@@ -1,0 +1,3 @@
+[submodule "RedisModulesSDK"]
+	path = RedisModulesSDK
+	url = ./RedisModulesSDK
