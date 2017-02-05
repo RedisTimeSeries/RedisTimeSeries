@@ -1,7 +1,7 @@
 # Redis TSDB Module
 
 ## Overview
-With this module you can now store timeseries data effiecently in redis.
+With this module you can now store timeseries data efficiently in Redis.
 The data is stored in a compact way.
 
 ## License: AGPL
