@@ -11,7 +11,7 @@
 
 static RedisModuleType *SeriesType;
 
-int TSDB_Meta(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
     if (argc != 2) return RedisModule_WrongArity(ctx);
@@ -41,7 +41,7 @@ int TSDB_Meta(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_Query(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
     if (argc != 4) return RedisModule_WrongArity(ctx);
@@ -78,7 +78,7 @@ int TSDB_Query(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_Insert(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
     if (argc != 4) {
@@ -159,9 +159,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx) {
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", 0, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
-    RMUtil_RegisterWriteCmd(ctx, "ts.insert", TSDB_Insert);
-    RMUtil_RegisterWriteCmd(ctx, "ts.query", TSDB_Query);
-    RMUtil_RegisterWriteCmd(ctx, "ts.meta", TSDB_Meta);
+    RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
+    RMUtil_RegisterWriteCmd(ctx, "ts.range", TSDB_range);
+    RMUtil_RegisterWriteCmd(ctx, "ts.info", TSDB_info);
 
     return REDISMODULE_OK;
 }

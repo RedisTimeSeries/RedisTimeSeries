@@ -11,7 +11,7 @@ print "from %s to %s" % (ts, ts+tsrange)
 pipe = r.pipeline(tsrange)
 for i in range(tsrange):
 #    p.zadd('test', ts+i, i)
-    pipe.execute_command("ts.insert","test", ts+i, i)
+    pipe.execute_command("ts.add","test", ts+i, i)
 s = time.time()
 pipe.execute()
 e = time.time()
@@ -19,7 +19,7 @@ insert_time = e - s
 
 s = time.time()
 for i in range(10):
-    res = r.execute_command("ts.query", "test", ts, ts+tsrange)
+    res = r.execute_command("ts.range", "test", ts, ts+tsrange)
     res_size = len(res)
     print res[0], res[-1]
     print res_size/2.0

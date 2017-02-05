@@ -23,10 +23,10 @@ Sample is a timestamp+value.
 
 ## Cmds
 ```sql
-TS.INSERT key TIMESTAMP value
+TS.ADD key TIMESTAMP value
 ```
 ```sql
-TS.QUERY key FROM_TIMESTAMP TO_TIMESTAMP
+TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP
  1) (integer) 1486289260
  2) (integer) 49994
  3) (integer) 1486289261
@@ -41,7 +41,7 @@ TS.QUERY key FROM_TIMESTAMP TO_TIMESTAMP
 12) (integer) 49999
 ```
 ```sql
-TS.META key
+TS.INFO key
 1) lastTimestamp
 2) (integer) 1486289265
 3) retentionSecs
