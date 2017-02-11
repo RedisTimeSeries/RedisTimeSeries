@@ -41,7 +41,7 @@ typedef struct SeriesItertor {
 } SeriesItertor;
 
 Chunk * NewChunk();
-Series * NewSeries();
+Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk);
 void SeriesFree(void *value);
 size_t SeriesMemUsage(void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);

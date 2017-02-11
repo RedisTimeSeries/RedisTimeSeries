@@ -23,6 +23,17 @@ Sample is a timestamp+value.
 
 ## Cmds
 ```sql
+TS.create KEY [retentionSecs] [maxSamplesPerChunk]
+```
+* key - key name for timeseries
+Optional args:
+* retentionSecs - for how long (in seconds) to keep samples.
+    * Default: 0
+    * if value is 0 than no data will be deleted
+* maxSamplesPerChunk - how many samples to keep per memory chunk
+    * Default: 360
+
+```sql
 TS.ADD key TIMESTAMP value
 ```
 ```sql

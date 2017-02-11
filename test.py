@@ -6,6 +6,7 @@ r = redis.Redis()
 ts = int(time.time())
 tsrange = 50000
 r.delete('test')
+r.execute_command('ts.create', 'test', 0, 360)
 print "from %s to %s" % (ts, ts+tsrange) 
 
 pipe = r.pipeline(tsrange)

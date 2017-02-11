@@ -7,7 +7,7 @@ Chunk * NewChunk(size_t sampleCount)
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
     newChunk->nextChunk = NULL;
-    newChunk->samples = malloc(sizeof(Sample)*360);
+    newChunk->samples = malloc(sizeof(Sample)*sampleCount);
 
     return newChunk;
 }
@@ -17,16 +17,16 @@ void freeChunk(Chunk *chunk) {
     free(chunk);
 }
 
-Series * NewSeries()
+Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
-    newSeries->maxSamplesPerChunk = 360;
+    newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
     newSeries->firstChunk = NewChunk(newSeries->maxSamplesPerChunk);
     newSeries->lastChunk = newSeries->firstChunk;
     newSeries->chunkCount = 1;
     newSeries->lastTimestamp = 0;
-    newSeries->retentionSecs = 0;
-    
+    newSeries->retentionSecs = retentionSecs;
+
     return newSeries;
 }
 

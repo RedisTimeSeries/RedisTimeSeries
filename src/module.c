@@ -1,5 +1,4 @@
 #include "redismodule.h"
-#include "module.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"
@@ -97,7 +96,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        series = TSDB_Create(ctx, argv[1]);
+        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
     } else {
@@ -118,18 +117,36 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 }
 
-Series* TSDB_Create(RedisModuleCtx *ctx, RedisModuleString *key) {
-    RedisModuleKey *series = RedisModule_OpenKey(ctx, key, REDISMODULE_READ|REDISMODULE_WRITE);
+int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc < 2 || argc > 4)
+        return RedisModule_WrongArity(ctx);
 
-    if (RedisModule_KeyType(series) != REDISMODULE_KEYTYPE_EMPTY) {
-        return NULL;
+    RedisModuleString *key = argv[1];
+    long long retentionSecs = 0;
+    long long maxSamplesPerChunk = 360;
+
+    if (argc > 2) {
+        if ((RedisModule_StringToLongLong(argv[2], &retentionSecs) != REDISMODULE_OK))
+            return RedisModule_ReplyWithError(ctx,"TSDB: invalid retentionSecs");
     }
 
-    Series *newSeries = NewSeries();
+    if (argc > 3) {
+        if ((RedisModule_StringToLongLong(argv[3], &maxSamplesPerChunk) != REDISMODULE_OK))
+            return RedisModule_ReplyWithError(ctx,"TSDB: invalid maxSamplesPerChunk");
+    }
+
+    RedisModuleKey *series = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+
+    if (RedisModule_KeyType(series) != REDISMODULE_KEYTYPE_EMPTY) {
+        return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
+    }
+
+    Series *newSeries = NewSeries(retentionSecs, maxSamplesPerChunk);
     RedisModule_ModuleTypeSetValue(series, SeriesType, newSeries);
 
     RedisModule_Log(ctx, "info", "created new series");
-    return newSeries;
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    return REDISMODULE_OK;
 }
 void series_aof_rewrite(RedisModuleIO *aof, RedisModuleString *key, void *value)
 {}
@@ -159,6 +176,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx) {
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", 0, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
+    RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
     RMUtil_RegisterWriteCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterWriteCmd(ctx, "ts.info", TSDB_info);
