@@ -8,7 +8,17 @@
 
 #define MYTYPE_ENCODING_VERSION 0 
 
+#define AGG_NONE 0
+#define AGG_MIN 1
+#define AGG_MAX 2
+#define AGG_SUM 3
+#define AGG_AVG 4
+
 static RedisModuleType *SeriesType;
+
+typedef struct agg_values_t {
+    double sum_agg, avg_count, min_val, max_val;
+} agg_values_t;
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -40,17 +50,50 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+void print_agg_values(RedisModuleCtx *ctx, int agg_type, timestamp_t last_agg_timestamp, agg_values_t *agg_values) {
+    RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
+
+    if (agg_type == AGG_SUM) {
+        RedisModule_ReplyWithLongLong(ctx, agg_values->sum_agg);
+    } else if (agg_type == AGG_AVG) {
+        RedisModule_ReplyWithLongLong(ctx, agg_values->sum_agg/agg_values->avg_count);
+    } else if (agg_type == AGG_MAX) {
+        RedisModule_ReplyWithLongLong(ctx, agg_values->max_val);
+    } else if (agg_type == AGG_MIN) {
+        RedisModule_ReplyWithLongLong(ctx, agg_values->min_val);
+    }
+}
+
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
-    if (argc != 4) return RedisModule_WrongArity(ctx);
+    if (argc < 4 || argc > 6) return RedisModule_WrongArity(ctx);
 
     long long start_ts, end_ts;
+    long long agg_type = 0;
+    long long dt = 0;
+    agg_values_t agg_values;
     
     if (RedisModule_StringToLongLong(argv[2], &start_ts) != REDISMODULE_OK)
         RedisModule_ReplyWithError(ctx, "TSDB: start-timestamp is invalid");
     if (RedisModule_StringToLongLong(argv[3], &end_ts) != REDISMODULE_OK)
         RedisModule_ReplyWithError(ctx, "TSDB: end-timestamp is invalid");
+    if (argc > 4) {
+        if (RMUtil_ArgExists("SUM", argv, argc, 3)) {
+            agg_type = AGG_SUM;
+        } else if (RMUtil_ArgExists("AVG", argv, argc, 3)) {
+            agg_type = AGG_AVG;
+        } else if (RMUtil_ArgExists("MIN", argv, argc, 3)) {
+            agg_type = AGG_MIN;
+        } else if (RMUtil_ArgExists("MAX", argv, argc, 3)) {
+            agg_type = AGG_MAX;
+        } else {
+            RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
+        }
+
+        if (RedisModule_StringToLongLong(argv[5], &dt) != REDISMODULE_OK)
+            RedisModule_ReplyWithError(ctx, "TSDB: time delta is invalid");
+    }
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     Series *series;
@@ -67,10 +110,45 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithArray(ctx,REDISMODULE_POSTPONED_ARRAY_LEN);
     SeriesItertor iterator = SeriesQuery(series, start_ts, end_ts);
     Sample *sample;
+    timestamp_t last_agg_timestamp = 0;
     while ((sample = SeriesItertorGetNext(&iterator)) != NULL ) {
+        if (agg_type == AGG_NONE) { // No aggregation whats so ever
             RedisModule_ReplyWithLongLong(ctx, sample->timestamp);
             RedisModule_ReplyWithLongLong(ctx, sample->data);
             arraylen++;
+        } else {
+            timestamp_t current_timestamp = sample->timestamp - sample->timestamp%dt;
+            if (current_timestamp > last_agg_timestamp) {
+                if (last_agg_timestamp != 0) {
+                    print_agg_values(ctx, agg_type, last_agg_timestamp, &agg_values);
+                    arraylen++;
+                }
+
+                last_agg_timestamp = current_timestamp;
+                agg_values.sum_agg = 0;
+                agg_values.avg_count = 0;
+                agg_values.max_val,agg_values.min_val = sample->data;
+            }
+
+            if (agg_type == AGG_AVG || agg_type == AGG_SUM)
+            {
+                agg_values.sum_agg += sample->data;
+                agg_values.avg_count++;
+            }
+
+            if (agg_type == AGG_MAX && sample->data > agg_values.max_val) {
+                agg_values.max_val = sample->data;
+            }
+            if (agg_type == AGG_MIN && sample->data < agg_values.min_val) {
+                agg_values.min_val = sample->data;
+            }
+        }
+    }
+
+    if (agg_type != AGG_NONE && agg_values.avg_count > 0) {
+        // reply last bucket of data
+        print_agg_values(ctx, agg_type, last_agg_timestamp, &agg_values);
+        arraylen++;
     }
 
     RedisModule_ReplySetArrayLength(ctx,arraylen*2);
