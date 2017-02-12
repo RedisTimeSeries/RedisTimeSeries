@@ -1,4 +1,4 @@
-# Redis TSDB Module
+# Redis Time-Series Module
 
 ## Overview
 With this module you can now store timeseries data efficiently in Redis.
