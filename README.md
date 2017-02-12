@@ -29,7 +29,7 @@ TS.create KEY [retentionSecs] [maxSamplesPerChunk]
 Optional args:
 * retentionSecs - for how long (in seconds) to keep samples.
     * Default: 0
-    * if value is 0 than no data will be deleted
+    * if value==0 meaning is infinite retention.
 * maxSamplesPerChunk - how many samples to keep per memory chunk
     * Default: 360
 
