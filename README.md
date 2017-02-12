@@ -28,9 +28,9 @@ TS.create KEY [retentionSecs] [maxSamplesPerChunk]
 ```
 * key - key name for timeseries
 Optional args:
-* retentionSecs - for how long (in seconds) to keep samples.
+* retentionSecs - max age for samples compared to current time (in seconds).
     * Default: 0
-    * if value==0 meaning is infinite retention.
+    * When set to 0, the series will not be trimmed at all
 * maxSamplesPerChunk - how many samples to keep per memory chunk
     * Default: 360
 
