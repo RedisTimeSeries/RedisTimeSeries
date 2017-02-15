@@ -1,4 +1,4 @@
-# Redis Time-Series Module ![alt text](https://travis-ci.org/danni-m/redis-tsdb.svg?branch=master "TravisCI build")
+# Redis Time-Series Module [![Build Status](https://travis-ci.org/danni-m/redis-tsdb.svg?branch=master)](https://travis-ci.org/danni-m/redis-tsdb)
 
 ## Overview
 With this module you can now store timeseries data efficiently in Redis.
