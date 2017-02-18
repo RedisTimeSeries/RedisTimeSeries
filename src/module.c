@@ -51,6 +51,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 void print_agg_values(RedisModuleCtx *ctx, int agg_type, timestamp_t last_agg_timestamp, agg_values_t *agg_values) {
+    RedisModule_ReplyWithArray(ctx, 2);
+
     RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
 
     if (agg_type == AGG_SUM) {
@@ -113,6 +115,8 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     timestamp_t last_agg_timestamp = 0;
     while ((sample = SeriesItertorGetNext(&iterator)) != NULL ) {
         if (agg_type == AGG_NONE) { // No aggregation whats so ever
+            RedisModule_ReplyWithArray(ctx, 2);
+
             RedisModule_ReplyWithLongLong(ctx, sample->timestamp);
             RedisModule_ReplyWithDouble(ctx, sample->data);
             arraylen++;
@@ -151,7 +155,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         arraylen++;
     }
 
-    RedisModule_ReplySetArrayLength(ctx,arraylen*2);
+    RedisModule_ReplySetArrayLength(ctx,arraylen);
     return REDISMODULE_OK;
 }
 
