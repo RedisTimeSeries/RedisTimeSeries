@@ -39,7 +39,10 @@ def process_connection(socket, _):
                 # small hack, for performance reasons its better to first try to add an metric
                 # instead of checking per metric if it exists or not
                 if 'the key does not exists' in ex.message:
-                    redis_client.execute_command("ts.create", path, 60, 10)
+                    redis_client.execute_command("ts.create",
+                                                 path,
+                                                 MAX_RETENTION,
+                                                 SAMPLES_PER_CHUNK)
                     redis_client.execute_command("ts.add", path, timestamp, value)
                 else:
                     raise
@@ -51,15 +54,20 @@ def process_connection(socket, _):
 
 
 def main():
-    global REDIS_POOL
+    global REDIS_POOL, MAX_RETENTION, SAMPLES_PER_CHUNK
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", help="server address to listen to", default="127.0.0.1")
     parser.add_argument("--port", help="port number to listen to", default=2003, type=int)
     parser.add_argument("--redis-server", help="redis server address")
     parser.add_argument("--redis-port", help="redis server port", type=int)
+    parser.add_argument("--max-retention", help="default retention time (in seconds)", default=3600, type=int)
+    parser.add_argument("--samples-per-chunk", help="default samples per memory chunk", default=360, type=int)
+
     args = parser.parse_args()
 
+    MAX_RETENTION = args.max_retention
+    SAMPLES_PER_CHUNK = args.samples_per_chunk
     REDIS_POOL = redis.ConnectionPool(host='localhost', port=6379)
 
     server = StreamServer((args.host, args.port), process_connection)

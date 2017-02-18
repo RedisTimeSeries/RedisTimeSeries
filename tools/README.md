@@ -21,6 +21,8 @@ Where
 usage: GraphiteServer.py [-h] [--host HOST] [--port PORT]
                          [--redis-server REDIS_SERVER]
                          [--redis-port REDIS_PORT]
+                         [--max-retention MAX_RETENTION]
+                         [--samples-per-chunk SAMPLES_PER_CHUNK]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -30,6 +32,11 @@ optional arguments:
                         redis server address
   --redis-port REDIS_PORT
                         redis server port
+  --max-retention MAX_RETENTION
+                        default retention time (in seconds)
+  --samples-per-chunk SAMPLES_PER_CHUNK
+                        default samples per memory chunk
+
 ```
 
 ### Dependencies
