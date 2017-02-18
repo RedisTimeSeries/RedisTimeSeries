@@ -6,7 +6,7 @@ The data is stored in a compact way.
 
 ## License: AGPL
 ## Using with other tools (StatsD, Grphite collectors)
-See [Tools](tools/README.md) directory.
+See [Tools](tools/) directory.
 
 ## Memory model
 Each series has a linked list of chunks.
