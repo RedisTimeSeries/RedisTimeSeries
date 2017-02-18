@@ -38,7 +38,7 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
     while (currentChunk != NULL)
     {
-        if (currentChunk->samples[currentChunk->num_samples].timestamp < minTimestamp)
+        if (currentChunk->samples[currentChunk->num_samples - 1].timestamp < minTimestamp)
         {
             Chunk *nextChunk = currentChunk->nextChunk;
             if (nextChunk != NULL) {
