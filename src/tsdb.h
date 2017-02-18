@@ -11,7 +11,7 @@
 
 typedef struct Sample {
     timestamp_t timestamp;
-    int64_t data;
+    double data;
 } Sample;
 
 typedef struct Chunk

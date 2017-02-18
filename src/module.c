@@ -6,7 +6,7 @@
 
 #include "tsdb.h"
 
-#define MYTYPE_ENCODING_VERSION 0 
+#define TS_ENC_VER 0
 
 #define AGG_NONE 0
 #define AGG_MIN 1
@@ -54,13 +54,13 @@ void print_agg_values(RedisModuleCtx *ctx, int agg_type, timestamp_t last_agg_ti
     RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
 
     if (agg_type == AGG_SUM) {
-        RedisModule_ReplyWithLongLong(ctx, agg_values->sum_agg);
+        RedisModule_ReplyWithDouble(ctx, agg_values->sum_agg);
     } else if (agg_type == AGG_AVG) {
-        RedisModule_ReplyWithLongLong(ctx, agg_values->sum_agg/agg_values->avg_count);
+        RedisModule_ReplyWithDouble(ctx, agg_values->sum_agg/agg_values->avg_count);
     } else if (agg_type == AGG_MAX) {
-        RedisModule_ReplyWithLongLong(ctx, agg_values->max_val);
+        RedisModule_ReplyWithDouble(ctx, agg_values->max_val);
     } else if (agg_type == AGG_MIN) {
-        RedisModule_ReplyWithLongLong(ctx, agg_values->min_val);
+        RedisModule_ReplyWithDouble(ctx, agg_values->min_val);
     }
 }
 
@@ -114,7 +114,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     while ((sample = SeriesItertorGetNext(&iterator)) != NULL ) {
         if (agg_type == AGG_NONE) { // No aggregation whats so ever
             RedisModule_ReplyWithLongLong(ctx, sample->timestamp);
-            RedisModule_ReplyWithLongLong(ctx, sample->data);
+            RedisModule_ReplyWithDouble(ctx, sample->data);
             arraylen++;
         } else {
             timestamp_t current_timestamp = sample->timestamp - sample->timestamp%dt;
@@ -213,7 +213,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return RedisModule_ReplyWithError(ctx,"TSDB: invalid maxSamplesPerChunk");
     }
 
-    RedisModuleKey *series = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *series = RedisModule_OpenKey(ctx, key, REDISMODULE_READ|REDISMODULE_WRITE);
 
     if (RedisModule_KeyType(series) != REDISMODULE_KEYTYPE_EMPTY) {
         return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
@@ -229,12 +229,45 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 void series_aof_rewrite(RedisModuleIO *aof, RedisModuleString *key, void *value)
 {}
 
-void series_rdb_save(RedisModuleIO *rdb, void *value)
-{}
-
-void *series_rdb_load(RedisModuleIO *rdb, int encver)
+void series_rdb_save(RedisModuleIO *io, void *value)
 {
-    return NULL;
+    Series *series = value;
+    RedisModule_SaveUnsigned(io, series->retentionSecs);
+    RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
+
+    Chunk *chunk = series->firstChunk;
+    size_t numSamples =0;
+    while (chunk != NULL) {
+        numSamples += chunk->num_samples;
+        chunk = chunk->nextChunk;
+    }
+    RedisModule_SaveUnsigned(io, numSamples);
+
+    SeriesItertor iter = SeriesQuery(series, 0, series->lastTimestamp);
+    Sample *sample;
+    while ((sample = SeriesItertorGetNext(&iter)) != NULL) {
+        RedisModule_SaveUnsigned(io, sample->timestamp);
+        RedisModule_SaveDouble(io, sample->data);
+    }
+}
+
+void *series_rdb_load(RedisModuleIO *io, int encver)
+{
+    if (encver != TS_ENC_VER) {
+        RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
+        return NULL;
+    }
+    uint64_t retentionSecs = RedisModule_LoadUnsigned(io);
+    uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+    uint64_t samplesCount = RedisModule_LoadUnsigned(io);
+
+    Series *series = NewSeries(retentionSecs, maxSamplesPerChunk);
+    for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
+        timestamp_t ts = RedisModule_LoadUnsigned(io);
+        double val = RedisModule_LoadDouble(io);
+        SeriesAddSample(series, ts, val);
+    }
+    return series;
 }
 
 int RedisModule_OnLoad(RedisModuleCtx *ctx) {
@@ -252,7 +285,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx) {
         .free = SeriesFree
     };
 
-    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", 0, &tm);
+    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_ENC_VER, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
     RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
