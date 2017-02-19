@@ -5,8 +5,11 @@ With this module you can now store timeseries data efficiently in Redis.
 The data is stored in a compact way.
 
 ## License: AGPL
-## Using with other tools (StatsD, Grphite collectors)
+## Using with other tools metrics tools
 See [Tools](tools/) directory.
+Including Integration with:
+1. StatsD, Graphite exports using graphite protocol.
+2. Grafana - using SimpleJson datasource.
 
 ## Memory model
 Each series has a linked list of chunks.
@@ -44,18 +47,16 @@ TS.ADD key TIMESTAMP value
 ### TS.range - ranged query
 ```sql
 TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
- 1) (integer) 1486289260
- 2) (integer) 49994
- 3) (integer) 1486289261
- 4) (integer) 49995
- 5) (integer) 1486289262
- 6) (integer) 49996
- 7) (integer) 1486289263
- 8) (integer) 49997
- 9) (integer) 1486289264
-10) (integer) 49998
-11) (integer) 1486289265
-12) (integer) 49999
+1) 1) (integer) 1487426646
+   2) "3.6800000000000002"
+2) 1) (integer) 1487426648
+   2) "3.6200000000000001"
+3) 1) (integer) 1487426650
+   2) "3.6200000000000001"
+4) 1) (integer) 1487426652
+   2) "3.6749999999999998"
+5) 1) (integer) 1487426654
+   2) "3.73"
 ```
 * key - key name for timeseries
 Optional args:
@@ -64,19 +65,23 @@ Optional args:
 
 #### Example for aggregated query
 ```sql
-TS.range test 1486932612 1486932700 max 15
- 1) (integer) 1486932600
- 2) (integer) 2
- 3) (integer) 1486932615
- 4) (integer) 9
- 5) (integer) 1486932630
- 6) (integer) 9
- 7) (integer) 1486932645
- 8) (integer) 9
- 9) (integer) 1486932660
-10) (integer) 9
-11) (integer) 1486932675
-12) (integer) 9
+ts.range stats_counts.statsd.packets_received 1487527100 1487527133 avg 5
+1) 1) (integer) 1487527100
+   2) "284.39999999999998"
+2) 1) (integer) 1487527105
+   2) "281"
+3) 1) (integer) 1487527110
+   2) "278.80000000000001"
+4) 1) (integer) 1487527115
+   2) "279.60000000000002"
+5) 1) (integer) 1487527120
+   2) "215"
+6) 1) (integer) 1487527125
+   2) "266.80000000000001"
+7) 1) (integer) 1487527130
+   2) "310.75"
+127.0.0.1:6379>
+
 ```
 
 ### TS.info - query the series metadata
