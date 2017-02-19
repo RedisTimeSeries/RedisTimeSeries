@@ -60,7 +60,7 @@ def main():
     parser.add_argument("--host", help="server address to listen to", default="127.0.0.1")
     parser.add_argument("--port", help="port number to listen to", default=2003, type=int)
     parser.add_argument("--redis-server", help="redis server address")
-    parser.add_argument("--redis-port", help="redis server port", type=int)
+    parser.add_argument("--redis-port", help="redis server port", default=6379, type=int)
     parser.add_argument("--max-retention", help="default retention time (in seconds)", default=3600, type=int)
     parser.add_argument("--samples-per-chunk", help="default samples per memory chunk", default=360, type=int)
 
@@ -68,7 +68,7 @@ def main():
 
     MAX_RETENTION = args.max_retention
     SAMPLES_PER_CHUNK = args.samples_per_chunk
-    REDIS_POOL = redis.ConnectionPool(host='localhost', port=6379)
+    REDIS_POOL = redis.ConnectionPool(host=args.redis_server, port=args.redis_port)
 
     server = StreamServer((args.host, args.port), process_connection)
     print('Starting Graphite server on %s:%s' % (args.host, args.port))
