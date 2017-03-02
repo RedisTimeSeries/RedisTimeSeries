@@ -1,7 +1,8 @@
-#include "redismodule.h"
-
 #ifndef TSDB_H
 #define TSDB_H
+
+#include <sys/types.h>
+#include "compaction.h"
 
 #define timestamp_t int32_t
 #define api_timestamp_t double
