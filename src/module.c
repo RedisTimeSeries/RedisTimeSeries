@@ -282,6 +282,41 @@ int SeriesHasRule(Series *series, RedisModuleString *destKey) {
     return FALSE;
 }
 
+//TS.DELETERULE SOURCE_KEY DEST_KEY
+int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    Series *series = RedisModule_ModuleTypeGetValue(key);
+
+    RedisModuleString *destKey = argv[2];
+    if (SeriesHasRule(series, destKey)) {
+        CompactionRule *rule = series->rules;
+        CompactionRule *prev_rule = NULL;
+        while (rule != NULL) {
+            if (RMUtil_StringEquals(rule->destKey, destKey)) {
+                if (prev_rule == NULL) {
+                    series->rules = rule->nextRule;
+                } else {
+                    prev_rule->nextRule = rule->nextRule;
+                }
+            }
+
+            prev_rule = rule;
+            rule = rule->nextRule;
+        }
+    } else {
+        return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exists");
+    }
+
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    return REDISMODULE_OK;
+}
+
 /*
 TS.CREATERULE src_key AGG_TYPE BUCKET_SIZE DEST_KEY
 */
@@ -351,6 +386,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx) {
     if (SeriesType == NULL) return REDISMODULE_ERR;
     RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);
+    RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
     RMUtil_RegisterWriteCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterWriteCmd(ctx, "ts.info", TSDB_info);
