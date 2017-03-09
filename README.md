@@ -39,6 +39,28 @@ Optional args:
 * maxSamplesPerChunk - how many samples to keep per memory chunk
     * Default: 360
 
+### TS.createrule - create a compaction rule
+```sql
+TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
+```
+* SOURCE_KEY - key name for source time series
+* AGG_TYPE - aggregration type one of the following: avg, sum, min, max, sum
+* BUCKET_SIZE_SEC - time bucket for aggregated compaction,
+* DEST_KEY - key name for destination time series
+
+> DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+
+> *Performance Notice*: if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
+
+### TS.deleterule - delete a compcation rule
+```sql
+TS.DELETERULE SOURCE_KEY DEST_KEY
+```
+
+* SOURCE_KEY - key name for source time series
+* DEST_KEY - key name for destination time series
+
+
 ### TS.add - append a new value to the series
 ```sql
 TS.ADD key TIMESTAMP value
