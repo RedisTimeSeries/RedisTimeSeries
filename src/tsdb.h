@@ -2,13 +2,13 @@
 #define TSDB_H
 
 #include <sys/types.h>
+#include "redismodule.h"
 #include "compaction.h"
 
 #define timestamp_t int32_t
-#define api_timestamp_t double
+#define api_timestamp_t int32_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
-
 
 typedef struct Sample {
     timestamp_t timestamp;
@@ -24,6 +24,15 @@ typedef struct Chunk
     // struct Chunk *prevChunk;
 } Chunk;
 
+typedef struct CompactionRule {
+    RedisModuleString *destKey;
+    int32_t bucketSizeSec;
+    AggregationClass *aggClass;
+    int aggType;
+    void *aggContext;
+    struct CompactionRule *nextRule;
+} CompactionRule;
+
 typedef struct Series {
     Chunk *firstChunk;
     Chunk *lastChunk;
@@ -31,6 +40,7 @@ typedef struct Series {
     timestamp_t lastTimestamp;
     int32_t retentionSecs;
     short maxSamplesPerChunk;
+    CompactionRule *rules;
 } Series;
 
 typedef struct SeriesItertor {
@@ -50,4 +60,6 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
 Sample * SeriesItertorGetNext(SeriesItertor *iterator);
 
+
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec);
 #endif /* TSDB_H */

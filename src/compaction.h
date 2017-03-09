@@ -1,7 +1,6 @@
 #ifndef COMPACTION_H
 #define COMPACTION_H
 #include <sys/types.h>
-#include "tsdb.h"
 
 
 #define AGG_NONE 0
