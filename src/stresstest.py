@@ -1,39 +1,44 @@
 import redis
 import time
 import pprint
+import multiprocessing
 
 r = redis.Redis()
 ts = int(time.time())
-tsrange = 50000
+pool_size = 20 
+tsrange = 140000 / pool_size
 r.delete('test')
+r.delete('test_agg_10')
+r.delete('test_sum_10')
+r.delete('test_avg_100')
 r.execute_command('ts.create', 'test', 0, 360)
-print "from %s to %s" % (ts, ts+tsrange) 
+# r.execute_command('ts.rule', 'test', 'avg', 10, 'test_agg_10')
+# r.execute_command('ts.rule', 'test', 'count', 10, 'test_sum_10')
+# r.execute_command('ts.rule', 'test_agg_10', 'avg', 100, 'test_avg_100')
+print "from %s to %s" % (ts, ts+tsrange)
 
-pipe = r.pipeline(tsrange)
-for i in range(tsrange):
-#    p.zadd('test', ts+i, i)
-    pipe.execute_command("ts.add","test", ts+i, i)
+for i in range(pool_size):
+    r.delete('test_%d' % i)
+    r.execute_command('ts.create', 'test_%d' % i, 0, 360)
+
+def func(arg):
+    r = redis.Redis()
+    pipe = r.pipeline(tsrange)
+    for i in range(tsrange):
+    #    p.zadd('test', ts+i, i)
+        if tsrange % 100 and False:
+            pipe.execute()
+            pip = r.pipeline
+        pipe.execute_command("ts.add","test_%d" % arg, ts+i, i)
+    pipe.execute()
+    return  True
+
+pool = multiprocessing.Pool(pool_size)
 s = time.time()
-pipe.execute()
+pool.map(func, range(pool_size))
 e = time.time()
 insert_time = e - s
 
-s = time.time()
-for i in range(10):
-    res = r.execute_command("ts.range", "test", ts, ts+tsrange)
-    res_size = len(res)
-    print res[0], res[-1]
-    print res_size/2.0
-e = time.time()
-query_time = e - s
-
-i = 0
-ts_res = dict()
-while res:
-    ts_res[res.pop()] = res.pop()
-
-# print pprint.pprint(ts_res)
-print res_size/2.0
-print "items %s:" % tsrange 
+print "items %s:" % (tsrange * pool_size )
 print "took %s to insert sec" % insert_time
-print "took %s to query sec" % query_time
+# print "took %s to query sec" % query_time
