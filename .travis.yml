@@ -2,4 +2,6 @@ language: C
 compiler:
     - clang
     - gcc
+before_install:
+      - sudo pip install pytest pytest-cov rmtest redis
 script: "cd src && make all test"
