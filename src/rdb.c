@@ -10,7 +10,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
     
-
     Series *series = NewSeries(retentionSecs, maxSamplesPerChunk);
 
     CompactionRule *lastRule;
