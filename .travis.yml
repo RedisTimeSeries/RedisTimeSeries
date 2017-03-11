@@ -2,4 +2,4 @@ language: C
 compiler:
     - clang
     - gcc
-script: "cd src && make"
+script: "cd src && make all test"
