@@ -19,6 +19,7 @@ Sample is a timestamp+value.
 ## Features
 * Quick inserts (50K samples per sec)
 * Query by start time and end-time
+* Aggregated queries (Min, Max, Avg, Sum, Count) for any time bucket
 * Configurable max retention period
 
 ## Build
