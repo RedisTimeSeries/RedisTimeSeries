@@ -24,12 +24,19 @@ Sample is a timestamp+value.
 ## Build
 1. `cd src`
 2. `make`
-3. `loadmodule redis-tsdb-module.so`
+3. on your red-server run: `loadmodule redis-tsdb-module.so`
 
-## Cmds
+### Tests
+Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
+```
+$ cd src
+$ make test
+```
+
+## Commands
 ### TS.create - create a new time-series
 ```sql
-TS.create KEY [retentionSecs] [maxSamplesPerChunk]
+TS.CREATE KEY [retentionSecs] [maxSamplesPerChunk]
 ```
 * key - key name for timeseries
 Optional args:
