@@ -51,7 +51,7 @@ Optional args:
 TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
 ```
 * SOURCE_KEY - key name for source time series
-* AGG_TYPE - aggregration type one of the following: avg, sum, min, max, sum
+* AGG_TYPE - aggregration type one of the following: avg, sum, min, max, count
 * BUCKET_SIZE_SEC - time bucket for aggregated compaction,
 * DEST_KEY - key name for destination time series
 
@@ -89,7 +89,7 @@ TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
 ```
 * key - key name for timeseries
 Optional args:
-    * aggregationType - one of the following: avg, sum, min, max
+    * aggregationType - one of the following: avg, sum, min, max, count
     * bucketSizeSeconds - time bucket for aggreagation in seconds
 
 #### Example for aggregated query
