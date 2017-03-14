@@ -30,6 +30,7 @@ Sample is a timestamp+value.
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
 ```
 $ cd src
+$ pip install -r tests/requirements.txt # optional, use virtualenv
 $ make test
 ```
 
