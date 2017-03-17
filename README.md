@@ -1,4 +1,4 @@
-# Redis Time-Series Module [![Build Status](https://travis-ci.org/danni-m/redis-timeseries.svg?branch=master)](https://travis-ci.org/danni-m/redis-tsdb)
+# Redis Time-Series Module [![Build Status](https://travis-ci.org/danni-m/redis-timeseries.svg?branch=master)](https://travis-ci.org/danni-m/redis-timeseries)
 
 ## Overview
 With this module you can now store timeseries data efficiently in Redis.
@@ -12,15 +12,16 @@ Including Integration with:
 2. Grafana - using SimpleJson datasource.
 
 ## Memory model
-Each series has a linked list of chunks.
-Each chunk has 1+ samples.
-Sample is a timestamp+value.
+A time series is a linked list of meomry chunks.
+Each chunk has a predefined size of samples, each sample is a tuple of the time and the value.
+Each sample is the size of 128bit (64bit for the timestamp and 64bit for the value).
 
 ## Features
 * Quick inserts (50K samples per sec)
 * Query by start time and end-time
 * Aggregated queries (Min, Max, Avg, Sum, Count) for any time bucket
 * Configurable max retention period
+* Compations/Rollups - automatiicly updated aggregated timeseries
 
 ## Build
 1. `cd src`
