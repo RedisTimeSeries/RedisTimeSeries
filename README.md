@@ -25,12 +25,20 @@ Sample is a timestamp+value.
 ## Build
 1. `cd src`
 2. `make`
-3. `loadmodule redis-tsdb-module.so`
+3. on your red-server run: `loadmodule redis-tsdb-module.so`
 
-## Cmds
+### Tests
+Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
+```
+$ cd src
+$ pip install -r tests/requirements.txt # optional, use virtualenv
+$ make test
+```
+
+## Commands
 ### TS.create - create a new time-series
 ```sql
-TS.create KEY [retentionSecs] [maxSamplesPerChunk]
+TS.CREATE KEY [retentionSecs] [maxSamplesPerChunk]
 ```
 * key - key name for timeseries
 Optional args:
@@ -39,6 +47,28 @@ Optional args:
     * When set to 0, the series will not be trimmed at all
 * maxSamplesPerChunk - how many samples to keep per memory chunk
     * Default: 360
+
+### TS.createrule - create a compaction rule
+```sql
+TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
+```
+* SOURCE_KEY - key name for source time series
+* AGG_TYPE - aggregration type one of the following: avg, sum, min, max, count
+* BUCKET_SIZE_SEC - time bucket for aggregated compaction,
+* DEST_KEY - key name for destination time series
+
+> DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+
+> *Performance Notice*: if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
+
+### TS.deleterule - delete a compcation rule
+```sql
+TS.DELETERULE SOURCE_KEY DEST_KEY
+```
+
+* SOURCE_KEY - key name for source time series
+* DEST_KEY - key name for destination time series
+
 
 ### TS.add - append a new value to the series
 ```sql
@@ -61,7 +91,7 @@ TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
 ```
 * key - key name for timeseries
 Optional args:
-    * aggregationType - one of the following: avg, sum, min, max
+    * aggregationType - one of the following: avg, sum, min, max, count
     * bucketSizeSeconds - time bucket for aggreagation in seconds
 
 #### Example for aggregated query

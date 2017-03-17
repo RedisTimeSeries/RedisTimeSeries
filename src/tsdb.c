@@ -1,4 +1,4 @@
-#include "time.h"
+#include <time.h>
 #include "tsdb.h"
 #include "rmutil/alloc.h"
 
@@ -26,6 +26,7 @@ Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
     newSeries->chunkCount = 1;
     newSeries->lastTimestamp = 0;
     newSeries->retentionSecs = retentionSecs;
+    newSeries->rules = NULL;
 
     return newSeries;
 }
@@ -72,9 +73,12 @@ size_t SeriesMemUsage(void *value) {
     return sizeof(series) + sizeof(Chunk) * series->chunkCount;
 }
 
-int SeriesAddSample(Series *series, double timestamp, double value) {
-    if (timestamp <= series->lastTimestamp) {
+int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+    if (timestamp < series->lastTimestamp) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
+    } else if (timestamp == series->lastTimestamp) {
+        // we want to override the last sample, so lets ignore it first
+        series->lastChunk->num_samples--;
     }
     
     Chunk *currentChunk;
@@ -144,4 +148,21 @@ Sample *SeriesItertorGetNext(SeriesItertor *iterator) {
         }
     }
     return NULL;
+}
+
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec) {
+    if (bucketSizeSec <= 0) {
+        return NULL;
+    }
+
+    CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
+    rule->aggClass = GetAggClass(aggType);;
+    rule->aggType = aggType;
+    rule->aggContext = rule->aggClass->createContext();
+    rule->bucketSizeSec = bucketSizeSec;
+    rule->destKey = destKey;
+
+    rule->nextRule = NULL;
+
+    return rule;
 }
