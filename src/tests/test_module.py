@@ -19,7 +19,19 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
-            assert r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count) == expected_result
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+
+    def test_range_query(self):
+        start_ts = 1488823384L
+        samples_count = 500
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            self._insert_data(r, 'tester', start_ts, samples_count, 5)
+
+            expected_result = [[start_ts+i, str(5)] for i in range(100, 151)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts+100, start_ts + 150)
+            assert expected_result == actual_result
 
     def test_compaction_rules(self):
         with self.redis() as r:

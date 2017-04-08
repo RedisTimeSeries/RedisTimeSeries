@@ -1,4 +1,5 @@
 #include "rdb.h"
+#include "chunk.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -75,7 +76,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     Chunk *chunk = series->firstChunk;
     size_t numSamples =0;
     while (chunk != NULL) {
-        numSamples += chunk->num_samples;
+        numSamples += ChunkNumOfSample(chunk);
         chunk = chunk->nextChunk;
     }
     RedisModule_SaveUnsigned(io, numSamples);

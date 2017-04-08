@@ -2,21 +2,6 @@
 #include "tsdb.h"
 #include "rmutil/alloc.h"
 
-Chunk * NewChunk(size_t sampleCount)
-{
-    Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
-    newChunk->num_samples = 0;
-    newChunk->nextChunk = NULL;
-    newChunk->samples = malloc(sizeof(Sample)*sampleCount);
-
-    return newChunk;
-}
-
-void freeChunk(Chunk *chunk) {
-    free(chunk->samples);
-    free(chunk);
-}
-
 Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
@@ -49,7 +34,7 @@ void SeriesTrim(Series * series) {
             }
             
             series->chunkCount--;
-            freeChunk(currentChunk);
+            FreeChunk(currentChunk);
             currentChunk = nextChunk;
         } else {
             break;
@@ -57,13 +42,13 @@ void SeriesTrim(Series * series) {
     }
 }
 
-void SeriesFree(void *value) {
+void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
     Chunk *currentChunk = currentSeries->firstChunk;
     while (currentChunk != NULL)
     {
         Chunk *nextChunk = currentChunk->nextChunk;
-        freeChunk(currentChunk);
+        FreeChunk(currentChunk);
         currentChunk = nextChunk;
     }
 }
@@ -77,31 +62,26 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     if (timestamp < series->lastTimestamp) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp) {
-        // we want to override the last sample, so lets ignore it first
+        // this is a hack, we want to override the last sample, so lets ignore it first
         series->lastChunk->num_samples--;
     }
     
     Chunk *currentChunk;
-    if (series->lastChunk->num_samples < series->maxSamplesPerChunk) {
+    if (!IsChunkFull(series->lastChunk)) {
          currentChunk = series->lastChunk;
-         if (currentChunk->num_samples == 0) {
-             currentChunk->base_timestamp = timestamp;
-         }
     }
     else {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
         Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
-        newChunk->base_timestamp = timestamp;
         series->lastChunk->nextChunk = newChunk;
         series->lastChunk = newChunk;
         series->chunkCount++;        
         currentChunk = newChunk;
     }
-    currentChunk->samples[currentChunk->num_samples].timestamp = timestamp;
-    currentChunk->samples[currentChunk->num_samples].data = value;
-    currentChunk->num_samples++;
+    Sample sample = {.timestamp = timestamp, .data = value};
+    ChunkAddSample(currentChunk, sample);
     series->lastTimestamp = timestamp;
 
     return TSDB_OK;
@@ -111,6 +91,7 @@ SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_time
     SeriesItertor iter;
     iter.series = series;
     iter.currentChunk = series->firstChunk;
+    iter.chunkIteratorInitilized = FALSE;
     iter.currentSampleIndex = 0;
     iter.minTimestamp = minTimestamp;
     iter.maxTimestamp = maxTimestamp;
@@ -121,30 +102,35 @@ Sample *SeriesItertorGetNext(SeriesItertor *iterator) {
     while (iterator->currentChunk != NULL)
     {
         Chunk *currentChunk = iterator->currentChunk;
-        if (currentChunk->samples[currentChunk->num_samples - 1].timestamp < iterator->minTimestamp)
+        if (ChunkGetLastSample(currentChunk)->timestamp < iterator->minTimestamp)
         {
             iterator->currentChunk = currentChunk->nextChunk;
+            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
             continue;
         }
-        else if (currentChunk->base_timestamp > iterator->maxTimestamp)
+        else if (ChunkGetFirstSample(currentChunk)->timestamp > iterator->maxTimestamp)
         {
             break;
         }
+        else if (!iterator->chunkIteratorInitilized) 
+        {
+            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
+            iterator->chunkIteratorInitilized = TRUE;
+        }
 
-        if (iterator->currentSampleIndex >= currentChunk->num_samples) {
-            iterator->currentSampleIndex = 0;
+        Sample *currentSample = ChunkItertorGetNext(&iterator->chunkIterator);
+        if (currentSample == NULL) { // reached the end of the chunk
             iterator->currentChunk = currentChunk->nextChunk;
+            iterator->chunkIteratorInitilized = FALSE;
             continue;
+        }
+
+        if (currentSample->timestamp < iterator->minTimestamp) {
+            continue;
+        } else if (currentSample->timestamp > iterator->maxTimestamp) {
+            break;
         } else {
-            int currentSampleIndex = iterator->currentSampleIndex;
-            iterator->currentSampleIndex++;
-            if (currentChunk->samples[currentSampleIndex].timestamp < iterator->minTimestamp) {
-                continue;
-            }
-            else if (currentChunk->samples[currentSampleIndex].timestamp > iterator->maxTimestamp) {
-                break;
-            }
-            return &currentChunk->samples[currentSampleIndex];
+            return currentSample;
         }
     }
     return NULL;

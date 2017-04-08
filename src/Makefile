@@ -26,12 +26,16 @@ all: rmutil redis-tsdb-module.so
 rmutil: FORCE
 	$(MAKE) -C $(RMUTIL_LIBDIR)
 
-redis-tsdb-module.so: rmutil module.o tsdb.o compaction.o rdb.o
-	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc 
+redis-tsdb-module.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o
+	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc 
 
 clean:
 	rm -rf *.xo *.so *.o
 
 test: redis-tsdb-module.so
-	pytest .
+	python2 -m pytest .
+
+docker:
+	cd .. && docker build -t redis-tsdb .
+
 FORCE:

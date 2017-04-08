@@ -379,7 +379,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx) {
         .rdb_save = series_rdb_save,
         .aof_rewrite = series_aof_rewrite,
         .mem_usage = SeriesMemUsage,
-        .free = SeriesFree
+        .free = FreeSeries
     };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_ENC_VER, &tm);
