@@ -75,6 +75,8 @@ TS.DELETERULE SOURCE_KEY DEST_KEY
 ```sql
 TS.ADD key TIMESTAMP value
 ```
+#### Complexity
+if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
 
 ### TS.range - ranged query
 ```sql
@@ -94,6 +96,14 @@ TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
 Optional args:
     * aggregationType - one of the following: avg, sum, min, max, count
     * bucketSizeSeconds - time bucket for aggreagation in seconds
+
+#### Complexity
+TS.RANGE complexity is O(n/m+k*m)
+n = number of data points
+m = chunk size (data points per chunk)
+k = number of data points that are in the requested range
+
+This can be improved in the future by using binary search to find the start of the range, which will make this O(Log(n/m)+k*m), but since m is pretty small, we can neglect it at look at the operation as O(Log(n) + k).
 
 #### Example for aggregated query
 ```sql
