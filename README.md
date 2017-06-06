@@ -99,6 +99,7 @@ Optional args:
 
 #### Complexity
 TS.RANGE complexity is O(n/m+k*m)
+
 n = number of data points
 m = chunk size (data points per chunk)
 k = number of data points that are in the requested range
