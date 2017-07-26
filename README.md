@@ -21,7 +21,7 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 * Query by start time and end-time
 * Aggregated queries (Min, Max, Avg, Sum, Count) for any time bucket
 * Configurable max retention period
-* Compations/Rollups - automatiicly updated aggregated timeseries
+* Compations/Rollups - automatically updated aggregated timeseries
 
 ## Build
 1. `cd src`
