@@ -1,8 +1,6 @@
 # Redis Time-Series Module [![Build Status](https://travis-ci.org/danni-m/redis-timeseries.svg?branch=master)](https://travis-ci.org/danni-m/redis-timeseries)
 
-## Overview
-With this module you can now store timeseries data efficiently in Redis.
-The data is stored in a compact way.
+Time series data structure for redis.
 
 ## License: AGPL
 ## Using with other tools metrics tools
