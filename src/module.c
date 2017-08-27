@@ -112,6 +112,8 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             break;
         case 6:
             pRes = RMUtil_ParseArgs(argv, argc, 2, "llsl", &start_ts, &end_ts, &aggTypeStr, &time_delta );
+            if (!time_delta)
+                return RedisModule_ReplyWithError(ctx, "TSDB: time-delta must != 0");
             break;
         default:
             return RedisModule_WrongArity(ctx);
