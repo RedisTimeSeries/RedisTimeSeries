@@ -53,7 +53,7 @@ void FreeSeries(void *value) {
     }
 }
 
-size_t SeriesMemUsage(void *value) {
+size_t SeriesMemUsage(const void *value) {
     Series *series = (Series *)value;
     return sizeof(series) + sizeof(Chunk) * series->chunkCount;
 }

@@ -9,17 +9,17 @@
 
 static RedisModuleType *SeriesType;
 
-char * AggTypeEnumToString(int aggType){
+static const char * AggTypeEnumToString(int aggType){
     switch (aggType) {
-        case 1:
+        case TS_AGG_MIN:
             return "MIN";
-        case 2:
+        case TS_AGG_MAX:
             return "MAX";
-        case 3:
+        case TS_AGG_SUM:
             return "SUM";
-        case 4:
+        case TS_AGG_AVG:
             return "AVG";
-        case 5:
+        case TS_AGG_COUNT:
             return "COUNT";
         default:
             return "Unknown";
@@ -75,17 +75,17 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int StringAggTypeToEnum(RedisModuleString *aggType) {
     RMUtil_StringToLower(aggType);
     if (RMUtil_StringEqualsC(aggType, "min")){
-        return 1;
+        return TS_AGG_MIN;
     } else if (RMUtil_StringEqualsC(aggType, "max")){
-        return 2;
+        return TS_AGG_MAX;
     } else if (RMUtil_StringEqualsC(aggType, "sum")){
-        return 3;
+        return TS_AGG_SUM;
     } else if (RMUtil_StringEqualsC(aggType, "avg")){
-        return 4;
+        return TS_AGG_AVG;
     } else if (RMUtil_StringEqualsC(aggType, "count")){
-        return 5;
+        return TS_AGG_COUNT;
     } else {
-        return -1;
+        return TS_AGG_INVALID;
     }
 }
 
@@ -100,30 +100,42 @@ void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, Aggr
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-    
-    if (argc < 4 || argc > 6) return RedisModule_WrongArity(ctx);
 
     long long start_ts, end_ts;
+    long long time_delta = 0;
+    RedisModuleString * aggTypeStr = NULL;
+
+    int pRes = REDISMODULE_ERR;
+    switch (argc) {
+        case 4:
+            pRes = RMUtil_ParseArgs(argv, argc, 2, "ll", &start_ts, &end_ts);
+            break;
+        case 6:
+            pRes = RMUtil_ParseArgs(argv, argc, 2, "llsl", &start_ts, &end_ts, &aggTypeStr, &time_delta );
+            break;
+        default:
+            return RedisModule_WrongArity(ctx);
+    }
+    if (pRes != REDISMODULE_OK)
+        return RedisModule_WrongArity(ctx);
+
     long long agg_type = 0;
-    long long dt = 0;
     Series *series;
     RedisModuleKey *key;
-    AggregationClass *aggObject;
+    AggregationClass *aggObject = NULL;
 
-    if (RedisModule_StringToLongLong(argv[2], &start_ts) != REDISMODULE_OK)
-        return RedisModule_ReplyWithError(ctx, "TSDB: start-timestamp is invalid");
-    if (RedisModule_StringToLongLong(argv[3], &end_ts) != REDISMODULE_OK)
-        return RedisModule_ReplyWithError(ctx, "TSDB: end-timestamp is invalid");
-    if (argc > 4) {
-        agg_type = StringAggTypeToEnum(argv[4]);
-        int aggType = StringAggTypeToEnum(argv[4]);
-        if (aggType < 0 && aggType > 5) {
+    if (argc > 4)
+    {
+        if (!aggTypeStr)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
-        }
-        aggObject = GetAggClass(aggType);
+        agg_type = StringAggTypeToEnum( aggTypeStr );
 
-        if (RedisModule_StringToLongLong(argv[5], &dt) != REDISMODULE_OK)
-            RedisModule_ReplyWithError(ctx, "TSDB: time delta is invalid");
+        if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
+            return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
+
+        aggObject = GetAggClass( agg_type );
+        if (!aggObject)
+            return RedisModule_ReplyWithError(ctx, "TSDB: Failed to retrieve aggObject");
     }
 
     key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
@@ -152,7 +164,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_ReplyWithDouble(ctx, sample->data);
             arraylen++;
         } else {
-            timestamp_t current_timestamp = sample->timestamp - sample->timestamp%dt;
+            timestamp_t current_timestamp = sample->timestamp - (sample->timestamp % time_delta);
             if (current_timestamp > last_agg_timestamp) {
                 if (last_agg_timestamp != 0) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
@@ -243,8 +255,8 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
 
     RedisModuleString *key = argv[1];
-    long long retentionSecs = 0;
-    long long maxSamplesPerChunk = 360;
+    long long retentionSecs = RETENTION_DEFAULT_SECS;
+    long long maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
 
     if (argc > 2) {
         if ((RedisModule_StringToLongLong(argv[2], &retentionSecs) != REDISMODULE_OK))
