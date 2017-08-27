@@ -9,17 +9,17 @@
 
 static RedisModuleType *SeriesType;
 
-char * AggTypeEnumToString(int aggType){
+static const char * AggTypeEnumToString(int aggType){
     switch (aggType) {
-        case 1:
+        case TS_AGG_MIN:
             return "MIN";
-        case 2:
+        case TS_AGG_MAX:
             return "MAX";
-        case 3:
+        case TS_AGG_SUM:
             return "SUM";
-        case 4:
+        case TS_AGG_AVG:
             return "AVG";
-        case 5:
+        case TS_AGG_COUNT:
             return "COUNT";
         default:
             return "Unknown";
@@ -75,17 +75,17 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int StringAggTypeToEnum(RedisModuleString *aggType) {
     RMUtil_StringToLower(aggType);
     if (RMUtil_StringEqualsC(aggType, "min")){
-        return 1;
+        return TS_AGG_MIN;
     } else if (RMUtil_StringEqualsC(aggType, "max")){
-        return 2;
+        return TS_AGG_MAX;
     } else if (RMUtil_StringEqualsC(aggType, "sum")){
-        return 3;
+        return TS_AGG_SUM;
     } else if (RMUtil_StringEqualsC(aggType, "avg")){
-        return 4;
+        return TS_AGG_AVG;
     } else if (RMUtil_StringEqualsC(aggType, "count")){
-        return 5;
+        return TS_AGG_COUNT;
     } else {
-        return -1;
+        return TS_AGG_INVALID;
     }
 }
 
@@ -132,7 +132,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         agg_type = StringAggTypeToEnum( aggTypeStr );
         // int aggType = StringAggTypeToEnum( aggTypeStr );
 
-        if (agg_type < 0 || agg_type > 5)
+        if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
 
         aggObject = GetAggClass( agg_type );

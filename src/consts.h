@@ -12,4 +12,16 @@
 #define RETENTION_DEFAULT_SECS          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  360LL
 
+/* TS.Range Aggregation types */
+typedef enum {
+    TS_AGG_INVALID = -1,
+    TS_AGG_NONE = 0,
+    TS_AGG_MIN,
+    TS_AGG_MAX,
+    TS_AGG_SUM,
+    TS_AGG_AVG,
+    TS_AGG_COUNT,
+    TS_AGG_TYPES_MAX // 6
+} TS_AGG_TYPES_T;
+
 #endif
