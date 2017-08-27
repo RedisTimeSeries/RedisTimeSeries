@@ -110,7 +110,6 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         case 4:
             pRes = RMUtil_ParseArgs(argv, argc, 2, "ll", &start_ts, &end_ts);
             break;
-        /* case 5: return RedisModule_ReplyWithLongLong(ctx, 12341234); */ // Test false positive
         case 6:
             pRes = RMUtil_ParseArgs(argv, argc, 2, "llsl", &start_ts, &end_ts, &aggTypeStr, &time_delta );
             break;
@@ -130,7 +129,6 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (!aggTypeStr)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
         agg_type = StringAggTypeToEnum( aggTypeStr );
-        // int aggType = StringAggTypeToEnum( aggTypeStr );
 
         if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
