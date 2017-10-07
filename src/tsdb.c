@@ -102,7 +102,18 @@ Sample *SeriesItertorGetNext(SeriesItertor *iterator) {
     while (iterator->currentChunk != NULL)
     {
         Chunk *currentChunk = iterator->currentChunk;
-        if (ChunkGetLastSample(currentChunk)->timestamp < iterator->minTimestamp)
+        Sample* lastSample = ChunkGetLastSample(currentChunk);
+        if (lastSample == NULL)
+        {
+            // this is an empty Chunk, move on to the next one
+            // this can happen only when a new TS was created but not populated yet,
+            // eventough we can assume this here, lets keep this logic to allow future use of empty chunks
+            iterator->currentChunk = currentChunk->nextChunk;
+            iterator->chunkIteratorInitilized = FALSE;
+            continue;
+        }
+
+        if (lastSample->timestamp < iterator->minTimestamp)
         {
             iterator->currentChunk = currentChunk->nextChunk;
             iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);

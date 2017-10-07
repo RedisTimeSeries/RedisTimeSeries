@@ -33,7 +33,7 @@ clean:
 	rm -rf *.xo *.so *.o
 
 test: redis-tsdb-module.so
-	python2 -m pytest .
+	python2 -m pytest -vv .
 
 docker:
 	cd .. && docker build -t redis-tsdb .

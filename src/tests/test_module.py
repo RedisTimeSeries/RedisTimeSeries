@@ -87,3 +87,8 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             assert len(self._get_ts_info(r, 'tester')['rules']) == 1
             assert r.execute_command('TS.DELETERULE', 'tester', 'tester_agg_max_10')
             assert len(self._get_ts_info(r, 'tester')['rules']) == 0
+
+    def test_empty_series(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('DUMP', 'tester')
