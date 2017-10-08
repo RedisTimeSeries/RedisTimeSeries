@@ -1,7 +1,12 @@
 language: C
+dist: trusty
 compiler:
     - clang
     - gcc
 before_install:
       - sudo pip install pytest pytest-cov rmtest redis
+      - git clone -b 4.0.1 --depth 1 https://github.com/antirez/redis.git
+      - cd redis
+      - make install
+      - cd ..
 script: "cd src && make all test"
