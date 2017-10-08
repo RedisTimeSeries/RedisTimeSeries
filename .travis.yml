@@ -4,4 +4,4 @@ compiler:
     - gcc
 before_install:
       - sudo pip install pytest pytest-cov rmtest redis
-script: "cd src && make all"
+script: "cd src && make all test"
