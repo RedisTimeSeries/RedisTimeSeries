@@ -24,7 +24,7 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
     while (currentChunk != NULL)
     {
-        if (currentChunk->samples[currentChunk->num_samples - 1].timestamp < minTimestamp)
+        if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
         {
             Chunk *nextChunk = currentChunk->nextChunk;
             if (nextChunk != NULL) {
@@ -66,11 +66,10 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         series->lastChunk->num_samples--;
     }
     
-    Chunk *currentChunk;
-    if (!IsChunkFull(series->lastChunk)) {
-         currentChunk = series->lastChunk;
-    }
-    else {
+    Chunk *currentChunk = series->lastChunk;
+    Sample sample = {.timestamp = timestamp, .data = value};
+    int ret = ChunkAddSample(currentChunk, sample);
+    if (ret == 0 ) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
@@ -79,9 +78,9 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         series->lastChunk = newChunk;
         series->chunkCount++;        
         currentChunk = newChunk;
-    }
-    Sample sample = {.timestamp = timestamp, .data = value};
-    ChunkAddSample(currentChunk, sample);
+        // re-add the sample
+        ChunkAddSample(currentChunk, sample);
+    } 
     series->lastTimestamp = timestamp;
 
     return TSDB_OK;
@@ -98,53 +97,44 @@ SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_time
     return iter;
 }
 
-Sample *SeriesItertorGetNext(SeriesItertor *iterator) {
+int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample) {
+    Sample internalSample;
     while (iterator->currentChunk != NULL)
     {
         Chunk *currentChunk = iterator->currentChunk;
-        Sample* lastSample = ChunkGetLastSample(currentChunk);
-        if (lastSample == NULL)
+        if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp)
         {
-            // this is an empty Chunk, move on to the next one
-            // this can happen only when a new TS was created but not populated yet,
-            // eventough we can assume this here, lets keep this logic to allow future use of empty chunks
             iterator->currentChunk = currentChunk->nextChunk;
             iterator->chunkIteratorInitilized = FALSE;
             continue;
         }
-
-        if (lastSample->timestamp < iterator->minTimestamp)
-        {
-            iterator->currentChunk = currentChunk->nextChunk;
-            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
-            continue;
-        }
-        else if (ChunkGetFirstSample(currentChunk)->timestamp > iterator->maxTimestamp)
+        else if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
         {
             break;
         }
-        else if (!iterator->chunkIteratorInitilized) 
+        
+        if (!iterator->chunkIteratorInitilized) 
         {
             iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
             iterator->chunkIteratorInitilized = TRUE;
         }
 
-        Sample *currentSample = ChunkItertorGetNext(&iterator->chunkIterator);
-        if (currentSample == NULL) { // reached the end of the chunk
+        if (ChunkItertorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
             iterator->currentChunk = currentChunk->nextChunk;
             iterator->chunkIteratorInitilized = FALSE;
             continue;
         }
 
-        if (currentSample->timestamp < iterator->minTimestamp) {
+        if (internalSample.timestamp < iterator->minTimestamp) {
             continue;
-        } else if (currentSample->timestamp > iterator->maxTimestamp) {
+        } else if (internalSample.timestamp > iterator->maxTimestamp) {
             break;
         } else {
-            return currentSample;
+            memcpy(currentSample, &internalSample, sizeof(Sample));
+            return 1;
         }
     }
-    return NULL;
+    return 0;
 }
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec) {

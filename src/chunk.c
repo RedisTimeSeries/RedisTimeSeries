@@ -25,36 +25,54 @@ int ChunkNumOfSample(Chunk *chunk) {
     return chunk->num_samples;
 }
 
-Sample *ChunkGetLastSample(Chunk *chunk) {
-    if (chunk->num_samples == 0) {
-        return NULL;
-    }
-    return &chunk->samples[chunk->num_samples - 1];
-}
-Sample *ChunkGetFirstSample(Chunk *chunk) {
-    if (chunk->num_samples == 0) {
-        return NULL;
-    }
-    return &chunk->samples[0];
+Sample *ChunkGetSampleArray(Chunk *chunk) {
+    return (Sample *)chunk->samples;
 }
 
-void ChunkAddSample(Chunk *chunk, Sample sample) {
+Sample *ChunkGetSample(Chunk *chunk, int index) {
+    return &ChunkGetSampleArray(chunk)[index];
+}
+
+timestamp_t ChunkGetLastTimestamp(Chunk *chunk) {
+    if (chunk->num_samples == 0) {
+        return -1;
+    }
+    return ChunkGetSample(chunk, chunk->num_samples - 1)->timestamp;
+}
+timestamp_t ChunkGetFirstTimestamp(Chunk *chunk) {
+    if (chunk->num_samples == 0) {
+        return -1;
+    }
+    return ChunkGetSample(chunk, 0)->timestamp;
+}
+
+int ChunkAddSample(Chunk *chunk, Sample sample) {
+    if (IsChunkFull(chunk)){
+        return 0;
+    }
+
     if (ChunkNumOfSample(chunk) == 0) {
+        //initilize base_timestamp
         chunk->base_timestamp = sample.timestamp;
     }
-    chunk->samples[chunk->num_samples] = sample;
+
+    ChunkGetSampleArray(chunk)[chunk->num_samples] = sample;
     chunk->num_samples++;
+
+    return 1;
 }
 
 ChunkIterator NewChunkIterator(Chunk* chunk) {
     return (ChunkIterator){.chunk = chunk, .currentIndex = 0};
 }
 
-Sample * ChunkItertorGetNext(ChunkIterator *iter) {
+int ChunkItertorGetNext(ChunkIterator *iter, Sample* sample) {
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
-        return &iter->chunk->samples[iter->currentIndex-1];
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
+        memcpy(sample, internalSample, sizeof(Sample));
+        return 1;
     } else {
-        return NULL;
+        return 0;
     }
 }

@@ -13,7 +13,7 @@ typedef struct Sample {
 typedef struct Chunk
 {
     timestamp_t base_timestamp;
-    Sample * samples;
+    void * samples;
     short num_samples;
     short max_samples;
     struct Chunk *nextChunk;
@@ -24,17 +24,20 @@ typedef struct ChunkIterator
 {
     Chunk *chunk;
     int currentIndex;
+    timestamp_t lastTimestamp;
+    int lastValue;
 } ChunkIterator;
 
 Chunk * NewChunk(size_t sampleCount);
 void FreeChunk(Chunk *chunk);
 
-void ChunkAddSample(Chunk *chunk, Sample sample);
+// 0 for failure, 1 for succss
+int ChunkAddSample(Chunk *chunk, Sample sample);
 int IsChunkFull(Chunk *chunk);
 int ChunkNumOfSample(Chunk *chunk);
-Sample *ChunkGetLastSample(Chunk *chunk);
-Sample *ChunkGetFirstSample(Chunk *chunk);
+timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
+timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
 
 ChunkIterator NewChunkIterator(Chunk *chunk);
-Sample * ChunkItertorGetNext(ChunkIterator *iterator);
+int ChunkItertorGetNext(ChunkIterator *iter, Sample* sample);
 #endif

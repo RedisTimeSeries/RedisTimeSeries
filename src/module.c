@@ -153,20 +153,20 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long arraylen = 0;
     SeriesItertor iterator = SeriesQuery(series, start_ts, end_ts);
-    Sample *sample;
+    Sample sample;
     void *context;
     if (agg_type != AGG_NONE)
         context = aggObject->createContext();
     timestamp_t last_agg_timestamp = 0;
-    while ((sample = SeriesItertorGetNext(&iterator)) != NULL ) {
+    while (SeriesItertorGetNext(&iterator, &sample) != 0 ) {
         if (agg_type == AGG_NONE) { // No aggregation whats so ever
             RedisModule_ReplyWithArray(ctx, 2);
 
-            RedisModule_ReplyWithLongLong(ctx, sample->timestamp);
-            RedisModule_ReplyWithDouble(ctx, sample->data);
+            RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
+            RedisModule_ReplyWithDouble(ctx, sample.data);
             arraylen++;
         } else {
-            timestamp_t current_timestamp = sample->timestamp - (sample->timestamp % time_delta);
+            timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             if (current_timestamp > last_agg_timestamp) {
                 if (last_agg_timestamp != 0) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
@@ -175,7 +175,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
                 last_agg_timestamp = current_timestamp;
             }
-            aggObject->appendValue(context, sample->data);
+            aggObject->appendValue(context, sample.data);
         }
     }
 

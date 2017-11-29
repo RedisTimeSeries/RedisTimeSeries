@@ -3,8 +3,8 @@
 
 #include "redismodule.h"
 #include "compaction.h"
-#include "chunk.h"
 #include "consts.h"
+#include "chunk.h"
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -41,7 +41,7 @@ size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 
 SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
-Sample * SeriesItertorGetNext(SeriesItertor *iterator);
+int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample);
 
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec);
