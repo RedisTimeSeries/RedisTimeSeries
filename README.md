@@ -10,7 +10,7 @@ Including Integration with:
 2. Grafana - using SimpleJson datasource.
 
 ## Memory model
-A time series is a linked list of meomry chunks.
+A time series is a linked list of memory chunks.
 Each chunk has a predefined size of samples, each sample is a tuple of the time and the value.
 Each sample is the size of 128bit (64bit for the timestamp and 64bit for the value).
 
@@ -19,7 +19,7 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 * Query by start time and end-time
 * Aggregated queries (Min, Max, Avg, Sum, Count) for any time bucket
 * Configurable max retention period
-* Compations/Rollups - automatically updated aggregated timeseries
+* Compactions/Roll-ups - automatically updated aggregated timeseries
 
 ## Build
 1. `cd src`
@@ -52,7 +52,7 @@ Optional args:
 TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
 ```
 * SOURCE_KEY - key name for source time series
-* AGG_TYPE - aggregration type one of the following: avg, sum, min, max, count
+* AGG_TYPE - aggregation type one of the following: avg, sum, min, max, count
 * BUCKET_SIZE_SEC - time bucket for aggregated compaction,
 * DEST_KEY - key name for destination time series
 
@@ -60,7 +60,7 @@ TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
 
 > *Performance Notice*: if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
 
-### TS.deleterule - delete a compcation rule
+### TS.deleterule - delete a compaction rule
 ```sql
 TS.DELETERULE SOURCE_KEY DEST_KEY
 ```
@@ -93,7 +93,7 @@ TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
 * key - key name for timeseries
 Optional args:
     * aggregationType - one of the following: avg, sum, min, max, count
-    * bucketSizeSeconds - time bucket for aggreagation in seconds
+    * bucketSizeSeconds - time bucket for aggregation in seconds
 
 #### Complexity
 TS.RANGE complexity is O(n/m+k*m)
@@ -102,7 +102,7 @@ n = number of data points
 m = chunk size (data points per chunk)
 k = number of data points that are in the requested range
 
-This can be improved in the future by using binary search to find the start of the range, which will make this O(Log(n/m)+k*m), but since m is pretty small, we can neglect it at look at the operation as O(Log(n) + k).
+This can be improved in the future by using binary search to find the start of the range, which will make this O(Log(n/m)+k*m), but since m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
 
 #### Example for aggregated query
 ```sql
