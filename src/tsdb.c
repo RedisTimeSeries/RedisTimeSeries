@@ -1,4 +1,5 @@
 #include <time.h>
+#include <string.h>
 #include "tsdb.h"
 #include "rmutil/alloc.h"
 

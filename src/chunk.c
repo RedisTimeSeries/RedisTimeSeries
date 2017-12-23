@@ -1,5 +1,6 @@
 #include "chunk.h"
-#include <stdlib.h>
+#include <string.h>
+#include "rmutil/alloc.h"
 
 Chunk * NewChunk(size_t sampleCount)
 {

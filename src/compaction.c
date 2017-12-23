@@ -35,10 +35,14 @@ void AvgReset(void *contextPtr) {
     context->cnt = 0;
 }
 
+void rm_free(void* ptr) {
+    free(ptr);
+}
+
 static AggregationClass aggAvg = {
     .createContext = AvgCreateContext,
     .appendValue = AvgAddValue,
-    .freeContext = free,
+    .freeContext = rm_free,
     .finalize = AvgFinalize,
     .resetContext = AvgReset
 };
@@ -93,7 +97,7 @@ void CountAppendValue(void *contextPtr, double value) {
 static AggregationClass aggMax = {
     .createContext = MaxMinCreateContext,
     .appendValue = MaxAppendValue,
-    .freeContext = free,
+    .freeContext = rm_free,
     .finalize = MaxMinFinalize,
     .resetContext = MaxMinReset
 };
@@ -101,7 +105,7 @@ static AggregationClass aggMax = {
 static AggregationClass aggMin = {
     .createContext = MaxMinCreateContext,
     .appendValue = MinAppendValue,
-    .freeContext = free,
+    .freeContext = rm_free,
     .finalize = MaxMinFinalize,
     .resetContext = MaxMinReset
 };
@@ -109,7 +113,7 @@ static AggregationClass aggMin = {
 static AggregationClass aggSum = {
     .createContext = MaxMinCreateContext,
     .appendValue = SumAppendValue,
-    .freeContext = free,
+    .freeContext = rm_free,
     .finalize = MaxMinFinalize,
     .resetContext = MaxMinReset
 };
@@ -117,7 +121,7 @@ static AggregationClass aggSum = {
 static AggregationClass aggCount = {
     .createContext = MaxMinCreateContext,
     .appendValue = CountAppendValue,
-    .freeContext = free,
+    .freeContext = rm_free,
     .finalize = MaxMinFinalize,
     .resetContext = MaxMinReset
 };
