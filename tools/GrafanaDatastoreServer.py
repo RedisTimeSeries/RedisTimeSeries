@@ -48,9 +48,10 @@ def query():
     for target in targets:
         args = ['ts.range', target, int(stime), int(etime)]
         if 'intervalMs' in request and request['intervalMs'] > 0 and request['intervalMs']/1000 > 1:
-            args += ['avg', request['intervalMs']/1000]
+            args += ['avg', int(round(request['intervalMs']/1000))]
+        print(args)
         redis_resp = redis_client.execute_command(*args)
-        datapoints = [(x2, x1*1000) for x1, x2 in redis_resp]
+        datapoints = [(x2.decode("ascii"), x1*1000) for x1, x2 in redis_resp]
         response.append(dict(target=target, datapoints=datapoints))
     return jsonify(response)
 
