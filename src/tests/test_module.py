@@ -12,12 +12,25 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             assert redis.execute_command('TS.ADD', key, start_ts + i, 5)
 
     def test_sanity(self):
-        start_ts = 1488823384L
+        start_ts = 1511885909L
         samples_count = 500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
+            expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+
+    def test_sanity_pipeline(self):
+        start_ts = 1488823384L
+        samples_count = 500
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            with r.pipeline(transaction=False) as p:
+                p.set("name", "danni")
+                self._insert_data(p, 'tester', start_ts, samples_count, 5)
+                p.execute()
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
