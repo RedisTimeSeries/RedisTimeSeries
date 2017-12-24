@@ -39,3 +39,7 @@ docker:
 	cd .. && docker build -t redis-tsdb .
 
 FORCE:
+
+package: redis-tsdb-module.so
+	mkdir -p ../build
+	ramp pack -m "`pwd`/../ramp_manifest.yml" -v -o "../build/redis-tsdb-module.{os}-{architecture}.latest.zip" "`pwd`/redis-tsdb-module.so"
