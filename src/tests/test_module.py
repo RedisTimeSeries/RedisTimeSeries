@@ -22,6 +22,21 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
+    def test_rdb(self):
+        start_ts = 1511885909L
+        samples_count = 500
+        data = None
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            self._insert_data(r, 'tester', start_ts, samples_count, 5)
+            data = r.execute_command('dump', 'tester')
+
+        with self.redis() as r:
+            r.execute_command('RESTORE', 'tester', 0, data)
+            expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+
     def test_sanity_pipeline(self):
         start_ts = 1488823384L
         samples_count = 500
