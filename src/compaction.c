@@ -1,3 +1,5 @@
+#include <ctype.h>
+#include <string.h>
 #include "compaction.h"
 #include "rmutil/alloc.h"
 
@@ -126,6 +128,52 @@ static AggregationClass aggCount = {
     .finalize = MaxMinFinalize,
     .resetContext = MaxMinReset
 };
+
+int StringAggTypeToEnum(const char *agg_type) {
+    return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
+}
+
+int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
+    char *agg_type_lower = malloc(sizeof(char) * len);
+    int result;
+
+    for(int i = 0; i < len; i++){
+        agg_type_lower[i] = tolower(agg_type[i]);
+    }
+    if (strncmp(agg_type_lower, "min", len) == 0){
+        result = TS_AGG_MIN;
+    } else if (strncmp(agg_type_lower, "max", len) == 0) {
+        result =  TS_AGG_MAX;
+    } else if (strncmp(agg_type_lower, "sum", len) == 0) {
+        result =  TS_AGG_SUM;
+    } else if (strncmp(agg_type_lower, "avg", len) == 0) {
+        result =  TS_AGG_AVG;
+    } else if (strncmp(agg_type_lower, "count", len) == 0) {
+        result =  TS_AGG_COUNT;
+    } else {
+        result =  TS_AGG_INVALID;
+    }
+
+    free(agg_type_lower);
+    return result;
+}
+
+const char * AggTypeEnumToString(int aggType) {
+    switch (aggType) {
+        case TS_AGG_MIN:
+            return "MIN";
+        case TS_AGG_MAX:
+            return "MAX";
+        case TS_AGG_SUM:
+            return "SUM";
+        case TS_AGG_AVG:
+            return "AVG";
+        case TS_AGG_COUNT:
+            return "COUNT";
+        default:
+            return "Unknown";
+    }
+}
 
 AggregationClass* GetAggClass(int aggType) {
     switch (aggType) {

@@ -3,10 +3,14 @@
 
 #include <sys/types.h>
 
+#define TRUE 1
+#define FALSE 0
+
 #define timestamp_t int32_t
 #define api_timestamp_t int32_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
+#define TSDB_ERROR -1
 
 /* TS.CREATE Defaults */
 #define RETENTION_DEFAULT_SECS          0LL

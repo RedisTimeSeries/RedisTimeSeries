@@ -1,7 +1,11 @@
 #include <time.h>
 #include <string.h>
-#include "tsdb.h"
+#include "rmutil/logging.h"
+#include "rmutil/strings.h"
 #include "rmutil/alloc.h"
+#include "tsdb.h"
+#include "module.h"
+#include "config.h"
 
 Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
 {
@@ -138,6 +142,50 @@ int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample) {
     return 0;
 }
 
+CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize) {
+    CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
+    if (rule == NULL ) {
+        return NULL;
+    }
+    if (series->rules == NULL){
+        series->rules = rule;
+    } else {
+        CompactionRule *last = series->rules;
+        while(last->nextRule != NULL) last = last->nextRule;
+        last->nextRule = rule;
+    }
+    return rule;
+}
+
+int SeriesCreateRulesFromGloalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series) {
+    size_t len;
+    int i;
+    Series *compactedSeries;
+    RedisModuleKey *compactedKey;
+
+    for (i=0; i<TSGlobalConfig.compactionRulesCount; i++) {
+        SimpleCompactionRule* rule = TSGlobalConfig.compactionRules + i;
+        RedisModuleString* destKey = RedisModule_CreateStringPrintf(ctx, "%s_%s_%ld",
+                                            RedisModule_StringPtrLen(keyName, &len),
+                                            AggTypeEnumToString(rule->aggType),
+                                            rule->bucketSizeSec);
+        RedisModule_RetainString(ctx, destKey);
+        SeriesAddRule(series, destKey, rule->aggType, rule->bucketSizeSec);
+
+        compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ|REDISMODULE_WRITE);
+
+        if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
+            RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
+            RedisModule_CloseKey(compactedKey);
+            continue;
+        }
+
+        CreateTsKey(ctx, destKey, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        RedisModule_CloseKey(compactedKey);
+    }
+    return TSDB_OK;
+}
+
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec) {
     if (bucketSizeSec <= 0) {
         return NULL;
@@ -153,4 +201,15 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeS
     rule->nextRule = NULL;
 
     return rule;
+}
+
+int SeriesHasRule(Series *series, RedisModuleString *destKey) {
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        if (RMUtil_StringEquals(rule->destKey, destKey)) {
+            return TRUE;
+        }
+        rule = rule->nextRule;
+    }
+    return FALSE;
 }

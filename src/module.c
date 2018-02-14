@@ -6,25 +6,10 @@
 #include "tsdb.h"
 #include "compaction.h"
 #include "rdb.h"
+#include "config.h"
+#include "module.h"
 
-static RedisModuleType *SeriesType;
-
-static const char * AggTypeEnumToString(int aggType){
-    switch (aggType) {
-        case TS_AGG_MIN:
-            return "MIN";
-        case TS_AGG_MAX:
-            return "MAX";
-        case TS_AGG_SUM:
-            return "SUM";
-        case TS_AGG_AVG:
-            return "AVG";
-        case TS_AGG_COUNT:
-            return "COUNT";
-        default:
-            return "Unknown";
-    }
-}
+RedisModuleType *SeriesType;
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -71,24 +56,6 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-
-int StringAggTypeToEnum(RedisModuleString *aggType) {
-    RMUtil_StringToLower(aggType);
-    if (RMUtil_StringEqualsC(aggType, "min")){
-        return TS_AGG_MIN;
-    } else if (RMUtil_StringEqualsC(aggType, "max")){
-        return TS_AGG_MAX;
-    } else if (RMUtil_StringEqualsC(aggType, "sum")){
-        return TS_AGG_SUM;
-    } else if (RMUtil_StringEqualsC(aggType, "avg")){
-        return TS_AGG_AVG;
-    } else if (RMUtil_StringEqualsC(aggType, "count")){
-        return TS_AGG_COUNT;
-    } else {
-        return TS_AGG_INVALID;
-    }
-}
-
 void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
     RedisModule_ReplyWithArray(ctx, 2);
 
@@ -128,9 +95,12 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (argc > 4)
     {
-        if (!aggTypeStr)
+        if (!aggTypeStr){
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
-        agg_type = StringAggTypeToEnum( aggTypeStr );
+        }
+
+        size_t str_len;
+        agg_type = StringLenAggTypeToEnum(RedisModule_StringPtrLen(aggTypeStr, &str_len), str_len);
 
         if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
@@ -211,8 +181,8 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 4) {
         return RedisModule_WrongArity(ctx);
     }
-
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleString *keyName = argv[1];
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
     double timestamp, value;
     if ((RedisModule_StringToDouble(argv[3], &value) != REDISMODULE_OK))
@@ -221,10 +191,16 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if ((RedisModule_StringToDouble(argv[2], &timestamp) != REDISMODULE_OK))
         return RedisModule_ReplyWithError(ctx,"TSDB: invalid timestamp");
 
-    Series *series;
+    Series *series = NULL;
     
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        if (TSGlobalConfig.hasGlobalConfig) {
+            // the key doesn't exists but we have enough information to create one
+            CreateTsKey(ctx, keyName, TSGlobalConfig.retentionPolicy, TSGlobalConfig.maxSamplesPerChunk, &series, &key);
+            SeriesCreateRulesFromGloalConfig(ctx, keyName, series);
+        } else {
+            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+        }
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
     } else {
@@ -232,12 +208,13 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     int retval = SeriesAddSample(series, timestamp, value);
+    int result = 0;
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
         RedisModule_ReplyWithError(ctx, "TSDB: timestamp is too old");
-        return REDISMODULE_ERR;
+        result = REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
-        return REDISMODULE_ERR;
+        result = REDISMODULE_ERR;
     } else {
         // handle compaction rules
         CompactionRule *rule = series->rules;
@@ -248,17 +225,33 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         
         RedisModule_ReplyWithSimpleString(ctx, "OK");
         RedisModule_ReplicateVerbatim(ctx);
-        return REDISMODULE_OK;
+        result = REDISMODULE_OK;
     }
+    RedisModule_CloseKey(key);
+    return result;
+}
+
+int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, long long retentionSecs,
+                long long maxSamplesPerChunk, Series **series, RedisModuleKey **key) {
+    if (*key == NULL) {
+        *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    }
+
+    *series = NewSeries(retentionSecs, maxSamplesPerChunk);
+    if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
+        return TSDB_ERROR;
+    }
+
+    return TSDB_OK;
 }
 
 int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc < 2 || argc > 4)
         return RedisModule_WrongArity(ctx);
 
-    RedisModuleString *key = argv[1];
+    RedisModuleString *keyName = argv[1];
     long long retentionSecs = RETENTION_DEFAULT_SECS;
-    long long maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
+    long long maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
 
     if (argc > 2) {
         if ((RedisModule_StringToLongLong(argv[2], &retentionSecs) != REDISMODULE_OK))
@@ -270,31 +263,21 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return RedisModule_ReplyWithError(ctx,"TSDB: invalid maxSamplesPerChunk");
     }
 
-    RedisModuleKey *series = RedisModule_OpenKey(ctx, key, REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
-    if (RedisModule_KeyType(series) != REDISMODULE_KEYTYPE_EMPTY) {
+    if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(key);
         return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
     }
 
-    Series *newSeries = NewSeries(retentionSecs, maxSamplesPerChunk);
-    RedisModule_ModuleTypeSetValue(series, SeriesType, newSeries);
+    Series *series;
+    CreateTsKey(ctx, keyName, retentionSecs, maxSamplesPerChunk, &series, &key);
+    RedisModule_CloseKey(key);
 
     RedisModule_Log(ctx, "info", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
-}
-
-int SeriesHasRule(Series *series, RedisModuleString *destKey) {
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        if (RMUtil_StringEquals(rule->destKey, destKey)) {
-            return TRUE;
-        }
-        rule = rule->nextRule;
-    }
-
-    return FALSE;
 }
 
 //TS.DELETERULE SOURCE_KEY DEST_KEY
@@ -345,7 +328,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
     }
 
-    int aggType = StringAggTypeToEnum(argv[2]);
+    size_t str_len;
+    int aggType = StringLenAggTypeToEnum(RedisModule_StringPtrLen(argv[2], &str_len), str_len);
     if (aggType < 0 && aggType >5) { \
         return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type"); \
     }
@@ -368,15 +352,11 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *destKeyStr = RedisModule_CreateStringFromString(ctx, argv[4]);
-    RedisModule_RetainString(ctx, destKeyStr);
-    CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
-
-    if (series->rules == NULL){
-        series->rules = rule;
+    if (SeriesAddRule(series, destKeyStr, aggType, bucketSize) != NULL) {
+        RedisModule_RetainString(ctx, destKeyStr);
     } else {
-        CompactionRule *last = series->rules;
-        while(last->nextRule != NULL) last = last->nextRule;
-        last->nextRule = rule;
+        RedisModule_ReplyWithSimpleString(ctx, "ERROR creating rule");
+        return REDISMODULE_ERR;
     }
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
@@ -384,20 +364,31 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx) {
-  if (RedisModule_Init(ctx, "tsdb", 1, REDISMODULE_APIVER_1) ==
-      REDISMODULE_ERR) {
-    return REDISMODULE_ERR;
-  }
+/*
+module loading function, possible arguments:
+COMPACTION_POLICY - compaction policy from parse_policies,h
+RETNTION_POLICY - integer that represent the retention in seconds
+MAX_SAMPLE_PER_CHUNK - how many samples per chunks
+example:
+redis-server --loadmodule ./redis-tsdb-module.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
+*/
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (RedisModule_Init(ctx, "tsdb", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
 
-  RedisModuleTypeMethods tm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = series_rdb_load,
-        .rdb_save = series_rdb_save,
-        .aof_rewrite = series_aof_rewrite,
-        .mem_usage = SeriesMemUsage,
-        .free = FreeSeries
-    };
+    if (ReadConfig(argv, argc) == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    RedisModuleTypeMethods tm = {
+            .version = REDISMODULE_TYPE_METHOD_VERSION,
+            .rdb_load = series_rdb_load,
+            .rdb_save = series_rdb_save,
+            .aof_rewrite = RMUtil_DefaultAofRewrite,
+            .mem_usage = SeriesMemUsage,
+            .free = FreeSeries
+        };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_ENC_VER, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;

@@ -61,6 +61,17 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             actual_result = r.execute_command('TS.range', 'tester', start_ts+100, start_ts + 150)
             assert expected_result == actual_result
 
+    def test_range_with_agg_query(self):
+        start_ts = 1488823384L
+        samples_count = 500
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            self._insert_data(r, 'tester', start_ts, samples_count, 5)
+
+            expected_result = [[1488823000L, '116'], [1488823500L, '384']]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + 500, 'count', 500)
+            assert expected_result == actual_result
+
     def test_compaction_rules(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')

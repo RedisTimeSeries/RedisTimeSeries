@@ -23,23 +23,29 @@ CC=gcc
 
 all: rmutil redis-tsdb-module.so
 
-rmutil: FORCE
+rmutil:
 	$(MAKE) -C $(RMUTIL_LIBDIR)
 
-redis-tsdb-module.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o
-	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc 
+redis-tsdb-module.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o
+	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
 
 clean:
-	rm -rf *.xo *.so *.o
+	rm -rf *.xo *.so *.o ./tests_runner
 
-test: redis-tsdb-module.so
+tests: redis-tsdb-module.so
 	python2 -m pytest -vv .
+
+unittests_runner: redis-tsdb-module.so tests.o
+	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
+
+unittests: unittests_runner
+	./unittests_runner
 
 docker:
 	cd .. && docker build -t redis-tsdb .
 
-FORCE:
-
 package: redis-tsdb-module.so
 	mkdir -p ../build
 	ramp pack -m "`pwd`/../ramp_manifest.yml" -v -o "../build/redis-tsdb-module.{os}-{architecture}.latest.zip" "`pwd`/redis-tsdb-module.so"
+
+.PHONY: package tests unittests clean all

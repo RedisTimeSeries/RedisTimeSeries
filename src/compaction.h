@@ -1,6 +1,9 @@
 #ifndef COMPACTION_H
 #define COMPACTION_H
 #include <sys/types.h>
+#include "redismodule.h"
+#include "consts.h"
+#include <rmutil/util.h>
 
 
 #define AGG_NONE 0
@@ -10,8 +13,6 @@
 #define AGG_AVG 4
 #define AGG_COUNT 5
 
-#define TRUE 1
-#define FALSE 0
 
 typedef struct AggregationClass
 {
@@ -23,5 +24,8 @@ typedef struct AggregationClass
 } AggregationClass;
 
 AggregationClass* GetAggClass(int aggType);
+int StringAggTypeToEnum(const char *agg_type);
+int StringLenAggTypeToEnum(const char *agg_type, size_t len);
+const char * AggTypeEnumToString(int aggType);
 
 #endif
