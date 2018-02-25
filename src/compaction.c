@@ -49,6 +49,7 @@ static AggregationClass aggAvg = {
 
 void *MaxMinCreateContext() {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
+    context->value = 0;
     context->isResetted = TRUE;
     return context;
 }
