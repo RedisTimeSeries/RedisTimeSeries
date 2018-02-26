@@ -43,10 +43,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     return series;
 }
 
-
-void series_aof_rewrite(RedisModuleIO *aof, RedisModuleString *key, void *value)
-{}
-
 int countRules(Series *series) {
     int count = 0;
     CompactionRule *rule = series->rules;
