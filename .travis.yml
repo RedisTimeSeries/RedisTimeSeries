@@ -10,4 +10,4 @@ before_install:
       - cd redis
       - sudo make install
       - cd ..
-script: "cd src && make all test"
+script: "cd src && make all tests unittests"
