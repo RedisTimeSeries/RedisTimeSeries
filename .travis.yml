@@ -8,6 +8,6 @@ before_install:
       - sudo apt-get install --allow-unauthenticated -qq clang
       - git clone -b 4.0 --depth 1 https://github.com/antirez/redis.git
       - cd redis
-      - sudo make install
+      - sudo make -j install
       - cd ..
-script: "cd src && make all tests unittests"
+script: "cd src && make -j all tests unittests"
