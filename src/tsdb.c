@@ -96,7 +96,6 @@ SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_time
     iter.series = series;
     iter.currentChunk = series->firstChunk;
     iter.chunkIteratorInitilized = FALSE;
-    iter.currentSampleIndex = 0;
     iter.minTimestamp = minTimestamp;
     iter.maxTimestamp = maxTimestamp;
     return iter;

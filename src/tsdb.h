@@ -30,7 +30,6 @@ typedef struct SeriesItertor {
     Chunk *currentChunk;
     int chunkIteratorInitilized;
     ChunkIterator chunkIterator;
-    unsigned int currentSampleIndex;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
 } SeriesItertor;
