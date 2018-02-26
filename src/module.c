@@ -99,8 +99,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
         }
 
-        size_t str_len;
-        agg_type = StringLenAggTypeToEnum(RedisModule_StringPtrLen(aggTypeStr, &str_len), str_len);
+        agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
 
         if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
             return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
@@ -328,8 +327,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
     }
 
-    size_t str_len;
-    int aggType = StringLenAggTypeToEnum(RedisModule_StringPtrLen(argv[2], &str_len), str_len);
+    int aggType = RMStringLenAggTypeToEnum(argv[2]);
     if (aggType < 0 && aggType >5) { \
         return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type"); \
     }

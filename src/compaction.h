@@ -25,6 +25,7 @@ typedef struct AggregationClass
 
 AggregationClass* GetAggClass(int aggType);
 int StringAggTypeToEnum(const char *agg_type);
+int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);
 const char * AggTypeEnumToString(int aggType);
 

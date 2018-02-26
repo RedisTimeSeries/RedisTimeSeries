@@ -19,7 +19,7 @@ else
 	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup
 endif
 CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET
-CC=gcc
+# CC=gcc
 
 all: rmutil redis-tsdb-module.so
 
@@ -36,7 +36,7 @@ tests: redis-tsdb-module.so
 	python2 -m pytest -vv .
 
 unittests_runner: redis-tsdb-module.so tests.o
-	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
+	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
 
 unittests: unittests_runner
 	./unittests_runner

@@ -81,11 +81,12 @@ int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **par
     char *token;
     char *token_iter_ptr;
     size_t len = strlen(policy_string);
-    char *rest = malloc(len);
+    char *rest = malloc(len + 1);
     memcpy(rest, policy_string, len+1);
     *rules_count = 0;
 
-    int policies_count = count_char_in_str(policy_string, len, ';');
+    // the ';' is a seperator so we need to add +1 for the policy count
+    int policies_count = count_char_in_str(policy_string, len, ';') + 1;
     SimpleCompactionRule *parsed_rules = malloc(sizeof(SimpleCompactionRule) * policies_count);
     *parsed_rules_out = parsed_rules;
 

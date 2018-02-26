@@ -133,8 +133,14 @@ int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
 }
 
+int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
+    size_t str_len;
+    const char *aggTypeCStr = RedisModule_StringPtrLen(aggTypeStr, &str_len);
+    return StringLenAggTypeToEnum(aggTypeCStr, str_len);
+}
+
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    char *agg_type_lower = malloc(sizeof(char) * len);
+    char agg_type_lower[10];
     int result;
 
     for(int i = 0; i < len; i++){
@@ -154,7 +160,6 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
         result =  TS_AGG_INVALID;
     }
 
-    free(agg_type_lower);
     return result;
 }
 
