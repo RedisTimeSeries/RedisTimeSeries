@@ -1,3 +1,4 @@
+#include <time.h>
 #include "redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
@@ -10,6 +11,7 @@
 #include "module.h"
 
 RedisModuleType *SeriesType;
+time_t timer;
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -362,6 +364,81 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+
+/*
+TS.INCRBY ts_key NUMBER [RESET] [RESET TIME SECONDS]
+*/
+int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 3 || argc > 5)
+        return RedisModule_WrongArity(ctx);
+
+    RedisModuleString *keyName = argv[1];
+    Series *series;
+
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        if (TSGlobalConfig.hasGlobalConfig) {
+            // the key doesn't exists but we have enough information to create one
+            CreateTsKey(ctx, keyName, TSGlobalConfig.retentionPolicy, TSGlobalConfig.maxSamplesPerChunk, &series, &key);
+            SeriesCreateRulesFromGloalConfig(ctx, keyName, series);
+        } else {
+            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+        }
+    }
+
+    series = RedisModule_ModuleTypeGetValue(key);
+    long long incrby = 0;
+    if (RMUtil_ParseArgs(argv, argc, 2, "l", &incrby) != REDISMODULE_OK)
+        return RedisModule_WrongArity(ctx);
+    time(&timer);
+
+    double result;
+    long long resetSeconds = 1;
+    time_t currentUpdatedTime = timer;
+    if (argc > 3) {
+        RMUtil_StringToLower(argv[3]);
+        if (RMUtil_StringEqualsC(argv[3], "reset")) {
+            if (argc > 4) {
+                RMUtil_StringToLower(argv[4]);
+                if (RMUtil_ParseArgs(argv, argc, 4, "l", &resetSeconds) != REDISMODULE_OK) {
+                    return RedisModule_WrongArity(ctx);
+                }
+            }
+            currentUpdatedTime = timer - ((int)timer % resetSeconds);
+            if (series->lastTimestamp != 0) {
+                int lastTS = series->lastTimestamp;
+                if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
+                    series->lastValue = 0;
+                }
+            }
+        } else {
+            return RedisModule_WrongArity(ctx);
+        }
+    }
+
+    RMUtil_StringToLower(argv[0]);
+    if (RMUtil_StringEqualsC(argv[0], "ts.incrby")) {
+        result = series->lastValue + incrby;
+    } else {
+        result = series->lastValue - incrby;
+    }
+
+    SeriesAddSample(series, currentUpdatedTime, result);
+
+    // handle compaction rules
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        handleCompaction(ctx, rule, currentUpdatedTime, result);
+        rule = rule->nextRule;
+    }
+
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -394,6 +471,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
+    RMUtil_RegisterWriteCmd(ctx, "ts.incrby", TSDB_incrby);
+    RMUtil_RegisterWriteCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
 

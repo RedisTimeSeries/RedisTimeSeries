@@ -19,10 +19,11 @@ typedef struct Series {
     Chunk *firstChunk;
     Chunk *lastChunk;
     size_t chunkCount;
-    timestamp_t lastTimestamp;
     int32_t retentionSecs;
     short maxSamplesPerChunk;
     CompactionRule *rules;
+    timestamp_t lastTimestamp;
+    double lastValue;
 } Series;
 
 typedef struct SeriesItertor {
