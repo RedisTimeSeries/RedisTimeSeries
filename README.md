@@ -125,6 +125,19 @@ ts.range stats_counts.statsd.packets_received 1487527100 1487527133 avg 5
 
 ```
 
+
+### TS.INCRBY/TS.DECRBY - Incrment the latest value
+```sql
+TS.INCRBY key [VALUE] [RESET] [TIME_BUCKET]
+```
+This command can be used as a counter/gauge that get automatic history as a time series.
+
+* key - key name for timeseries
+Optional args:
+    * VALUE - one of the following: avg, sum, min, max, count
+    * RESET - Should the current counter should be resetted when TIME_BUCKET is changes
+    * TIME_BUCKET - time bucket for resetting the current counter in seconds
+
 ### TS.info - query the series metadata
 ```sql
 TS.INFO key

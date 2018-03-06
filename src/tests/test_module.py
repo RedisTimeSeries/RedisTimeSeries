@@ -1,5 +1,6 @@
 import redis
 import pytest
+import time
 from rmtest import ModuleTestCase
 
 class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
@@ -131,3 +132,32 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('DUMP', 'tester')
+
+    def test_incrby_reset(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+
+            i = 0
+            time_bucket = 10
+            start_time = int(time.time())
+            start_time = start_time - start_time % time_bucket
+            while i < 1000:
+                i += 1
+                r.execute_command('ts.incrby', 'tester', '1', 'RESET', time_bucket)
+
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_time, '1000']]
+
+    def test_incrby(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+
+            start_incr_time = int(time.time())
+            for i in range(20):
+                r.execute_command('ts.incrby', 'tester', '5')
+
+            time.sleep(1)
+            start_decr_time = int(time.time())
+            for i in range(20):
+                r.execute_command('ts.decrby', 'tester', '1')
+
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_incr_time, '100'], [start_decr_time, '80']]

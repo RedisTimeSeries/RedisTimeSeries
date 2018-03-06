@@ -14,9 +14,10 @@ Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
     newSeries->firstChunk = NewChunk(newSeries->maxSamplesPerChunk);
     newSeries->lastChunk = newSeries->firstChunk;
     newSeries->chunkCount = 1;
-    newSeries->lastTimestamp = 0;
     newSeries->retentionSecs = retentionSecs;
     newSeries->rules = NULL;
+    newSeries->lastTimestamp = 0;
+    newSeries->lastValue = 0;
 
     return newSeries;
 }
@@ -87,7 +88,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         ChunkAddSample(currentChunk, sample);
     } 
     series->lastTimestamp = timestamp;
-
+    series->lastValue = value;
     return TSDB_OK;
 }
 
