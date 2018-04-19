@@ -77,9 +77,9 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     }
     RedisModule_SaveUnsigned(io, numSamples);
 
-    SeriesItertor iter = SeriesQuery(series, 0, series->lastTimestamp);
+    SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp);
     Sample sample;
-    while (SeriesItertorGetNext(&iter, &sample) != 0) {
+    while (SeriesIteratorGetNext(&iter, &sample) != 0) {
         RedisModule_SaveUnsigned(io, sample.timestamp);
         RedisModule_SaveDouble(io, sample.data);
     }

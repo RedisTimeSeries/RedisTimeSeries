@@ -92,17 +92,17 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-SeriesItertor SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
-    SeriesItertor iter;
+SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
+    SeriesIterator iter;
     iter.series = series;
     iter.currentChunk = series->firstChunk;
-    iter.chunkIteratorInitilized = FALSE;
+    iter.chunkIteratorInitialized = FALSE;
     iter.minTimestamp = minTimestamp;
     iter.maxTimestamp = maxTimestamp;
     return iter;
 }
 
-int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample) {
+int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     Sample internalSample;
     while (iterator->currentChunk != NULL)
     {
@@ -110,7 +110,7 @@ int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample) {
         if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp)
         {
             iterator->currentChunk = currentChunk->nextChunk;
-            iterator->chunkIteratorInitilized = FALSE;
+            iterator->chunkIteratorInitialized = FALSE;
             continue;
         }
         else if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
@@ -118,15 +118,15 @@ int SeriesItertorGetNext(SeriesItertor *iterator, Sample *currentSample) {
             break;
         }
         
-        if (!iterator->chunkIteratorInitilized) 
+        if (!iterator->chunkIteratorInitialized) 
         {
             iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
-            iterator->chunkIteratorInitilized = TRUE;
+            iterator->chunkIteratorInitialized = TRUE;
         }
 
-        if (ChunkItertorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
+        if (ChunkIteratorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
             iterator->currentChunk = currentChunk->nextChunk;
-            iterator->chunkIteratorInitilized = FALSE;
+            iterator->chunkIteratorInitialized = FALSE;
             continue;
         }
 
@@ -157,7 +157,7 @@ CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, in
     return rule;
 }
 
-int SeriesCreateRulesFromGloalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series) {
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series) {
     size_t len;
     int i;
     Series *compactedSeries;

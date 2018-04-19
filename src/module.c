@@ -98,13 +98,13 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc > 4)
     {
         if (!aggTypeStr){
-            return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
+            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
         }
 
         agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
 
         if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
-            return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type");
+            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
 
         aggObject = GetAggClass( agg_type );
         if (!aggObject)
@@ -123,13 +123,13 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long arraylen = 0;
-    SeriesItertor iterator = SeriesQuery(series, start_ts, end_ts);
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
     Sample sample;
     void *context;
     if (agg_type != AGG_NONE)
         context = aggObject->createContext();
     timestamp_t last_agg_timestamp = 0;
-    while (SeriesItertorGetNext(&iterator, &sample) != 0 ) {
+    while (SeriesIteratorGetNext(&iterator, &sample) != 0 ) {
         if (agg_type == AGG_NONE) { // No aggregation whats so ever
             RedisModule_ReplyWithArray(ctx, 2);
 
@@ -163,7 +163,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, rule->destKey, REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        // key doesn't exists anymore, currently don't do anything.
+        // key doesn't exist anymore and we don't do anything
         return;
     }
     Series *destSeries = RedisModule_ModuleTypeGetValue(key);
@@ -196,11 +196,11 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         if (TSGlobalConfig.hasGlobalConfig) {
-            // the key doesn't exists but we have enough information to create one
+            // the key doesn't exist but we have enough information to create one
             CreateTsKey(ctx, keyName, TSGlobalConfig.retentionPolicy, TSGlobalConfig.maxSamplesPerChunk, &series, &key);
-            SeriesCreateRulesFromGloalConfig(ctx, keyName, series);
+            SeriesCreateRulesFromGlobalConfig(ctx, keyName, series);
         } else {
-            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
         }
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
@@ -285,7 +285,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
@@ -309,7 +309,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             rule = rule->nextRule;
         }
     } else {
-        return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exists");
+        return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exist");
     }
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
@@ -326,22 +326,22 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+        return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
     }
 
     int aggType = RMStringLenAggTypeToEnum(argv[2]);
     if (aggType < 0 && aggType >5) { \
-        return RedisModule_ReplyWithError(ctx, "TSDB: Unkown aggregation type"); \
+        return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type"); \
     }
     
     long long bucketSize;
     RedisModule_StringToLongLong(argv[3], &bucketSize);
     if (bucketSize <= 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: bucketSize must be bigger than zero");
+        return RedisModule_ReplyWithError(ctx, "TSDB: bucketSize must be greater than zero");
     }
     RedisModuleKey *destKey = RedisModule_OpenKey(ctx, argv[4], REDISMODULE_READ);
     if (RedisModule_KeyType(destKey) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: the destination key does not exists");
+        return RedisModule_ReplyWithError(ctx, "TSDB: the destination key does not exist");
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
@@ -380,9 +380,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         if (TSGlobalConfig.hasGlobalConfig) {
-            // the key doesn't exists but we have enough information to create one
+            // the key doesn't exist but we have enough information to create one
             CreateTsKey(ctx, keyName, TSGlobalConfig.retentionPolicy, TSGlobalConfig.maxSamplesPerChunk, &series, &key);
-            SeriesCreateRulesFromGloalConfig(ctx, keyName, series);
+            SeriesCreateRulesFromGlobalConfig(ctx, keyName, series);
         } else {
             return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
         }
@@ -442,10 +442,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
-RETNTION_POLICY - integer that represent the retention in seconds
-MAX_SAMPLE_PER_CHUNK - how many samples per chunks
+RETENTION_POLICY - integer that represents the retention in seconds
+MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
-redis-server --loadmodule ./redis-tsdb-module.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
+redis-server --loadmodule ./redis-tsdb-module.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
 */
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_Init(ctx, "tsdb", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {
