@@ -32,6 +32,7 @@ int ReadConfig(RedisModuleString **argv, int argc) {
         }
 
         printf("loaded default retention policy: %lld \n", TSGlobalConfig.retentionPolicy);
+        TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("MAX_SAMPLE_PER_CHUNK", argv, argc) >= 0) {
