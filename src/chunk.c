@@ -53,7 +53,7 @@ int ChunkAddSample(Chunk *chunk, Sample sample) {
     }
 
     if (ChunkNumOfSample(chunk) == 0) {
-        //initilize base_timestamp
+        // initialize base_timestamp
         chunk->base_timestamp = sample.timestamp;
     }
 
@@ -67,7 +67,7 @@ ChunkIterator NewChunkIterator(Chunk* chunk) {
     return (ChunkIterator){.chunk = chunk, .currentIndex = 0};
 }
 
-int ChunkItertorGetNext(ChunkIterator *iter, Sample* sample) {
+int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample) {
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
         Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);

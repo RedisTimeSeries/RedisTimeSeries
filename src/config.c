@@ -26,8 +26,8 @@ int ReadConfig(RedisModuleString **argv, int argc) {
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("RETNTION_POLICY", argv, argc) >= 0) {
-        if (RMUtil_ParseArgsAfter("RETNTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) != REDISMODULE_OK) {
+    if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
+        if (RMUtil_ParseArgsAfter("RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) != REDISMODULE_OK) {
             return TSDB_ERROR;
         }
 

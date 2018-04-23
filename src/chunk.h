@@ -31,7 +31,7 @@ typedef struct ChunkIterator
 Chunk * NewChunk(size_t sampleCount);
 void FreeChunk(Chunk *chunk);
 
-// 0 for failure, 1 for succss
+// 0 for failure, 1 for success
 int ChunkAddSample(Chunk *chunk, Sample sample);
 int IsChunkFull(Chunk *chunk);
 int ChunkNumOfSample(Chunk *chunk);
@@ -39,5 +39,5 @@ timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
 timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
 
 ChunkIterator NewChunkIterator(Chunk *chunk);
-int ChunkItertorGetNext(ChunkIterator *iter, Sample* sample);
+int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample);
 #endif

@@ -27,7 +27,7 @@ int parse_string_to_secs(const char *timeStr, int *out){
     return TRUE;
 }
 
-int parse_interal_policy(char *policy, SimpleCompactionRule *rule) {
+int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *token;
     char *token_iter_ptr;
     char agg_type[20];
@@ -94,7 +94,7 @@ int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **par
     int success = TRUE;
     while (token != NULL)
     {
-        int result = parse_interal_policy(token, parsed_rules);
+        int result = parse_interval_policy(token, parsed_rules);
         if (result == FALSE ) {
             success = FALSE;
             break;
