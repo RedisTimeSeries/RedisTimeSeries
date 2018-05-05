@@ -22,9 +22,17 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 * Compactions/Roll-ups - automatically updated aggregated timeseries
 
 ## Build
-1. `cd src`
-2. `make`
-3. on your red-server run: `loadmodule redis-tsdb-module.so`
+```bash
+git submodule init
+git submodule update
+cd src
+make all
+```
+
+## Run 
+In your redis-server run: `loadmodule redis-tsdb-module.so`.
+
+More infomation about modules can be found at redis offical documentation: https://redis.io/topics/modules-intro
 
 ### Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
