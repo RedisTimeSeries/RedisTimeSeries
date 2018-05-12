@@ -30,8 +30,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
             series->rules = rule;
         } else {
             lastRule->nextRule = rule;
-            lastRule = rule;
         }
+        
+        lastRule = rule;
     }
 
     uint64_t samplesCount = RedisModule_LoadUnsigned(io);
