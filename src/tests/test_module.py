@@ -29,6 +29,10 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
         data = None
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester_agg_avg_10')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 10, 'tester_agg_avg_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'MAX', 10, 'tester_agg_max_10')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
             data = r.execute_command('dump', 'tester')
 
