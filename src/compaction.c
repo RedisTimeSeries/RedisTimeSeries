@@ -97,6 +97,19 @@ void CountAppendValue(void *contextPtr, double value) {
     context->value++;
 }
 
+void FirstAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    if (context->isResetted) {
+        context->isResetted = FALSE;
+        context->value = value;
+    }
+}
+
+void LastAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    context->value = value;
+}
+
 static AggregationClass aggMax = {
     .createContext = MaxMinCreateContext,
     .appendValue = MaxAppendValue,
@@ -129,6 +142,22 @@ static AggregationClass aggCount = {
     .resetContext = MaxMinReset
 };
 
+static AggregationClass aggFirst = {
+    .createContext = MaxMinCreateContext,
+    .appendValue = FirstAppendValue,
+    .freeContext = rm_free,
+    .finalize = MaxMinFinalize,
+    .resetContext = MaxMinReset
+};
+
+static AggregationClass aggLast = {
+    .createContext = MaxMinCreateContext,
+    .appendValue = LastAppendValue,
+    .freeContext = rm_free,
+    .finalize = MaxMinFinalize,
+    .resetContext = MaxMinReset
+};
+
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
 }
@@ -156,6 +185,10 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
         result =  TS_AGG_AVG;
     } else if (strncmp(agg_type_lower, "count", len) == 0) {
         result =  TS_AGG_COUNT;
+    } else if (strncmp(agg_type_lower, "first", len) == 0) {
+        result =  TS_AGG_FIRST;
+    } else if (strncmp(agg_type_lower, "last", len) == 0) {
+        result =  TS_AGG_LAST;
     } else {
         result =  TS_AGG_INVALID;
     }
@@ -175,6 +208,10 @@ const char * AggTypeEnumToString(int aggType) {
             return "AVG";
         case TS_AGG_COUNT:
             return "COUNT";
+        case TS_AGG_FIRST:
+            return "FIRST";
+        case TS_AGG_LAST:
+            return "LAST";
         default:
             return "Unknown";
     }
@@ -198,6 +235,12 @@ AggregationClass* GetAggClass(int aggType) {
             break;
         case AGG_COUNT:
             return &aggCount;
+            break;
+        case AGG_FIRST:
+            return &aggFirst;
+            break;
+        case AGG_LAST:
+            return &aggLast;
             break;
         default:
             return NULL;

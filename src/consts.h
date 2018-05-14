@@ -25,7 +25,9 @@ typedef enum {
     TS_AGG_SUM,
     TS_AGG_AVG,
     TS_AGG_COUNT,
-    TS_AGG_TYPES_MAX // 6
+    TS_AGG_FIRST,
+    TS_AGG_LAST,
+    TS_AGG_TYPES_MAX // 8
 } TS_AGG_TYPES_T;
 
 #endif

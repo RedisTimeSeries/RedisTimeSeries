@@ -41,8 +41,11 @@ MU_TEST(test_invalid_policy) {
 MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("min") == TS_AGG_MIN);
     mu_check(StringAggTypeToEnum("max") == TS_AGG_MAX);
+    mu_check(StringAggTypeToEnum("sum") == TS_AGG_SUM);
     mu_check(StringAggTypeToEnum("avg") == TS_AGG_AVG);
     mu_check(StringAggTypeToEnum("count") == TS_AGG_COUNT);
+    mu_check(StringAggTypeToEnum("first") == TS_AGG_FIRST);
+    mu_check(StringAggTypeToEnum("last") == TS_AGG_LAST);
 }
 
 MU_TEST_SUITE(test_suite) {
