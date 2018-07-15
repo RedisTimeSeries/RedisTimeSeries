@@ -2,16 +2,30 @@ import redis
 import pytest
 import time
 from rmtest import ModuleTestCase
+import __builtin__
+import math
+
 
 class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
         return dict([(info[i], info[i+1]) for i in range(0, len(info), 2)])
 
-    def _insert_data(self, redis, key, start_ts, samples_count, value):
+    @staticmethod
+    def _insert_data(redis, key, start_ts, samples_count, value):
+        """
+        insert data to key, starting from start_ts, with 1 sec interval between them
+        :param redis: redis connection
+        :param key: name of time_series
+        :param start_ts: beginning of time series
+        :param samples_count: number of samples
+        :param value: could be a list of samples_count values, or one value. if a list, insert the values in their
+        order, if not, insert the single value for all the timestamps
+        """
         for i in range(samples_count):
-            assert redis.execute_command('TS.ADD', key, start_ts + i, value)
-    
+            value_to_insert = value[i] if type(value) == list else value
+            assert redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+
     def _insert_agg_data(self, redis, key, agg_type):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
@@ -24,6 +38,49 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             assert redis.execute_command('TS.ADD', key, i, i // 10 * 100 + values[i % 10])
 
         return agg_key
+
+    @staticmethod
+    def _get_series_value(ts_key_result):
+        """
+        Get only the values from the time stamp series
+        :param ts_key_result: the output of ts.range command (pairs of timestamp and value)
+        :return: float values of all the values in the series
+        """
+        return [float(value[1]) for value in ts_key_result]
+
+    @staticmethod
+    def _calc_downsampling_series(values, bucket_size, calc_func):
+        """
+        calculate the downsampling series given the wanted calc_func, by applying to calc_func to all the full buckets
+        and to the remainder bucket
+        :param values: values of original series
+        :param bucket_size: bucket size for downsampling
+        :param calc_func: function that calculates the wanted rule, for example min/sum/avg
+        :return: the values of the series after downsampling
+        """
+        series = []
+        for i in range(1, int(math.ceil(len(values) / float(bucket_size)))):
+            curr_bucket_size = bucket_size
+            # we don't have enough values for a full bucket anymore
+            if (i + 1) * bucket_size > len(values):
+                curr_bucket_size = len(values) - i
+            series.append(calc_func(values[i * bucket_size: i * bucket_size + curr_bucket_size]))
+        return series
+
+    def calc_rule(self, rule, values, bucket_size):
+        """
+        Calculate the downsampling with the given rule
+        :param rule: 'avg' / 'max' / 'min' / 'sum' / 'count'
+        :param values: original series values
+        :param bucket_size: bucket size for downsampling
+        :return: the values of the series after downsampling
+        """
+        if rule == 'avg':
+            return self._calc_downsampling_series(values, bucket_size, lambda x: float(sum(x)) / len(x))
+        elif rule in ['sum', 'max', 'min']:
+            return self._calc_downsampling_series(values, bucket_size, getattr(__builtin__, rule))
+        elif rule == 'count':
+            return self._calc_downsampling_series(values, bucket_size, len)
 
     def test_sanity(self):
         start_ts = 1511885909L
@@ -234,3 +291,40 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             expected_result = [[10, '184'], [20, '284'], [30, '384'], [40, '484']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             assert expected_result == actual_result
+
+    def test_downsampling_rules(self):
+        """
+        Test downsmapling rules - avg,min,max,count,sum with 4 keys each.
+        Downsample in resolution of:
+        1sec (should be the same length as the original series),
+        3sec (number of samples is divisible by 10),
+        10s (number of samples is not divisible by 10),
+        1000sec (series should be empty since there are not enough samples)
+        Insert some data and check that the length, the values and the info of the downsample series are as expected.
+        """
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            rules = ['avg', 'sum', 'count', 'max', 'min']
+            resolutions = [1, 3, 10, 1000]
+            for rule in rules:
+                for resolution in resolutions:
+                    assert r.execute_command('TS.CREATE', 'tester_{}_{}'.format(rule, resolution))
+                    assert r.execute_command('TS.CREATERULE', 'tester', rule, resolution,
+                                             'tester_{}_{}'.format(rule, resolution))
+
+            start_ts = 0
+            samples_count = 501
+            end_ts = start_ts + samples_count
+            values = range(samples_count)
+            self._insert_data(r, 'tester', start_ts, samples_count, values)
+
+            for rule in rules:
+                for resolution in resolutions:
+                    actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
+                                                      start_ts, end_ts)
+                    assert len(actual_result) == math.ceil((samples_count - resolution) / float(resolution))
+                    expected_result = self.calc_rule(rule, values, resolution)
+                    assert self._get_series_value(actual_result) == expected_result
+                    # last time stamp should be the beginning of the last bucket
+                    assert self._get_ts_info(r, 'tester_{}_{}'.format(rule, resolution))['lastTimestamp'] == \
+                                            (samples_count - 1) - (samples_count - 1) % resolution
