@@ -112,6 +112,39 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
+    def test_rdb_aggregation_context(self):
+        """
+        Check that the aggregation context of the rules is saved in rdb. Write data with not a full bucket,
+        then save it and restore, add more data to the bucket and check the rules results considered the previous data
+        that was in that bucket in their calculation. Check on avg and min, since all the other rules use the same
+        context as min.
+        """
+        start_ts = 3
+        samples_count = 4  # 1 full bucket and another one with 1 value
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester_agg_avg_3')
+            assert r.execute_command('TS.CREATE', 'tester_agg_min_3')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 3, 'tester_agg_avg_3')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'MIN', 3, 'tester_agg_min_3')
+            self._insert_data(r, 'tester', start_ts, samples_count, range(samples_count))
+            data_tester = r.execute_command('dump', 'tester')
+            data_avg_tester = r.execute_command('dump', 'tester_agg_avg_3')
+            data_min_tester = r.execute_command('dump', 'tester_agg_min_3')
+
+        with self.redis() as r:
+            r.execute_command('RESTORE', 'tester', 0, data_tester)
+            r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
+            r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
+            assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count, samples_count)
+            # if the aggregation context wasn't saved, the results were considering only the new value added
+            expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
+            expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
+            actual_result_avg = r.execute_command('TS.range', 'tester_agg_avg_3', start_ts, start_ts + samples_count)
+            assert actual_result_avg == expected_result_avg
+            actual_result_min = r.execute_command('TS.range', 'tester_agg_min_3', start_ts, start_ts + samples_count)
+            assert actual_result_min == expected_result_min
+
     def test_sanity_pipeline(self):
         start_ts = 1488823384L
         samples_count = 500

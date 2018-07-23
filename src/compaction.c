@@ -37,6 +37,18 @@ void AvgReset(void *contextPtr) {
     context->cnt = 0;
 }
 
+void AvgWriteContext(void *contextPtr, RedisModuleIO * io) {
+    AvgContext *context = (AvgContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->val);
+    RedisModule_SaveDouble(io, context->cnt);
+}
+
+void AvgReadContext(void *contextPtr, RedisModuleIO * io){
+    AvgContext *context = (AvgContext *)contextPtr;
+    context->val = RedisModule_LoadDouble(io);
+    context->cnt = RedisModule_LoadDouble(io);
+}
+
 void rm_free(void* ptr) {
     free(ptr);
 }
@@ -46,6 +58,8 @@ static AggregationClass aggAvg = {
     .appendValue = AvgAddValue,
     .freeContext = rm_free,
     .finalize = AvgFinalize,
+    .writeContext = AvgWriteContext,
+    .readContext = AvgReadContext,
     .resetContext = AvgReset
 };
 
@@ -87,6 +101,18 @@ void MinAppendValue(void *contextPtr, double value) {
     }
 }
 
+void MaxMinWriteContext(void *contextPtr, RedisModuleIO * io) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->value);
+    RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
+}
+
+void MaxMinReadContext(void *contextPtr, RedisModuleIO * io) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    size_t len = 1;
+    context->value = RedisModule_LoadDouble(io);
+    context->isResetted = RedisModule_LoadStringBuffer(io, &len)[0];
+}
 void SumAppendValue(void *contextPtr, double value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     context->value += value;
@@ -115,6 +141,8 @@ static AggregationClass aggMax = {
     .appendValue = MaxAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
@@ -123,6 +151,8 @@ static AggregationClass aggMin = {
     .appendValue = MinAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
@@ -131,6 +161,8 @@ static AggregationClass aggSum = {
     .appendValue = SumAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext =  MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
@@ -139,6 +171,8 @@ static AggregationClass aggCount = {
     .appendValue = CountAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
@@ -147,6 +181,8 @@ static AggregationClass aggFirst = {
     .appendValue = FirstAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
@@ -155,6 +191,8 @@ static AggregationClass aggLast = {
     .appendValue = LastAppendValue,
     .freeContext = rm_free,
     .finalize = MaxMinFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
     .resetContext = MaxMinReset
 };
 
