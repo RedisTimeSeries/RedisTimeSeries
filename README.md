@@ -2,7 +2,6 @@
 
 Time series data structure for redis.
 
-## License: AGPL
 ## Using with other tools metrics tools
 See [Tools](tools/) directory.
 Including Integration with:
@@ -158,3 +157,7 @@ TS.INFO key
 7) maxSamplesPerChunk
 8) (integer) 360
 ```
+
+### License
+
+Apache 2.0 with Commons Clause - see [LICENSE](LICENSE)
