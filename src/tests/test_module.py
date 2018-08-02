@@ -59,7 +59,7 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
         :return: the values of the series after downsampling
         """
         series = []
-        for i in range(1, int(math.ceil(len(values) / float(bucket_size)))):
+        for i in range(0, int(math.ceil(len(values) / float(bucket_size)))):
             curr_bucket_size = bucket_size
             # we don't have enough values for a full bucket anymore
             if (i + 1) * bucket_size > len(values):
@@ -355,7 +355,7 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
                 for resolution in resolutions:
                     actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
                                                       start_ts, end_ts)
-                    assert len(actual_result) == math.ceil((samples_count - resolution) / float(resolution))
+                    assert len(actual_result) == math.ceil(samples_count / float(resolution))
                     expected_result = self.calc_rule(rule, values, resolution)
                     assert self._get_series_value(actual_result) == expected_result
                     # last time stamp should be the beginning of the last bucket

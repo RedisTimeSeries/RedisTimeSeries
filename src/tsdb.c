@@ -67,7 +67,7 @@ size_t SeriesMemUsage(const void *value) {
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     if (timestamp < series->lastTimestamp) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp) {
+    } else if (timestamp == series->lastTimestamp && series->lastChunk->num_samples > 0) {
         // this is a hack, we want to override the last sample, so lets ignore it first
         series->lastChunk->num_samples--;
     }
