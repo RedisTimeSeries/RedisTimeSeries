@@ -361,3 +361,12 @@ class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
                     # last time stamp should be the beginning of the last bucket
                     assert self._get_ts_info(r, 'tester_{}_{}'.format(rule, resolution))['lastTimestamp'] == \
                                             (samples_count - 1) - (samples_count - 1) % resolution
+
+    def test_automatic_timestamp(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+        curr_time = int(time.time())
+        r.execute_command('TS.ADD', 'tester', '*', 1)
+        result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()))
+        # test time difference is not more than 1 second
+        assert result[0][0] - curr_time <= 1
