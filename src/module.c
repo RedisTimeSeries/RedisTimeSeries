@@ -188,9 +188,14 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     double timestamp, value;
     if ((RedisModule_StringToDouble(argv[3], &value) != REDISMODULE_OK))
         return RedisModule_ReplyWithError(ctx,"TSDB: invalid value");
-    
-    if ((RedisModule_StringToDouble(argv[2], &timestamp) != REDISMODULE_OK))
-        return RedisModule_ReplyWithError(ctx,"TSDB: invalid timestamp");
+
+    if ((RedisModule_StringToDouble(argv[2], &timestamp) != REDISMODULE_OK)) {
+        // if timestamp is "*", take current time (automatic timestamp)
+        if(RMUtil_StringEqualsC(argv[2], "*"))
+            timestamp = time(NULL);
+        else
+            return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+    }
 
     Series *series = NULL;
     
