@@ -6,7 +6,7 @@ compiler:
 before_install:
       - sudo pip2 install pytest pytest-cov rmtest==0.2 redis
       - sudo apt-get install --allow-unauthenticated -qq clang
-      - git clone -b 4.0 --depth 1 https://github.com/antirez/redis.git
+      - git clone -b 5.0 --depth 1 https://github.com/antirez/redis.git
       - cd redis
       - sudo make -j install
       - cd ..
