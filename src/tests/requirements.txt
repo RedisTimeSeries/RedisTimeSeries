@@ -1,4 +1,4 @@
 pytest==3.0.7
 redis==2.10.5
-rmtest==0.2
+rmtest==0.7.0
 ramp-packer
