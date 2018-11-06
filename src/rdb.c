@@ -70,12 +70,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
         rule = rule->nextRule;
     }
 
-    Chunk *chunk = series->firstChunk;
-    size_t numSamples =0;
-    while (chunk != NULL) {
-        numSamples += ChunkNumOfSample(chunk);
-        chunk = chunk->nextChunk;
-    }
+    size_t numSamples = SeriesGetNumSamples(series);
     RedisModule_SaveUnsigned(io, numSamples);
 
     SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp);

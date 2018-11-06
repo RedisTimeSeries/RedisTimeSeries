@@ -36,7 +36,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "retentionSecs");
     RedisModule_ReplyWithLongLong(ctx, series->retentionSecs);
     RedisModule_ReplyWithSimpleString(ctx, "chunkCount");
-    RedisModule_ReplyWithLongLong(ctx, series->chunkCount);
+    RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "maxSamplesPerChunk");
     RedisModule_ReplyWithLongLong(ctx, series->maxSamplesPerChunk);
 
