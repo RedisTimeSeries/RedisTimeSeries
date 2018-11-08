@@ -13,7 +13,7 @@ jobs:
       - run:
           name: Install prerequisite
           command: >-
-            apt-get update; apt-get install -y cmake
+            apt-get update; apt-get install -y cmake; pip install -r src/tests/requirements.txt
       - run:
           name: Build
           command: cd src && make -j 8
