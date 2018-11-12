@@ -26,16 +26,19 @@ jobs:
           name: Persist Artifacts
           command: >-
             mkdir -p /workspace/build && cp src/$MODULE_ARTIFACT /workspace/ &&
-            cp ramp_manifest.yml /workspace/
+            cp ramp_manifest.yml /workspace/; ls -la /workspace
       - persist_to_workspace:
           root: /workspace
           paths:
             - '*.so'
-            - ramp.yml
+            - '*.yml'
             - build
   package_branch:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
+    environment:
+      MODULE_ARTIFACT: redis-tsdb-module.so
+      PACKAGE_NAME: redis-tsdb-module
     steps:
       - attach_workspace:
           at: /workspace
@@ -89,9 +92,6 @@ workflows:
       - package_branch:
           requires:
             - build
-          filters:
-            branches:
-              only: master
       - package_release:
           requires:
             - build
