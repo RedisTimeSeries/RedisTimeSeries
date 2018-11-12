@@ -1,6 +1,8 @@
-# Redis Time-Series Module [![Build Status](https://travis-ci.org/danni-m/redis-timeseries.svg?branch=master)](https://travis-ci.org/danni-m/redis-timeseries)
-
+# Redis Time-Series Module
 Time series data structure for redis.
+
+[![CircleCI](https://circleci.com/gh/RedisLabsModules/redis-timeseries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/redis-timeseries/tree/master)
+
 
 ## Using with other tools metrics tools
 See [Tools](tools/) directory.
