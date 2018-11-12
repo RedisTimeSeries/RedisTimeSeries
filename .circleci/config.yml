@@ -1,0 +1,102 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    environment:
+      MODULE_ARTIFACT: redis-tsdb-module.so
+    steps:
+      - checkout
+      - run:
+          name: "Pull Submodules"
+          command: |
+            git submodule init
+            git submodule update --remote
+      - run:
+          name: Install prerequisite
+          command: >-
+            apt-get update; apt-get install -y cmake; pip install -r src/tests/requirements.txt
+      - run:
+          name: Build
+          command: cd src && make -j 8
+      - run:
+          name: Test
+          command: cd src && make tests
+      - run:
+          name: Persist Artifacts
+          command: >-
+            mkdir -p /workspace/build && cp src/$MODULE_ARTIFACT /workspace/ &&
+            cp ramp_manifest.yml /workspace/
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - '*.so'
+            - ramp.yml
+            - build
+  package_branch:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: Package
+          command: >-
+            ramp pack -m /workspace/ramp_manifest.yml -o
+            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.$CIRCLE_BRANCH.zip
+            /workspace/$MODULE_ARTIFACT
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - build
+      - store_artifacts:
+          path: /workspace/build
+  package_release:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    environment:
+      MODULE_ARTIFACT: redis-tsdb-module.so
+      PACKAGE_NAME: redis-tsdb-module
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: Package
+          command: >-
+            ramp pack -m /workspace/ramp.yml -o
+            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.{semantic_version}.zip
+            /workspace/$MODULE_ARTIFACT
+      - run:
+          name: Package
+          command: >-
+            ramp pack -m /workspace/ramp.yml -o
+            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.latest.zip
+            /workspace/$MODULE_ARTIFACT
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - build
+      - store_artifacts:
+          path: /workspace/build
+workflows:
+  version: 2
+  build_and_package:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - package_branch:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
+      - package_release:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: '/^v[0-9].*/'

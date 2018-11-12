@@ -1,12 +1,12 @@
+import os
 import redis
 import pytest
 import time
-from rmtest import ModuleTestCase
 import __builtin__
 import math
+from rmtest import ModuleTestCase
 
-
-class MyTestCase(ModuleTestCase('redis-tsdb-module.so')):
+class MyTestCase(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redis-tsdb-module.so')):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
         return dict([(info[i], info[i+1]) for i in range(0, len(info), 2)])

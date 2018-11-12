@@ -1,7 +1,7 @@
 author: Danni Moiseyev
 email: danni@redislabs.com
 description: Time-Series data structure for redis
-homepage: https://github.com/danni-m/redis-timeseries
+homepage: https://github.com/RedisLabsModules/redis-timeseries
 license: Apache 2.0 with Commons Clause
 command_line_args: ""
 min_redis_version: "4.0"
