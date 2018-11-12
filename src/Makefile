@@ -32,7 +32,7 @@ clean:
 	rm -rf *.xo *.so *.o ./tests_runner
 
 tests: redis-tsdb-module.so
-	python2 -m pytest -svv .
+	python -m pytest ${EXTRA_ARGS} -svv .
 
 unittests_runner: redis-tsdb-module.so tests.o
 	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm

@@ -21,7 +21,7 @@ jobs:
           command: cd src && make -j 8
       - run:
           name: Test
-          command: cd src && make tests
+          command: cd src && mkdir -p /workspace/tests && make tests EXTRA_ARGS="--junitxml=/workspace/tests/tests_report.xml"
       - run:
           name: Persist Artifacts
           command: >-
@@ -33,6 +33,8 @@ jobs:
             - '*.so'
             - '*.yml'
             - build
+      - store_test_results:
+          path: /workspace/tests
   package_branch:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
