@@ -3,6 +3,8 @@ jobs:
   build:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
+    environment:
+      MODULE_ARTIFACT: redis-tsdb-module.so
     steps:
       - checkout
       - run:
@@ -19,7 +21,7 @@ jobs:
           command: cd src && make -j 8
       - run:
           name: Test
-          command: cd src &&  make tests
+          command: cd src && make tests
       - run:
           name: Persist Artifacts
           command: >-
@@ -52,6 +54,9 @@ jobs:
   package_release:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
+    environment:
+      MODULE_ARTIFACT: redis-tsdb-module.so
+      PACKAGE_NAME: redis-tsdb-module
     steps:
       - attach_workspace:
           at: /workspace
