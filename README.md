@@ -133,7 +133,7 @@ ts.range stats_counts.statsd.packets_received 1487527100 1487527133 avg 5
 ```
 
 
-### TS.INCRBY/TS.DECRBY - Incrment the latest value
+### TS.INCRBY/TS.DECRBY - Increment the latest value
 ```sql
 TS.INCRBY key [VALUE] [RESET] [TIME_BUCKET]
 ```
