@@ -103,7 +103,7 @@ Optional args:
     * bucketSizeSeconds - time bucket for aggregation in seconds
 
 #### Complexity
-TS.RANGE complexity is O(n/m+k*m)
+TS.RANGE complexity is O(n/m+k)
 
 n = number of data points
 m = chunk size (data points per chunk)
