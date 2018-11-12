@@ -47,6 +47,7 @@ $ make test
 TS.CREATE KEY [retentionSecs] [maxSamplesPerChunk]
 ```
 * key - key name for timeseries
+
 Optional args:
 * retentionSecs - max age for samples compared to current time (in seconds).
     * Default: 0
