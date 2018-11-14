@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: 'redislabsmodules/rmbuilder:5.0.1'
     environment:
       MODULE_ARTIFACT: redis-tsdb-module.so
     steps:
