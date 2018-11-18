@@ -46,6 +46,7 @@ MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("count") == TS_AGG_COUNT);
     mu_check(StringAggTypeToEnum("first") == TS_AGG_FIRST);
     mu_check(StringAggTypeToEnum("last") == TS_AGG_LAST);
+    mu_check(StringAggTypeToEnum("range") == TS_AGG_RANGE);
 }
 
 MU_TEST_SUITE(test_suite) {
