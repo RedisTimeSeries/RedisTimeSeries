@@ -83,6 +83,9 @@ TS.DELETERULE SOURCE_KEY DEST_KEY
 ```sql
 TS.ADD key TIMESTAMP value
 ```
+* TIMESTAMP - unix timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
+* value - sample numeric data value (double)
+
 #### Complexity
 if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
 
