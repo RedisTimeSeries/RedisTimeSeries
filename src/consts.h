@@ -27,7 +27,8 @@ typedef enum {
     TS_AGG_COUNT,
     TS_AGG_FIRST,
     TS_AGG_LAST,
-    TS_AGG_TYPES_MAX // 8
+    TS_AGG_RANGE,
+    TS_AGG_TYPES_MAX // 9
 } TS_AGG_TYPES_T;
 
 #endif
