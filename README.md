@@ -18,7 +18,7 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 ## Features
 * Quick inserts (50K samples per sec)
 * Query by start time and end-time
-* Aggregated queries (Min, Max, Avg, Sum, Count, First, Last) for any time bucket
+* Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
 * Configurable max retention period
 * Compactions/Roll-ups - automatically updated aggregated timeseries
 
@@ -105,7 +105,7 @@ TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
 ```
 * key - key name for timeseries
 Optional args:
-    * aggregationType - one of the following: avg, sum, min, max, count, first, last
+    * aggregationType - one of the following: avg, sum, min, max, range, count, first, last
     * bucketSizeSeconds - time bucket for aggregation in seconds
 
 #### Complexity
@@ -147,7 +147,7 @@ This command can be used as a counter/gauge that get automatic history as a time
 
 * key - key name for timeseries
 Optional args:
-    * VALUE - one of the following: avg, sum, min, max, count, first, last
+    * VALUE - one of the following: avg, sum, min, max, range, count, first, last
     * RESET - Should the current counter should be resetted when TIME_BUCKET is changes
     * TIME_BUCKET - time bucket for resetting the current counter in seconds
 
