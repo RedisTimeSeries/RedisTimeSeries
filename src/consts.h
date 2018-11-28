@@ -31,4 +31,9 @@ typedef enum {
     TS_AGG_TYPES_MAX // 9
 } TS_AGG_TYPES_T;
 
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
 #endif

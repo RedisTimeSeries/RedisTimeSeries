@@ -1,5 +1,8 @@
+#include <string.h>
+#include "rmutil/alloc.h"
 #include "rdb.h"
 #include "chunk.h"
+#include "consts.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -7,11 +10,19 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
+    RedisModuleString *keyName = RedisModule_LoadString(io);
     uint64_t retentionSecs = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+    uint64_t labelsCount = RedisModule_LoadUnsigned(io);
+    Label *labels = malloc(sizeof(Label) * labelsCount);
+    for (int i=0; i<labelsCount; i++) {
+        labels[i].key = RedisModule_LoadString(io);
+        labels[i].value = RedisModule_LoadString(io);
+    }
+
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
-    
-    Series *series = NewSeries(retentionSecs, maxSamplesPerChunk);
+
+    Series *series = NewSeries(keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk);
 
     CompactionRule *lastRule;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
@@ -57,8 +68,16 @@ int countRules(Series *series) {
 void series_rdb_save(RedisModuleIO *io, void *value)
 {
     Series *series = value;
+    RedisModule_SaveString(io, series->keyName);
     RedisModule_SaveUnsigned(io, series->retentionSecs);
     RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
+
+    RedisModule_SaveUnsigned(io, series->labelsCount);
+    for (int i=0; i < series->labelsCount; i++) {
+        RedisModule_SaveString(io, series->labels[i].key);
+        RedisModule_SaveString(io, series->labels[i].value);
+    }
+
     RedisModule_SaveUnsigned(io, countRules(series));
 
     CompactionRule *rule = series->rules;

@@ -5,6 +5,7 @@
 #include "compaction.h"
 #include "consts.h"
 #include "chunk.h"
+#include "indexer.h"
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -23,6 +24,9 @@ typedef struct Series {
     CompactionRule *rules;
     timestamp_t lastTimestamp;
     double lastValue;
+    Label *labels;
+    RedisModuleString *keyName;
+    size_t labelsCount;
 } Series;
 
 typedef struct SeriesIterator {
@@ -35,13 +39,13 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs, short maxSamplesPerChunk);
 void FreeSeries(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 int SeriesHasRule(Series *series, RedisModuleString *destKey);
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize);
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series);
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(Series *series);
 
 // Iterator over the series

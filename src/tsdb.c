@@ -1,21 +1,27 @@
 #include <time.h>
 #include <string.h>
+#include <redismodule.h>
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"
 #include "tsdb.h"
 #include "module.h"
 #include "config.h"
+#include "indexer.h"
 
-Series * NewSeries(int32_t retentionSecs, short maxSamplesPerChunk)
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs,
+        short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
+    newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
     newSeries->retentionSecs = retentionSecs;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
+    newSeries->labels = labels;
+    newSeries->labelsCount = labelsCount;
     Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
@@ -59,6 +65,15 @@ void FreeSeries(void *value) {
         RedisModule_DictIteratorReseekC(iter, ">", currentKey, sizeof(currentKey));
     }
     RedisModule_DictIteratorStop(iter);
+
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    RemoveIndexedMetric(ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    for (int i=0; i < currentSeries->labelsCount; i++) {
+        RedisModule_FreeString(NULL, currentSeries->labels[i].key);
+        RedisModule_FreeString(NULL, currentSeries->labels[i].value);
+    }
+    free(currentSeries->labels);
+    free(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
 }
 
@@ -181,7 +196,8 @@ CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, in
     return rule;
 }
 
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series) {
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series,
+        Label *labels, size_t labelsCounts) {
     size_t len;
     int i;
     Series *compactedSeries;
@@ -204,7 +220,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             continue;
         }
 
-        CreateTsKey(ctx, destKey, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        CreateTsKey(ctx, destKey, labels, labelsCounts, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
