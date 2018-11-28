@@ -5,19 +5,19 @@
 #include "consts.h"
 #include "indexer.h"
 
-int parseLabel(RedisModuleString *label, Label *retLabel, const char *separator) {
+int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, const char *separator) {
     char *token;
     char *iter_ptr;
     size_t _s;
     const char *labelRaw = RedisModule_StringPtrLen(label, &_s);
-    char *labelstr = malloc(_s + 1);
+    char *labelstr = RedisModule_PoolAlloc(ctx, _s + 1);
     labelstr[_s] = '\0';
     strncpy(labelstr, labelRaw, _s);
     token = strtok_r(labelstr, separator, &iter_ptr);
     for (int i=0; i<2; i++)
     {
         if (token == NULL) {
-            return FALSE;
+            return TSDB_ERROR;
         }
         if (i == 0) {
             retLabel->key = RedisModule_CreateString(NULL, token, strlen(token));
@@ -26,8 +26,7 @@ int parseLabel(RedisModuleString *label, Label *retLabel, const char *separator)
         }
         token = strtok_r (NULL, "=", &iter_ptr);
     }
-    free(labelstr);
-    return TRUE;
+    return TSDB_OK;
 }
 
 void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
@@ -79,8 +78,7 @@ int _remove_not_intersected(int eqCount, RedisModuleDict *dictEq, char **lastKey
     return 0;
 }
 
-RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count, size_t *result_count) {
-    *result_count = 0;
+RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count) {
     int eqCount = 0;
     RedisModuleDict *dictEq = RedisModule_CreateDict(ctx);
     RedisModuleDict *dictNeq = RedisModule_CreateDict(ctx);
@@ -105,7 +103,6 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
                 lastCount = (int) RedisModule_DictGet(dictEq, key_name, &nokey);
                 if (nokey == 1) {
                     RedisModule_DictSet(dictEq, key_name, (void *)1);
-                    (*result_count)++;
                 } else {
                     RedisModule_DictReplace(dictEq, key_name, (void *)(lastCount + 1));
                 }
@@ -124,7 +121,6 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
     size_t currentKeyLen;
     while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModule_DictDelC(dictEq, currentKey, currentKeyLen, NULL);
-        (*result_count)--;
     }
 
     RedisModule_DictIteratorStop(iter);

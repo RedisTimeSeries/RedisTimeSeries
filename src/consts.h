@@ -6,8 +6,8 @@
 #define TRUE 1
 #define FALSE 0
 
-#define timestamp_t int32_t
-#define api_timestamp_t int32_t
+#define timestamp_t u_int32_t
+#define api_timestamp_t u_int64_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
 #define TSDB_ERROR -1

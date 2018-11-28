@@ -27,6 +27,6 @@ typedef struct {
 
 void IndexMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
 void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
-RedisModuleDict *QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count, size_t *result_count);
-int parseLabel(RedisModuleString *label, Label *retLabel, const char *separator);
+RedisModuleDict *QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count);
+int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, const char *separator);
 #endif
