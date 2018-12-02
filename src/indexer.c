@@ -28,7 +28,7 @@ int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, c
                 retLabel->value = NULL;
             }
         }
-        token = strtok_r (NULL, "=", &iter_ptr);
+        token = strtok_r (NULL, separator, &iter_ptr);
     }
     return TSDB_OK;
 }
@@ -38,16 +38,16 @@ void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_k
 
     for (int i=0; i<labels_count; i++) {
         size_t _s;
-        RedisModuleString *skv = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s",
+        RedisModuleString *indexed_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s",
                 RedisModule_StringPtrLen(labels[i].key, &_s),
                 RedisModule_StringPtrLen(labels[i].value, &_s));
-        RedisModuleString *sk = RedisModule_CreateStringPrintf(ctx, "__index_%s",
+        RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
                 RedisModule_StringPtrLen(labels[i].key, &_s),
                 RedisModule_StringPtrLen(labels[i].value, &_s));
-        reply = RedisModule_Call(ctx, op, "ss", skv, ts_key);
+        reply = RedisModule_Call(ctx, op, "ss", indexed_key_value, ts_key);
         if (reply)
             RedisModule_FreeCallReply(reply);
-        reply = RedisModule_Call(ctx, op, "ss", sk, ts_key);
+        reply = RedisModule_Call(ctx, op, "ss", indexed_key, ts_key);
         if (reply)
             RedisModule_FreeCallReply(reply);
     }
