@@ -16,6 +16,7 @@ typedef struct {
 typedef enum  {
     EQ,
     NEQ,
+    NCONTAINS,
     // REQ,
     // NREQ
 } PredicateType;

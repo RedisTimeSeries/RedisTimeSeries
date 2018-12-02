@@ -102,6 +102,11 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
             if (parseLabel(ctx, argv[i], &query->label, "=") == TSDB_ERROR) {
                 return TSDB_ERROR;
             }
+            if (query->label.value == NULL) {
+                query->type = NCONTAINS;
+            }
+        } else {
+            return TSDB_ERROR;
         }
     }
     return TSDB_OK;
@@ -137,11 +142,23 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_rangebylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     api_timestamp_t start_ts, end_ts;
+    api_timestamp_t time_delta = 0;
+    RedisModuleString * aggTypeStr = NULL;
+    AggregationClass *aggObject = NULL;
+    int agg_type = 0;
 
     if (argc < 4)
         return RedisModule_WrongArity(ctx);
-
     int query_count = argc - 1 - 2; // 1 is for the command, 2 is for start_ts and end_ts
+
+    if (RMUtil_ParseArgs(argv, argc, argc - 2, "sl", &aggTypeStr, &time_delta) == REDISMODULE_OK) {
+        agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
+        aggObject = GetAggClass(agg_type);
+        if (agg_type != TS_AGG_INVALID) {
+            query_count -= 2;
+        }
+    }
+
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
@@ -168,7 +185,7 @@ int TSDB_rangebylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         ReplyWithSeriesLabels(ctx, series);
-        ReplySeriesRange(ctx, series, start_ts, end_ts, NULL, 0);
+        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta);
         replylen++;
     }
     RedisModule_DictIteratorStop(iter);
@@ -198,7 +215,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return RedisModule_WrongArity(ctx);
     }
     if (pRes != REDISMODULE_OK)
-        return RedisModule_WrongArity(ctx);
+        return RedisModule_ReplyWithError(ctx, "TSDB: wrong format");
 
     int agg_type = 0;
     Series *series;

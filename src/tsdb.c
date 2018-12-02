@@ -197,17 +197,19 @@ CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, in
 }
 
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series,
-        Label *labels, size_t labelsCounts) {
+        Label *labels, size_t labelsCount) {
     size_t len;
     int i;
     Series *compactedSeries;
     RedisModuleKey *compactedKey;
+    size_t comaptedRuleLabelCount = labelsCount + 2;
 
     for (i=0; i<TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule* rule = TSGlobalConfig.compactionRules + i;
+        const char *aggString = AggTypeEnumToString(rule->aggType);
         RedisModuleString* destKey = RedisModule_CreateStringPrintf(ctx, "%s_%s_%ld",
                                             RedisModule_StringPtrLen(keyName, &len),
-                                            AggTypeEnumToString(rule->aggType),
+                                            aggString,
                                             rule->bucketSizeSec);
         RedisModule_RetainString(ctx, destKey);
         SeriesAddRule(series, destKey, rule->aggType, rule->bucketSizeSec);
@@ -220,7 +222,20 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             continue;
         }
 
-        CreateTsKey(ctx, destKey, labels, labelsCounts, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        Label * compactedLabels = RedisModule_PoolAlloc(ctx, sizeof(Label) * comaptedRuleLabelCount);
+        // todo: deep copy labels function
+        memcpy(compactedLabels, labels, sizeof(Label) * labelsCount);
+        for (int i=0; i<labelsCount; i++){
+            compactedLabels[i].key = RedisModule_CreateStringFromString(NULL, labels[i].key);
+            compactedLabels[i].value = RedisModule_CreateStringFromString(NULL, labels[i].value);
+        }
+
+        compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
+        compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
+        compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
+        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->bucketSizeSec);
+
+        CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
