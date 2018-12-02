@@ -124,9 +124,9 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
                 RedisModule_StringPtrLen(predicate->label.key, &_s));
         reply = RedisModule_Call(ctx, "SMEMBERS", "s", index_key);
     } else {
-        RedisModuleString *index_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s",
-                                                                            RedisModule_StringPtrLen(predicate->label.key, &_s),
-                                                                            RedisModule_StringPtrLen(predicate->label.value, &_s));
+        const char *key = RedisModule_StringPtrLen(predicate->label.key, &_s);
+        const char *value = RedisModule_StringPtrLen(predicate->label.value, &_s);
+        RedisModuleString *index_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s", key, value);
         reply = RedisModule_Call(ctx, "SMEMBERS", "s", index_key_value);
     }
     size_t items = RedisModule_CallReplyLength(reply);
@@ -151,10 +151,11 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
         } else if (predicate->type == NEQ){
             while (_difference(prevResults, localResult, &lastKey, &lastKeySize) != 0) {}
         }
+        return prevResults;
     } else if (predicate->type == EQ) {
         return localResult;
     } else {
-        return NULL;
+        return prevResults;
     }
 }
 
