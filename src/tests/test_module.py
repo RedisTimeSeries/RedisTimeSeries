@@ -441,5 +441,6 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert ['tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class!=middle', 'x=')
             assert [] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'x=')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'z=')
-            assert [] == r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'z=', 'x=2')

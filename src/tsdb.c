@@ -38,7 +38,7 @@ void SeriesTrim(Series * series) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk *currentChunk;
     void *currentKey;
-    timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
+    timestamp_t minTimestamp = ChunkGetLastTimestamp(series->lastChunk) - series->retentionSecs;
     while ((currentKey=RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)))
     {
         if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
@@ -230,6 +230,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             compactedLabels[i].value = RedisModule_CreateStringFromString(NULL, labels[i].value);
         }
 
+        // For every aggregated key create 2 labels: `aggregation` and `time_bucket`.
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
         compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");

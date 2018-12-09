@@ -33,17 +33,29 @@ int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, c
     return TSDB_OK;
 }
 
+int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type) {
+    int equal_query_count = 0;
+    for (int i=0; i<query_count; i++) {
+        if (queries[i].type == type) {
+        equal_query_count++;
+        }
+    }
+    return equal_query_count;
+}
+
 void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
     RedisModuleCallReply *reply;
-
+    const char *key_string, *value_string;
     for (int i=0; i<labels_count; i++) {
         size_t _s;
+        key_string = RedisModule_StringPtrLen(labels[i].key, &_s);
+        value_string = RedisModule_StringPtrLen(labels[i].value, &_s);
         RedisModuleString *indexed_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s",
-                RedisModule_StringPtrLen(labels[i].key, &_s),
-                RedisModule_StringPtrLen(labels[i].value, &_s));
+                                                                              key_string,
+                                                                              value_string);
         RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
-                RedisModule_StringPtrLen(labels[i].key, &_s),
-                RedisModule_StringPtrLen(labels[i].value, &_s));
+                                                                        key_string,
+                                                                        value_string);
         reply = RedisModule_Call(ctx, op, "ss", indexed_key_value, ts_key);
         if (reply)
             RedisModule_FreeCallReply(reply);
@@ -61,12 +73,12 @@ void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *
     IndexOperation(ctx, "SREM", ts_key, labels, labels_count);
 }
 
-int _intersect(RedisModuleDict *left, RedisModuleDict *right, char **lastKey, size_t *lastKeySize) {
+int _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right, RedisModuleString **lastKey) {
     RedisModuleDictIter *iter;
     if (*lastKey == NULL) {
         iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
     } else {
-        iter = RedisModule_DictIteratorStartC(left, "^", lastKey, *lastKeySize);
+        iter = RedisModule_DictIteratorStart(left, ">=", *lastKey);
     }
 
     char *currentKey;
@@ -77,8 +89,7 @@ int _intersect(RedisModuleDict *left, RedisModuleDict *right, char **lastKey, si
         if (doesNotExist == 0) {
             continue;
         }
-        *lastKey = currentKey;
-        *lastKeySize = currentKeyLen;
+        *lastKey = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
         RedisModule_DictDelC(left, currentKey, currentKeyLen, NULL);
         RedisModule_DictIteratorStop(iter);
         return 1;
@@ -87,12 +98,12 @@ int _intersect(RedisModuleDict *left, RedisModuleDict *right, char **lastKey, si
     return 0;
 }
 
-int _difference(RedisModuleDict *left, RedisModuleDict *right, char **lastKey, size_t *lastKeySize) {
+int _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right, RedisModuleString **lastKey) {
     RedisModuleDictIter *iter;
     if (*lastKey == NULL) {
         iter = RedisModule_DictIteratorStartC(right, "^", NULL, 0);
     } else {
-        iter = RedisModule_DictIteratorStartC(right, "^", lastKey, *lastKeySize);
+        iter = RedisModule_DictIteratorStart(right, ">=", *lastKey);
     }
 
     char *currentKey;
@@ -103,8 +114,7 @@ int _difference(RedisModuleDict *left, RedisModuleDict *right, char **lastKey, s
         if (doesNotExist == 1) {
             continue;
         }
-        *lastKey = currentKey;
-        *lastKeySize = currentKeyLen;
+        *lastKey = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
         RedisModule_DictDelC(left, currentKey, currentKeyLen, NULL);
         RedisModule_DictIteratorStop(iter);
         return 1;
@@ -119,7 +129,7 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
     size_t _s;
 
 
-    if (predicate->type == NCONTAINS) {
+    if (predicate->type == NCONTAINS || predicate->type == CONTAINS) {
         RedisModuleString *index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
                 RedisModule_StringPtrLen(predicate->label.key, &_s));
         reply = RedisModule_Call(ctx, "SMEMBERS", "s", index_key);
@@ -142,14 +152,13 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
         RedisModule_FreeCallReply(reply);
 
     if (prevResults != NULL) {
-        char *lastKey = NULL;
-        size_t lastKeySize;
-        if (predicate->type == EQ) {
-            while (_intersect(prevResults, localResult, &lastKey, &lastKeySize) != 0) {}
+        RedisModuleString *lastKey = NULL;
+        if (predicate->type == EQ || predicate->type == CONTAINS) {
+            while (_intersect(ctx, prevResults, localResult, &lastKey) != 0) {}
         } else  if (predicate->type == NCONTAINS) {
-            while (_difference(prevResults, localResult, &lastKey, &lastKeySize) != 0) {}
+            while (_difference(ctx, prevResults, localResult, &lastKey) != 0) {}
         } else if (predicate->type == NEQ){
-            while (_difference(prevResults, localResult, &lastKey, &lastKeySize) != 0) {}
+            while (_difference(ctx, prevResults, localResult, &lastKey) != 0) {}
         }
         return prevResults;
     } else if (predicate->type == EQ) {
@@ -164,7 +173,7 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
 
     // EQ
     for (int i=0; i < predicate_count; i++) {
-        if (index_predicate[i].type == EQ) {
+        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS) {
             result = QueryIndexPredicate(ctx, &index_predicate[i], result);
         }
     }

@@ -97,6 +97,9 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
             if (parseLabel(ctx, argv[i], &query->label, "!=") == TSDB_ERROR) {
                 return TSDB_ERROR;
             }
+            if (query->label.value == NULL) {
+                query->type = CONTAINS;
+            }
         } else if (strstr(str2, "=") != NULL) {
             query->type = EQ;
             if (parseLabel(ctx, argv[i], &query->label, "=") == TSDB_ERROR) {
@@ -119,6 +122,10 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
+    }
+
+    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
@@ -164,6 +171,10 @@ int TSDB_rangebylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
     RMUtil_ParseArgs(argv, argc, query_count + 1, "ll", &start_ts, &end_ts);
+
+    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
+    }
 
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
 
