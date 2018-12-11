@@ -38,7 +38,7 @@ void SeriesTrim(Series * series) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk *currentChunk;
     void *currentKey;
-    timestamp_t minTimestamp = ChunkGetLastTimestamp(series->lastChunk) - series->retentionSecs;
+    timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
     while ((currentKey=RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)))
     {
         if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)

@@ -34,13 +34,13 @@ int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, c
 }
 
 int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type) {
-    int equal_query_count = 0;
+    int count = 0;
     for (int i=0; i<query_count; i++) {
         if (queries[i].type == type) {
-        equal_query_count++;
+        count++;
         }
     }
-    return equal_query_count;
+    return count;
 }
 
 void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
@@ -54,8 +54,7 @@ void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_k
                                                                               key_string,
                                                                               value_string);
         RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
-                                                                        key_string,
-                                                                        value_string);
+                                                                        key_string);
         reply = RedisModule_Call(ctx, op, "ss", indexed_key_value, ts_key);
         if (reply)
             RedisModule_FreeCallReply(reply);
@@ -171,7 +170,7 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
 RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count) {
     RedisModuleDict *result = NULL;
 
-    // EQ
+    // EQ or Contains
     for (int i=0; i < predicate_count; i++) {
         if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS) {
             result = QueryIndexPredicate(ctx, &index_predicate[i], result);
