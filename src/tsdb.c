@@ -222,12 +222,11 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             continue;
         }
 
-        Label * compactedLabels = RedisModule_PoolAlloc(ctx, sizeof(Label) * comaptedRuleLabelCount);
+        Label * compactedLabels = malloc(sizeof(Label) * comaptedRuleLabelCount);
         // todo: deep copy labels function
-        memcpy(compactedLabels, labels, sizeof(Label) * labelsCount);
-        for (int i=0; i<labelsCount; i++){
-            compactedLabels[i].key = RedisModule_CreateStringFromString(NULL, labels[i].key);
-            compactedLabels[i].value = RedisModule_CreateStringFromString(NULL, labels[i].value);
+        for (int l=0; l<labelsCount; l++){
+            compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
+            compactedLabels[l].value = RedisModule_CreateStringFromString(NULL, labels[l].value);
         }
 
         // For every aggregated key create 2 labels: `aggregation` and `time_bucket`.

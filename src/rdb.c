@@ -55,8 +55,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     return series;
 }
 
-int countRules(Series *series) {
-    int count = 0;
+unsigned int countRules(Series *series) {
+    unsigned int count = 0;
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         count ++;
