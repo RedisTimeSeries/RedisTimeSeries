@@ -23,8 +23,10 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
+    RedisModuleString *key = RedisModule_CreateStringFromLongLong(NULL, 0);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
+    RedisModule_Free(key);
     newSeries->lastChunk = newChunk;
     return newSeries;
 }
@@ -38,14 +40,15 @@ void SeriesTrim(Series * series) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk *currentChunk;
     void *currentKey;
+    size_t keyLen;
     timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
-    while ((currentKey=RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)))
+    while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
         if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
         {
-            RedisModule_DictDelC(series->chunks, currentKey, sizeof(timestamp_t), NULL);
+            RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
-            RedisModule_DictIteratorReseekC(iter, ">", currentKey, sizeof(timestamp_t));
+            RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
             FreeChunk(currentChunk);
         } else {
             break;
@@ -58,11 +61,9 @@ void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk *currentChunk;
-    void *currentKey;
-    while ((currentKey=RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)))
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL)
     {
         FreeChunk(currentChunk);
-        RedisModule_DictIteratorReseekC(iter, ">", currentKey, sizeof(currentKey));
     }
     RedisModule_DictIteratorStop(iter);
 
@@ -109,8 +110,8 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         SeriesTrim(series);
 
         Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
-        RedisModule_DictSetC(series->chunks, (void*)&timestamp, sizeof(timestamp), (void*)newChunk);
-        // re-add the sample
+        RedisModuleString *key = RedisModule_CreateStringFromLongLong(NULL, (long long int)timestamp);
+        RedisModule_DictSet(series->chunks, key, (void*)newChunk);
         ChunkAddSample(newChunk, sample);
         series->lastChunk = newChunk;
     }
@@ -123,7 +124,9 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
     SeriesIterator iter;
     iter.series = series;
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
-    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", (void*)&minTimestamp, sizeof(minTimestamp));
+    RedisModuleString *start = RedisModule_CreateStringFromLongLong(NULL, 0);
+    iter.dictIter = RedisModule_DictIteratorStart(series->chunks, "<=", start);
+    RedisModule_Free(start);
 
     // if no such chunk exists, we will start the search from the first chunk
     if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))

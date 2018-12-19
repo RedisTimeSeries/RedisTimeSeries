@@ -50,7 +50,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
         timestamp_t ts = RedisModule_LoadUnsigned(io);
         double val = RedisModule_LoadDouble(io);
-        SeriesAddSample(series, ts, val);
+        int result = SeriesAddSample(series, ts, val);
+        if (result != TSDB_OK) {
+            RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+        }
     }
     return series;
 }

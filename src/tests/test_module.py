@@ -84,7 +84,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_sanity(self):
         start_ts = 1511885909L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', '0', '360', 'name=brown', 'color=pink')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
@@ -93,9 +93,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
-            expected_result = {'chunkCount': 2L,
+            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
               'labels': [['name', 'brown'], ['color', 'pink']],
-              'lastTimestamp': 1511886408L,
+              'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
               'retentionSecs': 0L,
               'rules': []}
@@ -105,7 +105,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_rdb(self):
         start_ts = 1511885909L
-        samples_count = 500
+        samples_count = 1500
         data = None
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', '0', '360', 'name=brown', 'color=pink')
@@ -122,9 +122,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
-            expected_result = {'chunkCount': 2L,
+            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                'labels': [['name', 'brown'], ['color', 'pink']],
-                               'lastTimestamp': 1511886408L,
+                               'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
                                'retentionSecs': 0L,
                                'rules': [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]}
@@ -166,7 +166,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_sanity_pipeline(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             with r.pipeline(transaction=False) as p:
@@ -179,7 +179,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_range_query(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
@@ -190,13 +190,14 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
-            expected_result = [[1488823000L, '116'], [1488823500L, '384']]
-            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + 500, 'count', 500)
+            expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 500)
+            print actual_result
             assert expected_result == actual_result
 
     def test_compaction_rules(self):
@@ -206,7 +207,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATERULE', 'tester', 'avg', 10, 'tester_agg_max_10')
 
             start_ts = 1488823384L
-            samples_count = 500
+            samples_count = 1500
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             actual_result = r.execute_command('TS.RANGE', 'tester_agg_max_10', start_ts, start_ts + samples_count)
@@ -214,7 +215,12 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'chunkCount': 2L, 'lastTimestamp': start_ts + samples_count -1, 'maxSamplesPerChunk': 360L, 'retentionSecs': 0L, 'labels': [], 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
+            assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                                 'lastTimestamp': start_ts + samples_count -1,
+                                 'maxSamplesPerChunk': 360L,
+                                 'retentionSecs': 0L,
+                                 'labels': [],
+                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
     
     def test_create_compaction_rule_without_dest_series(self):
         with self.redis() as r:
@@ -238,7 +244,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.delete('tester_agg_max_10')
 
             start_ts = 1488823384L
-            samples_count = 500
+            samples_count = 1500
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
     def test_delete_rule(self):
