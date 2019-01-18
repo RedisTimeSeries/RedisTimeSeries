@@ -30,23 +30,41 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->lastChunk = newChunk;
     return newSeries;
 }
+void printChunks(Series* series)
+{
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    Chunk *currentChunk;
+    void *currentKey;
+    int count = 0;
+    while ((currentKey=RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)))
+    {
+        printf("chunk %d first ts %lld last ts %lld \n", count, currentChunk->base_timestamp, ChunkGetLastTimestamp(currentChunk));
+        count++;
+    }
+    RedisModule_DictIteratorStop(iter);
 
+}
 void SeriesTrim(Series * series) {
     if (series->retentionSecs == 0) {
         return;
     }
-
+    printf("trim1\n");
+    printChunks(series);
     // start iterator from smallest key
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk *currentChunk;
     void *currentKey;
     size_t keyLen;
-    timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
+    timestamp_t minTimestamp = ChunkGetLastTimestamp(series->lastChunk) - series->retentionSecs;
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
         if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
         {
+            printf("trim2 before delete\n");
+            printChunks(series);
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
+            printf("trim3 after delete\n");
+            printChunks(series);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
             FreeChunk(currentChunk);
@@ -56,6 +74,7 @@ void SeriesTrim(Series * series) {
     }
     RedisModule_DictIteratorStop(iter);
 }
+
 
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
@@ -121,6 +140,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 }
 
 SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
+    printChunks(series);
     SeriesIterator iter;
     iter.series = series;
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
@@ -206,7 +226,6 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
     Series *compactedSeries;
     RedisModuleKey *compactedKey;
     size_t comaptedRuleLabelCount = labelsCount + 2;
-
     for (i=0; i<TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule* rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
