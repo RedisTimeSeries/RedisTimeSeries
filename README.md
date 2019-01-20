@@ -22,6 +22,15 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 * Configurable max retention period
 * Compactions/Roll-ups - automatically updated aggregated timeseries
 
+
+## Docker
+
+To quickly tryout Redis-TimeSeries, launch an instance using docker:
+
+```sh
+docker run -p 6379:6379 -it --rm redislabs/redis-timeseries
+```
+
 ## Build
 ```bash
 git submodule init
