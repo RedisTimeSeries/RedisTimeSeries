@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: 'redislabsmodules/rmbuilder:5.0.1'
+      - image: 'redislabsmodules/rmbuilder:latest'
     environment:
       MODULE_ARTIFACT: redis-tsdb-module.so
     steps:
@@ -83,6 +83,19 @@ jobs:
             - build
       - store_artifacts:
           path: /workspace/build
+  deploy_docs:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - checkout
+      - run:
+          name: Build Docs
+          command: mkdocs build
+      - run:
+          name: Deploy Docs to S3
+          command: >-
+            aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl
+            public-read --recursive
 workflows:
   version: 2
   build_and_package:
@@ -94,6 +107,9 @@ workflows:
       - package_branch:
           requires:
             - build
+          filters:
+            branches:
+              only: master
       - package_release:
           requires:
             - build
@@ -102,3 +118,7 @@ workflows:
               ignore: /.*/
             tags:
               only: '/^v[0-9].*/'
+      - deploy_docs:
+          filters:
+            branches:
+              only: master
