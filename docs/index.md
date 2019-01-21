@@ -55,11 +55,3 @@ Some languages have client libraries that provide support for RedisTimeSeries's 
 
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
-
-## Mailing List / Forum
-
-Got questions? Feel free to ask at the [RediGraph mailing list](https://groups.google.com/forum/#!forum/redisgraph).
-
-## License
-
-Apache 2.0 with Commons Clause - see [LICENSE](https://raw.githubusercontent.com/RedisLabsModules/RedisGraph/master/LICENSE)
