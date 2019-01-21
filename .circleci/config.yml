@@ -3,8 +3,6 @@ jobs:
   build:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
-    environment:
-      MODULE_ARTIFACT: redis-tsdb-module.so
     steps:
       - checkout
       - run:
@@ -38,9 +36,6 @@ jobs:
   package_branch:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
-    environment:
-      MODULE_ARTIFACT: redis-tsdb-module.so
-      PACKAGE_NAME: redis-tsdb-module
     steps:
       - attach_workspace:
           at: /workspace
@@ -59,9 +54,6 @@ jobs:
   package_release:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
-    environment:
-      MODULE_ARTIFACT: redis-tsdb-module.so
-      PACKAGE_NAME: redis-tsdb-module
     steps:
       - attach_workspace:
           at: /workspace
