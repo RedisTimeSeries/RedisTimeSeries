@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/RedisLabsModules/redis-timeseries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/redis-timeseries/tree/master)
+[![CircleCI](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master)
 [![GitHub issues](https://img.shields.io/github/release/RedisLabsModules/redis-timeseries.svg)](https://github.com/RedisLabsModules/redis-timeseries/releases/latest)
 
 # Redis Time-Series Module
