@@ -173,6 +173,11 @@ TS.INFO key
 8) (integer) 360
 ```
 
+## Mailing List / Forum
+
+Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
+
+
 ### License
 
 Apache 2.0 with Commons Clause - see [LICENSE](LICENSE)
