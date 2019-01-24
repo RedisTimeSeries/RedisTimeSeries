@@ -6,8 +6,8 @@
 #define TRUE 1
 #define FALSE 0
 
-#define timestamp_t int32_t
-#define api_timestamp_t int32_t
+#define timestamp_t u_int64_t
+#define api_timestamp_t u_int64_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
 #define TSDB_ERROR -1
@@ -30,5 +30,10 @@ typedef enum {
     TS_AGG_RANGE,
     TS_AGG_TYPES_MAX // 9
 } TS_AGG_TYPES_T;
+
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
 
 #endif

@@ -84,21 +84,31 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_sanity(self):
         start_ts = 1511885909L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester', '0', '360', 'name=brown', 'color=pink')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
+            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+              'labels': [['name', 'brown'], ['color', 'pink']],
+              'lastTimestamp': start_ts + samples_count - 1,
+              'maxSamplesPerChunk': 360L,
+              'retentionSecs': 0L,
+              'rules': []}
+            actual_result = self._get_ts_info(r, 'tester')
+            assert expected_result == actual_result
+
+
     def test_rdb(self):
         start_ts = 1511885909L
-        samples_count = 500
+        samples_count = 1500
         data = None
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester', '0', '360', 'name=brown', 'color=pink')
             assert r.execute_command('TS.CREATE', 'tester_agg_avg_10')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
             assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 10, 'tester_agg_avg_10')
@@ -110,6 +120,15 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command('RESTORE', 'tester', 0, data)
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+
+            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                               'labels': [['name', 'brown'], ['color', 'pink']],
+                               'lastTimestamp': 1511887408L,
+                               'maxSamplesPerChunk': 360L,
+                               'retentionSecs': 0L,
+                               'rules': [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]}
+            actual_result = self._get_ts_info(r, 'tester')
             assert expected_result == actual_result
 
     def test_rdb_aggregation_context(self):
@@ -147,7 +166,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_sanity_pipeline(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             with r.pipeline(transaction=False) as p:
@@ -160,7 +179,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_range_query(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
@@ -171,13 +190,14 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
-        samples_count = 500
+        samples_count = 1500
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
-            expected_result = [[1488823000L, '116'], [1488823500L, '384']]
-            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + 500, 'count', 500)
+            expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 500)
+            print actual_result
             assert expected_result == actual_result
 
     def test_compaction_rules(self):
@@ -187,7 +207,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATERULE', 'tester', 'avg', 10, 'tester_agg_max_10')
 
             start_ts = 1488823384L
-            samples_count = 500
+            samples_count = 1500
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             actual_result = r.execute_command('TS.RANGE', 'tester_agg_max_10', start_ts, start_ts + samples_count)
@@ -195,7 +215,12 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'chunkCount': 2L, 'lastTimestamp': start_ts + samples_count -1, 'maxSamplesPerChunk': 360L, 'retentionSecs': 0L, 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
+            assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                                 'lastTimestamp': start_ts + samples_count -1,
+                                 'maxSamplesPerChunk': 360L,
+                                 'retentionSecs': 0L,
+                                 'labels': [],
+                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
     
     def test_create_compaction_rule_without_dest_series(self):
         with self.redis() as r:
@@ -219,7 +244,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.delete('tester_agg_max_10')
 
             start_ts = 1488823384L
-            samples_count = 500
+            samples_count = 1500
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
     def test_delete_rule(self):
@@ -378,3 +403,50 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()))
         # test time difference is not more than 1 second
         assert result[0][0] - curr_time <= 1
+
+    def test_range_by_labels(self):
+        start_ts = 1511885909L
+        samples_count = 50
+
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', '0', '360', 'name=bob', 'class=middle', 'generation=x')
+            assert r.execute_command('TS.CREATE', 'tester2', '0', '360', 'name=rudy', 'class=junior', 'generation=x')
+            assert r.execute_command('TS.CREATE', 'tester3', '0', '360', 'name=fabi', 'class=top', 'generation=x')
+            self._insert_data(r, 'tester1', start_ts, samples_count, 5)
+            self._insert_data(r, 'tester2', start_ts, samples_count, 15)
+            self._insert_data(r, 'tester3', start_ts, samples_count, 25)
+
+
+            expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.rangebylabels', 'name=bob', start_ts, start_ts + samples_count)
+            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
+
+            def build_expected(val, time_bucket):
+                return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count+1, time_bucket)]
+            actual_result = r.execute_command('TS.rangebylabels', 'generation=x', start_ts, start_ts + samples_count, 'LAST', 5)
+            expected_result = [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], build_expected(5, 5)],
+                    ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], build_expected(15, 5)],
+                    ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], build_expected(25, 5)],
+                    ]
+
+            assert expected_result == actual_result
+            assert expected_result[1:] == r.execute_command('TS.rangebylabels', 'generation=x', 'class!=middle', start_ts, start_ts + samples_count, 'LAST', 5)
+
+    def test_label_index(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', '0', '360', 'name=bob', 'class=middle', 'generation=x')
+            assert r.execute_command('TS.CREATE', 'tester2', '0', '360', 'name=rudy', 'class=junior', 'generation=x')
+            assert r.execute_command('TS.CREATE', 'tester3', '0', '360', 'name=fabi', 'class=top', 'generation=x', 'x=2')
+            assert r.execute_command('TS.CREATE', 'tester4', '0', '360', 'name=anybody', 'class=top', 'type=noone', 'x=2', 'z=3')
+
+            assert ['tester1', 'tester2', 'tester3'] == r.execute_command('TS.QUERYINDEX', 'generation=x')
+            assert ['tester1', 'tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'x=')
+            assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'x=2')
+            assert ['tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', 'x=2')
+            assert ['tester1', 'tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class!=top')
+            assert ['tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class!=middle', 'x=')
+            assert [] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'x=')
+            assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'z=')
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
+            assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'z=', 'x=2')
