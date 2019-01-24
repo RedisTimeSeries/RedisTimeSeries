@@ -34,6 +34,9 @@ clean:
 tests: redis-tsdb-module.so
 	python -m pytest ${EXTRA_ARGS} -svv .
 
+run: redis-tsdb-module.so
+	redis-server --loadmodule `pwd`/redis-tsdb-module.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+
 unittests_runner: redis-tsdb-module.so tests.o
 	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
 
