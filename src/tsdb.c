@@ -8,6 +8,7 @@
 #include "module.h"
 #include "config.h"
 #include "indexer.h"
+#include "endianconv.h"
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs,
         short maxSamplesPerChunk)
@@ -23,10 +24,8 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
-    RedisModuleString *key = RedisModule_CreateStringFromLongLong(NULL, 0);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
-    RedisModule_Free(key);
     newSeries->lastChunk = newChunk;
     return newSeries;
 }
@@ -56,6 +55,13 @@ void SeriesTrim(Series * series) {
     }
     RedisModule_DictIteratorStop(iter);
 }
+
+void seriesEncodeTimestamp(void *buf, timestamp_t id) {
+    uint64_t e;
+    e = htonu64(id);
+    memcpy(buf, &e, sizeof(e));
+}
+
 
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
@@ -97,6 +103,7 @@ size_t SeriesGetNumSamples(Series *series)
 }
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+    timestamp_t rax_key;
     if (timestamp < series->lastTimestamp) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp && series->lastChunk->num_samples > 0) {
@@ -110,8 +117,8 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         SeriesTrim(series);
 
         Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
-        RedisModuleString *key = RedisModule_CreateStringFromLongLong(NULL, (long long int)timestamp);
-        RedisModule_DictSet(series->chunks, key, (void*)newChunk);
+        seriesEncodeTimestamp(&rax_key, timestamp);
+        RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
         ChunkAddSample(newChunk, sample);
         series->lastChunk = newChunk;
     }
@@ -122,11 +129,11 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
 SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
     SeriesIterator iter;
+    timestamp_t rax_key;
     iter.series = series;
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
-    RedisModuleString *start = RedisModule_CreateStringFromLongLong(NULL, 0);
-    iter.dictIter = RedisModule_DictIteratorStart(series->chunks, "<=", start);
-    RedisModule_Free(start);
+    seriesEncodeTimestamp(&rax_key, minTimestamp);
+    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
 
     // if no such chunk exists, we will start the search from the first chunk
     if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))
