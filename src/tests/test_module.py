@@ -450,3 +450,18 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             with pytest.raises(redis.ResponseError):
                 r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'z=', 'x=2')
+
+    def test_series_ordering(self):
+        with self.redis() as r:
+            sample_len = 1024
+            chunk_size = 4
+
+            r.execute_command("ts.create", 'test_key', 0, chunk_size)
+            for i in range(sample_len):
+                r.execute_command("ts.add", 'test_key', i , i)
+
+            res = r.execute_command('ts.range', 'test_key', 0, sample_len)
+            i = 0
+            for sample in res:
+                assert sample == [i, str(i)]
+                i += 1
