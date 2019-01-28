@@ -56,9 +56,10 @@ void SeriesTrim(Series * series) {
     RedisModule_DictIteratorStop(iter);
 }
 
-void seriesEncodeTimestamp(void *buf, timestamp_t id) {
+// Encode timestamps as bigendian to allow correct lexical sorting
+void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
     uint64_t e;
-    e = htonu64(id);
+    e = htonu64(timestamp);
     memcpy(buf, &e, sizeof(e));
 }
 
