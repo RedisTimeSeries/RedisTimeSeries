@@ -263,15 +263,19 @@ Optional args:
 
 ### TS.INCRBY/TS.DECRBY - Increment the latest value
 ```sql
-TS.INCRBY key [VALUE] [RESET] [TIME_BUCKET]
+TS.INCRBY key value [RESET time-bucket]
+```
+or
+```sql
+TS.DECRBY key value [RESET time-bucket]
 ```
 This command can be used as a counter/gauge that get automatic history as a time series.
 
 * key - key name for timeseries
+* value - sample numeric data value (double)
+
 Optional args:
-    * VALUE - one of the following: avg, sum, min, max, range, count, first, last
-    * RESET - Should the current counter should be resetted when TIME_BUCKET is changes
-    * TIME_BUCKET - time bucket for resetting the current counter in seconds
+    * time-bucket - time bucket for resetting the current counter in seconds
 
 ### TS.info - query the series metadata
 ```sql
