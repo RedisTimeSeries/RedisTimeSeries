@@ -1,4 +1,4 @@
-# Redis Time-Series Module
+# RedisTimeSeries Module
 Time series data structure for Redis.
 
 ## Using with other tools metrics tools
@@ -55,3 +55,4 @@ Some languages have client libraries that provide support for RedisTimeSeries's 
 
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
+| JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
