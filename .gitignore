@@ -6,3 +6,7 @@ __pycache__
 .project
 .pydevproject
 .settings/
+venv/
+.idea/
+.DS_Store
+ tests/.cache/
