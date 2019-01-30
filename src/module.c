@@ -617,7 +617,7 @@ COMPACTION_POLICY - compaction policy from parse_policies,h
 RETENTION_POLICY - integer that represents the retention in seconds
 MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
-redis-server --loadmodule ./redis-tsdb-module.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
+redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
 */
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_Init(ctx, "tsdb", 2, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {

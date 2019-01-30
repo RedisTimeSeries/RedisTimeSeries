@@ -37,7 +37,7 @@ make all
 ```
 
 ## Run
-In your redis-server run: `loadmodule redis-tsdb-module.so`.
+In your redis-server run: `loadmodule redistimeseries.so`.
 
 More infomation about modules can be found at redis offical documentation: https://redis.io/topics/modules-intro
 

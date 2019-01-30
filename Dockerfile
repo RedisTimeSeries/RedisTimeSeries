@@ -30,7 +30,7 @@ WORKDIR /data
 RUN set -ex;\
     mkdir -p "$LIBDIR";
 
-COPY --from=builder /redis-timeseries/src/redis-tsdb-module.so "$LIBDIR"
+COPY --from=builder /redis-timeseries/src/redistimeseries.so "$LIBDIR"
 
 EXPOSE 6379
-CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redis-tsdb-module.so"]
+CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]

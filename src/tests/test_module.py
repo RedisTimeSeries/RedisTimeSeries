@@ -6,7 +6,7 @@ import __builtin__
 import math
 from rmtest import ModuleTestCase
 
-class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redis-tsdb-module.so')):
+class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redistimeseries.so')):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
         return dict([(info[i], info[i+1]) for i in range(0, len(info), 2)])

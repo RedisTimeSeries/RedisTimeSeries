@@ -20,24 +20,24 @@ else
 endif
 CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
 
-all: rmutil redis-tsdb-module.so
+all: rmutil redistimeseries.so
 
 rmutil:
 	$(MAKE) -C $(RMUTIL_LIBDIR)
 
-redis-tsdb-module.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o
+redistimeseries.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o
 	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o indexer.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
 
 clean:
 	rm -rf *.xo *.so *.o ./tests_runner
 
-tests: redis-tsdb-module.so
+tests: redistimeseries.so
 	python -m pytest ${EXTRA_ARGS} -svv .
 
-run: redis-tsdb-module.so
-	redis-server --loadmodule `pwd`/redis-tsdb-module.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+run: redistimeseries.so
+	redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
 
-unittests_runner: redis-tsdb-module.so tests.o
+unittests_runner: redistimeseries.so tests.o
 	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
 
 unittests: unittests_runner
@@ -46,8 +46,8 @@ unittests: unittests_runner
 docker:
 	cd .. && docker build -t redis-tsdb .
 
-package: redis-tsdb-module.so
+package: redistimeseries.so
 	mkdir -p ../build
-	ramp pack -m "`pwd`/../ramp_manifest.yml" -v -o "../build/redis-tsdb-module.{os}-{architecture}.latest.zip" "`pwd`/redis-tsdb-module.so"
+	ramp pack -m "`pwd`/../ramp.yml" -v -o "../build/redistimeseries.{os}-{architecture}.latest.zip" "`pwd`/redistimeseries.so"
 
 .PHONY: package tests unittests clean all
