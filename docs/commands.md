@@ -2,7 +2,7 @@
 
 ## TS.CREATE - create a new time-series
 ```sql
-TS.CREATE KEY [retentionSecs] [maxSamplesPerChunk] [labels]
+TS.CREATE key [retentionSecs] [maxSamplesPerChunk] [labels]
 ```
 * key - key name for timeseries
 
@@ -21,12 +21,12 @@ TS.CREATE temperature 60 360 sensor_id=2 area_id=32
 
 ## TS.CREATERULE - create a compaction rule
 ```sql
-TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
+TS.CREATERULE sourceKey aggType bucketSizeSec destKey
 ```
-* SOURCE_KEY - key name for source time series
-* AGG_TYPE - aggregation type one of the following: avg, sum, min, max, range, count, first, last
-* BUCKET_SIZE_SEC - time bucket for aggregated compaction,
-* DEST_KEY - key name for destination time series
+* sourceKey - key name for source time series
+* aggType - aggregation type one of the following: avg, sum, min, max, range, count, first, last
+* bucketSizeSec - time bucket for aggregated compaction,
+* destKey - key name for destination time series
 
 > DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -34,20 +34,20 @@ TS.CREATERULE SOURCE_KEY AGG_TYPE BUCKET_SIZE_SEC DEST_KEY
 
 ## TS.DELETERULE - delete a compaction rule
 ```sql
-TS.DELETERULE SOURCE_KEY DEST_KEY
+TS.DELETERULE sourceKey destKey
 ```
 
-* SOURCE_KEY - key name for source time series
-* DEST_KEY - key name for destination time series
+* sourceKey - key name for source time series
+* destKey - key name for destination time series
 
 
 ## TS.ADD - append a new value to the series
 ```sql
-TS.ADD key [labels] TIMESTAMP value
+TS.ADD key [labels] timestamp value
 ```
 * labels - set of key-value pairs that represent metadata labels of the key. This will be used if the module was started
 with default settings. see TODO.
-* TIMESTAMP - unix timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
+* timestamp - unix timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
 * value - sample numeric data value (double)
 
 ### Examples
@@ -62,21 +62,11 @@ if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced
 
 ## TS.RANGE - ranged query
 ```sql
-TS.RANGE key FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
-1) 1) (integer) 1487426646
-   2) "3.6800000000000002"
-2) 1) (integer) 1487426648
-   2) "3.6200000000000001"
-3) 1) (integer) 1487426650
-   2) "3.6200000000000001"
-4) 1) (integer) 1487426652
-   2) "3.6749999999999998"
-5) 1) (integer) 1487426654
-   2) "3.73"
+TS.RANGE key fromTimestamp toTimestamp [aggregationType] [bucketSizeSeconds]
 ```
 * key - key name for timeseries
-* FROM_TIMESTAMP - start timestamp for range query
-* TO_TIMESTAMP - end timestamp for range query
+* fromTimestamp - start timestamp for range query
+* toTimestamp - end timestamp for range query
 Optional args:
     * aggregationType - one of the following: avg, sum, min, max, range, count, first, last
     * bucketSizeSeconds - time bucket for aggregation in seconds
@@ -111,12 +101,12 @@ This can be improved in the future by using binary search to find the start of t
 ```
 ## TS.RANGEBYLABELS - ranged query by labels
 ```sql
-TS.RANGEBYLABELS key (LABELS) FROM_TIMESTAMP TO_TIMESTAMP [aggregationType] [bucketSizeSeconds]
+TS.RANGEBYLABELS key (labels) fromTimestamp toTimestamp [aggregationType] [bucketSizeSeconds]
 ```
 
-* LABELS - set of key-pair selector (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
-* FROM_TIMESTAMP - start timestamp for range query
-* TO_TIMESTAMP - end timestamp for range query
+* labels - set of key-pair selector (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
+* fromTimestamp - start timestamp for range query
+* toTimestamp - end timestamp for range query
 Optional args:
     * aggregationType - one of the following: avg, sum, min, max, count, first, last
     * bucketSizeSeconds - time bucket for aggregation in seconds
