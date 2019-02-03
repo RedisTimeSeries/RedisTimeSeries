@@ -56,3 +56,4 @@ Some languages have client libraries that provide support for RedisTimeSeries's 
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
+| redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
