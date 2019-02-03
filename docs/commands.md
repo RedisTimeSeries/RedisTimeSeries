@@ -7,12 +7,12 @@ TS.CREATE key [retentionSecs] [maxSamplesPerChunk] [labels]
 * key - key name for timeseries
 
 Optional args:
-* retentionSecs - max age for samples compared to current time (in seconds).
-    * Default: 0
-    * When set to 0, the series will not be trimmed at all
-* maxSamplesPerChunk - how many samples to keep per memory chunk
-    * Default: 360
-* labels - set of key-value pairs that represent metadata labels of the key
+   * retentionSecs - max age for samples compared to current time (in seconds).
+      * Default: 0
+      * When set to 0, the series will not be trimmed at all
+   * maxSamplesPerChunk - how many samples to keep per memory chunk
+      * Default: 360
+   * labels - set of key-value pairs that represent metadata labels of the key
 
 ### Example
 ```sql
@@ -67,9 +67,10 @@ TS.RANGE key fromTimestamp toTimestamp [aggregationType] [bucketSizeSeconds]
 * key - key name for timeseries
 * fromTimestamp - start timestamp for range query
 * toTimestamp - end timestamp for range query
+
 Optional args:
-    * aggregationType - one of the following: avg, sum, min, max, range, count, first, last
-    * bucketSizeSeconds - time bucket for aggregation in seconds
+   * aggregationType - one of the following: avg, sum, min, max, range, count, first, last
+   * bucketSizeSeconds - time bucket for aggregation in seconds
 
 ### Complexity
 TS.RANGE complexity is O(n/m+k)
@@ -107,9 +108,10 @@ TS.RANGEBYLABELS key (labels) fromTimestamp toTimestamp [aggregationType] [bucke
 * labels - set of key-pair selector (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 * fromTimestamp - start timestamp for range query
 * toTimestamp - end timestamp for range query
+
 Optional args:
-    * aggregationType - one of the following: avg, sum, min, max, count, first, last
-    * bucketSizeSeconds - time bucket for aggregation in seconds
+   * aggregationType - one of the following: avg, sum, min, max, count, first, last
+   * bucketSizeSeconds - time bucket for aggregation in seconds
 
 ### Examples
 ```sql
@@ -210,7 +212,7 @@ This command can be used as a counter/gauge that get automatic history as a time
 * value - sample numeric data value (double)
 
 Optional args:
-    * time-bucket - time bucket for resetting the current counter in seconds
+   * time-bucket - time bucket for resetting the current counter in seconds
 
 ## TS.INFO - query the series metadata
 ```sql
