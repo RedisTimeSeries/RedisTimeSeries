@@ -102,7 +102,7 @@ This can be improved in the future by using binary search to find the start of t
 ```
 ## TS.RANGEBYLABELS - ranged query by labels
 ```sql
-TS.RANGEBYLABELS key (labels) fromTimestamp toTimestamp [aggregationType] [bucketSizeSeconds]
+TS.RANGEBYLABELS (labels) fromTimestamp toTimestamp [aggregationType] [bucketSizeSeconds]
 ```
 
 * labels - set of key-pair selector (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
