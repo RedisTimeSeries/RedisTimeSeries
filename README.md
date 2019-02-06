@@ -24,7 +24,6 @@ Each sample is the size of 128bit (64bit for the timestamp and 64bit for the val
 * Compactions/Roll-ups - automatically updated aggregated timeseries
 * labels index - each key has labels which will allows query by labels
 
-
 ## Docker
 
 To quickly tryout Redis-TimeSeries, launch an instance using docker:
