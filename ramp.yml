@@ -7,7 +7,6 @@ license: Apache 2.0 with Commons Clause
 command_line_args: ""
 min_redis_version: "5.0"
 min_redis_pack_version: "5.4"
-capabilities: "types,no_multi_key,replica_of,backup_restore,eviction_expiry,reshard_rebalance,failover_migrate,persistence_aof,persistence_rdb,hash_policy,flash,clustering"
 capabilities:
     - types
     - no_multi_key
