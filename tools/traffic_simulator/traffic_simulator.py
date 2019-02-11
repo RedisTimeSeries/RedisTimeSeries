@@ -2,17 +2,23 @@ import redis
 import time
 import click
 import multiprocessing
+import sys
 
 
 def worker_func(args):
-    host, port, start_ts, tsrange, pipeline_size, key_index, key_format = args
+    host, port, start_ts, tsrange, pipeline_size, key_index, key_format, check_only = args
     redis_client = redis.Redis(host, port)
-    pipe = redis_client.pipeline(tsrange)
-    for i in range(tsrange):
-        if tsrange % pipeline_size:
-            pipe.execute()
-        pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts+i, i)
-    pipe.execute()
+    if check_only:
+        res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
+        if(len(res) != tsrange):
+            return -1
+    else:
+        pipe = redis_client.pipeline(tsrange)
+        for i in range(tsrange):
+            if tsrange % pipeline_size:
+                pipe.execute()
+            pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, i)
+        pipe.execute()
     return tsrange
 
 
@@ -36,12 +42,13 @@ def create_compacted_key(redis, i, source, agg, bucket):
 @click.option('--start-timestamp', type=click.INT, default=int(time.time()), help='Base timestamp for all samples')
 @click.option('--key-format', type=click.STRING, default="test{{{index}}}",
               help='base key format, will be compiled with an index parameter')
+@click.option('--check-only', type=click.BOOL, default=False, help='test if all keys are correcly exists in the database')
 def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, with_compaction, start_timestamp,
-        key_format):
+        key_format, check_only):
     r = redis.Redis(host, port)
-    print("from %s to %s" % (start_timestamp, start_timestamp+samples))
+    print("from %s to %s" % (start_timestamp, start_timestamp + samples))
 
-    if create_keys:
+    if create_keys and not check_only:
         for i in range(key_count):
             keyname = key_format.format(index=i)
             r.delete(keyname)
@@ -54,12 +61,20 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
     pool = multiprocessing.Pool(pool_size)
     s = time.time()
     result = pool.map(worker_func,
-                      [(host, port, start_timestamp, int(samples), pipeline_size, key_index, key_format) for key_index in range(key_count)])
+                      [(host, port, start_timestamp, int(samples), pipeline_size, key_index, key_format, check_only)
+                       for key_index in range(key_count)])
     e = time.time()
     insert_time = e - s
 
-    print("# items inserted %s:" % sum(result))
-    print("took %s to insert sec, average insert time %s" % (insert_time, insert_time*1000/sum(result)))
+    if(check_only):
+        for r in result:
+            if r == -1:
+                print("# failed!!! not all items exists in the databse")
+                sys.exit(1)
+        print("# pass, all items exists in the databse")
+    else:
+        print("# items inserted %s:" % sum(result))
+        print("took %s to insert sec, average insert time %s" % (insert_time, insert_time * 1000 / sum(result)))
 
 
 if __name__ == '__main__':
