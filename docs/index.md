@@ -1,3 +1,5 @@
+<img src="images/logo.png" alt="logo" width="100"/>
+
 # RedisTimeSeries Module
 Time series data structure for Redis.
 
