@@ -50,7 +50,7 @@ Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmte
 ```
 $ cd src
 $ pip install -r tests/requirements.txt # optional, use virtualenv
-$ make test
+$ make tests
 ```
 
 ## Documentation
