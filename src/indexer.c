@@ -5,6 +5,12 @@
 #include "consts.h"
 #include "indexer.h"
 
+RedisModuleDict *labelsIndex;
+
+void IndexInit() {
+    labelsIndex = RedisModule_CreateDict(NULL);
+}
+
 int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, const char *separator) {
     char *token;
     char *iter_ptr;
@@ -43,8 +49,22 @@ int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateTyp
     return count;
 }
 
+void indexUnderKey(const char *op, RedisModuleString *key, RedisModuleString *ts_key) {
+    int nokey = 0;
+    RedisModuleDict *leaf = RedisModule_DictGet(labelsIndex, key, &nokey);
+    if (nokey) {
+        leaf = RedisModule_CreateDict(NULL);
+        RedisModule_DictSet(labelsIndex, key, leaf);
+    }
+
+    if (strcmp(op, "SADD") == 0) {
+        RedisModule_DictSet(leaf, ts_key, NULL);
+    } else if (strcmp(op, "SREM") == 0) {
+        RedisModule_DictDel(leaf, ts_key, NULL);
+    }
+}
+
 void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
-    RedisModuleCallReply *reply;
     const char *key_string, *value_string;
     for (int i=0; i<labels_count; i++) {
         size_t _s;
@@ -55,12 +75,9 @@ void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_k
                                                                               value_string);
         RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
                                                                         key_string);
-        reply = RedisModule_Call(ctx, op, "ss", indexed_key_value, ts_key);
-        if (reply)
-            RedisModule_FreeCallReply(reply);
-        reply = RedisModule_Call(ctx, op, "ss", indexed_key, ts_key);
-        if (reply)
-            RedisModule_FreeCallReply(reply);
+
+        indexUnderKey(op, indexed_key_value, ts_key);
+        indexUnderKey(op, indexed_key, ts_key);
     }
 }
 
@@ -124,31 +141,32 @@ int _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *rig
 
 RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predicate, RedisModuleDict *prevResults) {
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
-    RedisModuleCallReply *reply;
+    RedisModuleDict *currentLeaf;
+    RedisModuleString *index_key;
     size_t _s;
 
 
     if (predicate->type == NCONTAINS || predicate->type == CONTAINS) {
-        RedisModuleString *index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
+        index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
                 RedisModule_StringPtrLen(predicate->label.key, &_s));
-        reply = RedisModule_Call(ctx, "SMEMBERS", "s", index_key);
+
     } else {
         const char *key = RedisModule_StringPtrLen(predicate->label.key, &_s);
         const char *value = RedisModule_StringPtrLen(predicate->label.value, &_s);
-        RedisModuleString *index_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s", key, value);
-        reply = RedisModule_Call(ctx, "SMEMBERS", "s", index_key_value);
+        index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s", key, value);
     }
-    size_t items = RedisModule_CallReplyLength(reply);
-
-    for (size_t j=0; j < items; j++) {
-        RedisModuleCallReply *item = RedisModule_CallReplyArrayElement(reply, j);
-        RedisModuleString *key_name = RedisModule_CreateStringFromCallReply(item);
-        RedisModule_DictSet(localResult, key_name, (void *)1);
-
+    int nokey;
+    currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+    if (nokey) {
+        currentLeaf = NULL;
+    } else {
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentLeaf, "^", NULL, 0);
+        RedisModuleString *currentKey;
+        while((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+            RedisModule_DictSet(localResult, currentKey, (void *)1);
+        }
+        RedisModule_DictIteratorStop(iter);
     }
-
-    if (reply)
-        RedisModule_FreeCallReply(reply);
 
     if (prevResults != NULL) {
         RedisModuleString *lastKey = NULL;

@@ -55,6 +55,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
             RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
         }
     }
+
+    IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     return series;
 }
 
