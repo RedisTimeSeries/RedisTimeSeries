@@ -27,7 +27,7 @@ int ReadConfig(RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        printf("loaded default compation policy: %s\n\r", policy_cstr);
+        printf("loaded default compaction policy: %s\n\r", policy_cstr);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
@@ -48,6 +48,7 @@ int ReadConfig(RedisModuleString **argv, int argc) {
         printf("loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
     } else {
         TSGlobalConfig.maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
-        return TSDB_OK;
     }
+    printf("loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
+    return TSDB_OK;
 }

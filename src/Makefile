@@ -32,7 +32,7 @@ clean:
 	rm -rf *.xo *.so *.o ./tests_runner
 
 tests: redistimeseries.so
-	python -m pytest ${EXTRA_ARGS} -svv .
+	python2 -m pytest ${EXTRA_ARGS} -svv .
 
 run: redistimeseries.so
 	redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp

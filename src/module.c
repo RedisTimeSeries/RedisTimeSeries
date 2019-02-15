@@ -326,14 +326,21 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     SeriesAddSample(destSeries, currentTimestamp, rule->aggClass->finalize(rule->aggContext));
 }
 
-Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int start, int end, size_t *label_count) {
-    *label_count = (size_t)(max(0, argc - start - end));
+Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count) {
+    int pos = RMUtil_ArgIndex("LABELS", argv, argc);
+    int first_label_pos = pos + 1;
     Label *labels = NULL;
-    if (*label_count > 0) {
+    *label_count = 0;
+    if (pos < 0) {
+        return NULL;
+    }
+    *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
+    if (label_count > 0) {
         labels = malloc(sizeof(Label) * (*label_count));
         for (int i=0; i < *label_count; i++) {
-            parseLabel(ctx, argv[start + i], labels + i, "=");
-        }
+            labels[i].key = RedisModule_CreateStringFromString(NULL, argv[first_label_pos + i*2]);
+            labels[i].value = RedisModule_CreateStringFromString(NULL, argv[first_label_pos + i*2 + 1]);
+        };
     }
     return labels;
 }
@@ -367,7 +374,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (TSGlobalConfig.hasGlobalConfig) {
             // the key doesn't exist but we have enough information to create one
             size_t labelsCount;
-            Label *labels = parseLabelsFromArgs(ctx, argv, argc, 2, 2, &labelsCount);
+            Label *labels = parseLabelsFromArgs(ctx, argv, argc, &labelsCount);
             CreateTsKey(ctx, keyName, labels, labelsCount, TSGlobalConfig.retentionPolicy,
                     TSGlobalConfig.maxSamplesPerChunk, &series, &key);
             SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
@@ -429,15 +436,8 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long retentionSecs = RETENTION_DEFAULT_SECS;
     long long maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
 
-    if (argc > 2) {
-        if ((RedisModule_StringToLongLong(argv[2], &retentionSecs) != REDISMODULE_OK))
-            return RedisModule_ReplyWithError(ctx,"TSDB: invalid retentionSecs");
-    }
-
-    if (argc > 3) {
-        if ((RedisModule_StringToLongLong(argv[3], &maxSamplesPerChunk) != REDISMODULE_OK))
-            return RedisModule_ReplyWithError(ctx,"TSDB: invalid maxSamplesPerChunk");
-    }
+    RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &retentionSecs);
+    RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &maxSamplesPerChunk);
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
@@ -448,7 +448,8 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     size_t labelsCount;
-    Label *labels = parseLabelsFromArgs(ctx, argv, argc, 4, 0, &labelsCount);
+    Label *labels = parseLabelsFromArgs(ctx, argv, argc, &labelsCount);;
+
     CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
     RedisModule_CloseKey(key);
 
