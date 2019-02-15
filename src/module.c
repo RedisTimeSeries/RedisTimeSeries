@@ -561,8 +561,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     series = RedisModule_ModuleTypeGetValue(key);
-    long long incrby = 0;
-    if (RMUtil_ParseArgs(argv, argc, 2, "l", &incrby) != REDISMODULE_OK)
+    double incrby = 0;
+    if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
     time(&timer);
 

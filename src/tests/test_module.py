@@ -290,9 +290,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             time.sleep(1)
             start_decr_time = int(time.time())
             for i in range(20):
-                r.execute_command('ts.decrby', 'tester', '1')
+                r.execute_command('ts.decrby', 'tester', '1.5')
 
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_incr_time, '100'], [start_decr_time, '80']]
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_incr_time, '100'], [start_decr_time, '70']]
 
     def test_agg_min(self):
         with self.redis() as r:
