@@ -455,6 +455,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 //TS.DELETERULE SOURCE_KEY DEST_KEY
 int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 3)
+        return RedisModule_WrongArity(ctx);
+
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
