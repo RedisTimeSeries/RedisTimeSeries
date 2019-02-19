@@ -374,8 +374,10 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (TSGlobalConfig.hasGlobalConfig) {
             // the key doesn't exist but we have enough information to create one
             size_t labelsCount;
+            long long retentionSecs = TSGlobalConfig.retentionPolicy;
             Label *labels = parseLabelsFromArgs(ctx, argv, argc, &labelsCount);
-            CreateTsKey(ctx, keyName, labels, labelsCount, TSGlobalConfig.retentionPolicy,
+            RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &retentionSecs);
+            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs,
                     TSGlobalConfig.maxSamplesPerChunk, &series, &key);
             SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
         } else {
@@ -547,7 +549,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 
 /*
-TS.INCRBY ts_key NUMBER [RESET] [RESET TIME SECONDS]
+TS.INCRBY ts_key NUMBER [RESET time-bucket]
 */
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -578,24 +580,17 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     double result;
     long long resetSeconds = 1;
     time_t currentUpdatedTime = timer;
-    if (argc > 3) {
-        RMUtil_StringToLower(argv[3]);
-        if (RMUtil_StringEqualsC(argv[3], "reset")) {
-            if (argc > 4) {
-                RMUtil_StringToLower(argv[4]);
-                if (RMUtil_ParseArgs(argv, argc, 4, "l", &resetSeconds) != REDISMODULE_OK) {
-                    return RedisModule_WrongArity(ctx);
-                }
-            }
-            currentUpdatedTime = timer - ((int)timer % resetSeconds);
-            if (series->lastTimestamp != 0) {
-                int lastTS = series->lastTimestamp;
-                if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
-                    series->lastValue = 0;
-                }
-            }
-        } else {
+    if (RMUtil_ArgExists("RESET", argv, argc, 1)) {
+        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
+        }
+
+        currentUpdatedTime = timer - ((int)timer % resetSeconds);
+        if (series->lastTimestamp != 0) {
+            int lastTS = series->lastTimestamp;
+            if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
+                series->lastValue = 0;
+            }
         }
     }
 
