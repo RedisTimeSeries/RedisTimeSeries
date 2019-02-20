@@ -34,6 +34,8 @@ int ReadConfig(RedisModuleString **argv, int argc) {
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
         if (RMUtil_ParseArgsAfter("RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) != REDISMODULE_OK) {
             return TSDB_ERROR;
+        } else {
+            TSGlobalConfig.retentionPolicy = RETENTION_DEFAULT_SECS;
         }
 
         printf("loaded default retention policy: %lld \n", TSGlobalConfig.retentionPolicy);

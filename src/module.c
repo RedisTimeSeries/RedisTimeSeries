@@ -25,6 +25,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
+int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
+                    long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels);
+
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
@@ -373,12 +376,13 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         if (TSGlobalConfig.hasGlobalConfig) {
             // the key doesn't exist but we have enough information to create one
+            long long retentionSecs;
+            long long maxSamplesPerChunk;
             size_t labelsCount;
-            long long retentionSecs = TSGlobalConfig.retentionPolicy;
-            Label *labels = parseLabelsFromArgs(ctx, argv, argc, &labelsCount);
-            RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &retentionSecs);
-            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs,
-                    TSGlobalConfig.maxSamplesPerChunk, &series, &key);
+            Label *labels;
+            parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels);
+
+            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
             SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
         } else {
             return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
@@ -430,16 +434,36 @@ int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, 
     return TSDB_OK;
 }
 
+int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
+        long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
+    *retentionSecs = TSGlobalConfig.retentionPolicy;
+    *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
+    *labelsCount = 0;
+    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);;
+
+    if (RMUtil_ArgExists("RETENTION", argv, argc, 1) && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    if (RMUtil_ArgExists("CHUNK_SIZE", argv, argc, 1) && RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", maxSamplesPerChunk) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    return REDISMODULE_OK;
+}
+
 int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc < 2)
         return RedisModule_WrongArity(ctx);
 
+    Series *series;
     RedisModuleString *keyName = argv[1];
-    long long retentionSecs = RETENTION_DEFAULT_SECS;
-    long long maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
+    long long retentionSecs;
+    long long maxSamplesPerChunk;
+    size_t labelsCount;
+    Label *labels;
 
-    RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &retentionSecs);
-    RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &maxSamplesPerChunk);
+    if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+        return RedisModule_WrongArity(ctx);
+    }
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
@@ -447,10 +471,6 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_CloseKey(key);
         return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
     }
-
-    Series *series;
-    size_t labelsCount;
-    Label *labels = parseLabelsFromArgs(ctx, argv, argc, &labelsCount);;
 
     CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
     RedisModule_CloseKey(key);
@@ -554,7 +574,7 @@ TS.INCRBY ts_key NUMBER [RESET time-bucket]
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 3 || argc > 5)
+    if (argc < 3)
         return RedisModule_WrongArity(ctx);
 
     RedisModuleString *keyName = argv[1];
@@ -564,7 +584,15 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         if (TSGlobalConfig.hasGlobalConfig) {
             // the key doesn't exist but we have enough information to create one
-            CreateTsKey(ctx, keyName, NULL, 0, TSGlobalConfig.retentionPolicy, TSGlobalConfig.maxSamplesPerChunk, &series, &key);
+            long long retentionSecs;
+            long long maxSamplesPerChunk;
+            size_t labelsCount;
+            Label *labels;
+            if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+                return RedisModule_WrongArity(ctx);
+            }
+
+            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
             SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, NULL, 0);
         } else {
             return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
@@ -587,7 +615,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         currentUpdatedTime = timer - ((int)timer % resetSeconds);
         if (series->lastTimestamp != 0) {
-            int lastTS = series->lastTimestamp;
+            u_int64_t lastTS = series->lastTimestamp;
             if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
                 series->lastValue = 0;
             }
