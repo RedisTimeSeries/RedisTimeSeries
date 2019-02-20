@@ -28,6 +28,26 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                     long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels);
 
+int parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
+        int *agg_type) {
+    RedisModuleString * aggTypeStr = NULL;
+    if (RMUtil_ParseArgsAfter("AGGREGATION", argv, argc, "sl", &aggTypeStr, time_delta) == REDISMODULE_OK) {
+        if (!aggTypeStr){
+            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
+        }
+
+        *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
+
+        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX) {
+            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
+        }
+        return TSDB_OK;
+    }
+
+    return TSDB_NOTEXISTS;
+}
+
+
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
@@ -215,56 +235,56 @@ int TSDB_rangebylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
-    api_timestamp_t start_ts, end_ts;
-    api_timestamp_t time_delta = 0;
-    RedisModuleString * aggTypeStr = NULL;
-
-    int pRes = REDISMODULE_ERR;
-    switch (argc) {
-        case 4:
-            pRes = RMUtil_ParseArgs(argv, argc, 2, "ll", &start_ts, &end_ts);
-            break;
-        case 6:
-            pRes = RMUtil_ParseArgs(argv, argc, 2, "llsl", &start_ts, &end_ts, &aggTypeStr, &time_delta );
-            if (!time_delta)
-                return RedisModule_ReplyWithError(ctx, "TSDB: time-delta must != 0");
-            break;
-        default:
-            return RedisModule_WrongArity(ctx);
-    }
-    if (pRes != REDISMODULE_OK)
-        return RedisModule_ReplyWithError(ctx, "TSDB: wrong format");
-
-    int agg_type = 0;
     Series *series;
     RedisModuleKey *key;
-    AggregationClass *aggObject = NULL;
-
-    if (argc > 4)
-    {
-        if (!aggTypeStr){
-            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
-        }
-
-        agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
-
-        if (agg_type < 0 || agg_type >= TS_AGG_TYPES_MAX)
-            return RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
-
-        aggObject = GetAggClass(agg_type);
-        if (!aggObject)
-            return RedisModule_ReplyWithError(ctx, "TSDB: Failed to retrieve aggObject");
-    }
-
     key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    
+
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
         return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
+    }
+
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    api_timestamp_t start_ts, end_ts;
+    api_timestamp_t time_delta = 0;
+
+
+    size_t start_len;
+    const char *start = RedisModule_StringPtrLen(argv[2], &start_len);
+    if (strcmp(start, "-") == 0) {
+        start_ts = 0;
+    } else {
+        if (RedisModule_StringToLongLong(argv[2], (long long int *) &start_ts) != REDISMODULE_OK) {
+            return RedisModule_WrongArity(ctx);
+        }
+    }
+
+    size_t end_len;
+    const char *end = RedisModule_StringPtrLen(argv[3], &end_len);
+    if (strcmp(end, "+") == 0) {
+        end_ts = series->lastTimestamp;
+    } else {
+        if (RedisModule_StringToLongLong(argv[3], (long long int *) &end_ts) != REDISMODULE_OK) {
+            return RedisModule_WrongArity(ctx);
+        }
+    }
+
+    int agg_type = 0;
+    AggregationClass *aggObject = NULL;
+    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &agg_type);
+    if (aggregationResult == TSDB_OK)
+    {
+        aggObject = GetAggClass(agg_type);
+        if (!aggObject)
+            return RedisModule_ReplyWithError(ctx, "TSDB: Failed to retrieve aggObject");
+    } else if (aggregationResult != TSDB_NOTEXISTS) {
+        return REDISMODULE_ERR;
     }
 
     ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta);
