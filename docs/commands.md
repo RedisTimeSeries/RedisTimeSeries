@@ -136,7 +136,7 @@ This can be improved in the future by using binary search to find the start of t
 ```
 ## TS.MRANGE - ranged query by filters
 ```sql
-TS.MRABGE fromTimestamp toTimestamp FILTER filter.. [AGGREGATION aggregationType bucketSizeSeconds]
+TS.MRABGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
 ```
 
 * fromTimestamp - start timestamp for range query
