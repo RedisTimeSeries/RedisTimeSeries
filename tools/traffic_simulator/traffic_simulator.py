@@ -17,7 +17,7 @@ def worker_func(args):
         for i in range(tsrange):
             if tsrange % pipeline_size:
                 pipe.execute()
-            pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, i)
+            pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, 5)
         pipe.execute()
     return tsrange
 

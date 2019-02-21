@@ -419,19 +419,19 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
-            actual_result = r.execute_command('TS.rangebylabels', 'name=bob', start_ts, start_ts + samples_count)
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
 
             def build_expected(val, time_bucket):
                 return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count+1, time_bucket)]
-            actual_result = r.execute_command('TS.rangebylabels', 'generation=x', start_ts, start_ts + samples_count, 'LAST', 5)
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
             expected_result = [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], build_expected(5, 5)],
                     ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], build_expected(15, 5)],
                     ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], build_expected(25, 5)],
                     ]
 
             assert expected_result == actual_result
-            assert expected_result[1:] == r.execute_command('TS.rangebylabels', 'generation=x', 'class!=middle', start_ts, start_ts + samples_count, 'LAST', 5)
+            assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
 
     def test_label_index(self):
         with self.redis() as r:

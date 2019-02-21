@@ -5,6 +5,7 @@
 */
 #include <time.h>
 #include <string.h>
+#include <limits.h>
 #include "redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
@@ -47,6 +48,32 @@ int parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     return TSDB_NOTEXISTS;
 }
 
+
+int parseRangeArguments(RedisModuleCtx *ctx, Series *series, int start_index, RedisModuleString **argv, api_timestamp_t *start_ts, api_timestamp_t *end_ts) {
+    size_t start_len;
+    const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
+    if (strcmp(start, "-") == 0) {
+        *start_ts = 0;
+    } else {
+        if (RedisModule_StringToLongLong(argv[start_index], (long long int *) start_ts) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: wrong fromTimestamp");
+            return REDISMODULE_ERR;
+        }
+    }
+
+    size_t end_len;
+    const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
+    if (strcmp(end, "+") == 0) {
+        *end_ts = series->lastTimestamp;
+    } else {
+        if (RedisModule_StringToLongLong(argv[start_index + 1], (long long int *) end_ts) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: wrong toTimestamp");
+            return REDISMODULE_ERR;
+        }
+    }
+
+    return REDISMODULE_OK;
+}
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -116,10 +143,10 @@ void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, Aggr
 
 int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int start, int query_count,
         QueryPredicate *queries) {
+    QueryPredicate *query = queries;
     for (int i=start; i < start + query_count; i++) {
         size_t _s;
         const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
-        QueryPredicate *query = queries + i - 1;
         if (strstr(str2, "!=") != NULL) {
             query->type = NEQ;
             if (parseLabel(ctx, argv[i], &query->label, "!=") == TSDB_ERROR) {
@@ -139,6 +166,7 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
         } else {
             return TSDB_ERROR;
         }
+        query++;
     }
     return TSDB_OK;
 }
@@ -174,37 +202,46 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_rangebylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     api_timestamp_t start_ts, end_ts;
     api_timestamp_t time_delta = 0;
-    RedisModuleString * aggTypeStr = NULL;
-    AggregationClass *aggObject = NULL;
-    int agg_type = 0;
 
     if (argc < 4)
         return RedisModule_WrongArity(ctx);
-    int query_count = argc - 1 - 2; // 1 is for the command, 2 is for start_ts and end_ts
-
-    if (RMUtil_ParseArgs(argv, argc, argc - 2, "sl", &aggTypeStr, &time_delta) == REDISMODULE_OK) {
-        agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
-        aggObject = GetAggClass(agg_type);
-        if (agg_type != TS_AGG_INVALID) {
-            query_count -= 2;
-        }
+    Series fake_series;
+    fake_series.lastTimestamp = LLONG_MAX;
+    if (parseRangeArguments(ctx, &fake_series, 1, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
     }
 
+    int agg_type = 0;
+    AggregationClass *aggObject = NULL;
+    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &agg_type);
+    if (aggregationResult == TSDB_OK) {
+        aggObject = GetAggClass(agg_type);
+        if (!aggObject)
+            return RedisModule_ReplyWithError(ctx, "TSDB: Failed to retrieve aggObject");
+    } else if (aggregationResult != TSDB_NOTEXISTS) {
+        return REDISMODULE_ERR;
+    }
+
+    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    int query_count = argc - 1 - filter_location;
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
+    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
-    RMUtil_ParseArgs(argv, argc, query_count + 1, "ll", &start_ts, &end_ts);
 
     if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
+    RedisModuleDict *result = QueryIndex(ctx, queries, (size_t) query_count);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
@@ -254,25 +291,8 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     api_timestamp_t start_ts, end_ts;
     api_timestamp_t time_delta = 0;
 
-
-    size_t start_len;
-    const char *start = RedisModule_StringPtrLen(argv[2], &start_len);
-    if (strcmp(start, "-") == 0) {
-        start_ts = 0;
-    } else {
-        if (RedisModule_StringToLongLong(argv[2], (long long int *) &start_ts) != REDISMODULE_OK) {
-            return RedisModule_WrongArity(ctx);
-        }
-    }
-
-    size_t end_len;
-    const char *end = RedisModule_StringPtrLen(argv[3], &end_len);
-    if (strcmp(end, "+") == 0) {
-        end_ts = series->lastTimestamp;
-    } else {
-        if (RedisModule_StringToLongLong(argv[3], (long long int *) &end_ts) != REDISMODULE_OK) {
-            return RedisModule_WrongArity(ctx);
-        }
+    if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
     }
 
     int agg_type = 0;
@@ -699,8 +719,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteCmd(ctx, "ts.incrby", TSDB_incrby);
     RMUtil_RegisterWriteCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
+    RMUtil_RegisterReadCmd(ctx, "ts.mrange", TSDB_mrange);
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
-    RMUtil_RegisterReadCmd(ctx, "ts.rangebylabels", TSDB_rangebylabels);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
 
     return REDISMODULE_OK;
