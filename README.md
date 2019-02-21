@@ -63,4 +63,4 @@ Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://gr
 
 ## License
 
-Apache 2.0 with Commons Clause - see [LICENSE](LICENSE)
+Redis Source Available License Agreement, see [LICENSE](LICENSE)
