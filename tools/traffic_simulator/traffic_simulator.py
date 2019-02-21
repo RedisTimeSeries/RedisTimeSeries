@@ -25,8 +25,8 @@ def worker_func(args):
 def create_compacted_key(redis, i, source, agg, bucket):
     dest = '%s_%s_%s' % (source, agg, bucket)
     redis.delete(dest)
-    redis.execute_command('ts.create', dest, 0, 360,
-                          'index=%s' % i, "aggregation=%s" % agg, "bucket=%s" % bucket)
+    redis.execute_command('ts.create', dest, 'RETENTION', 0, 'CHUNK_SIZE', 360,
+                          'LABELS', 'index', i, "aggregation", agg, "bucket", bucket)
     redis.execute_command('ts.createrule', source, agg, bucket, dest)
 
 
@@ -52,7 +52,7 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
         for i in range(key_count):
             keyname = key_format.format(index=i)
             r.delete(keyname)
-            r.execute_command('ts.create', keyname, 0, 360, 'index=%s' % i)
+            r.execute_command('ts.create', keyname, 'RETENTION', 0, 'CHUNK_SIZE', 360, 'LABELS', 'index', i)
             if with_compaction:
                 create_compacted_key(r, i, keyname, 'avg', 10)
                 create_compacted_key(r, i, keyname, 'avg', 60)
