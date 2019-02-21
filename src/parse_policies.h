@@ -1,3 +1,8 @@
+/*
+* Copyright 2018-2019 Redis Labs Ltd. and Contributors
+*
+* This file is available under the Redis Labs Source Available License Agreement
+*/
 #ifndef PARSE_POLICIES_H
 #define PARSE_POLICIES_H
 
