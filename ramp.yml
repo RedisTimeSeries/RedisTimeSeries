@@ -18,5 +18,4 @@ capabilities:
     - persistence_aof
     - persistence_rdb
     - hash_policy
-    - flash
     - clustering
