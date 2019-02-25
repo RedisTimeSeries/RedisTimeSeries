@@ -74,11 +74,12 @@ You can use this command to add data to an non existing timeseries in a single c
 
 ### TS.CREATERULE - create a compaction rule
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType
+TS.CREATERULE sourceKey destKey AGGREGATION aggType bucketSizeSeconds
 ```
 * sourceKey - key name for source time series
 * destKey - key name for destination time series
 * aggType - aggregation type one of the following: avg, sum, min, max, range, count, first, last
+* bucketSizeSeconds - time bucket for aggregation in seconds
 
 > DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
