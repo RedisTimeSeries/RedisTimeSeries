@@ -46,8 +46,6 @@ int ReadConfig(RedisModuleString **argv, int argc) {
         if (RMUtil_ParseArgsAfter("MAX_SAMPLE_PER_CHUNK", argv, argc, "l", &TSGlobalConfig.maxSamplesPerChunk) != REDISMODULE_OK) {
             return TSDB_ERROR;
         }
-
-        printf("loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
     } else {
         TSGlobalConfig.maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
     }
