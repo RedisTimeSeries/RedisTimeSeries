@@ -27,7 +27,7 @@ def create_compacted_key(redis, i, source, agg, bucket):
     redis.delete(dest)
     redis.execute_command('ts.create', dest, 'RETENTION', 0, 'CHUNK_SIZE', 360,
                           'LABELS', 'index', i, "aggregation", agg, "bucket", bucket)
-    redis.execute_command('ts.createrule', source, agg, bucket, dest)
+    redis.execute_command('ts.createrule', source, dest, 'AGGREGATION', agg, bucket, )
 
 
 @click.command()

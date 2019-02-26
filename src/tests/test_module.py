@@ -31,7 +31,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
 
         assert redis.execute_command('TS.CREATE', key)
         assert redis.execute_command('TS.CREATE', agg_key)
-        assert redis.execute_command('TS.CREATERULE', key, agg_type, 10, agg_key)
+        assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
         for i in range(10, 50):
@@ -112,8 +112,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name', 'brown', 'color', 'pink')
             assert r.execute_command('TS.CREATE', 'tester_agg_avg_10')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 10, 'tester_agg_avg_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'MAX', 10, 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_avg_10', 'AGGREGATION', 'AVG', 10)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
             data = r.execute_command('dump', 'tester')
 
@@ -145,8 +145,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATE', 'tester_agg_avg_3')
             assert r.execute_command('TS.CREATE', 'tester_agg_min_3')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 3, 'tester_agg_avg_3')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'MIN', 3, 'tester_agg_min_3')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_avg_3', 'AGGREGATION', 'AVG', 3)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_min_3', 'AGGREGATION', 'MIN', 3)
             self._insert_data(r, 'tester', start_ts, samples_count, range(samples_count))
             data_tester = r.execute_command('dump', 'tester')
             data_avg_tester = r.execute_command('dump', 'tester_agg_avg_3')
@@ -205,7 +205,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'avg', 10, 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
 
             start_ts = 1488823384L
             samples_count = 1500
@@ -227,21 +227,21 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.CREATERULE', 'tester', 'MAX', 10, 'tester_agg_max_10')
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
 
     def test_create_compaction_rule_twice(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'MAX', 10, 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.CREATERULE', 'tester', 'MAX', 10, 'tester_agg_max_10')
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
 
     def test_create_compaction_rule_and_del_dest_series(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 10, 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'AVG', 10)
             assert r.delete('tester_agg_max_10')
 
             start_ts = 1488823384L
@@ -252,7 +252,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-            assert r.execute_command('TS.CREATERULE', 'tester', 'AVG', 10, 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'AVG', 10)
 
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.DELETERULE', 'tester', 'non_existent')
@@ -376,8 +376,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for rule in rules:
                 for resolution in resolutions:
                     assert r.execute_command('TS.CREATE', 'tester_{}_{}'.format(rule, resolution))
-                    assert r.execute_command('TS.CREATERULE', 'tester', rule, resolution,
-                                             'tester_{}_{}'.format(rule, resolution))
+                    assert r.execute_command('TS.CREATERULE', 'tester', 'tester_{}_{}'.format(rule, resolution),
+                                             'AGGREGATION', rule, resolution)
 
             start_ts = 0
             samples_count = 501
@@ -431,7 +431,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                     ]
 
             assert expected_result == actual_result
-            assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
+            assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
+                                                            'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
 
     def test_label_index(self):
         with self.redis() as r:
