@@ -26,7 +26,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
-Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count) {
+static Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
     Label *labels = NULL;
@@ -45,12 +45,12 @@ Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     return labels;
 }
 
-int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
+static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                     long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
     *retentionSecs = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
-    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);;
+    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
 
     if (RMUtil_ArgExists("RETENTION", argv, argc, 1) && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -61,10 +61,16 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     return REDISMODULE_OK;
 }
 
-int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
+static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
-    if (RMUtil_ParseArgsAfter("AGGREGATION", argv, argc, "sl", &aggTypeStr, time_delta) == REDISMODULE_OK) {
+    int offset = RMUtil_ArgExists("AGGREGATION", argv, argc, 0);
+    if (offset > 0) {
+        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
+            return TSDB_ERROR;
+        }
+
         if (!aggTypeStr){
             RedisModule_ReplyWithError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
@@ -88,7 +94,7 @@ int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
 
 }
 
-int parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
+static int parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          AggregationClass **agg_object) {
     int agg_type;
     int result = _parseAggregationArgs(ctx, argv, argc, time_delta, &agg_type);
@@ -104,7 +110,7 @@ int parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     }
 }
 
-int parseRangeArguments(RedisModuleCtx *ctx, Series *series, int start_index, RedisModuleString **argv,
+static int parseRangeArguments(RedisModuleCtx *ctx, Series *series, int start_index, RedisModuleString **argv,
         api_timestamp_t *start_ts, api_timestamp_t *end_ts) {
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
@@ -265,7 +271,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (argc < 4)
         return RedisModule_WrongArity(ctx);
-    Series fake_series;
+    Series fake_series = {0};
     fake_series.lastTimestamp = LLONG_MAX;
     if (parseRangeArguments(ctx, &fake_series, 1, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -283,7 +289,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int query_count = argc - 1 - filter_location;
+    size_t query_count = argc - 1 - filter_location;
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
@@ -293,7 +299,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, (size_t) query_count);
+    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
