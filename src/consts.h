@@ -16,6 +16,7 @@
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
 #define TSDB_ERROR -1
+#define TSDB_NOTEXISTS 2
 
 /* TS.CREATE Defaults */
 #define RETENTION_DEFAULT_SECS          0LL
