@@ -429,16 +429,18 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *keyName = argv[1];
+    RedisModuleString *timestampStr = argv[2];
+    RedisModuleString *valueStr = argv[3];
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
     double value;
     api_timestamp_t timestamp;
-    if ((RedisModule_StringToDouble(argv[argc - 1], &value) != REDISMODULE_OK))
+    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
-    if ((RedisModule_StringToLongLong(argv[argc - 2], (long long int *) &timestamp) != REDISMODULE_OK)) {
+    if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
-        if(RMUtil_StringEqualsC(argv[2], "*"))
+        if(RMUtil_StringEqualsC(timestampStr, "*"))
             timestamp = (u_int64_t) time(NULL);
         else
             return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
