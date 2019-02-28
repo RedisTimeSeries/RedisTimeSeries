@@ -10,11 +10,14 @@ def worker_func(args):
     redis_client = redis.Redis(host, port)
     if check_only:
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
-        if(len(res) != tsrange):
+        if len(res) != tsrange:
+            return -1
+        expected = [[long(start_ts + i), str(i)] for i in xrange(tsrange)]
+        if expected != res:
             return -1
     else:
         pipe = redis_client.pipeline(tsrange)
-        for i in range(tsrange):
+        for i in xrange(tsrange):
             if tsrange % pipeline_size:
                 pipe.execute()
             pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, i)
@@ -39,7 +42,7 @@ def create_compacted_key(redis, i, source, agg, bucket):
 @click.option('--pipeline-size', type=click.INT, default=100, help='Number of workers.')
 @click.option('--create-keys', type=click.BOOL, default=True, help='Create the keys before inserting')
 @click.option('--with-compaction', type=click.BOOL, default=True, help='Create the compactions keys before inserting')
-@click.option('--start-timestamp', type=click.INT, default=int(time.time()), help='Base timestamp for all samples')
+@click.option('--start-timestamp', type=click.INT, default=1551347864, help='Base timestamp for all samples')
 @click.option('--key-format', type=click.STRING, default="test{{{index}}}",
               help='base key format, will be compiled with an index parameter')
 @click.option('--check-only', type=click.BOOL, default=False, help='test if all keys are correcly exists in the database')
