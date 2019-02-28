@@ -52,10 +52,10 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     *labelsCount = 0;
     *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
 
-    if (RMUtil_ArgExists("RETENTION", argv, argc, 1) && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
+    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
-    if (RMUtil_ArgExists("CHUNK_SIZE", argv, argc, 1) && RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", maxSamplesPerChunk) != REDISMODULE_OK) {
+    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 && RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", maxSamplesPerChunk) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
     return REDISMODULE_OK;
@@ -64,7 +64,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
-    int offset = RMUtil_ArgExists("AGGREGATION", argv, argc, 0);
+    int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
         if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
@@ -666,7 +666,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     double result;
     long long resetSeconds = 1;
     time_t currentUpdatedTime = timer;
-    if (RMUtil_ArgExists("RESET", argv, argc, 1)) {
+    if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
         if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
         }
