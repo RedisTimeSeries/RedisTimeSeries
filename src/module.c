@@ -53,9 +53,22 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
 
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
+
+    if (retentionSecs < 0) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
+        return REDISMODULE_ERR;
+    }
+
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 && RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", maxSamplesPerChunk) != REDISMODULE_OK) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
+        return REDISMODULE_ERR;
+    }
+
+    if (maxSamplesPerChunk <= 0) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
     return REDISMODULE_OK;
@@ -449,19 +462,17 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series = NULL;
     
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        if (TSGlobalConfig.hasGlobalConfig) {
-            // the key doesn't exist but we have enough information to create one
-            long long retentionSecs;
-            long long maxSamplesPerChunk;
-            size_t labelsCount;
-            Label *labels;
-            parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels);
-
-            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
-            SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
-        } else {
-            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
+        // the key doesn't exist, lets check we have enough information to create one
+        long long retentionSecs;
+        long long maxSamplesPerChunk;
+        size_t labelsCount;
+        Label *labels;
+        if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
         }
+
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
+        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
     } else {
@@ -521,7 +532,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Label *labels;
 
     if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
-        return RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
     }
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
@@ -640,21 +651,17 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        if (TSGlobalConfig.hasGlobalConfig) {
-            // the key doesn't exist but we have enough information to create one
-            long long retentionSecs;
-            long long maxSamplesPerChunk;
-            size_t labelsCount;
-            Label *labels;
-            if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
-                return RedisModule_WrongArity(ctx);
-            }
-
-            CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
-            SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, NULL, 0);
-        } else {
-            return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exists");
+        // the key doesn't exist, lets check we have enough information to create one
+        long long retentionSecs;
+        long long maxSamplesPerChunk;
+        size_t labelsCount;
+        Label *labels;
+        if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
         }
+
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
+        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, NULL, 0);
     }
 
     series = RedisModule_ModuleTypeGetValue(key);

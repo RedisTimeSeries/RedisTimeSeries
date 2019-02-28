@@ -405,6 +405,53 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         # test time difference is not more than 1 second
         assert result[0][0] - curr_time <= 1
 
+    def test_add_create_key(self):
+        with self.redis() as r:
+            ts = time.time()
+            assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla')
+            assert r.execute_command('TS.INFO', 'tester1') == [
+                'lastTimestamp',
+                long(ts),
+                'retentionSecs',
+                666L,
+                'chunkCount',
+                1L,
+                'maxSamplesPerChunk',
+                360L,
+                'labels',
+                [
+                    ['name',
+                    'blabla']
+                ],
+                'rules',
+                []
+            ]
+
+            assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location', 'earth')
+            assert r.execute_command('TS.INFO', 'tester2') == [
+                'lastTimestamp',
+                long(ts),
+                'retentionSecs',
+                0L,
+                'chunkCount',
+                1L,
+                'maxSamplesPerChunk',
+                360L,
+                'labels',
+                [
+                    [
+                        'name',
+                        'blabla2'
+                     ],
+                    [
+                        'location',
+                        'earth'
+                    ]
+                ],
+                'rules',
+                []
+            ]
+
     def test_range_by_labels(self):
         start_ts = 1511885909L
         samples_count = 50
