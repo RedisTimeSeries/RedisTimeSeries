@@ -28,7 +28,7 @@ TS.ADD key timestamp value [RETENTION retentionSecs] [LABELS field value..]
 * timestamp - unix timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
 * value - sample numeric data value (double)
 
-Optional args:
+The following arguments are optional since they can be set by TS.CREATE:
    * retentionSecs - max age for samples compared to current time (in seconds).
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
       * When set to 0, the series will not be trimmed at all
@@ -42,7 +42,7 @@ TS.ADD temperature:3:11 1548149181 30
 ```
 
 #### Complexity
-If a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
+If a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1) with no compaction.
 
 #### Notes
 You can use this command to add data to an non existing timeseries in a single command.  This is the reason why the labels and retentionsecs are optional arguments.  When specified, RedisTimeSeries will check if it needs to update the labels and or retentionSecs which introduces additional complexity.
@@ -83,13 +83,10 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggType bucketSizeSeconds
 
 > DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
-> *Performance Notice*: if a compaction rule exits on a timeseries `TS.ADD` performance might be reduced, the complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1).
-
 ### TS.DELETERULE - delete a compaction rule
 ```sql
 TS.DELETERULE sourceKey destKey
 ```
-
 * sourceKey - key name for source time series
 * destKey - key name for destination time series
 
@@ -137,20 +134,20 @@ This can be improved in the future by using binary search to find the start of t
 ```
 ## TS.MRANGE - ranged query by filters
 ```sql
-TS.MRABGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
 ```
 
 * fromTimestamp - start timestamp for range query
 * toTimestamp - end timestamp for range query
+* filters - set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 
 Optional args:
    * aggregationType - one of the following: avg, sum, min, max, count, first, last
    * bucketSizeSeconds - time bucket for aggregation in seconds
-   * filters - set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 
 ### Example
 ```sql
-127.0.0.1:6379> TS.MRANGE 1548149180 1548149210 AGGREGATION avg 5 FILTER area_id=32 
+127.0.0.1:6379> TS.MRANGE 1548149180 1548149210 AGGREGATION avg 5 FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
