@@ -19,12 +19,12 @@
 #include "indexer.h"
 
 RedisModuleType *SeriesType;
-time_t timer;
+static time_t timer;
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
+static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
                      AggregationClass *aggObject, int64_t time_delta);
 
-void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
+static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
 static Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);

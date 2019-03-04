@@ -62,7 +62,7 @@ void SeriesTrim(Series * series) {
 }
 
 // Encode timestamps as bigendian to allow correct lexical sorting
-void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
+static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
     uint64_t e;
     e = htonu64(timestamp);
     memcpy(buf, &e, sizeof(e));
