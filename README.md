@@ -55,7 +55,7 @@ $ make tests
 
 ## Documentation
 
-Read the docs at https://redistimeseries.io
+Read the docs at http://redistimeseries.io
 
 ## Mailing List / Forum
 
