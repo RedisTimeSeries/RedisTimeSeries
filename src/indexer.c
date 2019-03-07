@@ -12,6 +12,10 @@
 
 RedisModuleDict *labelsIndex;
 
+#define KV_PREFIX "__index_%s=%s"
+#define K_PREFIX "__key_index_%s"
+
+
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
 }
@@ -75,10 +79,10 @@ void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_k
         size_t _s;
         key_string = RedisModule_StringPtrLen(labels[i].key, &_s);
         value_string = RedisModule_StringPtrLen(labels[i].value, &_s);
-        RedisModuleString *indexed_key_value = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s",
+        RedisModuleString *indexed_key_value = RedisModule_CreateStringPrintf(ctx, KV_PREFIX,
                                                                               key_string,
                                                                               value_string);
-        RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
+        RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, K_PREFIX,
                                                                         key_string);
 
         indexUnderKey(op, indexed_key_value, ts_key);
@@ -152,13 +156,13 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
 
 
     if (predicate->type == NCONTAINS || predicate->type == CONTAINS) {
-        index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s",
+        index_key = RedisModule_CreateStringPrintf(ctx, K_PREFIX,
                 RedisModule_StringPtrLen(predicate->label.key, &_s));
 
     } else {
         const char *key = RedisModule_StringPtrLen(predicate->label.key, &_s);
         const char *value = RedisModule_StringPtrLen(predicate->label.value, &_s);
-        index_key = RedisModule_CreateStringPrintf(ctx, "__index_%s=%s", key, value);
+        index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
     }
     int nokey;
     currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
