@@ -9,6 +9,7 @@ TS.CREATE key [RETENTION retentionSecs] [LABELS field value..]
 * key - key name for timeseries
 
 Optional args:
+
    * retentionSecs - max age for samples compared to current time (in seconds).
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
       * When set to 0, the series will not be trimmed at all
@@ -61,6 +62,7 @@ This command can be used as a counter/gauge that get automatic history as a time
 * value - sample numeric data value (double)
 
 Optional args:
+
    * time-bucket - time bucket for resetting the current counter in seconds
    * retentionSecs - max age for samples compared to current time (in seconds).
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
@@ -101,6 +103,7 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSe
 * toTimestamp - end timestamp for range query
 
 Optional args:
+
    * aggregationType - one of the following: avg, sum, min, max, range, count, first, last
    * bucketSizeSeconds - time bucket for aggregation in seconds
 
@@ -136,12 +139,12 @@ This can be improved in the future by using binary search to find the start of t
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
 ```
-
 * fromTimestamp - start timestamp for range query
 * toTimestamp - end timestamp for range query
 * filters - set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 
 Optional args:
+
    * aggregationType - one of the following: avg, sum, min, max, count, first, last
    * bucketSizeSeconds - time bucket for aggregation in seconds
 
