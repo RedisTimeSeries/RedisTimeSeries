@@ -4,8 +4,9 @@
 Time series data structure for Redis.
 
 ## Using with other tools metrics tools
-See [Tools](tools/) directory.
+See [RedisTimeSeries](https://github.com/RedisTimeSeries) organization.
 Including Integration with:
+
 1. StatsD, Graphite exports using graphite protocol.
 2. Grafana - using SimpleJson datasource.
 
