@@ -30,6 +30,7 @@ TS.ADD key timestamp value [RETENTION retentionSecs] [LABELS field value..]
 * value - sample numeric data value (double)
 
 The following arguments are optional since they can be set by TS.CREATE:
+
    * retentionSecs - max age for samples compared to current time (in seconds).
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
       * When set to 0, the series will not be trimmed at all
