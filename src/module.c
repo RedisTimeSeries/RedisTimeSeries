@@ -155,7 +155,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     
     if (argc != 2) return RedisModule_WrongArity(ctx);
 
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
     
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
@@ -194,6 +194,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ruleCount++;
     }
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
+    RedisModule_CloseKey(key);
 
     return REDISMODULE_OK;
 }
@@ -432,6 +433,7 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     }
     rule->aggClass->appendValue(rule->aggContext, value);
     SeriesAddSample(destSeries, currentTimestamp, rule->aggClass->finalize(rule->aggContext));
+    RedisModule_CloseKey(key);
 }
 
 int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -587,6 +589,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
@@ -633,6 +636,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_CloseKey(destKey);
+    RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
@@ -705,6 +710,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
