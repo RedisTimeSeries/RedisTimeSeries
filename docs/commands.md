@@ -192,6 +192,19 @@ Optional args:
          2) "20"
 ```
 
+### TS.GET - get the last sample
+```sql
+TS.GET key
+```
+* key - key name for timeseries
+
+### Example
+```sql
+127.0.0.1:6379> TS.GET temperature:2:32
+1) (integer) 1548149279
+2) "23"
+```
+
 ## General
 
 ### TS.INFO - query the series metadata
