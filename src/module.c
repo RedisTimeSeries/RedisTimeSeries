@@ -708,6 +708,31 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+
+int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc != 2) return RedisModule_WrongArity(ctx);
+
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+    Series *series;
+
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    } else {
+        series = RedisModule_ModuleTypeGetValue(key);
+    }
+    RedisModule_ReplyWithArray(ctx, 2);
+    RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+    RedisModule_ReplyWithDouble(ctx, series->lastValue);
+
+    RedisModule_CloseKey(key);
+    return REDISMODULE_OK;
+}
+
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -747,6 +772,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.mrange", TSDB_mrange);
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
+    RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
 
     return REDISMODULE_OK;
 }
