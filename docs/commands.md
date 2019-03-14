@@ -136,7 +136,7 @@ This can be improved in the future by using binary search to find the start of t
    2) "20"
 
 ```
-## TS.MRANGE - ranged query by filters
+### TS.MRANGE - ranged query by filters
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
 ```
@@ -149,7 +149,7 @@ Optional args:
    * aggregationType - one of the following: avg, sum, min, max, count, first, last
    * bucketSizeSeconds - time bucket for aggregation in seconds
 
-### Example
+#### Example
 ```sql
 127.0.0.1:6379> TS.MRANGE 1548149180 1548149210 AGGREGATION avg 5 FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
@@ -198,7 +198,7 @@ TS.GET key
 ```
 * key - key name for timeseries
 
-### Example
+#### Example
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
 1) (integer) 1548149279
