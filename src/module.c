@@ -96,8 +96,9 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        if (time_delta <= 0) {
-            return RedisModule_ReplyWithError(ctx, "TSDB: bucketSizeSeconds must be greater than zero");
+        if (*time_delta <= 0) {
+            RedisModule_ReplyWithError(ctx, "TSDB: bucketSizeSeconds must be greater than zero");
+            return TSDB_ERROR;
         }
 
         return TSDB_OK;
