@@ -10,10 +10,6 @@
 #include "redismodule.h"
 
 typedef struct {
-
-} Indexer;
-
-typedef struct {
     RedisModuleString *key;
     RedisModuleString *value;
 } Label;
