@@ -699,7 +699,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result = series->lastValue - incrby;
     }
 
-    SeriesAddSample(series, currentUpdatedTime, result);
+    if (SeriesAddSample(series, max(currentUpdatedTime, series->lastTimestamp), result) != TSDB_OK) {
+        RedisModule_ReplyWithSimpleString(ctx, "TSDB: couldn't add sample");
+        return REDISMODULE_OK;
+    }
 
     // handle compaction rules
     CompactionRule *rule = series->rules;
