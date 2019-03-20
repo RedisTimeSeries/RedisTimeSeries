@@ -71,7 +71,7 @@ Optional args:
    * labels - set of key-value pairs that represent metadata labels of the key
 
 #### Notes
-You can use this command to add data to an non existing timeseries in a single command.  This is the reason why the labels and retentionsecs are optional arguments.  When specified, RedisTimeSeries will check if it needs to update the labels and or retentionSecs which introduces additional complexity.
+You can use this command to add data to an non existing timeseries in a single command.  This is the reason why the labels and retentionsecs are optional arguments.  When specified, RedisTimeSeries will check if it needs to update the labels and or retentionSecs.  This check, next to the update itself, introduces additional time complexity.
 
 ## Aggregation / Compaction / Downsampling
 
