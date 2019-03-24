@@ -35,6 +35,7 @@ The following arguments are optional since they can be set by TS.CREATE:
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
       * When set to 0, the series will not be trimmed at all
    * labels - set of key-value pairs that represent metadata labels of the key
+
 If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
 
 #### Examples
@@ -70,6 +71,7 @@ Optional args:
       * Default: the global retenionsecs configuration of the database. If not set, this is 0.
       * When set to 0, the series will not be trimmed at all
    * labels - set of key-value pairs that represent metadata labels of the key
+
 If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
 
 #### Notes
