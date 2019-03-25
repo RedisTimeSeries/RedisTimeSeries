@@ -19,7 +19,7 @@ Optional args:
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
 
-### Create Example
+#### Create Example
 
 ```sql
 TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
@@ -194,7 +194,7 @@ Optional args:
  * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
  * bucketSizeSeconds - Time bucket for aggregation in seconds
 
-#### Example
+#### Query by Filters Example
 
 ```sql
 127.0.0.1:6379> TS.MRANGE 1548149180 1548149210 AGGREGATION avg 5 FILTER area_id=32 sensor_id!=1
@@ -248,7 +248,7 @@ TS.GET key
 
 * key - Key name for timeseries
 
-#### Example
+#### Get Example
 
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
@@ -268,7 +268,7 @@ TS.INFO key
 
 * key - Key name for timeseries
 
-#### Example
+#### Info Example
 
 ```sql
 TS.INFO temperature:2:32
