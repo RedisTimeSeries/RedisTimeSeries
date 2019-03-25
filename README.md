@@ -1,8 +1,17 @@
 [![CircleCI](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master)
 [![GitHub issues](https://img.shields.io/github/release/RedisLabsModules/redis-timeseries.svg)](https://github.com/RedisLabsModules/redis-timeseries/releases/latest)
 
-# Redis Time-Series Module
-Time series data structure for redis.
+# RedisTimeSeries
+RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
+
+## Features
+* Quick inserts (50K samples per sec)
+* Query by start time and end-time
+* Query by labels sets
+* Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+* Configurable max retention period
+* Compactions/Roll-ups - automatically updated aggregated timeseries
+* labels index - each key has labels which will allows query by labels
 
 ## Using with other tools metrics tools
 See [RedisTimeSeries](https://github.com/RedisTimeSeries) organization.
@@ -15,33 +24,20 @@ Including Integration with:
 ## Memory model
 A time series is a linked list of memory chunks.
 Each chunk has a predefined size of samples, each sample is a tuple of the time and the value.
-Each sample is the size of 128bit (64bit for the timestamp and 64bit for the value).
-
-## Features
-* Quick inserts (50K samples per sec)
-* Query by start time and end-time
-* Query by labels sets
-* Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
-* Configurable max retention period
-* Compactions/Roll-ups - automatically updated aggregated timeseries
-* labels index - each key has labels which will allows query by labels
 
 ## Docker
-
 To quickly tryout Redis-TimeSeries, launch an instance using docker:
 
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
 
-## Give it a try
-
+### Give it a try
 Here we'll create a time series representing sensor temperature measurements.
 Once created, temperature measurements can be sent.
 Last the data can queried for a time range while based on some aggreagation rule
 
 ### With `redis-cli`
-
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
@@ -58,7 +54,6 @@ OK
 ```
 
 ### Client libraries
-
 Some languages have client libraries that provide support for RedisTimeSeries's commands:
 
 | Project | Language | License | Author | URL |
@@ -88,13 +83,10 @@ $ make tests
 ```
 
 ## Documentation
-
 Read the docs at http://redistimeseries.io
 
 ## Mailing List / Forum
-
 Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
 
 ## License
-
 Redis Source Available License Agreement, see [LICENSE](LICENSE)
