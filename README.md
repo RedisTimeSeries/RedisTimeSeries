@@ -1,5 +1,5 @@
 [![CircleCI](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master)
-[![GitHub issues](https://img.shields.io/github/release/RedisLabsModules/redis-timeseries.svg)](https://github.com/RedisLabsModules/redis-timeseries/releases/latest)
+[![GitHub issues](https://img.shields.io/github/release/RedisLabsModules/redis-timeseries.svg?kill_cache=1)](https://github.com/RedisLabsModules/redis-timeseries/releases/latest)
 
 # RedisTimeSeries
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
