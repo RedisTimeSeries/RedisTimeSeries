@@ -1,8 +1,24 @@
-<img src="images/logo.png" alt="logo" width="100"/>
+<img src="images/logo.svg" alt="logo" width="200"/>
 
-# RedisTimeSeries Module
+# RedisTimeSeries
+RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
-Time series data structure for Redis.
+## Features
+- Quick inserts (50K samples per sec)
+- Query by start time and end-time
+- Query by labels sets
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+- Configurable max retention period
+- Compactions/Roll-ups - automatically updated aggregated timeseries
+- labels index - each key has labels which will allows query by labels
+
+## Using with other tools metrics tools
+In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
+find projects that help you integrate RedisTimeSeries with other tools, including:
+
+1. Prometheus - [Adapter for Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) to use RedisTimeSeries as backend db.
+2. StatsD, Graphite exports using graphite protocol.
+3. Grafana - using SimpleJson datasource.
 
 ## Memory model
 
@@ -11,22 +27,12 @@ Each chunk has a predefined size of samples.
 Each sample is a tuple of the time and the value of 128 bits,
 64 bits for the timestamp and 64 bits for the value.
 
-## Features
-
-- Quick inserts (50K samples per sec)
-- Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
-- Configurable max retention period
-- Compactions/Roll-ups - automatically updated aggregated timeseries
-
 ## Setup
 
 You can either get RedisTimeSeries setup in a Docker container or on your own machine.
 
-### Run in a Docker container
-
-To quickly setup RedisTimeSeries, launch an instance using docker:
-
+### Docker
+To quickly tryout RedisTimeSeries, launch an instance using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
@@ -61,7 +67,6 @@ After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggreagation rule.
 
 ### With `redis-cli`
-
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
@@ -77,16 +82,6 @@ OK
    2) "42"
 ```
 
-### Tests
-
-Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
-
-```
-$ cd src
-$ pip install -r tests/requirements.txt # optional, use virtualenv
-$ make test
-```
-
 ### Client libraries
 
 Some languages have client libraries that provide support for RedisTimeSeries commands:
@@ -95,11 +90,3 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
-
-## Using RedisTimeSeries with other metrics tools
-
-In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
-find projects that help you integrate RedisTimeSeries with other tools, including:
-
-- StatsD - Graphite exports using graphite protocol
-- Grafana - using SimpleJson datasource

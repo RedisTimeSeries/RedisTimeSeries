@@ -45,10 +45,11 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
 
-#### Add Examples
+If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
 
+#### Examples
 ```sql
-TS.ADD temperature:2:32 1548149180 26 LABELS sensor_id 2 area_id 32 
+TS.ADD temperature:2:32 1548149180 26 LABELS sensor_id 2 area_id 32
 TS.ADD temperature:3:11 1548149180 27 RETENTION 3600
 TS.ADD temperature:3:11 1548149181 30
 ```
@@ -60,10 +61,10 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compactions ru
 
 #### Notes
 
-- You can use this command to add data to an non-existing timeseries in a single command.
-  This is the reason why the labels and retentionsecs are optional arguments.
-- When specified, RedisTimeSeries checks if it needs to update the labels or retentionSecs.
-  This introduces additional complexity.
+- You can use this command to add data to an non existing timeseries in a single command.
+  This is the reason why `labels` and `retentionsecs` are optional arguments.
+- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionSecs`.
+  Setting the `labels` and `retentionSecs` introduces additional time complexity.
 
 ### TS.INCRBY/TS.DECRBY
 
@@ -92,12 +93,14 @@ Optional args:
   * When set to 0, the series is not trimmed at all
 * labels - Set of key-value pairs that represent metadata labels of the key
 
+If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
+
 #### Notes
 
-- You can use this command to add data to an non-existing timeseries in a single command.
-  This is the reason why the labels and retentionsecs are optional arguments.
-- When specified, RedisTimeSeries checks if it needs to update the labels or retentionSecs.
-  This introduces additional complexity.
+- You can use this command to add data to an non existing timeseries in a single command.
+  This is the reason why `labels` and `retentionsecs` are optional arguments.
+- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionSecs`.
+  Setting the `labels` and `retentionSecs` introduces additional time complexity.
 
 ## Aggregation, Compaction, Downsampling
 
