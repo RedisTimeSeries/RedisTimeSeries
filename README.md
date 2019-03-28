@@ -5,17 +5,17 @@
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
 ## Features
-* Quick inserts (50K samples per sec)
-* Query by start time and end-time
-* Query by labels sets
-* Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
-* Configurable max retention period
-* Compactions/Roll-ups - automatically updated aggregated timeseries
-* labels index - each key has labels which will allows query by labels
+- Quick inserts (50K samples per sec)
+- Query by start time and end-time
+- Query by labels sets
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+- Configurable max retention period
+- Compactions/Roll-ups - automatically updated aggregated timeseries
+- labels index - each key has labels which will allows query by labels
 
 ## Using with other tools metrics tools
-See [RedisTimeSeries](https://github.com/RedisTimeSeries) organization.
-Including Integration with:
+In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
+find projects that help you integrate RedisTimeSeries with other tools, including:
 
 1. Prometheus - [Adapter for Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) to use RedisTimeSeries as backend db.
 2. StatsD, Graphite exports using graphite protocol.
@@ -23,19 +23,48 @@ Including Integration with:
 
 ## Memory model
 A time series is a linked list of memory chunks.
-Each chunk has a predefined size of samples, each sample is a tuple of the time and the value.
+Each chunk has a predefined size of samples.
+Each sample is a tuple of the time and the value of 128 bits,
+64 bits for the timestamp and 64 bits for the value.
 
-## Docker
-To quickly tryout Redis-TimeSeries, launch an instance using docker:
+## Setup
 
+You can either get RedisTimeSeries setup in a Docker container or on your own machine.
+
+### Docker
+To quickly tryout RedisTimeSeries, launch an instance using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
 
-### Give it a try
-Here we'll create a time series representing sensor temperature measurements.
-Once created, temperature measurements can be sent.
-Last the data can queried for a time range while based on some aggreagation rule
+### Build and Run it yourself
+
+You can also build and run RedisTimeSeries on your own machine.
+
+#### Build
+
+To build RedisTimeSeries:
+
+```bash
+git submodule init
+git submodule update
+cd src
+make all
+```
+
+#### Run
+
+In your redis-server run: `loadmodule redistimeseries.so`
+
+For more infomation about modules, go to the [redis offical documentation](https://redis.io/topics/modules-intro).
+
+## Give it a try
+
+After you setup RedisTimeSeries, you can interact with it using redis-cli.
+
+Here we'll create a time series representing sensor temperature measurements. 
+After you create the time series, you can send temperature measurements.
+Then you can query the data for a time range on some aggreagation rule.
 
 ### With `redis-cli`
 ```sh
@@ -54,25 +83,13 @@ OK
 ```
 
 ### Client libraries
-Some languages have client libraries that provide support for RedisTimeSeries's commands:
+
+Some languages have client libraries that provide support for RedisTimeSeries commands:
 
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
-
-## Build
-```bash
-git submodule init
-git submodule update
-cd src
-make all
-```
-
-## Run
-In your redis-server run: `loadmodule redistimeseries.so`.
-
-More infomation about modules can be found at redis offical documentation: https://redis.io/topics/modules-intro
 
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
