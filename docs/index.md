@@ -19,17 +19,25 @@ Each sample is a tuple of the time and the value of 128 bits,
 - Configurable max retention period
 - Compactions/Roll-ups - automatically updated aggregated timeseries
 
-## Tryout RedisTimeSeries in a Docker container
+## Setup
 
-To quickly tryout Redis-TimeSeries, launch an instance using docker:
+You can either get RedisTimeSeries setup in a Docker container or on your own machine.
+
+### Run in a Docker container
+
+To quickly setup RedisTimeSeries, launch an instance using docker:
 
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
 
-## Build and Run it yourself
+### Build and Run it yourself
 
-### Build
+You can also build and run RedisTimeSeries on your own machine.
+
+#### Build
+
+To build RedisTimeSeries:
 
 ```bash
 git submodule init
@@ -38,7 +46,7 @@ cd src
 make all
 ```
 
-### Run
+#### Run
 
 In your redis-server run: `loadmodule redistimeseries.so`
 
@@ -46,7 +54,7 @@ For more infomation about modules, go to the [redis offical documentation](https
 
 ## Give it a try
 
-After you load RedisTimeSeries, you can interact with it using redis-cli.
+After you setup RedisTimeSeries, you can interact with it using redis-cli.
 
 Here we'll create a time series representing sensor temperature measurements. 
 After you create the time series, you can send temperature measurements.
