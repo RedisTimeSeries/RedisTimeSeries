@@ -668,7 +668,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
 
         CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
-        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, NULL, 0);
+        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     }
 
     series = RedisModule_ModuleTypeGetValue(key);
