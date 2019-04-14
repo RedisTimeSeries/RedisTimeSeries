@@ -2,22 +2,22 @@
 
 ## Create
 
-### TS.CREATE
+### `TS.CREATE`
 
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionSecs] [LABELS field value..]
+TS.CREATE key [RETENTION retentionSecs] [CHUNK_SIZE chunksize] [LABLES <labelName labelValue> ...]
 ```
 
-* key - Key name for timeseries
+* `key` - Key name for a timeseries
 
 Optional args:
 
- * retentionSecs - Maximum age for samples compared to current time (in seconds)
-    * Default: The global retenion secs configuration of the database (by default, `0`)
-    * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * `retentionSecs` - Maximum age for samples compared to current time (in seconds)
+    * Default: 0, whereby the series is not trimmed at all
+ * `chunksize` - Chunk size for each block (default is 360) and the module keeps at least 1 chunk
+ * `labelName`, `labelValue` - Set of label-value pairs that represent metadata labels of the key
 
 #### Create Example
 
@@ -27,23 +27,23 @@ TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
 
 ## Update
 
-### TS.ADD
+### `TS.ADD`
 
 Append (or create and append) a new value to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionSecs] [LABELS field value..]
+TS.ADD key timestamp value [RETENTION retentionSecs] [LABLES <labelName labelValue> ...]
 ```
 
-* timestamp - UNIX timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
-* value - Sample numeric data value (double)
+* `key` - Key name for a timeseries
+* `timestamp` - UNIX timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
+* `value` - Sample numeric data value (double)
 
-These arguments are optional because they can be set by TS.CREATE:
+These arguments are optional because they can be set by `TS.CREATE`:
 
- * retentionSecs - Maximum age for samples compared to current time (in seconds)
-    * Default: The global retenion secs configuration of the database (by default, `0`)
-    * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * `retentionSecs` - Maximum age for samples compared to current time (in seconds)
+    * Default: 0, whereby the series is not trimmed at all
+ * `labelName`, `labelValue` - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
 
@@ -63,37 +63,31 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compactions ru
 
 - You can use this command to add data to an non existing timeseries in a single command.
   This is the reason why `labels` and `retentionsecs` are optional arguments.
-- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionSecs`.
-  Setting the `labels` and `retentionSecs` introduces additional time complexity.
+- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionSecs`.  
+  Setting the `labelName`, `labelValue` and `retentionSecs` introduces additional time complexity.
 
-### TS.INCRBY/TS.DECRBY
+### `TS.INCRBY`/`TS.DECRBY`
 
-Increment the latest value.
-
-```sql
-TS.INCRBY key value [RESET time-bucket] [RETENTION retentionSecs] [LABELS field value..]
-```
-
-or
+Increment or decrement the latest value.
 
 ```sql
-TS.DECRBY key value [RESET time-bucket] [RETENTION retentionSecs] [LABELS field value..]
+TS.INCRBY key value [RESET timeBucket] [RETENTION retentionSecs] [LABLES <labelName labelValue> ...]
+TS.DECRBY key value [RESET timeBucket] [RETENTION retentionSecs] [LABLES <labelName labelValue> ...]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
 
-* key - Key name for timeseries
-* value - Sample numeric data value (double)
+* `key` - Key name for a timeseries
+* `value` - Sample numeric data value (double)
 
 Optional args:
 
-* time-bucket - Time bucket for resetting the current counter in seconds
-* retentionSecs - Maximum age for samples compared to current time (in seconds)
-  * Default: The global retenion secs configuration of the database (by default, `0`)
-  * When set to 0, the series is not trimmed at all
-* labels - Set of key-value pairs that represent metadata labels of the key
+* `timeBucket` - Time bucket for resetting the current counter in seconds
+* `retentionSecs` - Maximum age for samples compared to current time (in seconds)
+    * Default: 0, whereby the series is not trimmed at all
+* `labelName`, `labelValue` - Set of label-value pairs that represent metadata labels of the key
 
-If this command is used to add data to an existing timeseries, `retentionSecs` and `labels` are ignored.
+If this command is used to add data to an existing timeseries, `retentionSecs`, `labelName` and `labelValue`` are ignored.
 
 #### Notes
 
@@ -104,22 +98,22 @@ If this command is used to add data to an existing timeseries, `retentionSecs` a
 
 ## Aggregation, Compaction, Downsampling
 
-### TS.CREATERULE
+### `TS.CREATERULE`
 
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType bucketSizeSeconds
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketSizeSeconds
 ```
 
-- sourceKey - Key name for source time series
-- destKey - Key name for destination time series
-- aggType - Aggregation type: avg, sum, min, max, range, count, first, last
-- bucketSizeSeconds - Time bucket for aggregation in seconds
+* `sourcekey` - Key name for source timeseries
+* `destKey` - Key name for destination time series
+* `aggregationType` - Aggregation type: `avg`, `sum`, `min`, `max`, `range`, `count`, `first`, `last`
+* `bucketSizeSeconds` - Time bucket for aggregation in seconds
 
-DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+`destKey` should be of a `timeseries` type, and should be created before `TS.CREATERULE` is called.
 
-### TS.DELETERULE
+### `TS.DELETERULE`
 
 Delete a compaction rule.
 
@@ -127,12 +121,12 @@ Delete a compaction rule.
 TS.DELETERULE sourceKey destKey
 ```
 
-- sourceKey - Key name for source time series
-- destKey - Key name for destination time series
+* `sourcekey` - Key name for source timeseries
+* `destKey` - Key name for destination time series
 
 ## Query
 
-### TS.RANGE
+### `TS.RANGE`
 
 Query a range.
 
@@ -140,24 +134,24 @@ Query a range.
 TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds]
 ```
 
-- key - Key name for timeseries
-- fromTimestamp - Start timestamp for range query
-- toTimestamp - End timestamp for range query
+- `key` - Key name for a timeseries
+- `fromTimestamp` - Start timestamp for range query
+- `toTimestamp` - End timestamp for range query
 
 Optional args:
 
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
-- bucketSizeSeconds - Time bucket for aggregation in seconds
+* `aggregationType` - Aggregation type: `avg`, `sum`, `min`, `max`, `range`, `count`, `first`, `last`
+* `bucketSizeSeconds` - Time bucket for aggregation in seconds
 
 #### Complexity
 
-TS.RANGE complexity is O(n/m+k).
+`TS.RANGE` complexity is O(n/m+k).
 
 n = Number of data points
 m = Chunk size (data points per chunk)
 k = Number of data points that are in the requested range
 
-This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k*m).
+This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k\*m).
 But because m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
 
 #### Aggregated Query Example
@@ -180,7 +174,7 @@ But because m is pretty small, we can neglect it and look at the operation as O(
    2) "20"
 ```
 
-### TS.MRANGE
+### `TS.MRANGE`
 
 Query a range by filters.
 
@@ -188,14 +182,14 @@ Query a range by filters.
 TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSeconds] FILTER filter..
 ```
 
-* fromTimestamp - Start timestamp for range query
-* toTimestamp - End timestamp for range query
-* filters - Set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
+* `fromTimestamp` - Start timestamp for range query
+* `toTimestamp` - End timestamp for range query
+* `filters` - Set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 
 Optional args:
 
- * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
- * bucketSizeSeconds - Time bucket for aggregation in seconds
+ * `aggregationType` - Aggregation type: `avg`, `sum`, `min`, `max`, `range`, `count`, `first`, `last`
+ * `bucketSizeSeconds` - Time bucket for aggregation in seconds
 
 #### Query by Filters Example
 
@@ -241,7 +235,7 @@ Optional args:
          2) "20"
 ```
 
-### TS.GET
+### `TS.GET`
 
 Get the last sample.
 
@@ -249,7 +243,7 @@ Get the last sample.
 TS.GET key
 ```
 
-* key - Key name for timeseries
+* `key` - Key name for a timeseries
 
 #### Get Example
 
@@ -261,7 +255,7 @@ TS.GET key
 
 ## General
 
-### TS.INFO
+### `TS.INFO`
 
 Query the series metadata
 
@@ -269,7 +263,7 @@ Query the series metadata
 TS.INFO key
 ```
 
-* key - Key name for timeseries
+* `key` - Key name for a timeseries
 
 #### Info Example
 
