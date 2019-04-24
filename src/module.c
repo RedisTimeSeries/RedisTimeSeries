@@ -6,6 +6,8 @@
 #include <time.h>
 #include <string.h>
 #include <limits.h>
+#include <ctype.h>
+
 #include "redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
@@ -21,6 +23,8 @@
 
 RedisModuleType *SeriesType;
 static time_t timer;
+
+enum CMD_TYPE {CREATE, ALTER};
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
                      AggregationClass *aggObject, int64_t time_delta);
@@ -72,6 +76,26 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
+    return REDISMODULE_OK;
+}
+
+static int parseAlterArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
+                           long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
+    *retentionSecs = TSGlobalConfig.retentionPolicy;
+    *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
+    *labelsCount = 0;
+    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
+
+    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
+        return REDISMODULE_ERR;
+    }
+
+    if (retentionSecs < 0) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
+        return REDISMODULE_ERR;
+    }
+
     return REDISMODULE_OK;
 }
 
@@ -555,6 +579,53 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
+    if (argc < 2)
+        return RedisModule_WrongArity(ctx);
+
+    Series *series;
+    RedisModuleString *keyName = argv[1];
+    long long retentionSecs;
+    long long maxSamplesPerChunk;
+    size_t labelsCount;
+    Label *newLabels;
+
+    if (parseAlterArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        RedisModule_CloseKey(key);
+        return RedisModule_ReplyWithError(ctx,"TSDB: key doesn't exist");
+    }
+    series = RedisModule_ModuleTypeGetValue(key);
+    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
+        series->retentionSecs = retentionSecs;
+    }
+
+    if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
+        // free current labels
+        if (series->labelsCount > 0) {
+            for (int i = 0; i < series->labelsCount; i++) {
+                RedisModule_FreeString(ctx, series->labels[i].key);
+                RedisModule_FreeString(ctx, series->labels[i].value);
+            }
+            free(series->labels);
+        }
+
+        // set new newLabels
+        series->labels = newLabels;
+        series->labelsCount = labelsCount;
+    }
+
+    RedisModule_CloseKey(key);
+    RedisModule_Log(ctx, "info", "altered existing series");
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
 //TS.DELETERULE SOURCE_KEY DEST_KEY
 int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 3)
@@ -774,6 +845,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (SeriesType == NULL) return REDISMODULE_ERR;
     IndexInit();
     RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
+    RMUtil_RegisterWriteCmd(ctx, "ts.alter", TSDB_alter);
     RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
