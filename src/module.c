@@ -743,6 +743,51 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        return RedisModule_WrongArity(ctx);
+    }
+    size_t query_count = argc - 1 - filter_location;
+    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
+    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
+    }
+
+    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
+    }
+
+    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    long long replylen = 0;
+    Series *series;
+    while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key = RedisModule_OpenKey(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                REDISMODULE_READ);
+        if (key == NULL || RedisModule_ModuleTypeGetType(key) != SeriesType){
+            RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+                continue;
+            }
+        series = RedisModule_ModuleTypeGetValue(key);
+
+        RedisModule_ReplyWithArray(ctx, 4);
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        ReplyWithSeriesLabels(ctx, series);
+        RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+        RedisModule_ReplyWithDouble(ctx, series->lastValue);
+        replylen++;
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
+
+    return REDISMODULE_OK;
+}
 
 /*
 module loading function, possible arguments:
@@ -784,6 +829,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
+    RMUtil_RegisterReadCmd(ctx, "ts.mget", TSDB_mget);
 
     return REDISMODULE_OK;
 }

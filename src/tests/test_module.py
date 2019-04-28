@@ -178,6 +178,23 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
+    def test_mget_cmd(self):
+        time_stamp = 1511885909L
+        value = 1500
+        key = 'tester'
+        neg_key = 'negative_test'
+
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', key, 'LABELS', 'a', '1')
+            assert r.execute_command('TS.CREATE', neg_key, 'LABELS', 'b', '1')
+            assert r.execute_command('TS.ADD', key, time_stamp - 1, value - 1)
+            assert r.execute_command('TS.ADD', key, time_stamp, value)
+            assert r.execute_command('TS.ADD', neg_key, time_stamp + 1, value + 1)
+            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [[key, [['a', '1']], time_stamp, str(value)]]
+            # negative test
+            assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
+            assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
+
     def test_range_query(self):
         start_ts = 1488823384L
         samples_count = 1500
