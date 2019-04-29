@@ -179,18 +179,24 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert expected_result == actual_result
 
     def test_mget_cmd(self):
+        num_of_keys = 3
         time_stamp = 1511885909L
-        value = 1500
-        key = 'tester'
-        neg_key = 'negative_test'
+        keys = ['k1', 'k2', 'k3']
+        labels = ['a', 'a', 'b']
+        values = [100, 200, 300]
 
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', key, 'LABELS', 'a', '1')
-            assert r.execute_command('TS.CREATE', neg_key, 'LABELS', 'b', '1')
-            assert r.execute_command('TS.ADD', key, time_stamp - 1, value - 1)
-            assert r.execute_command('TS.ADD', key, time_stamp, value)
-            assert r.execute_command('TS.ADD', neg_key, time_stamp + 1, value + 1)
-            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [[key, [['a', '1']], time_stamp, str(value)]]
+            for i in range(num_of_keys):
+                assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
+
+                assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
+                assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
+
+            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [
+                [keys[0], [[labels[0], '1']], time_stamp, str(values[0])],
+                [keys[1], [[labels[1], '1']], time_stamp, str(values[1])]
+            ]
+
             # negative test
             assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
             assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
