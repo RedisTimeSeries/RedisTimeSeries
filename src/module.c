@@ -79,26 +79,6 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     return REDISMODULE_OK;
 }
 
-static int parseAlterArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
-                           long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
-    *retentionSecs = TSGlobalConfig.retentionPolicy;
-    *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
-    *labelsCount = 0;
-    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
-
-    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
-    }
-
-    if (retentionSecs < 0) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
-    }
-
-    return REDISMODULE_OK;
-}
-
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
@@ -590,7 +570,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     size_t labelsCount;
     Label *newLabels;
 
-    if (parseAlterArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
+    if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -602,6 +582,10 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     series = RedisModule_ModuleTypeGetValue(key);
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
         series->retentionSecs = retentionSecs;
+    }
+
+    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0) {
+        series->maxSamplesPerChunk = maxSamplesPerChunk;
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
