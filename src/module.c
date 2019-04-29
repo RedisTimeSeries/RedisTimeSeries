@@ -597,7 +597,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         RedisModule_CloseKey(key);
-        return RedisModule_ReplyWithError(ctx,"TSDB: key doesn't exist");
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
     series = RedisModule_ModuleTypeGetValue(key);
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
@@ -605,6 +605,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
+        RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
         // free current labels
         if (series->labelsCount > 0) {
             for (int i = 0; i < series->labelsCount; i++) {
@@ -617,6 +618,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
         // set new newLabels
         series->labels = newLabels;
         series->labelsCount = labelsCount;
+        IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     }
 
     RedisModule_CloseKey(key);

@@ -237,6 +237,10 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             self._ts_alter_cmd(r, key, expected_retention, expected_labels)
             self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention, expected_labels)
 
+            # test indexer was updated
+            assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key]
+            assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
+
             # test alter labels
             expected_labels = [['A', '1']]
             self._ts_alter_cmd(r, key, expected_retention, set_labels=expected_labels)
