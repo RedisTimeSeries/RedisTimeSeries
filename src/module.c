@@ -24,8 +24,6 @@
 RedisModuleType *SeriesType;
 static time_t timer;
 
-enum CMD_TYPE {CREATE, ALTER};
-
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
                      AggregationClass *aggObject, int64_t time_delta);
 
@@ -606,7 +604,6 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     }
 
     RedisModule_CloseKey(key);
-    RedisModule_Log(ctx, "info", "altered existing series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
