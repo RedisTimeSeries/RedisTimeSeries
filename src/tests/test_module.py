@@ -25,7 +25,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         :param expected_data:
         :return:
         """
-        
+
         actual_result = self._get_ts_info(r, key)
 
         if expected_data:
@@ -268,6 +268,29 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             # test indexer was updated
             assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key]
             assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
+
+    def test_mget_cmd(self):
+        num_of_keys = 3
+        time_stamp = 1511885909L
+        keys = ['k1', 'k2', 'k3']
+        labels = ['a', 'a', 'b']
+        values = [100, 200, 300]
+
+        with self.redis() as r:
+            for i in range(num_of_keys):
+                assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
+
+                assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
+                assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
+
+            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [
+                [keys[0], [[labels[0], '1']], time_stamp, str(values[0])],
+                [keys[1], [[labels[1], '1']], time_stamp, str(values[1])]
+            ]
+
+            # negative test
+            assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
+            assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
 
     def test_range_query(self):
         start_ts = 1488823384L
