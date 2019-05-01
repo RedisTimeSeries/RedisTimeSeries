@@ -11,6 +11,54 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         info = redis.execute_command('TS.INFO', key)
         return dict([(info[i], info[i+1]) for i in range(0, len(info), 2)])
 
+    def _assert_alter_cmd(self, r, key, start_ts, end_ts,
+                          expected_data=None,
+                          expected_retention=None,
+                          expected_chunk_size=None,
+                          expected_labels=None):
+        """
+        Test modifications didn't change the data
+        :param r: Redis instance
+        :param key: redis key
+        :param start_ts:
+        :param end_ts:
+        :param expected_data:
+        :return:
+        """
+
+        actual_result = self._get_ts_info(r, key)
+
+        if expected_data:
+            actual_data = r.execute_command('TS.range', key, start_ts, end_ts)
+            assert expected_data == actual_data
+        if expected_retention:
+            assert expected_retention == actual_result['retentionSecs']
+        if expected_labels:
+            assert expected_labels == actual_result['labels']
+        if expected_chunk_size:
+            assert expected_chunk_size == actual_result['maxSamplesPerChunk']
+
+    @staticmethod
+    def _ts_alter_cmd(r, key, set_retention=None, set_chunk_size=None, set_labels=None):
+        """
+        Assert that changed data is the same as expected, with or without modification of label or retention.
+        :param r: Redis instance
+        :param key: redis key to work on
+        :param set_retention: If none will skip (and test that didn't change from expected result)
+        :param set_labels: Format is list. If none will skip (and test that didn't change from expected result)
+        :return:
+        """
+        cmd = ['TS.ALTER', key]
+        if set_retention:
+            cmd.extend(['RETENTION', set_retention])
+        if set_chunk_size:
+            cmd.extend(['CHUNK_SIZE', set_chunk_size])
+        if set_labels:
+            new_labels = [item for sublist in set_labels for item in sublist]
+            cmd.extend(['LABELS'])
+            cmd.extend(new_labels)
+        r.execute_command(*cmd)
+
     @staticmethod
     def _insert_data(redis, key, start_ts, samples_count, value):
         """
@@ -177,6 +225,49 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
+
+    def test_alter_cmd(self):
+        start_ts = 1511885909L
+        samples_count = 1500
+        end_ts = start_ts + samples_count
+        key = 'tester'
+
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
+                                     'LABELS', 'name', 'brown', 'color', 'pink')
+            self._insert_data(r, key, start_ts, samples_count, 5)
+
+            expected_data = [[start_ts + i, str(5)] for i in range(samples_count)]
+
+            # test alter retention, chunk size and labels
+            expected_retention = 100
+            expected_chunk_size = 100
+            expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
+            self._ts_alter_cmd(r, key, expected_retention, expected_chunk_size, expected_labels)
+            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+                                   expected_chunk_size, expected_labels)
+
+            # test alter retention
+            expected_retention = 200
+            self._ts_alter_cmd(r, key, set_retention=expected_retention)
+            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+                                   expected_chunk_size, expected_labels)
+
+            # test alter chunk size
+            expected_chunk_size = 500
+            self._ts_alter_cmd(r, key, set_chunk_size=expected_chunk_size)
+            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+                                   expected_chunk_size, expected_labels)
+
+            # test alter labels
+            expected_labels = [['A', '1']]
+            self._ts_alter_cmd(r, key, expected_retention, set_labels=expected_labels)
+            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+                                   expected_chunk_size, expected_labels)
+
+            # test indexer was updated
+            assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key]
+            assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
 
     def test_mget_cmd(self):
         num_of_keys = 3
