@@ -43,7 +43,7 @@ You can also build and run RedisTimeSeries on your own machine.
 
 #### Requirements
 -  On Ubuntu Linux, run: apt-get install build-essential cmake
--  The RedisTimeSeries repository: `git clone https://github.com/RedisLabsModules/RedisTimeSeries.git`
+-  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
 
 #### Build
 
