@@ -17,7 +17,7 @@ In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you ca
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
 1. Prometheus - [Adapter for Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) to use RedisTimeSeries as backend db.
-2. StatsD, Graphite exports using graphite protocol.
+2. StatsD, Graphite exports using graphiGote protocol.
 3. Grafana - using SimpleJson datasource.
 
 ## Memory model
@@ -43,7 +43,7 @@ You can also build and run RedisTimeSeries on your own machine.
 
 #### Requirements
 -  build-essential
--  The RedisTimeSeries repository: `git clone https://github.com/RedisLabsModules/RedisTimeSeries.git`
+-  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
 
 #### Build
 
@@ -86,10 +86,12 @@ OK
 ```
 
 ### Client libraries
-
+Go
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
+| redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
+

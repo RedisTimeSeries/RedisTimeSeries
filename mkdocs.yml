@@ -1,7 +1,7 @@
 site_name: RedisTimeSeries - Time-Series data structure for Redis
 site_url: http://redistimeseries.io
-repo_url: https://github.com/RedisLabsModules/RedisTimeSeries
-repo_name: RedisLabsModules/RedisTimeSeries
+repo_url: https://github.com/RedisTimeSeries/RedisTimeSeries
+repo_name: RedisTimeSeries/RedisTimeSeries
 
 google_analytics:
   - 'UA-92003007-1'

@@ -1,3 +1,7 @@
+PREFIX?=/usr/local
+INSTALL_LIB=$(PREFIX)/lib
+INSTALL=/usr/bin/install
+
 #set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 ifndef RM_INCLUDE_DIR
 	RM_INCLUDE_DIR=../RedisModulesSDK
@@ -30,6 +34,13 @@ module.o: module.c version.h
 
 redistimeseries.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o version.h
 	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o indexer.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
+
+install: all
+	@mkdir -p $(INSTALL_LIB)
+	$(INSTALL) redistimeseries.so $(INSTALL_LIB)
+
+uninstall:
+	rm -f $(INSTALL_LIB)/redistimeseries.so
 
 clean:
 	rm -rf *.xo *.so *.o ./tests_runner

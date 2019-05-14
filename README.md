@@ -1,5 +1,6 @@
-[![CircleCI](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisLabsModules/RedisTimeSeries/tree/master)
-[![GitHub issues](https://img.shields.io/github/release/RedisLabsModules/redis-timeseries.svg?kill_cache=1)](https://github.com/RedisLabsModules/redis-timeseries/releases/latest)
+[![GitHub issues](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
+[![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/redislabs/redistimeseries.svg)](https://hub.docker.com/r/redislabs/redistimeseries/builds/)
 
 # RedisTimeSeries
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
@@ -43,7 +44,7 @@ You can also build and run RedisTimeSeries on your own machine.
 
 #### Requirements
 -  build-essential
--  The RedisTimeSeries repository: `git clone https://github.com/RedisLabsModules/RedisTimeSeries.git`
+-  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
 
 #### Build
 
@@ -93,6 +94,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
+| redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
 
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
