@@ -51,7 +51,7 @@ jobs:
           name: Clean RAMP file
           shell: /bin/bash
           command: |
-            /workspace/clean_ramp.py ./workspace/build/*.zip
+            /workspace/clean_ramp.py /workspace/build/*.zip
       - persist_to_workspace:
           root: /workspace
           paths:
@@ -80,7 +80,7 @@ jobs:
           name: Clean RAMP file
           shell: /bin/bash
           command: |
-            /workspace/clean_ramp.py ./workspace/build/*.zip
+            /workspace/clean_ramp.py /workspace/build/*.zip
       - persist_to_workspace:
           root: /workspace
           paths:
