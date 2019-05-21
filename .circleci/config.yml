@@ -25,7 +25,7 @@ jobs:
           command: >-
             mkdir -p /workspace/build && cp src/$MODULE_ARTIFACT /workspace/ &&
             cp ramp.yml /workspace/ &&
-            cp clean_ramp.py /workspace; ls -la /workspace
+            cp src/clean_ramp.py /workspace; ls -la /workspace
       - persist_to_workspace:
           root: /workspace
           paths:
