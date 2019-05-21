@@ -24,12 +24,14 @@ jobs:
           name: Persist Artifacts
           command: >-
             mkdir -p /workspace/build && cp src/$MODULE_ARTIFACT /workspace/ &&
-            cp ramp.yml /workspace/; ls -la /workspace
+            cp ramp.yml /workspace/ &&
+            cp clean_ramp.py /workspace; ls -la /workspace
       - persist_to_workspace:
           root: /workspace
           paths:
             - '*.so'
             - '*.yml'
+            - '*.py'
             - build
       - store_test_results:
           path: /workspace/tests
@@ -45,6 +47,7 @@ jobs:
             ramp pack -m /workspace/ramp.yml -o
             /workspace/build/$PACKAGE_NAME.{os}-{architecture}.$CIRCLE_BRANCH.zip
             /workspace/$MODULE_ARTIFACT
+            /workspace/clean_ramp.py ./workspace/build/*.zip
       - persist_to_workspace:
           root: /workspace
           paths:
@@ -63,12 +66,14 @@ jobs:
             ramp pack -m /workspace/ramp.yml -o
             /workspace/build/$PACKAGE_NAME.{os}-{architecture}.{semantic_version}.zip
             /workspace/$MODULE_ARTIFACT
+            /workspace/clean_ramp.py ./workspace/build/*.zip
       - run:
           name: Package
           command: >-
             ramp pack -m /workspace/ramp.yml -o
             /workspace/build/$PACKAGE_NAME.{os}-{architecture}.latest.zip
             /workspace/$MODULE_ARTIFACT
+            /workspace/clean_ramp.py ./workspace/build/*.zip
       - persist_to_workspace:
           root: /workspace
           paths:

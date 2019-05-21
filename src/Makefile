@@ -1,6 +1,7 @@
 PREFIX?=/usr/local
 INSTALL_LIB=$(PREFIX)/lib
 INSTALL=/usr/bin/install
+PAKCAGE_NAME?="../build/redistimeseries.{os}-{architecture}.latest.zip"
 
 #set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 ifndef RM_INCLUDE_DIR
@@ -62,7 +63,7 @@ docker:
 
 package: redistimeseries.so
 	mkdir -p ../build
-	ramp pack -m "`pwd`/../ramp.yml" -v -o "../build/redistimeseries.{os}-{architecture}.latest.zip" "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
+	ramp pack -m "`pwd`/../ramp.yml" -v -o ${PAKCAGE_NAME} "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
 	./clean_ramp.py `tail -1 /tmp/ramp_output`
 
 .PHONY: package tests unittests clean all
