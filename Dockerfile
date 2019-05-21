@@ -1,34 +1,34 @@
-FROM redis:latest as builder
+#----------------------------------------------------------------------------------------------
+# FROM redislabs/redis-arm:arm64-bionic as builder
+FROM raffapen/redis-arm:arm64-bionic
 
-ENV DEPS "build-essential"
-
-# Set up a build environment
 RUN set -ex;\
-    deps="$DEPS";\
     apt-get update;\
-    apt-get install -y --no-install-recommends $deps;
+    apt-get install -y python
     
-# Build the source
 ADD ./ /redis-timeseries
-
-# Build Redis-TimeSeries
 WORKDIR /redis-timeseries
+
+RUN python ./system-setup.py
+
 RUN set -ex;\
 	cd RedisModulesSDK/rmutil;\
 	make clean;\
-	make;\
-	cd -;
+	make
+
 RUN set -ex;\
 	cd src;\
     make clean; \
-    make;
+    make
 
-# Package the runner
-FROM redis:latest
+#----------------------------------------------------------------------------------------------
+# FROM redislabs/redis-arm:arm64-bionic
+FROM raffapen/redis-arm:arm64-bionic
+
 ENV LIBDIR /usr/lib/redis/modules
 WORKDIR /data
 RUN set -ex;\
-    mkdir -p "$LIBDIR";
+    mkdir -p "$LIBDIR"
 
 COPY --from=builder /redis-timeseries/src/redistimeseries.so "$LIBDIR"
 

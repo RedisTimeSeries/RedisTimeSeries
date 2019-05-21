@@ -1,16 +1,11 @@
-PREFIX?=/usr/local
-INSTALL_LIB=$(PREFIX)/lib
-INSTALL=/usr/bin/install
-PAKCAGE_NAME?="../build/redistimeseries.{os}-{architecture}.latest.zip"
+PREFIX ?= /usr/local
+INSTALL_LIB:=$(PREFIX)/lib
+INSTALL:=/usr/bin/install
+PAKCAGE_NAME ?= ../build/redistimeseries.{os}-{architecture}.latest.zip
 
-#set environment variable RM_INCLUDE_DIR to the location of redismodule.h
-ifndef RM_INCLUDE_DIR
-	RM_INCLUDE_DIR=../RedisModulesSDK
-endif
-
-ifndef RMUTIL_LIBDIR
-	RMUTIL_LIBDIR=../RedisModulesSDK/rmutil
-endif
+# set environment variable RM_INCLUDE_DIR to the location of redismodule.h
+RM_INCLUDE_DIR ?= ../RedisModulesSDK
+RMUTIL_LIBDIR ?= ../RedisModulesSDK/rmutil
 
 # find the OS
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
@@ -63,7 +58,7 @@ docker:
 
 package: redistimeseries.so
 	mkdir -p ../build
-	ramp pack -m "`pwd`/../ramp.yml" -v -o ${PAKCAGE_NAME} "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
+	ramp pack -m "`pwd`/../ramp.yml" -v -o "${PAKCAGE_NAME}" "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
 	./clean_ramp.py `tail -1 /tmp/ramp_output`
 
 .PHONY: package tests unittests clean all
