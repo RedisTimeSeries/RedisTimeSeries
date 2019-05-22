@@ -7,7 +7,7 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionSecs] [CHUNK_SIZE maxSamplesPerChunk] [LABELS field value..]
+TS.CREATE key [RETENTION retentionSecs] [LABELS field value..]
 ```
 
 * key - Key name for timeseries
@@ -31,16 +31,16 @@ TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
 
 ### TS.ALTER
 
-Update the retention, chunk size and labels of an existing key. The parameters are the same as TS.CREATE.
+Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
 
 ```sql
-TS.ALTER key [RETENTION retentionSecs] [CHUNK_SIZE maxSamplesPerChunk] [LABELS field value..]
+TS.ALTER key [RETENTION retentionSecs] [LABELS field value..]
 ```
 
 #### Alter Example
 
 ```sql
-TS.CREATE temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
+TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
@@ -283,7 +283,8 @@ TS.GET key
 ```
 
 ### TS.MGET
-Multi-get all timeseries matching the specific filter. 
+Get the last samples matching the specific filter.
+
 ```sql
 TS.MGET FILTER filter... 
 ```
