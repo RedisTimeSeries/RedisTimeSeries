@@ -386,6 +386,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         AggregationClass *aggObject, int64_t time_delta) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long arraylen = 0;
+
+    start_ts = max(start_ts, ChunkGetLastTimestamp(series->lastChunk) - series->retentionSecs);
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
     Sample sample;
     void *context = NULL;
