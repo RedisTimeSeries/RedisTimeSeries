@@ -389,7 +389,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 
 	// In case a retention is set shouldn't return chunks older than the retention 
     if(series->retentionSecs){ 
-    	start_ts = max(start_ts, series->lastTimestamp - series->retentionSecs + 1);
+    	start_ts = max(start_ts, series->lastTimestamp - series->retentionSecs);
     }
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
     Sample sample;
