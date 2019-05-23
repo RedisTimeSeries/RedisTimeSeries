@@ -190,7 +190,7 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSecon
 
 * fromTimestamp - Start timestamp for range query
 * toTimestamp - End timestamp for range query
-* filters - Set of key-pair fitlers (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
+* filters - Set of key-pair filters (`k=v`, `k!=v,` `k=` contains a key, `k!=` doesn't contain a key)
 
 Optional args:
 

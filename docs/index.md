@@ -9,7 +9,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 - Query by labels sets
 - Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
 - Configurable max retention period
-- Compactions/Roll-ups - automatically updated aggregated timeseries
+- Compaction/Roll-ups - automatically updated aggregated timeseries
 - labels index - each key has labels which will allows query by labels
 
 ## Using with other tools metrics tools
@@ -32,7 +32,7 @@ Each sample is a tuple of the time and the value of 128 bits,
 You can either get RedisTimeSeries setup in a Docker container or on your own machine.
 
 ### Docker
-To quickly tryout RedisTimeSeries, launch an instance using docker:
+To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
@@ -59,7 +59,7 @@ make all
 
 In your redis-server run: `loadmodule redistimeseries.so`
 
-For more infomation about modules, go to the [redis offical documentation](https://redis.io/topics/modules-intro).
+For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
 ## Give it a try
 
@@ -67,7 +67,7 @@ After you setup RedisTimeSeries, you can interact with it using redis-cli.
 
 Here we'll create a time series representing sensor temperature measurements. 
 After you create the time series, you can send temperature measurements.
-Then you can query the data for a time range on some aggreagation rule.
+Then you can query the data for a time range on some aggregation rule.
 
 ### With `redis-cli`
 ```sh
