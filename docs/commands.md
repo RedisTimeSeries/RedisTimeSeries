@@ -14,8 +14,8 @@ TS.CREATE key [RETENTION retentionSecs] [LABELS field value..]
 
 Optional args:
 
- * retentionSecs - Maximum age for samples compared to current time (in seconds)
-    * Default: The global retenion secs configuration of the database (by default, `0`)
+ * retentionSecs - Maximum age for samples compared to last event time (in seconds)
+    * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
 
@@ -40,8 +40,8 @@ TS.ADD key timestamp value [RETENTION retentionSecs] [LABELS field value..]
 
 These arguments are optional because they can be set by TS.CREATE:
 
- * retentionSecs - Maximum age for samples compared to current time (in seconds)
-    * Default: The global retenion secs configuration of the database (by default, `0`)
+ * retentionSecs - Maximum age for samples compared to last event time (in seconds)
+    * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
 
@@ -57,7 +57,7 @@ TS.ADD temperature:3:11 1548149181 30
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.ADD` performance might be reduced.
-The complexity of `TS.ADD` is always O(M) when M is the amount of compactions rules or O(1) with no compaction.
+The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rules or O(1) with no compaction.
 
 #### Notes
 
@@ -88,8 +88,8 @@ This command can be used as a counter or gauge that automatically gets history a
 Optional args:
 
 * time-bucket - Time bucket for resetting the current counter in seconds
-* retentionSecs - Maximum age for samples compared to current time (in seconds)
-  * Default: The global retenion secs configuration of the database (by default, `0`)
+* retentionSecs - Maximum age for samples compared to last event time (in seconds)
+  * Default: The global retention secs configuration of the database (by default, `0`)
   * When set to 0, the series is not trimmed at all
 * labels - Set of key-value pairs that represent metadata labels of the key
 
