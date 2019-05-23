@@ -27,6 +27,27 @@ TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
 
 ## Update
 
+### TS.ALTER
+
+Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
+
+```sql
+TS.ALTER key [RETENTION retentionSecs] [LABELS field value..]
+```
+
+#### Alter Example
+
+```sql
+TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
+```
+
+#### Notes
+* The command only alters the fields that are given,
+  e.g. if labels are given but retention isn't, then only the retention is altered.
+* If the labels are altered, the given label-list is applied,
+  i.e. labels that are not present in the given list are removed implicitly.
+* Supplying the labels keyword without any fields will remove all existing labels.  
+
 ### TS.ADD
 
 Append (or create and append) a new value to the series.
@@ -259,6 +280,35 @@ TS.GET key
 2) "23"
 ```
 
+### TS.MGET
+Get the last samples matching the specific filter.
+
+```sql
+TS.MGET FILTER filter... 
+```
+* filter - Set of key-pair fitlers (k=v, k!=v, k= contains a key, k!= doesn't contain a key)
+
+#### MGET Example
+
+```sql
+127.0.0.1:6379> TS.MGET FILTER area_id=32
+1) 1) "temperature:2:32"
+   2) 1) 1) "sensor_id"
+         2) "2"
+      2) 1) "area_id"
+         2) "32"
+   3) (integer) 1548149181
+   4) "30"
+2) 1) "temperature:3:32"
+   2) 1) 1) "sensor_id"
+         2) "3"
+      2) 1) "area_id"
+         2) "32"
+   3) (integer) 1548149181
+   4) "29"
+```
+
+
 ## General
 
 ### TS.INFO
@@ -291,3 +341,21 @@ TS.INFO temperature:2:32
 11) rules
 12) (empty list or set)
 ```
+
+### TS.QUERYINDEX
+
+Get all the keys matching the filter list.
+
+```sql
+TS.QUERYINDEX fitler...
+```
+
+* filter - Set of key-pair fitlers (k=v, k!=v, k= contains a key, k!= doesn't contain a key)
+
+### Query index example
+```sql 
+127.0.0.1:6379> TS.QUERYINDEX sensor_id=2
+1) "temperature:2:32"
+2) "temperature:2:33"
+```
+
