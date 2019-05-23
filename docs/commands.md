@@ -17,8 +17,6 @@ Optional args:
  * retentionSecs - Maximum age for samples compared to current time (in seconds)
     * Default: The global retenion secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * maxSamplesPerChunk - Maximum number of samples contained in each chunk.
-   A chunk is the memory allocation size, meaning that when a chunk is filled up, a new chunk is allocated.
  * labels - Set of key-value pairs that represent metadata labels of the key
 
 #### Create Example
