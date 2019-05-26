@@ -617,31 +617,33 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist");
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+    }
+    if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
     Series *series = RedisModule_ModuleTypeGetValue(key);
-
     RedisModuleString *destKey = argv[2];
-    if (SeriesHasRule(series, destKey)) {
-        CompactionRule *rule = series->rules;
-        CompactionRule *prev_rule = NULL;
-        while (rule != NULL) {
-            if (RMUtil_StringEquals(rule->destKey, destKey)) {
-                if (prev_rule == NULL) {
-                    series->rules = rule->nextRule;
-                } else {
-                    prev_rule->nextRule = rule->nextRule;
-                }
+    CompactionRule *rule = series->rules;
+    CompactionRule *prev_rule = NULL;
+    int ruleDelete = 0;
+    while (rule != NULL) {
+        if (RMUtil_StringEquals(rule->destKey, destKey)) {
+            if (prev_rule == NULL) {
+                series->rules = rule->nextRule;
+            } else {
+                prev_rule->nextRule = rule->nextRule;
             }
-
-            prev_rule = rule;
-            rule = rule->nextRule;
+            ruleDelete = 1;
+            break; // There can't be two similar rules
         }
-    } else {
-        return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exist");
+        prev_rule = rule;
+        rule = rule->nextRule;
     }
+
+   	if(!ruleDelete){
+   		return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exist");
+   	}
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
