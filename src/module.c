@@ -626,7 +626,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *destKey = argv[2];
     CompactionRule *rule = series->rules;
     CompactionRule *prev_rule = NULL;
-    int ruleDelete = 0;
+    int ruleDeleted = 0;
     while (rule != NULL) {
         if (RMUtil_StringEquals(rule->destKey, destKey)) {
             if (prev_rule == NULL) {
@@ -634,14 +634,14 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             } else {
                 prev_rule->nextRule = rule->nextRule;
             }
-            ruleDelete = 1;
+            ruleDeleted = 1;
             break; // There can't be two similar rules
         }
         prev_rule = rule;
         rule = rule->nextRule;
     }
 
-   	if(!ruleDelete){
+   	if(!ruleDeleted){
    		return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exist");
    	}
 
