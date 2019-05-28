@@ -380,6 +380,13 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('DUMP', 'tester')
 
+    def test_empty_labels(self):
+        with self.redis() as r:
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.CREATE', 'tester', 'LABELS', 'name', '')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', '')
+
     def test_incrby_reset(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
