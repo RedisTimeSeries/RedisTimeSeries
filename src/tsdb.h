@@ -32,6 +32,7 @@ typedef struct Series {
     Label *labels;
     RedisModuleString *keyName;
     size_t labelsCount;
+    RedisModuleString *srcKey;
 } Series;
 
 typedef struct SeriesIterator {
@@ -49,6 +50,11 @@ void FreeSeries(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 int SeriesHasRule(Series *series, RedisModuleString *destKey);
+int SeriesHasRule(Series *series, RedisModuleString *destKey);
+int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
+int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
+int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
+
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(Series *series);

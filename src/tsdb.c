@@ -284,3 +284,41 @@ int SeriesHasRule(Series *series, RedisModuleString *destKey) {
     }
     return FALSE;
 }
+
+int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
+    CompactionRule *rule = series->rules;
+	CompactionRule *prev_rule = NULL;
+	while (rule != NULL) {
+		if (RMUtil_StringEquals(rule->destKey, destKey)) {
+			if (prev_rule == NULL) {
+				free(series->rules);
+				series->rules = rule->nextRule;
+			} else {
+				free(prev_rule->nextRule);
+				prev_rule->nextRule = rule->nextRule;
+			}
+		    return TRUE;
+		}
+		prev_rule = rule;
+		rule = rule->nextRule;
+    }
+    return FALSE;
+}
+
+int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
+	if(series->srcKey){
+		return FALSE;
+	}
+	series->srcKey = srctKey;
+	return TRUE;
+}
+
+int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
+	if(RMUtil_StringEquals(series->srcKey, srctKey)){
+		RedisModule_FreeString(NULL, series->srcKey);
+		series->srcKey = NULL;
+		return TRUE;
+	}
+	return FALSE;
+}
+
