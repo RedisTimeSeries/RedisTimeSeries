@@ -240,29 +240,31 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_data = [[start_ts + i, str(5)] for i in range(samples_count)]
 
             # test alter retention, chunk size and labels
-            expected_retention = 100
-            expected_chunk_size = 100
             expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
+            expected_retention = 500
+            expected_chunk_size = 100
             self._ts_alter_cmd(r, key, expected_retention, expected_chunk_size, expected_labels)
-            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+            self._assert_alter_cmd(r, key, end_ts-501, end_ts, expected_data[-501:], expected_retention,
                                    expected_chunk_size, expected_labels)
-
+            
             # test alter retention
             expected_retention = 200
             self._ts_alter_cmd(r, key, set_retention=expected_retention)
-            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+            self._assert_alter_cmd(r, key, end_ts-201, end_ts, expected_data[-201:], expected_retention,
                                    expected_chunk_size, expected_labels)
-
+            
             # test alter chunk size
-            expected_chunk_size = 500
+            expected_chunk_size = 100
+            expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
             self._ts_alter_cmd(r, key, set_chunk_size=expected_chunk_size)
-            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+            self._assert_alter_cmd(r, key, end_ts-201, end_ts, expected_data[-201:], expected_retention,
                                    expected_chunk_size, expected_labels)
+            
 
             # test alter labels
             expected_labels = [['A', '1']]
             self._ts_alter_cmd(r, key, expected_retention, set_labels=expected_labels)
-            self._assert_alter_cmd(r, key, start_ts, end_ts, expected_data, expected_retention,
+            self._assert_alter_cmd(r, key, end_ts-201, end_ts, expected_data[-201:], expected_retention,
                                    expected_chunk_size, expected_labels)
 
             # test indexer was updated
@@ -296,11 +298,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         start_ts = 1488823384L
         samples_count = 1500
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', samples_count-100)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
-            expected_result = [[start_ts+i, str(5)] for i in range(100, 151)]
-            actual_result = r.execute_command('TS.range', 'tester', start_ts+100, start_ts + 150)
+            expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
 
     def test_range_with_agg_query(self):
