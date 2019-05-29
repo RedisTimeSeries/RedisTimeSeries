@@ -198,6 +198,9 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 }
 
 CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize) {
+	if(RMUtil_StringEquals(series->keyName, destKeyStr)){ // Don't allow own rules creation
+		return NULL;
+	}
     CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
     if (rule == NULL ) {
         return NULL;

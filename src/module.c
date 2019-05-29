@@ -672,7 +672,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int result = _parseAggregationArgs(ctx, argv, argc, &bucketSize, &aggType);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
-    } else if (result == TSDB_ERROR) {
+    }
+    if (result == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 
@@ -680,7 +681,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *destKey = RedisModule_OpenKey(ctx, destKeyName, REDISMODULE_READ);
     if (RedisModule_KeyType(destKey) == REDISMODULE_KEYTYPE_EMPTY) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the destination key does not exist");
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+    }
+    if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
@@ -690,13 +692,10 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *destKeyStr = RedisModule_CreateStringFromString(ctx, destKeyName);
-    if (SeriesAddRule(series, destKeyStr, aggType, bucketSize) != NULL) {
-        RedisModule_RetainString(ctx, destKeyStr);
-    } else {
-        RedisModule_ReplyWithSimpleString(ctx, "ERROR creating rule");
-        return REDISMODULE_ERR;
+    if (SeriesAddRule(series, destKeyStr, aggType, bucketSize) == NULL) {
+    	return RedisModule_ReplyWithError(ctx, "ERROR creating rule");
     }
-
+    RedisModule_RetainString(ctx, destKeyStr);
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(destKey);
