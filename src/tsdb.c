@@ -45,7 +45,7 @@ void SeriesTrim(Series * series) {
     Chunk *currentChunk;
     void *currentKey;
     size_t keyLen;
-    timestamp_t minTimestamp = time(NULL) - series->retentionSecs;
+    timestamp_t minTimestamp = series->lastTimestamp - series->retentionSecs;
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
         if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
@@ -198,6 +198,9 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 }
 
 CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize) {
+	if(RMUtil_StringEquals(series->keyName, destKeyStr)){ // Don't allow own rules creation
+		return NULL;
+	}
     CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
     if (rule == NULL ) {
         return NULL;
