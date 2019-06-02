@@ -85,9 +85,21 @@ void FreeSeries(void *value) {
         RedisModule_FreeString(NULL, currentSeries->labels[i].key);
         RedisModule_FreeString(NULL, currentSeries->labels[i].value);
     }
+    CompactionRule *rule = currentSeries->rules;
+    while (rule != NULL) {
+    	CompactionRule *nextRule = rule->nextRule;
+    	FreeCompactionRule(rule);
+    	rule = nextRule;
+    }
     free(currentSeries->labels);
     free(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
+}
+
+void FreeCompactionRule(void *value) {
+	CompactionRule *rule = (CompactionRule *) value;
+	RedisModule_FreeString(NULL, rule->destKey);
+	free(rule->aggContext);
 }
 
 size_t SeriesMemUsage(const void *value) {
@@ -291,10 +303,10 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
 	while (rule != NULL) {
 		if (RMUtil_StringEquals(rule->destKey, destKey)) {
 			if (prev_rule == NULL) {
-				free(series->rules);
+				FreeCompactionRule(series->rules);
 				series->rules = rule->nextRule;
 			} else {
-				free(prev_rule->nextRule);
+				FreeCompactionRule(prev_rule->nextRule);
 				prev_rule->nextRule = rule->nextRule;
 			}
 		    return TRUE;
