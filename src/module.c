@@ -48,6 +48,20 @@ static Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv,
     return labels;
 }
 
+static int getSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist"); // TODO add keyName
+        return FALSE;
+    }
+    if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return FALSE;
+    }
+    *series = RedisModule_ModuleTypeGetValue(key);
+    return TRUE;
+}
+
 static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                     long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
     *retentionSecs = TSGlobalConfig.retentionPolicy;
