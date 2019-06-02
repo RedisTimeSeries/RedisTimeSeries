@@ -29,23 +29,37 @@ static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t
 
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
-static Label *parseLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count) {
+static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
-    Label *labels = NULL;
+    Label *labelsResult = NULL;
     *label_count = 0;
     if (pos < 0) {
-        return NULL;
+        *labels = NULL;
+        return REDISMODULE_OK;
     }
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
     if (label_count > 0) {
-        labels = malloc(sizeof(Label) * (*label_count));
+    	labelsResult = malloc(sizeof(Label) * (*label_count));
         for (int i=0; i < *label_count; i++) {
-            labels[i].key = RedisModule_CreateStringFromString(NULL, argv[first_label_pos + i*2]);
-            labels[i].value = RedisModule_CreateStringFromString(NULL, argv[first_label_pos + i*2 + 1]);
+        	RedisModuleString *key = argv[first_label_pos + i*2];
+        	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
+
+        	// Verify Label Key or Value are not empty strings
+        	size_t keyLen, valueLen;
+        	RedisModule_StringPtrLen(key, &keyLen);
+        	RedisModule_StringPtrLen(value, &valueLen);
+        	if(keyLen==0 || valueLen==0){
+        		free(labelsResult);
+        		return REDISMODULE_ERR;
+        	}
+
+        	labelsResult[i].key = RedisModule_CreateStringFromString(NULL, key);
+        	labelsResult[i].value = RedisModule_CreateStringFromString(NULL, value);
         };
     }
-    return labels;
+    *labels = labelsResult;
+    return REDISMODULE_OK;
 }
 
 static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
@@ -53,7 +67,10 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     *retentionSecs = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
-    *labels = parseLabelsFromArgs(ctx, argv, argc, labelsCount);
+    if(parseLabelsFromArgs(argv, argc, labelsCount, labels) == REDISMODULE_ERR){
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse LABELS");
+        return REDISMODULE_ERR;
+    }
 
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
