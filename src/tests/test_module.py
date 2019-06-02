@@ -338,6 +338,25 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                  'retentionSecs': 0L,
                                  'labels': [],
                                  'rules': [['tester_agg_max_10', 10L, 'AVG']]}
+
+    def test_create_retention(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
+            
+            assert r.execute_command('TS.ADD', 'tester', 500, 10)
+            expected_result = [[500L, '10']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result
+            
+            assert r.execute_command('TS.ADD', 'tester', 1001, 20)
+            expected_result = [[500L, '10'], [1001L, '20']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result            
+            
+            assert r.execute_command('TS.ADD', 'tester', 2000, 30)
+            expected_result = [[1001L, '20'], [2000L, '30']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result            
     
     def test_create_compaction_rule_without_dest_series(self):
         with self.redis() as r:
