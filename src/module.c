@@ -697,6 +697,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleString *srcKeyName = argv[1];
     RedisModuleString *destKeyName = argv[2];
+    if(!RedisModule_StringCompare(srcKeyName, destKeyName)){
+    	return RedisModule_ReplyWithError(ctx, "TSDB: the source key and destination key should be different");
+    }
 
     // First we verify the source is not a destination
     Series *srcSeries;
