@@ -350,6 +350,24 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+                
+    def test_create_compaction_rule_override_dest(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester2')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester2', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+
+    def test_create_compaction_rule_from_target(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester2')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester_agg_max_10', 'tester2', 'AGGREGATION', 'MAX', 10)
 
     def test_create_compaction_rule_and_del_dest_series(self):
         with self.redis() as r:

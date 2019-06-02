@@ -698,26 +698,29 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *srcKeyName = argv[1];
     RedisModuleString *destKeyName = argv[2];
 
-    // First verify the destination doesn't have other rule
-    Series *destSeries;
-    int status = getSeries(ctx, destKeyName, &destSeries);
+    // First we verify the source is not a destination
+    Series *srcSeries;
+    int status = getSeries(ctx, srcKeyName, &srcSeries);
     if(!status){
     	return REDISMODULE_ERR;
     }
+    if(srcSeries->srcKey){
+    	return RedisModule_ReplyWithError(ctx, "TSDB: the source key already has a source rule");
+    }
 
+    // Second verify the destination doesn't have other rule
+    Series *destSeries;
+    status = getSeries(ctx, destKeyName, &destSeries);
+    if(!status){
+    	return REDISMODULE_ERR;
+    }
     srcKeyName = RedisModule_CreateStringFromString(ctx, srcKeyName);
     if(!SeriesSetSrcRule(destSeries, srcKeyName)){
     	return RedisModule_ReplyWithError(ctx, "TSDB: the destination key already has a rule");
     }
     RedisModule_RetainString(ctx, srcKeyName);
 
-    // Then add the rule to source
-    Series *srcSeries;
-    status = getSeries(ctx, srcKeyName, &srcSeries);
-    if(!status){
-    	return REDISMODULE_ERR;
-    }
-
+    // Last add the rule to source
     destKeyName = RedisModule_CreateStringFromString(ctx, destKeyName);
     if (SeriesAddRule(srcSeries, destKeyName, aggType, bucketSize) == NULL) {
         RedisModule_ReplyWithSimpleString(ctx, "ERROR creating rule");
