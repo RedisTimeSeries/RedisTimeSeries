@@ -345,12 +345,6 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
 
-    def test_create_self_compaction_rule(self):
-        with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester')
-            with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.CREATERULE', 'tester', 'tester', 'AGGREGATION', 'MAX', 10)
-
     def test_create_compaction_rule_twice(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
