@@ -94,12 +94,14 @@ void FreeSeries(void *value) {
     free(currentSeries->labels);
     free(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
+    free(currentSeries);
 }
 
 void FreeCompactionRule(void *value) {
 	CompactionRule *rule = (CompactionRule *) value;
 	RedisModule_FreeString(NULL, rule->destKey);
 	free(rule->aggContext);
+	free(rule);
 }
 
 size_t SeriesMemUsage(const void *value) {
