@@ -72,7 +72,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         """
         for i in range(samples_count):
             value_to_insert = value[i] if type(value) == list else value
-            assert redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+            actual_result = redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+            if type(actual_result) == long:               
+                assert actual_result == long(start_ts + i)
+            else:
+                assert actual_result
 
     def _insert_agg_data(self, redis, key, agg_type):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
@@ -556,7 +560,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
     def test_add_create_key(self):
         with self.redis() as r:
             ts = time.time()
-            assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla')
+            assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             assert r.execute_command('TS.INFO', 'tester1') == [
                 'lastTimestamp',
                 long(ts),

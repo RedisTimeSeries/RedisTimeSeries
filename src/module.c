@@ -523,8 +523,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             handleCompaction(ctx, rule, timestamp, value);
             rule = rule->nextRule;
         }
-        
-        RedisModule_ReplyWithSimpleString(ctx, "OK");
+        RedisModule_ReplyWithLongLong(ctx, timestamp);
         RedisModule_ReplicateVerbatim(ctx);
         result = REDISMODULE_OK;
     }
