@@ -49,7 +49,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
         	size_t keyLen, valueLen;
         	RedisModule_StringPtrLen(key, &keyLen);
         	RedisModule_StringPtrLen(value, &valueLen);
-        	if(keyLen==0 || valueLen==0){
+        	if(keyLen==0 || valueLen==0 || strpbrk( RedisModule_StringPtrLen(value, NULL), "(),")){
         		free(labelsResult);
         		return REDISMODULE_ERR;
         	}
