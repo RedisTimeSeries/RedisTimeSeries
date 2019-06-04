@@ -356,8 +356,18 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.ADD', 'tester', 2000, 30)
             expected_result = [[1001L, '20'], [2000L, '30']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
-            assert expected_result == actual_result            
-    
+            assert expected_result == actual_result   
+            
+    def test_create_compaction_rule_with_wrong_aggregation(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAXX', 10)
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MA', 10)
+
     def test_create_compaction_rule_without_dest_series(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')

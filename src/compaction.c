@@ -267,33 +267,35 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    char agg_type_lower[10];
-    int result;
-
-    for(int i = 0; i < len; i++){
-        agg_type_lower[i] = tolower(agg_type[i]);
-    }
-    if (strncmp(agg_type_lower, "min", len) == 0){
-        result = TS_AGG_MIN;
-    } else if (strncmp(agg_type_lower, "max", len) == 0) {
-        result =  TS_AGG_MAX;
-    } else if (strncmp(agg_type_lower, "sum", len) == 0) {
-        result =  TS_AGG_SUM;
-    } else if (strncmp(agg_type_lower, "avg", len) == 0) {
-        result =  TS_AGG_AVG;
-    } else if (strncmp(agg_type_lower, "count", len) == 0) {
-        result =  TS_AGG_COUNT;
-    } else if (strncmp(agg_type_lower, "first", len) == 0) {
-        result =  TS_AGG_FIRST;
-    } else if (strncmp(agg_type_lower, "last", len) == 0) {
-        result =  TS_AGG_LAST;
-    } else if (strncmp(agg_type_lower, "range", len) == 0) {
-        result =  TS_AGG_RANGE;
-    } else {
-        result =  TS_AGG_INVALID;
-    }
-
-    return result;
+	int result = TS_AGG_INVALID;
+	char agg_type_lower[len];
+	for(int i = 0; i < len; i++){
+		agg_type_lower[i] = tolower(agg_type[i]);
+	}
+	if(len == 3){
+		if (strncmp(agg_type_lower, "min", len) == 0 && len == 3){
+			result = TS_AGG_MIN;
+		} else if (strncmp(agg_type_lower, "max", len) == 0) {
+			result =  TS_AGG_MAX;
+		} else if (strncmp(agg_type_lower, "sum", len) == 0) {
+			result =  TS_AGG_SUM;
+		} else if (strncmp(agg_type_lower, "avg", len) == 0) {
+			result =  TS_AGG_AVG;
+		}
+	} else if (len == 4){
+		if (strncmp(agg_type_lower, "last", len) == 0) {
+			result =  TS_AGG_LAST;
+		}
+	} else if (len == 5){
+		if (strncmp(agg_type_lower, "count", len) == 0) {
+			result =  TS_AGG_COUNT;
+		} else if (strncmp(agg_type_lower, "range", len) == 0) {
+			result =  TS_AGG_RANGE;
+		} else if (strncmp(agg_type_lower, "first", len) == 0) {
+			result =  TS_AGG_FIRST;
+		}
+	}
+	return result;
 }
 
 const char * AggTypeEnumToString(int aggType) {
