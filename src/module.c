@@ -714,7 +714,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // Last add the rule to source
     destKeyName = RedisModule_CreateStringFromString(ctx, destKeyName);
     if (SeriesAddRule(srcSeries, destKeyName, aggType, bucketSize) == NULL) {
-        RedisModule_ReplyWithSimpleString(ctx, "ERROR creating rule");
+        RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
         return REDISMODULE_ERR;
     }
     RedisModule_RetainString(ctx, destKeyName);
