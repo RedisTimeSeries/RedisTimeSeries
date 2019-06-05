@@ -24,6 +24,12 @@ typedef struct AvgContext {
     double cnt;
 } AvgContext;
 
+typedef struct StdContext {
+    double std;
+    double mean;
+    double cnt;
+} StdContext;
+
 void *SingleValueCreateContext() {
     SingleValueContext *context = (SingleValueContext*)malloc(sizeof(SingleValueContext));
     context->value = 0;
@@ -88,6 +94,50 @@ void AvgReadContext(void *contextPtr, RedisModuleIO * io){
     context->cnt = RedisModule_LoadDouble(io);
 }
 
+void *StdCreateContext() {
+    StdContext *context = (StdContext*)malloc(sizeof(StdContext));
+    context->cnt = 0;
+    context->mean =0;
+    context->std =0;
+    return context;
+}
+
+void StdAddValue(void *contextPtr, double value){
+    StdContext *context = (StdContext *)contextPtr;
+    double oldMean = context->mean;
+    if(context->cnt != 0) {
+    context->mean = oldMean + (value - oldMean) / context->cnt;
+    context->std = context->std + (value - oldMean) * (value - context->mean);
+    }
+    context->cnt++;
+}
+
+double StdFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    return context->std;
+}
+
+void StdReset(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    context->mean = 0;
+    context->std = 0;
+    context->cnt = 0;
+}
+
+void StdWriteContext(void *contextPtr, RedisModuleIO * io) {
+    StdContext *context = (StdContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->mean);
+    RedisModule_SaveDouble(io, context->std);
+    RedisModule_SaveDouble(io, context->cnt);
+}
+
+void StdReadContext(void *contextPtr, RedisModuleIO * io){
+    StdContext *context = (StdContext *)contextPtr;
+    context->mean = RedisModule_LoadDouble(io);
+    context->std = RedisModule_LoadDouble(io);
+    context->cnt = RedisModule_LoadDouble(io);
+}
+
 void rm_free(void* ptr) {
     free(ptr);
 }
@@ -100,6 +150,16 @@ static AggregationClass aggAvg = {
     .writeContext = AvgWriteContext,
     .readContext = AvgReadContext,
     .resetContext = AvgReset
+};
+
+static AggregationClass aggStd = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = StdFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
 };
 
 void *MaxMinCreateContext() {
@@ -281,6 +341,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 			result =  TS_AGG_SUM;
 		} else if (strncmp(agg_type_lower, "avg", len) == 0) {
 			result =  TS_AGG_AVG;
+		} else if (strncmp(agg_type_lower, "std", len) == 0) {
+			result =  TS_AGG_STD;
 		}
 	} else if (len == 4){
 		if (strncmp(agg_type_lower, "last", len) == 0) {
@@ -308,6 +370,8 @@ const char * AggTypeEnumToString(int aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
+        case TS_AGG_STD:
+            return "STD";
         case TS_AGG_COUNT:
             return "COUNT";
         case TS_AGG_FIRST:
@@ -333,6 +397,9 @@ AggregationClass* GetAggClass(int aggType) {
             return &aggMax;
         case AGG_AVG:
             return &aggAvg;
+            break;
+        case AGG_STD:
+            return &aggStd;
             break;
         case AGG_SUM:
             return &aggSum;

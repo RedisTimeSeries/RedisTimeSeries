@@ -16,9 +16,10 @@
 #define AGG_MAX 2
 #define AGG_SUM 3
 #define AGG_AVG 4
-#define AGG_COUNT 5
-#define AGG_FIRST 6
-#define AGG_LAST 7
+#define AGG_STD 5
+#define AGG_COUNT 6
+#define AGG_FIRST 7
+#define AGG_LAST 8
 
 
 typedef struct AggregationClass
