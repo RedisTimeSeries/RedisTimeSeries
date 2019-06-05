@@ -300,7 +300,7 @@ int SeriesHasRule(Series *series, RedisModuleString *destKey) {
 }
 
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
-    CompactionRule *rule = series->rules;
+	CompactionRule *rule = series->rules;
 	CompactionRule *prev_rule = NULL;
 	while (rule != NULL) {
 		if (RMUtil_StringEquals(rule->destKey, destKey)) {
@@ -311,12 +311,12 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
 				FreeCompactionRule(prev_rule->nextRule);
 				prev_rule->nextRule = rule->nextRule;
 			}
-		    return TRUE;
+			return TRUE;
 		}
 		prev_rule = rule;
 		rule = rule->nextRule;
-    }
-    return FALSE;
+	}
+	return FALSE;
 }
 
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
