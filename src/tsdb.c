@@ -304,12 +304,14 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
 	CompactionRule *prev_rule = NULL;
 	while (rule != NULL) {
 		if (RMUtil_StringEquals(rule->destKey, destKey)) {
-			if (prev_rule == NULL) {
-				FreeCompactionRule(series->rules);
-				series->rules = rule->nextRule;
-			} else {
-				FreeCompactionRule(prev_rule->nextRule);
-				prev_rule->nextRule = rule->nextRule;
+            CompactionRule *next = rule->nextRule;
+            FreeCompactionRule(rule);
+			if (prev_rule != NULL) {
+			     // cut off the current rule from the linked list
+			     prev_rule->nextRule = next;
+			}  else {
+			    // make the next one to be the first rule
+			    series->rules = next;
 			}
 			return TRUE;
 		}
