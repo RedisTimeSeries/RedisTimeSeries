@@ -133,6 +133,9 @@ void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *ri
 }
 
 RedisModuleDict * GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predicate) {
+    /*
+     * Return the dictionary of all the keys that match the label in the given predicate.
+     */
     RedisModuleDict *currentLeaf;
     RedisModuleString *index_key;
     size_t _s;
@@ -164,6 +167,9 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
     currentLeaf = GetPredicateKeysDict(ctx, predicate);
 
     if (currentLeaf != NULL) {
+        // Copy everything to new dict only in case this is the first predicate (and there is more than one predicate).
+        // In the next iteration, when prevResults is no longer NULL, there is no need to copy again. We can work on
+        // currentLeaf, since only the left dict is being changed during intersection / difference.
         if (createResultDict && prevResults == NULL) {
             RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentLeaf, "^", NULL, 0);
             RedisModuleString *currentKey;
@@ -194,10 +200,15 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
 }
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count) {
+    /*
+     * Find the predicate that has the minimal amount of keys that match to it, and move it to the beginning of the
+     * predicate list so we will start our calculation from the smallest predicate. This is an optimization, so we will
+     * copy the smallest dict possible.
+     */
     if (predicate_count > 1) {
         int minIndex = 0;
         unsigned int minDictSize = UINT_MAX;
-        for (int i=0; i < predicate_count; i++) {
+        for (int i = 0; i < predicate_count; i++) {
             RedisModuleDict *currentPredicateKeys = GetPredicateKeysDict(ctx, &index_predicate[i]);
             int currentDictSize =  (currentPredicateKeys != NULL) ? RedisModule_DictSize(currentPredicateKeys): 0;
             if (currentDictSize < minDictSize) {
@@ -206,6 +217,7 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx, QueryPredicate *index_
             }
         }
 
+        // switch between the minimal predicate and the predicate in the first place
         if (minIndex != 0) {
             QueryPredicate temp = index_predicate[minIndex];
             index_predicate[minIndex] = index_predicate[0];
