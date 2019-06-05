@@ -70,9 +70,12 @@ If this command is used to add data to an existing timeseries, `retentionSecs` a
 
 #### Examples
 ```sql
-TS.ADD temperature:2:32 1548149180 26 LABELS sensor_id 2 area_id 32
-TS.ADD temperature:3:11 1548149180 27 RETENTION 3600
-TS.ADD temperature:3:11 1548149181 30
+127.0.0.1:6379>TS.ADD temperature:2:32 1548149180 26 LABELS sensor_id 2 area_id 32
+(integer) 1548149180
+127.0.0.1:6379>TS.ADD temperature:3:11 1548149183 27 RETENTION 3600
+(integer) 1548149183
+127.0.0.1:6379>TS.ADD temperature:3:11 * 30
+(integer) 1559718352
 ```
 
 #### Complexity
