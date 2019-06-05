@@ -6,6 +6,8 @@ import platform
 
 class Platform:
     def __init__(self):
+        self.os = self.dist = self.os_ver = self.full_os_ver = self.os_nick = self.arch = '?'
+    
         self.os = platform.system().lower()
         dist = platform.linux_distribution()
         distname = dist[0].lower()
@@ -33,12 +35,18 @@ class Platform:
             self.dist = self.os
             self.os_ver = platform.release()
             self.full_os_ver = os.version()
+        elif self.os == 'sunos':
+            self.os = 'solaris'
+            self.os_ver = ''
+            self.dist = ''
         else:
             Assert(False), "Cannot determine OS"
 
         self.arch = platform.machine().lower()
         if self.arch == 'amd64' or self.arch == 'x86_64':
             self.arch = 'x64'
+        elif self.arch == 'i386' or self.arch == 'i686' or self.arch == 'i86pc':
+            self.arch = 'x86'
         elif self.arch == 'aarch64':
             self.arch = 'arm64v8'
 

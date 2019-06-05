@@ -1,10 +1,13 @@
 # TAG raffapen/redistimeseries-${ARCH}-${OSNICK}:latest
 
 ARG OSNICK=bionic
+ARG ARCH=arm64
 # ARG ARCH=x64|arm64|arm7l [no need to specify: using multi-arch]
 
 #----------------------------------------------------------------------------------------------
-FROM raffapen/redis-${OSNICK}:5.0.5 AS builder
+FROM raffapen/redis-${ARCH}-${OSNICK}-xbuild:5.0.5 as builder
+
+RUN [ "cross-build-start" ]
 
 ADD ./ /build
 WORKDIR /build
@@ -15,8 +18,12 @@ RUN python ./system-setup.py
 RUN make -C RedisModulesSDK/rmutil
 RUN make -C src
 
+RUN [ "cross-build-end" ]
+
 #----------------------------------------------------------------------------------------------
-FROM raffapen/redis-${OSNICK}:5.0.5
+FROM raffapen/redis-${ARCH}-${OSNICK}-xbuild:5.0.5
+
+RUN [ "cross-build-start" ]
 
 ENV LIBDIR /usr/lib/redis/modules
 WORKDIR /data
@@ -26,3 +33,5 @@ COPY --from=builder /build/src/redistimeseries.so "$LIBDIR"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
+
+RUN [ "cross-build-end" ]

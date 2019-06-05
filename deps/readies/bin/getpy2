@@ -1,0 +1,23 @@
+#!/bin/sh
+
+[ ! -z $(command -v python) ] && exit 0
+[ ! -z $(command -v python2) ] && exit 0
+
+if [ ! -z $(command -v apt-get) ]; then
+	apt-get update
+	apt-get install -y python
+elif [ ! -z $(command -v dnf) ]; then
+	dnf install -y python2
+elif [ ! -z $(command -v yum) ]; then
+	yum install -y python2
+elif [ ! -z $(command -v apk) ]; then
+	apk update
+	apk add python2
+elif [ ! -z $(command -v brew) ]; then
+	brew install python2
+fi
+
+if [ -z $(command -v python) ]; then
+	>&2 echo "Cannot install Python2. Aborting."
+	exit 1
+fi

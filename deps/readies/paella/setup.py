@@ -53,6 +53,11 @@ class Setup(OnPlatform):
         # this is required because osx pip installed are done with --user
         if self.os == 'macosx':
             os.environ["PATH"] = os.environ["PATH"] + ':' + '$HOME/Library/Python/2.7/bin'
+        
+        if self.platform.is_debian_compat():
+            # prevents apt-get from interactively prompting
+            os.environ["DEBIAN_FRONTEND"] = 'noninteractive'
+        
         os.environ["PYTHONWARNINGS"] = 'ignore:DEPRECATION::pip._internal.cli.base_command'
 
     def setup(self):
@@ -68,7 +73,7 @@ class Setup(OnPlatform):
     #------------------------------------------------------------------------------------------
 
     def apt_install(self, packs, group=False):
-        self.run("apt-get install -q -y " + packs)
+        self.run("apt-get -qq install -y " + packs)
 
     def yum_install(self, packs, group=False):
         if not group:
