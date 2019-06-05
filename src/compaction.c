@@ -105,16 +105,13 @@ void *StdCreateContext() {
 void StdAddValue(void *contextPtr, double value){
     StdContext *context = (StdContext *)contextPtr;
     double oldMean = context->mean;
-    if(context->cnt != 0) {
-    context->mean = oldMean + (value - oldMean) / context->cnt;
+    context->mean = oldMean + (value - oldMean) / ++context->cnt;
     context->std = context->std + (value - oldMean) * (value - context->mean);
-    }
-    context->cnt++;
 }
 
 double StdFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    return context->std;
+    return context->std / context->cnt;
 }
 
 void StdReset(void *contextPtr) {
