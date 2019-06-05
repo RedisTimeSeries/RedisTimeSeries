@@ -6,6 +6,9 @@ def fread(fname, mode = 'rb'):
 	with open(fname, mode) as file:
 		return file.read()
 
+def flines(fname, mode = 'rb'):
+	return [line.rstrip() for line in open(fname)]
+
 @contextmanager
 def cwd(path):
     d0 = os.getcwd()
