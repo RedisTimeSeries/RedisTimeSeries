@@ -487,6 +487,15 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             assert expected_result == actual_result
 
+    def test_agg_std(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'std')
+
+            expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.001                
+
     def test_agg_sum(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'sum')
