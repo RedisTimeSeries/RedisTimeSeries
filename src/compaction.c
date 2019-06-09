@@ -31,14 +31,14 @@ typedef struct StdContext {
 } StdContext;
 
 void *SingleValueCreateContext() {
-    SingleValueContext *context = (SingleValueContext*)malloc(sizeof(SingleValueContext));
+    SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     context->isResetted = TRUE;
     return context;
 }
 
 void SingleValueReset(void *contextPtr) {
-    SingleValueContext *context = (SingleValueContext*)contextPtr;
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
     context->isResetted = TRUE;
 }
@@ -59,7 +59,7 @@ void SingleValueReadContext(void *contextPtr, RedisModuleIO * io){
 }
 
 void *AvgCreateContext() {
-    AvgContext *context = (AvgContext*)malloc(sizeof(AvgContext));
+    AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     context->cnt = 0;
     context->val =0;
     return context;
@@ -95,7 +95,7 @@ void AvgReadContext(void *contextPtr, RedisModuleIO * io){
 }
 
 void *StdCreateContext() {
-    StdContext *context = (StdContext*)malloc(sizeof(StdContext));
+    StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->mean =0;
     context->std =0;
