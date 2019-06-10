@@ -87,9 +87,23 @@ void FreeSeries(void *value) {
         RedisModule_FreeString(NULL, currentSeries->labels[i].key);
         RedisModule_FreeString(NULL, currentSeries->labels[i].value);
     }
+    CompactionRule *rule = currentSeries->rules;
+    while (rule != NULL) {
+    	CompactionRule *nextRule = rule->nextRule;
+    	FreeCompactionRule(rule);
+    	rule = nextRule;
+    }
     free(currentSeries->labels);
     free(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
+    free(currentSeries);
+}
+
+void FreeCompactionRule(void *value) {
+	CompactionRule *rule = (CompactionRule *) value;
+	RedisModule_FreeString(NULL, rule->destKey);
+	free(rule->aggContext);
+	free(rule);
 }
 
 size_t SeriesMemUsage(const void *value) {
@@ -200,9 +214,6 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 }
 
 CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize) {
-	if(RMUtil_StringEquals(series->keyName, destKeyStr)){ // Don't allow own rules creation
-		return NULL;
-	}
     CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
     if (rule == NULL ) {
         return NULL;
@@ -289,3 +300,43 @@ int SeriesHasRule(Series *series, RedisModuleString *destKey) {
     }
     return FALSE;
 }
+
+int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
+	CompactionRule *rule = series->rules;
+	CompactionRule *prev_rule = NULL;
+	while (rule != NULL) {
+		if (RMUtil_StringEquals(rule->destKey, destKey)) {
+            CompactionRule *next = rule->nextRule;
+            FreeCompactionRule(rule);
+			if (prev_rule != NULL) {
+			     // cut off the current rule from the linked list
+			     prev_rule->nextRule = next;
+			}  else {
+			    // make the next one to be the first rule
+			    series->rules = next;
+			}
+			return TRUE;
+		}
+		prev_rule = rule;
+		rule = rule->nextRule;
+	}
+	return FALSE;
+}
+
+int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
+	if(series->srcKey){
+		return FALSE;
+	}
+	series->srcKey = srctKey;
+	return TRUE;
+}
+
+int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
+	if(RMUtil_StringEquals(series->srcKey, srctKey)){
+		RedisModule_FreeString(NULL, series->srcKey);
+		series->srcKey = NULL;
+		return TRUE;
+	}
+	return FALSE;
+}
+
