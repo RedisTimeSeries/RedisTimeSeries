@@ -1,4 +1,4 @@
-display_name: redistimeseries
+display_name: RedisTimeSeries
 author: RedisLabs
 email: danni@redislabs.com
 description: Time-Series data structure for redis

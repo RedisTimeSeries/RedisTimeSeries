@@ -72,7 +72,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         """
         for i in range(samples_count):
             value_to_insert = value[i] if type(value) == list else value
-            assert redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+            actual_result = redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+            if type(actual_result) == long:               
+                assert actual_result == long(start_ts + i)
+            else:
+                assert actual_result
 
     def _insert_agg_data(self, redis, key, agg_type):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
@@ -340,8 +344,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                  'retentionSecs': 0L,
                                  'labels': [],
                                  'sourceKey': '',
-                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
-            
+                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}          
             
     def test_delete_key(self):
         with self.redis() as r:
@@ -360,6 +363,35 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 12)
             assert len(self._get_ts_info(r, 'tester')['rules']) == 1
     
+    def test_create_retention(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
+            
+            assert r.execute_command('TS.ADD', 'tester', 500, 10)
+            expected_result = [[500L, '10']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result
+            
+            assert r.execute_command('TS.ADD', 'tester', 1001, 20)
+            expected_result = [[500L, '10'], [1001L, '20']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result            
+            
+            assert r.execute_command('TS.ADD', 'tester', 2000, 30)
+            expected_result = [[1001L, '20'], [2000L, '30']]
+            actual_result = r.execute_command('TS.range', 'tester', '-', '+')
+            assert expected_result == actual_result   
+            
+    def test_create_compaction_rule_with_wrong_aggregation(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAXX', 10)
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MA', 10)
+
     def test_create_compaction_rule_without_dest_series(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
@@ -434,6 +466,19 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('DUMP', 'tester')
+
+    def test_valid_labels(self):
+        with self.redis() as r:
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.CREATE', 'tester', 'LABELS', 'name', '')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', '')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'list)')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
 
     def test_incrby_reset(self):
         with self.redis() as r:
@@ -577,7 +622,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
     def test_add_create_key(self):
         with self.redis() as r:
             ts = time.time()
-            assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla')
+            assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             assert r.execute_command('TS.INFO', 'tester1') == [
                 'lastTimestamp',
                 long(ts),
