@@ -1,11 +1,11 @@
-# TAG raffapen/redistimeseries-${ARCH}-${OSNICK}:latest
+# BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:latest
 
 ARG OSNICK=bionic
 ARG ARCH=arm64
 # ARG ARCH=x64|arm64|arm7l [no need to specify: using multi-arch]
 
 #----------------------------------------------------------------------------------------------
-FROM raffapen/redis-${ARCH}-${OSNICK}-xbuild:5.0.5 as builder
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:5.0.5 as builder
 
 RUN [ "cross-build-start" ]
 
@@ -21,7 +21,7 @@ RUN make -C src
 RUN [ "cross-build-end" ]
 
 #----------------------------------------------------------------------------------------------
-FROM raffapen/redis-${ARCH}-${OSNICK}-xbuild:5.0.5
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:5.0.5
 
 RUN [ "cross-build-start" ]
 
