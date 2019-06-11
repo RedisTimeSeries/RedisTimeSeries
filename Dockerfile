@@ -1,4 +1,4 @@
-# BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:latest
+# BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:M.m.b
 
 ARG OSNICK=bionic
 # ARG ARCH=x64|arm64|arm7l [no need to specify: using multi-arch]
