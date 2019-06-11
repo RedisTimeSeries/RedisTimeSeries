@@ -218,7 +218,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "sourceKey");
     if(series->srcKey == NULL){
-    	RedisModule_ReplyWithSimpleString(ctx, "");
+    	RedisModule_ReplyWithNull(ctx);
     } else {
     	RedisModule_ReplyWithString(ctx, series->srcKey);
     }
