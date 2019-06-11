@@ -582,7 +582,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 			add(ctx, keyName, timestampStr, valueStr, NULL, -1);
 	   }
        RedisModule_ReplicateVerbatim(ctx);
-       return REDISMODULE_OK; // TODO change
+       return REDISMODULE_OK;
 }
 
 int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
