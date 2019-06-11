@@ -16,4 +16,7 @@ extern RedisModuleType *SeriesType;
 int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts,
                 long long retentionSecs, long long maxSamplesPerChunk, Series **series, RedisModuleKey **key);
 
+int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series);
+
+
 #endif

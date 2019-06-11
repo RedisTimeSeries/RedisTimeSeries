@@ -62,7 +62,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
     return REDISMODULE_OK;
 }
 
-static int getSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
+int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithError(ctx, "TSDB: the key does not exist"); // TODO add keyName
@@ -201,7 +201,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         series = RedisModule_ModuleTypeGetValue(key);
     }
 
-    RedisModule_ReplyWithArray(ctx, 6*2);
+    RedisModule_ReplyWithArray(ctx, 7*2);
 
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
@@ -214,6 +214,14 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "labels");
     ReplyWithSeriesLabels(ctx, series);
+
+
+    RedisModule_ReplyWithSimpleString(ctx, "sourceKey");
+    if(series->srcKey == NULL){
+    	RedisModule_ReplyWithSimpleString(ctx, "");
+    } else {
+    	RedisModule_ReplyWithString(ctx, series->srcKey);
+    }
 
     RedisModule_ReplyWithSimpleString(ctx, "rules");
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -655,21 +663,22 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
     RedisModuleString *srcKeyName = argv[1];
-    RedisModuleString *destKeyName = argv[2];
 
     // First try to remove the rule from the source key
     Series *srcSeries;
-    int status = getSeries(ctx, srcKeyName, &srcSeries);
+    int status = GetSeries(ctx, srcKeyName, &srcSeries);
     if(!status){
     	return REDISMODULE_ERR;
     }
+
+    RedisModuleString *destKeyName = argv[2];
     if (!SeriesDeleteRule(srcSeries, destKeyName)) {
     	return RedisModule_ReplyWithError(ctx, "TSDB: compaction rule does not exist");
     }
 
     // If succeed to remove the rule from the source key remove from the destination too
     Series *destSeries;
-    status = getSeries(ctx, destKeyName, &destSeries);
+    status = GetSeries(ctx, destKeyName, &destSeries);
     if(!status){
     	return REDISMODULE_ERR;
     }
@@ -708,7 +717,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // First we verify the source is not a destination
     Series *srcSeries;
-    int status = getSeries(ctx, srcKeyName, &srcSeries);
+    int status = GetSeries(ctx, srcKeyName, &srcSeries);
     if(!status){
     	return REDISMODULE_ERR;
     }
@@ -718,7 +727,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // Second verify the destination doesn't have other rule
     Series *destSeries;
-    status = getSeries(ctx, destKeyName, &destSeries);
+    status = GetSeries(ctx, destKeyName, &destSeries);
     if(!status){
     	return REDISMODULE_ERR;
     }

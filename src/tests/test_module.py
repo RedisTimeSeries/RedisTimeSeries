@@ -151,6 +151,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
               'retentionSecs': 0L,
+              'sourceKey': '',
               'rules': []}
             actual_result = self._get_ts_info(r, 'tester')
             assert expected_result == actual_result
@@ -180,6 +181,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
                                'retentionSecs': 0L,
+                               'sourceKey': '',
                                'rules': [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]}
             actual_result = self._get_ts_info(r, 'tester')
             assert expected_result == actual_result
@@ -341,8 +343,26 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                  'maxSamplesPerChunk': 360L,
                                  'retentionSecs': 0L,
                                  'labels': [],
-                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}
-
+                                 'sourceKey': '',
+                                 'rules': [['tester_agg_max_10', 10L, 'AVG']]}          
+            
+    def test_delete_key(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
+            assert r.delete('tester_agg_max_10')
+            assert len(self._get_ts_info(r, 'tester')['rules']) == 0
+            
+            assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 11)
+            assert r.delete('tester')
+            assert self._get_ts_info(r, 'tester_agg_max_10')['sourceKey'] == ''
+            
+            assert r.execute_command('TS.CREATE', 'tester')
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 12)
+            assert len(self._get_ts_info(r, 'tester')['rules']) == 1
+    
     def test_create_retention(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
@@ -617,6 +637,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                     ['name',
                     'blabla']
                 ],
+                'sourceKey',
+                '',
                 'rules',
                 []
             ]
@@ -642,6 +664,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                         'earth'
                     ]
                 ],
+                'sourceKey',
+                '',
                 'rules',
                 []
             ]

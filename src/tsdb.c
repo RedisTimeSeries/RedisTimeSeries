@@ -23,6 +23,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
     newSeries->retentionSecs = retentionSecs;
+    newSeries->srcKey = NULL;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
@@ -70,13 +71,12 @@ static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
     memcpy(buf, &e, sizeof(e));
 }
 
-
+// Releases Series and all its compaction rules
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk *currentChunk;
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL)
-    {
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL){
         FreeChunk(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -89,10 +89,24 @@ void FreeSeries(void *value) {
     }
     CompactionRule *rule = currentSeries->rules;
     while (rule != NULL) {
+        Series *dstSeries;
+        int status = GetSeries(ctx, rule->destKey, &dstSeries);
+        if(status){
+        	SeriesDeleteSrcRule(dstSeries, currentSeries->keyName);
+        }
     	CompactionRule *nextRule = rule->nextRule;
     	FreeCompactionRule(rule);
     	rule = nextRule;
     }
+    if(currentSeries->srcKey){
+        Series *srcSeries;
+        int status = GetSeries(ctx, currentSeries->srcKey, &srcSeries);
+        if(status){
+        	SeriesDeleteRule(srcSeries, currentSeries->keyName);
+        }
+        free(currentSeries->srcKey);
+    }
+
     free(currentSeries->labels);
     free(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
