@@ -270,18 +270,23 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
         const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
         if (strstr(str2, "!=") != NULL) {
             query->type = NEQ;
-            if (parseLabel(ctx, argv[i], &query->label, "!=") == TSDB_ERROR) {
+            if (parsePredicate(ctx, argv[i], query, "!=") == TSDB_ERROR) {
                 return TSDB_ERROR;
             }
-            if (query->label.value == NULL) {
+            if (query->valueListCount == 0) {
                 query->type = CONTAINS;
+            }
+        } else if (strstr(str2, "=(") != NULL) {  // order is important! Must be before "=".
+            query->type = FILTER_LIST;
+            if (parsePredicate(ctx, argv[i], query, "=(") == TSDB_ERROR) {
+                return TSDB_ERROR;
             }
         } else if (strstr(str2, "=") != NULL) {
             query->type = EQ;
-            if (parseLabel(ctx, argv[i], &query->label, "=") == TSDB_ERROR) {
+            if (parsePredicate(ctx, argv[i], query, "=") == TSDB_ERROR) {
                 return TSDB_ERROR;
             }
-            if (query->label.value == NULL) {
+            if (query->valueListCount == 0) {
                 query->type = NCONTAINS;
             }
         } else {

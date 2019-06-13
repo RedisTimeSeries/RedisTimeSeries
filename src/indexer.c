@@ -21,7 +21,7 @@ void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
 }
 
-int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, const char *separator) {
+int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator) {
     char *token;
     char *iter_ptr;
     size_t _s;
@@ -29,22 +29,48 @@ int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, c
     char *labelstr = RedisModule_PoolAlloc(ctx, _s + 1);
     labelstr[_s] = '\0';
     strncpy(labelstr, labelRaw, _s);
+
+    // Extract key
     token = strtok_r(labelstr, separator, &iter_ptr);
-    for (int i=0; i<2; i++)
-    {
-        if (token == NULL && i==0) {
+    if (token == NULL) {
+        return TSDB_ERROR;
+    }
+    retQuery->key = RedisModule_CreateString(ctx, token, strlen(token));
+
+    // Extract value
+    token = strtok_r(NULL, separator, &iter_ptr);
+    if (strcmp(separator, "=(") == 0) {
+        if (token == NULL) {
             return TSDB_ERROR;
         }
-        if (i == 0) {
-            retLabel->key = RedisModule_CreateString(NULL, token, strlen(token));
+
+        if (token[strlen(token) - 1] == ')') {
+            token[strlen(token) - 1] = '\0'; // remove closing parentheses
         } else {
-            if (token != NULL) {
-                retLabel->value = RedisModule_CreateString(NULL, token, strlen(token));
-            } else {
-                retLabel->value = NULL;
+            return TSDB_ERROR;
+        }
+
+        int filterCount = 1;
+        for (int i=0; token[i]!='\0'; i++) {
+            if (token[i] == ',') {
+                filterCount++;
             }
         }
-        token = strtok_r (NULL, separator, &iter_ptr);
+        retQuery->valueListCount = filterCount;
+        retQuery->valuesList = RedisModule_PoolAlloc(ctx, filterCount * sizeof(RedisModuleString*));
+
+        char* subToken = strtok_r(token, ",", &iter_ptr);
+        for (int i=0; i < filterCount; i++) {
+            retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, subToken);
+            subToken = strtok_r(NULL, ",", &iter_ptr);
+        }
+    } else if (token != NULL) {
+        retQuery->valueListCount = 1;
+        retQuery->valuesList = RedisModule_PoolAlloc(ctx, sizeof(RedisModuleString*));
+        retQuery->valuesList[0] = RedisModule_CreateString(ctx, token, strlen(token));
+    } else {
+        retQuery->valuesList = NULL;
+        retQuery->valueListCount = 0;
     }
     return TSDB_OK;
 }
@@ -99,6 +125,18 @@ void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *
     IndexOperation(ctx, "SREM", ts_key, labels, labels_count);
 }
 
+void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
+    /*
+    * Copy all elements from src to dest
+    */
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src, "^", NULL, 0);
+    RedisModuleString *currentKey;
+    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        RedisModule_DictSet(dest, currentKey, (void *) 1);
+    }
+    RedisModule_DictIteratorStop(iter);
+}
+
 void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
     char *currentKey;
@@ -134,29 +172,35 @@ void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *ri
 
 RedisModuleDict * GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predicate) {
     /*
-     * Return the dictionary of all the keys that match the label in the given predicate.
+     * Return the dictionary of all the keys that match the predicate.
      */
-    RedisModuleDict *currentLeaf;
+    RedisModuleDict *currentLeaf = NULL;
     RedisModuleString *index_key;
     size_t _s;
+    const char *key = RedisModule_StringPtrLen(predicate->key, &_s);
+    const char *value;
+
+    int nokey;
 
     if (predicate->type == NCONTAINS || predicate->type == CONTAINS) {
         index_key = RedisModule_CreateStringPrintf(ctx, K_PREFIX,
-                                                   RedisModule_StringPtrLen(predicate->label.key, &_s));
-
-    } else {
-        const char *key = RedisModule_StringPtrLen(predicate->label.key, &_s);
-        const char *value = RedisModule_StringPtrLen(predicate->label.value, &_s);
-        index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
-    }
-    int nokey;
-    currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
-    if (nokey) {
-
-        currentLeaf = NULL;
+                                                   RedisModule_StringPtrLen(predicate->key, &_s));
+        currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+    } else { // one or more entries
+        RedisModuleDict *singleEntryLeaf;
+        for (int i = 0; i < predicate->valueListCount; i++) {
+            value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
+            index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
+            singleEntryLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+            if (singleEntryLeaf != NULL){
+                if (currentLeaf == NULL) {
+                    currentLeaf = RedisModule_CreateDict(ctx);
+                }
+                _union(ctx, currentLeaf, singleEntryLeaf);
+            }
+        }
     }
     return currentLeaf;
-
 }
 
 RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predicate,
@@ -186,16 +230,18 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
     if (prevResults != NULL) {
         if (predicate->type == EQ || predicate->type == CONTAINS) {
             _intersect(ctx, prevResults, localResult);
-        } else  if (predicate->type == NCONTAINS) {
+        } else if (predicate->type == FILTER_LIST) {
+            _intersect(ctx, prevResults, localResult);
+        }else  if (predicate->type == NCONTAINS) {
             _difference(ctx, prevResults, localResult);
         } else if (predicate->type == NEQ){
             _difference(ctx, prevResults, localResult);
         }
         return prevResults;
-    } else if (predicate->type == EQ || predicate->type == CONTAINS) {
+    } else if (predicate->type == EQ || predicate->type == CONTAINS || predicate->type == FILTER_LIST) {
         return localResult;
     } else {
-        return prevResults;
+        return prevResults; // always NULL
     }
 }
 
@@ -233,7 +279,7 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
 
     // EQ or Contains
     for (int i=0; i < predicate_count; i++) {
-        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS) {
+        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS || index_predicate[i].type == FILTER_LIST) {
             result = QueryIndexPredicate(ctx, &index_predicate[i], result, shouldCreateNewDict);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);

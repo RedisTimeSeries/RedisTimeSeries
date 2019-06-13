@@ -718,6 +718,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                 r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'z=', 'x=2')
 
+            # Test filter list
+            assert ['tester1', 'tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(middle,junior)')
+            assert [] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(a,b,c)')
+
+
     def test_series_ordering(self):
         with self.redis() as r:
             sample_len = 1024
