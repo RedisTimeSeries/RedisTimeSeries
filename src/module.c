@@ -188,7 +188,9 @@ static int parseRangeArguments(RedisModuleCtx *ctx, Series *series, int start_in
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    if (argc != 2) {
+    	return RedisModule_WrongArity(ctx);
+    }
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
@@ -292,6 +294,11 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+
+    if (argc < 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+
     int query_count = argc - 1;
 
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
@@ -323,11 +330,14 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
     api_timestamp_t start_ts, end_ts;
     api_timestamp_t time_delta = 0;
 
-    if (argc < 4)
-        return RedisModule_WrongArity(ctx);
     Series fake_series = {0};
     fake_series.lastTimestamp = LLONG_MAX;
     if (parseRangeArguments(ctx, &fake_series, 1, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
@@ -387,6 +397,11 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
     Series *series;
     RedisModuleKey *key;
     key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
@@ -397,10 +412,6 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
-    }
-
-    if (argc < 4) {
-        return RedisModule_WrongArity(ctx);
     }
 
     api_timestamp_t start_ts, end_ts;
@@ -571,8 +582,11 @@ int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, 
 }
 
 int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc < 2)
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 2) {
         return RedisModule_WrongArity(ctx);
+    }
 
     Series *series;
     RedisModuleString *keyName = argv[1];
@@ -602,8 +616,11 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
-    if (argc < 2)
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 2) {
         return RedisModule_WrongArity(ctx);
+    }
 
     Series *series;
     RedisModuleString *keyName = argv[1];
@@ -657,10 +674,11 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
 TS.DELETERULE SOURCE_KEY DEST_KEY
  */
 int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
     if (argc != 3) {
         return RedisModule_WrongArity(ctx);
     }
-    RedisModule_AutoMemory(ctx);
 
     RedisModuleString *srcKeyName = argv[1];
 
@@ -693,10 +711,11 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketSizeSeconds
 */
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
     if (argc != 6){
         return RedisModule_WrongArity(ctx);
     }
-    RedisModule_AutoMemory(ctx);
 
     // Validate aggregation arguments
     api_timestamp_t bucketSize;
@@ -757,8 +776,9 @@ TS.INCRBY ts_key NUMBER [RESET time-bucket]
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 3)
+    if (argc < 3) {
         return RedisModule_WrongArity(ctx);
+    }
 
     RedisModuleString *keyName = argv[1];
     Series *series;
@@ -830,7 +850,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    if (argc != 2) {
+    	return RedisModule_WrongArity(ctx);
+    }
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
@@ -852,6 +874,11 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+
+    if (argc < 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+
     int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
     if (filter_location == -1) {
         return RedisModule_WrongArity(ctx);
