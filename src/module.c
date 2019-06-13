@@ -50,7 +50,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
         	RedisModule_StringPtrLen(key, &keyLen);
         	RedisModule_StringPtrLen(value, &valueLen);
         	if(keyLen==0 || valueLen==0 || strpbrk( RedisModule_StringPtrLen(value, NULL), "(),")){
-        		free(labelsResult);
+        		FreeLabels(labelsResult, i); // need to release prior key values too
         		return REDISMODULE_ERR;
         	}
 
@@ -655,13 +655,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
         RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
         // free current labels
-        if (series->labelsCount > 0) {
-            for (int i = 0; i < series->labelsCount; i++) {
-                RedisModule_FreeString(ctx, series->labels[i].key);
-                RedisModule_FreeString(ctx, series->labels[i].value);
-            }
-            free(series->labels);
-        }
+       	FreeLabels(series->labels, series->labelsCount);
 
         // set new newLabels
         series->labels = newLabels;
