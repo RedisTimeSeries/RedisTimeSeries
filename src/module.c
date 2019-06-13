@@ -655,7 +655,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
         RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
         // free current labels
-       	FreeLabels(series->labels, series->labelsCount);
+        FreeLabels(series->labels, series->labelsCount);
 
         // set new newLabels
         series->labels = newLabels;
