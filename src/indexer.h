@@ -21,19 +21,22 @@ typedef enum  {
     CONTAINS,
     // Not Contains a label
     NCONTAINS,
+    FILTER_LIST,  // List of predicates
     // REQ,
     // NREQ
 } PredicateType;
 
 typedef struct QueryPredicate {
     PredicateType type;
-    Label label;
+    RedisModuleString *key;
+    RedisModuleString **valuesList;
+    int valueListCnt;
 } QueryPredicate;
 
 void IndexInit();
 void IndexMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
 void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count);
-int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, Label *retLabel, const char *separator);
+int parseLabel(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator);
 int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type);
 #endif
