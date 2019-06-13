@@ -25,6 +25,15 @@ void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
 }
 
+void FreeLabels(void *value, size_t labelsCount){
+	Label *labels = (Label *) value;
+	for (int i = 0; i < labelsCount; ++i) {
+		RedisModule_FreeString(NULL, labels[i].key);
+		RedisModule_FreeString(NULL, labels[i].value);
+	}
+	free(labels);
+}
+
 int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator) {
     char *token;
     char *iter_ptr;

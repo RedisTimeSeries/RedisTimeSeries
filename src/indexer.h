@@ -34,6 +34,7 @@ typedef struct QueryPredicate {
 } QueryPredicate;
 
 void IndexInit();
+void FreeLabels(void *value, size_t labelsCount);
 void IndexMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
 void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count);
