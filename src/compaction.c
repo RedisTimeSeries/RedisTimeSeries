@@ -5,6 +5,7 @@
 */
 #include <ctype.h>
 #include <string.h>
+#include <math.h>           // sqrt
 #include "compaction.h"
 #include "rmutil/alloc.h"
 
@@ -109,9 +110,24 @@ void StdAddValue(void *contextPtr, double value){
     context->std = context->std + (value - oldMean) * (value - context->mean);
 }
 
-double StdFinalize(void *contextPtr) {
+double StdPopulationFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    return sqrt(context->std / context->cnt);
+}
+
+double StdSamplesFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    return sqrt(context->std / (context->cnt - 1));
+}
+
+double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     return context->std / context->cnt;
+}
+
+double VarSamplesFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    return context->std / (context->cnt - 1);
 }
 
 void StdReset(void *contextPtr) {
@@ -149,11 +165,41 @@ static AggregationClass aggAvg = {
     .resetContext = AvgReset
 };
 
-static AggregationClass aggStd = {
+static AggregationClass aggStdP = {
     .createContext = StdCreateContext,
     .appendValue = StdAddValue,
     .freeContext = rm_free,
-    .finalize = StdFinalize,
+    .finalize = StdPopulationFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggStdS = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = StdSamplesFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggVarP = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = VarPopulationFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggVarS = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = VarSamplesFinalize,
     .writeContext = StdWriteContext,
     .readContext = StdReadContext,
     .resetContext = StdReset
@@ -338,8 +384,6 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 			result =  TS_AGG_SUM;
 		} else if (strncmp(agg_type_lower, "avg", len) == 0) {
 			result =  TS_AGG_AVG;
-		} else if (strncmp(agg_type_lower, "std", len) == 0) {
-			result =  TS_AGG_STD;
 		}
 	} else if (len == 4){
 		if (strncmp(agg_type_lower, "last", len) == 0) {
@@ -352,6 +396,14 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 			result =  TS_AGG_RANGE;
 		} else if (strncmp(agg_type_lower, "first", len) == 0) {
 			result =  TS_AGG_FIRST;
+		} else if (strncmp(agg_type_lower, "std.p", len) == 0) {
+			result =  TS_AGG_STD_P;
+		} else if (strncmp(agg_type_lower, "std.s", len) == 0) {
+			result =  TS_AGG_STD_S;
+		} else if (strncmp(agg_type_lower, "var.p", len) == 0) {
+			result =  TS_AGG_VAR_P;
+		} else if (strncmp(agg_type_lower, "var.s", len) == 0) {
+			result =  TS_AGG_VAR_S;
 		}
 	}
 	return result;
@@ -367,8 +419,14 @@ const char * AggTypeEnumToString(int aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
-        case TS_AGG_STD:
-            return "STD";
+        case TS_AGG_STD_P:
+            return "STD.P";
+        case TS_AGG_STD_S:
+            return "STD.S";
+        case TS_AGG_VAR_P:
+            return "VAR.P";
+        case TS_AGG_VAR_S:
+            return "VAR.S";
         case TS_AGG_COUNT:
             return "COUNT";
         case TS_AGG_FIRST:
@@ -395,8 +453,17 @@ AggregationClass* GetAggClass(int aggType) {
         case AGG_AVG:
             return &aggAvg;
             break;
-        case AGG_STD:
-            return &aggStd;
+        case AGG_STD_P:
+            return &aggStdP;
+            break;
+        case AGG_STD_S:
+            return &aggStdS;
+            break;
+        case AGG_VAR_P:
+            return &aggVarP;
+            break;
+        case AGG_VAR_S:
+            return &aggVarS;
             break;
         case AGG_SUM:
             return &aggSum;
