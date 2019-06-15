@@ -89,6 +89,32 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
   This is the reason why `labels` and `retentionsecs` are optional arguments.
 - When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionSecs`.
   Setting the `labels` and `retentionSecs` introduces additional time complexity.
+  
+### TS.MADD
+
+Append new values to a list of series.
+
+```sql
+TS.ADD key timestamp value [key timestamp value ...]
+```
+
+* timestamp - UNIX timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
+* value - Sample numeric data value (double)
+
+#### Examples
+```sql
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149180 26 cpu:2:32 1548149183 54 
+1) (integer) 1548149180
+2) (integer) 1548149183
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149181 45 cpu:2:32 1548149180 30
+1) (integer) 1548149181
+2) (error) TSDB: timestamp is too old
+```
+
+#### Complexity
+
+If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
+The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
 
 ### TS.INCRBY/TS.DECRBY
 
