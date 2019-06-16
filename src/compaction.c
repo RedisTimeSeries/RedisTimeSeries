@@ -110,24 +110,30 @@ void StdAddValue(void *contextPtr, double value){
     context->std = context->std + (value - oldMean) * (value - context->mean);
 }
 
-double StdPopulationFinalize(void *contextPtr) {
-    StdContext *context = (StdContext *)contextPtr;
-    return sqrt(context->std / context->cnt);
-}
-
-double StdSamplesFinalize(void *contextPtr) {
-    StdContext *context = (StdContext *)contextPtr;
-    return sqrt(context->std / (context->cnt - 1));
-}
-
 double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    return context->std / context->cnt;
+    double res = 0;
+    if(context->cnt > 0) {
+        res = context->std / context->cnt;
+    }
+    return res;
 }
 
 double VarSamplesFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    return context->std / (context->cnt - 1);
+    double res = 0;
+    if(context->cnt > 1) {
+        res = context->std / (context->cnt - 1);
+    }
+    return res;
+}
+
+double StdPopulationFinalize(void *contextPtr) {
+    return sqrt(VarPopulationFinalize(contextPtr));
+}
+
+double StdSamplesFinalize(void *contextPtr) {
+    return sqrt(VarSamplesFinalize(contextPtr));
 }
 
 void StdReset(void *contextPtr) {
