@@ -43,7 +43,9 @@ int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate
         if (token == NULL) {
             return TSDB_ERROR;
         }
-
+        if (strlen(token) <= 1) {
+            return TSDB_ERROR;
+        }
         if (token[strlen(token) - 1] == ')') {
             token[strlen(token) - 1] = '\0'; // remove closing parentheses
         } else {
@@ -56,6 +58,7 @@ int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate
                 filterCount++;
             }
         }
+
         retQuery->valueListCount = filterCount;
         retQuery->valuesList = RedisModule_PoolAlloc(ctx, filterCount * sizeof(RedisModuleString*));
 
