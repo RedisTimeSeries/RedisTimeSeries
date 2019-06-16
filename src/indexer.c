@@ -16,6 +16,10 @@ RedisModuleDict *labelsIndex;
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
 
+typedef enum {
+    Indexer_Add,
+    Indexer_Remove
+} INDEXER_OPERATION_T;
 
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
@@ -88,7 +92,7 @@ int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateTyp
     return count;
 }
 
-void indexUnderKey(const char *op, RedisModuleString *key, RedisModuleString *ts_key) {
+void indexUnderKey(INDEXER_OPERATION_T op, RedisModuleString *key, RedisModuleString *ts_key) {
     int nokey = 0;
     RedisModuleDict *leaf = RedisModule_DictGet(labelsIndex, key, &nokey);
     if (nokey) {
@@ -96,14 +100,14 @@ void indexUnderKey(const char *op, RedisModuleString *key, RedisModuleString *ts
         RedisModule_DictSet(labelsIndex, key, leaf);
     }
 
-    if (strcmp(op, "SADD") == 0) {
+    if (op == Indexer_Add) {
         RedisModule_DictSet(leaf, ts_key, NULL);
-    } else if (strcmp(op, "SREM") == 0) {
+    } else if (op == Indexer_Remove) {
         RedisModule_DictDel(leaf, ts_key, NULL);
     }
 }
 
-void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
+void IndexOperation(RedisModuleCtx *ctx, INDEXER_OPERATION_T op, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
     const char *key_string, *value_string;
     for (int i=0; i<labels_count; i++) {
         size_t _s;
@@ -121,11 +125,11 @@ void IndexOperation(RedisModuleCtx *ctx, const char *op, RedisModuleString *ts_k
 }
 
 void IndexMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
-    IndexOperation(ctx, "SADD", ts_key, labels, labels_count);
+    IndexOperation(ctx, Indexer_Add, ts_key, labels, labels_count);
 }
 
 void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count) {
-    IndexOperation(ctx, "SREM", ts_key, labels, labels_count);
+    IndexOperation(ctx, Indexer_Remove, ts_key, labels, labels_count);
 }
 
 void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
