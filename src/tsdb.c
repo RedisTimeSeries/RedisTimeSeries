@@ -185,6 +185,10 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
     return iter;
 }
 
+void SeriesIteratorClose(SeriesIterator *iterator) {
+    RedisModule_DictIteratorStop(iterator->dictIter);
+}
+
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     Sample internalSample;
     while (iterator->currentChunk != NULL)
