@@ -104,11 +104,11 @@ void FreeSeries(void *value) {
         if(status){
         	SeriesDeleteRule(srcSeries, currentSeries->keyName);
         }
-        free(currentSeries->srcKey);
+        RedisModule_FreeString(currentSeries->srcKey);
     }
 
     RedisModule_FreeThreadSafeContext(ctx);
-    free(currentSeries->keyName);
+    RedisModule_FreeString(currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
     free(currentSeries);
 }
