@@ -473,6 +473,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             aggObject->appendValue(context, sample.data);
         }
     }
+    SeriesIteratorClose(&iterator);
 
     if (aggObject != AGG_NONE) {
         // reply last bucket of data

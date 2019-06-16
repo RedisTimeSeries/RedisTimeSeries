@@ -108,4 +108,5 @@ void series_rdb_save(RedisModuleIO *io, void *value)
         RedisModule_SaveUnsigned(io, sample.timestamp);
         RedisModule_SaveDouble(io, sample.data);
     }
+    SeriesIteratorClose(&iter);
 }

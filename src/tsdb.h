@@ -62,7 +62,7 @@ size_t SeriesGetNumSamples(Series *series);
 // Iterator over the series
 SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-
+void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec);
 #endif /* TSDB_H */
