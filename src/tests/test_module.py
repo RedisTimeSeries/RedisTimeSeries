@@ -721,12 +721,15 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             # Test filter list
             assert ['tester1', 'tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(middle,junior)')
             assert [] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(a,b,c)')
-            with pytest.raises(redis.ResponseError):
-                assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=()')
+            assert r.execute_command('TS.QUERYINDEX', 'generation=x') == r.execute_command('TS.QUERYINDEX', 'generation=(x)')
+            assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=()') == []
+            assert r.execute_command('TS.QUERYINDEX', 'class=(middle,junior,top)', 'name!=(bob,rudy,fabi)') == ['tester4']
             with pytest.raises(redis.ResponseError):
                 assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(')
             with pytest.raises(redis.ResponseError):
                 assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(ab')
+            with pytest.raises(redis.ResponseError):
+                assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
 
 
     def test_series_ordering(self):
