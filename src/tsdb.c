@@ -82,6 +82,7 @@ void FreeSeries(void *value) {
     RedisModule_DictIteratorStop(iter);
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    RedisModule_AutoMemory(ctx);
     RemoveIndexedMetric(ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
     for (int i=0; i < currentSeries->labelsCount; i++) {
         RedisModule_FreeString(NULL, currentSeries->labels[i].key);
@@ -106,6 +107,7 @@ void FreeSeries(void *value) {
         }
         free(currentSeries->srcKey);
     }
+    RedisModule_FreeThreadSafeContext(ctx);
 
     free(currentSeries->labels);
     free(currentSeries->keyName);
