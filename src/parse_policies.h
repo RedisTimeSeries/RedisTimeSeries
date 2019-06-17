@@ -15,4 +15,5 @@ typedef struct SimpleCompactionRule {
 } SimpleCompactionRule;
 
 int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **parsed_rules, size_t *count_rules);
+int parse_string_to_secs(const char *timeStr, int *out);
 #endif

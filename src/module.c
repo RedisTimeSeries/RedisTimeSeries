@@ -4,9 +4,11 @@
 * This file is available under the Redis Labs Source Available License Agreement
 */
 #include <time.h>
+#include <sys/time.h>
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #include "redismodule.h"
 #include "rmutil/util.h"
@@ -111,11 +113,21 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
+    RedisModuleString * bucketStr = NULL;
+    size_t bucketLen = 0;
+    *time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
-        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
+        if (RMUtil_ParseArgs(argv, argc, offset + 1, "ss", &aggTypeStr, &bucketStr) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
             return TSDB_ERROR;
+        }
+
+        const char *bucketStrC = RedisModule_StringPtrLen(bucketStr, &bucketLen);
+        if (parse_string_to_secs(bucketStrC, time_delta)) {
+            *time_delta = *time_delta * 1000;
+        } else {
+            *time_delta = atoi(bucketStrC) * 1000;
         }
 
         if (!aggTypeStr){
@@ -502,6 +514,22 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     RedisModule_CloseKey(key);
 }
 
+// time functions (from https://github.com/antirez/redis/blob/unstable/src/redis-cli.c)
+static long long ustime(void) {
+    struct timeval tv;
+    long long ust;
+
+    gettimeofday(&tv, NULL);
+    ust = ((long long)tv.tv_sec)*1000000;
+    ust += tv.tv_usec;
+    return ust;
+}
+
+static long long mstime(void) {
+    return ustime()/1000;
+}
+
+
 int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
@@ -522,7 +550,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
         if(RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t) time(NULL);
+            timestamp = (u_int64_t) mstime();
         else
             return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }

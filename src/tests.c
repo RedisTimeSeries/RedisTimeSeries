@@ -11,12 +11,12 @@
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule* parsedRules;
     size_t rulesCount;
-    int result = ParseCompactionPolicy("max:1m:1h;min:10s:5d:10d;avg:2h:10d;avg:3d:100d", &parsedRules, &rulesCount);
+    int result = ParseCompactionPolicy("max:1ms:1h;min:10s:5d:10d;avg:2h:10d;avg:3d:100d", &parsedRules, &rulesCount);
 	mu_check(result == TRUE);
 	mu_check(rulesCount == 4);
 
     mu_check(parsedRules[0].aggType == StringAggTypeToEnum("max"));
-    mu_check(parsedRules[0].bucketSizeSec == 60);
+    mu_assert_int_eq(parsedRules[0].bucketSizeSec, 60);
 
     mu_check(parsedRules[1].aggType == StringAggTypeToEnum("min"));
     mu_check(parsedRules[1].bucketSizeSec == 10);
