@@ -165,7 +165,7 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
 * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
 
-Note: Whenever a filter is applied, a minimum of
+Note: Whenever filters need to be provided, a minimum of one filter should be applied.
 
 ### TS.RANGE
 
