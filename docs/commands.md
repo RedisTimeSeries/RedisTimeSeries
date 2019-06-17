@@ -156,6 +156,17 @@ TS.DELETERULE sourceKey destKey
 
 ## Query
 
+### Filtering
+For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
+* `l=v` label equals value
+* `l!=v` label doesn't equal value
+* `l=` key has the label `l`
+* `l!=` key doesn't have the label `l`
+* `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
+* `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
+
+Note: Whenever a filter is applied, a minimum of
+
 ### TS.RANGE
 
 Query a range.
@@ -214,13 +225,7 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSecon
 
 * fromTimestamp - Start timestamp for range query
 * toTimestamp - End timestamp for range query
-* filter - Set of label-pair filters. The supported filters are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key doesn't contains the label `k`
-  * `k!=` key contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
-  * `k!=(v1, v2, ...)` key with label `k` that doesn't equals to the values in the list
+* filter - [See Filtering](#filtering)
 
 Optional args:
 
@@ -293,9 +298,9 @@ TS.GET key
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET FILTER filter... 
+TS.MGET FILTER filter...
 ```
-* filter - [See TS.MRANGE](#tsmrange) filtering
+* filter - [See Filtering](#filtering)
 
 #### MGET Example
 
@@ -316,7 +321,6 @@ TS.MGET FILTER filter...
    3) (integer) 1548149181
    4) "29"
 ```
-
 
 ## General
 
@@ -359,12 +363,11 @@ Get all the keys matching the filter list.
 TS.QUERYINDEX filter...
 ```
 
-* filter - [See TS.MRANGE](#tsmrange) filtering
+* filter - [See Filtering](#filtering)
 
 ### Query index example
-```sql 
+```sql
 127.0.0.1:6379> TS.QUERYINDEX sensor_id=2
 1) "temperature:2:32"
 2) "temperature:2:33"
 ```
-
