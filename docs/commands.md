@@ -217,10 +217,11 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSecon
 * filter - Set of label-pair filters. The supported filters are:
   * `k=v` label equals value
   * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
+  * `k=` key doesn't contains the label `k`
+  * `k!=` key contain the label `k`
   * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
-  
+  * `k!=(v1, v2, ...)` key with label `k` that doesn't equals to the values in the list
+
 Optional args:
 
  * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
@@ -294,12 +295,7 @@ Get the last samples matching the specific filter.
 ```sql
 TS.MGET FILTER filter... 
 ```
-* filter - Set of label-pair filters. The supported filters are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
+* filter - [See TS.MRANGE](#tsmrange) filtering
 
 #### MGET Example
 
@@ -360,15 +356,10 @@ TS.INFO temperature:2:32
 Get all the keys matching the filter list.
 
 ```sql
-TS.QUERYINDEX fitler...
+TS.QUERYINDEX filter...
 ```
 
-* filter - Set of label-pair filter. The supported filter are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
+* filter - [See TS.MRANGE](#tsmrange) filtering
 
 ### Query index example
 ```sql 
