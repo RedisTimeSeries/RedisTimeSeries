@@ -268,7 +268,12 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
     for (int i=start; i < start + query_count; i++) {
         size_t _s;
         const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
-        if (strstr(str2, "!=") != NULL) {
+        if (strstr(str2, "!=(") != NULL) {  // order is important! Must be before "!=".
+            query->type = LIST_NOTMATCH;
+            if (parsePredicate(ctx, argv[i], query, "!=(") == TSDB_ERROR) {
+                return TSDB_ERROR;
+            }
+        } else if (strstr(str2, "!=") != NULL) {
             query->type = NEQ;
             if (parsePredicate(ctx, argv[i], query, "!=") == TSDB_ERROR) {
                 return TSDB_ERROR;
@@ -277,7 +282,7 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
                 query->type = CONTAINS;
             }
         } else if (strstr(str2, "=(") != NULL) {  // order is important! Must be before "=".
-            query->type = FILTER_LIST;
+            query->type = LIST_MATCH;
             if (parsePredicate(ctx, argv[i], query, "=(") == TSDB_ERROR) {
                 return TSDB_ERROR;
             }
@@ -311,7 +316,8 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+    if (CountPredicateType(queries, (size_t) query_count, EQ) +
+        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 

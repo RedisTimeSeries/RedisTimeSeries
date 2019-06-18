@@ -52,31 +52,37 @@ int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate
 
     // Extract value
     token = strtok_r(NULL, separator, &iter_ptr);
-    if (strcmp(separator, "=(") == 0) {
+    if (strstr(separator, "=(") != NULL) {
         if (token == NULL) {
             return TSDB_ERROR;
         }
-        if (strlen(token) <= 1) {
-            return TSDB_ERROR;
-        }
-        if (token[strlen(token) - 1] == ')') {
-            token[strlen(token) - 1] = '\0'; // remove closing parentheses
+        size_t token_len = strlen(token);
+
+        if (token[token_len - 1] == ')') {
+            token[token_len - 1] = '\0'; // remove closing parentheses
         } else {
             return TSDB_ERROR;
         }
 
-        int filterCount = 1;
+        int filterCount = 0;
         for (int i=0; token[i]!='\0'; i++) {
             if (token[i] == ',') {
                 filterCount++;
             }
         }
-
-        retQuery->valueListCount = filterCount;
-        retQuery->valuesList = RedisModule_PoolAlloc(ctx, filterCount * sizeof(RedisModuleString*));
+        if (token_len <= 1) {
+            // when the token is <=1 it means that we have an empty list
+            retQuery->valueListCount = 0;
+        } else {
+            retQuery->valueListCount = filterCount  + 1;
+        }
+        retQuery->valuesList = RedisModule_PoolAlloc(ctx, retQuery->valueListCount * sizeof(RedisModuleString*));
 
         char* subToken = strtok_r(token, ",", &iter_ptr);
-        for (int i=0; i < filterCount; i++) {
+        for (int i=0; i < retQuery->valueListCount; i++) {
+            if (subToken == NULL) {
+                continue;
+            }
             retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, subToken);
             subToken = strtok_r(NULL, ",", &iter_ptr);
         }
@@ -246,15 +252,17 @@ RedisModuleDict * QueryIndexPredicate(RedisModuleCtx *ctx, QueryPredicate *predi
     if (prevResults != NULL) {
         if (predicate->type == EQ || predicate->type == CONTAINS) {
             _intersect(ctx, prevResults, localResult);
-        } else if (predicate->type == FILTER_LIST) {
+        } else if (predicate->type == LIST_MATCH) {
             _intersect(ctx, prevResults, localResult);
-        }else  if (predicate->type == NCONTAINS) {
+        } else if (predicate->type == LIST_NOTMATCH) {
+            _difference(ctx, prevResults, localResult);
+        } else  if (predicate->type == NCONTAINS) {
             _difference(ctx, prevResults, localResult);
         } else if (predicate->type == NEQ){
             _difference(ctx, prevResults, localResult);
         }
         return prevResults;
-    } else if (predicate->type == EQ || predicate->type == CONTAINS || predicate->type == FILTER_LIST) {
+    } else if (predicate->type == EQ || predicate->type == CONTAINS || predicate->type == LIST_MATCH) {
         return localResult;
     } else {
         return prevResults; // always NULL
@@ -295,7 +303,7 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
 
     // EQ or Contains
     for (int i=0; i < predicate_count; i++) {
-        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS || index_predicate[i].type == FILTER_LIST) {
+        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS || index_predicate[i].type == LIST_MATCH) {
             result = QueryIndexPredicate(ctx, &index_predicate[i], result, shouldCreateNewDict);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
@@ -306,7 +314,7 @@ RedisModuleDict * QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicat
     // The next two types of queries are reducers so we run them after the matcher
     // NCONTAINS or NEQ
     for (int i=0; i < predicate_count; i++) {
-        if (index_predicate[i].type == NCONTAINS || index_predicate[i].type == NEQ) {
+        if (index_predicate[i].type == NCONTAINS || index_predicate[i].type == NEQ || index_predicate[i].type == LIST_NOTMATCH) {
             result = QueryIndexPredicate(ctx, &index_predicate[i], result, shouldCreateNewDict);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
