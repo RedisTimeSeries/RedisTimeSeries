@@ -138,7 +138,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggType bucketSizeSeconds
 
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
-- aggType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggType - Aggregation type: avg, std, sum, min, max, range, count, first, last
 - bucketSizeSeconds - Time bucket for aggregation in seconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
@@ -181,7 +181,7 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSe
 
 Optional args:
 
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggregationType - Aggregation type: avg, std, sum, min, max, range, count, first, last
 - bucketSizeSeconds - Time bucket for aggregation in seconds
 
 #### Complexity
@@ -229,7 +229,7 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSizeSecon
 
 Optional args:
 
- * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
+ * aggregationType - Aggregation type: avg, std, sum, min, max, count, first, last
  * bucketSizeSeconds - Time bucket for aggregation in seconds
 
 #### Query by Filters Example

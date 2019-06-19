@@ -7,7 +7,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 - Quick inserts (50K samples per sec)
 - Query by start time and end-time
 - Query by labels sets
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+- Aggregated queries (Min, Max, Avg, Std, Sum, Range, Count, First, Last) for any time bucket
 - Configurable max retention period
 - Compaction/Roll-ups - automatically updated aggregated timeseries
 - labels index - each key has labels which will allows query by labels

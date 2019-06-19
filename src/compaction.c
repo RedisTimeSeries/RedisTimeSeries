@@ -5,6 +5,7 @@
 */
 #include <ctype.h>
 #include <string.h>
+#include <math.h>           // sqrt
 #include "compaction.h"
 #include "rmutil/alloc.h"
 
@@ -24,15 +25,21 @@ typedef struct AvgContext {
     double cnt;
 } AvgContext;
 
+typedef struct StdContext {
+    double std;
+    double mean;
+    double cnt;
+} StdContext;
+
 void *SingleValueCreateContext() {
-    SingleValueContext *context = (SingleValueContext*)malloc(sizeof(SingleValueContext));
+    SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     context->isResetted = TRUE;
     return context;
 }
 
 void SingleValueReset(void *contextPtr) {
-    SingleValueContext *context = (SingleValueContext*)contextPtr;
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
     context->isResetted = TRUE;
 }
@@ -53,7 +60,7 @@ void SingleValueReadContext(void *contextPtr, RedisModuleIO * io){
 }
 
 void *AvgCreateContext() {
-    AvgContext *context = (AvgContext*)malloc(sizeof(AvgContext));
+    AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     context->cnt = 0;
     context->val =0;
     return context;
@@ -88,6 +95,68 @@ void AvgReadContext(void *contextPtr, RedisModuleIO * io){
     context->cnt = RedisModule_LoadDouble(io);
 }
 
+void *StdCreateContext() {
+    StdContext *context = (StdContext *)malloc(sizeof(StdContext));
+    context->cnt = 0;
+    context->mean =0;
+    context->std =0;
+    return context;
+}
+
+void StdAddValue(void *contextPtr, double value){
+    StdContext *context = (StdContext *)contextPtr;
+    double oldMean = context->mean;
+    context->mean = oldMean + (value - oldMean) / ++context->cnt;
+    context->std = context->std + (value - oldMean) * (value - context->mean);
+}
+
+double VarPopulationFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    double res = 0;
+    if(context->cnt > 0) {
+        res = context->std / context->cnt;
+    }
+    return res;
+}
+
+double VarSamplesFinalize(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    double res = 0;
+    if(context->cnt > 1) {
+        res = context->std / (context->cnt - 1);
+    }
+    return res;
+}
+
+double StdPopulationFinalize(void *contextPtr) {
+    return sqrt(VarPopulationFinalize(contextPtr));
+}
+
+double StdSamplesFinalize(void *contextPtr) {
+    return sqrt(VarSamplesFinalize(contextPtr));
+}
+
+void StdReset(void *contextPtr) {
+    StdContext *context = (StdContext *)contextPtr;
+    context->mean = 0;
+    context->std = 0;
+    context->cnt = 0;
+}
+
+void StdWriteContext(void *contextPtr, RedisModuleIO * io) {
+    StdContext *context = (StdContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->mean);
+    RedisModule_SaveDouble(io, context->std);
+    RedisModule_SaveDouble(io, context->cnt);
+}
+
+void StdReadContext(void *contextPtr, RedisModuleIO * io){
+    StdContext *context = (StdContext *)contextPtr;
+    context->mean = RedisModule_LoadDouble(io);
+    context->std = RedisModule_LoadDouble(io);
+    context->cnt = RedisModule_LoadDouble(io);
+}
+
 void rm_free(void* ptr) {
     free(ptr);
 }
@@ -100,6 +169,46 @@ static AggregationClass aggAvg = {
     .writeContext = AvgWriteContext,
     .readContext = AvgReadContext,
     .resetContext = AvgReset
+};
+
+static AggregationClass aggStdP = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = StdPopulationFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggStdS = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = StdSamplesFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggVarP = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = VarPopulationFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
+};
+
+static AggregationClass aggVarS = {
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .freeContext = rm_free,
+    .finalize = VarSamplesFinalize,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .resetContext = StdReset
 };
 
 void *MaxMinCreateContext() {
@@ -293,6 +402,14 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 			result =  TS_AGG_RANGE;
 		} else if (strncmp(agg_type_lower, "first", len) == 0) {
 			result =  TS_AGG_FIRST;
+		} else if (strncmp(agg_type_lower, "std.p", len) == 0) {
+			result =  TS_AGG_STD_P;
+		} else if (strncmp(agg_type_lower, "std.s", len) == 0) {
+			result =  TS_AGG_STD_S;
+		} else if (strncmp(agg_type_lower, "var.p", len) == 0) {
+			result =  TS_AGG_VAR_P;
+		} else if (strncmp(agg_type_lower, "var.s", len) == 0) {
+			result =  TS_AGG_VAR_S;
 		}
 	}
 	return result;
@@ -308,6 +425,14 @@ const char * AggTypeEnumToString(int aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
+        case TS_AGG_STD_P:
+            return "STD.P";
+        case TS_AGG_STD_S:
+            return "STD.S";
+        case TS_AGG_VAR_P:
+            return "VAR.P";
+        case TS_AGG_VAR_S:
+            return "VAR.S";
         case TS_AGG_COUNT:
             return "COUNT";
         case TS_AGG_FIRST:
@@ -333,6 +458,18 @@ AggregationClass* GetAggClass(int aggType) {
             return &aggMax;
         case AGG_AVG:
             return &aggAvg;
+            break;
+        case AGG_STD_P:
+            return &aggStdP;
+            break;
+        case AGG_STD_S:
+            return &aggStdS;
+            break;
+        case AGG_VAR_P:
+            return &aggVarP;
+            break;
+        case AGG_VAR_S:
+            return &aggVarS;
             break;
         case AGG_SUM:
             return &aggSum;
