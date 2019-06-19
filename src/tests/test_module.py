@@ -567,7 +567,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[10, '743.61'], [20, '743.61'], [30, '743.61'], [40, '743.61']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             for i in range(len(expected_result)):
-                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.001                
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.01                
 
     def test_agg_sum(self):
         with self.redis() as r:
