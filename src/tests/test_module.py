@@ -212,7 +212,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
             assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count * 1000, samples_count)
             # if the aggregation context wasn't saved, the results were considering only the new value added
-             expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
+            expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
             expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
             actual_result_avg = r.execute_command('TS.range', 'tester_agg_avg_3', start_ts, start_ts + samples_count * 1000)
             assert actual_result_avg == expected_result_avg

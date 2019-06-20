@@ -113,21 +113,12 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
-    RedisModuleString * bucketStr = NULL;
-    size_t bucketLen = 0;
     *time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
-        if (RMUtil_ParseArgs(argv, argc, offset + 1, "ss", &aggTypeStr, &bucketStr) != REDISMODULE_OK) {
+        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
             return TSDB_ERROR;
-        }
-
-        const char *bucketStrC = RedisModule_StringPtrLen(bucketStr, &bucketLen);
-        if (parse_string_to_secs(bucketStrC, time_delta)) {
-            *time_delta = *time_delta * 1000;
-        } else {
-            *time_delta = atoi(bucketStrC) * 1000;
         }
 
         if (!aggTypeStr){
