@@ -72,9 +72,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         """
         for i in range(samples_count):
             value_to_insert = value[i] if type(value) == list else value
-            actual_result = redis.execute_command('TS.ADD', key, start_ts + i * 1000, value_to_insert)
+            actual_result = redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
             if type(actual_result) == long:               
-                assert actual_result == long(start_ts + i * 1000)
+                assert actual_result == long(start_ts + i)
             else:
                 assert actual_result
 
@@ -193,7 +193,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         that was in that bucket in their calculation. Check on avg and min, since all the other rules use the same
         context as min.
         """
-        start_ts = 1560751631609
+        start_ts = 3
         samples_count = 4  # 1 full bucket and another one with 1 value
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
@@ -210,13 +210,13 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command('RESTORE', 'tester', 0, data_tester)
             r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
-            assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count * 1000, samples_count)
+            assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count, samples_count)
             # if the aggregation context wasn't saved, the results were considering only the new value added
             expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
             expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
-            actual_result_avg = r.execute_command('TS.range', 'tester_agg_avg_3', start_ts, start_ts + samples_count * 1000)
+            actual_result_avg = r.execute_command('TS.range', 'tester_agg_avg_3', start_ts, start_ts + samples_count)
             assert actual_result_avg == expected_result_avg
-            actual_result_min = r.execute_command('TS.range', 'tester_agg_min_3', start_ts, start_ts + samples_count * 1000)
+            actual_result_min = r.execute_command('TS.range', 'tester_agg_min_3', start_ts, start_ts + samples_count)
             assert actual_result_min == expected_result_min
 
     def test_sanity_pipeline(self):
