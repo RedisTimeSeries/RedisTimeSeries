@@ -16,16 +16,16 @@ MU_TEST(test_valid_policy) {
 	mu_check(rulesCount == 4);
 
     mu_check(parsedRules[0].aggType == StringAggTypeToEnum("max"));
-    mu_assert_int_eq(parsedRules[0].bucketSizeSec, 60);
+    mu_assert_int_eq(parsedRules[0].bucketSize, 60);
 
     mu_check(parsedRules[1].aggType == StringAggTypeToEnum("min"));
-    mu_check(parsedRules[1].bucketSizeSec == 10);
+    mu_check(parsedRules[1].bucketSize == 10);
 
     mu_check(parsedRules[2].aggType == StringAggTypeToEnum("avg"));
-    mu_check(parsedRules[2].bucketSizeSec == 3600*2);
+    mu_check(parsedRules[2].bucketSize == 3600*2);
 
     mu_check(parsedRules[3].aggType == StringAggTypeToEnum("avg"));
-    mu_check(parsedRules[3].bucketSizeSec == 3*86400);
+    mu_check(parsedRules[3].bucketSize == 3*86400);
     free(parsedRules);
 }
 

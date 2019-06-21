@@ -15,14 +15,14 @@
 #include "indexer.h"
 #include "endianconv.h"
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs,
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime,
         short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
-    newSeries->retentionSecs = retentionSecs;
+    newSeries->retentionTime = retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
@@ -37,7 +37,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
 }
 
 void SeriesTrim(Series * series) {
-    if (series->retentionSecs == 0) {
+    if (series->retentionTime == 0) {
         return;
     }
 
@@ -46,8 +46,8 @@ void SeriesTrim(Series * series) {
     Chunk *currentChunk;
     void *currentKey;
     size_t keyLen;
-    timestamp_t minTimestamp = series->lastTimestamp > series->retentionSecs ?
-    		series->lastTimestamp - series->retentionSecs : 0;
+    timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
+    		series->lastTimestamp - series->retentionTime : 0;
 
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
@@ -260,9 +260,9 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         RedisModuleString* destKey = RedisModule_CreateStringPrintf(ctx, "%s_%s_%ld",
                                             RedisModule_StringPtrLen(keyName, &len),
                                             aggString,
-                                            rule->bucketSizeSec);
+                                            rule->bucketSize);
         RedisModule_RetainString(ctx, destKey);
-        SeriesAddRule(series, destKey, rule->aggType, rule->bucketSizeSec);
+        SeriesAddRule(series, destKey, rule->aggType, rule->bucketSize);
 
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ|REDISMODULE_WRITE);
 
@@ -283,7 +283,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
         compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
-        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->bucketSizeSec);
+        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->bucketSize);
 
         CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
@@ -291,8 +291,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec) {
-    if (bucketSizeSec <= 0) {
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSize) {
+    if (bucketSize <= 0) {
         return NULL;
     }
 
@@ -300,7 +300,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeS
     rule->aggClass = GetAggClass(aggType);;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
-    rule->bucketSizeSec = bucketSizeSec;
+    rule->bucketSize = bucketSize;
     rule->destKey = destKey;
 
     rule->nextRule = NULL;

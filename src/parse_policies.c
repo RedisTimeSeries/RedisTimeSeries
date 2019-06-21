@@ -47,7 +47,7 @@ int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
         } else if (i == 1) { // the 2nd param is the bucket
-             if (parse_string_to_secs(token, &rule->bucketSizeSec) == FALSE) {
+             if (parse_string_to_secs(token, &rule->bucketSize) == FALSE) {
                  return FALSE;
              }
         } else if (i == 2) {

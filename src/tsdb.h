@@ -14,7 +14,7 @@
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
-    int32_t bucketSizeSec;
+    int32_t bucketSize;
     AggregationClass *aggClass;
     int aggType;
     void *aggContext;
@@ -24,7 +24,7 @@ typedef struct CompactionRule {
 typedef struct Series {
     RedisModuleDict* chunks;
     Chunk* lastChunk;
-    int32_t retentionSecs;
+    int32_t retentionTime;
     short maxSamplesPerChunk;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
@@ -45,7 +45,7 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime, short maxSamplesPerChunk);
 void FreeSeries(void *value);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
@@ -64,5 +64,5 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec);
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSize);
 #endif /* TSDB_H */

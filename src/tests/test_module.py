@@ -32,7 +32,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_data = r.execute_command('TS.range', key, start_ts, end_ts)
             assert expected_data == actual_data
         if expected_retention:
-            assert expected_retention == actual_result['retentionSecs']
+            assert expected_retention == actual_result['retentionTime']
         if expected_labels:
             assert expected_labels == actual_result['labels']
         if expected_chunk_size:
@@ -150,7 +150,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
-              'retentionSecs': 0L,
+              'retentionTime': 0L,
               'sourceKey': None,
               'rules': []}
             actual_result = self._get_ts_info(r, 'tester')
@@ -180,7 +180,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
-                               'retentionSecs': 0L,
+                               'retentionTime': 0L,
                                'sourceKey': None,
                                'rules': [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]}
             actual_result = self._get_ts_info(r, 'tester')
@@ -341,7 +341,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                  'lastTimestamp': start_ts + samples_count -1,
                                  'maxSamplesPerChunk': 360L,
-                                 'retentionSecs': 0L,
+                                 'retentionTime': 0L,
                                  'labels': [],
                                  'sourceKey': None,
                                  'rules': [['tester_agg_max_10', 10L, 'AVG']]}          
@@ -626,7 +626,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.INFO', 'tester1') == [
                 'lastTimestamp',
                 long(ts),
-                'retentionSecs',
+                'retentionTime',
                 666L,
                 'chunkCount',
                 1L,
@@ -647,7 +647,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.INFO', 'tester2') == [
                 'lastTimestamp',
                 long(ts),
-                'retentionSecs',
+                'retentionTime',
                 0L,
                 'chunkCount',
                 1L,
