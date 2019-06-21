@@ -556,7 +556,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int retval = SeriesAddSample(series, timestamp, value);
     int result = 0;
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
-        RedisModule_ReplyWithError(ctx, "TSDB: timestamp is too old");
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         result = REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
