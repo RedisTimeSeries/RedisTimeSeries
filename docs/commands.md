@@ -98,7 +98,7 @@ Append new values to a list of series.
 TS.ADD key timestamp value [key timestamp value ...]
 ```
 
-* timestamp - UNIX timestamp (in seconds) or `*` for automatic timestamp (using the system clock)
+* timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
 * value - Sample numeric data value (double)
 
 #### Examples
