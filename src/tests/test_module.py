@@ -5,7 +5,6 @@ import time
 import __builtin__
 import math
 from rmtest import ModuleTestCase
-from _cffi_backend import typeof
 
 class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redistimeseries.so')):
     def _get_ts_info(self, redis, key):
