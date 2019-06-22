@@ -204,7 +204,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             self._insert_data(r, 'tester', start_ts, samples_count, range(samples_count))
             data_tester = r.execute_command('dump', 'tester')
             data_avg_tester = r.execute_command('dump', 'tester_agg_avg_3')
-            data_min_tester = r.execute_command('dump', 'tester_agg_min_3')
+            data_min_tester = r.execute_command('dump', 'tesmodule.cter_agg_min_3')
 
         with self.redis() as r:
             r.execute_command('RESTORE', 'tester', 0, data_tester)
@@ -614,10 +614,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
         curr_time = int(time.time())
-        assert curr_time == r.execute_command('TS.ADD', 'tester', '*', 1)
+        response_timestamp = r.execute_command('TS.ADD', 'tester', '*', 1)
         result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()))
         # test time difference is not more than 5 second
         assert result[0][0] - curr_time <= 5
+        assert response_timestamp - curr_time <= 5
 
     def test_add_create_key(self):
         with self.redis() as r:
