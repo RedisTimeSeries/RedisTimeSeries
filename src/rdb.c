@@ -16,7 +16,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         return NULL;
     }
     RedisModuleString *keyName = RedisModule_LoadString(io);
-    uint64_t retentionSecs = RedisModule_LoadUnsigned(io);
+    uint64_t retentionTime = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
     uint64_t labelsCount = RedisModule_LoadUnsigned(io);
     Label *labels = malloc(sizeof(Label) * labelsCount);
@@ -27,20 +27,20 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
-    Series *series = NewSeries(keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk);
+    Series *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
 
     CompactionRule *lastRule;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
 
     for (int i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = RedisModule_LoadString(io);
-        uint64_t bucketSizeSec = RedisModule_LoadUnsigned(io);
+        uint64_t timeBucket = RedisModule_LoadUnsigned(io);
         uint64_t aggType = RedisModule_LoadUnsigned(io);
 
         destKey = RedisModule_CreateStringFromString(ctx, destKey);
         RedisModule_RetainString(ctx, destKey);
 
-        CompactionRule *rule = NewRule(destKey, aggType, bucketSizeSec);
+        CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
         
         if (series->rules == NULL) {
             series->rules = rule;
@@ -79,7 +79,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
 {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
-    RedisModule_SaveUnsigned(io, series->retentionSecs);
+    RedisModule_SaveUnsigned(io, series->retentionTime);
     RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
@@ -93,7 +93,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         RedisModule_SaveString(io, rule->destKey);
-        RedisModule_SaveUnsigned(io, rule->bucketSizeSec);
+        RedisModule_SaveUnsigned(io, rule->timeBucket);
         RedisModule_SaveUnsigned(io, rule->aggType);
         rule->aggClass->writeContext(rule->aggContext, io);
         rule = rule->nextRule;

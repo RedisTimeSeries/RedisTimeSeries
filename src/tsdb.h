@@ -14,7 +14,7 @@
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
-    int32_t bucketSizeSec;
+    int32_t timeBucket;
     AggregationClass *aggClass;
     int aggType;
     void *aggContext;
@@ -24,7 +24,7 @@ typedef struct CompactionRule {
 typedef struct Series {
     RedisModuleDict* chunks;
     Chunk* lastChunk;
-    int32_t retentionSecs;
+    int32_t retentionTime;
     short maxSamplesPerChunk;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
@@ -45,7 +45,7 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime, short maxSamplesPerChunk);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
@@ -56,7 +56,7 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
-CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize);
+CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long timeBucket);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(Series *series);
 
@@ -65,5 +65,5 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec);
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int timeBucket);
 #endif /* TSDB_H */
