@@ -47,6 +47,7 @@ typedef struct SeriesIterator {
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime, short maxSamplesPerChunk);
 void FreeSeries(void *value);
+void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);

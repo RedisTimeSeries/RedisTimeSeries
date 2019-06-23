@@ -4,11 +4,9 @@
 * This file is available under the Redis Labs Source Available License Agreement
 */
 #include <time.h>
-#include <sys/time.h>
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
-#include <stdlib.h>
 
 #include "redismodule.h"
 #include "rmutil/util.h"
@@ -527,7 +525,7 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     }
 
     Series *series = NULL;
-    
+
     if (argv != NULL && RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
         long long retentionTime;
@@ -954,6 +952,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
+    if (strcasecmp(event, "del")==0) {
+        CleanLastDeletedSeries(ctx, key);
+    }
+    return REDISMODULE_OK;
+}
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -997,6 +1002,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
     RMUtil_RegisterReadCmd(ctx, "ts.mget", TSDB_mget);
+
+    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
 
     return REDISMODULE_OK;
 }
