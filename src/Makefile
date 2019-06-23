@@ -54,6 +54,8 @@ run: redistimeseries.so
 
 gdb: redistimeseries.so
 	gdb --args `which redis-server` --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+valgrind: redistimeseries.so
+	valgrind --leak-check=full --show-leak-kinds=all -v redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
 
 unittests_runner: redistimeseries.so tests.o
 	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
