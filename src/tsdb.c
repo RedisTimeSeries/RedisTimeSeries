@@ -92,7 +92,7 @@ void freeLastDeletedSeries() {
 }
 
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
-    if(lastDeletedSeries == NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
+    if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
             Series *dstSeries;
