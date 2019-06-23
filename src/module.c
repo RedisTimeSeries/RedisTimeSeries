@@ -134,7 +134,7 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
         }
 
         if (*time_delta <= 0) {
-            RedisModule_ReplyWithError(ctx, "TSDB: bucketSize must be greater than zero");
+            RedisModule_ReplyWithError(ctx, "TSDB: timeBucket must be greater than zero");
             return TSDB_ERROR;
         }
 
@@ -235,7 +235,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     while (rule != NULL) {
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithString(ctx, rule->destKey);
-        RedisModule_ReplyWithLongLong(ctx, rule->bucketSize);
+        RedisModule_ReplyWithLongLong(ctx, rule->timeBucket);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
         
         rule = rule->nextRule;
@@ -496,7 +496,7 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     }
     Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-    timestamp_t currentTimestamp = timestamp - timestamp % rule->bucketSize;
+    timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
     if (currentTimestamp > destSeries->lastTimestamp) {
         rule->aggClass->resetContext(rule->aggContext);
     }
@@ -727,7 +727,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /*
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketSize
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 */
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -737,9 +737,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     // Validate aggregation arguments
-    api_timestamp_t bucketSize;
+    api_timestamp_t timeBucket;
     int aggType;
-    int result = _parseAggregationArgs(ctx, argv, argc, &bucketSize, &aggType);
+    int result = _parseAggregationArgs(ctx, argv, argc, &timeBucket, &aggType);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
@@ -777,7 +777,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // Last add the rule to source
     destKeyName = RedisModule_CreateStringFromString(ctx, destKeyName);
-    if (SeriesAddRule(srcSeries, destKeyName, aggType, bucketSize) == NULL) {
+    if (SeriesAddRule(srcSeries, destKeyName, aggType, timeBucket) == NULL) {
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
         return REDISMODULE_ERR;
     }

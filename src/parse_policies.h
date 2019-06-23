@@ -9,7 +9,7 @@
 #include <sys/types.h>
 
 typedef struct SimpleCompactionRule {
-    int32_t bucketSize;
+    int32_t timeBucket;
     int32_t retentionSizeSec;
     int aggType;
 } SimpleCompactionRule;

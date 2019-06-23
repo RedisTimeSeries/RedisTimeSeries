@@ -133,13 +133,13 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType bucketSize
+TS.CREATERULE sourceKey destKey AGGREGATION aggType timeBucket
 ```
 
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
 - aggType - Aggregation type: avg, sum, min, max, range, count, first, last
-- bucketSize - Time bucket for aggregation in milliseconds
+- timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -161,7 +161,7 @@ TS.DELETERULE sourceKey destKey
 Query a range.
 
 ```sql
-TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSize]
+TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -171,7 +171,7 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSize]
 Optional args:
 
 - aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
-- bucketSize - Time bucket for aggregation in milliseconds
+- timeBucket - Time bucket for aggregation in milliseconds
 
 #### Complexity
 
@@ -209,7 +209,7 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 Query a range by filters.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSize] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for range query
@@ -224,7 +224,7 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType bucketSize] FIL
 Optional args:
 
  * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
- * bucketSize - Time bucket for aggregation in milliseconds
+ * timeBucket - Time bucket for aggregation in milliseconds
 
 #### Query by Filters Example
 

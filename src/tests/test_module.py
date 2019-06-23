@@ -616,7 +616,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         curr_time = int(time.time()*1000)
         r.execute_command('TS.ADD', 'tester', '*', 1)
         result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time() * 1000))
-        # test time difference is not more than 5 second
+        # test time difference is not more than 5 milliseconds
         assert result[0][0] - curr_time <= 5
 
     def test_add_create_key(self):

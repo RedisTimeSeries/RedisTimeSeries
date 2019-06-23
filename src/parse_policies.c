@@ -11,24 +11,25 @@
 #include "parse_policies.h"
 
 static const int lookup_intervals[] = {
-   ['s'] = 1,
-   ['m'] = 60,
-   ['h'] = 3600,
-   ['d'] = 86400
+   ['m'] = 1,
+   ['s'] = 1000,
+   ['M'] = 1000*60,
+   ['h'] = 1000*60*60,
+   ['d'] = 1000*60*60*24
 };
 
-int parse_string_to_secs(const char *timeStr, int *out){
+int parse_string_to_millisecs(const char *timeStr, int *out){
     char should_be_empty;
     unsigned char interval_type;
     int timeSize;
     if (sscanf(timeStr, "%d%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
         return FALSE;
     }
-    int interval_in_secs = lookup_intervals[interval_type];
-    if (interval_in_secs == 0) {
+    int interval_in_millisecs = lookup_intervals[interval_type];
+    if (interval_in_millisecs == 0) {
         return FALSE;
     }
-    *out = interval_in_secs * timeSize;
+    *out = interval_in_millisecs * timeSize;
     return TRUE;
 }
 
@@ -47,11 +48,11 @@ int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
         } else if (i == 1) { // the 2nd param is the bucket
-             if (parse_string_to_secs(token, &rule->bucketSize) == FALSE) {
+             if (parse_string_to_millisecs(token, &rule->timeBucket) == FALSE) {
                  return FALSE;
              }
         } else if (i == 2) {
-            if (parse_string_to_secs(token, &rule->retentionSizeSec) == FALSE) {
+            if (parse_string_to_millisecs(token, &rule->retentionSizeSec) == FALSE) {
                 return FALSE;
             }
         } else {
@@ -90,7 +91,7 @@ int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **par
     memcpy(rest, policy_string, len+1);
     *rules_count = 0;
 
-    // the ';' is a seperator so we need to add +1 for the policy count
+    // the ';' is a separator so we need to add +1 for the policy count
     int policies_count = count_char_in_str(policy_string, len, ';') + 1;
     SimpleCompactionRule *parsed_rules = malloc(sizeof(SimpleCompactionRule) * policies_count);
     *parsed_rules_out = parsed_rules;
