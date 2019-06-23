@@ -506,8 +506,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for i in range(20):
                 r.execute_command('ts.decrby', 'tester', '1.5')
 
-            result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()*1000))
+            now = int(time.time()*1000)
+            result = r.execute_command('TS.RANGE', 'tester', 0, now)
             assert result[-1][1] == '70'
+            assert result[-1][0] <= now
+            assert result[0][0] >= start_incr_time
             assert len(result) <= 40
 
     def test_agg_min(self):
@@ -784,12 +787,14 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command("ts.create", 'test_key3')
 
             now = int(time.time()*1000)
-            assert [now, 2000, 3000] == r.execute_command("ts.madd", 'test_key1', now, 10, 'test_key2', 2000, 20, 'test_key3', 3000, 30)
-            res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
+            res = r.execute_command("ts.madd", 'test_key1', "*", 10, 'test_key2', 2000, 20, 'test_key3', 3000, 30)
+            assert now <= res[0] and now+2 >= res[0]
+            assert 2000 == res[1]
+            assert 3000 == res[2]
 
+            res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
             assert (now + 1, 3001) == (res[0], res[2])
             assert isinstance(res[1], redis.ResponseError)
-
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
