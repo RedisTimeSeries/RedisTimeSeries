@@ -24,7 +24,6 @@
 #include "version.h"
 
 RedisModuleType *SeriesType;
-static time_t timer;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
                      AggregationClass *aggObject, int64_t time_delta);
@@ -835,20 +834,19 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
-    time(&timer);
 
     double result;
-    long long resetSeconds = 1;
-    time_t currentUpdatedTime = timer;
+    long long resetMilliSeconds = 1;
+    time_t currentUpdatedTime = RedisModule_Milliseconds();
     if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetSeconds) != 0) {
+        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetMilliSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
         }
 
-        currentUpdatedTime = timer - ((int)timer % resetSeconds);
+        currentUpdatedTime = currentUpdatedTime - (currentUpdatedTime % resetMilliSeconds);
         if (series->lastTimestamp != 0) {
             u_int64_t lastTS = series->lastTimestamp;
-            if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
+            if (lastTS - (lastTS % resetMilliSeconds) !=  currentUpdatedTime) {
                 series->lastValue = 0;
             }
         }
@@ -959,7 +957,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
-RETENTION_POLICY - integer that represents the retention in seconds
+RETENTION_POLICY - long that represents the retention in milliseconds
 MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
 redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
