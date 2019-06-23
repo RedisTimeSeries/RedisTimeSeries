@@ -614,10 +614,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
         curr_time = int(time.time())
-        r.execute_command('TS.ADD', 'tester', '*', 1)
+        response_timestamp = r.execute_command('TS.ADD', 'tester', '*', 1)
         result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()))
         # test time difference is not more than 5 second
         assert result[0][0] - curr_time <= 5
+        assert response_timestamp - curr_time <= 5
 
     def test_add_create_key(self):
         with self.redis() as r:
@@ -746,3 +747,51 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for sample in res:
                 assert sample == [i, str(i)]
                 i += 1
+                
+    def test_madd(self):
+        sample_len = 1024
+        
+        with self.redis() as r:
+            r.execute_command("ts.create", 'test_key1')
+            r.execute_command("ts.create", 'test_key2')
+            r.execute_command("ts.create", 'test_key3')
+          
+            for i in range(sample_len):
+                assert [i+1000L, i+3000L, i+6000L] == r.execute_command("ts.madd", 'test_key1', i+1000 , i, 'test_key2', i+3000 , i, 'test_key3', i+6000 , i,)
+
+            res = r.execute_command('ts.range', 'test_key1', 1000, 1000+sample_len)
+            i = 0
+            for sample in res:
+                assert sample == [1000+i, str(i)]
+                i += 1
+                
+            res = r.execute_command('ts.range', 'test_key2', 3000, 3000+sample_len)
+            i = 0
+            for sample in res:
+                assert sample == [3000+i, str(i)]
+                i += 1                
+                
+            res = r.execute_command('ts.range', 'test_key3', 6000, 6000+sample_len)
+            i = 0
+            for sample in res:
+                assert sample == [6000+i, str(i)]
+                i += 1                                
+                
+                
+    def test_partial_madd(self):        
+        with self.redis() as r:
+            r.execute_command("ts.create", 'test_key1')
+            r.execute_command("ts.create", 'test_key2')
+            r.execute_command("ts.create", 'test_key3')
+             
+            now = int(time.time())
+            assert [now, 2000, 3000] == r.execute_command("ts.madd", 'test_key1', '*' , 10, 'test_key2', 2000 , 20, 'test_key3', 3000 , 30)
+            res = r.execute_command("ts.madd", 'test_key1', now + 1 , 10, 'test_key2', 1000 , 20, 'test_key3', 3001 , 30)
+                 
+            assert (now + 1, 3001) == (res[0], res[2])        
+            assert isinstance(res[1], redis.ResponseError)
+            
+
+            assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
+            assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1       
+            assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2

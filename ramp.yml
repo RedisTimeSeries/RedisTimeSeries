@@ -9,7 +9,6 @@ min_redis_version: "5.0"
 min_redis_pack_version: "5.4"
 capabilities:
     - types
-    - no_multi_key
     - replica_of
     - backup_restore
     - hash_policy
