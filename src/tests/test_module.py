@@ -32,7 +32,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_data = r.execute_command('TS.range', key, start_ts, end_ts)
             assert expected_data == actual_data
         if expected_retention:
-            assert expected_retention == actual_result['retentionSecs']
+            assert expected_retention == actual_result['retentionTime']
         if expected_labels:
             assert expected_labels == actual_result['labels']
         if expected_chunk_size:
@@ -150,7 +150,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
-              'retentionSecs': 0L,
+              'retentionTime': 0L,
               'sourceKey': None,
               'rules': []}
             actual_result = self._get_ts_info(r, 'tester')
@@ -180,7 +180,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
-                               'retentionSecs': 0L,
+                               'retentionTime': 0L,
                                'sourceKey': None,
                                'rules': [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]}
             actual_result = self._get_ts_info(r, 'tester')
@@ -341,7 +341,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                  'lastTimestamp': start_ts + samples_count -1,
                                  'maxSamplesPerChunk': 360L,
-                                 'retentionSecs': 0L,
+                                 'retentionTime': 0L,
                                  'labels': [],
                                  'sourceKey': None,
                                  'rules': [['tester_agg_max_10', 10L, 'AVG']]}          
@@ -613,10 +613,10 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
     def test_automatic_timestamp(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
-        curr_time = int(time.time())
+        curr_time = int(time.time()*1000)
         response_timestamp = r.execute_command('TS.ADD', 'tester', '*', 1)
-        result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time()))
-        # test time difference is not more than 5 second
+        result = r.execute_command('TS.RANGE', 'tester', 0, int(time.time() * 1000))
+        # test time difference is not more than 5 milliseconds
         assert result[0][0] - curr_time <= 5
         assert response_timestamp - curr_time <= 5
 
@@ -627,7 +627,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.INFO', 'tester1') == [
                 'lastTimestamp',
                 long(ts),
-                'retentionSecs',
+                'retentionTime',
                 666L,
                 'chunkCount',
                 1L,
@@ -648,7 +648,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert r.execute_command('TS.INFO', 'tester2') == [
                 'lastTimestamp',
                 long(ts),
-                'retentionSecs',
+                'retentionTime',
                 0L,
                 'chunkCount',
                 1L,
@@ -732,7 +732,6 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             with pytest.raises(redis.ResponseError):
                 assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
 
-
     def test_series_ordering(self):
         with self.redis() as r:
             sample_len = 1024
@@ -747,15 +746,15 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for sample in res:
                 assert sample == [i, str(i)]
                 i += 1
-                
+
     def test_madd(self):
         sample_len = 1024
-        
+
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
             r.execute_command("ts.create", 'test_key2')
             r.execute_command("ts.create", 'test_key3')
-          
+
             for i in range(sample_len):
                 assert [i+1000L, i+3000L, i+6000L] == r.execute_command("ts.madd", 'test_key1', i+1000 , i, 'test_key2', i+3000 , i, 'test_key3', i+6000 , i,)
 
@@ -764,34 +763,32 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for sample in res:
                 assert sample == [1000+i, str(i)]
                 i += 1
-                
+
             res = r.execute_command('ts.range', 'test_key2', 3000, 3000+sample_len)
             i = 0
             for sample in res:
                 assert sample == [3000+i, str(i)]
-                i += 1                
-                
+                i += 1
+
             res = r.execute_command('ts.range', 'test_key3', 6000, 6000+sample_len)
             i = 0
             for sample in res:
                 assert sample == [6000+i, str(i)]
-                i += 1                                
-                
-                
-    def test_partial_madd(self):        
+                i += 1
+
+    def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
             r.execute_command("ts.create", 'test_key2')
             r.execute_command("ts.create", 'test_key3')
-             
-            now = int(time.time())
-            assert [now, 2000, 3000] == r.execute_command("ts.madd", 'test_key1', '*' , 10, 'test_key2', 2000 , 20, 'test_key3', 3000 , 30)
+
+            now = int(time.time()*1000)
+            assert [now, 2000, 3000] == r.execute_command("ts.madd", 'test_key1', '*', 10, 'test_key2', 2000, 20, 'test_key3', 3000 , 30)
             res = r.execute_command("ts.madd", 'test_key1', now + 1 , 10, 'test_key2', 1000 , 20, 'test_key3', 3001 , 30)
-                 
-            assert (now + 1, 3001) == (res[0], res[2])        
+
+            assert (now + 1, 3001) == (res[0], res[2])
             assert isinstance(res[1], redis.ResponseError)
-            
 
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
-            assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1       
+            assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
