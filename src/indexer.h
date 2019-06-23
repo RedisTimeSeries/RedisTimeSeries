@@ -21,7 +21,8 @@ typedef enum  {
     CONTAINS,
     // Not Contains a label
     NCONTAINS,
-    FILTER_LIST,  // List of predicates
+    LIST_MATCH,  // List of matching predicates
+    LIST_NOTMATCH,  // List of non-matching predicates
     // REQ,
     // NREQ
 } PredicateType;

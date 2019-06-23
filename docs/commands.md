@@ -90,6 +90,32 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 - When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionTime`.
   Setting the `labels` and `retentionTime` introduces additional time complexity.
 
+### TS.MADD
+
+Append new values to a list of series.
+
+```sql
+TS.ADD key timestamp value [key timestamp value ...]
+```
+
+* timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
+* value - Sample numeric data value (double)
+
+#### Examples
+```sql
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149180 26 cpu:2:32 1548149183 54
+1) (integer) 1548149180
+2) (integer) 1548149183
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149181 45 cpu:2:32 1548149180 30
+1) (integer) 1548149181
+2) (error) TSDB: timestamp is too old
+```
+
+#### Complexity
+
+If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
+The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
+
 ### TS.INCRBY/TS.DECRBY
 
 Increment the latest value.
@@ -156,6 +182,17 @@ TS.DELETERULE sourceKey destKey
 
 ## Query
 
+### Filtering
+For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
+ * `l=v` label equals value
+ * `l!=v` label doesn't equal value
+ * `l=` key does not ha * ve the label `l`
+ * `l!=` key has label `l`
+ * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
+ * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
+
+Note: Whenever filters need to be provided, a minimum of one filter should be applied.
+
 ### TS.RANGE
 
 Query a range.
@@ -214,13 +251,8 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FIL
 
 * fromTimestamp - Start timestamp for range query
 * toTimestamp - End timestamp for range query
-* filter - Set of label-pair filters. The supported filters are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
-  
+* filter - [See Filtering](#filtering)
+
 Optional args:
 
  * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
@@ -292,14 +324,9 @@ TS.GET key
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET FILTER filter... 
+TS.MGET FILTER filter...
 ```
-* filter - Set of label-pair filters. The supported filters are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
+* filter - [See Filtering](#filtering)
 
 #### MGET Example
 
@@ -320,7 +347,6 @@ TS.MGET FILTER filter...
    3) (integer) 1548149181
    4) "29"
 ```
-
 
 ## General
 
@@ -360,20 +386,14 @@ TS.INFO temperature:2:32
 Get all the keys matching the filter list.
 
 ```sql
-TS.QUERYINDEX fitler...
+TS.QUERYINDEX filter...
 ```
 
-* filter - Set of label-pair filter. The supported filter are:
-  * `k=v` label equals value
-  * `k!=v` label doesn't equal value
-  * `k=` key contains the label `k`
-  * `k!=` key doesn't contain the label `k`
-  * `k=(v1, v2, ...)` key with label `k` that equals one of the values in the list
+* filter - [See Filtering](#filtering)
 
 ### Query index example
-```sql 
+```sql
 127.0.0.1:6379> TS.QUERYINDEX sensor_id=2
 1) "temperature:2:32"
 2) "temperature:2:33"
 ```
-
