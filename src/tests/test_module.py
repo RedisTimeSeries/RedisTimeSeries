@@ -485,29 +485,33 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command('ts.create', 'tester')
 
             i = 0
-            time_bucket = 10
-            start_time = int(time.time())
+            time_bucket = 10*1000
+            start_time = long(time.time()*1000)
             start_time = start_time - start_time % time_bucket
             while i < 1000:
                 i += 1
                 r.execute_command('ts.incrby', 'tester', '1', 'RESET', time_bucket)
 
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_time, '1000']]
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time()*1000)) == [[start_time, '1000']]
 
     def test_incrby(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
 
-            start_incr_time = int(time.time())
+            start_incr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.incrby', 'tester', '5')
 
-            time.sleep(1)
-            start_decr_time = int(time.time())
+            start_decr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.decrby', 'tester', '1.5')
 
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time())) == [[start_incr_time, '100'], [start_decr_time, '70']]
+            now = int(time.time()*1000)
+            result = r.execute_command('TS.RANGE', 'tester', 0, now)
+            assert result[-1][1] == '70'
+            assert result[-1][0] <= now
+            assert result[0][0] >= start_incr_time
+            assert len(result) <= 40
 
     def test_agg_min(self):
         with self.redis() as r:
@@ -756,7 +760,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command("ts.create", 'test_key3')
 
             for i in range(sample_len):
-                assert [i+1000L, i+3000L, i+6000L] == r.execute_command("ts.madd", 'test_key1', i+1000 , i, 'test_key2', i+3000 , i, 'test_key3', i+6000 , i,)
+                assert [i+1000L, i+3000L, i+6000L] == r.execute_command("ts.madd", 'test_key1', i+1000, i, 'test_key2', i+3000, i, 'test_key3', i+6000, i,)
 
             res = r.execute_command('ts.range', 'test_key1', 1000, 1000+sample_len)
             i = 0
@@ -783,12 +787,14 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command("ts.create", 'test_key3')
 
             now = int(time.time()*1000)
-            assert [now, 2000, 3000] == r.execute_command("ts.madd", 'test_key1', '*', 10, 'test_key2', 2000, 20, 'test_key3', 3000 , 30)
-            res = r.execute_command("ts.madd", 'test_key1', now + 1 , 10, 'test_key2', 1000 , 20, 'test_key3', 3001 , 30)
+            res = r.execute_command("ts.madd", 'test_key1', "*", 10, 'test_key2', 2000, 20, 'test_key3', 3000, 30)
+            assert now <= res[0] and now+2 >= res[0]
+            assert 2000 == res[1]
+            assert 3000 == res[2]
 
+            res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
             assert (now + 1, 3001) == (res[0], res[2])
             assert isinstance(res[1], redis.ResponseError)
-
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
