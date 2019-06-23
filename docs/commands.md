@@ -22,7 +22,7 @@ Optional args:
 #### Create Example
 
 ```sql
-TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
+TS.CREATE temperature RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
 ## Update
