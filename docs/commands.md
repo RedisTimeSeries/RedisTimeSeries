@@ -184,12 +184,12 @@ TS.DELETERULE sourceKey destKey
 
 ### Filtering
 For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
- * `l=v` label equals value
- * `l!=v` label doesn't equal value
- * `l=` key does not ha * ve the label `l`
- * `l!=` key has label `l`
- * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
- * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
+* `l=v` label equals value
+* `l!=v` label doesn't equal value
+* `l=` key does not ha * ve the label `l`
+* `l!=` key has label `l`
+* `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
+* `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
 
 Note: Whenever filters need to be provided, a minimum of one filter should be applied.
 
