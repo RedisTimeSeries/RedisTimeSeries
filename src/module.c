@@ -22,7 +22,6 @@
 #include "version.h"
 
 RedisModuleType *SeriesType;
-static time_t timer;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
                      AggregationClass *aggObject, int64_t time_delta);
@@ -77,8 +76,8 @@ int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
 }
 
 static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
-                    long long *retentionSecs, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
-    *retentionSecs = TSGlobalConfig.retentionPolicy;
+                    long long *retentionTime, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
+    *retentionTime = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
     if(parseLabelsFromArgs(argv, argc, labelsCount, labels) == REDISMODULE_ERR){
@@ -86,12 +85,12 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionSecs) != REDISMODULE_OK) {
+    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionTime) != REDISMODULE_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
 
-    if (retentionSecs < 0) {
+    if (retentionTime < 0) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
@@ -111,6 +110,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
+    *time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
         if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
@@ -131,7 +131,7 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
         }
 
         if (*time_delta <= 0) {
-            RedisModule_ReplyWithError(ctx, "TSDB: bucketSizeSeconds must be greater than zero");
+            RedisModule_ReplyWithError(ctx, "TSDB: timeBucket must be greater than zero");
             return TSDB_ERROR;
         }
 
@@ -207,8 +207,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
-    RedisModule_ReplyWithSimpleString(ctx, "retentionSecs");
-    RedisModule_ReplyWithLongLong(ctx, series->retentionSecs);
+    RedisModule_ReplyWithSimpleString(ctx, "retentionTime");
+    RedisModule_ReplyWithLongLong(ctx, series->retentionTime);
     RedisModule_ReplyWithSimpleString(ctx, "chunkCount");
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "maxSamplesPerChunk");
@@ -232,7 +232,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     while (rule != NULL) {
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithString(ctx, rule->destKey);
-        RedisModule_ReplyWithLongLong(ctx, rule->bucketSizeSec);
+        RedisModule_ReplyWithLongLong(ctx, rule->timeBucket);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
         
         rule = rule->nextRule;
@@ -449,9 +449,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     long long arraylen = 0;
 
     // In case a retention is set shouldn't return chunks older than the retention 
-    if(series->retentionSecs){ 
-    	start_ts = series->lastTimestamp > series->retentionSecs ?
-    			max(start_ts, series->lastTimestamp - series->retentionSecs) : start_ts;   		
+    if(series->retentionTime){
+    	start_ts = series->lastTimestamp > series->retentionTime ?
+    			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
     Sample sample;
@@ -499,7 +499,7 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     }
     Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-    timestamp_t currentTimestamp = timestamp - timestamp % rule->bucketSizeSec;
+    timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
     if (currentTimestamp > destSeries->lastTimestamp) {
         rule->aggClass->resetContext(rule->aggContext);
     }
@@ -508,44 +508,35 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     RedisModule_CloseKey(key);
 }
 
-int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
-    
-    if (argc < 4) {
-        return RedisModule_WrongArity(ctx);
-    }
+static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
+	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
-    RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
-
-    double value;
-    api_timestamp_t timestamp;
-    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+	    double value;
+	    api_timestamp_t timestamp;
+	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
         if(RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t) time(NULL);
+            timestamp = (u_int64_t) RedisModule_Milliseconds();
         else
             return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }
 
     Series *series = NULL;
-    
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+
+    if (argv != NULL && RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
-        long long retentionSecs;
+        long long retentionTime;
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
@@ -556,7 +547,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int retval = SeriesAddSample(series, timestamp, value);
     int result = 0;
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
-        RedisModule_ReplyWithError(ctx, "TSDB: timestamp is too old");
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         result = REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
@@ -569,21 +560,54 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             rule = rule->nextRule;
         }
         RedisModule_ReplyWithLongLong(ctx, timestamp);
-        RedisModule_ReplicateVerbatim(ctx);
         result = REDISMODULE_OK;
     }
     RedisModule_CloseKey(key);
     return result;
 }
 
-int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionSecs,
+int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 4 || (argc-1)%3 != 0) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    RedisModule_ReplyWithArray(ctx, (argc-1)/3);
+    for(int i=1; i<argc ; i+=3){
+        RedisModuleString *keyName = argv[i];
+        RedisModuleString *timestampStr = argv[i+1];
+        RedisModuleString *valueStr = argv[i+2];
+        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
+    }
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
+int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    RedisModuleString *keyName = argv[1];
+    RedisModuleString *timestampStr = argv[2];
+    RedisModuleString *valueStr = argv[3];
+
+    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    RedisModule_ReplicateVerbatim(ctx);
+    return result;
+}
+
+int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionTime,
                 long long maxSamplesPerChunk, Series **series, RedisModuleKey **key) {
     if (*key == NULL) {
         *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     }
 
     RedisModule_RetainString(ctx, keyName);
-    *series = NewSeries(keyName, labels, labelsCounts, retentionSecs, maxSamplesPerChunk);
+    *series = NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
@@ -602,12 +626,12 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleString *keyName = argv[1];
-    long long retentionSecs;
+    long long retentionTime;
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *labels;
 
-    if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -618,7 +642,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
     }
 
-    CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
+    CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, &series, &key);
     RedisModule_CloseKey(key);
 
     RedisModule_Log(ctx, "info", "created new series");
@@ -636,12 +660,12 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
 
     Series *series;
     RedisModuleString *keyName = argv[1];
-    long long retentionSecs;
+    long long retentionTime;
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *newLabels;
 
-    if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -652,7 +676,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     }
     series = RedisModule_ModuleTypeGetValue(key);
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
-        series->retentionSecs = retentionSecs;
+        series->retentionTime = retentionTime;
     }
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0) {
@@ -714,7 +738,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /*
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketSizeSeconds
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 */
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -724,9 +748,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     // Validate aggregation arguments
-    api_timestamp_t bucketSize;
+    api_timestamp_t timeBucket;
     int aggType;
-    int result = _parseAggregationArgs(ctx, argv, argc, &bucketSize, &aggType);
+    int result = _parseAggregationArgs(ctx, argv, argc, &timeBucket, &aggType);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
@@ -764,7 +788,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // Last add the rule to source
     destKeyName = RedisModule_CreateStringFromString(ctx, destKeyName);
-    if (SeriesAddRule(srcSeries, destKeyName, aggType, bucketSize) == NULL) {
+    if (SeriesAddRule(srcSeries, destKeyName, aggType, timeBucket) == NULL) {
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
         return REDISMODULE_ERR;
     }
@@ -792,15 +816,15 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
-        long long retentionSecs;
+        long long retentionTime;
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        if (parseCreateArgs(ctx, argv, argc, &retentionSecs, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx, keyName, labels, labelsCount, retentionSecs, maxSamplesPerChunk, &series, &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     }
 
@@ -808,20 +832,19 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
-    time(&timer);
 
     double result;
-    long long resetSeconds = 1;
-    time_t currentUpdatedTime = timer;
+    long long resetMilliSeconds = 1;
+    time_t currentUpdatedTime = RedisModule_Milliseconds();
     if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetSeconds) != 0) {
+        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetMilliSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
         }
 
-        currentUpdatedTime = timer - ((int)timer % resetSeconds);
+        currentUpdatedTime = currentUpdatedTime - (currentUpdatedTime % resetMilliSeconds);
         if (series->lastTimestamp != 0) {
             u_int64_t lastTS = series->lastTimestamp;
-            if (lastTS - (lastTS % resetSeconds) !=  currentUpdatedTime) {
+            if (lastTS - (lastTS % resetMilliSeconds) !=  currentUpdatedTime) {
                 series->lastValue = 0;
             }
         }
@@ -929,10 +952,17 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
+    if (strcasecmp(event, "del")==0) {
+        CleanLastDeletedSeries(ctx, key);
+    }
+    return REDISMODULE_OK;
+}
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
-RETENTION_POLICY - integer that represents the retention in seconds
+RETENTION_POLICY - long that represents the retention in milliseconds
 MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
 redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
@@ -963,6 +993,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
+    RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write", 1, -1, 3);
     RMUtil_RegisterWriteCmd(ctx, "ts.incrby", TSDB_incrby);
     RMUtil_RegisterWriteCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
@@ -971,6 +1002,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
     RMUtil_RegisterReadCmd(ctx, "ts.mget", TSDB_mget);
+
+    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
 
     return REDISMODULE_OK;
 }

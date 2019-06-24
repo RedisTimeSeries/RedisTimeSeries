@@ -19,7 +19,7 @@
 #define TSDB_NOTEXISTS 2
 
 /* TS.CREATE Defaults */
-#define RETENTION_DEFAULT_SECS          0LL
+#define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  360LL
 
 /* TS.Range Aggregation types */

@@ -15,14 +15,16 @@
 #include "indexer.h"
 #include "endianconv.h"
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionSecs,
+static Series* lastDeletedSeries = NULL;
+
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime,
         short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
-    newSeries->retentionSecs = retentionSecs;
+    newSeries->retentionTime = retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
@@ -37,7 +39,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
 }
 
 void SeriesTrim(Series * series) {
-    if (series->retentionSecs == 0) {
+    if (series->retentionTime == 0) {
         return;
     }
 
@@ -46,8 +48,8 @@ void SeriesTrim(Series * series) {
     Chunk *currentChunk;
     void *currentKey;
     size_t keyLen;
-    timestamp_t minTimestamp = series->lastTimestamp > series->retentionSecs ?
-    		series->lastTimestamp - series->retentionSecs : 0;
+    timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
+    		series->lastTimestamp - series->retentionTime : 0;
 
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
@@ -71,6 +73,46 @@ static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
     memcpy(buf, &e, sizeof(e));
 }
 
+void freeLastDeletedSeries() {
+    if(lastDeletedSeries == NULL){
+        return;
+    }
+    CompactionRule *rule = lastDeletedSeries->rules;
+    while (rule != NULL) {
+        CompactionRule *nextRule = rule->nextRule;
+        FreeCompactionRule(rule);
+        rule = nextRule;
+    }
+    if(lastDeletedSeries->srcKey != NULL) {
+        RedisModule_FreeString(NULL, lastDeletedSeries->srcKey);
+    }
+    RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
+    free(lastDeletedSeries);
+    lastDeletedSeries = NULL;
+}
+
+void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
+    if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
+        CompactionRule *rule = lastDeletedSeries->rules;
+        while (rule != NULL) {
+            Series *dstSeries;
+            int status = GetSeries(ctx, rule->destKey, &dstSeries);
+            if (status) {
+                SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
+            }
+            rule = rule->nextRule;
+        }
+        if (lastDeletedSeries->srcKey) {
+            Series *srcSeries;
+            int status = GetSeries(ctx, lastDeletedSeries->srcKey, &srcSeries);
+            if (status) {
+                SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
+            }
+        }
+    }
+    freeLastDeletedSeries();
+}
+
 // Releases Series and all its compaction rules
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
@@ -87,30 +129,11 @@ void FreeSeries(void *value) {
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
-    CompactionRule *rule = currentSeries->rules;
-    while (rule != NULL) {
-        Series *dstSeries;
-        int status = GetSeries(ctx, rule->destKey, &dstSeries);
-        if(status){
-        	SeriesDeleteSrcRule(dstSeries, currentSeries->keyName);
-        }
-    	CompactionRule *nextRule = rule->nextRule;
-    	FreeCompactionRule(rule);
-    	rule = nextRule;
-    }
-    if(currentSeries->srcKey){
-        Series *srcSeries;
-        int status = GetSeries(ctx, currentSeries->srcKey, &srcSeries);
-        if(status){
-        	SeriesDeleteRule(srcSeries, currentSeries->keyName);
-        }
-        RedisModule_FreeString(NULL, currentSeries->srcKey);
-    }
-
     RedisModule_FreeThreadSafeContext(ctx);
-    RedisModule_FreeString(NULL, currentSeries->keyName);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
-    free(currentSeries);
+
+    freeLastDeletedSeries();
+    lastDeletedSeries = currentSeries;
 }
 
 void FreeCompactionRule(void *value) {
@@ -231,8 +254,8 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     return 0;
 }
 
-CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long bucketSize) {
-    CompactionRule *rule = NewRule(destKeyStr, aggType, bucketSize);
+CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long timeBucket) {
+    CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
     if (rule == NULL ) {
         return NULL;
     }
@@ -260,9 +283,9 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         RedisModuleString* destKey = RedisModule_CreateStringPrintf(ctx, "%s_%s_%ld",
                                             RedisModule_StringPtrLen(keyName, &len),
                                             aggString,
-                                            rule->bucketSizeSec);
+                                            rule->timeBucket);
         RedisModule_RetainString(ctx, destKey);
-        SeriesAddRule(series, destKey, rule->aggType, rule->bucketSizeSec);
+        SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
 
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ|REDISMODULE_WRITE);
 
@@ -283,7 +306,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
         compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
-        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->bucketSizeSec);
+        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
         CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
@@ -291,8 +314,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeSec) {
-    if (bucketSizeSec <= 0) {
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int timeBucket) {
+    if (timeBucket <= 0) {
         return NULL;
     }
 
@@ -300,7 +323,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int bucketSizeS
     rule->aggClass = GetAggClass(aggType);;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
-    rule->bucketSizeSec = bucketSizeSec;
+    rule->timeBucket = timeBucket;
     rule->destKey = destKey;
 
     rule->nextRule = NULL;
@@ -357,4 +380,3 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
 	}
 	return FALSE;
 }
-
