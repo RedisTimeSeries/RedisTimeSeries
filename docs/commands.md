@@ -70,12 +70,12 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 
 #### Examples
 ```sql
-127.0.0.1:6379>TS.ADD temperature:2:32 1548149180 26 LABELS sensor_id 2 area_id 32
-(integer) 1548149180
-127.0.0.1:6379>TS.ADD temperature:3:11 1548149183 27 RETENTION 3600
-(integer) 1548149183
+127.0.0.1:6379>TS.ADD temperature:2:32 1548149180000 26 LABELS sensor_id 2 area_id 32
+(integer) 1548149180000
+127.0.0.1:6379>TS.ADD temperature:3:11 1548149183000 27 RETENTION 3600
+(integer) 1548149183000
 127.0.0.1:6379>TS.ADD temperature:3:11 * 30
-(integer) 1559718352
+(integer) 1559718352000
 ```
 
 #### Complexity
@@ -103,11 +103,11 @@ TS.ADD key timestamp value [key timestamp value ...]
 
 #### Examples
 ```sql
-127.0.0.1:6379>TS.MADD temperature:2:32 1548149180 26 cpu:2:32 1548149183 54
-1) (integer) 1548149180
-2) (integer) 1548149183
-127.0.0.1:6379>TS.MADD temperature:2:32 1548149181 45 cpu:2:32 1548149180 30
-1) (integer) 1548149181
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149180000 26 cpu:2:32 1548149183000 54
+1) (integer) 1548149180000
+2) (integer) 1548149183000
+127.0.0.1:6379>TS.MADD temperature:2:32 1548149181000 45 cpu:2:32 1548149180000 30
+1) (integer) 1548149181000
 2) (error) TSDB: timestamp is too old
 ```
 
@@ -224,20 +224,20 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 #### Aggregated Query Example
 
 ```sql
-127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180 1548149210 AGGREGATION avg 5
-1) 1) (integer) 1548149180
+127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
+1) 1) (integer) 1548149180000
    2) "26.199999999999999"
-2) 1) (integer) 1548149185
+2) 1) (integer) 1548149185000
    2) "27.399999999999999"
-3) 1) (integer) 1548149190
+3) 1) (integer) 1548149190000
    2) "24.800000000000001"
-4) 1) (integer) 1548149195
+4) 1) (integer) 1548149195000
    2) "23.199999999999999"
-5) 1) (integer) 1548149200
+5) 1) (integer) 1548149200000
    2) "25.199999999999999"
-6) 1) (integer) 1548149205
+6) 1) (integer) 1548149205000
    2) "28"
-7) 1) (integer) 1548149210
+7) 1) (integer) 1548149210000
    2) "20"
 ```
 
@@ -261,44 +261,44 @@ Optional args:
 #### Query by Filters Example
 
 ```sql
-127.0.0.1:6379> TS.MRANGE 1548149180 1548149210 AGGREGATION avg 5 FILTER area_id=32 sensor_id!=1
+127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180
+   3) 1) 1) (integer) 1548149180000
          2) "27.600000000000001"
-      2) 1) (integer) 1548149185
+      2) 1) (integer) 1548149185000
          2) "23.800000000000001"
-      3) 1) (integer) 1548149190
+      3) 1) (integer) 1548149190000
          2) "24.399999999999999"
-      4) 1) (integer) 1548149195
+      4) 1) (integer) 1548149195000
          2) "24"
-      5) 1) (integer) 1548149200
+      5) 1) (integer) 1548149200000
          2) "25.600000000000001"
-      6) 1) (integer) 1548149205
+      6) 1) (integer) 1548149205000
          2) "25.800000000000001"
-      7) 1) (integer) 1548149210
+      7) 1) (integer) 1548149210000
          2) "21"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
          2) "3"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180
+   3) 1) 1) (integer) 1548149180000
          2) "26.199999999999999"
-      2) 1) (integer) 1548149185
+      2) 1) (integer) 1548149185000
          2) "27.399999999999999"
-      3) 1) (integer) 1548149190
+      3) 1) (integer) 1548149190000
          2) "24.800000000000001"
-      4) 1) (integer) 1548149195
+      4) 1) (integer) 1548149195000
          2) "23.199999999999999"
-      5) 1) (integer) 1548149200
+      5) 1) (integer) 1548149200000
          2) "25.199999999999999"
-      6) 1) (integer) 1548149205
+      6) 1) (integer) 1548149205000
          2) "28"
-      7) 1) (integer) 1548149210
+      7) 1) (integer) 1548149210000
          2) "20"
 ```
 
@@ -337,14 +337,14 @@ TS.MGET FILTER filter...
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181
+   3) (integer) 1548149181000
    4) "30"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
          2) "3"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181
+   3) (integer) 1548149181000
    4) "29"
 ```
 
@@ -365,7 +365,7 @@ TS.INFO key
 ```sql
 TS.INFO temperature:2:32
  1) lastTimestamp
- 2) (integer) 1548149279
+ 2) (integer) 1548149279000
  3) retentionTime
  4) (integer) 0
  5) chunkCount
