@@ -136,6 +136,11 @@ void IndexOperation(RedisModuleCtx *ctx, INDEXER_OPERATION_T op, RedisModuleStri
 
         indexUnderKey(op, indexed_key_value, ts_key);
         indexUnderKey(op, indexed_key, ts_key);
+
+        if (op == Indexer_Remove) {
+            RedisModule_FreeString(indexed_key_value);
+            RedisModule_FreeString(indexed_key);
+        }
     }
 }
 
