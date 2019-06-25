@@ -24,9 +24,9 @@ From command line:
 $ redis-server --loadmodule ./redistimeseries.so OPT1 OPT2
 ```
 
-# RedisTimeSeries configuration options
+## RedisTimeSeries configuration options
 
-## COMPACTION_POLICY {policy}
+### COMPACTION_POLICY {policy}
 
 Default compaction/downsampling rules for newly created key with `TS.ADD`.
 
@@ -42,27 +42,27 @@ Each rule is seperated by a semicolon (`;`), the rule consists of several fields
 Example:
 
 `max:1m:1h` - Aggregate using max over 1 minute and retain the last 1 hour
-### Default
+#### Default
 
-Empty
+<Empty>
 
-### Example
+#### Example
 
 ```
 $ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10ms;avg:2h:10d;avg:3d:100d
 ```
 
----
-
-## RETENTION_POLICY
+### RETENTION_POLICY
 
 Maximum age for samples compared to last event time (in milliseconds) per key, this configuration will set
 the default retention for newly created keys that do not have a an override.
 
-### Default
+#### Default
 
 0
 
-### Example
+#### Example
 
+```
 $ redis-server --loadmodule ./redistimeseries.so 20
+```
