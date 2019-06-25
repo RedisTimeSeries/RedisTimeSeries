@@ -952,10 +952,16 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
+int NotifyCallback(RedisModuleCtx *orignial_ctx, int type, const char *event, RedisModuleString *key) {
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    RedisModule_AutoMemory(ctx);
+
     if (strcasecmp(event, "del")==0) {
         CleanLastDeletedSeries(ctx, key);
     }
+
+    RedisModule_FreeThreadSafeContext(ctx);
+
     return REDISMODULE_OK;
 }
 
