@@ -37,9 +37,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         uint64_t timeBucket = RedisModule_LoadUnsigned(io);
         uint64_t aggType = RedisModule_LoadUnsigned(io);
 
-        destKey = RedisModule_CreateStringFromString(ctx, destKey);
-        RedisModule_RetainString(ctx, destKey);
-
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
         
         if (series->rules == NULL) {
