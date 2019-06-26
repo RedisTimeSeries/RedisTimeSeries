@@ -1,0 +1,42 @@
+
+OS:=$(shell $(ROOT)/deps/readies/bin/platform --os)
+# ifeq ($(OS),linux)
+# OS:=$(shell $(ROOT)/deps/readies/bin/platform --dist)
+# endif
+
+ARCH=$(shell $(ROOT)/deps/readies/bin/platform --arch)
+
+#----------------------------------------------------------------------------------------------
+
+GIT_SHA := $(shell git rev-parse HEAD)
+GIT_COMMIT := $(shell git describe --always --abbrev=7 --dirty="+")
+
+#----------------------------------------------------------------------------------------------
+
+ifeq ($(DEBUG),1)
+FLAVOR=debug
+else
+FLAVOR=release
+endif
+
+#----------------------------------------------------------------------------------------------
+
+__VARIANT__=$(shell if [ -f $(ROOT)/VARIANT ]; then cat $(ROOT)/VARIANT; fi)
+
+ifeq ($(origin VARIANT),undefined)
+ifneq ($(__VARIANT__),)
+VARIANT:=$(__VARIANT__)
+endif
+endif
+
+ifeq ($(VARIANT),)
+__VARIANT:=
+else
+__VARIANT:=-$(VARIANT)
+endif
+FULL_VARIANT:=$(OS)-$(ARCH)-$(FLAVOR)$(__VARIANT)
+FULL_VARIANT_REL:=$(OS)-$(ARCH)-release$(__VARIANT)
+
+ifneq ($(origin VARIANT),)
+$(eval $(shell if [ -z $(VARIANT) ]; then rm -f $(ROOT)/VARIANT; else echo $(VARIANT)>$(ROOT)/VARIANT; fi))
+endif

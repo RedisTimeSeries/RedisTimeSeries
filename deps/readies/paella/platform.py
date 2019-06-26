@@ -49,7 +49,7 @@ class Platform:
             self.arch = 'x86'
         elif self.arch == 'aarch64':
             self.arch = 'arm64v8'
-        elif self.arch = 'armv7l':
+        elif self.arch == 'armv7l':
             self.arch = 'arm32v7'
 
     def is_debian_compat(self):

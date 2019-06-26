@@ -1,10 +1,12 @@
 # BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:M.m.b
 
-ARG OSNICK=bionic
-# ARG ARCH=x64|arm64|arm7l [no need to specify: using multi-arch]
+# stretch|bionic
+ARG OSNICK=stretch
 
 #----------------------------------------------------------------------------------------------
 FROM redislabs/redis-${OSNICK}:5.0.5 AS builder
+
+ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
 
 ADD ./ /build
 WORKDIR /build
@@ -12,8 +14,7 @@ WORKDIR /build
 RUN ./deps/readies/bin/getpy2
 RUN python ./system-setup.py
 
-RUN make -C RedisModulesSDK/rmutil
-RUN make -C src
+RUN make -C src -j $(eval "$X_NPROC")
 
 #----------------------------------------------------------------------------------------------
 FROM redislab/redis-${OSNICK}:5.0.5

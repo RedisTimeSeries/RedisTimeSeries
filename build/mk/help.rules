@@ -1,0 +1,11 @@
+
+ifneq ($(HELP),) 
+
+.PHONY: help
+
+help:
+	$(file >$(HELPFILE),$(HELP))
+	@cat $(HELPFILE)
+	@-rm -f $(HELPFILE)
+
+endif
