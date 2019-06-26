@@ -5,10 +5,9 @@ include $(ROOT)/build/mk/defs
 BINDIR=$(BINROOT)/rmutil
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
-# CC_FLAGS ?= -g -fPIC -O3 -std=gnu99 -Wall  -I$(RM_INCLUDE_DIR)
 CC=gcc
 
-CC_FLAGS = \
+CC_FLAGS=\
 	-g \
 	-O3 \
 	-I$(SRCDIR)/.. \

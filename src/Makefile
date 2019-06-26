@@ -9,7 +9,7 @@ SRCDIR=.
 PREFIX ?= /usr/local
 INSTALL_LIB:=$(PREFIX)/lib
 INSTALL:=/usr/bin/install
-PAKCAGE_NAME ?= $(BINDIR)/redistimeseries.{os}-{architecture}.latest.zip
+PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 
 # set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
@@ -18,6 +18,7 @@ RMUTIL_LIBDIR=$(BINROOT)/rmutil
 #----------------------------------------------------------------------------------------------
 
 TARGET=$(BINROOT)/redistimeseries.so
+UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
 
 CC=gcc
 
@@ -31,15 +32,16 @@ CC_FLAGS = \
 	-DREDIS_MODULE_TARGET \
 	-DREDISMODULE_EXPERIMENTAL_API
 
-LD_FLAGS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+LD_FLAGS += 
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
 
 ifeq ($(OS),linux)
-LD_FLAGS += -shared -Bsymbolic
+SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macosx) 
 CC_FLAGS += -dynamic
-LD_FLAGS += -bundle -undefined dynamic_lookup
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
 ifeq ($(DEBUG),1)
@@ -49,7 +51,7 @@ else
 CC_FLAGS += -O3
 endif
 
-_SOURCES = \
+_SOURCES=\
 	chunk.c \
 	compaction.c \
 	config.c \
@@ -59,14 +61,21 @@ _SOURCES = \
 	rdb.c \
 	tsdb.c
 
+_TEST_SOURCES=\
+	tests.c \
+	endianconv.c
+
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
-CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
+TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
+TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
+
+CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
 #----------------------------------------------------------------------------------------------
 
-all: rmutil $(TARGET)
+all: bindirs $(TARGET)
 
 include $(MK)/rules
 
@@ -79,7 +88,7 @@ rmutil:
 clean:
 	-$(SHOW)find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
-	-$(SHOW)rm -f $(BINDIR)/tests_runner
+	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
 -include $(CC_DEPS)
 
@@ -87,9 +96,9 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(OBJECTS)
+$(TARGET): rmutil $(OBJECTS)
 	@echo Linking $@...
-	$(SHOW)$(CC) -shared -o $@ $(OBJECTS) $(LD_FLAGS)
+	$(SHOW)$(CC) -shared $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifneq ($(DEBUG),1)
 	$(SHOW)strip $@
 endif
@@ -119,11 +128,12 @@ VALGRIND_ARGS=\
 valgrind: $(TARGET)
 	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(TARGET) $(REDIS_ARGS) --dir /tmp
 
-unittests_runner: $(TARGET) tests.o
-	$(SHOW)$(CC) *.o -o $(BINDIR)/unittests_runner -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
 
-unittests: unittests_runner
-	$(SHOW)$(BINDIR)/unittests_runner
+unittests: $(UNITTESTS_RUNNER)	
+	@echo Running unit tests...
+	$(SHOW)$<
 
 #----------------------------------------------------------------------------------------------
 
@@ -138,6 +148,5 @@ docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
 package: $(TARGET)
-	$(SHOW)mkdir -p ../build
 	$(SHOW)ramp pack -m "$(ROOT)/ramp.yml" -v -o "$(PAKCAGE_NAME)" $(TARGET) | tee /tmp/ramp_output
 	$(SHOW)./clean_ramp.py `tail -1 /tmp/ramp_output`

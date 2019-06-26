@@ -1,3 +1,4 @@
+.PHONY: setup fetch build test pack
 
 setup:
 	@./system-setup.py
@@ -13,4 +14,3 @@ test:
 
 pack:
 	@make -C src package
-
