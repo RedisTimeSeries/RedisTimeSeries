@@ -4,8 +4,8 @@
 [ ! -z $(command -v python2) ] && exit 0
 
 if [ ! -z $(command -v apt-get) ]; then
-	apt-get update
-	apt-get install -y python
+	apt-get -qq update
+	apt-get -qq install -y python
 elif [ ! -z $(command -v dnf) ]; then
 	dnf install -y python2
 elif [ ! -z $(command -v yum) ]; then

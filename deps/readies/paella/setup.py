@@ -32,7 +32,7 @@ class RepoRefresh(OnPlatform):
         pass
     
     def debian_compat(self):
-        self.runner.run("apt-get update -y")
+        self.runner.run("apt-get -qq update -y")
 
 #----------------------------------------------------------------------------------------------
 
