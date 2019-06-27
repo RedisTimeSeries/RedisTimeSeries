@@ -86,7 +86,7 @@ OK
 ```
 
 ### Client libraries
-Go
+
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
 | Project | Language | License | Author | URL |
