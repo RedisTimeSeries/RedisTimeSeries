@@ -4,7 +4,8 @@
 ARG OSNICK=stretch
 
 #----------------------------------------------------------------------------------------------
-FROM redislabs/redis-${OSNICK}:5.0.5 AS builder
+# FROM redisfab/redis-${OSNICK}:5.0.5 AS builder
+FROM redis:latest AS builder
 
 ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
 
@@ -17,7 +18,8 @@ RUN python ./system-setup.py
 RUN make -C src -j $(eval "$X_NPROC")
 
 #----------------------------------------------------------------------------------------------
-FROM redislab/redis-${OSNICK}:5.0.5
+# FROM redisfab/redis-${OSNICK}:5.0.5
+FROM redis:latest
 
 ENV LIBDIR /usr/lib/redis/modules
 WORKDIR /data
