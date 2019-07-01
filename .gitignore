@@ -13,3 +13,4 @@ tests/.cache/
 bin/
 VARIANT
 BINDIR
+[0-9]*/
