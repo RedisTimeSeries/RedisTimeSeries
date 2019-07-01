@@ -20,6 +20,7 @@ class RedisGearsSetup(paella.Setup):
         self.setup_pip()
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
+        self.pip_install("-r tests/requirements.txt")
         
         self.install("git")
 

@@ -18,15 +18,15 @@ PUSH=docker push
 
 define build_x64
 docker build $(BUILD_OPT) -t $(STEM)-x64-$(OSNICK):$(VERSION) -f $(ROOT)/Dockerfile $(ROOT)
-docker tag $(STEM)-$(1)-$(OSNICK):$(VERSION) $(STEM)-$(1)-$(OSNICK):latest $(ROOT)
+docker tag $(STEM)-x64-$(OSNICK):$(VERSION) $(STEM)-x64-$(OSNICK):latest $(ROOT)
 endef
 
-define build_arm # (1=arch)
+define build_arm  # (1=arch)
 docker build $(BUILD_OPT) -t $(STEM)-$(1)-$(OSNICK):$(VERSION) -f $(ROOT)/Dockerfile.arm --build-arg ARCH=$(1) $(ROOT)
-docker tag $(STEM)-$(1)-$(OSNICK):$(VERSION) $(STEM)-$(1)-$(OSNICK):latest $(ROOT)
+docker tag $(STEM)-$(1)-$(OSNICK):$(VERSION) $(STEM)-$(1)-$(OSNICK):latest
 endef
 
-define push
+define push # (1=arch)
 docker push $(STEM)-$(1)-$(OSNICK):$(VERSION)
 docker push $(STEM)-$(1)-$(OSNICK):latest
 endef
@@ -44,6 +44,6 @@ publish:
 	$(call push,arm64v8)
 	docker manifest create -a $(STEM)-$(OSNICK):$(VERSION) \
 		-a $(STEM)-x64-$(OSNICK):$(VERSION) \
-		-a $(STEM)-x64-$(OSNICK):$(VERSION) \
+		-a $(STEM)-arm64v8-$(OSNICK):$(VERSION) \
 		-a $(STEM)-arm32v7-$(OSNICK):$(VERSION)
 	docker manifest push -p $(STEM)-$(OSNICK):$(VERSION)

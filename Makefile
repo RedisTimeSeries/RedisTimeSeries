@@ -1,4 +1,6 @@
-.PHONY: setup fetch build test pack
+.PHONY: all setup fetch build test pack
+
+all: setup fetch build
 
 setup:
 	@./system-setup.py

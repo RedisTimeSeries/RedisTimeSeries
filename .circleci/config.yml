@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   build:
     docker:
@@ -7,16 +7,14 @@ jobs:
       - checkout
       - run:
           name: "Pull Submodules"
-          command: |
-            git submodule init
-            git submodule update --remote
+          command: make fetch
       - run:
           name: Install prerequisite
           command: >-
             apt-get update; apt-get install -y cmake; pip install -r src/tests/requirements.txt
       - run:
           name: Build
-          command: cd src && make -j 8
+          command: make build -j $(nproc)
       - run:
           name: Test
           command: cd src && mkdir -p /workspace/tests && make tests EXTRA_ARGS="--junitxml=/workspace/tests/tests_report.xml"

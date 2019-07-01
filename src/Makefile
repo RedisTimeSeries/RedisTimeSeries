@@ -102,6 +102,7 @@ $(TARGET): rmutil $(OBJECTS)
 ifneq ($(DEBUG),1)
 	$(SHOW)strip $@
 endif
+	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
 
