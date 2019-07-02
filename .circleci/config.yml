@@ -31,7 +31,7 @@ jobs:
           command: make test
       - run:
           name: Package
-          command: make pack >-
+          command: >-
             mkdir -p /workspace/packages && 
             make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages
       - persist_to_workspace:
