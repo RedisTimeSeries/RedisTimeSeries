@@ -17,3 +17,6 @@ test:
 
 pack:
 	@make -C src package
+
+# deploy:
+#	@make -C src deploy

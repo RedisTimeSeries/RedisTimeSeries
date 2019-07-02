@@ -108,7 +108,7 @@ endif
 
 tests: $(TARGET)
 	$(SHOW)cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python2 -m pytest ${EXTRA_ARGS} -svv .
+	REDISTIMESERIES=$(TARGET) python2 -m pytest --junitxml=$$PWD/tests_report.xml ${EXTRA_ARGS} -svv .
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \
@@ -148,6 +148,22 @@ uninstall:
 docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
+#----------------------------------------------------------------------------------------------
+
+# arguments:
+#   BRANCH: specifies branch names to serve as an exta package tag
+#   INTO: package destination directory (optinal)
+
+define ramp_pack # (1=tag, 2=subdir)
+$(SHOW)ramp pack -m "$(ROOT)/ramp.yml" -v -o "$(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip" $(TARGET) 2> /dev/null | grep '.zip' > /tmp/ramp_output
+$(SHOW)tail -1 /tmp/ramp_output > $(BINROOT)/../PACKAGE.$(1)
+$(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
+$(SHOW)[[ ! -z $(INTO) ]] && { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }
+endef
+
 package: $(TARGET)
-	$(SHOW)ramp pack -m "$(ROOT)/ramp.yml" -v -o "$(PAKCAGE_NAME)" $(TARGET) | tee /tmp/ramp_output
-	$(SHOW)./clean_ramp.py `tail -1 /tmp/ramp_output`
+	$(call ramp_pack,release,latest)
+	$(call ramp_pack,release,{semantic_version})
+ifneq ($(BRANCH),)
+	$(call ramp_pack,branch,$(BRANCH))
+endif
