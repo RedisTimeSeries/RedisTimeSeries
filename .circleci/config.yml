@@ -22,46 +22,37 @@ jobs:
           command: make fetch
       - run:
           name: Install prerequisites
-          command: python system-setup.py
+          command: make setup
       - run:
           name: Build
           command: make build SHOW=1
       - run:
           name: Test
-          command: make test
+          command: make test SHOW=1
       - run:
           name: Package
-          command: >-
-            mkdir -p /workspace/packages && 
-            make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages SHOW=1
+          command: make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
           root: /workspace/packages
           paths:
-            - '*.zip'
+            - 'release/*.zip'
+            - 'branch/*.zip'
       - store_test_results:
           path: /workspace/tests
 
-  deploy_branch:
+  deploy_package:
+    parameters:
+      package:
+        type: string
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
     steps:
       - attach_workspace:
           at: /workspace
       - deploy:
-          from: /workspace/packages/branch
+          from: /workspace/packages/<<parameters.package>>
       - store_artifacts:
-          path: /workspace/packages/branch
-
-  deploy_release:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
-    steps:
-      - attach_workspace:
-          at: /workspace
-      - deploy:
-          from: /workspace/packages/release
-      - store_artifacts:
-          path: /workspace/packages/release
+          path: /workspace/packages/<<parameters.package>>
 
   deploy_docs:
     docker:
@@ -97,13 +88,17 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - deploy_branch:
+      - deploy_package:
+          name: deploy_branch
+          package: branch
           requires:
             - build
           filters:
             branches:
               only: master
-      - deploy_release:
+      - deploy_package:
+          name: deploy_release
+          package: release
           requires:
             - build
           filters:
