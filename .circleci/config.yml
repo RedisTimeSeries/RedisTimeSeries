@@ -47,7 +47,7 @@ jobs:
       - attach_workspace:
           at: /workspace
       - deploy:
-        from: /workspace/packages/branch
+          from: /workspace/packages/branch
       - store_artifacts:
           path: /workspace/packages/branch
 
@@ -58,7 +58,7 @@ jobs:
       - attach_workspace:
           at: /workspace
       - deploy:
-        from: /workspace/packages/release
+          from: /workspace/packages/release
       - store_artifacts:
           path: /workspace/packages/release
 
