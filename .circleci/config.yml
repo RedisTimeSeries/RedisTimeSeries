@@ -33,7 +33,7 @@ jobs:
           name: Package
           command: >-
             mkdir -p /workspace/packages && 
-            make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages
+            make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
           root: /workspace/packages
           paths:

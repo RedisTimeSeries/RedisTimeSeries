@@ -1,0 +1,7 @@
+#!/bin/bash
+
+curl -f -k -u $QA_AUTOMATION_USERNAME:$QA_AUTOMATION_PASS \
+	-X POST -H "Content-Type: application/json" \
+	-d '@automation-testing.json' \
+	https://qa-automation-center.redislabs.com/processes
+

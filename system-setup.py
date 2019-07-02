@@ -22,7 +22,7 @@ class RedisGearsSetup(paella.Setup):
         self.pip_install("setuptools --upgrade")
         self.pip_install("-r tests/requirements.txt")
         
-        self.install("git jq")
+        self.install("git jq curl")
 
     def debian_compat(self):
         self.install("build-essential")
