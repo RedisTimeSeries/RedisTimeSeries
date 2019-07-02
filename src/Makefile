@@ -162,6 +162,10 @@ $(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/.
 endef
 
 package: $(TARGET)
+	if ! command -v redis-server > /dev/null; then ;\
+		echo Cannot find redis-server. Aborting. ;\
+		exit 1 ;\
+	fi
 	$(call ramp_pack,latest,release)
 	$(call ramp_pack,{semantic_version},release)
 ifneq ($(BRANCH),)
