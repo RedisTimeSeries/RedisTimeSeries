@@ -14,6 +14,7 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 # set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
+LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
 
 #----------------------------------------------------------------------------------------------
 
@@ -85,6 +86,8 @@ rmutil:
 	@echo Building $@...
 	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
+$(LIBRMUTIL): rmutil
+
 clean:
 	-$(SHOW)find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
@@ -96,7 +99,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): rmutil $(OBJECTS)
+$(TARGET): $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
 	$(SHOW)$(CC) -shared $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifneq ($(DEBUG),1)

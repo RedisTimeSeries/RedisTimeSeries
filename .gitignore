@@ -14,3 +14,4 @@ bin/
 VARIANT
 BINDIR
 [0-9]*/
+tests/tests_report.xml
