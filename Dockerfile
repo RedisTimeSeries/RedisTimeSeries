@@ -14,8 +14,9 @@ WORKDIR /build
 
 RUN ./deps/readies/bin/getpy2
 RUN python ./system-setup.py
+RUN make fetch
 
-RUN make -C src -j $(eval "$X_NPROC")
+RUN echo NPROC=$(eval "$X_NPROC"); make -C src -j $(eval "$X_NPROC")
 
 #----------------------------------------------------------------------------------------------
 # FROM redisfab/redis-${OSNICK}:5.0.5
