@@ -25,14 +25,15 @@ jobs:
           command: python system-setup.py
       - run:
           name: Build
-          command: make build
+          command: make build SHOW=1
       - run:
           name: Test
           command: make test
       - run:
           name: Package
-          command: make pack
-            mkdir -p /workspace/packages && make pack BRANCH=$(CIRCLE_BRANCH) INTO=/workspace/packages
+          command: make pack >-
+            mkdir -p /workspace/packages && 
+            make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages
       - persist_to_workspace:
           root: /workspace/packages
           paths:
