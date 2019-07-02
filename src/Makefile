@@ -158,7 +158,7 @@ define ramp_pack # (1=tag, 2=subdir)
 $(SHOW)ramp pack -m "$(ROOT)/ramp.yml" -v -o "$(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip" $(TARGET) 2> /dev/null | grep '.zip' > /tmp/ramp_output
 $(SHOW)tail -1 /tmp/ramp_output > $(BINROOT)/../PACKAGE.$(1)
 $(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
-$(SHOW)[[ ! -z $(INTO) ]] && { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }
+$(SHOW)[[ ! -z "$(INTO)" ]] && { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }
 endef
 
 package: $(TARGET)
