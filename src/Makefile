@@ -162,8 +162,8 @@ $(SHOW)[[ ! -z $(INTO) ]] && { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACK
 endef
 
 package: $(TARGET)
-	$(call ramp_pack,release,latest)
-	$(call ramp_pack,release,{semantic_version})
+	$(call ramp_pack,latest,release)
+	$(call ramp_pack,{semantic_version},release)
 ifneq ($(BRANCH),)
-	$(call ramp_pack,branch,$(BRANCH))
+	$(call ramp_pack,$(BRANCH),branch)
 endif
