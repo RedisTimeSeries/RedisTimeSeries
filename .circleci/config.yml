@@ -8,7 +8,7 @@ commands:
       - run:
           name: Deploy to S3
           command: >-
-            aws s3 cp /workspace/build/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
+            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
 jobs:
   build:
