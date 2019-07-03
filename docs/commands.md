@@ -121,13 +121,13 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 Increment the latest value.
 
 ```sql
-TS.INCRBY key value [RESET time-bucket] [RETENTION retentionTime] [LABELS field value..]
+TS.INCRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [RESET time-bucket] [RETENTION retentionTime] [LABELS field value..]
+TS.DECRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -137,11 +137,12 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
- * time-bucket - Time bucket for resetting the current counter in milliseconds
- * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
-    * Default: The global retention secs configuration of the database (by default, `0`)
-    * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+* time-bucket - Time bucket for resetting the current counter in milliseconds
+* timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
+* retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+  * Default: The global retention secs configuration of the database (by default, `0`)
+  * When set to 0, the series is not trimmed at all
+* labels - Set of key-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
@@ -198,7 +199,7 @@ Note: Whenever filters need to be provided, a minimum of one filter should be ap
 Query a range.
 
 ```sql
-TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
+TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -207,6 +208,7 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
 
 Optional args:
 
+- count - maximum number of returned results
 - aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
 - timeBucket - Time bucket for aggregation in milliseconds
 
@@ -243,10 +245,10 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 ### TS.MRANGE
 
-Query a range by filters.
+Query a range from multiple timeseries by filters.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for range query
@@ -255,6 +257,7 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FIL
 
 Optional args:
 
+ * count - Maximum number of returned results per timeseries
  * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
  * timeBucket - Time bucket for aggregation in milliseconds
 

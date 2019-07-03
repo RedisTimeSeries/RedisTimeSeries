@@ -175,6 +175,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
+            assert len(actual_result) == 3 
 
             expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                'labels': [['name', 'brown'], ['color', 'pink']],
@@ -513,6 +515,19 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert result[0][0] >= start_incr_time
             assert len(result) <= 40
 
+    def test_incrby_with_timestamp(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+
+            for i in range(20):
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == [i, str((i + 1) * 5)]
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19][1] == '100'
+
+            result = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')
+            assert r.execute_command('ts.get', 'tester') == result
+
     def test_agg_min(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'min')
@@ -699,10 +714,12 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                     ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], build_expected(15, 5)],
                     ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], build_expected(25, 5)],
                     ]
-
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'count', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            print actual_result[0][1]
+            assert len(actual_result[0][1]) == 3
 
     def test_label_index(self):
         with self.redis() as r:
