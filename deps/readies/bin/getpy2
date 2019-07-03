@@ -1,6 +1,9 @@
 #!/bin/sh
 
-[ ! -z $(command -v python) ] && exit 0
+if [ ! -z $(command -v python) ]; then
+	[ "$(python --version 2>&1 | cut -d" " -f2 | cut -d. -f1)" = "2" ] && exit 0
+fi
+exit 1
 [ ! -z $(command -v python2) ] && exit 0
 
 if [ ! -z $(command -v apt-get) ]; then

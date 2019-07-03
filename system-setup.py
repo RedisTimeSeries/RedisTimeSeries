@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import sys
 import os
@@ -12,7 +12,7 @@ os.environ["PYTHONWARNINGS"] = 'ignore:DEPRECATION::pip._internal.cli.base_comma
 
 #----------------------------------------------------------------------------------------------
 
-class RedisGearsSetup(paella.Setup):
+class RedisTimeSeriesSetup(paella.Setup):
     def __init__(self, nop=False):
         paella.Setup.__init__(self, nop)
 
@@ -49,4 +49,4 @@ parser = argparse.ArgumentParser(description='Set up system for build.')
 parser.add_argument('-n', '--nop', action="store_true", help='no operation')
 args = parser.parse_args()
 
-RedisGearsSetup(nop = args.nop).setup()
+RedisTimeSeriesSetup(nop = args.nop).setup()

@@ -9,9 +9,9 @@ __pycache__
 venv/
 .idea/
 .DS_Store
-tests/.cache/
-bin/
+/tests/.cache/
+/bin/
 VARIANT
 BINDIR
-[0-9]*/
-tests/tests_report.xml
+/[0-9]*/
+/tests/tests_report.xml

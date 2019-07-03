@@ -18,7 +18,7 @@ BUILD_OPT=--rm --squash
 
 define build_x64
 docker build $(BUILD_OPT) -t $(STEM)-x64-$(OSNICK):$(VERSION) -f $(ROOT)/Dockerfile $(ROOT)
-docker tag $(STEM)-x64-$(OSNICK):$(VERSION) $(STEM)-x64-$(OSNICK):latest $(ROOT)
+docker tag $(STEM)-x64-$(OSNICK):$(VERSION) $(STEM)-x64-$(OSNICK):latest
 endef
 
 define build_arm  # (1=arch)
