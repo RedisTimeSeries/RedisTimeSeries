@@ -68,13 +68,24 @@ int ChunkAddSample(Chunk *chunk, Sample sample) {
     return 1;
 }
 
-ChunkIterator NewChunkIterator(Chunk* chunk) {
-    return (ChunkIterator){.chunk = chunk, .currentIndex = 0};
+ChunkIterator NewChunkIterator(Chunk* chunk, int initIndex) {
+    return (ChunkIterator){.chunk = chunk, .currentIndex = initIndex};
 }
 
 int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample) {
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
+        memcpy(sample, internalSample, sizeof(Sample));
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int ChunkIteratorGetPrev(ChunkIterator *iter, Sample* sample) {
+    if (iter->currentIndex >= 0) {
+        iter->currentIndex--;
         Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
         memcpy(sample, internalSample, sizeof(Sample));
         return 1;

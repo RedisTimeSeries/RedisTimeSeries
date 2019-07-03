@@ -12,6 +12,11 @@
 #include "chunk.h"
 #include "indexer.h"
 
+typedef enum {
+    Forward,
+    Reverse
+} Direction;
+
 typedef struct CompactionRule {
     RedisModuleString *destKey;
     int32_t timeBucket;
@@ -61,8 +66,9 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 size_t SeriesGetNumSamples(Series *series);
 
 // Iterator over the series
-SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
+SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp, Direction direction);
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+int SeriesIteratorGetPrev(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int timeBucket);

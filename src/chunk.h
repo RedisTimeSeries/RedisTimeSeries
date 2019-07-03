@@ -43,6 +43,7 @@ int ChunkNumOfSample(Chunk *chunk);
 timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
 timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
 
-ChunkIterator NewChunkIterator(Chunk *chunk);
+ChunkIterator NewChunkIterator(Chunk* chunk, int initIndex);
 int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample);
+int ChunkIteratorGetPrev(ChunkIterator *iter, Sample* sample);
 #endif

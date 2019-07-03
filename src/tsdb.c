@@ -186,18 +186,28 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
+SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp,
+                            api_timestamp_t maxTimestamp, Direction direction) {
+    char *itSeekOp;
     SeriesIterator iter;
     timestamp_t rax_key;
     iter.series = series;
-    // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
-    seriesEncodeTimestamp(&rax_key, minTimestamp);
+
+    if (direction == Forward) {
+        itSeekOp = "^";
+        seriesEncodeTimestamp(&rax_key, minTimestamp);
+    } else {
+        itSeekOp = "$";
+        seriesEncodeTimestamp(&rax_key, maxTimestamp);
+    }
+
+    // get the either rightmost chunk whose base timestamp is smaller or equal than minTimestamp
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
 
     // if no such chunk exists, we will start the search from the first chunk
     if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))
     {
-        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
+        RedisModule_DictIteratorReseekC(iter.dictIter, itSeekOp, NULL, 0);
         RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
     }
     iter.chunkIteratorInitialized = FALSE;
@@ -230,7 +240,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 
         if (!iterator->chunkIteratorInitialized) 
         {
-            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
+            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk, 0);
             iterator->chunkIteratorInitialized = TRUE;
         }
 
@@ -253,6 +263,49 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     }
     return 0;
 }
+/***************************** WIP *****************************/
+int SeriesIteratorGetPrev(SeriesIterator *iterator, Sample *currentSample) {
+    Sample internalSample;
+    while (iterator->currentChunk != NULL)
+    {
+        Chunk *currentChunk = iterator->currentChunk;
+        // TODO: some redundancy?
+        if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
+        {
+            if (!RedisModule_DictPrevC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
+                iterator->currentChunk = NULL;
+            }
+            iterator->chunkIteratorInitialized = FALSE;
+            continue;
+        } else if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp) {
+            break;
+        }
+
+        if (!iterator->chunkIteratorInitialized) 
+        {
+            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk, iterator->currentChunk->num_samples);
+            iterator->chunkIteratorInitialized = TRUE;
+        }
+        if (ChunkIteratorGetPrev(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
+            if (!RedisModule_DictPrevC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
+                iterator->currentChunk = NULL;
+            }
+            iterator->chunkIteratorInitialized = FALSE;
+            continue;
+        }
+
+        if (internalSample.timestamp > iterator->maxTimestamp) {
+            continue;
+        } else if (internalSample.timestamp < iterator->minTimestamp) {
+            break;
+        } else {
+            memcpy(currentSample, &internalSample, sizeof(Sample));
+            return 1;
+        }
+    }
+    return 0;
+}
+/****************************************************/
 
 CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long timeBucket) {
     CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
