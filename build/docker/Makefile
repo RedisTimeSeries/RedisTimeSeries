@@ -42,12 +42,12 @@ publish:
 	$(call push,x64)
 	$(call push,arm32v7)
 	$(call push,arm64v8)
+	docker manifest annotate $(STEM)-$(OSNICK):$(VERSION) $(STEM)-arm32v7-$(OSNICK):$(VERSION) --os linux --arch arm
+	docker manifest annotate $(STEM)-$(OSNICK):$(VERSION) $(STEM)-arm64v8-$(OSNICK):$(VERSION) --os linux --arch arm64 --variant armv8
 	docker manifest create -a $(STEM)-$(OSNICK):$(VERSION) \
 		-a $(STEM)-x64-$(OSNICK):$(VERSION) \
 		-a $(STEM)-arm64v8-$(OSNICK):$(VERSION) \
 		-a $(STEM)-arm32v7-$(OSNICK):$(VERSION)
-	docker manifest annotate $(STEM)-$(OSNICK):$(VERSION) $(STEM)-arm32v7-$(OSNICK):$(VERSION) --os linux --arch arm
-	docker manifest annotate $(STEM)-$(OSNICK):$(VERSION) $(STEM)-arm64v8-$(OSNICK):$(VERSION) --os linux --arch arm64 --variant armv8
 	docker manifest push -p $(STEM)-$(OSNICK):$(VERSION)
 
 show:
