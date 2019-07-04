@@ -7,7 +7,7 @@
 #include <string.h>
 #include "rmutil/alloc.h"
 
-Chunk * NewChunk(size_t sampleCount)
+Chunk *NewChunk(size_t sampleCount)
 {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
@@ -68,14 +68,14 @@ int ChunkAddSample(Chunk *chunk, Sample sample) {
     return 1;
 }
 
-ChunkIterator NewChunkIterator(Chunk* chunk, int initIndex) {
+ChunkIterator NewChunkIterator(Chunk *chunk, int initIndex) {
     return (ChunkIterator){.chunk = chunk, .currentIndex = initIndex};
 }
 
-int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample) {
+int ChunkIteratorGetNext(ChunkIterator *iter, Sample *sample) {
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
-        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
         memcpy(sample, internalSample, sizeof(Sample));
         return 1;
     } else {
@@ -83,10 +83,10 @@ int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample) {
     }
 }
 
-int ChunkIteratorGetPrev(ChunkIterator *iter, Sample* sample) {
-    if (iter->currentIndex >= 0) {
+int ChunkIteratorGetPrev(ChunkIterator *iter, Sample *sample) {
+    if (iter->currentIndex > 0) {
         iter->currentIndex--;
-        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex);
         memcpy(sample, internalSample, sizeof(Sample));
         return 1;
     } else {
