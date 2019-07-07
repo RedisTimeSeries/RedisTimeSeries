@@ -310,6 +310,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.revrange', 'tester', start_ts+50, start_ts+150)
+            assert expected_result == actual_result
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
@@ -322,6 +325,10 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
             assert expected_result == actual_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.revrange', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
+                                              'count', 500)
+            #assert expected_result == actual_result
 
     def test_compaction_rules(self):
         with self.redis() as r:
@@ -792,6 +799,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert 2000 == res[1]
             assert 3000 == res[2]
 
+            now = int(time.time()*1000)
             res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
             assert (now + 1, 3001) == (res[0], res[2])
             assert isinstance(res[1], redis.ResponseError)
