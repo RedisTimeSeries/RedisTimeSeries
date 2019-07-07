@@ -247,7 +247,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
         
         rule = rule->nextRule;
-        ++ruleCount;
+        ruleCount++;
     }
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
     RedisModule_CloseKey(key);
@@ -308,7 +308,7 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
         } else {
             return TSDB_ERROR;
         }
-        ++query;
+        query++;
     }
     return TSDB_OK;
 }
@@ -342,7 +342,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long replylen = 0;
     while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        ++replylen;
+        replylen++;
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
@@ -412,7 +412,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         ReplyWithSeriesLabels(ctx, series);
         ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count);
-        ++replylen;
+        replylen++;
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
@@ -485,13 +485,13 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.data);
-            ++arraylen;
+            arraylen++;
         } else {
             timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             if (current_timestamp > last_agg_timestamp) {
                 if (last_agg_timestamp != 0) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-                    ++arraylen;
+                    arraylen++;
                 }
 
                 last_agg_timestamp = current_timestamp;
@@ -504,7 +504,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != AGG_NONE) {
         // reply last bucket of data
         ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-        ++arraylen;
+        arraylen++;
     }
 
     RedisModule_ReplySetArrayLength(ctx,arraylen);
@@ -979,7 +979,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ReplyWithSeriesLabels(ctx, series);
         RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
         RedisModule_ReplyWithDouble(ctx, series->lastValue);
-        ++replylen;
+        replylen++;
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
@@ -988,10 +988,16 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
+int NotifyCallback(RedisModuleCtx *original_ctx, int type, const char *event, RedisModuleString *key) {
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    RedisModule_AutoMemory(ctx);
+
     if (strcasecmp(event, "del")==0) {
         CleanLastDeletedSeries(ctx, key);
     }
+
+    RedisModule_FreeThreadSafeContext(ctx);
+
     return REDISMODULE_OK;
 }
 
