@@ -137,11 +137,11 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-* time-bucket - Time bucket for resetting the current counter in milliseconds
-* retentionTime - Maximum age for samples compared to last event time (in milliseconds)
-  * Default: The global retention secs configuration of the database (by default, `0`)
-  * When set to 0, the series is not trimmed at all
-* labels - Set of key-value pairs that represent metadata labels of the key
+ * time-bucket - Time bucket for resetting the current counter in milliseconds
+ * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+    * Default: The global retention secs configuration of the database (by default, `0`)
+    * When set to 0, the series is not trimmed at all
+ * labels - Set of key-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
