@@ -37,7 +37,7 @@ void SingleValueReset(void *contextPtr) {
     context->isResetted = TRUE;
 }
 
-double SingleValueFinlize(void *contextPtr) {
+double SingleValueFinalize(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     return context->value;
 }
@@ -210,7 +210,7 @@ static AggregationClass aggSum = {
     .createContext = SingleValueCreateContext,
     .appendValue = SumAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -220,7 +220,7 @@ static AggregationClass aggCount = {
     .createContext = SingleValueCreateContext,
     .appendValue = CountAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -230,7 +230,7 @@ static AggregationClass aggFirst = {
     .createContext = SingleValueCreateContext,
     .appendValue = FirstAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -240,7 +240,7 @@ static AggregationClass aggLast = {
     .createContext = SingleValueCreateContext,
     .appendValue = LastAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
