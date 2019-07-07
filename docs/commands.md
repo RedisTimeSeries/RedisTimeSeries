@@ -159,13 +159,13 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 ```
 
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
-- aggType - Aggregation type: avg, std, sum, min, max, range, count, first, last
-- bucketSizeSeconds - Time bucket for aggregation in seconds
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+- timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -206,9 +206,8 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
 - toTimestamp - End timestamp for range query
 
 Optional args:
-
-- aggregationType - Aggregation type: avg, std, sum, min, max, range, count, first, last
-- bucketSizeSeconds - Time bucket for aggregation in seconds
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+- timeBucket - Time bucket for aggregation in milliseconds
 
 #### Complexity
 
@@ -255,8 +254,8 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FIL
 
 Optional args:
 
- * aggregationType - Aggregation type: avg, std, sum, min, max, count, first, last
- * bucketSizeSeconds - Time bucket for aggregation in seconds
+* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+* timeBucket - Time bucket for aggregation in milliseconds
 
 #### Query by Filters Example
 

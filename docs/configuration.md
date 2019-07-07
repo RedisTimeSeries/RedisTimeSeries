@@ -30,7 +30,7 @@ $ redis-server --loadmodule ./redistimeseries.so OPT1 OPT2
 
 Default compaction/downsampling rules for newly created key with `TS.ADD`.
 
-Each rule is seperated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
+Each rule is separated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
 * aggregation function - avg, sum, min, max, count, first, last
 * time bucket - number and the time representation (Example for 1 minute: 1M)
     * m - millisecond
