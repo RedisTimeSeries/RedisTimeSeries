@@ -325,10 +325,10 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
             assert expected_result == actual_result
-            expected_result.reverse()
+            expected_result = [[1488825000L, '384'], [1488824500L, '500'], [1488824000L, '500'], [1488823500L, '116']]
             actual_result = r.execute_command('TS.revrange', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
-            #assert expected_result == actual_result
+            assert expected_result == actual_result
 
     def test_compaction_rules(self):
         with self.redis() as r:
