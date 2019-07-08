@@ -328,7 +328,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
     int i;
     Series *compactedSeries;
     RedisModuleKey *compactedKey;
-    size_t comaptedRuleLabelCount = labelsCount + 2;
+    size_t compactedRuleLabelCount = labelsCount + 2;
 
     for (i=0; i<TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule* rule = TSGlobalConfig.compactionRules + i;
@@ -348,7 +348,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             continue;
         }
 
-        Label * compactedLabels = malloc(sizeof(Label) * comaptedRuleLabelCount);
+        Label * compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
         // todo: deep copy labels function
         for (int l=0; l<labelsCount; l++){
             compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
@@ -361,7 +361,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
         compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        CreateTsKey(ctx, destKey, compactedLabels, compactedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
