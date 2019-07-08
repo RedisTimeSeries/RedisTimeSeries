@@ -26,9 +26,9 @@ typedef struct AvgContext {
 } AvgContext;
 
 typedef struct StdContext {
-    double std;
-    double mean;
-    double cnt;
+    double sum;
+    double sum_2;
+    u_int64_t cnt;
 } StdContext;
 
 void *SingleValueCreateContext() {
@@ -98,34 +98,38 @@ void AvgReadContext(void *contextPtr, RedisModuleIO * io){
 void *StdCreateContext() {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
-    context->mean =0;
-    context->std =0;
+    context->sum = 0;
+    context->sum_2 = 0;
     return context;
 }
 
 void StdAddValue(void *contextPtr, double value){
     StdContext *context = (StdContext *)contextPtr;
-    double oldMean = context->mean;
-    context->mean = oldMean + (value - oldMean) / ++context->cnt;
-    context->std = context->std + (value - oldMean) * (value - context->mean);
+    ++context->cnt;
+    context->sum += value;
+    context->sum_2 += value * value; 
 }
 
 double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    double res = 0;
-    if(context->cnt > 0) {
-        res = context->std / context->cnt;
+    double sum = context->sum;
+    double sum_2 = context->sum_2;
+    uint64_t count = context->cnt;
+    if(count <= 1) {
+        return 0;
     }
-    return res;
+    return (sum_2 - 2 * (sum / count) * sum + pow(sum / count, 2) * count) / count;
 }
 
 double VarSamplesFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    double res = 0;
-    if(context->cnt > 1) {
-        res = context->std / (context->cnt - 1);
+    double sum = context->sum;
+    double sum_2 = context->sum_2;
+    uint64_t count = context->cnt;
+    if(count <= 1) {
+        return 0;
     }
-    return res;
+    return (sum_2 - 2 * (sum / count) * sum + pow(sum / count, 2) * count) / (count - 1);
 }
 
 double StdPopulationFinalize(void *contextPtr) {
@@ -138,23 +142,23 @@ double StdSamplesFinalize(void *contextPtr) {
 
 void StdReset(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    context->mean = 0;
-    context->std = 0;
     context->cnt = 0;
+    context->sum = 0;
+    context->sum_2 = 0;
 }
 
 void StdWriteContext(void *contextPtr, RedisModuleIO * io) {
     StdContext *context = (StdContext *)contextPtr;
-    RedisModule_SaveDouble(io, context->mean);
-    RedisModule_SaveDouble(io, context->std);
-    RedisModule_SaveDouble(io, context->cnt);
+    RedisModule_SaveDouble(io, context->sum);
+    RedisModule_SaveDouble(io, context->sum_2);
+    RedisModule_SaveUnsigned(io, context->cnt);
 }
 
 void StdReadContext(void *contextPtr, RedisModuleIO * io){
     StdContext *context = (StdContext *)contextPtr;
-    context->mean = RedisModule_LoadDouble(io);
-    context->std = RedisModule_LoadDouble(io);
-    context->cnt = RedisModule_LoadDouble(io);
+    context->sum = RedisModule_LoadDouble(io);
+    context->sum_2 = RedisModule_LoadDouble(io);
+    context->cnt = RedisModule_LoadUnsigned(io);
 }
 
 void rm_free(void* ptr) {
