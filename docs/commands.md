@@ -241,6 +241,51 @@ But because m is pretty small, we can neglect it and look at the operation as O(
    2) "20"
 ```
 
+### TS.REVRANGE
+
+Query a range backwards. Apart from the reversed ordering, TS.REVRANGE is similar to TS.RANGE.
+
+```sql
+TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
+```
+
+- key - Key name for timeseries
+- fromTimestamp - Start timestamp for range query
+- toTimestamp - End timestamp for range query
+
+Optional args:
+
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
+- timeBucket - Time bucket for aggregation in milliseconds
+
+#### Complexity
+
+TS.REVRANGE complexity is O(n/m+k).
+
+n = Number of data points
+m = Chunk size (data points per chunk)
+k = Number of data points that are in the requested range
+
+#### Aggregated Query Example
+
+```sql
+127.0.0.1:6379> TS.REVRANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
+1) 1) (integer) 1548149210000
+   2) "20"
+2) 1) (integer) 1548149205000
+   2) "28"
+3) 1) (integer) 1548149200000
+   2) "25.199999999999999"
+4) 1) (integer) 1548149195000
+   2) "23.199999999999999"
+5) 1) (integer) 1548149190000
+   2) "24.800000000000001"
+6) 1) (integer) 1548149185000
+   2) "27.399999999999999"
+7) 1) (integer) 1548149180000
+   2) "26.199999999999999" 
+```
+
 ### TS.MRANGE
 
 Query a range by filters.
