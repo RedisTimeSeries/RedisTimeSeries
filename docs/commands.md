@@ -288,7 +288,7 @@ k = Number of data points that are in the requested range
 
 ### TS.MRANGE
 
-Query a range by filters.
+Query a range by filters backwards. Apart from the reversed ordering, TS.MREVRANGE is similar to TS.MRANGE.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FILTER filter..
@@ -346,6 +346,23 @@ Optional args:
       7) 1) (integer) 1548149210000
          2) "20"
 ```
+
+### TS.MREVRANGE
+
+Query a range by filters.
+
+```sql
+TS.MREVRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FILTER filter..
+```
+
+* fromTimestamp - Start timestamp for range query
+* toTimestamp - End timestamp for range query
+* filter - [See Filtering](#filtering)
+
+Optional args:
+
+ * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
+ * timeBucket - Time bucket for aggregation in milliseconds
 
 ### TS.GET
 
