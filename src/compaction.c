@@ -27,7 +27,7 @@ typedef struct AvgContext {
 
 typedef struct StdContext {
     double sum;
-    double sum_2;
+    double sum_2;   // sum of (values^2)
     u_int64_t cnt;
 } StdContext;
 
@@ -110,26 +110,28 @@ void StdAddValue(void *contextPtr, double value){
     context->sum_2 += value * value; 
 }
 
+static double variance(double sum, double sum_2, double count) {
+    //  var(X) = sum((x_i - E[X])^2)
+    //  = sum(x_i^2) - 2 * sum(x_i) * E[X] + E^2[X]
+    return  sum_2 - 2 * sum * (sum / count) + pow(sum / count, 2) * count;
+}
+
 double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    double sum = context->sum;
-    double sum_2 = context->sum_2;
     uint64_t count = context->cnt;
     if(count <= 1) {
         return 0;
     }
-    return (sum_2 - 2 * (sum / count) * sum + pow(sum / count, 2) * count) / count;
+    return variance(context->sum, context->sum_2, count) / count;
 }
 
 double VarSamplesFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
-    double sum = context->sum;
-    double sum_2 = context->sum_2;
     uint64_t count = context->cnt;
     if(count <= 1) {
         return 0;
     }
-    return (sum_2 - 2 * (sum / count) * sum + pow(sum / count, 2) * count) / (count - 1);
+    return variance(context->sum, context->sum_2, count) / (count - 1);
 }
 
 double StdPopulationFinalize(void *contextPtr) {
