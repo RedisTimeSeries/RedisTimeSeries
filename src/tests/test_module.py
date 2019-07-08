@@ -6,6 +6,11 @@ import __builtin__
 import math
 from rmtest import ModuleTestCase
 
+def update_reverse(list, value):
+    list.reverse()
+    for item in list:
+        item[0] += value
+
 class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redistimeseries.so')):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
@@ -698,18 +703,38 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
+            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+            expected_result.reverse()
+            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
 
             def build_expected(val, time_bucket):
                 return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count+1, time_bucket)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-            expected_result = [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], build_expected(5, 5)],
-                    ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], build_expected(15, 5)],
-                    ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], build_expected(25, 5)],
+            b55 = build_expected(5, 5)
+            b155 = build_expected(15, 5)
+            b255 = build_expected(25, 5)
+            expected_result = [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], b55],
+                    ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], b155],
+                    ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], b255],
                     ]
-
+            
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
+            update_reverse(b55, 5)
+            update_reverse(b155, 5)
+            update_reverse(b255, 5)
+            
+            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            expected_result = [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], b55],
+                    ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], b155],
+                    ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], b255],
+                    ]
+            assert expected_result == actual_result
+            assert expected_result[1:] == r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count,
+                                                            'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
+            
+            
 
     def test_label_index(self):
         with self.redis() as r:
