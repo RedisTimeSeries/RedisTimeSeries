@@ -24,7 +24,7 @@
 RedisModuleType *SeriesType;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-                     AggregationClass *aggObject, int64_t time_delta, Direction direction);
+                     AggregationClass *aggObject, api_timestamp_t time_delta, Direction direction);
 
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
@@ -109,7 +109,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
-    RedisModuleString * aggTypeStr = NULL;
+    RedisModuleString *aggTypeStr = NULL;
     *time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -449,8 +449,43 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-        AggregationClass *aggObject, int64_t time_delta, Direction direction) {
+static int aggregateForward(RedisModuleCtx *ctx, AggregationClass *aggObject,
+                            api_timestamp_t *last_agg_timestamp, api_timestamp_t time_delta,
+                            void *context, Sample sample) {
+    timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
+    int isReplied = 0;
+    if (current_timestamp > *last_agg_timestamp) {
+        if (*last_agg_timestamp != 0) {
+            ReplyWithAggValue(ctx, *last_agg_timestamp, aggObject, context);
+            ++isReplied;
+        }
+        *last_agg_timestamp = current_timestamp;
+    }
+    aggObject->appendValue(context, sample.data);
+    return isReplied;
+}
+
+static int aggregateBackward(RedisModuleCtx *ctx, AggregationClass *aggObject,
+                            api_timestamp_t *last_agg_timestamp, api_timestamp_t time_delta,
+                            void *context, Sample sample) {
+    int isReplied = 0;
+    timestamp_t current_timestamp = sample.timestamp + time_delta
+                                    - (sample.timestamp % time_delta);
+
+    if (current_timestamp < *last_agg_timestamp) {
+        if (*last_agg_timestamp != ~0) {
+            ReplyWithAggValue(ctx, *last_agg_timestamp, aggObject, context);
+            ++isReplied;
+        }
+        *last_agg_timestamp = current_timestamp;
+    }
+    aggObject->appendValue(context, sample.data);
+    return isReplied;
+}
+
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts,
+                    api_timestamp_t end_ts, AggregationClass *aggObject,
+                    api_timestamp_t time_delta, Direction direction) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long arraylen = 0;
 
@@ -464,31 +499,26 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     void *context = NULL;
     if (aggObject != NULL)
         context = aggObject->createContext();
-    timestamp_t last_agg_timestamp = 0;
 
-    int (*iterFunc)(SeriesIterator *, Sample *) = SeriesIteratorGetNext;
+    timestamp_t last_agg_timestamp = 0;
+    int (*iterGetFunc)(SeriesIterator *, Sample *) = SeriesIteratorGetNext;
+    int (*aggDirectionFunc)(RedisModuleCtx *, AggregationClass *, api_timestamp_t *,
+                   timestamp_t, void *, Sample) = aggregateForward;
     if (direction == Reverse) {
-        iterFunc = SeriesIteratorGetPrev;
+        last_agg_timestamp = ~0;
+        iterGetFunc = SeriesIteratorGetPrev;
+        aggDirectionFunc = aggregateBackward;
     }
 
-    while (iterFunc(&iterator, &sample) != 0) {
-        if (aggObject == NULL) { // No aggregation whats so ever
+    while (iterGetFunc(&iterator, &sample) != 0) {
+        if (aggObject == AGG_NONE) { // No aggregation whatsoever
             RedisModule_ReplyWithArray(ctx, 2);
-
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.data);
             arraylen++;
         } else {
-            timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            if (current_timestamp > last_agg_timestamp) {
-                if (last_agg_timestamp != 0) {
-                    ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-                    arraylen++;
-                }
-
-                last_agg_timestamp = current_timestamp;
-            }
-            aggObject->appendValue(context, sample.data);
+            arraylen += aggDirectionFunc(ctx, aggObject, &last_agg_timestamp,
+                                         time_delta, context, sample);
         }
     }
     SeriesIteratorClose(&iterator);
@@ -964,7 +994,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *orignial_ctx, int type, const char *event, RedisModuleString *key) {
+int NotifyCallback(RedisModuleCtx *original_ctx, int type, const char *event, RedisModuleString *key) {
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModule_AutoMemory(ctx);
 
