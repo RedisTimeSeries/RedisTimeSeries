@@ -377,6 +377,13 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
+    size_t cmdLen;
+    Direction direction = Forward;
+    RedisModule_StringPtrLen(argv[0], &cmdLen);
+    if (cmdLen == strlen("ts.mrevrange")) {
+        direction = Reverse;
+    }
+
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -397,7 +404,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         ReplyWithSeriesLabels(ctx, series);
-        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, Forward);
+        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, direction);
         replylen++;
     }
     RedisModule_DictIteratorStop(iter);
