@@ -508,8 +508,12 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     RedisModule_CloseKey(key);
 }
 
-static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+static inline int add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int i){
+        RedisModuleString *keyName = argv[i];
+        RedisModuleString *timestampStr = argv[i+1];
+        RedisModuleString *valueStr = argv[i+2];
+      
+      RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
 	    double value;
 	    api_timestamp_t timestamp;
@@ -575,10 +579,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithArray(ctx, (argc-1)/3);
     for(int i=1; i<argc ; i+=3){
-        RedisModuleString *keyName = argv[i];
-        RedisModuleString *timestampStr = argv[i+1];
-        RedisModuleString *valueStr = argv[i+2];
-        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
+        add(ctx, argv, argc, i);
     }
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -590,12 +591,8 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
     }
-
-    RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
-
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    
+    int result = add(ctx, argv, argc, 1);
     RedisModule_ReplicateVerbatim(ctx);
     return result;
 }
