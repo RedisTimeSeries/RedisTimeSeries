@@ -213,15 +213,21 @@ RedisModuleDict * GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *pred
         currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
     } else { // one or more entries
         RedisModuleDict *singleEntryLeaf;
+        int unioned_count = 0;
         for (int i = 0; i < predicate->valueListCount; i++) {
             value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
             index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
             singleEntryLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
-            if (singleEntryLeaf != NULL){
+            if (singleEntryLeaf != NULL ) {
+                // if there's only 1 item left to fetch from the index we can just return it
+                if (unioned_count == 0 && predicate->valueListCount - i == 1) {
+                    return singleEntryLeaf;
+                }
                 if (currentLeaf == NULL) {
                     currentLeaf = RedisModule_CreateDict(ctx);
                 }
                 _union(ctx, currentLeaf, singleEntryLeaf);
+                unioned_count++;
             }
         }
     }

@@ -4,21 +4,22 @@
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
 ## Features
-- Quick inserts (50K samples per sec)
+Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
+- High volume inserts, low latency reads
 - Query by start time and end-time
-- Query by labels sets
 - Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
-- Configurable max retention period
-- Compaction/Roll-ups - automatically updated aggregated timeseries
-- labels index - each key has labels which will allows query by labels
+- Configurable maximum retention period
+- Downsampling/Compaction - automatically updated aggregated timeseries
+- Secondary index - each time series has labels (field value pairs) which will allows to query by labels
 
 ## Using with other tools metrics tools
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
-1. Prometheus - [Adapter for Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) to use RedisTimeSeries as backend db.
-2. StatsD, Graphite exports using graphiGote protocol.
-3. Grafana - using SimpleJson datasource.
+1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
+2. [Grafana](https://github.com/RedisTimeSeries/grafana-redistimeseries) - using a SimpleJson datasource.
+3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
+4. StatsD, Graphite exports using graphite protocol.
 
 ## Memory model
 
@@ -86,7 +87,7 @@ OK
 ```
 
 ### Client libraries
-Go
+
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
 | Project | Language | License | Author | URL |
