@@ -827,6 +827,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             now = int(time.time()*1000)
             res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
             assert (now + 1, 3001) == (res[0], res[2])
+
             assert isinstance(res[1], redis.ResponseError)
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
