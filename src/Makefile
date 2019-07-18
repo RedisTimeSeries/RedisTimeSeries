@@ -2,6 +2,8 @@ PREFIX?=/usr/local
 INSTALL_LIB=$(PREFIX)/lib
 INSTALL=/usr/bin/install
 PAKCAGE_NAME?="../build/redistimeseries.{os}-{architecture}.latest.zip"
+REDISTIMESERIES_VERSION_PATCH?=0
+REDISTIMESERIES_MASTER_BUILD?=0
 
 #set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 ifndef RM_INCLUDE_DIR
@@ -23,7 +25,7 @@ else
 	SHOBJ_CFLAGS ?= -dynamic -fno-common -g -ggdb
 	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup
 endif
-CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
+CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API -DREDISTIMESERIES_MASTER_BUILD=${REDISTIMESERIES_MASTER_BUILD} -DREDISTIMESERIES_VERSION_PATCH=$(REDISTIMESERIES_VERSION_PATCH)
 
 all: rmutil redistimeseries.so
 

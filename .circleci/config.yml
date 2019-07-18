@@ -16,7 +16,12 @@ jobs:
             apt-get update; apt-get install -y cmake; pip install -r src/tests/requirements.txt
       - run:
           name: Build
-          command: cd src && REDISTIMESERIES_VERSION_PATCH=$CIRCLE_BUILD_NUM make -j 8
+          command: |
+            cd src
+            if [[ "$CIRCLE_BRANCH" == "master" ]]; then
+              export REDISTIMESERIES_MASTER_BUILD=1
+            fi
+            REDISTIMESERIES_VERSION_PATCH=$CIRCLE_BUILD_NUM make -j 8
       - run:
           name: Test
           command: cd src && mkdir -p /workspace/tests && make tests EXTRA_ARGS="--junitxml=/workspace/tests/tests_report.xml"
