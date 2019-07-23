@@ -43,7 +43,7 @@ TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 #### Notes
 * The command only alters the fields that are given,
-  e.g. if labels are given but retention isn't, then only the labels is altered.
+  e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the labels keyword without any fields will remove all existing labels.  
