@@ -38,7 +38,7 @@ typedef enum {
     TS_AGG_FIRST,
     TS_AGG_LAST,
     TS_AGG_RANGE,
-    TS_AGG_TYPES_MAX // 10
+    TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
 #define max(a,b) \
