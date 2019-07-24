@@ -30,15 +30,15 @@ typedef enum {
     TS_AGG_MAX,
     TS_AGG_SUM,
     TS_AGG_AVG,
-    TS_AGG_STD_P,
-    TS_AGG_STD_S,
-    TS_AGG_VAR_P,
-    TS_AGG_VAR_S,
     TS_AGG_COUNT,
     TS_AGG_FIRST,
     TS_AGG_LAST,
     TS_AGG_RANGE,
-    TS_AGG_TYPES_MAX // 10
+    TS_AGG_STD_P,
+    TS_AGG_STD_S,
+    TS_AGG_VAR_P,
+    TS_AGG_VAR_S,
+    TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
 #define max(a,b) \

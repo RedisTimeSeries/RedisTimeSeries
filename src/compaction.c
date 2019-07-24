@@ -44,17 +44,17 @@ void SingleValueReset(void *contextPtr) {
     context->isResetted = TRUE;
 }
 
-double SingleValueFinlize(void *contextPtr) {
+double SingleValueFinalize(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     return context->value;
 }
 
-void SingleValueWriteContext(void *contextPtr, RedisModuleIO * io) {
+void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
 }
 
-void SingleValueReadContext(void *contextPtr, RedisModuleIO * io){
+void SingleValueReadContext(void *contextPtr, RedisModuleIO *io){
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = RedisModule_LoadDouble(io);
 }
@@ -83,13 +83,13 @@ void AvgReset(void *contextPtr) {
     context->cnt = 0;
 }
 
-void AvgWriteContext(void *contextPtr, RedisModuleIO * io) {
+void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
     RedisModule_SaveDouble(io, context->val);
     RedisModule_SaveDouble(io, context->cnt);
 }
 
-void AvgReadContext(void *contextPtr, RedisModuleIO * io){
+void AvgReadContext(void *contextPtr, RedisModuleIO *io){
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = RedisModule_LoadDouble(io);
     context->cnt = RedisModule_LoadDouble(io);
@@ -111,8 +111,8 @@ void StdAddValue(void *contextPtr, double value){
 }
 
 static double variance(double sum, double sum_2, double count) {
-    //  var(X) = sum((x_i - E[X])^2)
-    //  = sum(x_i^2) - 2 * sum(x_i) * E[X] + E^2[X]
+    /*  var(X) = sum((x_i - E[X])^2)
+     *  = sum(x_i^2) - 2 * sum(x_i) * E[X] + E^2[X] */
     return  sum_2 - 2 * sum * (sum / count) + pow(sum / count, 2) * count;
 }
 
@@ -149,21 +149,21 @@ void StdReset(void *contextPtr) {
     context->sum_2 = 0;
 }
 
-void StdWriteContext(void *contextPtr, RedisModuleIO * io) {
+void StdWriteContext(void *contextPtr, RedisModuleIO *io) {
     StdContext *context = (StdContext *)contextPtr;
     RedisModule_SaveDouble(io, context->sum);
     RedisModule_SaveDouble(io, context->sum_2);
     RedisModule_SaveUnsigned(io, context->cnt);
 }
 
-void StdReadContext(void *contextPtr, RedisModuleIO * io){
+void StdReadContext(void *contextPtr, RedisModuleIO *io){
     StdContext *context = (StdContext *)contextPtr;
     context->sum = RedisModule_LoadDouble(io);
     context->sum_2 = RedisModule_LoadDouble(io);
     context->cnt = RedisModule_LoadUnsigned(io);
 }
 
-void rm_free(void* ptr) {
+void rm_free(void *ptr) {
     free(ptr);
 }
 
@@ -263,14 +263,14 @@ void MaxMinReset(void *contextPtr) {
     context->isResetted = TRUE;
 }
 
-void MaxMinWriteContext(void *contextPtr, RedisModuleIO * io) {
+void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     RedisModule_SaveDouble(io, context->maxValue);
     RedisModule_SaveDouble(io, context->minValue);
     RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
-void MaxMinReadContext(void *contextPtr, RedisModuleIO * io) {
+void MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     size_t len = 1;
     context->maxValue = RedisModule_LoadDouble(io);
@@ -325,7 +325,7 @@ static AggregationClass aggSum = {
     .createContext = SingleValueCreateContext,
     .appendValue = SumAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -335,7 +335,7 @@ static AggregationClass aggCount = {
     .createContext = SingleValueCreateContext,
     .appendValue = CountAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -345,7 +345,7 @@ static AggregationClass aggFirst = {
     .createContext = SingleValueCreateContext,
     .appendValue = FirstAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -355,7 +355,7 @@ static AggregationClass aggLast = {
     .createContext = SingleValueCreateContext,
     .appendValue = LastAppendValue,
     .freeContext = rm_free,
-    .finalize = SingleValueFinlize,
+    .finalize = SingleValueFinalize,
     .writeContext =  SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
@@ -421,7 +421,7 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 	return result;
 }
 
-const char * AggTypeEnumToString(int aggType) {
+const char *AggTypeEnumToString(int aggType) {
     switch (aggType) {
         case TS_AGG_MIN:
             return "MIN";
@@ -452,44 +452,33 @@ const char * AggTypeEnumToString(int aggType) {
     }
 }
 
-AggregationClass* GetAggClass(int aggType) {
+AggregationClass *GetAggClass(int aggType) {
     switch (aggType) {
         case AGG_NONE:
             return NULL;
-            break;
         case AGG_MIN:
             return &aggMin;
-            break;
         case AGG_MAX:
             return &aggMax;
         case AGG_AVG:
             return &aggAvg;
-            break;
         case AGG_STD_P:
             return &aggStdP;
-            break;
         case AGG_STD_S:
             return &aggStdS;
-            break;
         case AGG_VAR_P:
             return &aggVarP;
-            break;
         case AGG_VAR_S:
             return &aggVarS;
-            break;
         case AGG_SUM:
             return &aggSum;
-            break;
         case AGG_COUNT:
             return &aggCount;
-            break;
         case AGG_FIRST:
             return &aggFirst;
-            break;
         case AGG_LAST:
             return &aggLast;
-            break;
-        case TS_AGG_RANGE:
+        case AGG_RANGE:
             return &aggRange;
         default:
             return NULL;
