@@ -25,7 +25,7 @@ jobs:
           command: make setup
       - run:
           name: Build
-          command: REDISTIMESERIES_VERSION_PATCH=$CIRCLE_BUILD_NUM make build SHOW=1
+          command: make build SHOW=1
       - run:
           name: Test
           command: make test SHOW=1
