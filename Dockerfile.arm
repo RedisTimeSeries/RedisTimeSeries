@@ -1,25 +1,26 @@
-# BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:M.m.b
+# BUILD redisfab/redistimeseries-${OSNICK}:M.m.b-${ARCH}
 
-# stretch|bionic
-ARG OSNICK=stretch
+# stretch|bionic|buster
+ARG OSNICK=buster
 
-# arm32v7|arm64v8
-ARG ARCH=arm32v7
+# ARCH=arm64v8|arm32v7
+ARG ARCH=arm64v8
 
 #----------------------------------------------------------------------------------------------
 FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:5.0.5 as builder
 
 RUN [ "cross-build-start" ]
 
-ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l" 
-
 ADD ./ /build
 WORKDIR /build
 
 RUN ./deps/readies/bin/getpy2
-RUN python ./system-setup.py
+RUN ./system-setup.py
+RUN make fetch
 
-RUN make -C src -j $(eval "$X_NPROC")
+ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
+RUN echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
+RUN make build
 
 RUN [ "cross-build-end" ]
 

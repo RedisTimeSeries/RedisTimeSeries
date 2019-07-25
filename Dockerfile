@@ -1,4 +1,4 @@
-# BUILD redisfab/redistimeseries-${ARCH}-${OSNICK}:M.m.b
+# BUILD redisfab/redistimeseries-${OSNICK}:M.m.b-${ARCH}
 
 # stretch|bionic|buster
 ARG OSNICK=buster
@@ -10,16 +10,16 @@ ARG ARCH=x64
 # FROM redis:latest AS builder
 FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5 AS builder
 
-ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
-
 ADD ./ /build
 WORKDIR /build
 
 RUN ./deps/readies/bin/getpy2
-RUN python ./system-setup.py
+RUN ./system-setup.py
 RUN make fetch
 
-RUN echo NPROC=$(eval "$X_NPROC"); make -C src -j $(eval "$X_NPROC")
+ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
+RUN echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
+RUN make build
 
 #----------------------------------------------------------------------------------------------
 # FROM redis:latest
