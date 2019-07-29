@@ -165,7 +165,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggType timeBucket
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
 - aggType - Aggregation type: avg, sum, min, max, range, count, first, last
-- timeBucket - Time bucket for aggregation in milliseconds
+- timeBucket - Time bucket for aggregation in seconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
