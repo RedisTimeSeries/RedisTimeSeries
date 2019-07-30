@@ -515,19 +515,6 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert result[0][0] >= start_incr_time
             assert len(result) <= 40
 
-    def test_incrby_with_timestamp(self):
-        with self.redis() as r:
-            r.execute_command('ts.create', 'tester')
-
-            for i in range(20):
-                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == [i, str((i + 1) * 5)]
-            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
-            assert len(result) == 20
-            assert result[19][1] == '100'
-
-            result = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')
-            assert r.execute_command('ts.get', 'tester') == result
-
     def test_agg_min(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'min')

@@ -461,7 +461,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-                AggregationClass *aggObject, int64_t time_delta, long long maxResults) {
+        AggregationClass *aggObject, int64_t time_delta, long long maxResults) {
     Sample sample;
     long long arraylen = 0;
     timestamp_t last_agg_timestamp = 0;
@@ -821,7 +821,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 
 /*
-TS.INCRBY ts_key NUMBER [TIMESTAMP timestamp] [RESET time-bucket]
+TS.INCRBY ts_key NUMBER [RESET time-bucket]
 */
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -868,20 +868,6 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 series->lastValue = 0;
             }
         }
-        currentUpdatedTime = max(currentUpdatedTime, series->lastTimestamp);
-    }
-
-    long long timestamp = -1;
-    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc > 0) {
-        if ((RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long int *) &timestamp) != REDISMODULE_OK)) {
-            // if timestamp is "*", take current time (automatic timestamp)
-            if(RMUtil_StringEqualsC(argv[timestampLoc + 1], "*"))
-                timestamp = (u_int64_t) RedisModule_Milliseconds();
-            else
-                return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
-        }
-        currentUpdatedTime = timestamp;
     }
 
     RMUtil_StringToLower(argv[0]);
@@ -891,7 +877,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result = series->lastValue - incrby;
     }
 
-    if (SeriesAddSample(series, currentUpdatedTime, result) != TSDB_OK) {
+    if (SeriesAddSample(series, max(currentUpdatedTime, series->lastTimestamp), result) != TSDB_OK) {
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: couldn't add sample");
         return REDISMODULE_OK;
     }
@@ -903,9 +889,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         rule = rule->nextRule;
     }
 
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
-    RedisModule_ReplyWithDouble(ctx, result);
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
