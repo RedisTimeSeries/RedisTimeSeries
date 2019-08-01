@@ -179,13 +179,19 @@ void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *rig
 }
 
 void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(right, "^", NULL, 0);
+    if (RedisModule_DictSize(right) == 0) {
+        // the right leaf is empty, this means that the diff is basically no-op since the left will remain intact.
+        return;
+    }
+
+    // iterating over the left dict (which is always smaller) will allow us to have less data to iterate over
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
 
     char *currentKey;
     size_t currentKeyLen;
     while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         int doesNotExist = 0;
-        RedisModule_DictGetC(left, currentKey, currentKeyLen, &doesNotExist);
+        RedisModule_DictGetC(right, currentKey, currentKeyLen, &doesNotExist);
         if (doesNotExist == 1) {
             continue;
         }
