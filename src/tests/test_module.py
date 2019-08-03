@@ -6,6 +6,8 @@ import __builtin__
 import math
 from rmtest import ModuleTestCase
 
+ALLOWED_ERROR = 0.001
+
 class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redistimeseries.so')):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
@@ -544,7 +546,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             for i in range(len(expected_result)):
-                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.001                
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
 
     def test_agg_std_s(self):
         with self.redis() as r:
@@ -553,7 +555,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             for i in range(len(expected_result)):
-                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.001                
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
 
     def test_agg_var_p(self):
         with self.redis() as r:
@@ -562,7 +564,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             for i in range(len(expected_result)):
-                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.001                
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
 
     def test_agg_var_s(self):
         with self.redis() as r:
@@ -571,7 +573,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             for i in range(len(expected_result)):
-                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < 0.01                
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
 
     def test_agg_sum(self):
         with self.redis() as r:
