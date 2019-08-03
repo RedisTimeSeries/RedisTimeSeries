@@ -7,7 +7,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, Std.P, Std.S, Var.P, Var.S) for any time bucket
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
 - Configurable maximum retention period
 - Downsampling/Compaction - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (field value pairs) which will allows to query by labels
@@ -96,3 +96,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
 | redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
 
+## Mailing List / Forum
+
+Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
+
+## License
+
+Redis Source Available License Agreement - see [LICENSE](https://raw.githubusercontent.com/RedisTimeSeries/RedisTimeSeries/master/LICENSE)
