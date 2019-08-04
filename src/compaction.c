@@ -110,7 +110,9 @@ void StdAddValue(void *contextPtr, double value){
     context->sum_2 += value * value; 
 }
 
-static double variance(double sum, double sum_2, double count) {
+static inline double variance(double sum, double sum_2, double count) {
+    if (count == 0) { return 0; }
+
     /*  var(X) = sum((x_i - E[X])^2)
      *  = sum(x_i^2) - 2 * sum(x_i) * E[X] + E^2[X] */
     return  (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
@@ -119,18 +121,13 @@ static double variance(double sum, double sum_2, double count) {
 double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    if(count <= 1) {
-        return 0;
-    }
     return variance(context->sum, context->sum_2, count);
 }
 
 double VarSamplesFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    if(count <= 1) {
-        return 0;
-    }
+    if(count == 1) { return 0; }
     return variance(context->sum, context->sum_2, count) * count / (count - 1);
 }
 
