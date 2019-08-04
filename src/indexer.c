@@ -179,13 +179,19 @@ void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *rig
 }
 
 void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(right, "^", NULL, 0);
+    if (RedisModule_DictSize(right) == 0) {
+        // the right leaf is empty, this means that the diff is basically no-op since the left will remain intact.
+        return;
+    }
+
+    // iterating over the left dict (which is always smaller) will allow us to have less data to iterate over
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
 
     char *currentKey;
     size_t currentKeyLen;
     while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         int doesNotExist = 0;
-        RedisModule_DictGetC(left, currentKey, currentKeyLen, &doesNotExist);
+        RedisModule_DictGetC(right, currentKey, currentKeyLen, &doesNotExist);
         if (doesNotExist == 1) {
             continue;
         }
@@ -213,15 +219,21 @@ RedisModuleDict * GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *pred
         currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
     } else { // one or more entries
         RedisModuleDict *singleEntryLeaf;
+        int unioned_count = 0;
         for (int i = 0; i < predicate->valueListCount; i++) {
             value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
             index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
             singleEntryLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
-            if (singleEntryLeaf != NULL){
+            if (singleEntryLeaf != NULL ) {
+                // if there's only 1 item left to fetch from the index we can just return it
+                if (unioned_count == 0 && predicate->valueListCount - i == 1) {
+                    return singleEntryLeaf;
+                }
                 if (currentLeaf == NULL) {
                     currentLeaf = RedisModule_CreateDict(ctx);
                 }
                 _union(ctx, currentLeaf, singleEntryLeaf);
+                unioned_count++;
             }
         }
     }

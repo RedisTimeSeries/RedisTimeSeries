@@ -43,7 +43,7 @@ TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 #### Notes
 * The command only alters the fields that are given,
-  e.g. if labels are given but retention isn't, then only the retention is altered.
+  e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the labels keyword without any fields will remove all existing labels.  
@@ -186,7 +186,7 @@ TS.DELETERULE sourceKey destKey
 For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
 * `l=v` label equals value
 * `l!=v` label doesn't equal value
-* `l=` key does not ha * ve the label `l`
+* `l=` key does not have the label `l`
 * `l!=` key has label `l`
 * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
 * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
