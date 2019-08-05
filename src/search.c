@@ -3,9 +3,10 @@
 #include <assert.h>
 
 #include "search.h"
+//#include "geo_index.h"
 
 /***** Static functions *****/
-static bool CheckFieldExist(FullTextIndex *fti, const char *field, uint32_t fieldlen) {
+static bool CheckFieldExist(RSLiteIndex *fti, const char *field, uint32_t fieldlen) {
     assert(fti);
     assert(field);
 
@@ -17,7 +18,9 @@ static bool CheckFieldExist(FullTextIndex *fti, const char *field, uint32_t fiel
     return false;
 } 
 
-static void VerifyAddField(FullTextIndex *fti, char *field, uint32_t fieldlen) {
+// Checks whether a field exists and if not, creates it
+static void VerifyAddField(RSLiteIndex *fti, char *field, uint32_t fieldlen) {
+    // TODO : change to AVL
     if (CheckFieldExist(fti, field, fieldlen) == false) {
         if (fti->fields_count % 64 == 0) {
             if (fti->fields_count == 0) {
@@ -26,16 +29,28 @@ static void VerifyAddField(FullTextIndex *fti, char *field, uint32_t fieldlen) {
                 fti->fields = realloc(fti->fields, sizeof(char *) * (fti->fields_count + 10));
             }
         }
-        RediSearch_CreateField(fti->idx, field, 
-            RSFLDTYPE_FULLTEXT | RSFLDTYPE_NUMERIC, RSFLDOPT_NONE);   
+        RediSearch_CreateField (fti->idx, field, 
+                                RSFLDTYPE_FULLTEXT | RSFLDTYPE_NUMERIC | RSFLDTYPE_TAG,
+                                RSFLDOPT_NONE);   
         fti->fields[fti->fields_count++] = RedisModule_Strdup(field);
         // Ensure retention of string
     }
 }
 
 /***** Modification functions *****/
-int AddDoc(FullTextIndex *fti, char *key, uint32_t keylen, RSLabels *labels, count_t count) {
-    RSDoc *doc = RediSearch_CreateDocument(key, keylen, 1, 0);
+RSLiteIndex *RSLiteCreate(const char *name) {
+    RSLiteIndex *fti = (RSLiteIndex *)calloc(1, sizeof(RSLiteIndex));
+
+    fti->fields = NULL; // TODO will probably changed once AVL is added
+    fti->fields_count = 0;
+    fti->idx = RediSearch_CreateIndex(name, NULL);
+
+    return fti;
+}
+
+int AddDoc (RSLiteIndex *fti, char *item, uint32_t itemlen, 
+            RSLabels *labels, count_t count) {
+    RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
 
     for(count_t i = 0; i < count; ++i) {
         VerifyAddField(fti, labels[i].field, labels[i].fieldlen);
@@ -46,31 +61,24 @@ int AddDoc(FullTextIndex *fti, char *key, uint32_t keylen, RSLabels *labels, cou
         } else if (labels[i].RSFieldType == INDEXFLD_T_FULLTEXT) {
             RediSearch_DocumentAddFieldString(doc, labels[i].field,
                                 labels[i].str, labels[i].strlen, RSFLDTYPE_FULLTEXT);
-        } else {
-            return REDISMODULE_ERR; // TODO error
-        }
-        RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
-    }
-}
-
-int DeleteLabels(FullTextIndex *fti, char *key, uint32_t keylen, RSLabels *labels, count_t count) {
-    RSDoc *doc = RediSearch_CreateDocument(key, keylen, 1, 0);
-    for(count_t i = 0; i < count; ++i) {
-        if (labels[i].RSFieldType == INDEXFLD_T_NUMERIC) {            
-            RediSearch_DocumentAddFieldNumber(doc, labels[i].field,
-                                labels[i].dbl, RSFLDTYPE_NUMERIC);
-        } else if (labels[i].RSFieldType == INDEXFLD_T_FULLTEXT) {
+        } else if (labels[i].RSFieldType == INDEXFLD_T_TAG) {
             RediSearch_DocumentAddFieldString(doc, labels[i].field,
-                                labels[i].str, labels[i].strlen, RSFLDTYPE_FULLTEXT);
+                                labels[i].str, labels[i].strlen, RSFLDTYPE_TAG);
+        } else if (labels[i].RSFieldType == INDEXFLD_T_GEO) {
+            //  INDEXFLD_T_GEO = 0x04
+            return REDISMODULE_ERR; // TODO error
         } else {
             return REDISMODULE_ERR; // TODO error
         }
     }
-    RediSearch_DeleteDocument(fti->idx, key, keylen);
-    return 0;
+    RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
 }
 
-/***** Modification functions *****/
-char **QueryLabels(FullTextIndex *fti, RSLabels *labels, count_t count) {
+int DeleteLabels(RSLiteIndex *fti, char *item, uint32_t itemlen, 
+                 RSLabels *labels, count_t count) {
+    return RediSearch_DeleteDocument(fti->idx, item, itemlen);
+}
 
+RSResultsIterator *QueryString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
+  return RediSearch_IterateQuery(fti->idx, s, n, err);
 }

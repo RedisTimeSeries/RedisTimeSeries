@@ -1,38 +1,61 @@
 /*
 * Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
 * This file is available under the Redis Labs Source Available License Agreement
 */
 
-#include "../RediSearch/src/redisearch_api.h"
-#include "../RediSearch/src/field_spec.h"
+#ifndef __RS_LITE_H__
+#define __RS_LITE_H__
+
 #include "indexer.h"
-
-typedef struct {
-    //  char *label;                // Indexed label.
-    char **fields;              // Indexed fields.
-    //  Attribute_ID *fields_ids;   // Indexed field IDs.
-    uint32_t fields_count;          // Number of fields.
-    RSIndex *idx;               // RediSearch full-text index.
-} FullTextIndex;
-
-typedef struct {
-    uint32_t fieldlen;
-    uint32_t strlen;
-    char *field;
-    char *str;
-    double dbl;
-    FieldType RSFieldType;
-} RSLabels;
+#include "field_spec.h"
+#include "redisearch_api.h"
 
 typedef uint32_t count_t;
+typedef struct GeoFilter GeoFilter;
 
-/***** Modification functions *****/
-int AddDoc(FullTextIndex *, char *key, uint32_t keylen, RSLabels *, count_t);
+typedef struct {
+    char **fields;              // Indexed fields.
+    uint32_t fields_count;          // Number of fields.
+    RSIndex *idx;               // RediSearch full-text index.
+} RSLiteIndex;
 
-int AlterKey(FullTextIndex *, char *key, uint32_t keylen, RSLabels *, count_t);
+typedef struct {
+  //Field string
+  char *field;
+  uint32_t fieldlen;
+  
+  //Full Text or Tag string
+  char *str;
+  uint32_t strlen;
+  
+  //Numeric value
+  double dbl;
 
-int DeleteKey(FullTextIndex *, char *key, uint32_t keylen, RSLabels *, count_t);
+  //GEO values
+  GeoFilter *geo;
 
-/***** Modification functions *****/
-char **QueryLabels(FullTextIndex *, RSLabels *, count_t);
+  FieldType RSFieldType;
+} RSLabels;
+
+static RSLiteIndex *globalRSIndex;
+
+RSLiteIndex *RSLiteCreate(const char *name);
+
+int AddDoc(RSLiteIndex *,
+           char *item, uint32_t itemlen,
+           RSLabels *labels, count_t count);
+
+int DeleteKey(RSLiteIndex *,
+              char *item, uint32_t itemlen,
+              RSLabels *labels, count_t count);
+
+/*
+ * Returns an iterator with results.
+ * Function RediSearch_ResultsIteratorNext should be used to iterate over
+ * all results until INDEXREAD_EOF is reached.
+ */
+RSResultsIterator *QueryString(RSLiteIndex *, 
+                   const char *s, uint64_t n, 
+                   char **err);
+
+#endif // __RS_LITE_H__
