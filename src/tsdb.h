@@ -11,6 +11,7 @@
 #include "consts.h"
 #include "chunk.h"
 #include "indexer.h"
+#include "search.h"
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -33,6 +34,7 @@ typedef struct Series {
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
+    RSLiteIndex *fti;
 } Series;
 
 typedef struct SeriesIterator {

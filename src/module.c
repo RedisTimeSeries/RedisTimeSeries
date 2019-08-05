@@ -309,31 +309,19 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int query_count = argc - 1;
-
-    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
-    }
-
-    if (CountPredicateType(queries, (size_t) query_count, EQ) +
-        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
-    }
-
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
-
+    char *querystr = "query string";
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        replylen++;
+    RSResultsIterator *resIter = QueryString(globalRSIndex, querystr, 13, NULL);
+
+    size_t keylen;
+    long replylen = 0;
+    void *tsKey = RediSearch_ResultsIteratorNext(resIter, globalRSIndex->idx, keylen);
+    while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
+        RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
+        tsKey = RediSearch_ResultsIteratorNext(resIter, globalRSIndex->idx, keylen);
+        ++replylen;
     }
-    RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
     return REDISMODULE_OK;
@@ -1014,6 +1002,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+    globalRSIndex = RSLiteCreate("RedisTimeSeries_RSIndex");
 
     RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
 
