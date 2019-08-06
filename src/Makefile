@@ -12,6 +12,10 @@ ifndef RMUTIL_LIBDIR
 	RMUTIL_LIBDIR=../RedisModulesSDK/rmutil
 endif
 
+ifndef REDISEARCH_LIBDIR
+	REDISEARCH_LIBDIR=../RediSearch/src
+endif
+
 # find the OS
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 
@@ -23,7 +27,7 @@ else
 	SHOBJ_CFLAGS ?= -dynamic -fno-common -g -ggdb
 	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup
 endif
-CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
+CFLAGS = -I$(RM_INCLUDE_DIR) -I$(REDISEARCH_LIBDIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
 
 all: rmutil redistimeseries.so
 
