@@ -21,21 +21,21 @@ typedef struct {
 
 typedef struct {
   //Field string
-  char *field;
-  uint32_t fieldlen;
+  char *fieldStr;
+  uint32_t fieldLen;
   
   //Full Text or Tag string
-  char *str;
-  uint32_t strlen;
+  char *valueStr;
+  uint32_t valueLen;
   
   //Numeric value
   double dbl;
 
   //GEO values
-  GeoFilter *geo;
+  //GeoFilter *geo;
 
   FieldType RSFieldType;
-} RSLabels;
+} RSLabel;
 
 static RSLiteIndex *globalRSIndex;
 
@@ -43,11 +43,11 @@ RSLiteIndex *RSLiteCreate(const char *name);
 
 int AddDoc(RSLiteIndex *,
            char *item, uint32_t itemlen,
-           RSLabels *labels, count_t count);
+           RSLabel *labels, count_t count);
 
 int DeleteKey(RSLiteIndex *,
               char *item, uint32_t itemlen,
-              RSLabels *labels, count_t count);
+              RSLabel *labels, count_t count);
 
 /*
  * Returns an iterator with results.
@@ -57,5 +57,7 @@ int DeleteKey(RSLiteIndex *,
 RSResultsIterator *QueryString(RSLiteIndex *, 
                    const char *s, uint64_t n, 
                    char **err);
+
+void FreeRSLabels(RSLabel *labels, size_t count);
 
 #endif // __RS_LITE_H__

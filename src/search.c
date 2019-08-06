@@ -49,21 +49,21 @@ RSLiteIndex *RSLiteCreate(const char *name) {
 }
 
 int AddDoc (RSLiteIndex *fti, char *item, uint32_t itemlen, 
-            RSLabels *labels, count_t count) {
+            RSLabel *labels, count_t count) {
     RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
 
     for(count_t i = 0; i < count; ++i) {
-        VerifyAddField(fti, labels[i].field, labels[i].fieldlen);
+        VerifyAddField(fti, labels[i].fieldStr, labels[i].fieldLen);
             
         if (labels[i].RSFieldType == INDEXFLD_T_NUMERIC) {            
-            RediSearch_DocumentAddFieldNumber(doc, labels[i].field,
+            RediSearch_DocumentAddFieldNumber(doc, labels[i].fieldStr,
                                 labels[i].dbl, RSFLDTYPE_NUMERIC);
         } else if (labels[i].RSFieldType == INDEXFLD_T_FULLTEXT) {
-            RediSearch_DocumentAddFieldString(doc, labels[i].field,
-                                labels[i].str, labels[i].strlen, RSFLDTYPE_FULLTEXT);
+            RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
+                                labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_FULLTEXT);
         } else if (labels[i].RSFieldType == INDEXFLD_T_TAG) {
-            RediSearch_DocumentAddFieldString(doc, labels[i].field,
-                                labels[i].str, labels[i].strlen, RSFLDTYPE_TAG);
+            RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
+                                labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_TAG);
         } else if (labels[i].RSFieldType == INDEXFLD_T_GEO) {
             //  INDEXFLD_T_GEO = 0x04
             return REDISMODULE_ERR; // TODO error
@@ -75,10 +75,19 @@ int AddDoc (RSLiteIndex *fti, char *item, uint32_t itemlen,
 }
 
 int DeleteLabels(RSLiteIndex *fti, char *item, uint32_t itemlen, 
-                 RSLabels *labels, count_t count) {
+                 RSLabel *labels, count_t count) {
     return RediSearch_DeleteDocument(fti->idx, item, itemlen);
 }
 
 RSResultsIterator *QueryString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
   return RediSearch_IterateQuery(fti->idx, s, n, err);
+}
+
+void FreeRSLabels(RSLabel *labels, size_t count) {
+  for(size_t i = 0; i < count; ++i) {
+    free(labels[i].fieldStr);
+    free(labels[i].valueStr);
+  }
+  
+  free(labels);
 }
