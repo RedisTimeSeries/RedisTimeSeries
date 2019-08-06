@@ -61,6 +61,52 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
     return REDISMODULE_OK;
 }
 
+static int parseRSLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, RSLabels **rsLabels) {
+    int pos = RMUtil_ArgIndex("LABELS", argv, argc);
+    int first_label_pos = pos + 1;
+    RSLabel *labelsResult = NULL;
+    *label_count = 0;
+    if (pos < 0) {
+        *rsLabels = NULL;
+        return REDISMODULE_OK;
+    }
+
+    *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
+    if (label_count > 0) {
+    	labelsResult = malloc(sizeof(RSLabel) * (*label_count));
+        for (int i=0; i < *label_count; i++) {
+        	RedisModuleString *key = argv[first_label_pos + i*2];
+        	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
+
+            double dblValue;
+        	size_t keyLen, valueLen;
+
+        	// Processing Label Key into Field
+        	labelsResult[i].fieldStr = RedisModule_StringPtrLen(key, &keyLen);
+        	if(keyLen == 0) { goto exitOnError; }
+            labelsResult[i].fieldLen = keyLen;
+
+            if (RedisModule_StringToDouble(value, &dblValue) == REDISMODULE_OK) {
+                labelsResult[i].dbl = dblValue;
+                labelsResult[i].RSFieldType = RSFLDTYPE_NUMERIC;
+                continue;
+            }
+
+        	labelsResult[i].valueStr = RedisModule_StringPtrLen(value, &valueLen);
+        	if(valueLen==0 || strpbrk(labelsResult[i].valueStr, "(),")) {
+        		goto exitOnError;
+        	}
+            labelsResult[i].valueLen = valueLen;
+        };
+    }
+    *rsLabels = labelsResult;
+    return REDISMODULE_OK;
+
+exitOnError:
+    FreeLabels(labelsResult, label_count); // need to release prior key values too
+    return REDISMODULE_ERR;  
+}
+
 int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
