@@ -62,7 +62,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
     return REDISMODULE_OK;
 }
 */
-static int parseRSLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
+static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
     RSLabel *labelsResult = NULL;
@@ -75,23 +75,22 @@ static int parseRSLabelsFromArgs(RedisModuleString **argv, int argc, size_t *lab
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
     if (label_count > 0) {
     	labelsResult = malloc(sizeof(RSLabel) * (*label_count));
-        for (int i=0; i < *label_count; i++) {
+        for (int i = 0; i < *label_count; i++) {
         	RedisModuleString *key = argv[first_label_pos + i*2];
         	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
 
             double dblValue;
-        	size_t keyLen, valueLen;
+        	size_t *keyLen = &labelsResult[i].fieldLen;
+            size_t *valueLen = &labelsResult[i].valueLen;
 
         	// Processing Label Key into Field
-        	labelsResult[i].fieldStr = (char *)RedisModule_StringPtrLen(key, &keyLen);
-        	if(keyLen == 0) { goto exitOnError; }
-            labelsResult[i].fieldLen = keyLen;
+        	labelsResult[i].fieldStr = (char *)RedisModule_StringPtrLen(key, keyLen);
+        	if(*keyLen == 0) { goto exitOnError; }
 
-        	labelsResult[i].valueStr = (char *)RedisModule_StringPtrLen(value, &valueLen);
-        	if(valueLen==0 || strpbrk(labelsResult[i].valueStr, "(),")) {
+        	labelsResult[i].valueStr = (char *)RedisModule_StringPtrLen(value, valueLen);
+        	if(*valueLen == 0 || strpbrk(labelsResult[i].valueStr, "(),")) {
         		goto exitOnError;
         	}
-            labelsResult[i].valueLen = valueLen;
 
             if (RedisModule_StringToDouble(value, &dblValue) == REDISMODULE_OK) {
                 labelsResult[i].dbl = dblValue;
@@ -99,6 +98,8 @@ static int parseRSLabelsFromArgs(RedisModuleString **argv, int argc, size_t *lab
             } else {
                 labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
             }
+
+            // These RM_strings are for Series->labels
             labelsResult[i].RTS_Label.key = 
                 RedisModule_CreateStringFromString(NULL, key);
         	labelsResult[i].RTS_Label.value =
@@ -133,7 +134,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     *retentionTime = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
-    if(parseRSLabelsFromArgs(argv, argc, labelsCount, labels) == REDISMODULE_ERR){
+    if(parseRSLabelsFromArgs(ctx, argv, argc, labelsCount, labels) == REDISMODULE_ERR){
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse LABELS");
         return REDISMODULE_ERR;
     }

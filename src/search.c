@@ -28,7 +28,7 @@ static void VerifyAddField(RSLiteIndex *fti, char *field, uint32_t fieldlen) {
             if (fti->fields_count == 0) {
                 fti->fields = calloc(64, sizeof(char *));
             } else {
-                fti->fields = realloc(fti->fields, sizeof(char *) * (fti->fields_count + 10));
+                fti->fields = realloc(fti->fields, sizeof(char *) * (fti->fields_count + 64));
             }
         }
         RediSearch_CreateField (fti->idx, field, 
@@ -87,15 +87,81 @@ RSResultsIterator *RSL_GetQueryIter(RSLiteIndex *fti, const char *s, size_t n, c
 const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len) {
     return RediSearch_ResultsIteratorNext(iter, TSGlobalConfig.globalRSIndex->idx, len);
 }
+/*
+void RSL_CreateQuery(const char *s, size_t n) {
+int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator) {
+    char *token;
+    char *iter_ptr;
+    size_t _s;
+    const char *labelRaw = RedisModule_StringPtrLen(label, &_s);
+    char *labelstr = RedisModule_PoolAlloc(ctx, _s + 1);
+    labelstr[_s] = '\0';
+    strncpy(labelstr, labelRaw, _s);
 
+    // Extract key
+    token = strtok_r(labelstr, separator, &iter_ptr);
+    if (token == NULL) {
+        return TSDB_ERROR;
+    }
+    retQuery->key = RedisModule_CreateString(ctx, token, strlen(token));
+
+    // Extract value
+    token = strtok_r(NULL, separator, &iter_ptr);
+    if (strstr(separator, "=(") != NULL) {
+        if (token == NULL) {
+            return TSDB_ERROR;
+        }
+        size_t token_len = strlen(token);
+
+        if (token[token_len - 1] == ')') {
+            token[token_len - 1] = '\0'; // remove closing parentheses
+        } else {
+            return TSDB_ERROR;
+        }
+
+        int filterCount = 0;
+        for (int i=0; token[i]!='\0'; i++) {
+            if (token[i] == ',') {
+                filterCount++;
+            }
+        }
+        if (token_len <= 1) {
+            // when the token is <=1 it means that we have an empty list
+            retQuery->valueListCount = 0;
+        } else {
+            retQuery->valueListCount = filterCount  + 1;
+        }
+        retQuery->valuesList = RedisModule_PoolAlloc(ctx, retQuery->valueListCount * sizeof(RedisModuleString*));
+
+        char* subToken = strtok_r(token, ",", &iter_ptr);
+        for (int i=0; i < retQuery->valueListCount; i++) {
+            if (subToken == NULL) {
+                continue;
+            }
+            retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, subToken);
+            subToken = strtok_r(NULL, ",", &iter_ptr);
+        }
+    } else if (token != NULL) {
+        retQuery->valueListCount = 1;
+        retQuery->valuesList = RedisModule_PoolAlloc(ctx, sizeof(RedisModuleString*));
+        retQuery->valuesList[0] = RedisModule_CreateString(ctx, token, strlen(token));
+    } else {
+        retQuery->valuesList = NULL;
+        retQuery->valueListCount = 0;
+    }
+    return TSDB_OK;
+}
+*/
+
+/****** Helper functions ******/
 void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString) {
   for(size_t i = 0; i < count; ++i) {
     free(labels[i].fieldStr);
     free(labels[i].valueStr);
     if (freeRMString)
     {
-        free(labels[i].RTS_Label.key);
-        free(labels[i].RTS_Label.value);
+        RedisModule_FreeString(NULL, labels[i].RTS_Label.key);
+        RedisModule_FreeString(NULL, labels[i].RTS_Label.value);
     }    
   }
   

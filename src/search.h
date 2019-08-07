@@ -24,11 +24,11 @@ typedef struct {
 typedef struct {
   //Field string
   char *fieldStr;
-  uint32_t fieldLen;
+  size_t fieldLen;
   
   //Full Text or Tag string
   char *valueStr;
-  uint32_t valueLen;
+  size_t valueLen;
   
   //Numeric value
   double dbl;
