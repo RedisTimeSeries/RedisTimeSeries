@@ -2,6 +2,7 @@ PREFIX?=/usr/local
 INSTALL_LIB=$(PREFIX)/lib
 INSTALL=/usr/bin/install
 PAKCAGE_NAME?="../build/redistimeseries.{os}-{architecture}.latest.zip"
+REDISEARCH=../RediSearch/libredisearch.a
 
 #set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 ifndef RM_INCLUDE_DIR
@@ -37,8 +38,8 @@ rmutil:
 module.o: module.c version.h
 	$(CC) $(CFLAGS) -c -o $@ module.c
 
-redistimeseries.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o version.h
-	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o indexer.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
+redistimeseries.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o version.h search.o
+	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o indexer.o search.o $(REDISEARCH) $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
 
 install: all
 	@mkdir -p $(INSTALL_LIB)
@@ -76,3 +77,12 @@ package: redistimeseries.so
 	./clean_ramp.py `tail -1 /tmp/ramp_output`
 
 .PHONY: package tests unittests clean all
+
+#$(REDISEARCH):
+#ifeq (,$(wildcard $(REDISEARCH)))
+#	cd ../RediSearch; \
+#	mkdir build; \
+#	cd build; \
+#	cmake -DRS_BUILD_STATIC=ON ..; \
+#	make;
+#endif

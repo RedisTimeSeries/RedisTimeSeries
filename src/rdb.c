@@ -8,6 +8,7 @@
 #include "rdb.h"
 #include "chunk.h"
 #include "consts.h"
+#include "search.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -19,10 +20,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     uint64_t retentionTime = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
     uint64_t labelsCount = RedisModule_LoadUnsigned(io);
-    Label *labels = malloc(sizeof(Label) * labelsCount);
+    RSLabel *labels = malloc(sizeof(RSLabel) * labelsCount);
+    // TODO 
     for (int i=0; i<labelsCount; i++) {
-        labels[i].key = RedisModule_LoadString(io);
-        labels[i].value = RedisModule_LoadString(io);
+        labels[i].RTS_Label.key = RedisModule_LoadString(io);
+        labels[i].RTS_Label.value = RedisModule_LoadString(io);
     }
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
@@ -80,6 +82,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
+    // TODO
     for (int i=0; i < series->labelsCount; i++) {
         RedisModule_SaveString(io, series->labels[i].key);
         RedisModule_SaveString(io, series->labels[i].value);

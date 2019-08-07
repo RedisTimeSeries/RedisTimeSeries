@@ -6,11 +6,13 @@
 #ifndef __RS_LITE_H__
 #define __RS_LITE_H__
 
+#include <stdbool.h>
+
 #include "indexer.h"
-#include "field_spec.h"
 #include "redisearch_api.h"
 
 typedef uint32_t count_t;
+typedef uint8_t FieldType;
 typedef struct GeoFilter GeoFilter;
 
 typedef struct {
@@ -35,29 +37,29 @@ typedef struct {
   //GeoFilter *geo;
 
   FieldType RSFieldType;
+  Label RTS_Label;
 } RSLabel;
-
-static RSLiteIndex *globalRSIndex;
 
 RSLiteIndex *RSLiteCreate(const char *name);
 
-int AddDoc(RSLiteIndex *,
-           char *item, uint32_t itemlen,
+int RSL_Index(RSLiteIndex *,
+           const char *item, uint32_t itemlen,
            RSLabel *labels, count_t count);
 
-int DeleteKey(RSLiteIndex *,
-              char *item, uint32_t itemlen,
-              RSLabel *labels, count_t count);
+int RSL_Remove(RSLiteIndex *, const char *item, uint32_t itemlen);
 
 /*
  * Returns an iterator with results.
  * Function RediSearch_ResultsIteratorNext should be used to iterate over
  * all results until INDEXREAD_EOF is reached.
  */
-RSResultsIterator *QueryString(RSLiteIndex *, 
+RSResultsIterator *RSL_GetQueryIter(RSLiteIndex *, 
                    const char *s, uint64_t n, 
                    char **err);
 
-void FreeRSLabels(RSLabel *labels, size_t count);
+const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
+
+void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);
+Label *RSLabelToLabels(RSLabel *labels, size_t count);
 
 #endif // __RS_LITE_H__

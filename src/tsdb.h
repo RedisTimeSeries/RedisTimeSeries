@@ -13,6 +13,9 @@
 #include "indexer.h"
 #include "search.h"
 
+typedef struct RedisModuleDictIter RedisModuleDictIter;
+typedef struct RedisModuleDict RedisModuleDict;
+
 typedef struct CompactionRule {
     RedisModuleString *destKey;
     int32_t timeBucket;
@@ -34,7 +37,6 @@ typedef struct Series {
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
-    RSLiteIndex *fti;
 } Series;
 
 typedef struct SeriesIterator {
@@ -47,7 +49,8 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, RSLabel *labels, size_t labelsCount,
+                                int32_t retentionTime, short maxSamplesPerChunk);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
@@ -59,7 +62,8 @@ int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long timeBucket);
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName,
+                                Series *series, RSLabel *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(Series *series);
 
 // Iterator over the series

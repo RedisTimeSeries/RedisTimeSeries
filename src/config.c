@@ -11,7 +11,7 @@
 
 TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleString **argv, int argc) {
+int ReadTSConfig(RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {

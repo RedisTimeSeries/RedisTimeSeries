@@ -3,6 +3,8 @@
 #include <assert.h>
 
 #include "search.h"
+#include "config.h"
+#include "rmutil/alloc.h"
 //#include "geo_index.h"
 
 /***** Static functions *****/
@@ -48,46 +50,63 @@ RSLiteIndex *RSLiteCreate(const char *name) {
     return fti;
 }
 
-int AddDoc (RSLiteIndex *fti, char *item, uint32_t itemlen, 
-            RSLabel *labels, count_t count) {
+int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen, 
+              RSLabel *labels, count_t count) {
     RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
 
     for(count_t i = 0; i < count; ++i) {
         VerifyAddField(fti, labels[i].fieldStr, labels[i].fieldLen);
             
-        if (labels[i].RSFieldType == INDEXFLD_T_NUMERIC) {            
+        if (labels[i].RSFieldType == RSFLDTYPE_NUMERIC) {            
             RediSearch_DocumentAddFieldNumber(doc, labels[i].fieldStr,
                                 labels[i].dbl, RSFLDTYPE_NUMERIC);
-        } else if (labels[i].RSFieldType == INDEXFLD_T_FULLTEXT) {
+        } else if (labels[i].RSFieldType == RSFLDTYPE_FULLTEXT) {
             RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
                                 labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_FULLTEXT);
-        } else if (labels[i].RSFieldType == INDEXFLD_T_TAG) {
+        } else if (labels[i].RSFieldType == RSFLDTYPE_TAG) {
             RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
                                 labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_TAG);
-        } else if (labels[i].RSFieldType == INDEXFLD_T_GEO) {
-            //  INDEXFLD_T_GEO = 0x04
+        } else if (labels[i].RSFieldType == RSFLDTYPE_GEO) {
             return REDISMODULE_ERR; // TODO error
         } else {
             return REDISMODULE_ERR; // TODO error
         }
     }
     RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
+    return REDISMODULE_OK;
 }
 
-int DeleteLabels(RSLiteIndex *fti, char *item, uint32_t itemlen, 
-                 RSLabel *labels, count_t count) {
+int RSL_Remove(RSLiteIndex *fti, const char *item, uint32_t itemlen) {
     return RediSearch_DeleteDocument(fti->idx, item, itemlen);
 }
 
-RSResultsIterator *QueryString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
+RSResultsIterator *RSL_GetQueryIter(RSLiteIndex *fti, const char *s, size_t n, char **err) {
   return RediSearch_IterateQuery(fti->idx, s, n, err);
 }
 
-void FreeRSLabels(RSLabel *labels, size_t count) {
+const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len) {
+    return RediSearch_ResultsIteratorNext(iter, TSGlobalConfig.globalRSIndex->idx, len);
+}
+
+void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString) {
   for(size_t i = 0; i < count; ++i) {
     free(labels[i].fieldStr);
     free(labels[i].valueStr);
+    if (freeRMString)
+    {
+        free(labels[i].RTS_Label.key);
+        free(labels[i].RTS_Label.value);
+    }    
   }
   
   free(labels);
+}
+
+Label *RSLabelToLabels(RSLabel *labels, size_t count) {
+    Label *newLabels = (Label *)calloc(count, sizeof(Label));
+    for(size_t i = 0; i < count; ++i) {
+        newLabels[i].key = labels[i].RTS_Label.key;
+        newLabels[i].value = labels[i].RTS_Label.value;
+    }
+    return newLabels;
 }

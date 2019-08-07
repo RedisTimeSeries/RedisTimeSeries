@@ -8,6 +8,7 @@
 
 #include "redismodule.h"
 #include "parse_policies.h"
+#include "search.h"
 
 typedef struct {
     SimpleCompactionRule *compactionRules;
@@ -15,9 +16,10 @@ typedef struct {
     long long retentionPolicy;
     long long maxSamplesPerChunk;
     int hasGlobalConfig;
+    RSLiteIndex *globalRSIndex;
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleString **argv, int argc);
+int ReadTSConfig(RedisModuleString **argv, int argc);
 #endif
