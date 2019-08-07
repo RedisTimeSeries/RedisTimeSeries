@@ -156,8 +156,6 @@ int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate
 /****** Helper functions ******/
 void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString) {
   for(size_t i = 0; i < count; ++i) {
-    free(labels[i].fieldStr);
-    free(labels[i].valueStr);
     if (freeRMString)
     {
         RedisModule_FreeString(NULL, labels[i].RTS_Label.key);
