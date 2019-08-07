@@ -4,7 +4,9 @@
 
 #include "search.h"
 #include "config.h"
+#include "indexer.h"
 #include "rmutil/alloc.h"
+
 //#include "geo_index.h"
 
 /***** Static functions *****/
@@ -80,16 +82,115 @@ int RSL_Remove(RSLiteIndex *fti, const char *item, uint32_t itemlen) {
     return RediSearch_DeleteDocument(fti->idx, item, itemlen);
 }
 
-RSResultsIterator *RSL_GetQueryIter(RSLiteIndex *fti, const char *s, size_t n, char **err) {
+RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
   return RediSearch_IterateQuery(fti->idx, s, n, err);
+}
+
+RSResultsIterator *RSL_GetQueryFromNode(RSLiteIndex *fti, RSQNode *queryNode) {
+  return RediSearch_GetResultsIterator(queryNode, fti->idx);
 }
 
 const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len) {
     return RediSearch_ResultsIteratorNext(iter, TSGlobalConfig.globalRSIndex->idx, len);
 }
+
+int RSL_AppendTerm(RedisModuleString *RM_item, char *query, size_t queryLoc) {
+    // field=v1         @{field:v1}
+    // field=(v1,v2)    @{field:v1|v2}
+    // field!=v1       -@{field:v1}
+    // field!=(v1,v2)  -@{field:v1|v2}
+    // field=          -@{field:*}
+    // field!=          @{field:*}
+    size_t itemLen = 0;
+    char *item = RedisModule_StringPtrLen(RM_item, itemLen);
+    char *negativePtr = strstr(item, "!=");
+    if (negativePtr) {
+        switch (*(negativePtr + 2))
+        {
+        case '\0':
+            /* code */
+            break;
+        
+        default:
+            break;
+        }
+    }
+}
+
+const char *RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, int query_count) {
+    size_t queryLoc = 0;
+    char *query = (char *)calloc(1024, sizeof(char));
+    
+ 
+}
+
+int RSL_CreateQuery(RedisModuleCtx *ctx, RedisModuleString **argv, int start,
+                                            int query_count, RSQNode **tree) {
+    QueryPredicate *predList = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
+    if (parseLabelListFromArgs(ctx, argv, start, query_count, predList) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    RSQNode *negativeNode = NULL;
+
+    *tree = RediSearch_CreateIntersectNode(TSGlobalConfig.globalRSIndex, 0);
+    for(size_t i = 0; i < query_count; ++i) {
+        if (predList[i].valueListCount == 1) {
+            size_t fieldLen = 0, tokenLen = 0;
+            char *field = RedisModule_StringPtrLen(predList[i].key, &fieldLen);
+            char *token = RedisModule_StringPtrLen(predList[i].valuesList[0], &tokenLen);
+            RSQNode *temp = RediSearch_CreateTokenNode(TSGlobalConfig.globalRSIndex, field, token);
+            RediSearch_QueryNodeAddChild(tree, temp);
+        } else {
+            for(size_t j = 0; j < predList[i].valueListCount; ++j) {
+            }
+        }
+    }
+
+    if (query_count == 1) {
+        if (predList->valueListCount == 1) { 
+            size_t fieldLen = 0, tokenLen = 0;
+            char *field = RedisModule_StringPtrLen(predList->key, &fieldLen);
+            char *token = RedisModule_StringPtrLen(predList->valuesList, &tokenLen);
+            *tree = RediSearch_CreateTokenNode(TSGlobalConfig.globalRSIndex, field, token);
+            return REDISMODULE_OK;
+        } else {
+            for(si)
+        }
+    }
+
+}
+
 /*
-void RSL_CreateQuery(const char *s, size_t n) {
+RSResultsIterator *RSL_GetQueryIter(RedisModuleCtx *ctx, RSLiteIndex *fti, RedisModuleString **argv, int start, int query_count) {
+    size_t itemLen = 0;
+    const char *curItem = RedisModule_StringPtrLen(argv[start], itemLen);
+    if (strstr(curItem, "@") != NULL) {
+        return RSL_GetQueryFromString(fti, curItem, itemLen, NULL);
+    }
+
+    QueryPredicate *query = NULL; 
+    
+    parsePredicate(ctx, argv[start], query, )
+
+    RSQNode *head = NULL; 
+    if (query_count == 1) {
+        double dbl;
+        if (RedisModule_StringToDouble(argv[start], &dbl) == REDISMODULE_OK) {
+            head = RediSearch_CreateNumericNode(fti->idx, )
+        }
+    }
+
+
+}*/
+
+
+
+
+/*
 int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator) {
+
+
     char *token;
     char *iter_ptr;
     size_t _s;

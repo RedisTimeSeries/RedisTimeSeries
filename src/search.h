@@ -17,7 +17,7 @@ typedef struct GeoFilter GeoFilter;
 
 typedef struct {
     char **fields;              // Indexed fields.
-    uint32_t fields_count;          // Number of fields.
+    uint32_t fields_count;      // Number of fields.
     RSIndex *idx;               // RediSearch full-text index.
 } RSLiteIndex;
 
@@ -53,9 +53,12 @@ int RSL_Remove(RSLiteIndex *, const char *item, uint32_t itemlen);
  * Function RediSearch_ResultsIteratorNext should be used to iterate over
  * all results until INDEXREAD_EOF is reached.
  */
-RSResultsIterator *RSL_GetQueryIter(RSLiteIndex *, 
-                   const char *s, uint64_t n, 
-                   char **err);
+RSResultsIterator *RSL_GetQueryIter(RedisModuleCtx *ctx, RSLiteIndex *fti,
+                                    RedisModuleString **argv, int start,
+                                    int query_count);
+RSResultsIterator *RSL_GetQueryFromNode(RSLiteIndex *fti, RSQNode *queryNode);
+RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s, 
+                                          size_t n, char **err);
 
 const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
 

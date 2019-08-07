@@ -366,7 +366,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     char *querystr = "query string";
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    RSResultsIterator *resIter = RSL_GetQueryIter(TSGlobalConfig.globalRSIndex, querystr, 13, NULL);
+    RSResultsIterator *resIter = NULL;// RSL_GetQuery(ctx, TSGlobalConfig.globalRSIndex, querystr, 13, NULL);
 
     size_t keylen;
     long replylen = 0;
