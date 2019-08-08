@@ -11,6 +11,8 @@
 #include "indexer.h"
 #include "redisearch_api.h"
 
+#define QUERY_EXP 1024
+
 typedef uint32_t count_t;
 typedef uint8_t FieldType;
 typedef struct GeoFilter GeoFilter;
@@ -61,6 +63,9 @@ RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s,
                                           size_t n, char **err);
 
 const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
+
+int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
+                            char **queryStr, size_t *queryLen, int query_count);
 
 void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);
 Label *RSLabelToLabels(RSLabel *labels, size_t count);
