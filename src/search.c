@@ -94,36 +94,69 @@ const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len) {
     return RediSearch_ResultsIteratorNext(iter, TSGlobalConfig.globalRSIndex->idx, len);
 }
 
-int RSL_AppendTerm(RedisModuleString *RM_item, char *query, size_t queryLoc) {
-    // field=v1         @{field:v1}
-    // field=(v1,v2)    @{field:v1|v2}
-    // field!=v1       -@{field:v1}
-    // field!=(v1,v2)  -@{field:v1|v2}
-    // field=          -@{field:*}
-    // field!=          @{field:*}
+int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
+    // field=v1         @field:v1
+    // field=(v1,v2)    @field:(v1|v2)
+    // field!=v1       -@field:v1
+    // field!=(v1,v2)  -@field:(v1|v2)
+    // field=          -@field:*
+    // field!=          @field:*
     size_t itemLen = 0;
-    char *item = RedisModule_StringPtrLen(RM_item, itemLen);
-    char *negativePtr = strstr(item, "!=");
-    if (negativePtr) {
-        switch (*(negativePtr + 2))
+    bool addAsterisk = false;
+    const char *item = RedisModule_StringPtrLen(RM_item, &itemLen);
+
+    if ((*queryLoc + itemLen + 1 + 1) / QUERY_EXP == 1) {
+        *query = realloc(*query, ((*queryLoc / QUERY_EXP) + 1) * QUERY_EXP);
+    }  
+
+    char *equalPtr = strstr(item, "=");
+    if(equalPtr == NULL) { return REDISMODULE_ERR; }
+
+    if(*(equalPtr + 1) == '\0') { 
+        addAsterisk = true;
+    }
+
+    if ((*(equalPtr - 1) == '!' && *(equalPtr + 1) != '\0') ||
+        (*(equalPtr - 1) != '!' && *(equalPtr + 1) == '\0')) {
+        (*query)[(*queryLoc)++] = '-';        
+    }
+
+    (*query)[(*queryLoc)++] = '@';
+
+    for (size_t i = 0; i < itemLen; ++i) {
+        switch (item[i])
         {
-        case '\0':
-            /* code */
+        case '!':
             break;
-        
+        case '=':
+            (*query)[(*queryLoc)++] = ':';
+            break;
+        case ',':
+            (*query)[(*queryLoc)++] = '|';
+            break;        
         default:
+            (*query)[(*queryLoc)++] = item[i];
             break;
         }
     }
+    if (addAsterisk) {
+        (*query)[(*queryLoc)++] = '*';
+    }
+    (*query)[(*queryLoc)++] = ' ';
+    return REDISMODULE_OK;
 }
 
-const char *RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, int query_count) {
-    size_t queryLoc = 0;
-    char *query = (char *)calloc(1024, sizeof(char));
-    
- 
+int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
+                        char **queryStr, size_t *queryLen, int query_count) {
+    for(size_t i = start; i < query_count + start; ++i) {
+        if (RSL_AppendTerm(argv[i], queryStr, queryLen) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    }
+    (*queryStr)[--(*queryLen)] = '\0';
+    return REDISMODULE_OK;
 }
-
+/*
 int RSL_CreateQuery(RedisModuleCtx *ctx, RedisModuleString **argv, int start,
                                             int query_count, RSQNode **tree) {
     QueryPredicate *predList = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
@@ -159,7 +192,7 @@ int RSL_CreateQuery(RedisModuleCtx *ctx, RedisModuleString **argv, int start,
         }
     }
 
-}
+}*/
 
 /*
 RSResultsIterator *RSL_GetQueryIter(RedisModuleCtx *ctx, RSLiteIndex *fti, RedisModuleString **argv, int start, int query_count) {

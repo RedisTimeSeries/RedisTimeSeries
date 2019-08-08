@@ -363,18 +363,23 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    char *querystr = "query string";
+    size_t queryCount = argc - 1;
+    size_t queryLen = 0;
+    char *query = (char *)calloc(QUERY_EXP, sizeof(char));
+    if (RSL_RSQueryFromTSQuery(argv, 1, &query, &queryLen, queryCount) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    RSResultsIterator *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, NULL);
+    
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
-    RSResultsIterator *resIter = NULL;// RSL_GetQuery(ctx, TSGlobalConfig.globalRSIndex, querystr, 13, NULL);
 
     size_t keylen;
     long replylen = 0;
     void *tsKey = (void *)RSL_IterateResults(resIter, &keylen);
     while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
         RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
-        tsKey = (void *)RSL_IterateResults(resIter, &keylen);
         ++replylen;
+        tsKey = (void *)RSL_IterateResults(resIter, &keylen);
     }
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
