@@ -548,6 +548,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             var_key = 'var_key'
 
             random_numbers = 100
+            random.seed(0)
             items = random.sample(range(random_numbers), random_numbers)
         
             stdev = statistics.stdev(items)
@@ -561,8 +562,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             for i in range(random_numbers):
                 r.execute_command('TS.ADD', raw_key, i, items[i])
     
-            assert(stdev == float(r.execute_command('TS.GET', std_key)[1]))
-            assert(var == float(r.execute_command('TS.GET', var_key)[1]))            
+            assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
+            assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR        
 
     def test_agg_std_p(self):
         with self.redis() as r:
