@@ -541,39 +541,24 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             assert expected_result == actual_result
 
-    def _test_stds(self, redis, key, agg_type):
-        agg_key = '%s_agg_%s_10' % (key, agg_type)
-
-        items = random.sample(range(100), 100)
-
-        stdev = statistics.stdev(items)
-        var = statistics.variance(items)
-        assert redis.execute_command('TS.CREATE', key)
-        assert redis.execute_command('TS.CREATE', agg_key)
-        assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 1000)
-
-        for i in range(100):
-            redis.execute_command('TS.ADD', key, i, items[i])
-
-        return (stdev, var)
-
     def test_std_var_func(self):
         with self.redis() as r:
             raw_key = 'raw'
             std_key = 'std_key'
             var_key = 'var_key'
 
-            items = random.sample(range(100), 100)
-    
+            random_numbers = 100
+            items = random.sample(range(random_numbers), random_numbers)
+        
             stdev = statistics.stdev(items)
             var = statistics.variance(items)
             assert r.execute_command('TS.CREATE', raw_key)
             assert r.execute_command('TS.CREATE', std_key)
             assert r.execute_command('TS.CREATE', var_key)
-            assert r.execute_command('TS.CREATERULE', raw_key, std_key, "AGGREGATION", 'std.s', 1000)
-            assert r.execute_command('TS.CREATERULE', raw_key, var_key, "AGGREGATION", 'var.s', 1000)
+            assert r.execute_command('TS.CREATERULE', raw_key, std_key, "AGGREGATION", 'std.s', random_numbers)
+            assert r.execute_command('TS.CREATERULE', raw_key, var_key, "AGGREGATION", 'var.s', random_numbers)
     
-            for i in range(100):
+            for i in range(random_numbers):
                 r.execute_command('TS.ADD', raw_key, i, items[i])
     
             assert(stdev == float(r.execute_command('TS.GET', std_key)[1]))
