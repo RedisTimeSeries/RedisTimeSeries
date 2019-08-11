@@ -98,6 +98,7 @@ int RSL_Remove(RSLiteIndex *fti, const char *item, uint32_t itemlen) {
 }
 
 RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
+    printf("Query string : %s\n", s);
   return RediSearch_IterateQuery(fti->idx, s, n, err);
 }
 

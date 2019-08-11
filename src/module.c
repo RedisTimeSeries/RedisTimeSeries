@@ -364,33 +364,53 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
     return TSDB_OK;
 }
 
+// Receives argv which is the first query to parse
+int QueryFields(RedisModuleString **argv, int count, RSResultsIterator **resIter, char **err) {
+    char *query = NULL;
+    size_t queryLen = 0;
+    size_t firstLen = 0;
+    const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
+
+    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@')) {
+        query = (char *)calloc(QUERY_EXP, sizeof(char));
+        if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    } else {
+        query = (char *)firstStr;
+    }
+
+    *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, err);
+    if (query != firstStr) { free(query); }
+    return REDISMODULE_OK; 
+}
+
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     if (argc < 2) {
         return RedisModule_WrongArity(ctx);
     }
 
-    size_t queryCount = argc - 1;
-    size_t queryLen = 0;
-    char *query = (char *)calloc(QUERY_EXP, sizeof(char));
-    if (RSL_RSQueryFromTSQuery(argv, 1, &query, &queryLen, queryCount) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
     char *err = NULL;
-    RSResultsIterator *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, &err);   
-    if(resIter == NULL) { printf("Huston, we have a problem. Err : %s\n", err); }
+    RSResultsIterator *resIter = NULL;
+    QueryFields(argv + 1, argc - 1, &resIter, &err);
+    if(resIter == NULL) { 
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
 
     size_t keylen;
     long replylen = 0;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    void *tsKey = (void *)RSL_IterateResults(resIter, &keylen);
+    char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
         RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
         ++replylen;
-        tsKey = (void *)RSL_IterateResults(resIter, &keylen);
+        tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     }
     RedisModule_ReplySetArrayLength(ctx, replylen);
-    RediSearch_ResultsIteratorFree(resIter);    
+    RediSearch_ResultsIteratorFree(resIter);  
+
     return REDISMODULE_OK;
 }
 
@@ -938,21 +958,16 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-
-int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
-
-    if (argc != 2) {
-    	return RedisModule_WrongArity(ctx);
-    }
-
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+static void get(RedisModuleCtx *ctx, RedisModuleString *keyStr) {
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyStr, REDISMODULE_READ);
     Series *series;
 
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
+        RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
+        return;
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return;
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
@@ -961,12 +976,21 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithDouble(ctx, series->lastValue);
 
     RedisModule_CloseKey(key);
+}
+
+int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    if (argc != 2) {
+    	return RedisModule_WrongArity(ctx);
+    }
+    
+    get(ctx, argv[1]);
+
     return REDISMODULE_OK;
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
     if (argc < 3) {
         return RedisModule_WrongArity(ctx);
     }
