@@ -6,8 +6,14 @@
 #include "config.h"
 #include "indexer.h"
 #include "rmutil/alloc.h"
+#include "rmutil/util.h"
 
 //#include "geo_index.h"
+
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+      __typeof__ (b) _b = (b); \
+      _a > _b ? _a : _b; })
 
 /***** Static functions *****/
 static bool CheckFieldExist(RSLiteIndex *fti, const char *field, uint32_t fieldlen) {
@@ -23,7 +29,7 @@ static bool CheckFieldExist(RSLiteIndex *fti, const char *field, uint32_t fieldl
 } 
 
 // Checks whether a field exists and if not, creates it
-static void VerifyAddField(RSLiteIndex *fti, char *field, uint32_t fieldlen) {
+static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldlen) {
     // TODO : change to AVL
     if (CheckFieldExist(fti, field, fieldlen) == false) {
         if (fti->fields_count % 64 == 0) {
@@ -33,7 +39,7 @@ static void VerifyAddField(RSLiteIndex *fti, char *field, uint32_t fieldlen) {
                 fti->fields = realloc(fti->fields, sizeof(char *) * (fti->fields_count + 64));
             }
         }
-        RediSearch_CreateField (fti->idx, field, 
+        RSField *rsf = RediSearch_CreateField (fti->idx, field, 
                                 RSFLDTYPE_FULLTEXT | RSFLDTYPE_NUMERIC | RSFLDTYPE_TAG,
                                 RSFLDOPT_NONE);   
         fti->fields[fti->fields_count++] = RedisModule_Strdup(field);
@@ -57,20 +63,29 @@ int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen,
     RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
 
     for(count_t i = 0; i < count; ++i) {
-        VerifyAddField(fti, labels[i].fieldStr, labels[i].fieldLen);
+        size_t fieldLen = 0;
+        size_t valueLen = 0;
+        const char *fieldStr = RedisModule_StringPtrLen(labels[i].RTS_Label.key, &fieldLen);
+        const char *valueStr = RedisModule_StringPtrLen(labels[i].RTS_Label.value, &valueLen);
+        VerifyAddField(fti, fieldStr, fieldLen);
             
         if (labels[i].RSFieldType == RSFLDTYPE_NUMERIC) {            
-            RediSearch_DocumentAddFieldNumber(doc, labels[i].fieldStr,
-                                labels[i].dbl, RSFLDTYPE_NUMERIC);
+            RediSearch_DocumentAddFieldNumber(doc, fieldStr,
+                                labels[i].value.dbl, RSFLDTYPE_NUMERIC);
+            printf("NUMERIC\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_FULLTEXT) {
-            RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
-                                labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_FULLTEXT);
+            RediSearch_DocumentAddFieldString(doc, fieldStr,
+                                valueStr, valueLen, RSFLDTYPE_FULLTEXT);
+            printf("FULL\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_TAG) {
-            RediSearch_DocumentAddFieldString(doc, labels[i].fieldStr,
-                                labels[i].valueStr, labels[i].valueLen, RSFLDTYPE_TAG);
+            RediSearch_DocumentAddFieldString(doc, fieldStr,
+                                valueStr, valueLen, RSFLDTYPE_TAG);
+            printf("TAG\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_GEO) {
+            printf("GEO\n");
             return REDISMODULE_ERR; // TODO error
         } else {
+            printf("ELSE\n");
             return REDISMODULE_ERR; // TODO error
         }
     }
@@ -307,4 +322,99 @@ Label *RSLabelToLabels(RSLabel *labels, size_t count) {
         newLabels[i].value = labels[i].RTS_Label.value;
     }
     return newLabels;
+}
+
+static int parseFieldType(RedisModuleString *str, FieldType *type) {
+    size_t strLen = 0;
+    const char *typeStr = RedisModule_StringPtrLen(str, &strLen);
+    if (strLen != 3) { return REDISMODULE_ERR; }
+
+    if (strncasecmp(typeStr, "TXT", 3)) {
+        *type = RSFLDTYPE_FULLTEXT;
+    } else if(strncasecmp(typeStr, "NUM", 3)) {
+        *type = RSFLDTYPE_NUMERIC;
+    } else if(strncasecmp(typeStr, "TAG", 3)) {
+        *type = RSFLDTYPE_TAG;
+    } else if(strncasecmp(typeStr, "GEO", 3)) {
+        *type = RSFLDTYPE_GEO;
+    } else {
+        return REDISMODULE_ERR;
+    }
+
+    return REDISMODULE_OK;
+}
+
+static int parseGeo(RedisModuleString *str, GeoFilter *geo) {
+    // TODO
+    return REDISMODULE_OK;
+}
+
+
+/*
+ * Received in format [FIELDS field type value ...]
+ */
+int parseFieldsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
+    int pos = RMUtil_ArgIndex("FIELDS", argv, argc);
+    if (pos < 0) { return REDISMODULE_OK; }
+
+    RSLabel *labelsResult = NULL;
+    int first_label_pos = pos + 1;
+    // TODO : how to proceed with GEOs
+    // Leaning towards "lon&lat&radius&m|km|mi|ft"
+    *label_count = (size_t)(max(0, (argc - first_label_pos) / 3 ));
+    if (label_count > 0) {
+    	labelsResult = malloc(sizeof(RSLabel) * (*label_count));
+        for (int i = 0; i < *label_count; i++) {
+        	size_t *keyLen = 0;
+            size_t *valueLen = 0;
+        	RedisModuleString *key = argv[first_label_pos + i * 3];
+        	RedisModuleString *type = argv[first_label_pos + i * 3 + 1];
+        	RedisModuleString *value = argv[first_label_pos + i * 3 + 2];
+
+            if(RedisModule_StringPtrLen(key, keyLen) == NULL || *keyLen == 0) {
+                goto exitOnError; 
+            }
+            
+            if(parseFieldType(type, &labelsResult[i].RSFieldType) != REDISMODULE_OK) {
+        		goto exitOnError;
+            }
+
+            const char *ptr = NULL; // Can't declare after switch label.
+            switch (labelsResult[i].RSFieldType) {
+            case RSFLDTYPE_FULLTEXT:
+            case RSFLDTYPE_TAG:
+                ptr = RedisModule_StringPtrLen(value, valueLen);
+                if(*valueLen == 0 || strpbrk(ptr, "(),=!")) {
+                    goto exitOnError;
+                }
+                break;
+            case RSFLDTYPE_NUMERIC:
+                if (RedisModule_StringToDouble(value, &labelsResult[i].value.dbl) != REDISMODULE_OK) {
+                    goto exitOnError;
+                }                
+                break;
+            case RSFLDTYPE_GEO:
+                if (parseGeo(value, labelsResult[i].value.geo) != REDISMODULE_OK) {
+                    goto exitOnError;
+                }                
+                break;
+            default:
+                return REDISMODULE_ERR;
+                break;
+            }
+
+            // These RM_strings are for Series->labels
+            labelsResult[i].RTS_Label.key = 
+                RedisModule_CreateStringFromString(NULL, key);
+        	labelsResult[i].RTS_Label.value =
+                RedisModule_CreateStringFromString(NULL, value);
+        }
+    }
+    *rsLabels = labelsResult;
+    return REDISMODULE_OK;
+
+exitOnError:
+    FreeRSLabels(labelsResult, *label_count, true); // need to release prior key values too
+    labelsResult = NULL;
+    return REDISMODULE_ERR;  
 }

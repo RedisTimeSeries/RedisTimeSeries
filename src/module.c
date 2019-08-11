@@ -1,3 +1,4 @@
+
 /*
 * Copyright 2018-2019 Redis Labs Ltd. and Contributors
 *
@@ -74,26 +75,28 @@ static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
 
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
     if (label_count > 0) {
-    	labelsResult = malloc(sizeof(RSLabel) * (*label_count));
+    	labelsResult = calloc(*label_count, sizeof(RSLabel));
         for (int i = 0; i < *label_count; i++) {
         	RedisModuleString *key = argv[first_label_pos + i*2];
         	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
 
             double dblValue;
-        	size_t *keyLen = &labelsResult[i].fieldLen;
-            size_t *valueLen = &labelsResult[i].valueLen;
+        	size_t keyLen = 0;
+            size_t valueLen = 0;
 
         	// Processing Label Key into Field
-        	labelsResult[i].fieldStr = (char *)RedisModule_StringPtrLen(key, keyLen);
-        	if(*keyLen == 0) { goto exitOnError; }
+        	const char *fieldStr = RedisModule_StringPtrLen(key, &keyLen);
+        	if(fieldStr == NULL || keyLen == 0) { 
+                goto exitOnError;
+            }
 
-        	labelsResult[i].valueStr = (char *)RedisModule_StringPtrLen(value, valueLen);
-        	if(*valueLen == 0 || strpbrk(labelsResult[i].valueStr, "(),")) {
+        	const char *valueStr = RedisModule_StringPtrLen(value, &valueLen);
+        	if(valueStr == NULL || valueLen == 0 || strpbrk(valueStr, "(),")) {
         		goto exitOnError;
         	}
 
             if (RedisModule_StringToDouble(value, &dblValue) == REDISMODULE_OK) {
-                labelsResult[i].dbl = dblValue;
+                labelsResult[i].value.dbl = dblValue;
                 labelsResult[i].RSFieldType = RSFLDTYPE_NUMERIC;
             } else {
                 labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
@@ -136,6 +139,11 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     *labelsCount = 0;
     if(parseRSLabelsFromArgs(ctx, argv, argc, labelsCount, labels) == REDISMODULE_ERR){
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse LABELS");
+        return REDISMODULE_ERR;
+    }
+
+    if(parseFieldsFromArgs(ctx, argv, argc, labelsCount, labels) == REDISMODULE_ERR){
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse FIELDS");
         return REDISMODULE_ERR;
     }
 
@@ -358,7 +366,6 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
     if (argc < 2) {
         return RedisModule_WrongArity(ctx);
     }
@@ -369,12 +376,13 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RSL_RSQueryFromTSQuery(argv, 1, &query, &queryLen, queryCount) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
-    RSResultsIterator *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, NULL);
-    
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    char *err = NULL;
+    RSResultsIterator *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, &err);   
+    if(resIter == NULL) { printf("Huston, we have a problem. Err : %s\n", err); }
 
     size_t keylen;
     long replylen = 0;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     void *tsKey = (void *)RSL_IterateResults(resIter, &keylen);
     while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
         RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
@@ -382,7 +390,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         tsKey = (void *)RSL_IterateResults(resIter, &keylen);
     }
     RedisModule_ReplySetArrayLength(ctx, replylen);
-
+    RediSearch_ResultsIteratorFree(resIter);    
     return REDISMODULE_OK;
 }
 
@@ -1033,6 +1041,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
+    if(RediSearch_Init(ctx, REDISEARCH_INIT_LIBRARY) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    
     if (ReadTSConfig(argv, argc) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }

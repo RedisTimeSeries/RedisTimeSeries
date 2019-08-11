@@ -24,22 +24,15 @@ typedef struct {
 } RSLiteIndex;
 
 typedef struct {
-  //Field string
-  char *fieldStr;
-  size_t fieldLen;
-  
-  //Full Text or Tag string
-  char *valueStr;
-  size_t valueLen;
-  
-  //Numeric value
-  double dbl;
-
-  //GEO values
-  //GeoFilter *geo;
-
   FieldType RSFieldType;
-  Label RTS_Label;
+   // Numeric and Geo values
+  union
+  {
+    double dbl;
+    GeoFilter *geo;
+  } value;
+  
+  Label RTS_Label;     // two RedisModuleString for back compatibility
 } RSLabel;
 
 RSLiteIndex *RSLiteCreate(const char *name);
@@ -67,7 +60,10 @@ const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
 int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
                             char **queryStr, size_t *queryLen, int query_count);
 
-void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);
 Label *RSLabelToLabels(RSLabel *labels, size_t count);
+void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);
+
+int parseFieldsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
+                                size_t *label_count, RSLabel **rsLabels);
 
 #endif // __RS_LITE_H__
