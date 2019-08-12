@@ -43,7 +43,7 @@ TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 #### Notes
 * The command only alters the fields that are given,
-  e.g. if labels are given but retention isn't, then only the retention is altered.
+  e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the labels keyword without any fields will remove all existing labels.  
@@ -159,12 +159,12 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 ```
 
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
-- aggType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 - timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
@@ -186,7 +186,7 @@ TS.DELETERULE sourceKey destKey
 For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
 * `l=v` label equals value
 * `l!=v` label doesn't equal value
-* `l=` key does not ha * ve the label `l`
+* `l=` key does not have the label `l`
 * `l!=` key has label `l`
 * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
 * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
@@ -206,9 +206,7 @@ TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationTyp
 - toTimestamp - End timestamp for range query
 
 Optional args:
-
-- count - maximum number of returned results
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 - timeBucket - Time bucket for aggregation in milliseconds
 
 #### Complexity
@@ -255,10 +253,9 @@ TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType t
 * filter - [See Filtering](#filtering)
 
 Optional args:
-
- * count - Maximum number of returned results per timeseries
- * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
- * timeBucket - Time bucket for aggregation in milliseconds
+* count - Maximum number of returned results per timeseries
+* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+* timeBucket - Time bucket for aggregation in milliseconds
 
 #### Query by Filters Example
 
