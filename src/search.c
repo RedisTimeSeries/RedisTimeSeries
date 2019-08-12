@@ -72,20 +72,15 @@ int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen,
         if (labels[i].RSFieldType == RSFLDTYPE_NUMERIC) {            
             RediSearch_DocumentAddFieldNumber(doc, fieldStr,
                                 labels[i].value.dbl, RSFLDTYPE_NUMERIC);
-            printf("NUMERIC\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_FULLTEXT) {
             RediSearch_DocumentAddFieldString(doc, fieldStr,
                                 valueStr, valueLen, RSFLDTYPE_FULLTEXT);
-            printf("FULL\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_TAG) {
             RediSearch_DocumentAddFieldString(doc, fieldStr,
                                 valueStr, valueLen, RSFLDTYPE_TAG);
-            printf("TAG\n");
         } else if (labels[i].RSFieldType == RSFLDTYPE_GEO) {
-            printf("GEO\n");
             return REDISMODULE_ERR; // TODO error
         } else {
-            printf("ELSE\n");
             return REDISMODULE_ERR; // TODO error
         }
     }
@@ -98,7 +93,6 @@ int RSL_Remove(RSLiteIndex *fti, const char *item, uint32_t itemlen) {
 }
 
 RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s, size_t n, char **err) {
-    printf("Query string : %s\n", s);
   return RediSearch_IterateQuery(fti->idx, s, n, err);
 }
 

@@ -339,7 +339,6 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     char *err = NULL;
     RSResultsIterator *resIter = GetRSIter(argv + 1, argc - 1, &err);
-    printf("err %p iter %p", err, resIter);
     if (err != NULL) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
     }
@@ -409,7 +408,6 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     char *err = NULL;
     RSResultsIterator *resIter = GetRSIter(argv + filter_location + 1, argc - filter_location - 1, &err);
-    printf("err %p iter %p", err, resIter);
     if (err != NULL) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
     }
@@ -535,12 +533,12 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
-	    double value;
-	    api_timestamp_t timestamp;
-	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+    double value;
+    api_timestamp_t timestamp;
+    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
@@ -930,7 +928,6 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     char *err = NULL;
     RSResultsIterator *resIter = GetRSIter(argv + 2, argc - 2, &err);
-    printf("err %p iter %p", err, resIter);
     if (err != NULL) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
     }
