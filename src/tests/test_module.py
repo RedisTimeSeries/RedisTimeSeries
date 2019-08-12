@@ -176,7 +176,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
-            assert len(actual_result) == 3 
+            assert expected_result[:3] == actual_result
 
             expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                'labels': [['name', 'brown'], ['color', 'pink']],
@@ -705,8 +705,7 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'count', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-            print actual_result[0][1]
-            assert len(actual_result[0][1]) == 3
+            assert expected_result[0][2][:3] == actual_result[0][2][:3]
 
     def test_label_index(self):
         with self.redis() as r:
