@@ -47,18 +47,20 @@ int RSL_Remove(RSLiteIndex *, const char *item, uint32_t itemlen);
  * Returns an iterator with results.
  * Function RediSearch_ResultsIteratorNext should be used to iterate over
  * all results until INDEXREAD_EOF is reached.
- */
+ */ /*
 RSResultsIterator *RSL_GetQueryIter(RedisModuleCtx *ctx, RSLiteIndex *fti,
                                     RedisModuleString **argv, int start,
                                     int query_count);
 RSResultsIterator *RSL_GetQueryFromNode(RSLiteIndex *fti, RSQNode *queryNode);
 RSResultsIterator *RSL_GetQueryFromString(RSLiteIndex *fti, const char *s, 
                                           size_t n, char **err);
-
+*/
 const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
 
-int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
-                            char **queryStr, size_t *queryLen, int query_count);
+//int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
+//                            char **queryStr, size_t *queryLen, int query_count);
+
+RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err);
 
 Label *RSLabelToLabels(RSLabel *labels, size_t count);
 void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);

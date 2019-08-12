@@ -162,7 +162,7 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
     return REDISMODULE_OK;
 }
 
-int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
+static int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start, 
                         char **queryStr, size_t *queryLen, int query_count) {
     for(size_t i = start; i < query_count + start; ++i) {
         if (RSL_AppendTerm(argv[i], queryStr, queryLen) != REDISMODULE_OK) {
@@ -172,6 +172,31 @@ int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start,
     (*queryStr)[--(*queryLen)] = '\0';
     return REDISMODULE_OK;
 }
+
+// Receives argv which is the first query to parse
+RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
+    char *query = NULL;
+    size_t queryLen = 0;
+    size_t firstLen = 0;
+    RSResultsIterator *resIter = NULL;
+    const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
+
+    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@')) {
+        query = (char *)calloc(QUERY_EXP, sizeof(char));
+        if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
+            *err = "Error parsing LABELS";
+        }
+    } else {
+        query = (char *)firstStr;
+        queryLen = firstLen;
+    }
+
+    resIter = RediSearch_IterateQuery(TSGlobalConfig.globalRSIndex->idx, query, queryLen, err);
+    //*resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, err);
+    if (query != firstStr) { free(query); }
+    return resIter; 
+}
+
 /*
 int RSL_CreateQuery(RedisModuleCtx *ctx, RedisModuleString **argv, int start,
                                             int query_count, RSQNode **tree) {

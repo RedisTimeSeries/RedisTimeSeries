@@ -364,27 +364,6 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
     return TSDB_OK;
 }
 
-// Receives argv which is the first query to parse
-int QueryFields(RedisModuleString **argv, int count, RSResultsIterator **resIter, char **err) {
-    char *query = NULL;
-    size_t queryLen = 0;
-    size_t firstLen = 0;
-    const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
-
-    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@')) {
-        query = (char *)calloc(QUERY_EXP, sizeof(char));
-        if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
-            return REDISMODULE_ERR;
-        }
-    } else {
-        query = (char *)firstStr;
-    }
-
-    *resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, err);
-    if (query != firstStr) { free(query); }
-    return REDISMODULE_OK; 
-}
-
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     if (argc < 2) {
@@ -392,11 +371,13 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     char *err = NULL;
-    RSResultsIterator *resIter = NULL;
-    QueryFields(argv + 1, argc - 1, &resIter, &err);
+    RSResultsIterator *resIter = GetRSIter(argv + 1, argc - 1, &err);
+    printf("err %p iter %p", err, resIter);
+    if (err != NULL) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
+    }
     if(resIter == NULL) { 
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
+        return RedisModule_ReplyWithNull(ctx);
     }
 
     size_t keylen;
@@ -958,24 +939,24 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-static void get(RedisModuleCtx *ctx, RedisModuleString *keyStr) {
+static int seriesFromKey(RedisModuleCtx *ctx, RedisModuleString *keyStr, Series **series) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyStr, REDISMODULE_READ);
-    Series *series;
 
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
-        return;
+        return REDISMODULE_ERR;
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return;
-    } else {
-        series = RedisModule_ModuleTypeGetValue(key);
+        return REDISMODULE_ERR;
     }
-    RedisModule_ReplyWithArray(ctx, 2);
+    *series = RedisModule_ModuleTypeGetValue(key);
+
+    return REDISMODULE_OK;
+}
+
+static inline void get(RedisModuleCtx *ctx, Series *series) {
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
     RedisModule_ReplyWithDouble(ctx, series->lastValue);
-
-    RedisModule_CloseKey(key);
 }
 
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -983,39 +964,55 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 2) {
     	return RedisModule_WrongArity(ctx);
     }
-    
-    get(ctx, argv[1]);
 
+    Series *series;
+    if (seriesFromKey(ctx, argv[1], &series) != REDISMODULE_OK) {
+        return REDISMODULE_OK;
+    }
+
+    RedisModule_ReplyWithArray(ctx, 2);
+    get(ctx, series);
     return REDISMODULE_OK;
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-    if (argc < 3) {
+    if (argc < 3 || RMUtil_ArgIndex("FILTER", argv, argc) != 1) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
-    if (filter_location == -1) {
-        return RedisModule_WrongArity(ctx);
+    char *err = NULL;
+    RSResultsIterator *resIter = GetRSIter(argv + 2, argc - 2, &err);
+    printf("err %p iter %p", err, resIter);
+    if (err != NULL) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
     }
-    size_t query_count = argc - 1 - filter_location;
-    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
-    }
-
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
+    if(resIter == NULL) { 
+        return RedisModule_ReplyWithNull(ctx);
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
+    size_t keylen;
     Series *series;
+    long long replylen = 0;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
+    while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
+        RedisModuleString *rm_key = RedisModule_CreateString(ctx, tsKey, keylen);
+        if (seriesFromKey(ctx, rm_key, &series) != REDISMODULE_OK) {
+            return REDISMODULE_OK;
+        }
+
+        RedisModule_ReplyWithArray(ctx, 4);
+        RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
+        ReplyWithSeriesLabels(ctx, series);
+        RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+        RedisModule_ReplyWithDouble(ctx, series->lastValue);
+      
+        ++replylen;
+        tsKey = (char *)RSL_IterateResults(resIter, &keylen);
+    }
+
+/*
     while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key = RedisModule_OpenKey(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen),
                 REDISMODULE_READ);
@@ -1033,7 +1030,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         replylen++;
         RedisModule_CloseKey(key);
     }
-    RedisModule_DictIteratorStop(iter);
+    //RedisModule_DictIteratorStop(iter); */
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
     return REDISMODULE_OK;
