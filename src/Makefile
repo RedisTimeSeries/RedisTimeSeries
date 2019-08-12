@@ -27,7 +27,6 @@ CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-Wall \
 	-fPIC \
-	-fno-common \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
