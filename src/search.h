@@ -62,7 +62,7 @@ const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len);
 
 RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err);
 
-Label *RSLabelToLabels(RSLabel *labels, size_t count);
+Label *RSLabelToLabels(Label *dest, RSLabel *labels, size_t count);
 void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString);
 
 int parseFieldsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 

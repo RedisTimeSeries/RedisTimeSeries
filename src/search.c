@@ -39,7 +39,7 @@ static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldle
                 fti->fields = realloc(fti->fields, sizeof(char *) * (fti->fields_count + 64));
             }
         }
-        RSField *rsf = RediSearch_CreateField (fti->idx, field, 
+        RediSearch_CreateField (fti->idx, field, 
                                 RSFLDTYPE_FULLTEXT | RSFLDTYPE_NUMERIC | RSFLDTYPE_TAG,
                                 RSFLDOPT_NONE);   
         fti->fields[fti->fields_count++] = RedisModule_Strdup(field);
@@ -341,13 +341,15 @@ void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString) {
   free(labels);
 }
 
-Label *RSLabelToLabels(RSLabel *labels, size_t count) {
-    Label *newLabels = (Label *)calloc(count, sizeof(Label));
-    for(size_t i = 0; i < count; ++i) {
-        newLabels[i].key = labels[i].RTS_Label.key;
-        newLabels[i].value = labels[i].RTS_Label.value;
+Label *RSLabelToLabels(Label *dest, RSLabel *labels, size_t count) {
+    if (dest == NULL) {
+        dest = (Label *)calloc(count, sizeof(Label));
     }
-    return newLabels;
+    for(size_t i = 0; i < count; ++i) {
+        dest[i].key = labels[i].RTS_Label.key;
+        dest[i].value = labels[i].RTS_Label.value;
+    }
+    return dest;
 }
 
 static int parseFieldType(RedisModuleString *str, FieldType *type) {

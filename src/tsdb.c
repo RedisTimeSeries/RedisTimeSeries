@@ -29,7 +29,7 @@ Series *NewSeries(RedisModuleString *keyName, RSLabel *labels, size_t labelsCoun
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
-    newSeries->labels = RSLabelToLabels(labels, labelsCount);
+    newSeries->labels = RSLabelToLabels(NULL, labels, labelsCount);
     newSeries->labelsCount = labelsCount;
     Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
@@ -294,14 +294,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
             RedisModule_CloseKey(compactedKey);
             continue;
         }
-        /*
-        Label *compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
-        // todo: deep copy labels function
-        for (int l=0; l<labelsCount; l++){
-            compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
-            compactedLabels[l].value = RedisModule_CreateStringFromString(NULL, labels[l].value);
-        } */
-        Label *compactedLabels = RSLabelToLabels(labels, labelsCount);
+        Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof(RSLabel));
+        RSLabelToLabels(compactedLabels, labels, labelsCount);
 
         // For every aggregated key create 2 labels: `aggregation` and `time_bucket`.
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
