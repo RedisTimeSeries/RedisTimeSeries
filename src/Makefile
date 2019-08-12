@@ -27,6 +27,7 @@ CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-Wall \
 	-fPIC \
+	-fno-common \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
@@ -41,7 +42,6 @@ SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macosx) 
-CC_FLAGS += -dynamic
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 

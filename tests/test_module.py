@@ -4,12 +4,16 @@ import pytest
 import time
 import __builtin__
 import math
+import random
+import statistics 
 from rmtest import ModuleTestCase
 
 if os.environ['REDISTIMESERIES'] != '':
     REDISTIMESERIES = os.environ['REDISTIMESERIES']
 else:
     REDISTIMESERIES = os.path.dirname(os.path.abspath(__file__)) + '/redistimeseries.so'
+
+ALLOWED_ERROR = 0.001
 
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
@@ -541,6 +545,66 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[10, '156.5'], [20, '256.5'], [30, '356.5'], [40, '456.5']]
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             assert expected_result == actual_result
+
+    def test_std_var_func(self):
+        with self.redis() as r:
+            raw_key = 'raw'
+            std_key = 'std_key'
+            var_key = 'var_key'
+
+            random_numbers = 100
+            random.seed(0)
+            items = random.sample(range(random_numbers), random_numbers)
+        
+            stdev = statistics.stdev(items)
+            var = statistics.variance(items)
+            assert r.execute_command('TS.CREATE', raw_key)
+            assert r.execute_command('TS.CREATE', std_key)
+            assert r.execute_command('TS.CREATE', var_key)
+            assert r.execute_command('TS.CREATERULE', raw_key, std_key, "AGGREGATION", 'std.s', random_numbers)
+            assert r.execute_command('TS.CREATERULE', raw_key, var_key, "AGGREGATION", 'var.s', random_numbers)
+    
+            for i in range(random_numbers):
+                r.execute_command('TS.ADD', raw_key, i, items[i])
+    
+            assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
+            assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR        
+
+    def test_agg_std_p(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'std.p')
+
+            expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_std_s(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'std.s')
+
+            expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_var_p(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'var.p')
+
+            expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_var_s(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'var.s')
+
+            expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
 
     def test_agg_sum(self):
         with self.redis() as r:
