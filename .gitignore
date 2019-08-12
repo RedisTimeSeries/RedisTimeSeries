@@ -11,7 +11,6 @@ venv/
 .DS_Store
 /tests/.cache/
 /bin/
-VARIANT
-BINDIR
-/[0-9]*/
+/VARIANT
+/BINDIR
 /tests/tests_report.xml

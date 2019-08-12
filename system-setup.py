@@ -8,8 +8,6 @@ import argparse
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
 import paella
 
-os.environ["PYTHONWARNINGS"] = 'ignore:DEPRECATION::pip._internal.cli.base_command'
-
 #----------------------------------------------------------------------------------------------
 
 class RedisTimeSeriesSetup(paella.Setup):

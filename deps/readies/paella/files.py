@@ -12,7 +12,7 @@ def flines(fname, mode = 'rb'):
 @contextmanager
 def cwd(path):
     d0 = os.getcwd()
-    os.chdir(path)
+    os.chdir(str(path))
     try:
         yield
     finally:

@@ -2,7 +2,6 @@
 
 import sys
 import os
-import popen2
 import argparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
@@ -23,6 +22,8 @@ class Redis5Setup(paella.Setup):
         # https://chilts.org/installing-redis-from-chris-leas-ppa/
         self.run("add-apt-repository -y ppa:chris-lea/redis-server")
         self.install("redis-server")
+        # if not removed, might break apt-get update
+        self.run("add-apt-repository -r -y ppa:chris-lea/redis-server")
 
     def redhat_compat(self):
         # https://linuxize.com/post/how-to-install-and-configure-redis-on-centos-7/

@@ -57,7 +57,14 @@ class Platform:
     
     def is_redhat_compat(self):
         return self.dist == 'redhat' or self.dist == 'centos'
-    
+
+    def is_container(self):
+        with open('/proc/1/cgroups', 'r') as conf:
+            for line in conf:
+                if re.search('docker', line):
+                    return True
+        return False
+
     def report(self):
         print("This system is " + self.distname + " " + self.distver + ".\n")
 

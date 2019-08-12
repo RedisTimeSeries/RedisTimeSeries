@@ -1,6 +1,7 @@
 
 import os
 import sys
+import tempfile
 from .platform import OnPlatform, Platform
 
 #----------------------------------------------------------------------------------------------
@@ -9,13 +10,22 @@ class Runner:
     def __init__(self, nop=False):
         self.nop = nop
 
-    def run(self, cmd):
+    def run(self, cmd, output_on_error=False):
+        print(cmd)
+        sys.stdout.flush()
         if self.nop:
-            print(cmd)
             return
+        if output_on_error:
+            fd, temppath = tempfile.mkstemp()
+            os.close(fd)
+            cmd = "{{ {}; }} >{} 2>&1".format(cmd, temppath)
         rc = os.system(cmd)
         if rc > 0:
+            if output_on_error:
+                os.system("cat {}".format(temppath))
+                os.remove(temppath)
             eprint("command failed: " + cmd)
+            sys.stderr.flush()
             sys.exit(1)
 
     def has_command(self, cmd):
@@ -34,6 +44,9 @@ class RepoRefresh(OnPlatform):
     def debian_compat(self):
         self.runner.run("apt-get -qq update -y")
 
+    def macosx(self):
+        self.runner.run("brew update || true")
+
 #----------------------------------------------------------------------------------------------
 
 class Setup(OnPlatform):
@@ -50,6 +63,8 @@ class Setup(OnPlatform):
             self.python = "python"
         elif self.has_command("python2"):
             self.python = "python2"
+        elif self.has_command("python3"):
+            self.python = "python3"
 
         if self.os == 'macosx':
             # this is required because osx pip installed are done with --user
@@ -65,8 +80,8 @@ class Setup(OnPlatform):
         RepoRefresh(self.runner).invoke()
         self.invoke()
 
-    def run(self, cmd):
-        return self.runner.run(cmd)
+    def run(self, cmd, output_on_error=False):
+        return self.runner.run(cmd, output_on_error=output_on_error)
 
     def has_command(self, cmd):
         return self.runner.has_command(cmd)
@@ -74,28 +89,30 @@ class Setup(OnPlatform):
     #------------------------------------------------------------------------------------------
 
     def apt_install(self, packs, group=False):
-        self.run("apt-get -qq install -y " + packs)
+        self.run("apt-get -qq install -y " + packs, output_on_error=True)
 
     def yum_install(self, packs, group=False):
         if not group:
-            self.run("yum install -q -y " + packs)
+            self.run("yum install -q -y " + packs, output_on_error=True)
         else:
-            self.run("yum groupinstall -y " + packs)
+            self.run("yum groupinstall -y " + packs, output_on_error=True)
 
     def dnf_install(self, packs, group=False):
         if not group:
-            self.run("dnf install -y " + packs)
+            self.run("dnf install -y " + packs, output_on_error=True)
         else:
-            self.run("dnf groupinstall -y " + packs)
+            self.run("dnf groupinstall -y " + packs, output_on_error=True)
 
     def zypper_install(self, packs, group=False):
-        self.run("zipper --non-interactive install " + packs)
+        self.run("zipper --non-interactive install " + packs, output_on_error=True)
 
     def pacman_install(self, packs, group=False):
-        self.run("pacman --noconfirm -S " + packs)
+        self.run("pacman --noconfirm -S " + packs, output_on_error=True)
 
     def brew_install(self, packs, group=False):
-        self.run('brew install ' + packs)
+        # brew will fail if package is already installed
+        for pack in packs.split():
+            self.run("brew list {} &>/dev/null || brew install {}".format(pack, pack), output_on_error=True)
 
     def install(self, packs, group=False):
         if self.os == 'linux':
@@ -125,19 +142,20 @@ class Setup(OnPlatform):
         pip_user = ''
         if self.os == 'macosx':
             pip_user = '--user '
-        self.run("pip install --disable-pip-version-check " + pip_user + cmd)
+        self.run("pip install --disable-pip-version-check " + pip_user + cmd, output_on_error=True)
 
     def pip3_install(self, cmd):
         pip_user = ''
         if self.os == 'macosx':
             pip_user = '--user '
-        self.run("pip3 install --disable-pip-version-check " + pip_user + cmd)
+        self.run("pip3 install --disable-pip-version-check " + pip_user + cmd, output_on_error=True)
 
     def setup_pip(self):
         get_pip = "set -e; cd /tmp; curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py"
         if not self.has_command("pip"):
-            self.install("curl")
-            self.run(get_pip + "; " + self.python + " get-pip.py")
+            # self.install("python3-distutils")
+            self.install("curl ca-certificates")
+            self.run(get_pip + "; " + self.python + " get-pip.py", output_on_error=True)
         ## fails on ubuntu 18:
         # if not has_command("pip3") and has_command("python3"):
         #     run(get_pip + "; python3 get-pip.py")
