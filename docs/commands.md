@@ -95,7 +95,7 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 Append new values to a list of series.
 
 ```sql
-TS.ADD key timestamp value [key timestamp value ...]
+TS.MADD key timestamp value [key timestamp value ...]
 ```
 
 * timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
