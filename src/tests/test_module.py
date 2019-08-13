@@ -518,13 +518,12 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             r.execute_command('ts.create', 'tester')
 
             for i in range(20):
-                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == [i, str((i + 1) * 5)]
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == 'OK'
             result = r.execute_command('TS.RANGE', 'tester', 0, 20)
             assert len(result) == 20
             assert result[19][1] == '100'
 
-            result = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')
-            assert r.execute_command('ts.get', 'tester') == result
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') == 'OK'
 
     def test_agg_min(self):
         with self.redis() as r:

@@ -883,9 +883,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         rule = rule->nextRule;
     }
 
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
-    RedisModule_ReplyWithDouble(ctx, result);
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
