@@ -11,7 +11,7 @@
 #include "indexer.h"
 #include "redisearch_api.h"
 
-#define QUERY_EXP 1024
+#define DEFAULT_SIZE 1024
 
 typedef uint32_t count_t;
 typedef uint8_t FieldType;

@@ -15,6 +15,8 @@
       __typeof__ (b) _b = (b); \
       _a > _b ? _a : _b; })
 
+#define FIELDINDEX "_internal_RediSearch_"
+
 /***** Static functions *****/
 static bool CheckFieldExist(RSLiteIndex *fti, const char *field, uint32_t fieldlen) {
     assert(fti);
@@ -27,6 +29,12 @@ static bool CheckFieldExist(RSLiteIndex *fti, const char *field, uint32_t fieldl
     }
     return false;
 } 
+
+static inline void CheckSizeExpand(char **ptr, size_t curSize, size_t addSize) {
+    if (curSize + addSize / DEFAULT_SIZE == 1) { // TODO check length for empty value
+        *ptr = realloc(*ptr, ((curSize / DEFAULT_SIZE) + 1) * DEFAULT_SIZE);
+    }
+}
 
 // Checks whether a field exists and if not, creates it
 static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldlen) {
@@ -43,7 +51,7 @@ static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldle
                                 RSFLDTYPE_FULLTEXT | RSFLDTYPE_NUMERIC | RSFLDTYPE_TAG,
                                 RSFLDOPT_NONE);   
         fti->fields[fti->fields_count++] = RedisModule_Strdup(field);
-        // Ensure retention of string
+        // TODO Ensure retention of string
     }
 }
 
@@ -54,13 +62,20 @@ RSLiteIndex *RSLiteCreate(const char *name) {
     fti->fields = NULL; // TODO will probably changed once AVL is added
     fti->fields_count = 0;
     fti->idx = RediSearch_CreateIndex(name, NULL);
-
+    RediSearch_CreateField (fti->idx, FIELDINDEX, RSFLDTYPE_TAG, RSFLDOPT_NONE);  
     return fti;
 }
 
 int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen, 
               RSLabel *labels, count_t count) {
+    if (!labels) {
+        return REDISMODULE_OK;
+    }
+    
     RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
+
+    size_t fieldNamesLen = 0;
+    char *fieldNamesStr = (char *)calloc(DEFAULT_SIZE, sizeof(char));
 
     for(count_t i = 0; i < count; ++i) {
         size_t fieldLen = 0;
@@ -68,6 +83,11 @@ int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen,
         const char *fieldStr = RedisModule_StringPtrLen(labels[i].RTS_Label.key, &fieldLen);
         const char *valueStr = RedisModule_StringPtrLen(labels[i].RTS_Label.value, &valueLen);
         VerifyAddField(fti, fieldStr, fieldLen);
+
+        CheckSizeExpand(&fieldNamesStr, fieldNamesLen, fieldLen + 1);
+        memcpy(fieldNamesStr + fieldNamesLen, fieldStr, fieldLen);
+        fieldNamesLen += fieldLen;
+        fieldNamesStr[fieldNamesLen++] = ',';
             
         if (labels[i].RSFieldType == RSFLDTYPE_NUMERIC) {            
             RediSearch_DocumentAddFieldNumber(doc, fieldStr,
@@ -84,6 +104,8 @@ int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen,
             return REDISMODULE_ERR; // TODO error
         }
     }
+    fieldNamesStr[--fieldNamesLen] = '\0';
+    RediSearch_DocumentAddFieldString(doc, FIELDINDEX, fieldNamesStr, fieldNamesLen, RSFLDTYPE_TAG);
     RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
     return REDISMODULE_OK;
 }
@@ -109,14 +131,14 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
     // field=(v1,v2)    @field:(v1|v2)
     // field!=v1       -@field:v1
     // field!=(v1,v2)  -@field:(v1|v2)
-    // field=          -@field:*
-    // field!=          @field:*
+    // field=          -@_internal_RediSearch_:{field}
+    // field!=          @_internal_RediSearch_:{field}
     size_t itemLen = 0;
     bool addAsterisk = false;
     const char *item = RedisModule_StringPtrLen(RM_item, &itemLen);
 
-    if ((*queryLoc + itemLen + 1 + 1) / QUERY_EXP == 1) {
-        *query = realloc(*query, ((*queryLoc / QUERY_EXP) + 1) * QUERY_EXP);
+    if ((*queryLoc + itemLen + 1 + 1) / DEFAULT_SIZE == 1) { // TODO check length for empty value
+        *query = realloc(*query, ((*queryLoc / DEFAULT_SIZE) + 1) * DEFAULT_SIZE);
     }  
 
     char *equalPtr = strstr(item, "=");
@@ -124,33 +146,55 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
 
     if(*(equalPtr + 1) == '\0') { 
         addAsterisk = true;
-    }
-
-    if ((*(equalPtr - 1) == '!' && *(equalPtr + 1) != '\0') ||
-        (*(equalPtr - 1) != '!' && *(equalPtr + 1) == '\0')) {
-        (*query)[(*queryLoc)++] = '-';        
-    }
-
-    (*query)[(*queryLoc)++] = '@';
-
-    for (size_t i = 0; i < itemLen; ++i) {
-        switch (item[i])
-        {
-        case '!':
-            break;
-        case '=':
-            (*query)[(*queryLoc)++] = ':';
-            break;
-        case ',':
-            (*query)[(*queryLoc)++] = '|';
-            break;        
-        default:
-            (*query)[(*queryLoc)++] = item[i];
-            break;
+        if (*(equalPtr - 1) != '!') {
+            (*query)[(*queryLoc)++] = '-';
+        } else {
+            --equalPtr;
         }
+        
+        (*query)[(*queryLoc)++] = '@';
+        size_t len = strlen(FIELDINDEX);
+        memcpy(*query + (*queryLoc), FIELDINDEX, len);
+        *queryLoc += len;
+
+        (*query)[(*queryLoc)++] = ':';
+        (*query)[(*queryLoc)++] = '{';
+
+        len = (size_t)(equalPtr - item);
+        memcpy(*query + (*queryLoc), item, len);
+        *queryLoc += len;
+        (*query)[(*queryLoc)++] = '}';    
+        (*query)[(*queryLoc)++] = ' ';    
+        printf("Query is %s\n", *query);    
     }
-    if (addAsterisk) {
-        (*query)[(*queryLoc)++] = '*';
+
+    else {
+        if ((*(equalPtr - 1) == '!' && *(equalPtr + 1) != '\0') ||
+            (*(equalPtr - 1) != '!' && *(equalPtr + 1) == '\0')) {
+            (*query)[(*queryLoc)++] = '-';        
+        }
+
+        (*query)[(*queryLoc)++] = '@';
+
+        for (size_t i = 0; i < itemLen; ++i) {
+            switch (item[i])
+            {
+            case '!':
+                break;
+            case '=':
+                (*query)[(*queryLoc)++] = ':';
+                break;
+            case ',':
+                (*query)[(*queryLoc)++] = '|';
+                break;        
+            default:
+                (*query)[(*queryLoc)++] = item[i];
+                break;
+            }
+        }
+        if (addAsterisk) {
+            (*query)[(*queryLoc)++] = '*';
+        }
     }
     (*query)[(*queryLoc)++] = ' ';
     return REDISMODULE_OK;
@@ -176,7 +220,7 @@ RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
     const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
 
     if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@')) {
-        query = (char *)calloc(QUERY_EXP, sizeof(char));
+        query = (char *)calloc(DEFAULT_SIZE, sizeof(char));
         if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
             *err = "Error parsing LABELS";
         }
@@ -186,7 +230,6 @@ RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
     }
 
     resIter = RediSearch_IterateQuery(TSGlobalConfig.globalRSIndex->idx, query, queryLen, err);
-    //*resIter = RSL_GetQueryFromString(TSGlobalConfig.globalRSIndex, query, queryLen, err);
     if (query != firstStr) { free(query); }
     return resIter; 
 }

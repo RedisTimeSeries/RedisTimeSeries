@@ -650,7 +650,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long retentionTime;
     long long maxSamplesPerChunk;
     size_t labelsCount;
-    RSLabel *labels;
+    RSLabel *labels = NULL;
 
     if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
