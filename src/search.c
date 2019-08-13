@@ -327,8 +327,12 @@ void FreeRSLabels(RSLabel *labels, size_t count, bool freeRMString) {
   for(size_t i = 0; i < count; ++i) {
     if (freeRMString)
     {
-        RedisModule_FreeString(NULL, labels[i].RTS_Label.key);
-        RedisModule_FreeString(NULL, labels[i].RTS_Label.value);
+        if (labels[i].RTS_Label.key) {
+            RedisModule_FreeString(NULL, labels[i].RTS_Label.key);
+        }
+        if (labels[i].RTS_Label.value) {
+            RedisModule_FreeString(NULL, labels[i].RTS_Label.value);
+        }
     }    
   }
   

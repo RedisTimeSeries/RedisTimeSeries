@@ -33,6 +33,7 @@ static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
+    if ((argc - pos) % 2 == 0) { return REDISMODULE_ERR; }
     RSLabel *labelsResult = NULL;
     *label_count = 0;
     if (pos < 0) {
@@ -44,12 +45,10 @@ static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
     if (label_count > 0) {
     	labelsResult = calloc(*label_count, sizeof(RSLabel));
         for (int i = 0; i < *label_count; i++) {
-        	RedisModuleString *key = argv[first_label_pos + i*2];
-        	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
-
-            double dblValue;
         	size_t keyLen = 0;
             size_t valueLen = 0;
+        	RedisModuleString *key = argv[first_label_pos + i * 2];
+        	RedisModuleString *value = argv[first_label_pos + i * 2 + 1];
 
         	// Processing Label Key into Field
         	const char *fieldStr = RedisModule_StringPtrLen(key, &keyLen);
@@ -61,13 +60,7 @@ static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
         	if(valueStr == NULL || valueLen == 0 || strpbrk(valueStr, "(),")) {
         		goto exitOnError;
         	}
-
-            if (RedisModule_StringToDouble(value, &dblValue) == REDISMODULE_OK) {
-                labelsResult[i].value.dbl = dblValue;
-                labelsResult[i].RSFieldType = RSFLDTYPE_NUMERIC;
-            } else {
-                labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
-            }
+            labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
 
             // These RM_strings are for Series->labels
             labelsResult[i].RTS_Label.key = 
@@ -715,6 +708,10 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
         size_t keyLen;
         const char *keyStr = RedisModule_StringPtrLen(keyName, &keyLen);
         RSL_Index(TSGlobalConfig.globalRSIndex, keyStr, keyLen, newLabels, labelsCount);
+        free(series->labels);
+        series->labels = (Label *)calloc(labelsCount, sizeof(Label));
+        series->labels = RSLabelToLabels(NULL, newLabels, labelsCount);
+        series->labelsCount = labelsCount;
         FreeRSLabels(newLabels, labelsCount, FALSE);
     }
 
