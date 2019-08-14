@@ -719,8 +719,9 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert ['tester2'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class!=middle', 'x=')
             assert [] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'x=')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=top', 'z=')
-            with pytest.raises(redis.ResponseError):
-                r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
+    #       No limitation using RediSearch 
+    #       with pytest.raises(redis.ResponseError):
+    #           r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
             assert ['tester3'] == r.execute_command('TS.QUERYINDEX', 'z=', 'x=2')
 
             # Test filter list
@@ -733,8 +734,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                 assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(')
             with pytest.raises(redis.ResponseError):
                 assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(ab')
-            with pytest.raises(redis.ResponseError):
-                assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
+     #       with pytest.raises(redis.ResponseError):
+     #           assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
 
     def test_series_ordering(self):
         with self.redis() as r:

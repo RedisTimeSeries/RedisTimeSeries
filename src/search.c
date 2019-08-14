@@ -127,24 +127,26 @@ const char *RSL_IterateResults(RSResultsIterator *iter, size_t *len) {
 }
 
 int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
-    // field=v1         @field:v1
-    // field=(v1,v2)    @field:(v1|v2)
-    // field!=v1       -@field:v1
-    // field!=(v1,v2)  -@field:(v1|v2)
-    // field=          -@_internal_RediSearch_:{field}
-    // field!=          @_internal_RediSearch_:{field}
+    // field=v1         (@field:v1)
+    // field=(v1,v2)    (@field:(v1|v2))
+    // field!=v1       (-@field:v1)
+    // field!=(v1,v2)  (-@field:(v1|v2))
+    // field=          (-@_internal_RediSearch_:{field})
+    // field!=          (@_internal_RediSearch_:{field})
     size_t itemLen = 0;
     bool addAsterisk = false;
     const char *item = RedisModule_StringPtrLen(RM_item, &itemLen);
 
-    if ((*queryLoc + itemLen + 1 + 1) / DEFAULT_SIZE == 1) { // TODO check length for empty value
+    if ((*queryLoc + itemLen + 3 + 1) / DEFAULT_SIZE == 1) { // 3 for '(', ')', ' '
         *query = realloc(*query, ((*queryLoc / DEFAULT_SIZE) + 1) * DEFAULT_SIZE);
     }  
 
     char *equalPtr = strstr(item, "=");
     if(equalPtr == NULL) { return REDISMODULE_ERR; }
 
-    if(*(equalPtr + 1) == '\0') { 
+    (*query)[(*queryLoc)++] = '(';
+    if(*(equalPtr + 1) == '\0' || 
+      (*(equalPtr + 1) == '(' && *(equalPtr + 2) == ')')) { 
         addAsterisk = true;
         if (*(equalPtr - 1) != '!') {
             (*query)[(*queryLoc)++] = '-';
@@ -164,8 +166,6 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
         memcpy(*query + (*queryLoc), item, len);
         *queryLoc += len;
         (*query)[(*queryLoc)++] = '}';    
-        (*query)[(*queryLoc)++] = ' ';    
-        printf("Query is %s\n", *query);    
     }
 
     else {
@@ -196,6 +196,7 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
             (*query)[(*queryLoc)++] = '*';
         }
     }
+    (*query)[(*queryLoc)++] = ')';
     (*query)[(*queryLoc)++] = ' ';
     return REDISMODULE_OK;
 }
@@ -219,7 +220,7 @@ RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
     RSResultsIterator *resIter = NULL;
     const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
 
-    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@')) {
+    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@' && firstStr[0] != '(')) {
         query = (char *)calloc(DEFAULT_SIZE, sizeof(char));
         if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
             *err = "Error parsing LABELS";
@@ -229,7 +230,9 @@ RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
         queryLen = firstLen;
     }
 
-    resIter = RediSearch_IterateQuery(TSGlobalConfig.globalRSIndex->idx, query, queryLen, err);
+    printf("Query is %s and query len is %ld\n", query, queryLen);    
+
+    resIter = RediSearch_IterateQuery(TSGlobalConfig.globalRSIndex->idx, query, queryLen + 1, err);
     if (query != firstStr) { free(query); }
     return resIter; 
 }

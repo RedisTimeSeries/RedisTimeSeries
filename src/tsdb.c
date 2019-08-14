@@ -125,9 +125,9 @@ void FreeSeries(void *value) {
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModule_AutoMemory(ctx);
-    RemoveIndexedMetric(ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    //RemoveIndexedMetric(ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
 
-    FreeLabels(currentSeries->labels, currentSeries->labelsCount);
+    FreeRSLabels(currentSeries->labels, currentSeries->labelsCount, true);
 
     RedisModule_FreeThreadSafeContext(ctx);
     RedisModule_FreeDict(NULL, currentSeries->chunks);

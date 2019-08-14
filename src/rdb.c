@@ -60,7 +60,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         }
     }
 
-    IndexMetric(ctx, keyName, series->labels, series->labelsCount);
+    // TODO IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     return series;
 }
 
