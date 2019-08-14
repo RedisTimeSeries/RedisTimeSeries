@@ -768,8 +768,12 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'count', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-            assert expected_result[0][2][:3] == actual_result[0][2][:3]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            assert expected_result[0][2][:3] == actual_result[0][2]
+            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
+            assert expected_result[0][2][1:9] == actual_result[0][2][:8]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
+            assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
 
     def test_label_index(self):
         with self.redis() as r:
