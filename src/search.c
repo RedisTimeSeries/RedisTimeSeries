@@ -66,11 +66,13 @@ RSLiteIndex *RSLiteCreate(const char *name) {
     return fti;
 }
 
-int RSL_Index(RSLiteIndex *fti, const char *item, uint32_t itemlen, 
-              RSLabel *labels, count_t count) {
-    if (!labels) {
+int RSL_Index(RSLiteIndex *fti, RedisModuleString *keyName, RSLabel *labels, count_t count) {
+    if (!count) {
         return REDISMODULE_OK;
     }
+
+    size_t itemlen = 0;
+    const char *item = RedisModule_StringPtrLen(keyName, &itemlen);
     
     RSDoc *doc = RediSearch_CreateDocument(item, itemlen, 1, 0);
 

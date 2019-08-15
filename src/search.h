@@ -37,9 +37,8 @@ typedef struct {
 
 RSLiteIndex *RSLiteCreate(const char *name);
 
-int RSL_Index(RSLiteIndex *,
-           const char *item, uint32_t itemlen,
-           RSLabel *labels, count_t count);
+int RSL_Index(RSLiteIndex *fti, RedisModuleString *keyName,
+              RSLabel *labels, count_t count);
 
 int RSL_Remove(RSLiteIndex *, const char *item, uint32_t itemlen);
 

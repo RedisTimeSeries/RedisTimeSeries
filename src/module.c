@@ -629,10 +629,7 @@ int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, RSLabel *labels
         return TSDB_ERROR;
     }
 
-    //IndexMetric(ctx, keyName, (*series)->labels, (*series)->labelsCount);
-    size_t keyLen = 0;
-    const char *keyStr = RedisModule_StringPtrLen(keyName, &keyLen);
-    RSL_Index(TSGlobalConfig.globalRSIndex, keyStr, keyLen, labels, labelsCount);
+    RSL_Index(TSGlobalConfig.globalRSIndex, keyName, labels, labelsCount);
     FreeRSLabels(labels, labelsCount, FALSE);
 
     return TSDB_OK;
@@ -705,9 +702,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
-        size_t keyLen;
-        const char *keyStr = RedisModule_StringPtrLen(keyName, &keyLen);
-        RSL_Index(TSGlobalConfig.globalRSIndex, keyStr, keyLen, newLabels, labelsCount);
+        RSL_Index(TSGlobalConfig.globalRSIndex, keyName, newLabels, labelsCount);
         free(series->labels);
         series->labels = (Label *)calloc(labelsCount, sizeof(Label));
         series->labels = RSLabelToLabels(NULL, newLabels, labelsCount);

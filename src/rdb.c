@@ -9,6 +9,7 @@
 #include "chunk.h"
 #include "consts.h"
 #include "search.h"
+#include "config.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -30,6 +31,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
     Series *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
+
+    RSL_Index(TSGlobalConfig.globalRSIndex, keyName, labels, labelsCount);
+    FreeRSLabels(labels, labelsCount, FALSE);
 
     CompactionRule *lastRule;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
