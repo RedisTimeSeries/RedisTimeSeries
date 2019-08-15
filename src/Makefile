@@ -25,6 +25,14 @@ else
 endif
 CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
 
+ifeq ($(COV),1)
+CC=gcc
+LD=gcc
+CFLAGS += -fprofile-arcs -ftest-coverage
+LDFLAGS += -fprofile-arcs
+SHOBJ_LDFLAGS += -fprofile-arcs
+endif
+
 all: rmutil redistimeseries.so
 
 rmutil:
@@ -45,6 +53,10 @@ uninstall:
 
 clean:
 	rm -rf *.xo *.so *.o ./tests_runner
+	$(RM) -rf tmp
+	find . -name '*.gcov' -delete
+	find . -name '*.gcda' -delete
+	find . -name '*.gcno' -delete
 
 tests: redistimeseries.so
 	python2 -m pytest ${EXTRA_ARGS} -svv .
@@ -70,5 +82,17 @@ package: redistimeseries.so
 	mkdir -p ../build
 	ramp pack -m "`pwd`/../ramp.yml" -v -o ${PAKCAGE_NAME} "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
 	./clean_ramp.py `tail -1 /tmp/ramp_output`
+
+COV_DIR=tmp/lcov
+
+cov coverage:
+	@$(MAKE) clean
+	@$(MAKE) tests COV=1
+	mkdir -p $(COV_DIR)
+	gcov -c -b /* > /dev/null 2>&1
+	lcov -d . -c -o $(COV_DIR)/gcov.info --no-external > /dev/null 2>&1
+	lcov -r $(COV_DIR)/gcov.info "*test*" "*contrib*" "*redismodule.h" "*util.c*" -o $(COV_DIR)/gcov.info > /dev/null 2>&1
+	lcov -l $(COV_DIR)/gcov.info
+	genhtml --legend -o $(COV_DIR)/report $(COV_DIR)/gcov.info > /dev/null 2>&1
 
 .PHONY: package tests unittests clean all

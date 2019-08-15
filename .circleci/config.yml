@@ -35,6 +35,13 @@ jobs:
             - build
       - store_test_results:
           path: /workspace/tests
+      - run:
+          name: Coverage
+          command: >- 
+            apt-get update &&
+            apt-get install -y lcov curl &&
+            make coverage &&
+            bash <(curl -s https://codecov.io/bash)
   package_branch:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
