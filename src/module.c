@@ -189,9 +189,10 @@ static int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
         if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
-            int second_offset = offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset) { return TSDB_OK; }
-            offset = second_offset;
+            if (strcasecmp(RedisModule_StringPtrLen(argv[offset + 2], NULL), "COUNT") != 0) {
+                return TSDB_OK;
+            }
+            offset += 2;
         }
         if (RedisModule_StringToLongLong(argv[offset + 1], count) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse COUNT");
