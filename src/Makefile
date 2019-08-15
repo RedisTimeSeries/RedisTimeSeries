@@ -23,7 +23,16 @@ else
 	SHOBJ_CFLAGS ?= -dynamic -fno-common -g -ggdb
 	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup
 endif
-CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
+CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O0 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
+
+CC=gcc
+LD=gcc
+
+ifeq ($(COV),1)
+CFLAGS += -fprofile-arcs -ftest-coverage
+LDFLAGS += -fprofile-arcs
+SHOBJ_LDFLAGS += -fprofile-arcs
+endif
 
 ifeq ($(COV),1)
 CC=gcc
@@ -65,7 +74,7 @@ run: redistimeseries.so
 	redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
 
 gdb: redistimeseries.so
-	gdb --args `which redis-server` --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+	cgdb --args `which redis-server` --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
 valgrind: redistimeseries.so
 	valgrind --leak-check=full --show-leak-kinds=all -v redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
 
