@@ -43,7 +43,7 @@ TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 #### Notes
 * The command only alters the fields that are given,
-  e.g. if labels are given but retention isn't, then only the retention is altered.
+  e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the labels keyword without any fields will remove all existing labels.  
@@ -95,7 +95,7 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 Append new values to a list of series.
 
 ```sql
-TS.ADD key timestamp value [key timestamp value ...]
+TS.MADD key timestamp value [key timestamp value ...]
 ```
 
 * timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
@@ -137,11 +137,11 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
- * time-bucket - Time bucket for resetting the current counter in milliseconds
- * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
-    * Default: The global retention secs configuration of the database (by default, `0`)
-    * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+* time-bucket - Time bucket for resetting the current counter in milliseconds
+* retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+  * Default: The global retention secs configuration of the database (by default, `0`)
+  * When set to 0, the series is not trimmed at all
+* labels - Set of key-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
@@ -159,12 +159,12 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 ```
 
 - sourceKey - Key name for source time series
 - destKey - Key name for destination time series
-- aggType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 - timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
@@ -186,7 +186,7 @@ TS.DELETERULE sourceKey destKey
 For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
 * `l=v` label equals value
 * `l!=v` label doesn't equal value
-* `l=` key does not ha * ve the label `l`
+* `l=` key does not have the label `l`
 * `l!=` key has label `l`
 * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
 * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
@@ -198,7 +198,7 @@ Note: Whenever filters need to be provided, a minimum of one filter should be ap
 Query a range.
 
 ```sql
-TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
+TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -206,8 +206,7 @@ TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket]
 - toTimestamp - End timestamp for range query
 
 Optional args:
-
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last
+- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 - timeBucket - Time bucket for aggregation in milliseconds
 
 #### Complexity
@@ -243,10 +242,10 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 ### TS.MRANGE
 
-Query a range by filters.
+Query a range from multiple timeseries by filters.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for range query
@@ -254,9 +253,9 @@ TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregationType timeBucket] FIL
 * filter - [See Filtering](#filtering)
 
 Optional args:
-
- * aggregationType - Aggregation type: avg, sum, min, max, count, first, last
- * timeBucket - Time bucket for aggregation in milliseconds
+* count - Maximum number of returned results per timeseries
+* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+* timeBucket - Time bucket for aggregation in milliseconds
 
 #### Query by Filters Example
 

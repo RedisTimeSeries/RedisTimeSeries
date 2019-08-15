@@ -4,7 +4,11 @@ import pytest
 import time
 import __builtin__
 import math
+import random
+import statistics 
 from rmtest import ModuleTestCase
+
+ALLOWED_ERROR = 0.001
 
 class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../redistimeseries.so')):
     def _get_ts_info(self, redis, key):
@@ -175,6 +179,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
+            assert expected_result[:3] == actual_result
 
             expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                'labels': [['name', 'brown'], ['color', 'pink']],
@@ -537,6 +543,66 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
             assert expected_result == actual_result
 
+    def test_std_var_func(self):
+        with self.redis() as r:
+            raw_key = 'raw'
+            std_key = 'std_key'
+            var_key = 'var_key'
+
+            random_numbers = 100
+            random.seed(0)
+            items = random.sample(range(random_numbers), random_numbers)
+        
+            stdev = statistics.stdev(items)
+            var = statistics.variance(items)
+            assert r.execute_command('TS.CREATE', raw_key)
+            assert r.execute_command('TS.CREATE', std_key)
+            assert r.execute_command('TS.CREATE', var_key)
+            assert r.execute_command('TS.CREATERULE', raw_key, std_key, "AGGREGATION", 'std.s', random_numbers)
+            assert r.execute_command('TS.CREATERULE', raw_key, var_key, "AGGREGATION", 'var.s', random_numbers)
+    
+            for i in range(random_numbers):
+                r.execute_command('TS.ADD', raw_key, i, items[i])
+    
+            assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
+            assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR        
+
+    def test_agg_std_p(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'std.p')
+
+            expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_std_s(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'std.s')
+
+            expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_var_p(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'var.p')
+
+            expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
+    def test_agg_var_s(self):
+        with self.redis() as r:
+            agg_key = self._insert_agg_data(r, 'tester', 'var.s')
+
+            expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR                
+
     def test_agg_sum(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'sum')
@@ -699,10 +765,11 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                     ['tester2', [['name', 'rudy'], ['class', 'junior'], ['generation', 'x']], build_expected(15, 5)],
                     ['tester3', [['name', 'fabi'], ['class', 'top'], ['generation', 'x']], build_expected(25, 5)],
                     ]
-
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'count', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            assert expected_result[0][2][:3] == actual_result[0][2][:3]
 
     def test_label_index(self):
         with self.redis() as r:
@@ -792,8 +859,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert 2000 == res[1]
             assert 3000 == res[2]
 
-            res = r.execute_command("ts.madd", 'test_key1', now + 1, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
-            assert (now + 1, 3001) == (res[0], res[2])
+            res = r.execute_command("ts.madd", 'test_key1', now + 1000, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
+            assert (now + 1000, 3001) == (res[0], res[2])
             assert isinstance(res[1], redis.ResponseError)
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
