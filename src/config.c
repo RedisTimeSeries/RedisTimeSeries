@@ -11,7 +11,7 @@
 
 TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleString **argv, int argc) {
+int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
@@ -27,7 +27,7 @@ int ReadConfig(RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        printf("loaded default compaction policy: %s\n\r", policy_cstr);
+        RedisModule_Log(ctx, "verbose", "loaded default compaction policy: %s\n\r", policy_cstr);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
@@ -36,7 +36,7 @@ int ReadConfig(RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        printf("loaded default retention policy: %lld \n", TSGlobalConfig.retentionPolicy);
+        RedisModule_Log(ctx, "verbose", "loaded default retention policy: %lld \n", TSGlobalConfig.retentionPolicy);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
@@ -49,6 +49,6 @@ int ReadConfig(RedisModuleString **argv, int argc) {
     } else {
         TSGlobalConfig.maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
     }
-    printf("loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
+    RedisModule_Log(ctx, "verbose", "loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
     return TSDB_OK;
 }
