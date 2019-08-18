@@ -768,8 +768,35 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'count', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-            assert expected_result[0][2][:3] == actual_result[0][2][:3]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            assert expected_result[0][2][:3] == actual_result[0][2]
+            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
+            assert expected_result[0][2][1:9] == actual_result[0][2][:8]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
+            assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
+            assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
+            assert 18 == len(actual_result[0][2]) #just checking that agg count before count works
+
+    def test_range_count(self):
+        start_ts = 1511885908L
+        samples_count = 50
+
+        with self.redis() as r:
+            r.execute_command('TS.CREATE', 'tester1')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+            full_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            assert len(full_results) == samples_count
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'COUNT', 10)
+            assert count_results == full_results[:10]
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'COUNT', 10, 'AGGREGATION', 'COUNT', 3)
+            assert len(count_results) == 10
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3, 'COUNT', 10)
+            assert len(count_results) == 10
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3)
+            assert len(count_results) ==  math.ceil(samples_count / 3.0)
 
     def test_label_index(self):
         with self.redis() as r:
