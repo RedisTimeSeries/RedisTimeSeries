@@ -36,7 +36,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     FreeRSLabels(labels, labelsCount, FALSE);
 
     CompactionRule *lastRule;
-    RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
 
     for (int i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = RedisModule_LoadString(io);
