@@ -26,7 +26,7 @@ ifeq ($(uname_S),Linux)
 	SHOBJ_LDFLAGS ?= -shared -Bsymbolic
 else
 	SHOBJ_CFLAGS ?= -dynamic -fno-common -g -ggdb
-	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup
+	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup -macosx_version_min
 endif
 CFLAGS = -I$(RM_INCLUDE_DIR) -I$(REDISEARCH_LIBDIR) -Wall -O0 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
 
