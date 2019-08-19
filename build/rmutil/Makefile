@@ -35,7 +35,7 @@ all: bindirs $(TARGET)
 include $(MK)/rules
 
 clean:
-	-$(SHOW)find $(BINDIR) -name '*.[oadh]' -type f -delete
+	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 
 -include $(CC_DEPS)
 

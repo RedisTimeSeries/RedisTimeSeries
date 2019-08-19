@@ -75,11 +75,11 @@ CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
 #----------------------------------------------------------------------------------------------
 
+.PHONY: package tests unittests clean all install uninstall docker bindirs
+
 all: bindirs $(TARGET)
 
 include $(MK)/rules
-
-.PHONY: package tests unittests clean all install uninstall docker
 
 rmutil:
 	@echo Building $@...
@@ -88,7 +88,7 @@ rmutil:
 $(LIBRMUTIL): rmutil
 
 clean:
-	-$(SHOW)find $(BINDIR) -name '*.[oadh]' -type f -delete
+	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
@@ -98,7 +98,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(OBJECTS) $(LIBRMUTIL)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
@@ -115,7 +115,7 @@ REDIS_ARGS=\
 	MAX_SAMPLE_PER_CHUNK 1024
 
 run: $(TARGET)
-	$(SHOW)redis-server --loadmodule $(TARGET) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 gdb: $(TARGET)
 	$(SHOW)gdb --args `which redis-server` --loadmodule $(TARGET) $(REDIS_ARGS) --dir /tmp
