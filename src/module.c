@@ -669,7 +669,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, &series, &key);
     RedisModule_CloseKey(key);
 
-    RedisModule_Log(ctx, "info", "created new series");
+    RedisModule_Log(ctx, "verbose", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -1002,7 +1002,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (ReadConfig(argv, argc) == TSDB_ERROR) {
+    if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 

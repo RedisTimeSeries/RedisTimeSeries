@@ -19,5 +19,5 @@ typedef struct {
 
 extern TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleString **argv, int argc);
+int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 #endif
