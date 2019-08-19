@@ -101,10 +101,10 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - build-macos:
-          filters:
-            tags:
-              only: /.*/
+#      - build-macos:
+#          filters:
+#            tags:
+#              only: /.*/
       - deploy_package:
           name: deploy_branch
           package: branch

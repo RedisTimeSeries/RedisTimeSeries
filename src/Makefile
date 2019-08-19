@@ -101,11 +101,6 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 $(TARGET): $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
-ifneq ($(DEBUG),1)
-ifneq ($(OS),macosx)
-	$(SHOW)strip $@
-endif
-endif
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
