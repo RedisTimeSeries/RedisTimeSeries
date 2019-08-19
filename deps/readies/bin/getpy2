@@ -1,0 +1,34 @@
+#!/bin/bash
+
+[ "$VERBOSE" = "1" ] && set -x
+
+show_if_error() {
+	{ "${@:1}"; } > /tmp/py2.log  2>&1
+	[ $? != 0 ] && cat /tmp/py2.log
+	rm -f /tmp/py2.log
+}
+
+if [ ! -z $(command -v python) ]; then
+	[ "$(python --version 2>&1 | cut -d" " -f2 | cut -d. -f1)" = "2" ] && exit 0
+fi
+
+[ ! -z $(command -v python2) ] && exit 0
+
+if [ ! -z $(command -v apt-get) ]; then
+	show_if_error apt-get -qq update
+	show_if_error apt-get -qq install -y python
+elif [ ! -z $(command -v dnf) ]; then
+	show_if_error dnf install -y python2
+elif [ ! -z $(command -v yum) ]; then
+	show_if_error yum install -y python2
+elif [ ! -z $(command -v apk) ]; then
+	show_if_error apk update
+	show_if_error apk add python2
+elif [ ! -z $(command -v brew) ]; then
+	show_if_error brew install python2
+fi
+
+if [ -z $(command -v python) ]; then
+	>&2 echo "Cannot install Python2. Aborting."
+	exit 1
+fi

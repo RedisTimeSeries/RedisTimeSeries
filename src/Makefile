@@ -1,74 +1,173 @@
-PREFIX?=/usr/local
-INSTALL_LIB=$(PREFIX)/lib
-INSTALL=/usr/bin/install
-PAKCAGE_NAME?="../build/redistimeseries.{os}-{architecture}.latest.zip"
+ROOT=..
+include $(ROOT)/build/mk/defs
 
-#set environment variable RM_INCLUDE_DIR to the location of redismodule.h
-ifndef RM_INCLUDE_DIR
-	RM_INCLUDE_DIR=../RedisModulesSDK
+BINDIR=$(BINROOT)/src
+SRCDIR=.
+
+#----------------------------------------------------------------------------------------------  
+
+PREFIX ?= /usr/local
+INSTALL_LIB:=$(PREFIX)/lib
+INSTALL:=/usr/bin/install
+PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
+
+# set environment variable RM_INCLUDE_DIR to the location of redismodule.h
+SDK_DIR=$(ROOT)/deps/RedisModulesSDK
+RMUTIL_LIBDIR=$(BINROOT)/rmutil
+LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
+
+#----------------------------------------------------------------------------------------------
+
+TARGET=$(BINROOT)/redistimeseries.so
+UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
+
+CC=gcc
+
+CC_FLAGS = \
+	-I$(SDK_DIR) \
+	-Wall \
+	-fPIC \
+	-std=gnu99 \
+	-MMD -MF $(@:.o=.d) \
+	-include $(SRCDIR)/common.h \
+	-DREDIS_MODULE_TARGET \
+	-DREDISMODULE_EXPERIMENTAL_API
+
+LD_FLAGS += 
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+
+ifeq ($(OS),linux)
+SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
-ifndef RMUTIL_LIBDIR
-	RMUTIL_LIBDIR=../RedisModulesSDK/rmutil
+ifeq ($(OS),macosx)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup -Wl,-macosx_version_min,10.8 $(LD_FLAGS)
 endif
 
-# find the OS
-uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
-
-# Compile flags for linux / osx
-ifeq ($(uname_S),Linux)
-	SHOBJ_CFLAGS ?=  -fno-common -g -ggdb
-	SHOBJ_LDFLAGS ?= -shared -Bsymbolic
+ifeq ($(DEBUG),1)
+CC_FLAGS += -g -ggdb -O0 -DVALGRIND
+LD_FLAGS += -g
 else
-	SHOBJ_CFLAGS ?= -dynamic -fno-common -g -ggdb
-	SHOBJ_LDFLAGS ?= -bundle -undefined dynamic_lookup -macosx_version_min
+CC_FLAGS += -O3
 endif
-CFLAGS = -I$(RM_INCLUDE_DIR) -Wall -O3 -g -fPIC -lc -lm -std=gnu99  -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API
 
-all: rmutil redistimeseries.so
+_SOURCES=\
+	chunk.c \
+	compaction.c \
+	config.c \
+	indexer.c \
+	module.c \
+	parse_policies.c \
+	rdb.c \
+	tsdb.c
+
+_TEST_SOURCES=\
+	tests.c \
+	endianconv.c
+
+SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
+OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
+
+TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
+TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
+
+CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
+
+#----------------------------------------------------------------------------------------------
+
+.PHONY: package tests unittests clean all install uninstall docker bindirs
+
+all: bindirs $(TARGET)
+
+include $(MK)/rules
 
 rmutil:
-	$(MAKE) -C $(RMUTIL_LIBDIR)
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
-module.o: module.c version.h
-	$(CC) $(CFLAGS) -c -o $@ module.c
-
-redistimeseries.so: rmutil module.o tsdb.o compaction.o rdb.o chunk.o parse_policies.o config.o indexer.o endianconv.o version.h
-	$(LD) -o $@ module.o tsdb.o rdb.o compaction.o chunk.o parse_policies.o config.o indexer.o $(SHOBJ_LDFLAGS) $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc
-
-install: all
-	@mkdir -p $(INSTALL_LIB)
-	$(INSTALL) redistimeseries.so $(INSTALL_LIB)
-
-uninstall:
-	rm -f $(INSTALL_LIB)/redistimeseries.so
+$(LIBRMUTIL): rmutil
 
 clean:
-	rm -rf *.xo *.so *.o ./tests_runner
+	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
+	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
+	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
-tests: redistimeseries.so
-	python2 -m pytest ${EXTRA_ARGS} -svv .
+-include $(CC_DEPS)
 
-run: redistimeseries.so
-	redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+$(BINDIR)/%.o: $(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-gdb: redistimeseries.so
-	gdb --args `which redis-server` --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
-valgrind: redistimeseries.so
-	valgrind --leak-check=full --show-leak-kinds=all -v redis-server --loadmodule `pwd`/redistimeseries.so COMPACTION_POLICY "" RETNTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024 --dir /tmp
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
+	@echo Linking $@...
+	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
-unittests_runner: redistimeseries.so tests.o
-	$(CC) *.o -o unittests_runner $(LIBS) -L$(RMUTIL_LIBDIR) -lrmutil -lc -lm
+#----------------------------------------------------------------------------------------------
 
-unittests: unittests_runner
-	./unittests_runner
+tests: $(TARGET)
+	$(SHOW)cd ../tests; \
+	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$$PWD/tests_report.xml ${EXTRA_ARGS} -svv .
+
+REDIS_ARGS=\
+	COMPACTION_POLICY "" \
+	RETNTION_POLICY 3600 \
+	MAX_SAMPLE_PER_CHUNK 1024
+
+run: $(TARGET)
+	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+
+gdb: $(TARGET)
+	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+
+VALGRIND_ARGS=\
+	--leak-check=full \
+	--show-leak-kinds=all \
+	-v redis-server
+
+valgrind: $(TARGET)
+	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+
+unittests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
+
+install: all
+	$(SHOW)mkdir -p $(INSTALL_LIB)
+	$(SHOW)$(INSTALL) $(TARGET) $(INSTALL_LIB)
+
+uninstall:
+	$(SHOW)rm -f $(INSTALL_LIB)/$(notdir $(TARGET))
 
 docker:
-	cd .. && docker build -t redis-tsdb .
+	$(SHOW)cd .. && docker build -t redis-tsdb .
 
-package: redistimeseries.so
-	mkdir -p ../build
-	ramp pack -m "`pwd`/../ramp.yml" -v -o ${PAKCAGE_NAME} "`pwd`/redistimeseries.so" | tee /tmp/ramp_output
-	./clean_ramp.py `tail -1 /tmp/ramp_output`
+#----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all
+# arguments:
+#   BRANCH: specifies branch names to serve as an exta package tag
+#   INTO: package destination directory (optinal)
+
+define ramp_pack # (1=tag, 2=subdir)
+$(SHOW)ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
+$(SHOW)realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
+$(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
+$(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }; fi
+endef
+
+package: $(TARGET)
+	@echo Creating packages...
+	$(SHOW)if ! command -v redis-server > /dev/null; then \
+		echo Cannot find redis-server. Aborting. ;\
+		exit 1 ;\
+	fi
+	$(call ramp_pack,latest,release)
+	$(call ramp_pack,{semantic_version},release)
+ifneq ($(BRANCH),)
+	$(call ramp_pack,$(BRANCH),branch)
+endif

@@ -7,6 +7,7 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
+#include <strings.h>
 
 #include "redismodule.h"
 #include "rmutil/util.h"

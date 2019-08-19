@@ -1,0 +1,13 @@
+
+build: __sep bindirs
+ifeq (,$(wildcard $(BUILD_DIR)/Makefile))
+	$(SHOW)cd $(BUILD_DIR); $(realpath $(SRCDIR))/configure $(CONFIGURE_FLAGS)
+endif
+	@make -C $(BUILD_DIR)
+
+clean:
+ifeq ($(ALL),1) 
+	$(SHOW)rm -rf $(BINDIR)
+else
+	$(SHOW)$(MAKE) clean -C $(BUILD_DIR)
+endif
