@@ -18,10 +18,12 @@ commands:
           command: make build SHOW=1
       - run:
           name: Test
-          command: make test SHOW=1
+          command: >-
+            mkdir -p /workspace/tests;
+            make test TEST_REPORT_DIR=/workspace/tests SHOW=1
       - run:
           name: Package
-          command: make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages SHOW=1
+          command: make pack BRANCH="$CIRCLE_BRANCH" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
           root: /workspace/packages
           paths:
