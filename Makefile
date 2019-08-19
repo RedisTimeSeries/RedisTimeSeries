@@ -1,16 +1,17 @@
+
 .PHONY: all setup fetch build test pack
 
-all: setup fetch build
+all: fetch build
 
 setup:
 	@./deps/readies/bin/getpy2
-	@./system-setup.py
+	@python ./system-setup.py
 
 fetch:
 	@git submodule update --init --recursive
 
 build:
-	@make -C src all -j $(nproc)
+	@make -C src all -j
 
 test:
 	@make -C src tests

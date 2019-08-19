@@ -40,8 +40,8 @@ ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
-ifeq ($(OS),macosx) 
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+ifeq ($(OS),macosx)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup -Wl,-macosx_version_min,10.8 $(LD_FLAGS)
 endif
 
 ifeq ($(DEBUG),1)
@@ -100,9 +100,13 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 
 $(TARGET): $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
-	$(SHOW)$(CC) -shared $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifneq ($(DEBUG),1)
+ifeq ($(OS),macosx) 
+	$(SHOW)strip -x $@
+else
 	$(SHOW)strip $@
+endif
 endif
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
@@ -110,7 +114,7 @@ endif
 
 tests: $(TARGET)
 	$(SHOW)cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python2 -m pytest --junitxml=$$PWD/tests_report.xml ${EXTRA_ARGS} -svv .
+	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$$PWD/tests_report.xml ${EXTRA_ARGS} -svv .
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \

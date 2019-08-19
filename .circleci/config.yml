@@ -1,20 +1,10 @@
 version: 2.1
 
 commands:
-  deploy:
+  ci_steps:
     parameters:
-      from:
+      platform:
         type: string
-    steps:
-      - run:
-          name: Deploy to S3
-          command: >-
-            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
-
-jobs:
-  build:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
     steps:
       - checkout
       - run:
@@ -39,7 +29,30 @@ jobs:
             - 'branch/*.zip'
       - store_test_results:
           path: /workspace/tests
+  deploy:
+    parameters:
+      from:
+        type: string
+    steps:
+      - run:
+          name: Deploy to S3
+          command: >-
+            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
+jobs:
+  build:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - ci_steps:
+          platform: debian 
+  build-macos:
+    macos:
+      xcode: 10.2.1
+    steps:
+      - ci_steps:
+          platform: macosx
+ 
   deploy_package:
     parameters:
       package:
