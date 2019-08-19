@@ -19,7 +19,7 @@ commands:
       - run:
           name: Test
           command: >-
-            mkdir -p /workspace/tests
+            mkdir -p /workspace/tests;
             make test TEST_REPORT_DIR=/workspace/tests SHOW=1
       - run:
           name: Package
