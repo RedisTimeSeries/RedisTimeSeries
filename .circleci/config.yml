@@ -21,7 +21,7 @@ commands:
           command: make test SHOW=1
       - run:
           name: Package
-          command: make pack BRANCH="$(CIRCLE_BRANCH)" INTO=/workspace/packages SHOW=1
+          command: make pack BRANCH="$CIRCLE_BRANCH" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
           root: /workspace/packages
           paths:
