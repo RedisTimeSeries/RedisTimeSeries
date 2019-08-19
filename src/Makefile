@@ -102,9 +102,7 @@ $(TARGET): $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifneq ($(DEBUG),1)
-ifeq ($(OS),macosx) 
-	$(SHOW)strip -x $@
-else
+ifneq ($(OS),macosx)
 	$(SHOW)strip $@
 endif
 endif
