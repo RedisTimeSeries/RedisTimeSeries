@@ -4,7 +4,7 @@ import sys
 import os
 import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import paella
 
 os.environ["PYTHONWARNINGS"] = 'ignore:DEPRECATION::pip._internal.cli.base_command'
@@ -20,6 +20,7 @@ class Redis5Setup(paella.Setup):
 
     def debian_compat(self):
         # https://chilts.org/installing-redis-from-chris-leas-ppa/
+        self.install("software-properties-common")
         self.run("add-apt-repository -y ppa:chris-lea/redis-server")
         self.install("redis-server")
         # if not removed, might break apt-get update
