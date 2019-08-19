@@ -105,9 +105,11 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 
 #----------------------------------------------------------------------------------------------
 
+TEST_REPORT_DIR ?= $(PWD)
+
 tests: $(TARGET)
 	$(SHOW)cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$$PWD/tests_report.xml ${EXTRA_ARGS} -svv .
+	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \
