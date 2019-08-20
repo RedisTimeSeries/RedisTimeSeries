@@ -25,10 +25,10 @@ commands:
           name: Package
           command: make pack BRANCH="$CIRCLE_BRANCH" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
-          root: /workspace/packages
+          root: /workspace
           paths:
-            - 'release/*.zip'
-            - 'branch/*.zip'
+            - 'packages/release/*.zip'
+            - 'packages/branch/*.zip'
       - store_test_results:
           path: /workspace/tests
   deploy:

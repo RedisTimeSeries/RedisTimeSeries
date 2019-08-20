@@ -8,7 +8,7 @@ setup:
 	@python ./system-setup.py
 
 fetch:
-	@git submodule update --init --recursive
+	-@git submodule update --init --recursive
 
 build:
 	@make -C src all -j
