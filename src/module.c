@@ -1013,7 +1013,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
     
-    if (ReadTSConfig(argv, argc) == TSDB_ERROR) {
+    if (ReadTSConfig(ctx, argv, argc) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 

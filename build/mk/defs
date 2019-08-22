@@ -1,6 +1,8 @@
 
 MK=$(ROOT)/build/mk
 
+MK_ALL_TARGETS:=bindirs build 
+
 include $(MK)/common.defs
 include $(MK)/variant.defs
 include $(MK)/bindirs.defs

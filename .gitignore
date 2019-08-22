@@ -13,4 +13,4 @@ venv/
 /bin/
 /VARIANT
 /BINDIR
-/tests/tests_report.xml
+tests_report.xml

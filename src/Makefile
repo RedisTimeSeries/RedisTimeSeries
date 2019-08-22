@@ -6,16 +6,12 @@ SRCDIR=.
 
 #----------------------------------------------------------------------------------------------  
 
-PREFIX ?= /usr/local
-INSTALL_LIB:=$(PREFIX)/lib
-INSTALL:=/usr/bin/install
-PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
-
 # set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
-RMUTIL_LIBDIR=$(BINROOT)/rmutil
-LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
-REDISEARCH=../RediSearch/libredisearch.a
+REDISEARCH_DIR=$(ROOT)/deps/RediSearch
+
+LIBRMUTIL=$(BINROOT)/rmutil/librmutil.a
+LIBREDISEARCH=$(BINROOT)/RediSearch/libredisearch.a
 
 #----------------------------------------------------------------------------------------------
 
@@ -26,23 +22,23 @@ CC=gcc
 
 CC_FLAGS = \
 	-I$(SDK_DIR) \
-	-I$(REDISEARCH_LIBDIR) \
+	-I$(REDISEARCH_DIR)/src \
 	-Wall \
 	-fPIC \
 	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
+	-MMD \
+	-MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil $(REDISEARCH)
+LD_LIBS += -lc -lm -lpthread -ldl $(LIBREDISEARCH)
+# $(LIBRMUTIL)
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
-
-REDISEARCH_LIBDIR ?= ../RediSearch/src
 
 ifeq ($(OS),macosx)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup -Wl,-macosx_version_min,10.8 $(LD_FLAGS)
@@ -65,6 +61,7 @@ _SOURCES=\
 	chunk.c \
 	compaction.c \
 	config.c \
+	endianconv.c \
 	indexer.c \
 	module.c \
 	parse_policies.c \
@@ -84,21 +81,27 @@ TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
+#----------------------------------------------------------------------------------------------  
+
+PREFIX ?= /usr/local
+INSTALL_LIB:=$(PREFIX)/lib
+INSTALL:=/usr/bin/install
+
+PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
+
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs fetch setup
+.PHONY: all package tests unittests clean all install uninstall docker bindirs deps RediSearch rmutil build
 
-all: bindirs $(TARGET)
+build: $(TARGET)
+
+deps: RediSearch rmutil
 
 include $(MK)/rules
 
-rmutil:
-	@echo Building $@...
-	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
-
-$(LIBRMUTIL): rmutil
-
 clean:
+ifeq ($(DEPS),1)
+endif
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
@@ -112,10 +115,24 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBREDISEARCH)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
+
+#----------------------------------------------------------------------------------------------
+
+rmutil: $(LIBRMUTIL)
+
+RediSearch: $(LIBREDISEARCH)
+
+$(LIBRMUTIL):
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
+
+$(LIBREDISEARCH):
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(ROOT)/build/RediSearch
 
 #----------------------------------------------------------------------------------------------
 
@@ -124,6 +141,15 @@ TEST_REPORT_DIR ?= $(PWD)
 tests: $(TARGET)
 	$(SHOW)cd ../tests; \
 	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
+
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+
+unittests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \
@@ -139,6 +165,8 @@ gdb: $(TARGET)
 cgdb: $(TARGET)
 	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
+#----------------------------------------------------------------------------------------------
+
 VALGRIND_ARGS=\
 	--leak-check=full \
 	--show-leak-kinds=all \
@@ -147,8 +175,7 @@ VALGRIND_ARGS=\
 valgrind: $(TARGET)
 	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+#----------------------------------------------------------------------------------------------
 
 COV_DIR=$(BINDIR)/lcov
 
@@ -162,30 +189,7 @@ cov coverage:
 	$(SHOW)lcov -l $(COV_DIR)/gcov.info
 	$(SHOW)genhtml --legend -o $(COV_DIR)/report $(COV_DIR)/gcov.info > /dev/null 2>&1
 
-#$(REDISEARCH):
-#ifeq (,$(wildcard $(REDISEARCH)))
-#	cd ../RediSearch; \
-#	mkdir build; \
-#	cd build; \
-#	cmake -DRS_BUILD_STATIC=ON ..; \
-#	make;
-#endif
-
-.PHONY: package tests unittests clean all
-	
-unittests: $(UNITTESTS_RUNNER)
-	@echo Running unit tests...
-	$(SHOW)$<
-
 #----------------------------------------------------------------------------------------------
-
-setup:
-	@echo Setting up system...
-	$(SHOW)./deps/readies/bin/getpy2
-	$(SHOW)./system-setup.py
-
-fetch:
-	-$(SHOW)git submodule update --init --recursive 
 
 install: all
 	$(SHOW)mkdir -p $(INSTALL_LIB)
@@ -221,3 +225,5 @@ package: $(TARGET)
 ifneq ($(BRANCH),)
 	$(call ramp_pack,$(BRANCH),branch)
 endif
+
+#----------------------------------------------------------------------------------------------
