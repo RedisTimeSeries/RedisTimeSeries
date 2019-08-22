@@ -86,7 +86,7 @@ CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs
+.PHONY: package tests unittests clean all install uninstall docker bindirs fetch setup
 
 all: bindirs $(TARGET)
 
@@ -178,6 +178,14 @@ unittests: $(UNITTESTS_RUNNER)
 	$(SHOW)$<
 
 #----------------------------------------------------------------------------------------------
+
+setup:
+	@echo Setting up system...
+	$(SHOW)./deps/readies/bin/getpy2
+	$(SHOW)./system-setup.py
+
+fetch:
+	-$(SHOW)git submodule update --init --recursive 
 
 install: all
 	$(SHOW)mkdir -p $(INSTALL_LIB)
