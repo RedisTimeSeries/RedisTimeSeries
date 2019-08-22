@@ -180,14 +180,14 @@ valgrind: $(TARGET)
 COV_DIR=$(BINDIR)/lcov
 
 cov coverage:
-	@$(MAKE) clean
-	@$(MAKE) tests COV=1
-	$(SHOW)mkdir -p $(COV_DIR)
-	$(SHOW)gcov -c -b /* > /dev/null 2>&1
-	$(SHOW)lcov -d . -c -o $(COV_DIR)/gcov.info --no-external > /dev/null 2>&1
-	$(SHOW)lcov -r $(COV_DIR)/gcov.info "*test*" "*contrib*" "*redismodule.h" "*util.c*" -o $(COV_DIR)/gcov.info > /dev/null 2>&1
-	$(SHOW)lcov -l $(COV_DIR)/gcov.info
-	$(SHOW)genhtml --legend -o $(COV_DIR)/report $(COV_DIR)/gcov.info > /dev/null 2>&1
+	@$(MAKE) build VARIANT=cov COV=1
+#	@$(MAKE) tests VARIANT=cov COV=1
+#	$(SHOW)mkdir -p $(COV_DIR)
+#	$(SHOW)gcov -c -b /* > /dev/null 2>&1
+#	$(SHOW)lcov -d . -c -o $(COV_DIR)/gcov.info --no-external > /dev/null 2>&1
+#	$(SHOW)lcov -r $(COV_DIR)/gcov.info "*test*" "*contrib*" "*redismodule.h" "*util.c*" -o $(COV_DIR)/gcov.info > /dev/null 2>&1
+#	$(SHOW)lcov -l $(COV_DIR)/gcov.info
+#	$(SHOW)genhtml --legend -o $(COV_DIR)/report $(COV_DIR)/gcov.info > /dev/null 2>&1
 
 #----------------------------------------------------------------------------------------------
 
