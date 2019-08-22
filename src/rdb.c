@@ -29,7 +29,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
     Series *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
 
-    CompactionRule *lastRule;
+    CompactionRule *lastRule = NULL;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
 
     for (int i = 0; i < rulesCount; i++) {
@@ -39,7 +39,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
         
-        if (series->rules == NULL) {
+        if (i == 0) {
             series->rules = rule;
         } else {
             lastRule->nextRule = rule;
