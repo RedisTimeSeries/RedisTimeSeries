@@ -3,12 +3,13 @@
 # stretch|bionic|buster
 ARG OSNICK=buster
 
-# ARCH=x64|arm64v8|arm32v7
-ARG ARCH=x64
+# ARCH=arm64v8|arm32v7
+ARG ARCH=arm64v8
 
 #----------------------------------------------------------------------------------------------
-# FROM redis:latest AS builder
-FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5 AS builder
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:5.0.5 as builder
+
+RUN [ "cross-build-start" ]
 
 ADD ./ /build
 WORKDIR /build
@@ -21,9 +22,12 @@ ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
 RUN echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
 RUN make build
 
+RUN [ "cross-build-end" ]
+
 #----------------------------------------------------------------------------------------------
-# FROM redis:latest
-FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:5.0.5
+
+RUN [ "cross-build-start" ]
 
 ENV LIBDIR /usr/lib/redis/modules
 WORKDIR /data
@@ -33,3 +37,5 @@ COPY --from=builder /build/bin/redistimeseries.so "$LIBDIR"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
+
+RUN [ "cross-build-end" ]

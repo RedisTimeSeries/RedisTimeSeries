@@ -1,114 +1,74 @@
-version: 2
+version: 2.1
+
+commands:
+  ci_steps:
+    parameters:
+      platform:
+        type: string
+    steps:
+      - checkout
+      - run:
+          name: Pull Submodules
+          command: make fetch
+      - run:
+          name: Install prerequisites
+          command: make setup
+      - run:
+          name: Build
+          command: make build SHOW=1
+      - run:
+          name: Test
+          command: >-
+            mkdir -p /workspace/tests;
+            make test TEST_REPORT_DIR=/workspace/tests SHOW=1
+      - run:
+          name: Package
+          command: make pack BRANCH="$CIRCLE_BRANCH" INTO=/workspace/packages SHOW=1
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - 'packages/release/*.zip'
+            - 'packages/branch/*.zip'
+      - store_test_results:
+          path: /workspace/tests
+  deploy:
+    parameters:
+      from:
+        type: string
+    steps:
+      - run:
+          name: Deploy to S3
+          command: >-
+            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
+
 jobs:
   build:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
     steps:
-      - checkout
-      - run:
-          name: "Pull Submodules"
-          command: |
-            git submodule init
-            git submodule update --remote
-      - run:
-          name: Install prerequisite
-          command: >-
-            apt-get update; apt-get install -y cmake; pip install -r src/tests/requirements.txt
-      - run:
-          name: Build
-          command: cd src && make -j 8
-      - run:
-          name: Test
-          command: cd src && mkdir -p /workspace/tests && make tests EXTRA_ARGS="--junitxml=/workspace/tests/tests_report.xml"
-      - run:
-          name: Persist Artifacts
-          command: >-
-            mkdir -p /workspace/build && cp src/$MODULE_ARTIFACT /workspace/ &&
-            cp ramp.yml /workspace/ &&
-            cp src/clean_ramp.py /workspace; ls -la /workspace
-      - persist_to_workspace:
-          root: /workspace
-          paths:
-            - '*.so'
-            - '*.yml'
-            - '*.py'
-            - build
-      - store_test_results:
-          path: /workspace/tests
-  package_branch:
+      - ci_steps:
+          platform: debian 
+  build-macos:
+    macos:
+      xcode: 10.2.1
+    steps:
+      - ci_steps:
+          platform: macosx
+ 
+  deploy_package:
+    parameters:
+      package:
+        type: string
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
     steps:
       - attach_workspace:
           at: /workspace
-      - run:
-          name: Package
-          command: >-
-            ramp pack -m /workspace/ramp.yml -o
-            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.$CIRCLE_BRANCH.zip
-            /workspace/$MODULE_ARTIFACT
-      - run:
-          name: Clean RAMP file
-          shell: /bin/bash
-          command: |
-            /workspace/clean_ramp.py /workspace/build/*.zip
-      - persist_to_workspace:
-          root: /workspace
-          paths:
-            - build
+      - deploy:
+          from: /workspace/packages/<<parameters.package>>
       - store_artifacts:
-          path: /workspace/build
-  package_release:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
-    steps:
-      - attach_workspace:
-          at: /workspace
-      - run:
-          name: Package
-          command: >-
-            ramp pack -m /workspace/ramp.yml -o
-            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.{semantic_version}.zip
-            /workspace/$MODULE_ARTIFACT
-      - run:
-          name: Package
-          command: >-
-            ramp pack -m /workspace/ramp.yml -o
-            /workspace/build/$PACKAGE_NAME.{os}-{architecture}.latest.zip
-            /workspace/$MODULE_ARTIFACT
-      - run:
-          name: Clean RAMP file
-          shell: /bin/bash
-          command: |
-            /workspace/clean_ramp.py /workspace/build/*.zip
-      - persist_to_workspace:
-          root: /workspace
-          paths:
-            - build
-      - store_artifacts:
-          path: /workspace/build
-  deploy_branch:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
-    steps:
-      - attach_workspace:
-          at: /workspace
-      - run:
-          name: Deploy to S3
-          command: >-
-            aws s3 cp /workspace/build/ s3://redismodules/$PACKAGE_NAME/ --acl
-            public-read --recursive --exclude "*" --include "*.zip"
-  deploy_release:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
-    steps:
-      - attach_workspace:
-          at: /workspace
-      - run:
-          name: Deploy to S3
-          command: >-
-            aws s3 cp /workspace/build/ s3://redismodules/$PACKAGE_NAME/ --acl
-            public-read --recursive --exclude "*" --include "*.zip"
+          path: /workspace/packages/<<parameters.package>>
+
   deploy_docs:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
@@ -120,9 +80,8 @@ jobs:
       - run:
           name: Deploy Docs to S3
           command: >-
-            aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl
-            public-read --recursive
-            
+            aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl public-read --recursive
+
   run_automation:
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
@@ -135,7 +94,7 @@ jobs:
             -H "Content-Type: application/json"
             -d '{"service_id":"single_module_test_cycle_sanity_and_extended", "name":"redistimeseries automation-testing", "properties":{"sut_version":"master", "email_recipients":"t9b6i7v6e2q3d0s4@redislabs.slack.com", "sut_environments":[], "tools_environment":{}, "module_name": "redistimeseries", "module_version":"master", "cycle_environments_setup":[{"teardown":true, "name":"xenial-amd64-aws", "concurrency":1}, {"teardown":true, "name":"bionic-amd64-aws", "concurrency":1}]}}'
             https://qa-automation-center.redislabs.com/processes
-            
+
 workflows:
   version: 2
   build_and_package:
@@ -144,13 +103,21 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - package_branch:
+#      - build-macos:
+#          filters:
+#            tags:
+#              only: /.*/
+      - deploy_package:
+          name: deploy_branch
+          package: branch
           requires:
             - build
           filters:
             branches:
               only: master
-      - package_release:
+      - deploy_package:
+          name: deploy_release
+          package: release
           requires:
             - build
           filters:
@@ -158,18 +125,9 @@ workflows:
               ignore: /.*/
             tags:
               only: '/^v[0-9].*/'
-      - deploy_branch:
-          requires:
-            - package_branch
       - run_automation:
           requires:
             - deploy_branch
-      - deploy_release:
-          filters:
-            tags:
-              only: '/^v[0-9].*/'
-          requires:
-            - package_release
       - deploy_docs:
           filters:
             branches:

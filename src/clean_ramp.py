@@ -8,7 +8,7 @@ import shutil
 
 def main(zip_path):
     zf = zipfile.ZipFile(zip_path, 'r')
-    print zf.namelist()
+    # print zf.namelist()
     with tempfile.NamedTemporaryFile() as fp:
         zf_write = zipfile.ZipFile(fp.name, 'w')
         for item in zf.infolist():

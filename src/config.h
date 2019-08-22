@@ -3,8 +3,8 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-#ifndef CONFIG_H
-#define CONFIG_H
+
+#pragma once
 
 #include "redismodule.h"
 #include "parse_policies.h"
@@ -21,5 +21,4 @@ typedef struct {
 
 extern TSConfig TSGlobalConfig;
 
-int ReadTSConfig(RedisModuleString **argv, int argc);
-#endif
+int ReadTSConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

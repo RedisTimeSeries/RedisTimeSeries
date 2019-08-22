@@ -1,6 +1,6 @@
-[submodule "RedisModulesSDK"]
-	path = RedisModulesSDK
+[submodule "deps/RedisModulesSDK"]
+	path = deps/RedisModulesSDK
 	url = https://github.com/RedisLabs/RedisModulesSDK.git
-[submodule "RediSearch"]
-	path = RediSearch
+[submodule "deps/RediSearch"]
+	path = deps/RediSearch
 	url = https://github.com/RediSearch/RediSearch.git

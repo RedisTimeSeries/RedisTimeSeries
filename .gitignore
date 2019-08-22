@@ -9,4 +9,8 @@ __pycache__
 venv/
 .idea/
 .DS_Store
- tests/.cache/
+/tests/.cache/
+/bin/
+/VARIANT
+/BINDIR
+/tests/tests_report.xml

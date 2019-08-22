@@ -8,6 +8,7 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
+#include <strings.h>
 
 #include "redismodule.h"
 #include "rmutil/util.h"
@@ -692,7 +693,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, &series, &key);
     RedisModule_CloseKey(key);
 
-    RedisModule_Log(ctx, "info", "created new series");
+    RedisModule_Log(ctx, "verbose", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -1008,7 +1009,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if(RediSearch_Init(ctx, REDISEARCH_INIT_LIBRARY) != REDISMODULE_OK) {
+    if (RediSearch_Init(ctx, REDISEARCH_INIT_LIBRARY) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
     
