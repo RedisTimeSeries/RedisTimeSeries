@@ -4,6 +4,8 @@ include $(ROOT)/build/mk/defs
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
+.NOTPARALLEL:
+
 #----------------------------------------------------------------------------------------------  
 
 # set environment variable RM_INCLUDE_DIR to the location of redismodule.h
