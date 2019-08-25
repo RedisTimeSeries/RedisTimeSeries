@@ -52,6 +52,11 @@ jobs:
     macos:
       xcode: 10.2.1
     steps:
+      - run:
+        name: Set up workspace
+        command: >-
+          sudo mkdir -p /workspace;
+          sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
  
