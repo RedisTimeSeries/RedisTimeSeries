@@ -858,9 +858,24 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
 
+
+    long long currentUpdatedTime = -1;
+    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
+    if (timestampLoc > 0) {
+        if ((RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long int *) &currentUpdatedTime) != REDISMODULE_OK)) {
+            // if timestamp is "*", take current time (automatic timestamp)
+            if(RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+                currentUpdatedTime = (u_int64_t) RedisModule_Milliseconds();
+            } else {
+                return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+            }
+        }
+    } else {
+        currentUpdatedTime = RedisModule_Milliseconds();
+    }
+
     double result;
     long long resetMilliSeconds = 1;
-    time_t currentUpdatedTime = RedisModule_Milliseconds();
     if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
         if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetMilliSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
@@ -874,19 +889,6 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             }
         }
         currentUpdatedTime = max(currentUpdatedTime, series->lastTimestamp);
-    }
-
-    long long timestamp = -1;
-    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc > 0) {
-        if ((RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long int *) &timestamp) != REDISMODULE_OK)) {
-            // if timestamp is "*", take current time (automatic timestamp)
-            if(RMUtil_StringEqualsC(argv[timestampLoc + 1], "*"))
-                timestamp = (u_int64_t) RedisModule_Milliseconds();
-            else
-                return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
-        }
-        currentUpdatedTime = timestamp;
     }
 
     RMUtil_StringToLower(argv[0]);
