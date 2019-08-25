@@ -4,6 +4,11 @@ include $(ROOT)/build/mk/defs
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
+ifeq ($(OS),macosx)
+# pip installed packages like ramp reside here:
+export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
+endif
+
 #----------------------------------------------------------------------------------------------  
 
 PREFIX ?= /usr/local
