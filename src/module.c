@@ -862,10 +862,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
     if (timestampLoc > 0) {
-        if ((RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long int *) &currentUpdatedTime) != REDISMODULE_OK)) {
+        if ((RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long *) &currentUpdatedTime) != REDISMODULE_OK)) {
             // if timestamp is "*", take current time (automatic timestamp)
             if(RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
-                currentUpdatedTime = (u_int64_t) RedisModule_Milliseconds();
+                currentUpdatedTime = RedisModule_Milliseconds();
             } else {
                 return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
             }
