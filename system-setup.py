@@ -18,7 +18,6 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.setup_pip()
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
-        self.pip_install("-r tests/requirements.txt")
         
         self.install("git jq curl")
 
@@ -36,10 +35,12 @@ class RedisTimeSeriesSetup(paella.Setup):
         r, w, e = popen2.popen3('xcode-select -p')
         if r.readlines() == []:
             fatal("Xcode tools are not installed. Please run xcode-select --install.")
+        self.install("redis")
 
     def common_last(self):
         if not self.has_command("ramp"):
-            self.pip_install("git+https://github.com/RedisLabs/RAMP --upgrade")
+            self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
+        self.pip_install("-r tests/requirements.txt")
 
 #----------------------------------------------------------------------------------------------
 

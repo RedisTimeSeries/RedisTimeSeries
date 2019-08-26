@@ -4,6 +4,11 @@ include $(ROOT)/build/mk/defs
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
+ifeq ($(OS),macosx)
+# pip installed packages like ramp reside here:
+export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
+endif
+
 #----------------------------------------------------------------------------------------------  
 
 PREFIX ?= /usr/local
@@ -157,7 +162,7 @@ docker:
 
 define ramp_pack # (1=tag, 2=subdir)
 $(SHOW)ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
-$(SHOW)realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
+$(SHOW). $(ROOT)/deps/readies/shibumi/functions; realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
 $(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
 $(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }; fi
 endef
