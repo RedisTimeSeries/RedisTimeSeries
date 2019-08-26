@@ -507,17 +507,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
 
-            time_bucket = 10*1000
-            start_time = long(time.time()*time_bucket)
-            start_time = start_time - start_time % time_bucket
-            for _ in range(1000):
+            time_bucket = 1000
+            quantity = 100
+            start_time = 0
+            for _ in range(quantity):
                 r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time, 'RESET', time_bucket)
-            for _ in range(1000):
-                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time + 1, 'RESET', time_bucket)
+            for _ in range(quantity):
+                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time + time_bucket, 'RESET', time_bucket)
 
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time() * time_bucket)) == [[start_time, '2000']]
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(2 * time_bucket)) == [[0, '100'], [1000, '200']]
         
-
     def test_incrby(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
