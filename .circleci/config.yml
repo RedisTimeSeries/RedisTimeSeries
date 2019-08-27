@@ -23,7 +23,7 @@ commands:
             make test TEST_REPORT_DIR=/workspace/tests SHOW=1
       - run:
           name: Package
-          command: make pack BRANCH="$CIRCLE_BRANCH" INTO=/workspace/packages SHOW=1
+          command: make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=/workspace/packages SHOW=1
       - persist_to_workspace:
           root: /workspace
           paths:
@@ -52,6 +52,11 @@ jobs:
     macos:
       xcode: 10.2.1
     steps:
+      - run:
+          name: Set up workspace
+          command: >-
+            sudo mkdir -p /workspace;
+            sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
  
@@ -103,10 +108,10 @@ workflows:
           filters:
             tags:
               only: /.*/
-#      - build-macos:
-#          filters:
-#            tags:
-#              only: /.*/
+      - build-macos:
+          filters:
+            tags:
+              only: /.*/
       - deploy_package:
           name: deploy_branch
           package: branch

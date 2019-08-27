@@ -44,7 +44,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
         
-        if (series->rules == NULL) {
+        if (i == 0) {
             series->rules = rule;
         } else {
             lastRule->nextRule = rule;
