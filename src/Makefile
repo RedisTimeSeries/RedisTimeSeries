@@ -1,3 +1,5 @@
+.NOTPARALLEL:
+
 ROOT=..
 include $(ROOT)/build/mk/defs
 
@@ -106,9 +108,10 @@ include $(MK)/rules
 
 clean:
 ifeq ($(DEPS),1)
+	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
+	-$(SHOW)$(MAKE) -C $(ROOT)/build/RediSearch clean
 endif
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
-	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 	-$(SHOW)find $(BINDIR) -name '*.gcov' -delete
 	-$(SHOW)find $(BINDIR) -name '*.gcda' -delete
