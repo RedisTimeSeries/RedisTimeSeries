@@ -12,12 +12,12 @@ def worker_func(args):
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
             return -1
-        expected = [[long(start_ts + i), str(i)] for i in xrange(tsrange)]
+        expected = [[long(start_ts + i), str(i)] for i in range(tsrange)]
         if expected != res:
             return -1
     else:
         pipe = redis_client.pipeline(tsrange)
-        for i in xrange(tsrange):
+        for i in range(tsrange):
             if tsrange % pipeline_size:
                 pipe.execute()
             pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, i)
