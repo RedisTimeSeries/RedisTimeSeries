@@ -1,7 +1,9 @@
 
 ROOT=../..
+include $(ROOT)/build/mk/defs
 
 BINDIR=$(BINROOT)/RediSearch
+BINDIRS += $(BINDIR)
 SRCDIR=$(ROOT)/deps/RediSearch
 
 TARGET=$(BINDIR)/libredisearch.a
@@ -9,13 +11,11 @@ TARGET=$(BINDIR)/libredisearch.a
 CMAKE_FLAGS=\
 	-DRS_BUILD_STATIC=ON
 
-include $(ROOT)/build/mk/defs
-
 include $(MK)/rules
 
-$(BINDIR)/Makefile : $(SRCDIR)/CMakeLists.txt
-	$(SHOW)cd $(BINDIR); cmake $(CMAKE_FLAGS) $(realpath $(SRCDIR))
-
+$(BINDIR)/Makefile : bindirs $(SRCDIR)/CMakeLists.txt
+	$(SHOW)cd $(BINDIR); cmake $(CMAKE_WHY) $(CMAKE_FLAGS) $(abspath $(SRCDIR))
+	
 build: $(TARGET)
 
 $(TARGET): $(BINDIR)/Makefile

@@ -1,6 +1,6 @@
 
 BINROOT=$(ROOT)/bin/$(FULL_VARIANT)
-BIN_DIRS=$(sort $(patsubst %/,%,$(BINDIR) $(dir $(OBJECTS))))
+BIN_DIRS=$(sort $(patsubst %/,%,$(BINDIR) $(dir $(OBJECTS))) $(BINDIRS))
 
 define mkdir_rule
 $(1):
