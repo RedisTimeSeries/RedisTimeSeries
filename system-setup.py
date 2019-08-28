@@ -19,7 +19,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
         
-        self.install("git jq curl")
+        self.install("git jq curl cmake")
 
     def debian_compat(self):
         self.install("build-essential")
