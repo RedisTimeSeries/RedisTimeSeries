@@ -12,7 +12,7 @@ def worker_func(args):
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
             return -1
-        expected = [[long(start_ts + i), str(i)] for i in range(tsrange)]
+        expected = [[int(start_ts + i), str(i)] for i in range(tsrange)]
         if expected != res:
             return -1
     else:
