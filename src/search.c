@@ -215,14 +215,14 @@ static int RSL_RSQueryFromTSQuery(RedisModuleString **argv, int start,
 }
 
 // Receives argv which is the first query to parse
-RSResultsIterator * GetRSIter(RedisModuleString **argv, int count, char **err) {
+RSResultsIterator *GetRSIter(RedisModuleString **argv, int count, char **err) {
     char *query = NULL;
     size_t queryLen = 0;
     size_t firstLen = 0;
     RSResultsIterator *resIter = NULL;
     const char *firstStr = RedisModule_StringPtrLen(argv[0], &firstLen);
 
-    if (count > 1 || (firstStr[0] != '-' && firstStr[0] != '@' && firstStr[0] != '(')) {
+    if (count > 1 || strpbrk(firstStr, "=")) {
         query = (char *)calloc(DEFAULT_SIZE, sizeof(char));
         if (RSL_RSQueryFromTSQuery(argv, 0, &query, &queryLen, count) != REDISMODULE_OK) {
             *err = "Error parsing LABELS";

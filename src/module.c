@@ -33,15 +33,15 @@ static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
 static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
-    int first_label_pos = pos + 1;
-    if ((argc - pos) % 2 == 0) { return REDISMODULE_ERR; }
-    RSLabel *labelsResult = NULL;
-    *label_count = 0;
     if (pos < 0) {
         *rsLabels = NULL;
         return REDISMODULE_OK;
     }
 
+    int first_label_pos = pos + 1;
+    if ((argc - pos) % 2 == 0) { return REDISMODULE_ERR; }
+
+    RSLabel *labelsResult = NULL;
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
     if (label_count > 0) {
     	labelsResult = calloc(*label_count, sizeof(RSLabel));
@@ -58,7 +58,7 @@ static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
             }
 
         	const char *valueStr = RedisModule_StringPtrLen(value, &valueLen);
-        	if(valueStr == NULL || valueLen == 0 || strpbrk(valueStr, "(),")) {
+        	if(valueStr == NULL || valueLen == 0 || strpbrk(valueStr, "=(),")) {
         		goto exitOnError;
         	}
             labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
@@ -69,8 +69,8 @@ static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
         	labelsResult[i].RTS_Label.value =
                 RedisModule_CreateStringFromString(NULL, value);
         }
+        *rsLabels = labelsResult;
     }
-    *rsLabels = labelsResult;
     return REDISMODULE_OK;
 
 exitOnError:
@@ -710,8 +710,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     RedisModuleString *keyName = argv[1];
     long long retentionTime;
     long long maxSamplesPerChunk;
-    size_t labelsCount;
-    RSLabel *newLabels;
+    size_t labelsCount = 0;
+    RSLabel *newLabels = NULL;
 
     if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -731,7 +731,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
         series->maxSamplesPerChunk = maxSamplesPerChunk;
     }
 
-    if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
+    if (newLabels != NULL) {
         RSL_Index(TSGlobalConfig.globalRSIndex, keyName, newLabels, labelsCount);
         free(series->labels);
         series->labels = (Label *)calloc(labelsCount, sizeof(Label));
