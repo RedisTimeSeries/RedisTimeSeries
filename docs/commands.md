@@ -183,6 +183,20 @@ TS.DELETERULE sourceKey destKey
 ## Query
 
 ### Filtering
+#### RediSearch Query Language
+
+* Queries should be used as one string, e.g. "foo bar baz".
+* Words wrap together are intersected (i.e. foo AND bar AND baz).
+* Selection of specific fields using the syntax "@field:hello world".
+* OR Unions (i.e word1 OR word2), are expressed with a pipe (|), e.g. hello|hallo|shalom|hola.
+* NOT negation (i.e. word1 NOT word2) of expressions or sub-queries. e.g. hello -world. Negative queries (i.e. -foo or -@title:(foo|bar)) are supported. Note: "x -y" == "-(y) x" != "-y x" == "-(y x)".
+* Prefix matches (all terms starting with a prefix) are expressed with a *. A minimum prefix of length 2 is enforced.
+* A special "wildcard query" that returns all results in the index - * (cannot be combined with anything else).
+* Numeric Range matches on numeric fields with the syntax @field:[{min} {max}].
+* An expression in a query can be wrapped in parentheses to disambiguate, e.g. "(hello|hella) (world|werld)".
+* Combinations of the above can be used together, e.g "-hello (world|foo)"
+
+#### Backward compatibility
 For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
 
 * `l=v` label equals value
@@ -191,8 +205,6 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l!=` key has label `l`
 * `l=(v1, v2, ...)` key with label `l` that equals one of the values in the list
 * `l!=(v1, v2, ...)` key with label `l` that doesn't equals to the values in the list
-
-Note: Whenever filters need to be provided, a minimum of one filter should be applied.
 
 ### TS.RANGE
 
