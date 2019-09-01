@@ -17,7 +17,7 @@
 
 static Series* lastDeletedSeries = NULL;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, int32_t retentionTime,
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
         short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
@@ -308,7 +308,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
         compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeSec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        CreateTsKey(ctx, destKey, compactedLabels, comaptedRuleLabelCount, rule->retentionSizeMillisec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
