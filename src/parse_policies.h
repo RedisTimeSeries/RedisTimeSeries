@@ -9,8 +9,8 @@
 #include <sys/types.h>
 
 typedef struct SimpleCompactionRule {
-    int32_t timeBucket;
-    int32_t retentionSizeSec;
+    uint64_t timeBucket;
+    uint64_t retentionSizeMillisec;
     int aggType;
 } SimpleCompactionRule;
 
