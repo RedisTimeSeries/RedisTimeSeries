@@ -400,6 +400,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             info = r.execute_command('TS.INFO', 'tester')
             assert info[3] == huge_timestamp
 
+            r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
+            r.execute_command('TS.ADD', 'tester', huge_timestamp * 3, '2')
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp * 3, '2']]
+
     def test_create_compaction_rule_with_wrong_aggregation(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
