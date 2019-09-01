@@ -858,14 +858,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert ['tester1', 'tester2', 'tester4']            == r.execute_command('TS.QUERYINDEX', '(-top)|3')
             assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', '@x:2')
             assert ['tester1', 'tester2', 'tester3']            == r.execute_command('TS.QUERYINDEX', '@generation:x')
-            assert ['tester4']                                  == r.execute_command('TS.QUERYINDEX', "-@generation:x")
-            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', "@generation:x @x:2")
-            # check RS with meir
-            # assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', "(@generation:x|@x:2)")
-            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', "@generation:x @class:top")
-            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', "@generation:x -@class:top")
-            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', "@class:(middle|junior)")
-            assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', "-@class:(middle|junior)")
+            assert ['tester4']                                  == r.execute_command('TS.QUERYINDEX', '-@generation:x')
+            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', '@generation:x @x:2')
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', '(@generation:x)|(@x:2)')
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', '(@generation:x)|-(@z:42)')
+            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', '@generation:x @class:top')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '@generation:x -@class:top')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '@class:(middle|junior)')
+            assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', '-@class:(middle|junior)')
             
 
     def test_series_ordering(self):
