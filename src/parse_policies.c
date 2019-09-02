@@ -18,14 +18,14 @@ static const int lookup_intervals[] = {
    ['d'] = 1000*60*60*24
 };
 
-int parse_string_to_millisecs(const char *timeStr, int *out){
+static int parse_string_to_millisecs(const char *timeStr, uint64_t *out){
     char should_be_empty;
     unsigned char interval_type;
-    int timeSize;
-    if (sscanf(timeStr, "%d%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
+    uint64_t timeSize;
+    if (sscanf(timeStr, "%ld%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
         return FALSE;
     }
-    int interval_in_millisecs = lookup_intervals[interval_type];
+    uint64_t interval_in_millisecs = lookup_intervals[interval_type];
     if (interval_in_millisecs == 0) {
         return FALSE;
     }
@@ -33,7 +33,7 @@ int parse_string_to_millisecs(const char *timeStr, int *out){
     return TRUE;
 }
 
-int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
+static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *token;
     char *token_iter_ptr;
     char agg_type[20];
@@ -67,12 +67,12 @@ int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     }
     rule->aggType = agg_type_index;
 
-    return 1;
+    return TRUE;
 }
 
-int count_char_in_str(const char * string, int len, char lookup) {
-    int count = 0;
-    for (int i=0; i<len; i++) {
+static uint64_t count_char_in_str(const char * string, uint64_t len, char lookup) {
+    uint64_t count = 0;
+    for (uint64_t i=0; i<len; i++) {
         if (string[i] == lookup) {
             count++;
         }
@@ -83,16 +83,16 @@ int count_char_in_str(const char * string, int len, char lookup) {
 // parse compaction policies in the following format: "max:1m;min:10s;avg:2h;avg:3d"
 // the format is AGGREGATION_FUNCTION:\d[s|m|h|d];
 int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **parsed_rules_out,
-            size_t *rules_count) {
+            uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
-    size_t len = strlen(policy_string);
+    uint64_t len = strlen(policy_string);
     char *rest = malloc(len + 1);
     memcpy(rest, policy_string, len+1);
     *rules_count = 0;
 
     // the ';' is a separator so we need to add +1 for the policy count
-    int policies_count = count_char_in_str(policy_string, len, ';') + 1;
+    uint64_t policies_count = count_char_in_str(policy_string, len, ';') + 1;
     SimpleCompactionRule *parsed_rules = malloc(sizeof(SimpleCompactionRule) * policies_count);
     *parsed_rules_out = parsed_rules;
 
