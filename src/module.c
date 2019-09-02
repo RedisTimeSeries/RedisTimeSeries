@@ -4,7 +4,10 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
+#define _GNU_SOURCE
+
 #include <time.h>
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
@@ -348,9 +351,14 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     char *err = NULL;
+    char *errmsg = NULL;
     RSResultsIterator *resIter = GetRSIter(argv + 1, argc - 1, &err);
     if (err != NULL) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
+        asprintf(&errmsg, "TSDB: failed parsing filters with error %s", err);
+        RedisModule_ReplyWithError(ctx, errmsg);
+        free(err);
+        free(errmsg);
+        return REDISMODULE_OK;
     }
     if(resIter == NULL) { 
         return RedisModule_ReplyWithNull(ctx);
@@ -359,12 +367,14 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t keylen;
     long replylen = 0;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    
     char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
         RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
         ++replylen;
         tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     }
+    
     RedisModule_ReplySetArrayLength(ctx, replylen);
     RediSearch_ResultsIteratorFree(resIter);  
 

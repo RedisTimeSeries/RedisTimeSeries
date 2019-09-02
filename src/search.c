@@ -232,7 +232,7 @@ RSResultsIterator *GetRSIter(RedisModuleString **argv, int count, char **err) {
         queryLen = firstLen;
     }
 
-    printf("Query is %s and query len is %ld\n", query, queryLen);    
+    //printf("Query is %s and query len is %ld\n", query, queryLen);    
 
     resIter = RediSearch_IterateQuery(TSGlobalConfig.globalRSIndex->idx, query, queryLen + 1, err);
     if (query != firstStr) { free(query); }
