@@ -314,7 +314,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int timeBucket) {
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, long long timeBucket) {
     if (timeBucket <= 0) {
         return NULL;
     }

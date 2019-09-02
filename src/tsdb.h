@@ -65,5 +65,5 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, int timeBucket);
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, long long timeBucket);
 #endif /* TSDB_H */
