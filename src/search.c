@@ -144,7 +144,7 @@ int RSL_AppendTerm(RedisModuleString *RM_item, char **query, size_t *queryLoc) {
     }  
 
     char *equalPtr = strstr(item, "=");
-    if(equalPtr == NULL || (strstr(item, "(") != NULL && strstr(item, ")") == NULL)) { 
+    if(equalPtr == NULL) { 
         return REDISMODULE_ERR;
     }
 
