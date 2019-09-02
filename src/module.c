@@ -4,10 +4,7 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-#define _GNU_SOURCE
-
 #include <time.h>
-#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
@@ -351,13 +348,9 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     char *err = NULL;
-    char *errmsg = NULL;
     RSResultsIterator *resIter = GetRSIter(argv + 1, argc - 1, &err);
     if (err != NULL) {
-        asprintf(&errmsg, "TSDB: failed parsing filters with error %s", err);
-        RedisModule_ReplyWithError(ctx, errmsg);
-        free(err);
-        free(errmsg);
+        RedisModule_ReplyWithError(ctx, err);
         return REDISMODULE_OK;
     }
     if(resIter == NULL) { 
