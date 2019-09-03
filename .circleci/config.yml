@@ -68,7 +68,7 @@ commands:
           command: |
             sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             make -C build/docker build
-            make -C build/docker publish
+            sudo make -C build/docker publish
 jobs:
   build:
     docker:
