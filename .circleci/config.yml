@@ -40,7 +40,24 @@ commands:
           name: Deploy to S3
           command: >-
             aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
-
+  multiarch_docker:
+    steps:
+      - setup_remote_docker
+          docker_layer_caching: true
+      - run:
+          name: Setup Docker client
+          command: |
+            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
+            curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+            apt-get update -qq
+            apt-get -q install -y docker-ce docker-ce-cli containerd.io
+      - checkout
+      - run:
+          name: Build
+          command: |
+            make -C build/docker build
+            make -C build/docker publish
 jobs:
   build:
     docker:
@@ -59,7 +76,12 @@ jobs:
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
- 
+  build-multiarch-docker:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - multiarch_docker
+
   deploy_package:
     parameters:
       package:
