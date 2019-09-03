@@ -836,6 +836,38 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
      #       with pytest.raises(redis.ResponseError):
      #           assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
 
+    def test_redisearch_label_index(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', 'x', '2')
+            assert r.execute_command('TS.CREATE', 'tester4', 'LABELS', 'name', 'anybody', 'class', 'top', 'type', 'noone', 'x', '2', 'z', '3')
+
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', '*')
+            # check RSL_Index for field names addition to doc
+            # assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', 'class') 
+            assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', 'top')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '-top')
+            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', 'top x')
+            assert ['tester1', 'tester2', 'tester4']            == r.execute_command('TS.QUERYINDEX', '-(top x)')
+            assert ['tester1', 'tester2', 'tester4']            == r.execute_command('TS.QUERYINDEX', '-top x')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '(-top) x')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', 'x -top')
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', 'top|x')
+            assert []                                           == r.execute_command('TS.QUERYINDEX', '-top|x')
+            assert ['tester1', 'tester2', 'tester4']            == r.execute_command('TS.QUERYINDEX', '(-top)|3')
+            assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', '@x:2')
+            assert ['tester1', 'tester2', 'tester3']            == r.execute_command('TS.QUERYINDEX', '@generation:x')
+            assert ['tester4']                                  == r.execute_command('TS.QUERYINDEX', '-@generation:x')
+            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', '@generation:x @x:2')
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', '(@generation:x)|(@x:2)')
+            assert ['tester1', 'tester2', 'tester3', 'tester4'] == r.execute_command('TS.QUERYINDEX', '(@generation:x)|-(@z:42)')
+            assert ['tester3']                                  == r.execute_command('TS.QUERYINDEX', '@generation:x @class:top')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '@generation:x -@class:top')
+            assert ['tester1', 'tester2']                       == r.execute_command('TS.QUERYINDEX', '@class:(middle|junior)')
+            assert ['tester3', 'tester4']                       == r.execute_command('TS.QUERYINDEX', '-@class:(middle|junior)')
+            
+
     def test_series_ordering(self):
         with self.redis() as r:
             sample_len = 1024
