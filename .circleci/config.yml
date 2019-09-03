@@ -45,14 +45,16 @@ commands:
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
-          name: Setup Docker client
+          name: Setup Docker client experimental features
           command: |
-            apt-get update -qq
-            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-            apt-get update -qq
-            apt-get -q install -y docker-ce docker-ce-cli containerd.io
+            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
+            sudo service docker restart
+#            apt-get update -qq
+#            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
+#            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+#            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+#            apt-get update -qq
+#            apt-get -q install -y docker-ce docker-ce-cli containerd.io
       - checkout
       - run:
           name: Build
@@ -79,8 +81,11 @@ jobs:
       - ci_steps:
           platform: macosx
   build-multiarch-docker:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+    machine:
+      enabled: true
+      image: ubuntu-1604:201903-01
+#    docker:
+#      - image: 'redislabsmodules/rmbuilder:latest'
     steps:
       - multiarch_docker
 
