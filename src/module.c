@@ -39,7 +39,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
         return REDISMODULE_OK;
     }
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
-    if (label_count > 0) {
+    if (*label_count > 0) {
     	labelsResult = malloc(sizeof(Label) * (*label_count));
         for (int i=0; i < *label_count; i++) {
         	RedisModuleString *key = argv[first_label_pos + i*2];
@@ -91,7 +91,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         return REDISMODULE_ERR;
     }
 
-    if (retentionTime < 0) {
+    if (*retentionTime < 0) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
@@ -101,7 +101,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         return REDISMODULE_ERR;
     }
 
-    if (maxSamplesPerChunk <= 0) {
+    if (*maxSamplesPerChunk <= 0) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
