@@ -6,7 +6,7 @@
 #ifndef TSDB_H
 #define TSDB_H
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "compaction.h"
 #include "consts.h"
 #include "chunk.h"

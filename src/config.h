@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "parse_policies.h"
 #include "search.h"
 

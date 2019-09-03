@@ -45,6 +45,7 @@ ifneq ($(firstword $(call reverse,$(VARIANT.list))),$(VARIANT))
 export VARIANT.list:=$(strip $(VARIANT.list) $(VARIANT))
 endif
 
+# join strings with hyphens
 __EMPTY:=
 __SPACE:=$(__EMPTY) $(__EMPTY)
 VARIANT.string:=$(subst $(__SPACE),-,$(strip $(VARIANT.list)))

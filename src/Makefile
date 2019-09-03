@@ -6,6 +6,12 @@ include $(ROOT)/build/mk/defs
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
+DEPENDENCIES=RediSearch rmutil
+
+ifneq ($(filter all deps $(DEPENDENCIES) package,$(MAKECMDGOALS)),)
+DEPS=1
+endif 
+
 ifeq ($(OS),macosx)
 # pip installed packages like ramp reside here:
 export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
@@ -28,6 +34,7 @@ UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
 CC=gcc
 
 CC_FLAGS = \
+	-I$(ROOT)/deps \
 	-I$(SDK_DIR) \
 	-I$(REDISEARCH_DIR)/src \
 	-Wall \
@@ -107,15 +114,20 @@ deps: RediSearch rmutil
 include $(MK)/rules
 
 clean:
+ifeq ($(ALL),1)
+	-$(SHOW)rm -rf $(BINROOT)
+else
 ifeq ($(DEPS),1)
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/RediSearch clean
 endif
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
+	-$(SHOW)rm -f $(BINROOT)/../$(notdir $(TARGET))
 	-$(SHOW)find $(BINDIR) -name '*.gcov' -delete
 	-$(SHOW)find $(BINDIR) -name '*.gcda' -delete
 	-$(SHOW)find $(BINDIR) -name '*.gcno' -delete
+endif # ALL
 
 -include $(CC_DEPS)
 
@@ -123,22 +135,24 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBREDISEARCH)
+ifeq ($(DEPS),1)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) deps $(LIBRMUTIL) $(LIBREDISEARCH)
+else
+$(TARGET): $(BIN_DIRS) $(OBJECTS)
+endif
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
 
-rmutil: $(LIBRMUTIL)
+deps: $(LIBRMUTIL) $(LIBREDISEARCH)
 
-RediSearch: $(LIBREDISEARCH)
-
-$(LIBRMUTIL):
+rmutil $(LIBRMUTIL):
 	@echo Building $@...
 	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
-$(LIBREDISEARCH):
+RediSearch $(LIBREDISEARCH):
 	@echo Building $@...
 	$(SHOW)$(MAKE) -C $(ROOT)/build/RediSearch
 

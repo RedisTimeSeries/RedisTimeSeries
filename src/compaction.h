@@ -6,9 +6,9 @@
 #ifndef COMPACTION_H
 #define COMPACTION_H
 #include <sys/types.h>
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "consts.h"
-#include <rmutil/util.h>
+#include "rmutil/util.h"
 
 #define AGG_NONE 0
 #define AGG_MIN 1

@@ -14,6 +14,9 @@ fetch:
 build:
 	@make -C src all -j
 
+clean:
+	@make -C src clean
+
 test:
 	@make -C src tests
 

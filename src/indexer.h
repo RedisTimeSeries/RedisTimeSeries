@@ -7,7 +7,7 @@
 #define INDEXER_H
 
 #include <sys/types.h>
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 typedef struct {
     RedisModuleString *key;

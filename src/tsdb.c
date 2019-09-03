@@ -5,7 +5,7 @@
 */
 #include <time.h>
 #include <string.h>
-#include <redismodule.h>
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"

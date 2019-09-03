@@ -10,7 +10,7 @@
 #include <ctype.h>
 #include <strings.h>
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"
@@ -23,6 +23,8 @@
 #include "indexer.h"
 #include "version.h"
 #include "search.h"
+
+REDISMODULE_INIT_SYMBOLS();
 
 RedisModuleType *SeriesType;
 
