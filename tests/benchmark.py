@@ -50,7 +50,7 @@ def simple_query_func(self, samples_count):
         assert response[name] == [str(name)]
 
 class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file__)) + '/../bin/redistimeseries.so')):
-  def atest_multiple_simple(self):
+  def test_multiple_simple(self):
     print
     simple_query_func(self, 100)
     simple_query_func(self, 1000)
@@ -118,10 +118,6 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
       print len(result)
       start_time = time.time()
       result = r.execute_command('TS.QUERYINDEX', 'a=8')
-      print("--- %s milliseconds ---" % ((time.time() - start_time) * 1000))
-      print len(result)
-      start_time = time.time()
-      result = r.execute_command('TS.QUERYINDEX', 'f!=5')
       print("--- %s milliseconds ---" % ((time.time() - start_time) * 1000))
       print len(result)
       start_time = time.time()
@@ -285,6 +281,15 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         print("--- %s milliseconds ---" % ((time.time() - start_time) * 1000))
         print len(result)
 
+  def test_no_labels(self):
+    with self.redis() as r:
+      r.execute_command('FLUSHALL')
+      with r.pipeline(transaction=False) as p:
+        for i in range(812000):
+          p.execute_command('TS.CREATE', i)
+        p.execute()
+      print r.execute_command('info memory')
+
   def test_realistic(self): #remove 'a_' to run
     name = 0
     zone_l = [5, 'USA', 'EMEA', 'Asia', 'Africa', 'Oceania']
@@ -293,8 +298,8 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
                 [7, 'Moscow', 'Hong Kong', 'Beijing', 'Mumbai', 'Tokyo', 'Singapure', 'Hanoi'],
                 [4, 'Cape Town', 'Lagos', 'Timbuktu', 'Tunis'],
                 [3, 'Melborne', 'Perth', 'Aukland']]
-    cluster_range = 10
-    machine_range = 20
+    cluster_range = 20
+    machine_range = 50
     measurement_l = [7, 'RAM', 'CPU', 'Storage', 'Temp', 'Humidity', 'Power', 'Latency']
     provider_l = [4, 'QWS', 'Azure', 'GCP', 'IBM Cloud']
 
@@ -339,3 +344,4 @@ class RedisTimeseriesTests(ModuleTestCase(os.path.dirname(os.path.abspath(__file
         #print result
         print("--- Querying for %s seconds ---" % (end_time - start_time))
         print name
+        print r.execute_command('info memory')

@@ -109,6 +109,7 @@ int RSL_Index(RSLiteIndex *fti, RedisModuleString *keyName, RSLabel *labels, cou
     fieldNamesStr[--fieldNamesLen] = '\0';
     RediSearch_DocumentAddFieldString(doc, FIELDINDEX, fieldNamesStr, fieldNamesLen, RSFLDTYPE_TAG);
     RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
+    free(fieldNamesStr);
     return REDISMODULE_OK;
 }
 
