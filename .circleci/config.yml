@@ -57,7 +57,7 @@ commands:
       - run:
           name: Build
           command: |
-            docker login -u redisfab -p $DOCKER_PASS
+            docker login -u redisfab -p $DOCKER_REDISFAB_PASS
             make -C build/docker build
             make -C build/docker publish
 jobs:
