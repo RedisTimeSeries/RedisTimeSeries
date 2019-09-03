@@ -917,3 +917,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+    
+    def test_rule_timebucket_64bit(self):
+        with self.redis() as r:
+            BELOW_32BIT_LIMIT = 2147483647
+            ABOVE_32BIT_LIMIT = 2147483648
+            r.execute_command("ts.create", 'test_key', 'RETENTION', ABOVE_32BIT_LIMIT)
+            r.execute_command("ts.create", 'below_32bit_limit')
+            r.execute_command("ts.create", 'above_32bit_limit')
+            r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
+            r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
+            info = r.execute_command("ts.info", 'test_key')
+            assert info[13][0][1] == BELOW_32BIT_LIMIT            
+            assert info[13][1][1] == ABOVE_32BIT_LIMIT
