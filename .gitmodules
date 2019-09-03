@@ -1,8 +1,8 @@
 [submodule "deps/RedisModulesSDK"]
 	path = deps/RedisModulesSDK
-	url = ssh://git@github.com/RedisLabs/RedisModulesSDK.git
+	url = https://github.com/RedisLabs/RedisModulesSDK.git
 	branch = RedisTimeSeries
 [submodule "deps/RediSearch"]
 	path = deps/RediSearch
-	url = ssh://git@github.com/RediSearch/RediSearch.git
+	url = https://github.com/RediSearch/RediSearch.git
 	branch = RedisTimeSeries

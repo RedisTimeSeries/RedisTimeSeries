@@ -116,6 +116,7 @@ include $(MK)/rules
 clean:
 ifeq ($(ALL),1)
 	-$(SHOW)rm -rf $(BINROOT)
+	-$(SHOW)rm -f $(BINROOT)/../$(notdir $(TARGET))
 else
 ifeq ($(DEPS),1)
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
@@ -158,9 +159,9 @@ RediSearch $(LIBREDISEARCH):
 
 #----------------------------------------------------------------------------------------------
 
-TEST_REPORT_DIR ?= $(PWD)
+TEST_REPORT_DIR ?= $(BINDIR)
 
-tests: $(TARGET)
+test tests: $(TARGET)
 	$(SHOW)cd ../tests; \
 	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv ./test_module.py
 
