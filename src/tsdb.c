@@ -17,7 +17,7 @@
 
 static Series* lastDeletedSeries = NULL;
 
-Series *NewSeries(RedisModuleString *keyName, RSLabel *labels, size_t labelsCount, int32_t retentionTime,
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
         short maxSamplesPerChunk)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));

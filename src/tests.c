@@ -11,9 +11,9 @@
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule* parsedRules;
     size_t rulesCount;
-    int result = ParseCompactionPolicy("max:1m:1h;min:10s:5d:10d;last:5M:10ms;avg:2h:10d;avg:3d:100d", &parsedRules, &rulesCount);
+    int result = ParseCompactionPolicy("max:1m:1h;min:10s:10d;last:5M:10m;avg:2h:10d;avg:3d:100d", &parsedRules, &rulesCount);
 	mu_check(result == TRUE);
-	mu_check(rulesCount == 4);
+	mu_check(rulesCount == 5);
 
     mu_check(parsedRules[0].aggType == StringAggTypeToEnum("max"));
     mu_assert_int_eq(parsedRules[0].timeBucket, 1);

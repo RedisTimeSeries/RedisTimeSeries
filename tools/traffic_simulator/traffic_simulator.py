@@ -7,17 +7,17 @@ import sys
 
 def worker_func(args):
     host, port, start_ts, tsrange, pipeline_size, key_index, key_format, check_only = args
-    redis_client = redis.Redis(host, port)
+    redis_client = redis.Redis(host, port, decode_responses=True)
     if check_only:
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
             return -1
-        expected = [[long(start_ts + i), str(i)] for i in xrange(tsrange)]
+        expected = [[int(start_ts + i), str(i)] for i in range(tsrange)]
         if expected != res:
             return -1
     else:
         pipe = redis_client.pipeline(tsrange)
-        for i in xrange(tsrange):
+        for i in range(tsrange):
             if tsrange % pipeline_size:
                 pipe.execute()
             pipe.execute_command("ts.add", key_format.format(index=key_index), start_ts + i, i)
@@ -48,7 +48,7 @@ def create_compacted_key(redis, i, source, agg, bucket):
 @click.option('--check-only', type=click.BOOL, default=False, help='test if all keys are correcly exists in the database')
 def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, with_compaction, start_timestamp,
         key_format, check_only):
-    r = redis.Redis(host, port)
+    r = redis.Redis(host, port, decode_responses=True)
     print("from %s to %s" % (start_timestamp, start_timestamp + samples))
 
     if create_keys and not check_only:
@@ -72,9 +72,9 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
     if(check_only):
         for r in result:
             if r == -1:
-                print("# failed!!! not all items exists in the databse")
+                print("# failed!!! not all items exists in the database")
                 sys.exit(1)
-        print("# pass, all items exists in the databse")
+        print("# pass, all items exists in the database")
     else:
         print("# items inserted %s:" % sum(result))
         print("took %s to insert sec, average insert time %s" % (insert_time, insert_time * 1000 / sum(result)))

@@ -52,7 +52,7 @@ int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
                  return FALSE;
              }
         } else if (i == 2) {
-            if (parse_string_to_millisecs(token, &rule->retentionSizeSec) == FALSE) {
+            if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec) == FALSE) {
                 return FALSE;
             }
         } else {

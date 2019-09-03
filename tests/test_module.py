@@ -392,7 +392,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[1001L, '20'], [2000L, '30']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result   
-            
+
+    def test_check_retention_64bit(self):
+        with self.redis() as r:
+            huge_timestamp = 4000000000 # larger than uint32
+            r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
+            info = r.execute_command('TS.INFO', 'tester')
+            assert info[3] == huge_timestamp
+
+            r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
+            r.execute_command('TS.ADD', 'tester', huge_timestamp * 3, '2')
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp * 3, '2']]
+
     def test_create_compaction_rule_with_wrong_aggregation(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
