@@ -59,7 +59,7 @@ jobs:
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
- 
+
   deploy_package:
     parameters:
       package:
@@ -84,7 +84,7 @@ jobs:
           command: mkdocs build
       - run:
           name: Deploy Docs to S3
-          command: >-
+          command: |
             aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl public-read --recursive
 
   run_automation:
@@ -118,6 +118,8 @@ workflows:
           requires:
             - build
           filters:
+#            tags:
+#              only: /.*/
             branches:
               only: master
       - deploy_package:

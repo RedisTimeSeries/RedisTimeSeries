@@ -1,3 +1,4 @@
+
 /*
 * Copyright 2018-2019 Redis Labs Ltd. and Contributors
 *
@@ -9,7 +10,7 @@
 #include <ctype.h>
 #include <strings.h>
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"
@@ -21,6 +22,9 @@
 #include "module.h"
 #include "indexer.h"
 #include "version.h"
+#include "search.h"
+
+REDISMODULE_INIT_SYMBOLS();
 
 RedisModuleType *SeriesType;
 
@@ -29,37 +33,52 @@ static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t
 
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 
-static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
+static int parseRSLabelsFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, size_t *label_count, RSLabel **rsLabels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
-    int first_label_pos = pos + 1;
-    Label *labelsResult = NULL;
-    *label_count = 0;
     if (pos < 0) {
-        *labels = NULL;
+        *rsLabels = NULL;
         return REDISMODULE_OK;
     }
+
+    int first_label_pos = pos + 1;
+    if ((argc - pos) % 2 == 0) { return REDISMODULE_ERR; }
+
+    RSLabel *labelsResult = NULL;
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
     if (label_count > 0) {
-    	labelsResult = malloc(sizeof(Label) * (*label_count));
-        for (int i=0; i < *label_count; i++) {
-        	RedisModuleString *key = argv[first_label_pos + i*2];
-        	RedisModuleString *value = argv[first_label_pos + i*2 + 1];
+    	labelsResult = calloc(*label_count, sizeof(RSLabel));
+        for (int i = 0; i < *label_count; i++) {
+        	size_t keyLen = 0;
+            size_t valueLen = 0;
+        	RedisModuleString *key = argv[first_label_pos + i * 2];
+        	RedisModuleString *value = argv[first_label_pos + i * 2 + 1];
 
-        	// Verify Label Key or Value are not empty strings
-        	size_t keyLen, valueLen;
-        	RedisModule_StringPtrLen(key, &keyLen);
-        	RedisModule_StringPtrLen(value, &valueLen);
-        	if(keyLen==0 || valueLen==0 || strpbrk( RedisModule_StringPtrLen(value, NULL), "(),")){
-        		FreeLabels(labelsResult, i); // need to release prior key values too
-        		return REDISMODULE_ERR;
+        	// Processing Label Key into Field
+        	const char *fieldStr = RedisModule_StringPtrLen(key, &keyLen);
+        	if(fieldStr == NULL || keyLen == 0) { 
+                goto exitOnError;
+            }
+
+        	const char *valueStr = RedisModule_StringPtrLen(value, &valueLen);
+        	if(valueStr == NULL || valueLen == 0 || strpbrk(valueStr, "=(),")) {
+        		goto exitOnError;
         	}
+            labelsResult[i].RSFieldType = RSFLDTYPE_FULLTEXT;
 
-        	labelsResult[i].key = RedisModule_CreateStringFromString(NULL, key);
-        	labelsResult[i].value = RedisModule_CreateStringFromString(NULL, value);
-        };
+            // These RM_strings are for Series->labels
+            labelsResult[i].RTS_Label.key = 
+                RedisModule_CreateStringFromString(NULL, key);
+        	labelsResult[i].RTS_Label.value =
+                RedisModule_CreateStringFromString(NULL, value);
+        }
+        *rsLabels = labelsResult;
     }
-    *labels = labelsResult;
     return REDISMODULE_OK;
+
+exitOnError:
+    FreeRSLabels(labelsResult, *label_count, TRUE); // need to release prior key values too
+    labelsResult = NULL;
+    return REDISMODULE_ERR;  
 }
 
 int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
@@ -77,12 +96,17 @@ int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
 }
 
 static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
-                    long long *retentionTime, long long *maxSamplesPerChunk, size_t *labelsCount, Label **labels) {
+                    long long *retentionTime, long long *maxSamplesPerChunk, size_t *labelsCount, RSLabel **labels) {
     *retentionTime = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
-    if(parseLabelsFromArgs(argv, argc, labelsCount, labels) == REDISMODULE_ERR){
+    if(parseRSLabelsFromArgs(ctx, argv, argc, labelsCount, labels) == REDISMODULE_ERR){
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse LABELS");
+        return REDISMODULE_ERR;
+    }
+
+    if(parseFieldsFromArgs(ctx, argv, argc, labelsCount, labels) == REDISMODULE_ERR){
+        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse FIELDS");
         return REDISMODULE_ERR;
     }
 
@@ -321,37 +345,48 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int st
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
     if (argc < 2) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int query_count = argc - 1;
-
-    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
+    char *err = NULL;
+    RSResultsIterator *resIter = GetRSIter(argv + 1, argc - 1, &err);
+    if (err != NULL) {
+        RedisModule_ReplyWithError(ctx, err);
+        return REDISMODULE_OK;
+    }
+    if(resIter == NULL) { 
+        return RedisModule_ReplyWithNull(ctx);
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) +
-        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
-    }
-
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
-
+    size_t keylen;
+    long replylen = 0;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        replylen++;
+    
+    char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
+    while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
+        RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
+        ++replylen;
+        tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     }
-    RedisModule_DictIteratorStop(iter);
+    
     RedisModule_ReplySetArrayLength(ctx, replylen);
+    RediSearch_ResultsIteratorFree(resIter);  
+
+    return REDISMODULE_OK;
+}
+
+static int seriesFromKey(RedisModuleCtx *ctx, RedisModuleString *keyStr, Series **series) {
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyStr, REDISMODULE_READ);
+
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
+        return REDISMODULE_ERR;
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return REDISMODULE_ERR;
+    }
+    *series = RedisModule_ModuleTypeGetValue(key);
 
     return REDISMODULE_OK;
 }
@@ -393,34 +428,34 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
+    char *err = NULL;
+    RSResultsIterator *resIter = GetRSIter(argv + filter_location + 1, argc - filter_location - 1, &err);
+    if (err != NULL) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
+    }
+    if(resIter == NULL) { 
+        return RedisModule_ReplyWithNull(ctx);
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
-
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
+    size_t keylen;
     Series *series;
-    while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key = RedisModule_OpenKey(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                REDISMODULE_READ);
-        if (key == NULL || RedisModule_ModuleTypeGetType(key) != SeriesType){
-            RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+    long long replylen = 0;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
+    while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
+        RedisModuleString *rm_key = RedisModule_CreateString(NULL, tsKey, keylen);
+        if (seriesFromKey(ctx, rm_key, &series) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", tsKey);
             continue;
         }
-        series = RedisModule_ModuleTypeGetValue(key);
         RedisModule_ReplyWithArray(ctx, 3);
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        RedisModule_ReplyWithString(ctx,rm_key);
         ReplyWithSeriesLabels(ctx, series);
         ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count);
         replylen++;
+        RedisModule_FreeString(NULL, rm_key);
+        tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     }
-    RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
     return REDISMODULE_OK;
@@ -428,21 +463,13 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
     }
 
     Series *series;
-    RedisModuleKey *key;
-    key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
-        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-    } else {
-        series = RedisModule_ModuleTypeGetValue(key);
+    if (seriesFromKey(ctx, argv[1], &series) != REDISMODULE_OK) {
+        return REDISMODULE_OK;
     }
 
     api_timestamp_t start_ts, end_ts;
@@ -534,12 +561,12 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
-	    double value;
-	    api_timestamp_t timestamp;
-	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+    double value;
+    api_timestamp_t timestamp;
+    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
@@ -556,7 +583,7 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
         long long retentionTime;
         long long maxSamplesPerChunk;
         size_t labelsCount;
-        Label *labels;
+        RSLabel *labels;
         if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
@@ -625,19 +652,20 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return result;
 }
 
-int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionTime,
+int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, RSLabel *labels, size_t labelsCount, long long retentionTime,
                 long long maxSamplesPerChunk, Series **series, RedisModuleKey **key) {
     if (*key == NULL) {
         *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     }
 
     RedisModule_RetainString(ctx, keyName);
-    *series = NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk);
+    *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
 
-    IndexMetric(ctx, keyName, (*series)->labels, (*series)->labelsCount);
+    RSL_Index(TSGlobalConfig.globalRSIndex, keyName, labels, labelsCount);
+    FreeRSLabels(labels, labelsCount, FALSE);
 
     return TSDB_OK;
 }
@@ -654,7 +682,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long retentionTime;
     long long maxSamplesPerChunk;
     size_t labelsCount;
-    Label *labels;
+    RSLabel *labels = NULL;
 
     if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -687,8 +715,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     RedisModuleString *keyName = argv[1];
     long long retentionTime;
     long long maxSamplesPerChunk;
-    size_t labelsCount;
-    Label *newLabels;
+    size_t labelsCount = 0;
+    RSLabel *newLabels = NULL;
 
     if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -708,15 +736,13 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
         series->maxSamplesPerChunk = maxSamplesPerChunk;
     }
 
-    if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
-        RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
-        // free current labels
-        FreeLabels(series->labels, series->labelsCount);
-
-        // set new newLabels
-        series->labels = newLabels;
+    if (newLabels != NULL) {
+        RSL_Index(TSGlobalConfig.globalRSIndex, keyName, newLabels, labelsCount);
+        free(series->labels);
+        series->labels = (Label *)calloc(labelsCount, sizeof(Label));
+        series->labels = RSLabelToLabels(NULL, newLabels, labelsCount);
         series->labelsCount = labelsCount;
-        IndexMetric(ctx, keyName, series->labels, series->labelsCount);
+        FreeRSLabels(newLabels, labelsCount, FALSE);
     }
 
     RedisModule_CloseKey(key);
@@ -844,7 +870,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         long long retentionTime;
         long long maxSamplesPerChunk;
         size_t labelsCount;
-        Label *labels;
+        RSLabel *labels;
         if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
@@ -900,78 +926,63 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static inline void get(RedisModuleCtx *ctx, Series *series) {
+    RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+    RedisModule_ReplyWithDouble(ctx, series->lastValue);
+}
 
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
     if (argc != 2) {
     	return RedisModule_WrongArity(ctx);
     }
 
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
-
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-    } else {
-        series = RedisModule_ModuleTypeGetValue(key);
+    if (seriesFromKey(ctx, argv[1], &series) != REDISMODULE_OK) {
+        return REDISMODULE_OK;
     }
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
-    RedisModule_ReplyWithDouble(ctx, series->lastValue);
 
-    RedisModule_CloseKey(key);
+    RedisModule_ReplyWithArray(ctx, 2);
+    get(ctx, series);
     return REDISMODULE_OK;
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-
-    if (argc < 3) {
+    if (argc < 3 || RMUtil_ArgIndex("FILTER", argv, argc) != 1) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
-    if (filter_location == -1) {
-        return RedisModule_WrongArity(ctx);
+    char *err = NULL;
+    RSResultsIterator *resIter = GetRSIter(argv + 2, argc - 2, &err);
+    if (err != NULL) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing filters");
     }
-    size_t query_count = argc - 1 - filter_location;
-    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
-    }
-
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
+    if(resIter == NULL) { 
+        return RedisModule_ReplyWithNull(ctx);
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
+    size_t keylen;
     Series *series;
-    while((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key = RedisModule_OpenKey(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                REDISMODULE_READ);
-        if (key == NULL || RedisModule_ModuleTypeGetType(key) != SeriesType){
-            RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
-                continue;
-            }
-        series = RedisModule_ModuleTypeGetValue(key);
+    long long replylen = 0;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    char *tsKey = (char *)RSL_IterateResults(resIter, &keylen);
+    while(tsKey != NULL) {  // INDEXREAD_EOF == NULL
+        RedisModuleString *rm_key = RedisModule_CreateString(NULL, tsKey, keylen);
+        if (seriesFromKey(ctx, rm_key, &series) != REDISMODULE_OK) {
+            return REDISMODULE_OK;
+        }
 
         RedisModule_ReplyWithArray(ctx, 4);
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        RedisModule_ReplyWithStringBuffer(ctx, tsKey, keylen);
         ReplyWithSeriesLabels(ctx, series);
         RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
         RedisModule_ReplyWithDouble(ctx, series->lastValue);
-        replylen++;
-        RedisModule_CloseKey(key);
+
+        ++replylen;
+        RedisModule_FreeString(NULL, rm_key);
+        tsKey = (char *)RSL_IterateResults(resIter, &keylen);
     }
-    RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
     return REDISMODULE_OK;
@@ -1003,9 +1014,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
+    if (RediSearch_Init(ctx, REDISEARCH_INIT_LIBRARY) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
+    
+    if (ReadTSConfig(ctx, argv, argc) == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    TSGlobalConfig.globalRSIndex = RSLiteCreate("RedisTimeSeries_RSIndex");
 
     RedisModuleTypeMethods tm = {
             .version = REDISMODULE_TYPE_METHOD_VERSION,
@@ -1018,7 +1035,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_ENC_VER, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
-    IndexInit();
+    //IndexInit();
     RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteCmd(ctx, "ts.alter", TSDB_alter);
     RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);

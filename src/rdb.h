@@ -3,7 +3,7 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "tsdb.h"
 
 #ifndef RDB_H

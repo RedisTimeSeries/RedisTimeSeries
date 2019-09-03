@@ -8,6 +8,8 @@
 #include "rdb.h"
 #include "chunk.h"
 #include "consts.h"
+#include "search.h"
+#include "config.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -19,18 +21,21 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     uint64_t retentionTime = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
     uint64_t labelsCount = RedisModule_LoadUnsigned(io);
-    Label *labels = malloc(sizeof(Label) * labelsCount);
+    RSLabel *labels = malloc(sizeof(RSLabel) * labelsCount);
+    // TODO 
     for (int i=0; i<labelsCount; i++) {
-        labels[i].key = RedisModule_LoadString(io);
-        labels[i].value = RedisModule_LoadString(io);
+        labels[i].RTS_Label.key = RedisModule_LoadString(io);
+        labels[i].RTS_Label.value = RedisModule_LoadString(io);
     }
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
     Series *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
 
-    CompactionRule *lastRule = NULL;
-    RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
+    RSL_Index(TSGlobalConfig.globalRSIndex, keyName, labels, labelsCount);
+    FreeRSLabels(labels, labelsCount, FALSE);
+
+    CompactionRule *lastRule;
 
     for (int i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = RedisModule_LoadString(io);
@@ -58,7 +63,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         }
     }
 
-    IndexMetric(ctx, keyName, series->labels, series->labelsCount);
+    // TODO IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     return series;
 }
 
@@ -80,6 +85,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
+    // TODO
     for (int i=0; i < series->labelsCount; i++) {
         RedisModule_SaveString(io, series->labels[i].key);
         RedisModule_SaveString(io, series->labels[i].value);

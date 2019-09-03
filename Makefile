@@ -4,6 +4,7 @@
 all: fetch build
 
 setup:
+	@echo Setting up system...
 	@./deps/readies/bin/getpy2
 	@python ./system-setup.py
 
@@ -12,6 +13,9 @@ fetch:
 
 build:
 	@make -C src all -j
+
+clean:
+	@make -C src clean
 
 test:
 	@make -C src tests

@@ -3,7 +3,7 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/util.h"
 #include "rmutil/strings.h"
 #include "config.h"
@@ -11,7 +11,7 @@
 
 TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int ReadTSConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {

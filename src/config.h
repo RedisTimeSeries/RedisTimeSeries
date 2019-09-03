@@ -3,11 +3,12 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-#ifndef CONFIG_H
-#define CONFIG_H
 
-#include "redismodule.h"
+#pragma once
+
+#include "RedisModulesSDK/redismodule.h"
 #include "parse_policies.h"
+#include "search.h"
 
 typedef struct {
     SimpleCompactionRule *compactionRules;
@@ -15,9 +16,9 @@ typedef struct {
     long long retentionPolicy;
     long long maxSamplesPerChunk;
     int hasGlobalConfig;
+    RSLiteIndex *globalRSIndex;
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-#endif
+int ReadTSConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

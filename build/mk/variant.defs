@@ -8,8 +8,10 @@ ARCH=$(shell $(ROOT)/deps/readies/bin/platform --arch)
 
 #----------------------------------------------------------------------------------------------
 
+ifeq ($(shell { [ -d .git ] || git rev-parse --git-dir >/dev/null 2>&1; echo $?; }),0)
 GIT_SHA := $(shell git rev-parse HEAD)
 GIT_COMMIT := $(shell git describe --always --abbrev=7 --dirty="+")
+endif
 
 #----------------------------------------------------------------------------------------------
 
@@ -21,22 +23,45 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-__VARIANT__=$(shell if [ -f $(ROOT)/VARIANT ]; then cat $(ROOT)/VARIANT; fi)
+VARIANT.file:=$(shell if [ -f $(ROOT)/VARIANT ]; then cat $(ROOT)/VARIANT; fi)
 
+# if VARIANT not specified and we're the not in submake, use one from file, if present
 ifeq ($(origin VARIANT),undefined)
-ifneq ($(__VARIANT__),)
-VARIANT:=$(__VARIANT__)
-endif
+ ifneq ($(VARIANT.primary),)
+  ifneq ($(VARIANT.file),)
+   VARIANT:=$(VARIANT.file)
+  endif
+ endif
+else # VARIANT specified
+ ifeq ($(VARIANT.primary),)
+  export VARIANT.primary:=$(VARIANT)
+ endif
 endif
 
-ifeq ($(VARIANT),)
-__VARIANT:=
+reverse=$(if $(wordlist 2,2,$(1)),$(call reverse,$(wordlist 2,$(words $(1)),$(1))) $(firstword $(1)),$(1))
+
+# add variant to variant list
+ifneq ($(firstword $(call reverse,$(VARIANT.list))),$(VARIANT))
+export VARIANT.list:=$(strip $(VARIANT.list) $(VARIANT))
+endif
+
+# join strings with hyphens
+__EMPTY:=
+__SPACE:=$(__EMPTY) $(__EMPTY)
+VARIANT.string:=$(subst $(__SPACE),-,$(strip $(VARIANT.list)))
+
+ifeq ($(VARIANT.string),)
+_VARIANT.string:=
 else
-__VARIANT:=-$(VARIANT)
+_VARIANT.string:=-$(VARIANT.string)
 endif
-FULL_VARIANT:=$(OS)-$(ARCH)-$(FLAVOR)$(__VARIANT)
-FULL_VARIANT_REL:=$(OS)-$(ARCH)-release$(__VARIANT)
 
+FULL_VARIANT:=$(OS)-$(ARCH)-$(FLAVOR)$(_VARIANT.string)
+FULL_VARIANT.release:=$(OS)-$(ARCH)-release$(_VARIANT.string)
+
+# if primary variant present, write it to file. otherwise, delete file
+ifneq ($(VARIANT.primary),)
 ifneq ($(origin VARIANT),)
 $(eval $(shell if [ -z $(VARIANT) ]; then rm -f $(ROOT)/VARIANT; else echo $(VARIANT)>$(ROOT)/VARIANT; fi))
+endif
 endif

@@ -6,11 +6,15 @@
 #ifndef TSDB_H
 #define TSDB_H
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 #include "compaction.h"
 #include "consts.h"
 #include "chunk.h"
 #include "indexer.h"
+#include "search.h"
+
+typedef struct RedisModuleDictIter RedisModuleDictIter;
+typedef struct RedisModuleDict RedisModuleDict;
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -57,7 +61,8 @@ int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, long long timeBucket);
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName,
+                                Series *series, RSLabel *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(Series *series);
 
 // Iterator over the series
