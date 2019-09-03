@@ -10,7 +10,7 @@
 #include "compaction.h"
 #include "parse_policies.h"
 
-static const int lookup_intervals[] = {
+static const uint64_t lookup_intervals[] = {
    ['m'] = 1,
    ['s'] = 1000,
    ['M'] = 1000*60,
