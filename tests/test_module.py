@@ -393,6 +393,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result   
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE', 'negative', 'RETENTION', -10)
+
+    def test_create_with_negative_chunk_size(self):
+        with self.redis() as r:
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', -10)
+
     def test_check_retention_64bit(self):
         with self.redis() as r:
             huge_timestamp = 4000000000 # larger than uint32
