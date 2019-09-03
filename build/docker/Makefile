@@ -78,16 +78,24 @@ $(eval $(call push,x64))
 $(eval $(call push,arm64v8))
 $(eval $(call push,arm32v7))
 
-build: $(BUILD_TARGETS)
+# build: $(BUILD_TARGETS)
 
 ifneq ($(PUSH),0)
-publish: $(PUSH_TARGETS)
+build: $(PUSH_TARGETS)
 else
-publish:
+build: $(BUILD_TARGETS) $(PUSH_TARGETS)
 endif
+
+# ifneq ($(PUSH),0)
+# publish: $(PUSH_TARGETS)
+# else
+# publish:
+# endif
+
+publish:
 	$(call create_manifest,$(VERSION))
 	$(call create_manifest,latest)
-	
+
 show:
 	@echo "$(STEM)-$(OSNICK):"
 ifeq ($(INSPECT),1)

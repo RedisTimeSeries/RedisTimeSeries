@@ -40,35 +40,7 @@ commands:
           name: Deploy to S3
           command: >-
             aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
-  multiarch_docker:
-    steps:
-#      - setup_remote_docker:
-#          docker_layer_caching: true
-      - run:
-          name: Setup Docker client experimental features
-          command: |
-            sudo apt-get update -qq
-            sudo apt-get install -y -q jq moreutils
-            sudo mkdir -p ~/.docker
-            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
-            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
-            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
-            sudo service docker restart
-            docker version
-            
-#            apt-get update -qq
-#            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-#            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-#            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-#            apt-get update -qq
-#            apt-get -q install -y docker-ce docker-ce-cli containerd.io
-      - checkout
-      - run:
-          name: Build
-          command: |
-            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            make -C build/docker build
-            sudo make -C build/docker publish
+
 jobs:
   build:
     docker:
@@ -88,13 +60,49 @@ jobs:
       - ci_steps:
           platform: macosx
   build-multiarch-docker:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Setup Docker client experimental features
+          command: |
+            apt-get update -qq
+            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
+            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+            apt-get update -qq
+            apt-get -q install -y docker-ce docker-ce-cli containerd.io
+      - checkout
+      - run:
+          name: Build
+          command: |
+            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+            make -C build/docker build
+  publish-multiarch-docker:
     machine:
       enabled: true
       image: ubuntu-1604:201903-01
-#    docker:
-#      - image: 'redislabsmodules/rmbuilder:latest'
     steps:
-      - multiarch_docker
+      - run:
+          name: Setup Docker client experimental features
+          command: |
+            sudo apt-get update -qq
+            sudo apt-get install -y -q jq moreutils
+            sudo mkdir -p ~/.docker
+            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
+            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
+            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
+            sudo service docker restart
+            docker version
+      - checkout
+      - run:
+          name: Build
+          command: |
+            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+            make -C build/docker build
+            sudo make -C build/docker publish
 
   deploy_package:
     parameters:
@@ -149,6 +157,12 @@ workflows:
             tags:
               only: /.*/
       - build-multiarch-docker:
+          filters:
+            tags:
+              only: /.*/
+      - publish-multiarch-docker:
+          requires:
+            - build-multiarch-docker
           filters:
             tags:
               only: /.*/
