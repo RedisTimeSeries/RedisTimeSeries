@@ -47,8 +47,14 @@ commands:
       - run:
           name: Setup Docker client experimental features
           command: |
+            sudo apt-get update -qq
+            sudo apt-get install -y -q jq moreutils
+            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
+            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
             sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
             sudo service docker restart
+            docker version
+            
 #            apt-get update -qq
 #            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
 #            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
