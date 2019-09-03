@@ -81,9 +81,9 @@ $(eval $(call push,arm32v7))
 # build: $(BUILD_TARGETS)
 
 ifneq ($(PUSH),0)
-build: $(PUSH_TARGETS)
-else
 build: $(BUILD_TARGETS) $(PUSH_TARGETS)
+else
+build: $(BUILD_TARGETS)
 endif
 
 # ifneq ($(PUSH),0)
