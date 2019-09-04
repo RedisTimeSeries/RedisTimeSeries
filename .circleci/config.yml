@@ -92,6 +92,7 @@ jobs:
           name: Setup Docker client experimental features
           command: |
             sudo ./deps/readies/bin/getdocker --just-enable-exp
+            docker version
 #            sudo apt-get update -qq
 #            sudo apt-get install -y -q jq moreutils
 #            sudo mkdir -p ~/.docker
@@ -99,7 +100,7 @@ jobs:
 #            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
 #            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
 #            sudo service docker restart
-            docker version
+#            docker version
 #      - run:
 #          name: Build
 #          command: |
