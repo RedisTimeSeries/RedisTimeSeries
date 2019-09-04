@@ -133,7 +133,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-          filters:
             branches:
               only: master
       - deploy_package:
