@@ -49,4 +49,4 @@ parser.add_argument('-n', '--nop', action="store_true", help='no operation')
 parser.add_argument('--just-enable-exp', action="store_true", help='no install, just enable experimental features')
 args = parser.parse_args()
 
-DockerSetup(nop = args.nop, on_install=args.just_enable_exp).setup()
+DockerSetup(nop = args.nop, no_install=args.just_enable_exp).setup()
