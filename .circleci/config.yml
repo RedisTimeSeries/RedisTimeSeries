@@ -54,34 +54,11 @@ jobs:
     steps:
       - run:
           name: Set up workspace
-          command: >-
-            sudo mkdir -p /workspace;
+          command: |
+            sudo mkdir -p /workspace
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
-  test-circleci-docker:
-    docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
-    steps:
-      - setup_remote_docker:
-          docker_layer_caching: true
-      - checkout
-      - run:
-          name: Setup Docker client
-          command: |
-            ./deps/readies/bin/getdocker --no-exp
-            docker version
-#            apt-get update -qq
-#            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-#            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-#            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-#            apt-get update -qq
-#            apt-get -q install -y docker-ce docker-ce-cli containerd.io
-      - run:
-          name: Build
-          command: |
-            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-#            make -C build/docker build
   build-multiarch-docker:
     machine:
       enabled: true
@@ -93,20 +70,12 @@ jobs:
           command: |
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
-#            sudo apt-get update -qq
-#            sudo apt-get install -y -q jq moreutils
-#            sudo mkdir -p ~/.docker
-#            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
-#            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
-#            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
-#            sudo service docker restart
-#            docker version
       - run:
           name: Build
           command: |
             sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-#            make -C build/docker build
-#            sudo make -C build/docker publish
+            make -C build/docker build
+            sudo make -C build/docker publish
 
   deploy_package:
     parameters:
@@ -152,44 +121,43 @@ workflows:
   version: 2
   build_and_package:
     jobs:
-#      - build:
-#          filters:
-#            tags:
-#              only: /.*/
-#      - build-macos:
-#          filters:
-#            tags:
-#              only: /.*/
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - build-macos:
+          filters:
+            tags:
+              only: /.*/
       - build-multiarch-docker:
           filters:
             tags:
               only: /.*/
-      - test-circleci-docker:
           filters:
+            branches:
+              only: master
+      - deploy_package:
+          name: deploy_branch
+          package: branch
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
+      - deploy_package:
+          name: deploy_release
+          package: release
+          requires:
+            - build
+          filters:
+            branches:
+              ignore: /.*/
             tags:
-              only: /.*/
-#      - deploy_package:
-#          name: deploy_branch
-#          package: branch
-#          requires:
-#            - build
-#          filters:
-#            branches:
-#              only: master
-#      - deploy_package:
-#          name: deploy_release
-#          package: release
-#          requires:
-#            - build
-#          filters:
-#            branches:
-#              ignore: /.*/
-#            tags:
-#              only: '/^v[0-9].*/'
-#      - run_automation:
-#          requires:
-#            - deploy_branch
-#      - deploy_docs:
-#          filters:
-#            branches:
-#              only: master
+              only: '/^v[0-9].*/'
+      - run_automation:
+          requires:
+            - deploy_branch
+      - deploy_docs:
+          filters:
+            branches:
+              only: master
