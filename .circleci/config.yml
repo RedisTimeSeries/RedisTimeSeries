@@ -87,24 +87,25 @@ jobs:
       enabled: true
       image: ubuntu-1604:201903-01
     steps:
+      - checkout
       - run:
           name: Setup Docker client experimental features
           command: |
-            sudo apt-get update -qq
-            sudo apt-get install -y -q jq moreutils
-            sudo mkdir -p ~/.docker
-            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
-            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
-            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
-            sudo service docker restart
+            sudo ./deps/readies/bin/getdocker --just-enable-exp
+#            sudo apt-get update -qq
+#            sudo apt-get install -y -q jq moreutils
+#            sudo mkdir -p ~/.docker
+#            if [[ ! -f ~/.docker/config.json ]]; then sudo bash -c 'echo {} >  ~/.docker/config.json'; fi
+#            sudo bash -c 'jq '\''.experimental = "enabled"'\'' ~/.docker/config.json | sponge ~/.docker/config.json'
+#            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
+#            sudo service docker restart
             docker version
-      - checkout
-      - run:
-          name: Build
-          command: |
-            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            make -C build/docker build
-            sudo make -C build/docker publish
+#      - run:
+#          name: Build
+#          command: |
+#            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+#            make -C build/docker build
+#            sudo make -C build/docker publish
 
   deploy_package:
     parameters:
@@ -150,14 +151,14 @@ workflows:
   version: 2
   build_and_package:
     jobs:
-      - build:
-          filters:
-            tags:
-              only: /x.*/
-      - build-macos:
-          filters:
-            tags:
-              only: /x.*/
+#      - build:
+#          filters:
+#            tags:
+#              only: /.*/
+#      - build-macos:
+#          filters:
+#            tags:
+#              only: /.*/
       - build-multiarch-docker:
           filters:
             tags:
@@ -165,29 +166,29 @@ workflows:
       - test-circleci-docker:
           filters:
             tags:
-              only: /x.*/
-      - deploy_package:
-          name: deploy_branch
-          package: branch
-          requires:
-            - build
-          filters:
-            branches:
-              only: master
-      - deploy_package:
-          name: deploy_release
-          package: release
-          requires:
-            - build
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: '/^v[0-9].*/'
-      - run_automation:
-          requires:
-            - deploy_branch
-      - deploy_docs:
-          filters:
-            branches:
-              only: master
+              only: /.*/
+#      - deploy_package:
+#          name: deploy_branch
+#          package: branch
+#          requires:
+#            - build
+#          filters:
+#            branches:
+#              only: master
+#      - deploy_package:
+#          name: deploy_release
+#          package: release
+#          requires:
+#            - build
+#          filters:
+#            branches:
+#              ignore: /.*/
+#            tags:
+#              only: '/^v[0-9].*/'
+#      - run_automation:
+#          requires:
+#            - deploy_branch
+#      - deploy_docs:
+#          filters:
+#            branches:
+#              only: master
