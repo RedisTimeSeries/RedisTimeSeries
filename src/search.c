@@ -58,10 +58,13 @@ static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldle
 /***** Modification functions *****/
 RSLiteIndex *RSLiteCreate(const char *name) {
     RSLiteIndex *fti = (RSLiteIndex *)calloc(1, sizeof(RSLiteIndex));
+    RSIndexOptions *NOGC = RediSearch_CreateIndexOptions();
 
     fti->fields = NULL; // TODO will probably changed once AVL is added
     fti->fields_count = 0;
-    fti->idx = RediSearch_CreateIndex(name, NULL);
+    fti->idx = RediSearch_CreateIndex(name, NOGC);
+
+    RediSearch_FreeIndexOptions(NOGC);
     RediSearch_CreateField (fti->idx, FIELDINDEX, RSFLDTYPE_TAG, RSFLDOPT_NONE);  
     return fti;
 }
