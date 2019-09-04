@@ -59,27 +59,28 @@ jobs:
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
-#  build-multiarch-docker:
-#    docker:
-#      - image: 'redislabsmodules/rmbuilder:latest'
-#    steps:
-#      - setup_remote_docker:
-#          docker_layer_caching: true
-#      - run:
-#          name: Setup Docker client
-#          command: |
+  test-circleci-docker:
+    docker:
+      - image: 'redislabsmodules/rmbuilder:latest'
+    steps:
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - checkout
+      - run:
+          name: Setup Docker client
+          command: |
+            ./deps/readies/bin/getdocker
+            docker version
 #            apt-get update -qq
 #            apt-get -q install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
 #            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
 #            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
 #            apt-get update -qq
 #            apt-get -q install -y docker-ce docker-ce-cli containerd.io
-#            docker version
-#      - checkout
-#      - run:
-#          name: Build
-#          command: |
-#            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+      - run:
+          name: Build
+          command: |
+            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
 #            make -C build/docker build
   build-multiarch-docker:
     machine:
@@ -152,15 +153,19 @@ workflows:
       - build:
           filters:
             tags:
-              only: /.*/
+              only: /x.*/
       - build-macos:
           filters:
             tags:
-              only: /.*/
+              only: /x.*/
       - build-multiarch-docker:
           filters:
             tags:
               only: /.*/
+      - test-circleci-docker:
+          filters:
+            tags:
+              only: /x.*/
       - deploy_package:
           name: deploy_branch
           package: branch
