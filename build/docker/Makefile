@@ -78,21 +78,13 @@ $(eval $(call push,x64))
 $(eval $(call push,arm64v8))
 $(eval $(call push,arm32v7))
 
-# build: $(BUILD_TARGETS)
+build: $(BUILD_TARGETS)
 
 ifneq ($(PUSH),0)
-build: $(BUILD_TARGETS) $(PUSH_TARGETS)
+publish: $(PUSH_TARGETS)
 else
-build: $(BUILD_TARGETS)
-endif
-
-# ifneq ($(PUSH),0)
-# publish: $(PUSH_TARGETS)
-# else
-# publish:
-# endif
-
 publish:
+endif
 	$(call create_manifest,$(VERSION))
 	$(call create_manifest,latest)
 

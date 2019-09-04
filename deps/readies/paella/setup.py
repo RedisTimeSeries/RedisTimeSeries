@@ -10,7 +10,7 @@ class Runner:
     def __init__(self, nop=False):
         self.nop = nop
 
-    def run(self, cmd, output_on_error=False):
+    def run(self, cmd, output_on_error=False, _try=False):
         print(cmd)
         sys.stdout.flush()
         if self.nop:
@@ -26,7 +26,8 @@ class Runner:
                 os.remove(temppath)
             eprint("command failed: " + cmd)
             sys.stderr.flush()
-            sys.exit(1)
+            if not _try:
+                sys.exit(1)
 
     def has_command(self, cmd):
         return os.system("command -v " + cmd + " > /dev/null") == 0
@@ -73,63 +74,63 @@ class Setup(OnPlatform):
         if self.platform.is_debian_compat():
             # prevents apt-get from interactively prompting
             os.environ["DEBIAN_FRONTEND"] = 'noninteractive'
-        
+
         os.environ["PYTHONWARNINGS"] = 'ignore:DEPRECATION::pip._internal.cli.base_command'
 
     def setup(self):
         RepoRefresh(self.runner).invoke()
         self.invoke()
 
-    def run(self, cmd, output_on_error=False):
-        return self.runner.run(cmd, output_on_error=output_on_error)
+    def run(self, cmd, output_on_error=False, _try=False):
+        return self.runner.run(cmd, output_on_error=output_on_error, _try=_try)
 
     def has_command(self, cmd):
         return self.runner.has_command(cmd)
 
     #------------------------------------------------------------------------------------------
 
-    def apt_install(self, packs, group=False):
-        self.run("apt-get -qq install -y " + packs, output_on_error=True)
+    def apt_install(self, packs, group=False, _try=False):
+        self.run("apt-get -qq install -y " + packs, output_on_error=True, _try=_try)
 
-    def yum_install(self, packs, group=False):
+    def yum_install(self, packs, group=False, _try=False):
         if not group:
-            self.run("yum install -q -y " + packs, output_on_error=True)
+            self.run("yum install -q -y " + packs, output_on_error=True, _try=_try)
         else:
-            self.run("yum groupinstall -y " + packs, output_on_error=True)
+            self.run("yum groupinstall -y " + packs, output_on_error=True, _try=_try)
 
-    def dnf_install(self, packs, group=False):
+    def dnf_install(self, packs, group=False, _try=False):
         if not group:
-            self.run("dnf install -y " + packs, output_on_error=True)
+            self.run("dnf install -y " + packs, output_on_error=True, _try=_try)
         else:
-            self.run("dnf groupinstall -y " + packs, output_on_error=True)
+            self.run("dnf groupinstall -y " + packs, output_on_error=True, _try=_try)
 
-    def zypper_install(self, packs, group=False):
-        self.run("zipper --non-interactive install " + packs, output_on_error=True)
+    def zypper_install(self, packs, group=False, _try=False):
+        self.run("zipper --non-interactive install " + packs, output_on_error=True, _try=_try)
 
-    def pacman_install(self, packs, group=False):
-        self.run("pacman --noconfirm -S " + packs, output_on_error=True)
+    def pacman_install(self, packs, group=False, _try=False):
+        self.run("pacman --noconfirm -S " + packs, output_on_error=True, _try=_try)
 
-    def brew_install(self, packs, group=False):
+    def brew_install(self, packs, group=False, _try=False):
         # brew will fail if package is already installed
         for pack in packs.split():
-            self.run("brew list {} &>/dev/null || brew install {}".format(pack, pack), output_on_error=True)
+            self.run("brew list {} &>/dev/null || brew install {}".format(pack, pack), output_on_error=True, _try=_try)
 
-    def install(self, packs, group=False):
+    def install(self, packs, group=False, _try=False):
         if self.os == 'linux':
             if self.dist == 'fedora':
-                self.dnf_install(packs, group)
+                self.dnf_install(packs, group=group, _try=_try)
             elif self.dist == 'ubuntu' or self.dist == 'debian':
-                self.apt_install(packs, group)
+                self.apt_install(packs, group=group, _try=_try)
             elif self.dist == 'centos' or self.dist == 'redhat':
-                self.yum_install(packs, group)
+                self.yum_install(packs, group=group, _try=_try)
             elif self.dist == 'suse':
-                self.zypper_install(packs, group)
+                self.zypper_install(packs, group=group, _try=_try)
             elif self.dist == 'arch':
-                self.pacman_install(packs, group)
+                self.pacman_install(packs, group=group, _try=_try)
             else:
                 Assert(False), "Cannot determine installer"
         elif self.os == 'macosx':
-            self.brew_install(packs, group)
+            self.brew_install(packs, group=group, _try=_try)
         else:
             Assert(False), "Cannot determine installer"
 
@@ -137,25 +138,69 @@ class Setup(OnPlatform):
         self.install(packs, group=True)
 
     #------------------------------------------------------------------------------------------
+    
+    def yum_add_repo(self, repourl, repo=""):
+        self.install("yum-utils")
+        self.run("yum-config-manager --add-repo {}".format(repourl))
 
-    def pip_install(self, cmd):
+    def apt_add_repo(self, repourl, repo=""):
+        self.run("add-apt-repository {}".format(repourl))
+        self.run("apt-get -qq update")
+
+    def dnf_add_repo(self, repourl, repo=""):
+        self.install("dnf-plugins-core")
+        self.run("dnf config-manager --add-repo {}".format(repourl))
+
+    def zypper_add_repo(self, repourl, repo=""):
+        pass
+
+    def pacman_add_repo(self, repourl, repo=""):
+        pass
+    
+    def brew_add_repo(self, repourl, repo=""):
+        pass
+
+    def add_repo(self, repourl, repo=""):
+        if self.os == 'linux':
+            if self.dist == 'fedora':
+                self.dnf_add_repo(repourl, repo=repo)
+            elif self.dist == 'ubuntu' or self.dist == 'debian':
+                self.apt_add_repo(repourl, repo=repo)
+            elif self.dist == 'centos' or self.dist == 'redhat':
+                self.yum_add_repo(repourl, repo=repo)
+            elif self.dist == 'suse':
+                self.zypper_add_repo(repourl, repo=repo)
+            elif self.dist == 'arch':
+                self.pacman_add_repo(repourl, repo=repo)
+            else:
+                Assert(False), "Cannot determine installer"
+        elif self.os == 'macosx':
+            self.brew_add_repo(packs, group=group, _try=_try)
+        else:
+            Assert(False), "Cannot determine installer"
+
+    #------------------------------------------------------------------------------------------
+
+    def pip_install(self, cmd, _try=False):
         pip_user = ''
         if self.os == 'macosx':
             pip_user = '--user '
-        self.run("pip install --disable-pip-version-check " + pip_user + cmd, output_on_error=True)
+        self.run("pip install --disable-pip-version-check " + pip_user + cmd, output_on_error=True, _try=_try)
 
-    def pip3_install(self, cmd):
+    def pip3_install(self, cmd, _try=False):
         pip_user = ''
         if self.os == 'macosx':
             pip_user = '--user '
-        self.run("pip3 install --disable-pip-version-check " + pip_user + cmd, output_on_error=True)
+        self.run("pip3 install --disable-pip-version-check " + pip_user + cmd, output_on_error=True, _try=_try)
 
     def setup_pip(self):
-        get_pip = "set -e; cd /tmp; curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py"
+        get_pip = "set -e; curl -s https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py"
         if not self.has_command("pip"):
             # self.install("python3-distutils")
-            self.install("curl ca-certificates")
-            self.run(get_pip + "; " + self.python + " get-pip.py", output_on_error=True)
-        ## fails on ubuntu 18:
-        # if not has_command("pip3") and has_command("python3"):
-        #     run(get_pip + "; python3 get-pip.py")
+            self.install_downloaders()
+            self.run(get_pip + "; " + self.python + " /tmp/get-pip.py", output_on_error=True)
+
+    def install_downloaders(self):
+        if self.os == 'linux':
+            self.install("ca-certificates")
+        self.install("curl wget")
