@@ -10,8 +10,9 @@ import paella
 #----------------------------------------------------------------------------------------------
 
 class DockerSetup(paella.Setup):
-    def __init__(self, nop=False, no_install=False):
+    def __init__(self, nop=False, no_install=False, no_exp=False):
         self.no_install = no_install
+        self.no_exp = no_exp
         paella.Setup.__init__(self, nop)
 
     def debian_compat(self):
@@ -37,6 +38,8 @@ class DockerSetup(paella.Setup):
         self.install("docker-ce docker-ce-cli containerd.io")
 
     def common_last(self):
+        if self.no_exp:
+            return
         self.install("jq moreutils")
         self.run("mkdir -p ~/.docker")
         self.run("if [ ! -f ~/.docker/config.json ]; then echo '{}' >  ~/.docker/config.json; fi")
@@ -52,6 +55,7 @@ class DockerSetup(paella.Setup):
 parser = argparse.ArgumentParser(description='Install Docker CE')
 parser.add_argument('-n', '--nop', action="store_true", help='no operation')
 parser.add_argument('--just-enable-exp', action="store_true", help='no install, just enable experimental features')
+parser.add_argument('--no-exp', action="store_true", help="don't enable experimental features")
 args = parser.parse_args()
 
-DockerSetup(nop = args.nop, no_install=args.just_enable_exp).setup()
+DockerSetup(nop = args.nop, no_install=args.just_enable_exp, no_exp=args.no_exp).setup()
