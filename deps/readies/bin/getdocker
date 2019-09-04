@@ -38,9 +38,12 @@ class DockerSetup(paella.Setup):
     def common_last(self):
         self.install("jq moreutils")
         self.run("mkdir -p ~/.docker")
-        self.run("if [[ ! -f ~/.docker/config.json ]]; then echo {} >  ~/.docker/config.json; fi")
+        self.run("if [ ! -f ~/.docker/config.json ]; then echo '{}' >  ~/.docker/config.json; fi")
         self.run("jq '.experimental = \"enabled\"' ~/.docker/config.json | sponge ~/.docker/config.json")
-        self.run("systemctl restart docker")
+        if self.has_command("systemctl"):
+            self.run("systemctl restart docker")
+        else:
+            self.run("service docker restart")
         pass
 
 #----------------------------------------------------------------------------------------------
