@@ -91,7 +91,7 @@ jobs:
       - run:
           name: Setup Docker client experimental features
           command: |
-            sudo ./deps/readies/bin/getdocker --just-enable-exp
+            sudo ./deps/readies/bin/getdocker
             docker version
 #            sudo apt-get update -qq
 #            sudo apt-get install -y -q jq moreutils
@@ -101,10 +101,10 @@ jobs:
 #            sudo sh -c 'echo '\''DOCKER_OPTS="--experimental=true"'\'' >> /etc/default/docker'
 #            sudo service docker restart
 #            docker version
-#      - run:
-#          name: Build
-#          command: |
-#            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+      - run:
+          name: Build
+          command: |
+            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
 #            make -C build/docker build
 #            sudo make -C build/docker publish
 
