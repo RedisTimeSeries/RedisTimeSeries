@@ -8,4 +8,4 @@ else:
 	from .utils2 import *
 
 def sh(cmd):
-    return Popen(cmd.split(), stdout=PIPE).communicate()[0]
+    return " ".join(Popen(cmd.split(), stdout=PIPE).communicate()[0].split("\n"))
