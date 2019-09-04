@@ -17,8 +17,9 @@ class DockerSetup(paella.Setup):
     def debian_compat(self):
         if self.no_install:
             return
-        self.install("apt-transport-https ca-certificates curl gnupg-agent software-properties-common")
+        self.install("apt-transport-https ca-certificates curl gnupg-agent software-properties-common lsb-release")
         self.run("curl -fsSL https://download.docker.com/linux/{}/gpg | apt-key add -".format(self.dist))
+        self.add_repo("'deb [arch=amd64] https://download.docker.com/linux/debian {} stable'".format(sh("lsb_release -cs")))
         self.run("apt-get -qq update")
         self.install("docker-ce docker-ce-cli containerd.io")
 
