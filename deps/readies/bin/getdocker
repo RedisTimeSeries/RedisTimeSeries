@@ -11,10 +11,11 @@ import paella
 
 class DockerSetup(paella.Setup):
     def __init__(self, nop=False, no_install=False):
+        self.no_install = no_install
         paella.Setup.__init__(self, nop)
 
     def debian_compat(self):
-        if not no_install:
+        if not self.no_install:
             return
         self.install("apt-transport-https ca-certificates curl gnupg-agent software-properties-common")
         self.run("curl -fsSL https://download.docker.com/linux/{}/gpg | apt-key add -".format(self.dist))
@@ -22,14 +23,14 @@ class DockerSetup(paella.Setup):
         self.install("docker-ce docker-ce-cli containerd.io")
 
     def redhat_compat(self):
-        if not no_install:
+        if not self.no_install:
             return   
         self.install("yum-utils device-mapper-persistent-data lvm2")
         self.add_repo("https://download.docker.com/linux/centos/docker-ce.repo")
         self.install("docker-ce docker-ce-cli containerd.io")
 
     def fedora(self):
-        if not no_install:
+        if not self.no_install:
             return
         self.add_repo("https://download.docker.com/linux/fedora/docker-ce.repo")
         self.install("docker-ce docker-ce-cli containerd.io")
