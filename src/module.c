@@ -826,7 +826,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 
 /*
-TS.INCRBY ts_key NUMBER [RESET time-bucket]
+TS.INCRBY ts_key NUMBER [TIMESTAMP timestamp] [RESET time-bucket]
 */
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -858,9 +858,17 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
 
+
+    long long currentUpdatedTime = -1;
+    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
+    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+        currentUpdatedTime = RedisModule_Milliseconds();
+    } else if(RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long *) &currentUpdatedTime) != REDISMODULE_OK) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+    }
+
     double result;
     long long resetMilliSeconds = 1;
-    time_t currentUpdatedTime = RedisModule_Milliseconds();
     if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
         if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetMilliSeconds) != 0) {
             return RedisModule_WrongArity(ctx);
@@ -873,6 +881,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 series->lastValue = 0;
             }
         }
+        currentUpdatedTime = max(currentUpdatedTime, series->lastTimestamp);
     }
 
     RMUtil_StringToLower(argv[0]);
@@ -882,7 +891,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result = series->lastValue - incrby;
     }
 
-    if (SeriesAddSample(series, max(currentUpdatedTime, series->lastTimestamp), result) != TSDB_OK) {
+    if (SeriesAddSample(series, currentUpdatedTime, result) != TSDB_OK) {
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: couldn't add sample");
         return REDISMODULE_OK;
     }
