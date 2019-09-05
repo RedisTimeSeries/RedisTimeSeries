@@ -28,6 +28,7 @@ class Runner:
             sys.stderr.flush()
             if not _try:
                 sys.exit(1)
+        return rc
 
     def has_command(self, cmd):
         return os.system("command -v " + cmd + " > /dev/null") == 0
@@ -140,16 +141,20 @@ class Setup(OnPlatform):
     #------------------------------------------------------------------------------------------
     
     def yum_add_repo(self, repourl, repo=""):
-        self.install("yum-utils")
-        self.run("yum-config-manager --add-repo {}".format(repourl))
+        if not self.has_command("yum-config-manager"):
+            self.install("yum-utils")
+        self.run("yum-config-manager -y --add-repo {}".format(repourl))
 
     def apt_add_repo(self, repourl, repo=""):
-        self.run("add-apt-repository {}".format(repourl))
+        if not self.has_command("yum-config-manager"):
+            self.install("software-properties-common")
+        self.run("add-apt-repository -y {}".format(repourl))
         self.run("apt-get -qq update")
 
     def dnf_add_repo(self, repourl, repo=""):
-        self.install("dnf-plugins-core")
-        self.run("dnf config-manager --add-repo {}".format(repourl))
+        if self.run("dnf config-manager 2>/dev/null", _try=True):
+            self.install("dnf-plugins-core")
+        self.run("dnf config-manager -y --add-repo {}".format(repourl))
 
     def zypper_add_repo(self, repourl, repo=""):
         pass
