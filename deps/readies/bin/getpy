@@ -1,20 +1,18 @@
 #!/bin/bash
 
-[ "$VERBOSE" = "1" ] && set -x
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-runn() {
-	[[ $NOP == 1 ]] && { echo "${@:1}"; return; }
-	__runn_log=$(mktemp /tmp/run.XXXXX)
-	{ "${@:1}"; } > $__runn_log  2>&1
-	[ $? != 0 ] && cat $__runn_log
-	rm -f $__runn_log
-}
+. $HERE/../shibumi/functions
+
+[ "$VERBOSE" = "1" ] && set -x
 
 if [ ! -z $(command -v python) ]; then
 	[ "$(python --version 2>&1 | cut -d" " -f2 | cut -d. -f1)" = "3" ] && exit 0
 fi
 
 [ ! -z $(command -v python3) ] && exit 0
+
+[[ $CHECK == 1 ]] && exit 1
 
 if [ ! -z $(command -v apt-get) ]; then
 	runn apt-get -qq update

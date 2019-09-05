@@ -1,0 +1,11 @@
+
+.PHONY: build clean
+
+build: $(MK_MAKEFILES) $(TARGET)
+
+#clean:
+#ifeq ($(ALL),1) 
+#	$(SHOW)rm -rf $(BINDIR)
+#else
+#	$(SHOW)$(MAKE) clean -C $(BUILD_DIR)
+#endif 
