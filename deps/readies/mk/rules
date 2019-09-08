@@ -1,0 +1,11 @@
+
+.PHONY: all
+
+all: $(MK_ALL_TARGETS)
+
+include $(MK)/common.rules
+include $(MK)/variant.rules
+include $(MK)/bindirs.rules
+include $(MK)/help.rules
+include $(MK)/build.rules
+include $(MK)/cmake.rules

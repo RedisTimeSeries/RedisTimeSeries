@@ -1,31 +1,32 @@
 #!/bin/bash
 
-[ "$VERBOSE" = "1" ] && set -x
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-show_if_error() {
-	{ "${@:1}"; } > /tmp/py2.log  2>&1
-	[ $? != 0 ] && cat /tmp/py2.log
-	rm -f /tmp/py2.log
-}
+. $HERE/../shibumi/functions
+
+[ "$VERBOSE" = "1" ] && set -x
 
 if [ ! -z $(command -v python) ]; then
 	[ "$(python --version 2>&1 | cut -d" " -f2 | cut -d. -f1)" = "2" ] && exit 0
 fi
 
 [ ! -z $(command -v python2) ] && exit 0
+[ ! -z $(command -v python2.7) ] && exit 0
+
+[[ $CHECK == 1 ]] && exit 1
 
 if [ ! -z $(command -v apt-get) ]; then
-	show_if_error apt-get -qq update
-	show_if_error apt-get -qq install -y python
+	runn apt-get -qq update
+	runn apt-get -qq install -y python
 elif [ ! -z $(command -v dnf) ]; then
-	show_if_error dnf install -y python2
+	runn dnf install -y python2
 elif [ ! -z $(command -v yum) ]; then
-	show_if_error yum install -y python2
+	runn yum install -y python2
 elif [ ! -z $(command -v apk) ]; then
-	show_if_error apk update
-	show_if_error apk add python2
+	runn apk update
+	runn apk add python2
 elif [ ! -z $(command -v brew) ]; then
-	show_if_error brew install python2
+	runn brew install python2
 fi
 
 if [ -z $(command -v python) ]; then

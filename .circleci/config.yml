@@ -54,12 +54,29 @@ jobs:
     steps:
       - run:
           name: Set up workspace
-          command: >-
-            sudo mkdir -p /workspace;
+          command: |
+            sudo mkdir -p /workspace
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
- 
+  build-multiarch-docker:
+    machine:
+      enabled: true
+      image: ubuntu-1604:201903-01
+    steps:
+      - checkout
+      - run:
+          name: Setup Docker client experimental features
+          command: |
+            sudo ./deps/readies/bin/getdocker --just-enable-exp
+            docker version
+      - run:
+          name: Build
+          command: |
+            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+            make -C build/docker build
+            sudo make -C build/docker publish
+
   deploy_package:
     parameters:
       package:
@@ -112,6 +129,12 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - build-multiarch-docker:
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only: master
       - deploy_package:
           name: deploy_branch
           package: branch
