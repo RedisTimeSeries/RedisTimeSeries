@@ -26,7 +26,7 @@ def assertInitArgsFail(self):
 
 def assertInitArgsSuccess(self):
     c, s = self.client, self.server
-    self.assertOk('OK', self.cmd('set', 'test', 'foo'))
+    self.assertEqual(True, self.cmd('PING'))
 
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
