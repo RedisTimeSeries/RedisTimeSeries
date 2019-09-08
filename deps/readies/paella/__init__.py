@@ -30,3 +30,4 @@ Global.bb = bb
 Global.eprint = eprint
 Global.fatal = fatal
 Global.cwd = cwd
+Global.sh = sh

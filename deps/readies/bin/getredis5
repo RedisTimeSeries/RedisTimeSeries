@@ -20,8 +20,7 @@ class Redis5Setup(paella.Setup):
 
     def debian_compat(self):
         # https://chilts.org/installing-redis-from-chris-leas-ppa/
-        self.install("software-properties-common")
-        self.run("add-apt-repository -y ppa:chris-lea/redis-server")
+        self.add_repo("ppa:chris-lea/redis-server")
         self.install("redis-server")
         # if not removed, might break apt-get update
         self.run("add-apt-repository -r -y ppa:chris-lea/redis-server")

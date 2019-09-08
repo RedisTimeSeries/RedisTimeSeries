@@ -406,6 +406,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result   
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE', 'negative', 'RETENTION', -10)
+
+    def test_create_with_negative_chunk_size(self):
+        with self.redis() as r:
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', -10)
+
     def test_check_retention_64bit(self):
         with self.redis() as r:
             huge_timestamp = 4000000000 # larger than uint32
@@ -520,16 +528,28 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
 
-            i = 0
             time_bucket = 10*1000
             start_time = long(time.time()*1000)
             start_time = start_time - start_time % time_bucket
-            while i < 1000:
-                i += 1
+            for _ in range(1000):
                 r.execute_command('ts.incrby', 'tester', '1', 'RESET', time_bucket)
 
             assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time()*1000)) == [[start_time, '1000']]
 
+    def test_incrby_reset_timestamp(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+
+            time_bucket = 1000
+            quantity = 100
+            start_time = 0
+            for _ in range(quantity):
+                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time, 'RESET', time_bucket)
+            for _ in range(quantity):
+                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time + time_bucket, 'RESET', time_bucket)
+
+            assert r.execute_command('TS.RANGE', 'tester', 0, int(2 * time_bucket)) == [[0, '100'], [1000, '200']]
+        
     def test_incrby(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
@@ -548,6 +568,18 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert result[-1][0] <= now
             assert result[0][0] >= start_incr_time
             assert len(result) <= 40
+
+    def test_incrby_with_timestamp(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+
+            for i in range(20):
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == 'OK'
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19][1] == '100'
+
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') == 'OK'
 
     def test_agg_min(self):
         with self.redis() as r:
@@ -922,6 +954,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+    
+    def test_rule_timebucket_64bit(self):
+        with self.redis() as r:
+            BELOW_32BIT_LIMIT = 2147483647
+            ABOVE_32BIT_LIMIT = 2147483648
+            r.execute_command("ts.create", 'test_key', 'RETENTION', ABOVE_32BIT_LIMIT)
+            r.execute_command("ts.create", 'below_32bit_limit')
+            r.execute_command("ts.create", 'above_32bit_limit')
+            r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
+            r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
+            info = r.execute_command("ts.info", 'test_key')
+            assert info[13][0][1] == BELOW_32BIT_LIMIT            
+            assert info[13][1][1] == ABOVE_32BIT_LIMIT
 
 ########## Test init args ##########
 class RedisTimeseriesInitTestRetSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', '100'])):
