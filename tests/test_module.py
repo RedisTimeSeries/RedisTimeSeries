@@ -15,6 +15,19 @@ else:
 
 ALLOWED_ERROR = 0.001
 
+def assertInitArgsFail(self):
+    try:
+        c, s = self.client, self.server
+    except Exception:
+        delattr(self, '_server')
+        self.assertOk('OK')
+    else:
+        self.assertOk('NotOK')  
+
+def assertInitArgsSuccess(self):
+    c, s = self.client, self.server
+    self.assertOk('OK', self.cmd('set', 'test', 'foo'))
+
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
@@ -909,3 +922,36 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+
+########## Test init args ##########
+class RedisTimeseriesInitTestRetSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', '100'])):
+    def test_args(self):
+        assertInitArgsSuccess(self)
+
+class RedisTimeseriesInitTestRetFailStr(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', 'RTS'])):
+    def test_args(self):
+        assertInitArgsFail(self)
+
+class RedisTimeseriesInitTestRetFailNeg(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', -1])):
+    def test_args(self):
+        assertInitArgsFail(self)
+
+class RedisTimeseriesInitTestMaxSamplesSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', '100'])):
+    def test_args(self):
+        assertInitArgsSuccess(self)
+
+class RedisTimeseriesInitTestMaxSamplesFailStr(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', 'RTS'])):
+    def test_args(self):
+        assertInitArgsFail(self)
+
+class RedisTimeseriesInitTestMaxSamplesFailNeg(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', -1])):
+    def test_args(self):
+        assertInitArgsFail(self)
+
+class RedisTimeseriesInitTestPolicySuccess(ModuleTestCase(REDISTIMESERIES, module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
+    def test_args(self):
+        assertInitArgsSuccess(self)
+
+class RedisTimeseriesInitTestPolicyFail(ModuleTestCase(REDISTIMESERIES, module_args=['COMPACTION_POLICY', 'RTS'])):
+    def test_args(self):
+        assertInitArgsFail(self)
