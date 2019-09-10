@@ -199,7 +199,7 @@ class Setup(OnPlatform):
         self.run("pip3 install --disable-pip-version-check " + pip_user + cmd, output_on_error=True, _try=_try)
 
     def setup_pip(self):
-        get_pip = "set -e; curl -s https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py"
+        get_pip = "set -e; wget -q https://bootstrap.pypa.io/get-pip.py -O /tmp/get-pip.py"
         if not self.has_command("pip"):
             # self.install("python3-distutils")
             self.install_downloaders()
