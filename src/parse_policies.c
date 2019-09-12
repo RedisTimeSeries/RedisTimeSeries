@@ -82,7 +82,7 @@ static uint64_t count_char_in_str(const char *string, uint64_t len, char lookup)
 
 // parse compaction policies in the following format: "max:1m;min:10s;avg:2h;avg:3d"
 // the format is AGGREGATION_FUNCTION:\d[s|m|h|d];
-int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **parsed_rules,
+int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **parsed_rules_out,
             uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
@@ -93,19 +93,20 @@ int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **pars
 
     // the ';' is a separator so we need to add +1 for the policy count
     uint64_t policies_count = count_char_in_str(policy_string, len, ';') + 1;
-    *parsed_rules = malloc(sizeof(SimpleCompactionRule) * policies_count);
+    *parsed_rules_out = malloc(sizeof(SimpleCompactionRule) * policies_count);
+    SimpleCompactionRule *parsed_rules_runner = *parsed_rules_out;
 
     token = strtok_r (rest, ";", &token_iter_ptr);
     int success = TRUE;
     while (token != NULL)
     {
-        int result = parse_interval_policy(token, *parsed_rules);
+        int result = parse_interval_policy(token, parsed_rules_runner);
         if (result == FALSE ) {
             success = FALSE;
             break;
         }
         token = strtok_r (NULL, ";", &token_iter_ptr);
-        (*parsed_rules)++;
+        parsed_rules_runner++;
         *rules_count = *rules_count + 1;
     }
 
