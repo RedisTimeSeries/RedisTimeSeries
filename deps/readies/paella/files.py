@@ -2,9 +2,13 @@
 from contextlib import contextmanager
 import os
 
-def fread(fname, mode = 'rb'):
+def fread(fname, mode='rb'):
 	with open(fname, mode) as file:
 		return file.read()
+
+def fwrite(fname, text, mode='w'):
+	with open(fname, mode) as file:
+		return file.write(text)
 
 def flines(fname, mode = 'rb'):
 	return [line.rstrip() for line in open(fname)]

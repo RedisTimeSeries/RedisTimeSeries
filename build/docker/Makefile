@@ -87,7 +87,7 @@ publish:
 endif
 	$(call create_manifest,$(VERSION))
 	$(call create_manifest,latest)
-	
+
 show:
 	@echo "$(STEM)-$(OSNICK):"
 ifeq ($(INSPECT),1)
