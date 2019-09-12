@@ -1028,19 +1028,19 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_ENC_VER, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
     IndexInit();
-    RMUtil_RegisterWriteCmd(ctx, "ts.create", TSDB_create);
-    RMUtil_RegisterWriteCmd(ctx, "ts.alter", TSDB_alter);
-    RMUtil_RegisterWriteCmd(ctx, "ts.createrule", TSDB_createRule);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.alter", TSDB_alter);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.createrule", TSDB_createRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
-    RMUtil_RegisterWriteCmd(ctx, "ts.add", TSDB_add);
-    RMUtil_RegisterWriteCmd(ctx, "ts.incrby", TSDB_incrby);
-    RMUtil_RegisterWriteCmd(ctx, "ts.decrby", TSDB_incrby);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.add", TSDB_add);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.incrby", TSDB_incrby);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
 
-    if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write", 1, -1, 3) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, 0) == REDISMODULE_ERR)
