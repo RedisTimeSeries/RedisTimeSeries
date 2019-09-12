@@ -58,10 +58,13 @@ static void VerifyAddField(RSLiteIndex *fti, const char *field, uint32_t fieldle
 /***** Modification functions *****/
 RSLiteIndex *RSLiteCreate(const char *name) {
     RSLiteIndex *fti = (RSLiteIndex *)calloc(1, sizeof(RSLiteIndex));
+    RSIndexOptions *NOGC = RediSearch_CreateIndexOptions();
 
     fti->fields = NULL; // TODO will probably changed once AVL is added
     fti->fields_count = 0;
-    fti->idx = RediSearch_CreateIndex(name, NULL);
+    fti->idx = RediSearch_CreateIndex(name, NOGC);
+
+    RediSearch_FreeIndexOptions(NOGC);
     RediSearch_CreateField (fti->idx, FIELDINDEX, RSFLDTYPE_TAG, RSFLDOPT_NONE);  
     return fti;
 }
@@ -109,6 +112,7 @@ int RSL_Index(RSLiteIndex *fti, RedisModuleString *keyName, RSLabel *labels, cou
     fieldNamesStr[--fieldNamesLen] = '\0';
     RediSearch_DocumentAddFieldString(doc, FIELDINDEX, fieldNamesStr, fieldNamesLen, RSFLDTYPE_TAG);
     RediSearch_SpecAddDocument(fti->idx, doc); // Always use ADD_REPLACE for simplicity
+    free(fieldNamesStr);
     return REDISMODULE_OK;
 }
 
