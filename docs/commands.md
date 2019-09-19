@@ -22,7 +22,7 @@ Optional args:
 #### Create Example
 
 ```sql
-TS.CREATE temperature RETENTION 60000 LABELS sensor_id 2 area_id 32
+TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
 ## Update
@@ -38,7 +38,7 @@ TS.ALTER key [RETENTION retentionTime] [LABELS field value..]
 #### Alter Example
 
 ```sql
-TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
+TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
@@ -193,7 +193,7 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l=(v1,v2,...)` key with label `l` that equals one of the values in the list
 * `l!=(v1,v2,...)` key with label `l` that doesn't equals to the values in the list
 
-Note: Whenever filters need to be provided, a minimum of one filter should be applied.
+Note: Whenever filters need to be provided, a minimum of one `l=v` filter must be applied.
 
 ### TS.RANGE
 
@@ -244,7 +244,7 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 ### TS.MRANGE
 
-Query a range from multiple timeseries by filters.
+Query a timestamp range across multiple keys by filters.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] FILTER filter..
