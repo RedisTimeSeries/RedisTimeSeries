@@ -5,24 +5,59 @@ import platform
 #----------------------------------------------------------------------------------------------
 
 class Platform:
-    def __init__(self):
-        self.os = self.dist = self.os_ver = self.full_os_ver = self.os_nick = self.arch = '?'
-    
+    #------------------------------------------------------------------------------------------
+    class OSRelease():
+        def __init__(self):
+            self.defs = {}
+            with open("/etc/os-release") as f:
+                for line in f:
+                    try:
+                        k, v = line.rstrip().split("=")
+                        self.defs[k] = v.strip('"').strip("'")
+                    except:
+                        pass
+
+        def distname(self):
+            return self.defs["ID"].lower()
+
+        def version(self):
+            return self.defs["VERSION_ID"]
+
+        def osnick(self):
+            return self.defs["VERSION_CODENAME"]
+
+    #------------------------------------------------------------------------------------------
+
+    def __init__(self, strict=False):
+        self.os = self.dist = self.os_ver = self.full_os_ver = self.osnick = self.arch = '?'
+
         self.os = platform.system().lower()
-        dist = platform.linux_distribution()
-        distname = dist[0].lower()
-        self.os_ver = self.full_os_ver = dist[1]
         if self.os == 'linux':
+            if False:
+                dist = platform.linux_distribution()
+                distname = dist[0].lower()
+                self.os_ver = self.full_os_ver = dist[1]
+            else:
+                try:
+                    os_release = Platform.OSRelease()
+                    distname = os_release.distname()
+                    self.os_ver = self.full_os_ver = os_release.version()
+                except:
+                    if strict:
+                        assert(False), "Cannot determine distribution"
+                    distname = 'unknown'
+                    self.os_ver = self.full_os_ver = 'unknown'
             if distname == 'fedora' or distname == 'ubuntu' or  distname == 'debian' or distname == 'arch':
                 pass
-            elif distname == 'centos linux':
+            elif distname.startswith('centos'):
                 distname = 'centos'
-            elif distname.startswith('redhat'):
+            elif distname.startswith('redhat') or distname == 'rhel':
                 distname = 'redhat'
             elif distname.startswith('suse'):
                 distname = 'suse'
             else:
-                Assert(False), "Cannot determine distribution"
+                if strict:
+                    assert(False), "Cannot determine distribution"
             self.dist = distname
         elif self.os == 'darwin':
             self.os = 'macosx'
@@ -40,7 +75,10 @@ class Platform:
             self.os_ver = ''
             self.dist = ''
         else:
-            Assert(False), "Cannot determine OS"
+            if strict:
+                assert(False), "Cannot determine OS"
+            self.os_ver = ''
+            self.dist = ''
 
         self.arch = platform.machine().lower()
         if self.arch == 'amd64' or self.arch == 'x86_64':
@@ -54,7 +92,7 @@ class Platform:
 
     def is_debian_compat(self):
         return self.dist == 'debian' or self.dist == 'ubuntu'
-    
+
     def is_redhat_compat(self):
         return self.dist == 'redhat' or self.dist == 'centos'
 
@@ -86,12 +124,12 @@ class OnPlatform:
             self.common()
             if os == 'linux':
                 self.linux()
-                
+
                 if self.platform.is_debian_compat():
                     self.debian_compat()
                 if self.platform.is_redhat_compat():
                     self.redhat_compat()
-                
+
                 if dist == 'fedora':
                     self.fedora()
                 elif dist == 'ubuntu':
@@ -107,7 +145,7 @@ class OnPlatform:
                 elif dist == 'arch':
                     self.arch()
                 else:
-                    Assert(False), "Cannot determine installer"
+                    assert(False), "Cannot determine installer"
             elif os == 'macosx':
                 self.macosx()
 
@@ -130,13 +168,13 @@ class OnPlatform:
 
     def debian_compat(self): # debian, ubuntu, etc
         pass
-    
+
     def debian(self):
         pass
-    
+
     def centos(self):
         pass
-        
+
     def fedora(self):
         pass
 
@@ -145,7 +183,7 @@ class OnPlatform:
 
     def redhat(self):
         pass
-        
+
     def ubuntu(self):
         pass
 

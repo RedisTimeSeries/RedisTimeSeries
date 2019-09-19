@@ -6,7 +6,7 @@ import argparse
 
 READIES_PATH = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, READIES_PATH)
-from paella import Platform
+import paella
 
 parser = argparse.ArgumentParser(description='Report platform characteristics.')
 parser.add_argument('--os', action="store_true", help='Operating system')
@@ -15,9 +15,14 @@ parser.add_argument('--dist', action="store_true", help='Linux distribution (if 
 parser.add_argument('--arch', action="store_true", help='CPU Architecture')
 parser.add_argument('--kernel', action="store_true", help='Kernel version (if applicable)')
 parser.add_argument('--glibc', action="store_true", help='GLIBC version (if applicable)')
+parser.add_argument('--strict', action="store_true", help='Fail if cannot identify platform')
 args = parser.parse_args()
 
-platform = Platform()
+try:
+    platform = paella.Platform(strict=args.strict)
+except:
+    eprint("platform: cannot identify")
+    exit(1)
 ret = ""
 if args.os:
 	ret += " " + platform.os
