@@ -42,7 +42,7 @@ class RepoRefresh(OnPlatform):
 
     def redhat_compat(self):
         pass
-    
+
     def debian_compat(self):
         self.runner.run("apt-get -qq update -y")
 
@@ -60,7 +60,7 @@ class Setup(OnPlatform):
         self.os = self.platform.os
         self.dist = self.platform.dist
         self.ver = self.platform.os_ver
-        
+
         if self.has_command("python"):
             self.python = "python"
         elif self.has_command("python2"):
@@ -71,7 +71,7 @@ class Setup(OnPlatform):
         if self.os == 'macosx':
             # this is required because osx pip installed are done with --user
             os.environ["PATH"] = os.environ["PATH"] + ':' + '$HOME/Library/Python/2.7/bin'
-        
+
         if self.platform.is_debian_compat():
             # prevents apt-get from interactively prompting
             os.environ["DEBIAN_FRONTEND"] = 'noninteractive'
@@ -139,7 +139,7 @@ class Setup(OnPlatform):
         self.install(packs, group=True)
 
     #------------------------------------------------------------------------------------------
-    
+
     def yum_add_repo(self, repourl, repo=""):
         if not self.has_command("yum-config-manager"):
             self.install("yum-utils")
@@ -161,7 +161,7 @@ class Setup(OnPlatform):
 
     def pacman_add_repo(self, repourl, repo=""):
         pass
-    
+
     def brew_add_repo(self, repourl, repo=""):
         pass
 
@@ -209,3 +209,7 @@ class Setup(OnPlatform):
         if self.os == 'linux':
             self.install("ca-certificates")
         self.install("curl wget")
+
+    def install_git_lfs_on_linux(self):
+        self.run("curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash")
+        self.install("git-lfs")
