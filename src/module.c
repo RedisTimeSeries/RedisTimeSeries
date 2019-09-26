@@ -131,7 +131,7 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        if (*time_delta <= 0) {
+        if (*time_delta == 0 || *time_delta >> 63) {
             RedisModule_ReplyWithError(ctx, "TSDB: timeBucket must be greater than zero");
             return TSDB_ERROR;
         }
