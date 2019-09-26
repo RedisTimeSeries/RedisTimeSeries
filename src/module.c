@@ -111,9 +111,9 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
-    long long temp_time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
+        long long temp_time_delta = 0;
         if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, &temp_time_delta) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
             return TSDB_ERROR;
