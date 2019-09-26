@@ -111,10 +111,10 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, api_timestamp_t *time_delta,
                          int *agg_type) {
     RedisModuleString * aggTypeStr = NULL;
-    *time_delta = 0;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
-        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, time_delta) != REDISMODULE_OK) {
+        long long temp_time_delta = 0;
+        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, &temp_time_delta) != REDISMODULE_OK) {
             RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse AGGREGATION");
             return TSDB_ERROR;
         }
@@ -131,9 +131,11 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        if (*time_delta <= 0) {
+        if (temp_time_delta <= 0) {
             RedisModule_ReplyWithError(ctx, "TSDB: timeBucket must be greater than zero");
             return TSDB_ERROR;
+        } else {
+            *time_delta = (api_timestamp_t)temp_time_delta;
         }
 
         return TSDB_OK;
