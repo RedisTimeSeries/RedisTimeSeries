@@ -334,6 +334,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                               'count', 500)
             assert expected_result == actual_result
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
+                                              'count', -1)
+
     def test_compaction_rules(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
