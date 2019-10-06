@@ -61,6 +61,7 @@ Then, to install required build artifacts, invoke the following:
 cd RedisTimeSeries
 make setup
 ```
+Or you can install required dependecies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
 
 If ```make``` is not yet available, the following commands are equivalent:
 
