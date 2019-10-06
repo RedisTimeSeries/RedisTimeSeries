@@ -2,8 +2,11 @@
 from contextlib import contextmanager
 import os
 import os.path
-import urllib2
 import tempfile
+try:
+    from urllib2 import urlopen
+except:
+    from urllib.request import urlopen
 
 #----------------------------------------------------------------------------------------------
 
@@ -38,7 +41,7 @@ def wget(url, dest="", tempdir=False):
             dest = tempfilepath()
         elif tempdir:
             dest = os.path.join('/tmp', dest)
-    ufile = urllib2.urlopen(url)
+    ufile = urlopen(url)
     data = ufile.read()
     with open(dest, "wb") as file:
         file.write(data)

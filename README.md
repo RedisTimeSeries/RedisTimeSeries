@@ -45,23 +45,47 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 
 You can also build and run RedisTimeSeries on your own machine.
 
+Major Linux distributions as well as macOS are supported.
+
 #### Requirements
--  build-essential
--  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
+
+First, clone the RedisTimeSeries repository from git:
+
+```
+git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
+```
+
+Then, to install required build artifacts, invoke the following:
+
+```
+cd RedisTimeSeries
+make setup
+```
+
+If ```make``` is not yet available, the following commands are equivalent:
+
+```
+./deps/readies/bin/getpy2
+python ./system-setup.py
+```
+
+Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. If you prefer to avoid that, you can:
+
+* Review system-setup.py and install packages manually,
+* Utilize a Python virtual environment,
+* Use Docker with the ```--volume``` option to create an isolated build environment.
 
 #### Build
 
 ```bash
-cd RedisTimeSeries
-git submodule init
-git submodule update
-cd src
-make all
+make build
 ```
+
+Binary artifacts are placed under the ```bin``` directory.
 
 #### Run
 
-In your redis-server run: `loadmodule redistimeseries.so`
+In your redis-server run: `loadmodule bin/redistimeseries.so`
 
 For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
