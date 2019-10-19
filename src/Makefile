@@ -116,16 +116,14 @@ tests: $(TARGET)
 	$(SHOW)cd ../tests; \
 	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
 
-REDIS_ARGS=\
-	COMPACTION_POLICY "" \
-	RETNTION_POLICY 3600 \
-	MAX_SAMPLE_PER_CHUNK 1024
-
 run: $(TARGET)
 	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 gdb: $(TARGET)
 	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+
+cgdb: $(TARGET)
+	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 VALGRIND_ARGS=\
 	--leak-check=full \
