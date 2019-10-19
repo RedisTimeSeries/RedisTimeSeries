@@ -755,7 +755,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'chunkCount',
                 1L,
                 'maxSamplesPerChunk',
-                360L,
+                256L,
                 'labels',
                 [
                     ['name',
@@ -776,7 +776,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'chunkCount',
                 1L,
                 'maxSamplesPerChunk',
-                360L,
+                256L,
                 'labels',
                 [
                     [
