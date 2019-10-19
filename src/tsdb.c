@@ -145,7 +145,31 @@ void FreeCompactionRule(void *value) {
 
 size_t SeriesMemUsage(const void *value) {
     Series *series = (Series *)value;
-    return sizeof(series) + sizeof(Chunk) * RedisModule_DictSize(series->chunks);
+    size_t numSamples = SeriesGetNumSamples(series);
+    size_t numChunks = numSamples / series->maxSamplesPerChunk + 1;
+
+    size_t strlen = 0;
+    uint32_t labelsLen = 0;
+    for (int i = 0; i < series->labelsCount; i++) {
+        RedisModule_StringPtrLen(series->labels[i].key, &strlen);
+        labelsLen += (strlen + 1);
+        RedisModule_StringPtrLen(series->labels[i].value, &strlen);
+        labelsLen += (strlen + 1);
+    }
+
+    uint32_t rulesSize = 0;
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        rulesSize += sizeof(CompactionRule);
+        rule = rule->nextRule; 
+    }
+
+    return  sizeof(series) + 
+            rulesSize +
+            labelsLen +
+            sizeof(Label) * series->labelsCount + 
+            sizeof(Chunk) * RedisModule_DictSize(series->chunks) +
+            numChunks * series->maxSamplesPerChunk * sizeof(Sample);
 }
 
 size_t SeriesGetNumSamples(Series *series)
