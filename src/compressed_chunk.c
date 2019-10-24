@@ -117,7 +117,6 @@ static void appendBits(u_int64_t *arr, u_int64_t *idx, u_int64_t data, u_int8_t 
     if(available >= dataLen) {
         *runner |= clearBits(data, dataLen) << idx64;
     } else {
-        u_int8_t left = dataLen - available;
         *runner |= data << idx64;
         *(++runner) |= clearBits(data, dataLen) >> available;
     }
@@ -169,6 +168,13 @@ CChunk_Iterator *CChunk_GetIterator(CompressedChunk *chunk) {
   iter->prevValue.d = chunk->baseValue.d;  
   iter->prevLeading = 32;
   iter->prevTrailing = 32;
+
+  return iter;
+}
+
+
+CChunk_Iterator *CChunk_NewChunkIterator(CompressedChunk *chunk) {
+  return CChunk_GetIterator(chunk);
 }
 
 void CChunk_FreeIter(CChunk_Iterator *iter) {
@@ -327,7 +333,7 @@ static double readV(CChunk_Iterator *iter) {
   return iter->prevValue.d = rv.d;
 }
 
-int ChunkAddSample(CompressedChunk *chunk, Sample sample) {
+int CChunk_AddSample(CompressedChunk *chunk, Sample sample) {
   return CChunk_Append(chunk, sample.timestamp, sample.data);
 }
 
@@ -346,6 +352,10 @@ int CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value) {
   chunk->count++;
   //printf("\n");
   return CC_OK;
+}
+
+int CChunk_ChunkIteratorGetNext(CChunk_Iterator *iter, Sample* sample) {
+  CChunk_ReadNext(iter, &sample->timestamp, &sample->data);
 }
 
 int CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value) {
@@ -375,6 +385,18 @@ void CChunk_FreeChunk(CompressedChunk *chunk) {
   free(chunk->data);
   chunk->data = NULL;
   free(chunk);
+}
+
+u_int64_t CChunk_ChunkNumOfSample(CompressedChunk *chunk) {
+  return chunk->count;
+}
+
+u_int64_t CChunk_GetFirstTimestamp(CompressedChunk *chunk) {
+  return chunk->baseTimestamp;
+}
+
+u_int64_t CChunk_GetLastTimestamp (CompressedChunk *chunk) {
+  return chunk->prevTimestamp;
 }
 
 /***************************************************/

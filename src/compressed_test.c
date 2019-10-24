@@ -40,7 +40,7 @@ void testIterLoop() {
   srand(0);
   CompressedChunk *chunk = CChunk_NewChunk(4096);
   for(int i = 1; i; ++i) {
-    int success = CChunk_Append(chunk, i, ((i + rand()) % 100) * 1.123);
+    int success = CChunk_Append(chunk, i, ((i + rand()) % 100)/* * 1.123*/);
     if (success != CC_OK) break;
   }
   

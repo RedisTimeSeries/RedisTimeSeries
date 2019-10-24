@@ -9,8 +9,9 @@
 #include "redismodule.h"
 #include "compaction.h"
 #include "consts.h"
-#include "chunk.h"
+//#include "chunk.h"
 #include "indexer.h"
+#include "compressed_chunk.h"
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -23,7 +24,8 @@ typedef struct CompactionRule {
 
 typedef struct Series {
     RedisModuleDict* chunks;
-    Chunk* lastChunk;
+//    Chunk* lastChunk;
+    CompressedChunk* lastChunk;
     uint64_t retentionTime;
     short maxSamplesPerChunk;
     CompactionRule *rules;
@@ -38,9 +40,11 @@ typedef struct Series {
 typedef struct SeriesIterator {
     Series *series;
     RedisModuleDictIter *dictIter;
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     int chunkIteratorInitialized;
-    ChunkIterator chunkIterator;
+//    ChunkIterator chunkIterator;
+    CChunk_Iterator *chunkIterator;  // TODO: added pointer
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
 } SeriesIterator;
