@@ -206,9 +206,11 @@ static int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int
 
 static timestamp_t getSeriesFirstTimestamp(RedisModuleDict* chunks) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(chunks, "^", NULL, 0);
-    Chunk *currentChunk;
+
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     RedisModule_DictNextC(iter, NULL, (void*)&currentChunk);
-    uint64_t firstTimestamp = currentChunk->base_timestamp;
+    uint64_t firstTimestamp = CChunk_GetFirstTimestamp(currentChunk);
     RedisModule_DictIteratorStop(iter);
     return firstTimestamp;
 }
@@ -216,9 +218,10 @@ static timestamp_t getSeriesFirstTimestamp(RedisModuleDict* chunks) {
 static uint64_t getTotalSample(RedisModuleDict* chunks) {
     uint64_t total = 0;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(chunks, "^", NULL, 0);
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
-        total += currentChunk->num_samples;
+        total += CChunk_ChunkNumOfSample(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
     return total;
@@ -626,7 +629,6 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
-
     int rv = internalAdd(ctx, series, timestamp, value);
     RedisModule_CloseKey(key);
     return rv;
@@ -898,8 +900,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
-        return RedisModule_WrongArity(ctx);
-
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid increase/decrease value");
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);

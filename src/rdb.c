@@ -6,8 +6,9 @@
 #include <string.h>
 #include "rmutil/alloc.h"
 #include "rdb.h"
-#include "chunk.h"
+//#include "chunk.h"
 #include "consts.h"
+#include "compressed_chunk.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {

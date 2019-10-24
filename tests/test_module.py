@@ -159,9 +159,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             expected_result = {
               'totalSamples': 1500L,
-              'memoryUsage': 29022L,
+              'memoryUsage': 4238L,
               'firstTimestamp': start_ts,
-              'chunkCount': math.ceil((samples_count + 1) / 360.0),
+              'chunkCount': 1L,
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
@@ -194,9 +194,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert expected_result[:3] == actual_result
 
             expected_result = {'totalSamples': 1500L,
-                               'memoryUsage': 29134L,
+                               'memoryUsage': 4350L,
                                'firstTimestamp': start_ts,
-                               'chunkCount':long(math.ceil((samples_count + 1) / 360.0)),
+                               'chunkCount': 1L,
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
@@ -366,9 +366,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             info_dict = self._get_ts_info(r, 'tester')
             assert info_dict == {'totalSamples': 1501L,
-                                 'memoryUsage': 29024L,
+                                 'memoryUsage': 4240L,
                                  'firstTimestamp': start_ts,
-                                 'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                                 'chunkCount': 1,
                                  'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
@@ -422,15 +422,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_check_retention_64bit(self):
         with self.redis() as r:
+
             huge_timestamp = 4000000000 # larger than uint32
             r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
             info = r.execute_command('TS.INFO', 'tester')
             assert info[9] == huge_timestamp
-
-            r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
-            r.execute_command('TS.ADD', 'tester', huge_timestamp * 3, '2')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp * 3, '2']]
+            for i in range(10):
+                r.execute_command('TS.ADD', 'tester', huge_timestamp * i / 4, i)
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == \
+                [[5000000000L, '5'], [6000000000L, '6'], [7000000000L, '7'],
+                 [8000000000L, '8'], [9000000000L, '9']]
 
     def test_create_compaction_rule_with_wrong_aggregation(self):
         with self.redis() as r:
@@ -757,7 +758,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'totalSamples',
                 1L,
                 'memoryUsage',
-                4164L,
+                4212L,
                 'firstTimestamp',
                 long(ts),
                 'lastTimestamp',
@@ -784,7 +785,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'totalSamples',
                 1L,
                 'memoryUsage',
-                4196L,
+                4244L,
                 'firstTimestamp',
                 long(ts),                
                 'lastTimestamp',

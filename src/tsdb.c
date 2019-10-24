@@ -31,7 +31,8 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->lastValue = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
-    Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
+//    Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
+    CompressedChunk *newChunk = CChunk_NewChunk(4096);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
     newSeries->lastChunk = newChunk;
@@ -45,7 +46,8 @@ void SeriesTrim(Series * series) {
 
     // start iterator from smallest key
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     void *currentKey;
     size_t keyLen;
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
@@ -53,12 +55,14 @@ void SeriesTrim(Series * series) {
 
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
-        if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
+//        if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
+        if (CChunk_GetLastTimestamp(currentChunk) < minTimestamp)
         {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
-            FreeChunk(currentChunk);
+//            FreeChunk(currentChunk);
+            CChunk_FreeChunk(currentChunk);
         } else {
             break;
         }
@@ -117,9 +121,11 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL){
-        FreeChunk(currentChunk);
+//        FreeChunk(currentChunk);
+        CChunk_FreeChunk(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
 
@@ -145,11 +151,12 @@ void FreeCompactionRule(void *value) {
 
 size_t SeriesGetChunksSize(Series *series) {
     uint64_t size = 0;
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
     {
-        size += GetChunkSize(currentChunk);
+        size += CChunk_GetChunkSize(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
     return size;
@@ -183,11 +190,13 @@ size_t SeriesMemUsage(const void *value) {
 
 size_t SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
-    Chunk *currentChunk;
+//    Chunk *currentChunk;
+    CompressedChunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
     {
-        numSamples += ChunkNumOfSample(currentChunk);
+//        numSamples += ChunkNumOfSample(currentChunk);
+        numSamples += CChunk_ChunkNumOfSample(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
     return numSamples;
@@ -197,20 +206,23 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
     if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp && series->lastChunk->num_samples > 0) {
-        // this is a hack, we want to override the last sample, so lets ignore it first
-        series->lastChunk->num_samples--;
+    } else if (timestamp == series->lastTimestamp && timestamp != 0) {
+        return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
     Sample sample = {.timestamp = timestamp, .data = value};
-    int ret = ChunkAddSample(series->lastChunk, sample);
-    if (ret == 0 ) {
+////    int ret = ChunkAddSample(series->lastChunk, sample);
+    int ret = CChunk_AddSample(series->lastChunk, sample);
+////    if (ret == 0) {
+    if (ret == CC_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
-        Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
+////        Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
+        CompressedChunk *newChunk = CChunk_NewChunk(series->maxSamplesPerChunk);
         seriesEncodeTimestamp(&rax_key, timestamp);
         RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
-        ChunkAddSample(newChunk, sample);
+////        ChunkAddSample(newChunk, sample);
+        CChunk_AddSample(newChunk, sample);
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
@@ -246,8 +258,10 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     Sample internalSample;
     while (iterator->currentChunk != NULL)
     {
-        Chunk *currentChunk = iterator->currentChunk;
-        if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp)
+////        Chunk *currentChunk = iterator->currentChunk;
+        CompressedChunk *currentChunk = iterator->currentChunk;
+////        if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp)
+        if (CChunk_GetLastTimestamp(currentChunk) < iterator->minTimestamp)
         {
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
@@ -255,18 +269,21 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             iterator->chunkIteratorInitialized = FALSE;
             continue;
         }
-        else if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
+////        else if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
+        else if (CChunk_GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
         {
             break;
         }
 
         if (!iterator->chunkIteratorInitialized) 
         {
-            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
+////            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
+            iterator->chunkIterator = CChunk_NewChunkIterator(iterator->currentChunk);
             iterator->chunkIteratorInitialized = TRUE;
         }
 
-        if (ChunkIteratorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
+////        if (ChunkIteratorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
+        if (CChunk_ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CC_END) { // reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }

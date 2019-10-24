@@ -59,6 +59,7 @@ endif
 _SOURCES=\
 	chunk.c \
 	compaction.c \
+	compressed_chunk.c \
 	config.c \
 	indexer.c \
 	module.c \
