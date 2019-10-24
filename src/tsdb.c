@@ -165,9 +165,8 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
     if (timestamp < series->lastTimestamp) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp && series->lastChunk->num_samples > 0) {
-        // this is a hack, we want to override the last sample, so lets ignore it first
-        series->lastChunk->num_samples--;
+    } else if (timestamp == series->lastTimestamp && timestamp != 0) {
+        return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
     Sample sample = {.timestamp = timestamp, .data = value};
     int ret = ChunkAddSample(series->lastChunk, sample);

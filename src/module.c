@@ -576,6 +576,9 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
         RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         result = REDISMODULE_ERR;
+    } else if (retval == TSDB_ERR_TIMESTAMP_OCCUPIED) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be equal than the latest timestamp in the time series");
+        result = REDISMODULE_ERR;        
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
         result = REDISMODULE_ERR;
@@ -858,8 +861,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     series = RedisModule_ModuleTypeGetValue(key);
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
-        return RedisModule_WrongArity(ctx);
-
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid increase/decrease value");
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);

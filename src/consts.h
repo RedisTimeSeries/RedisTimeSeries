@@ -17,6 +17,7 @@
 #define TSDB_OK 0
 #define TSDB_ERROR -1
 #define TSDB_NOTEXISTS 2
+#define TSDB_ERR_TIMESTAMP_OCCUPIED -2
 
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
