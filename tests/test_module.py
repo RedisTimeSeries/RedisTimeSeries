@@ -155,7 +155,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
-            expected_result = {'memoryUsage': 29022L,
+            expected_result = {
+              'firstTimestamp': 1511885909L,
+              'totalSamples': 1500L,
+              'memoryUsage': 29022L,
               'chunkCount': math.ceil((samples_count + 1) / 360.0),
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
@@ -188,7 +191,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
 
-            expected_result = {'memoryUsage': 29118L,
+            expected_result = {'firstTimestamp': 1511885909L,
+                               'totalSamples': 1500L,
+                               'memoryUsage': 29118L,
                                'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
@@ -355,7 +360,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'memoryUsage': 29016L,
+            assert info_dict == {'totalSamples': 1500L,
+                                 'memoryUsage': 29016L,
+                                 'firstTimestamp': 1488823384L,
                                  'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                  'lastTimestamp': start_ts + samples_count -1,
                                  'maxSamplesPerChunk': 360L,
@@ -413,7 +420,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             huge_timestamp = 4000000000 # larger than uint32
             r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
             info = r.execute_command('TS.INFO', 'tester')
-            assert info[5] == huge_timestamp
+            assert info[9] == huge_timestamp
 
             r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
             assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
@@ -751,8 +758,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             ts = time.time()
             assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             assert r.execute_command('TS.INFO', 'tester1') == [
+                'totalSamples',
+                1L,
                 'memoryUsage',
                 4164L,
+                'firstTimestamp',
+                long(ts),
                 'lastTimestamp',
                 long(ts),
                 'retentionTime',
@@ -774,8 +785,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location', 'earth')
             assert r.execute_command('TS.INFO', 'tester2') == [
+                'totalSamples',
+                1L,
                 'memoryUsage',
                 4196L,
+                'firstTimestamp',
+                long(ts),                
                 'lastTimestamp',
                 long(ts),
                 'retentionTime',
@@ -963,5 +978,5 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
             r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
             info = r.execute_command("ts.info", 'test_key')
-            assert info[15][0][1] == BELOW_32BIT_LIMIT            
-            assert info[15][1][1] == ABOVE_32BIT_LIMIT
+            assert info[19][0][1] == BELOW_32BIT_LIMIT            
+            assert info[19][1][1] == ABOVE_32BIT_LIMIT
