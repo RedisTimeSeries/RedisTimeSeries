@@ -355,7 +355,7 @@ int CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value) {
 }
 
 int CChunk_ChunkIteratorGetNext(CChunk_Iterator *iter, Sample* sample) {
-  CChunk_ReadNext(iter, &sample->timestamp, &sample->data);
+  return CChunk_ReadNext(iter, &sample->timestamp, &sample->data);
 }
 
 int CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value) {
