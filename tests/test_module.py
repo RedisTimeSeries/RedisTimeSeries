@@ -514,7 +514,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
             with pytest.raises(redis.ResponseError) as excinfo:
                 r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
-
+    
+    ''' deprecated
     def test_incrby_reset(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
@@ -526,6 +527,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.incrby', 'tester', '1', 'RESET', time_bucket)
 
             assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time()*1000)) == [[start_time, '1000']]
+    '''
 
     def test_incrby_reset_timestamp(self):
         with self.redis() as r:
@@ -565,12 +567,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('ts.create', 'tester')
 
             for i in range(20):
-                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == 'OK'
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
             result = r.execute_command('TS.RANGE', 'tester', 0, 20)
             assert len(result) == 20
             assert result[19][1] == '100'
 
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') == 'OK'
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000 >= int(time.time())
 
     def test_agg_min(self):
         with self.redis() as r:
