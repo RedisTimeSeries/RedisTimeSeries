@@ -572,7 +572,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(result) == 20
             assert result[19][1] == '100'
 
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000 >= int(time.time())
+            query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000 
+            cur_time = int(time.time())
+            assert query_res >= cur_time
+            assert query_res <= cur_time + 1
 
     def test_agg_min(self):
         with self.redis() as r:
