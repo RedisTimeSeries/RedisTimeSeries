@@ -97,6 +97,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
         for i in range(10, 50):
             assert redis.execute_command('TS.ADD', key, i, i // 10 * 100 + values[i % 10])
+        # close last bucket
+        assert redis.execute_command('TS.ADD', key, 100, 0)
 
         return agg_key
 
@@ -222,6 +224,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
             assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count, samples_count)
+            assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count + 10, 0) #closes the last time_bucket
             # if the aggregation context wasn't saved, the results were considering only the new value added
             expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
             expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
@@ -328,7 +331,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
-
+            
             expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
@@ -347,6 +350,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             start_ts = 1488823384L
             samples_count = 1500
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
+            last_ts = start_ts + samples_count + 10
+            r.execute_command('TS.ADD', 'tester', last_ts, 5)
 
             actual_result = r.execute_command('TS.RANGE', 'tester_agg_max_10', start_ts, start_ts + samples_count)
 
@@ -354,7 +359,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             info_dict = self._get_ts_info(r, 'tester')
             assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
-                                 'lastTimestamp': start_ts + samples_count -1,
+                                 'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
                                  'labels': [],
@@ -616,6 +621,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     
             for i in range(random_numbers):
                 r.execute_command('TS.ADD', raw_key, i, items[i])
+            r.execute_command('TS.ADD', raw_key, random_numbers, 0) #close time bucket
     
             assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
             assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR        
@@ -721,7 +727,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             end_ts = start_ts + samples_count
             values = range(samples_count)
             self._insert_data(r, 'tester', start_ts, samples_count, values)
-
+            r.execute_command('TS.ADD', 'tester', 3000, 7.77)
+            
             for rule in rules:
                 for resolution in resolutions:
                     actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
@@ -732,6 +739,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     # last time stamp should be the beginning of the last bucket
                     assert self._get_ts_info(r, 'tester_{}_{}'.format(rule, resolution))['lastTimestamp'] == \
                                             (samples_count - 1) - (samples_count - 1) % resolution
+
+            # test for results after empty buckets
+            r.execute_command('TS.ADD', 'tester', 6000, 0)
+            for rule in rules:
+                for resolution in resolutions:
+                    actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
+                                                      3000, 6000)
+                    assert len(actual_result) == 1
+                    assert self._get_series_value(actual_result) == [7.77] or \
+                           self._get_series_value(actual_result) == [1]
 
     def test_automatic_timestamp(self):
         with self.redis() as r:

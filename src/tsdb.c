@@ -325,6 +325,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;
     rule->destKey = destKey;
+    rule->startCurrentTimeBucket = -1;
 
     rule->nextRule = NULL;
 

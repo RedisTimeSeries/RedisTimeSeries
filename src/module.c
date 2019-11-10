@@ -519,20 +519,28 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 }
 
 void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, rule->destKey, REDISMODULE_READ|REDISMODULE_WRITE);
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        // key doesn't exist anymore and we don't do anything
-        return;
-    }
-    Series *destSeries = RedisModule_ModuleTypeGetValue(key);
-
     timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
-    if (currentTimestamp > destSeries->lastTimestamp) {
-        rule->aggClass->resetContext(rule->aggContext);
+
+    if (rule->startCurrentTimeBucket == -1) {
+        // first sample, lets init the startCurrentTimeBucket
+        rule->startCurrentTimeBucket = currentTimestamp;
     }
+
+    if (currentTimestamp > rule->startCurrentTimeBucket) {
+        RedisModuleKey *key = RedisModule_OpenKey(ctx, rule->destKey, REDISMODULE_READ|REDISMODULE_WRITE);
+        if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
+            // key doesn't exist anymore and we don't do anything
+            return;
+        }
+        Series *destSeries = RedisModule_ModuleTypeGetValue(key);
+
+        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        rule->aggClass->resetContext(rule->aggContext);
+        rule->startCurrentTimeBucket = currentTimestamp;
+        RedisModule_CloseKey(key);
+    }
+
     rule->aggClass->appendValue(rule->aggContext, value);
-    SeriesAddSample(destSeries, currentTimestamp, rule->aggClass->finalize(rule->aggContext));
-    RedisModule_CloseKey(key);
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
