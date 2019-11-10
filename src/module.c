@@ -521,7 +521,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
 void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
     timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
 
-    if (rule->startCurrentTimeBucket == -1) {
+    if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
         rule->startCurrentTimeBucket = currentTimestamp;
     }
