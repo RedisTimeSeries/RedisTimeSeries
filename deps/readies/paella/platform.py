@@ -144,6 +144,8 @@ class OnPlatform:
                     self.suse()
                 elif dist == 'arch':
                     self.arch()
+                elif dist == 'linuxmint':
+                    self.linuxmint()
                 else:
                     assert(False), "Cannot determine installer"
             elif os == 'macosx':
@@ -200,4 +202,7 @@ class OnPlatform:
         pass
 
     def freebsd(self):
+        pass
+
+    def linuxmint(self):
         pass

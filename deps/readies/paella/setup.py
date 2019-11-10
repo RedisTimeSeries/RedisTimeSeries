@@ -120,7 +120,7 @@ class Setup(OnPlatform):
         if self.os == 'linux':
             if self.dist == 'fedora':
                 self.dnf_install(packs, group=group, _try=_try)
-            elif self.dist == 'ubuntu' or self.dist == 'debian':
+            elif self.dist == 'ubuntu' or self.dist == 'debian' or self.dist == 'linuxmint':
                 self.apt_install(packs, group=group, _try=_try)
             elif self.dist == 'centos' or self.dist == 'redhat':
                 self.yum_install(packs, group=group, _try=_try)
