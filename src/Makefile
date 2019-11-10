@@ -116,14 +116,22 @@ tests: $(TARGET)
 	$(SHOW)cd ../tests; \
 	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
 
+REDIS_ARGS=\
+	COMPACTION_POLICY "" \
+	RETNTION_POLICY 3600 \
+	MAX_SAMPLE_PER_CHUNK 1024
+
 run: $(TARGET)
+	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) --dir /tmp
+
+run_dev: $(TARGET)
 	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 gdb: $(TARGET)
-	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 cgdb: $(TARGET)
-	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 VALGRIND_ARGS=\
 	--leak-check=full \
@@ -131,7 +139,7 @@ VALGRIND_ARGS=\
 	-v redis-server
 
 valgrind: $(TARGET)
-	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)

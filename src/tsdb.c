@@ -143,10 +143,20 @@ void FreeCompactionRule(void *value) {
 	free(rule);
 }
 
+uint64_t SeriesGetChunksSize(Series *series) {
+    uint64_t size = 0;
+    Chunk *currentChunk;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
+    {
+        size += GetChunkSize(currentChunk);
+    }
+    RedisModule_DictIteratorStop(iter);
+    return size;
+}
+
 size_t SeriesMemUsage(const void *value) {
     Series *series = (Series *)value;
-    size_t numSamples = SeriesGetNumSamples(series);
-    size_t numChunks = numSamples / series->maxSamplesPerChunk + 1;
 
     size_t strlen = 0;
     uint32_t labelsLen = 0;
@@ -168,12 +178,10 @@ size_t SeriesMemUsage(const void *value) {
             rulesSize +
             labelsLen +
             sizeof(Label) * series->labelsCount + 
-            sizeof(Chunk) * RedisModule_DictSize(series->chunks) +
-            numChunks * series->maxSamplesPerChunk * sizeof(Sample);
+            SeriesGetChunksSize(series);
 }
 
-size_t SeriesGetNumSamples(Series *series)
-{
+size_t SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
     Chunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);

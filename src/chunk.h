@@ -35,6 +35,7 @@ typedef struct ChunkIterator
 
 Chunk * NewChunk(size_t sampleCount);
 void FreeChunk(Chunk *chunk);
+u_int64_t GetChunkSize(Chunk *chunk);
 
 // 0 for failure, 1 for success
 int ChunkAddSample(Chunk *chunk, Sample sample);
