@@ -14,11 +14,12 @@
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
-    uint64_t timeBucket;
+    timestamp_t timeBucket;
     AggregationClass *aggClass;
     int aggType;
     void *aggContext;
     struct CompactionRule *nextRule;
+    timestamp_t startCurrentTimeBucket;
 } CompactionRule;
 
 typedef struct Series {
