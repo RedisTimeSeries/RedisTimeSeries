@@ -194,9 +194,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert expected_result[:3] == actual_result
 
             expected_result = {'totalSamples': 1500L,
-                               'memoryUsage': 29118L,
+                               'memoryUsage': 29134L,
                                'firstTimestamp': start_ts,
-                               'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                               'chunkCount':long(math.ceil((samples_count + 1) / 360.0)),
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
@@ -365,11 +365,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'totalSamples': 1500L,
-                                 'memoryUsage': 29016L,
+            assert info_dict == {'totalSamples': 1501L,
+                                 'memoryUsage': 29024L,
                                  'firstTimestamp': start_ts,
                                  'chunkCount': math.ceil((samples_count + 1) / 360.0),
-                                 'lastTimestamp': start_ts + samples_count -1,
+                                 'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
                                  'labels': [],
