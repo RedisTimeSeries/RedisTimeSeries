@@ -5,7 +5,7 @@ all: fetch build
 
 setup:
 	@./deps/readies/bin/getpy2
-	@python ./system-setup.py
+	@sudo python2 ./system-setup.py
 
 fetch:
 	-@git submodule update --init --recursive

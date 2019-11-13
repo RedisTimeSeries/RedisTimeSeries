@@ -12,7 +12,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
 - Configurable maximum retention period
 - Downsampling/Compaction - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (field value pairs) which will allows to query by labels
@@ -62,13 +62,13 @@ Then, to install required build artifacts, invoke the following:
 cd RedisTimeSeries
 make setup
 ```
-Or you can install required dependecies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
+Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
 
 If ```make``` is not yet available, the following commands are equivalent:
 
 ```
 ./deps/readies/bin/getpy2
-python ./system-setup.py
+sudo ./system-setup.py
 ```
 
 Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. If you prefer to avoid that, you can:
@@ -102,7 +102,7 @@ Then you can query the data for a time range on some aggregation rule.
 ### With `redis-cli`
 ```sh
 $ redis-cli
-127.0.0.1:6379> TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
+127.0.0.1:6379> TS.CREATE temperature:3:11 RETENTION 60 LABELS sensor_id 2 area_id 32
 OK
 127.0.0.1:6379> TS.ADD temperature:3:11 1548149181 30
 OK
