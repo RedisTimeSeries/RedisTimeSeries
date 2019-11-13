@@ -3,11 +3,9 @@
 
 all: fetch build
 
-SUDO:=$(shell [ $$( command -v sudo >/dev/null 2>&1; echo $$? ) = 0 ] && echo sudo)
-
 setup:
-	@$(SUDO) ./deps/readies/bin/getpy2
-	@$(SUDO) ./system-setup.py
+	@./deps/readies/bin/getpy2
+	@./system-setup.py
 
 fetch:
 	-@git submodule update --init --recursive

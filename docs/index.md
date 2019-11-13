@@ -67,10 +67,12 @@ If ```make``` is not yet available, the following commands are equivalent:
 
 ```
 ./deps/readies/bin/getpy2
-sudo ./system-setup.py
+./system-setup.py
 ```
 
-Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. If you prefer to avoid that, you can:
+Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+
+If you prefer to avoid that, you can:
 
 * Review system-setup.py and install packages manually,
 * Utilize a Python virtual environment,
