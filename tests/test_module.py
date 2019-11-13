@@ -553,10 +553,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             start_incr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.incrby', 'tester', '5')
+                time.sleep(0.001)
 
             start_decr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.decrby', 'tester', '1.5')
+                time.sleep(0.001)
 
             now = int(time.time()*1000)
             result = r.execute_command('TS.RANGE', 'tester', 0, now)
