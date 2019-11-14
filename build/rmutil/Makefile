@@ -1,6 +1,6 @@
 
 ROOT=../..
-include $(ROOT)/build/mk/defs
+include $(ROOT)/deps/readies/mk/main
 
 BINDIR=$(BINROOT)/rmutil
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
@@ -25,6 +25,8 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
 
 TARGET=$(BINDIR)/librmutil.a
+
+include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 ROOT=..
-include $(ROOT)/build/mk/defs
+include $(ROOT)/deps/readies/mk/main
 
 BINDIR=$(BINROOT)/src
 SRCDIR=.
@@ -77,6 +77,8 @@ TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
 TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
+
+include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 

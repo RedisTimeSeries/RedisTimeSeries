@@ -1,8 +1,0 @@
-
-BINROOT=$(ROOT)/bin/$(FULL_VARIANT)
-BIN_DIRS=$(sort $(patsubst %/,%,$(BINDIR) $(dir $(OBJECTS))))
-
-define mkdir_rule
-$(1):
-	$$(SHOW)mkdir -p $(1)
-endef

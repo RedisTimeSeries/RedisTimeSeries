@@ -1,6 +1,0 @@
-
-MK=$(ROOT)/build/mk
-
-include $(MK)/common.defs
-include $(MK)/variant.defs
-include $(MK)/bindirs.defs
