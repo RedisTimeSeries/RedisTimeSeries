@@ -600,9 +600,10 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
-    RedisModule_CloseKey(key);
 
-    return internalAdd(ctx, series, timestamp, value);
+    int rv = internalAdd(ctx, series, timestamp, value);
+    RedisModule_CloseKey(key);
+    return rv;
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -868,7 +869,6 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     series = RedisModule_ModuleTypeGetValue(key);
-    RedisModule_CloseKey(key);
 
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
@@ -893,6 +893,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result);
     RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_CloseKey(key);
     return rv;
 }
 
