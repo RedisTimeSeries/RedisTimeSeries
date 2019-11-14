@@ -520,20 +520,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
 
-    def test_incrby_timestamp(self):
-        with self.redis() as r:
-            r.execute_command('ts.create', 'tester')
-
-            time_bucket = 1000
-            quantity = 100
-            start_time = 0
-            for _ in range(quantity):
-                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time)
-            for _ in range(quantity):
-                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time + time_bucket)
-
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(2 * time_bucket)) == [[0, '100'], [1000, '200']]
-
     def test_incrby(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
