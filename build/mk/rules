@@ -1,4 +1,0 @@
-
-include $(MK)/common.rules
-include $(MK)/variant.rules
-include $(MK)/bindirs.rules

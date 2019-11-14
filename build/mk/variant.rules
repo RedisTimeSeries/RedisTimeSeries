@@ -1,3 +1,0 @@
-
-show-variant:
-	@cat $(ROOT)/VARIANT
