@@ -10,7 +10,7 @@
 #include "compaction.h"
 #include "parse_policies.h"
 
-static const uint64_t lookup_intervals[] = {
+static const timestamp_t lookup_intervals[] = {
    ['m'] = 1,
    ['s'] = 1000,
    ['M'] = 1000*60,
@@ -18,14 +18,14 @@ static const uint64_t lookup_intervals[] = {
    ['d'] = 1000*60*60*24
 };
 
-static int parse_string_to_millisecs(const char *timeStr, uint64_t *out){
+static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out){
     char should_be_empty;
     unsigned char interval_type;
-    uint64_t timeSize;
+    timestamp_t timeSize;
     if (sscanf(timeStr, "%ld%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
         return FALSE;
     }
-    uint64_t interval_in_millisecs = lookup_intervals[interval_type];
+    timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
     if (interval_in_millisecs == 0) {
         return FALSE;
     }
