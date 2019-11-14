@@ -45,23 +45,50 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 
 You can also build and run RedisTimeSeries on your own machine.
 
+Major Linux distributions as well as macOS are supported.
+
 #### Requirements
--  build-essential
--  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
+
+First, clone the RedisTimeSeries repository from git:
+
+```
+git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
+```
+
+Then, to install required build artifacts, invoke the following:
+
+```
+cd RedisTimeSeries
+make setup
+```
+Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
+
+If ```make``` is not yet available, the following commands are equivalent:
+
+```
+./deps/readies/bin/getpy2
+./system-setup.py
+```
+
+Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+
+If you prefer to avoid that, you can:
+
+* Review system-setup.py and install packages manually,
+* Utilize a Python virtual environment,
+* Use Docker with the ```--volume``` option to create an isolated build environment.
 
 #### Build
 
 ```bash
-cd RedisTimeSeries
-git submodule init
-git submodule update
-cd src
-make all
+make build
 ```
+
+Binary artifacts are placed under the ```bin``` directory.
 
 #### Run
 
-In your redis-server run: `loadmodule redistimeseries.so`
+In your redis-server run: `loadmodule bin/redistimeseries.so`
 
 For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
@@ -99,6 +126,14 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
 | redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
 | phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
+
+## Tests
+Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
+```
+$ cd src
+$ pip install -r tests/requirements.txt # optional, use virtualenv
+$ make tests
+```
 
 ## Mailing List / Forum
 
