@@ -13,11 +13,6 @@ typedef union {
     u_int64_t u;
 } my64bits;
 
-/*typedef struct Sample {
-    timestamp_t timestamp;
-    double data;
-} Sample;*/
-
 struct CompressedChunk {
     u_int64_t size;
     u_int64_t count;
@@ -133,11 +128,9 @@ static u_int64_t readBits(u_int64_t *arr, u_int64_t *idx, u_int8_t dataLen) {
     if(available >= dataLen) {
         rv = clearBits(*runner >> idx64, dataLen);
     } else {
-        //printf("moving address\n");
         u_int8_t left = dataLen - available;
         rv = clearBits(*runner >> idx64, available);
         rv |= clearBits(*++runner, left) << available;
-       // rv = clearBits(rv, dataLen);
     }
     *idx += dataLen;
     return rv;
@@ -187,7 +180,6 @@ static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
   int64_t curDelta = timestamp - chunk->prevTimestamp;
   assert(curDelta >= 0);
   doubleDelta.i = curDelta - chunk->prevTimestampDelta;
-  // printf("idx before %lu", chunk->idx);
   // check if enough size exist
   // if not return false
 
@@ -211,9 +203,9 @@ static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
     appendBits(chunk->data, &chunk->idx, 0x0f, 5);
     appendBits(chunk->data, &chunk->idx, int2bin(doubleDelta.i, 16),16);
   } else {
-    CHECKSPACE(chunk, 5 + 32 + 1);
+    CHECKSPACE(chunk, 5 + 64 + 1);
     appendBits(chunk->data, &chunk->idx, 0x1f, 5);
-    appendBits(chunk->data, &chunk->idx, doubleDelta.u, 32);
+    appendBits(chunk->data, &chunk->idx, doubleDelta.u, 64);
   }
   
   // TODO: in loop
@@ -250,7 +242,7 @@ static double readTS(CChunk_Iterator *iter) {
   } else if (isBitOff(runner, (*idx)++)) {
       dd = bin2int(readBits(runner, idx, 16), 16);
   } else {
-      dd = bin2int(readBits(runner, idx, 32), 32);
+      dd = bin2int(readBits(runner, idx, 64), 64);
   }
 
   // Update iterator
@@ -343,8 +335,6 @@ int CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value) {
     chunk->baseValue.d   = chunk->prevValue.d = value;
     chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
     chunk->prevTimestampDelta = 0;
- // } else if (chunk->idx >> 3 < chunk->size){
- //   return CC_END;
   } else {
     if (appendTS(chunk, timestamp) != CC_OK) return CC_END;
     if (appendV (chunk, value) != CC_OK) return CC_END;
