@@ -41,7 +41,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of several fields
 
 Example:
 
-`max:1m:1h` - Aggregate using max over 1 minute and retain the last 1 hour
+`max:1M:1h` - Aggregate using max over 1 minute and retain the last 1 hour
 #### Default
 
 <Empty>

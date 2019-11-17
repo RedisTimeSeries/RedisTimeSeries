@@ -133,8 +133,21 @@ VALGRIND_ARGS=\
 	--show-leak-kinds=all \
 	-v redis-server
 
+CALLGRIND_ARGS=\
+	--tool=callgrind \
+	--dump-instr=yes \
+	--simulate-cache=no \
+	--collect-jumps=yes \
+	--collect-atstart=yes \
+	--instr-atstart=yes \
+	-v redis-server --protected-mode no --save "" --appendonly no
+
+
 valgrind: $(TARGET)
 	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+
+callgrind: $(TARGET)
+	$(SHOW)valgrind $(CALLGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
