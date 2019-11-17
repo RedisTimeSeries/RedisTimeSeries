@@ -157,7 +157,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
 
-            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+            expected_result = {'chunkCount': 1,
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
@@ -189,7 +189,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
 
-            expected_result = {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+            expected_result = {'chunkCount': 1,
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
@@ -358,7 +358,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'chunkCount': math.ceil((samples_count + 1) / 360.0),
+            assert info_dict == {'chunkCount': 1,
                                  'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
@@ -412,15 +412,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_check_retention_64bit(self):
         with self.redis() as r:
+
             huge_timestamp = 4000000000 # larger than uint32
             r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
             info = r.execute_command('TS.INFO', 'tester')
             assert info[3] == huge_timestamp
-
-            r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
-            r.execute_command('TS.ADD', 'tester', huge_timestamp * 3, '2')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp * 3, '2']]
+            for i in range(10):
+                r.execute_command('TS.ADD', 'tester', huge_timestamp * i / 4, i)
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == \
+                [[5000000000L, '5'], [6000000000L, '6'], [7000000000L, '7'],
+                 [8000000000L, '8'], [9000000000L, '9']]
 
     def test_create_compaction_rule_with_wrong_aggregation(self):
         with self.redis() as r:
@@ -520,32 +521,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
 
-    def test_incrby_reset(self):
-        with self.redis() as r:
-            r.execute_command('ts.create', 'tester')
-
-            time_bucket = 10*1000
-            start_time = long(time.time()*1000)
-            start_time = start_time - start_time % time_bucket
-            for _ in range(1000):
-                r.execute_command('ts.incrby', 'tester', '1', 'RESET', time_bucket)
-
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(time.time()*1000)) == [[start_time, '1000']]
-
-    def test_incrby_reset_timestamp(self):
-        with self.redis() as r:
-            r.execute_command('ts.create', 'tester')
-
-            time_bucket = 1000
-            quantity = 100
-            start_time = 0
-            for _ in range(quantity):
-                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time, 'RESET', time_bucket)
-            for _ in range(quantity):
-                r.execute_command('ts.incrby', 'tester', '1', 'timestamp', start_time + time_bucket, 'RESET', time_bucket)
-
-            assert r.execute_command('TS.RANGE', 'tester', 0, int(2 * time_bucket)) == [[0, '100'], [1000, '200']]
-        
     def test_incrby(self):
         with self.redis() as r:
             r.execute_command('ts.create', 'tester')
@@ -553,10 +528,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             start_incr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.incrby', 'tester', '5')
+                time.sleep(0.001)
 
             start_decr_time = int(time.time()*1000)
             for i in range(20):
                 r.execute_command('ts.decrby', 'tester', '1.5')
+                time.sleep(0.001)
 
             now = int(time.time()*1000)
             result = r.execute_command('TS.RANGE', 'tester', 0, now)
@@ -570,12 +547,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('ts.create', 'tester')
 
             for i in range(20):
-                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == 'OK'
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
             result = r.execute_command('TS.RANGE', 'tester', 0, 20)
             assert len(result) == 20
             assert result[19][1] == '100'
 
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') == 'OK'
+            query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000 
+            cur_time = int(time.time())
+            assert query_res >= cur_time
+            assert query_res <= cur_time + 1
 
     def test_agg_min(self):
         with self.redis() as r:

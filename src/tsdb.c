@@ -173,7 +173,7 @@ size_t SeriesGetNumSamples(Series *series)
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
-    if (timestamp < series->lastTimestamp) {
+    if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp && timestamp != 0) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
