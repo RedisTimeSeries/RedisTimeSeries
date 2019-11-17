@@ -11,14 +11,14 @@ typedef union {
     double d;
     int64_t i;
     u_int64_t u;
-} my64bits;
+} union64bits;
 
 struct CompressedChunk {
     u_int64_t size;
     u_int64_t count;
     u_int64_t idx;
 
-    my64bits baseValue;
+    union64bits baseValue;
     u_int64_t baseTimestamp;
 
     u_int64_t *data;
@@ -26,7 +26,7 @@ struct CompressedChunk {
     u_int64_t prevTimestamp;
     int64_t prevTimestampDelta;
 
-    my64bits prevValue;
+    union64bits prevValue;
     u_int8_t prevLeading;
     u_int8_t prevTrailing;
 };
@@ -48,7 +48,7 @@ struct CChunk_Iterator {
   int64_t prevDelta;
 
   // value vars
-  my64bits prevValue;  
+  union64bits prevValue;  
   u_int8_t prevLeading;
   u_int8_t prevTrailing;
 };
@@ -175,7 +175,7 @@ void CChunk_FreeIter(CChunk_Iterator *iter) {
 }
 
 static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
-  my64bits doubleDelta;
+  union64bits doubleDelta;
 
   int64_t curDelta = timestamp - chunk->prevTimestamp;
   assert(curDelta >= 0);
@@ -251,7 +251,7 @@ static double readTS(CChunk_Iterator *iter) {
 }
 
 static int appendV(CompressedChunk *chunk, double value) {
-  my64bits val;
+  union64bits val;
   val.d = value;
   u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
 
@@ -299,7 +299,7 @@ static int appendV(CompressedChunk *chunk, double value) {
 
 static double readV(CChunk_Iterator *iter) {
   u_int64_t xorValue;
-  my64bits rv;
+  union64bits rv;
 
   // Check if value was changed
   if (isBitOff(iter->chunk->data, iter->idx++)) {
