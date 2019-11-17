@@ -70,9 +70,9 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     return TRUE;
 }
 
-static uint64_t count_char_in_str(const char *string, uint64_t len, char lookup) {
-    uint64_t count = 0;
-    for (uint64_t i = 0; i < len; i++) {
+static size_t count_char_in_str(const char *string, size_t len, char lookup) {
+    size_t count = 0;
+    for (size_t i = 0; i < len; i++) {
         if (string[i] == lookup) {
             count++;
         }
@@ -86,7 +86,7 @@ int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **pars
             uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
-    uint64_t len = strlen(policy_string);
+    size_t len = strlen(policy_string);
     char *rest = malloc(len + 1);
     memcpy(rest, policy_string, len + 1);
     *rules_count = 0;
