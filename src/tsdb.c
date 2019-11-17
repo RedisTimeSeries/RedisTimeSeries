@@ -143,7 +143,7 @@ void FreeCompactionRule(void *value) {
 	free(rule);
 }
 
-uint64_t SeriesGetChunksSize(Series *series) {
+size_t SeriesGetChunksSize(Series *series) {
     uint64_t size = 0;
     Chunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
@@ -158,16 +158,16 @@ uint64_t SeriesGetChunksSize(Series *series) {
 size_t SeriesMemUsage(const void *value) {
     Series *series = (Series *)value;
 
-    size_t strlen = 0;
+    size_t labelLen = 0;
     uint32_t labelsLen = 0;
     for (int i = 0; i < series->labelsCount; i++) {
-        RedisModule_StringPtrLen(series->labels[i].key, &strlen);
-        labelsLen += (strlen + 1);
-        RedisModule_StringPtrLen(series->labels[i].value, &strlen);
-        labelsLen += (strlen + 1);
+        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
+        labelsLen += (labelLen + 1);
+        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
+        labelsLen += (labelLen + 1);
     }
 
-    uint32_t rulesSize = 0;
+    size_t rulesSize = 0;
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         rulesSize += sizeof(CompactionRule);

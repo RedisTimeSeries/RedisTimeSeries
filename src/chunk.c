@@ -83,6 +83,6 @@ int ChunkIteratorGetNext(ChunkIterator *iter, Sample *sample) {
     }
 }
 
-u_int64_t GetChunkSize(Chunk *chunk) {
+size_t GetChunkSize(Chunk *chunk) {
     return sizeof(*chunk) + chunk->max_samples * sizeof(Sample);
 }

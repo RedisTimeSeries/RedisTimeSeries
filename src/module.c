@@ -204,7 +204,7 @@ static int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int
     return TSDB_OK;
 }
 
-static uint64_t getSeriesFirstTimestamp(RedisModuleDict* chunks) {
+static timestamp_t getSeriesFirstTimestamp(RedisModuleDict* chunks) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(chunks, "^", NULL, 0);
     Chunk *currentChunk;
     RedisModule_DictNextC(iter, NULL, (void*)&currentChunk);
