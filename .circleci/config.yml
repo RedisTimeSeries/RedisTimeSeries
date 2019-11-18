@@ -69,7 +69,7 @@ jobs:
       - checkout
       - run:
           name: Checkout submodules
-          command: git submodule update --init --resursive
+          command: git submodule update --init --recursive
       - run:
           name: Setup Docker client experimental features
           command: |
