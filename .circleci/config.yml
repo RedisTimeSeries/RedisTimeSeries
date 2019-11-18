@@ -47,7 +47,8 @@ jobs:
       - image: 'redislabsmodules/rmbuilder:latest'
     steps:
       - ci_steps:
-          platform: debian 
+          platform: debian
+
   build-macos:
     macos:
       xcode: 10.2.1
@@ -59,12 +60,16 @@ jobs:
             sudo chown $USER /workspace
       - ci_steps:
           platform: macosx
+
   build-multiarch-docker:
     machine:
       enabled: true
       image: ubuntu-1604:201903-01
     steps:
       - checkout
+      - run:
+          name: Checkout submodules
+          command: git submodule update --init --resursive
       - run:
           name: Setup Docker client experimental features
           command: |
@@ -76,6 +81,7 @@ jobs:
             sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             make -C build/docker build
             sudo make -C build/docker publish
+          no_output_timeout: 20m
 
   deploy_package:
     parameters:
