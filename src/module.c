@@ -543,6 +543,28 @@ void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t
     rule->aggClass->appendValue(rule->aggContext, value);
 }
 
+static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t timestamp, double value) {
+    int retval = SeriesAddSample(series, timestamp, value);
+    int result = 0;
+    if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
+        result = REDISMODULE_ERR;
+    } else if (retval != TSDB_OK) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
+        result = REDISMODULE_ERR;
+    } else {
+        // handle compaction rules
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            handleCompaction(ctx, rule, timestamp, value);
+            rule = rule->nextRule;
+        }
+        RedisModule_ReplyWithLongLong(ctx, timestamp);
+        result = REDISMODULE_OK;
+    }
+    return result;
+}
+
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
 	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
 
@@ -579,26 +601,9 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
         series = RedisModule_ModuleTypeGetValue(key);
     }
 
-    int retval = SeriesAddSample(series, timestamp, value);
-    int result = 0;
-    if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
-        result = REDISMODULE_ERR;
-    } else if (retval != TSDB_OK) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
-        result = REDISMODULE_ERR;
-    } else {
-        // handle compaction rules
-        CompactionRule *rule = series->rules;
-        while (rule != NULL) {
-            handleCompaction(ctx, rule, timestamp, value);
-            rule = rule->nextRule;
-        }
-        RedisModule_ReplyWithLongLong(ctx, timestamp);
-        result = REDISMODULE_OK;
-    }
+    int rv = internalAdd(ctx, series, timestamp, value);
     RedisModule_CloseKey(key);
-    return result;
+    return rv;
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -864,6 +869,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     series = RedisModule_ModuleTypeGetValue(key);
+
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
         return RedisModule_WrongArity(ctx);
@@ -877,46 +883,18 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }
 
-    double result;
-    long long resetMilliSeconds = 1;
-    if (RMUtil_ArgIndex("RESET", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("RESET", argv, argc, "l", &resetMilliSeconds) != 0) {
-            return RedisModule_WrongArity(ctx);
-        }
-
-        currentUpdatedTime = currentUpdatedTime - (currentUpdatedTime % resetMilliSeconds);
-        if (series->lastTimestamp != 0) {
-            u_int64_t lastTS = series->lastTimestamp;
-            if (lastTS - (lastTS % resetMilliSeconds) !=  currentUpdatedTime) {
-                series->lastValue = 0;
-            }
-        }
-        currentUpdatedTime = max(currentUpdatedTime, series->lastTimestamp);
-    }
-
+    double result = series->lastValue;
     RMUtil_StringToLower(argv[0]);
     if (RMUtil_StringEqualsC(argv[0], "ts.incrby")) {
-        result = series->lastValue + incrby;
+        result += incrby;
     } else {
-        result = series->lastValue - incrby;
+        result -= incrby;
     }
 
-    if (SeriesAddSample(series, currentUpdatedTime, result) != TSDB_OK) {
-        RedisModule_ReplyWithSimpleString(ctx, "TSDB: couldn't add sample");
-        return REDISMODULE_OK;
-    }
-
-    // handle compaction rules
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        handleCompaction(ctx, rule, currentUpdatedTime, result);
-        rule = rule->nextRule;
-    }
-
-    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    int rv = internalAdd(ctx, series, currentUpdatedTime, result);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
-    return REDISMODULE_OK;
+    return rv;
 }
 
 
