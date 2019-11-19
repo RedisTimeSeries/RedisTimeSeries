@@ -13,7 +13,7 @@ Chunk * NewChunk(size_t sampleCount)
     newChunk->num_samples = 0;
     newChunk->max_samples = sampleCount;
     newChunk->nextChunk = NULL;
-    newChunk->samples = malloc(sizeof(Sample)*sampleCount);
+    newChunk->samples = malloc(sizeof(Sample) * sampleCount);
 
     return newChunk;
 }
@@ -72,13 +72,17 @@ ChunkIterator NewChunkIterator(Chunk* chunk) {
     return (ChunkIterator){.chunk = chunk, .currentIndex = 0};
 }
 
-int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample) {
+int ChunkIteratorGetNext(ChunkIterator *iter, Sample *sample) {
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
-        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex-1);
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
         memcpy(sample, internalSample, sizeof(Sample));
         return 1;
     } else {
         return 0;
     }
+}
+
+size_t GetChunkSize(Chunk *chunk) {
+    return sizeof(*chunk) + chunk->max_samples * sizeof(Sample);
 }
