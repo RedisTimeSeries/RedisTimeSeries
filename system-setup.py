@@ -2,7 +2,6 @@
 
 import sys
 import os
-import popen2
 import argparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
@@ -32,8 +31,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.group_install("'Development Tools'")
 
     def macosx(self):
-        r, w, e = popen2.popen3('xcode-select -p')
-        if r.readlines() == []:
+        if sh('xcode-select -p') == '':
             fatal("Xcode tools are not installed. Please run xcode-select --install.")
         self.install("redis")
 
