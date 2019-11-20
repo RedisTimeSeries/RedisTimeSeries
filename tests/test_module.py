@@ -156,8 +156,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
-
-            expected_result = {'chunkCount': 1,
+            expected_result = {
+              'totalSamples': 1500L,
+              'memoryUsage': 29022L,
+              'firstTimestamp': start_ts,
+              'chunkCount': math.ceil((samples_count + 1) / 360.0),
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
@@ -188,8 +191,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert expected_result == actual_result
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
-
-            expected_result = {'chunkCount': 1,
+            expected_result = {'totalSamples': 1500L,
+                               'memoryUsage': 29134L,
+                               'firstTimestamp': start_ts,
+                               'chunkCount':long(math.ceil((samples_count + 1) / 360.0)),
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
@@ -358,7 +363,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(actual_result) == samples_count/10
 
             info_dict = self._get_ts_info(r, 'tester')
-            assert info_dict == {'chunkCount': 1,
+            assert info_dict == {'totalSamples': 1501L,
+                                 'memoryUsage': 29024L,
+                                 'firstTimestamp': start_ts,
+                                 'chunkCount': math.ceil((samples_count + 1) / 360.0),
                                  'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
@@ -745,6 +753,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             ts = time.time()
             assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             assert r.execute_command('TS.INFO', 'tester1') == [
+                'totalSamples',
+                1L,
+                'memoryUsage',
+                4164L,
+                'firstTimestamp',
+                long(ts),
                 'lastTimestamp',
                 long(ts),
                 'retentionTime',
@@ -752,7 +766,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'chunkCount',
                 1L,
                 'maxSamplesPerChunk',
-                360L,
+                256L,
                 'labels',
                 [
                     ['name',
@@ -766,6 +780,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location', 'earth')
             assert r.execute_command('TS.INFO', 'tester2') == [
+                'totalSamples',
+                1L,
+                'memoryUsage',
+                4196L,
+                'firstTimestamp',
+                long(ts),                
                 'lastTimestamp',
                 long(ts),
                 'retentionTime',
@@ -773,7 +793,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'chunkCount',
                 1L,
                 'maxSamplesPerChunk',
-                360L,
+                256L,
                 'labels',
                 [
                     [
@@ -953,5 +973,5 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
             r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
             info = r.execute_command("ts.info", 'test_key')
-            assert info[13][0][1] == BELOW_32BIT_LIMIT            
-            assert info[13][1][1] == ABOVE_32BIT_LIMIT
+            assert info[19][0][1] == BELOW_32BIT_LIMIT            
+            assert info[19][1][1] == ABOVE_32BIT_LIMIT
