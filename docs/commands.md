@@ -121,13 +121,13 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 Increment the latest value.
 
 ```sql
-TS.INCRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -137,7 +137,6 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-* time-bucket - Time bucket for resetting the current counter in milliseconds
 * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
 * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
   * Default: The global retention secs configuration of the database (by default, `0`)
