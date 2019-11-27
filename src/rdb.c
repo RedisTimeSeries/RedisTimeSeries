@@ -38,7 +38,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         uint64_t aggType = RedisModule_LoadUnsigned(io);
 
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
-        
+        rule->startCurrentTimeBucket = RedisModule_LoadUnsigned(io);
+
         if (i == 0) {
             series->rules = rule;
         } else {
@@ -92,6 +93,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
         RedisModule_SaveString(io, rule->destKey);
         RedisModule_SaveUnsigned(io, rule->timeBucket);
         RedisModule_SaveUnsigned(io, rule->aggType);
+        RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
         rule->aggClass->writeContext(rule->aggContext, io);
         rule = rule->nextRule;
     }

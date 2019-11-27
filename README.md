@@ -1,6 +1,7 @@
 [![GitHub issues](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
 [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/redislabs/redistimeseries.svg)](https://hub.docker.com/r/redislabs/redistimeseries/builds/)
+[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/RedisTimeSeries/RedisTimeSeries.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/RedisTimeSeries/RedisTimeSeries/context:cpp)
 [![Mailing List](https://img.shields.io/badge/Mailing%20List-RedisTimeSeries-blue)](https://groups.google.com/forum/#!forum/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
@@ -11,7 +12,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last) for any time bucket
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
 - Configurable maximum retention period
 - Downsampling/Compaction - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (field value pairs) which will allows to query by labels
@@ -45,23 +46,50 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 
 You can also build and run RedisTimeSeries on your own machine.
 
+Major Linux distributions as well as macOS are supported.
+
 #### Requirements
--  build-essential
--  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
+
+First, clone the RedisTimeSeries repository from git:
+
+```
+git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
+```
+
+Then, to install required build artifacts, invoke the following:
+
+```
+cd RedisTimeSeries
+make setup
+```
+Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
+
+If ```make``` is not yet available, the following commands are equivalent:
+
+```
+./deps/readies/bin/getpy2
+./system-setup.py
+```
+
+Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+
+If you prefer to avoid that, you can:
+
+* Review system-setup.py and install packages manually,
+* Utilize a Python virtual environment,
+* Use Docker with the ```--volume``` option to create an isolated build environment.
 
 #### Build
 
 ```bash
-cd RedisTimeSeries
-git submodule init
-git submodule update
-cd src
-make all
+make build
 ```
+
+Binary artifacts are placed under the ```bin``` directory.
 
 #### Run
 
-In your redis-server run: `loadmodule redistimeseries.so`
+In your redis-server run: `loadmodule bin/redistimeseries.so`
 
 For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
@@ -76,7 +104,7 @@ Then you can query the data for a time range on some aggregation rule.
 ### With `redis-cli`
 ```sh
 $ redis-cli
-127.0.0.1:6379> TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
+127.0.0.1:6379> TS.CREATE temperature:3:11 RETENTION 60 LABELS sensor_id 2 area_id 32
 OK
 127.0.0.1:6379> TS.ADD temperature:3:11 1548149181 30
 OK
@@ -98,6 +126,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
 | redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
+| phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
 
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.

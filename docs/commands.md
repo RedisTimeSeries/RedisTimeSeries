@@ -22,7 +22,7 @@ Optional args:
 #### Create Example
 
 ```sql
-TS.CREATE temperature RETENTION 60000 LABELS sensor_id 2 area_id 32
+TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
 ## Update
@@ -38,7 +38,7 @@ TS.ALTER key [RETENTION retentionTime] [LABELS field value..]
 #### Alter Example
 
 ```sql
-TS.ALTER temperature LABELS sensor_id 2 area_id 32 sub_area_id 15
+TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
@@ -121,13 +121,13 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 Increment the latest value.
 
 ```sql
-TS.INCRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [RESET time-bucket] [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -137,7 +137,6 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-* time-bucket - Time bucket for resetting the current counter in milliseconds
 * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
 * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
   * Default: The global retention secs configuration of the database (by default, `0`)
@@ -163,10 +162,10 @@ Create a compaction rule.
 TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 ```
 
-- sourceKey - Key name for source time series
-- destKey - Key name for destination time series
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-- timeBucket - Time bucket for aggregation in milliseconds
+* sourceKey - Key name for source time series
+* destKey - Key name for destination time series
+* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+* timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -193,7 +192,7 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l=(v1,v2,...)` key with label `l` that equals one of the values in the list
 * `l!=(v1,v2,...)` key with label `l` that doesn't equals to the values in the list
 
-Note: Whenever filters need to be provided, a minimum of one filter should be applied.
+Note: Whenever filters need to be provided, a minimum of one `l=v` filter must be applied.
 
 ### TS.RANGE
 
@@ -204,12 +203,12 @@ TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationTyp
 ```
 
 - key - Key name for timeseries
-- fromTimestamp - Start timestamp for range query
-- toTimestamp - End timestamp for range query
+- fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+- toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional args:
-- aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-- timeBucket - Time bucket for aggregation in milliseconds
+* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
+* timeBucket - Time bucket for aggregation in milliseconds
 
 #### Complexity
 
@@ -244,14 +243,14 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 ### TS.MRANGE
 
-Query a range from multiple timeseries by filters.
+Query a timestamp range across multiple keys by filters.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] FILTER filter..
 ```
 
-* fromTimestamp - Start timestamp for range query
-* toTimestamp - End timestamp for range query
+* fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+* toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 * filter - [See Filtering](#filtering)
 
 Optional args:

@@ -143,13 +143,45 @@ void FreeCompactionRule(void *value) {
 	free(rule);
 }
 
-size_t SeriesMemUsage(const void *value) {
-    Series *series = (Series *)value;
-    return sizeof(series) + sizeof(Chunk) * RedisModule_DictSize(series->chunks);
+size_t SeriesGetChunksSize(Series *series) {
+    uint64_t size = 0;
+    Chunk *currentChunk;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
+    {
+        size += GetChunkSize(currentChunk);
+    }
+    RedisModule_DictIteratorStop(iter);
+    return size;
 }
 
-size_t SeriesGetNumSamples(Series *series)
-{
+size_t SeriesMemUsage(const void *value) {
+    Series *series = (Series *)value;
+
+    size_t labelLen = 0;
+    uint32_t labelsLen = 0;
+    for (int i = 0; i < series->labelsCount; i++) {
+        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
+        labelsLen += (labelLen + 1);
+        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
+        labelsLen += (labelLen + 1);
+    }
+
+    size_t rulesSize = 0;
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        rulesSize += sizeof(CompactionRule);
+        rule = rule->nextRule; 
+    }
+
+    return  sizeof(series) + 
+            rulesSize +
+            labelsLen +
+            sizeof(Label) * series->labelsCount + 
+            SeriesGetChunksSize(series);
+}
+
+size_t SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
     Chunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
@@ -163,7 +195,7 @@ size_t SeriesGetNumSamples(Series *series)
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
-    if (timestamp < series->lastTimestamp) {
+    if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp && series->lastChunk->num_samples > 0) {
         // this is a hack, we want to override the last sample, so lets ignore it first
@@ -325,6 +357,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;
     rule->destKey = destKey;
+    rule->startCurrentTimeBucket = -1LL;
 
     rule->nextRule = NULL;
 

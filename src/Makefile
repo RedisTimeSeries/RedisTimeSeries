@@ -1,5 +1,5 @@
 ROOT=..
-include $(ROOT)/build/mk/defs
+include $(ROOT)/deps/readies/mk/main
 
 BINDIR=$(BINROOT)/src
 SRCDIR=.
@@ -78,6 +78,8 @@ TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
+include $(MK)/defs
+
 #----------------------------------------------------------------------------------------------
 
 .PHONY: package tests unittests clean all install uninstall docker bindirs
@@ -122,18 +124,37 @@ REDIS_ARGS=\
 	MAX_SAMPLE_PER_CHUNK 1024
 
 run: $(TARGET)
+	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) --dir /tmp
+
+run_dev: $(TARGET)
 	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 gdb: $(TARGET)
-	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
+
+cgdb: $(TARGET)
+	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 VALGRIND_ARGS=\
 	--leak-check=full \
 	--show-leak-kinds=all \
 	-v redis-server
 
+CALLGRIND_ARGS=\
+	--tool=callgrind \
+	--dump-instr=yes \
+	--simulate-cache=no \
+	--collect-jumps=yes \
+	--collect-atstart=yes \
+	--instr-atstart=yes \
+	-v redis-server --protected-mode no --save "" --appendonly no
+
+
 valgrind: $(TARGET)
-	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
+	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) --dir /tmp
+
+callgrind: $(TARGET)
+	$(SHOW)valgrind $(CALLGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
