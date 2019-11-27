@@ -987,8 +987,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
             r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
             info = r.execute_command("ts.info", 'test_key')
-            assert info[13][0][1] == BELOW_32BIT_LIMIT            
-            assert info[13][1][1] == ABOVE_32BIT_LIMIT
+            assert info[19][0][1] == BELOW_32BIT_LIMIT            
+            assert info[19][1][1] == ABOVE_32BIT_LIMIT
 
 ########## Test init args ##########
 class RedisTimeseriesInitTestRetSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', '100'])):
