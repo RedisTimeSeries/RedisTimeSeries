@@ -15,18 +15,18 @@ else:
 
 ALLOWED_ERROR = 0.001
 
-def assertInitArgsFail(self):
+def assertInitArgsFail(redis):
     try:
-        c, s = self.client, self.server
+        c, s = redis.client, redis.server
     except Exception:
-        delattr(self, '_server')
-        self.assertOk('OK')
+        delattr(redis, '_server')
+        redis.assertOk('OK')
     else:
-        self.assertOk('NotOK')  
+        redis.assertOk('NotOK')  
 
-def assertInitArgsSuccess(self):
-    c, s = self.client, self.server
-    self.assertEqual(True, self.cmd('PING'))
+def assertInitArgsSuccess(redis):
+    c, s = redis.client, redis.server
+    redis.assertEqual(True, redis.cmd('PING'))
 
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
