@@ -23,7 +23,7 @@ void FreeChunk(Chunk *chunk) {
     free(chunk);
 }
 
-int IsChunkFull(Chunk *chunk) {
+static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->max_samples;
 }
 
