@@ -521,7 +521,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             RedisModule_ReplyWithArray(ctx, 2);
 
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
-            RedisModule_ReplyWithDouble(ctx, sample.data);
+            RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;
         } else {
             timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
@@ -532,7 +532,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
                 }
                 last_agg_timestamp = current_timestamp;
             }
-            aggObject->appendValue(context, sample.data);
+            aggObject->appendValue(context, sample.value);
         }
     }
     SeriesIteratorClose(&iterator);

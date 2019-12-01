@@ -32,6 +32,7 @@ CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-Wall \
 	-fPIC \
+	-pedantic \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
@@ -61,6 +62,7 @@ _SOURCES=\
 	compaction.c \
 	compressed_chunk.c \
 	config.c \
+	gorilla.c \
 	indexer.c \
 	module.c \
 	parse_policies.c \

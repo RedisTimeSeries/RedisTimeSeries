@@ -150,7 +150,7 @@ void FreeCompactionRule(void *value) {
 }
 
 size_t SeriesGetChunksSize(Series *series) {
-    uint64_t size = 0;
+    size_t size = 0;
 //    Chunk *currentChunk;
     CompressedChunk *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
@@ -209,7 +209,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     } else if (timestamp == series->lastTimestamp && timestamp != 0) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
-    Sample sample = {.timestamp = timestamp, .data = value};
+    Sample sample = {.timestamp = timestamp, .value = value};
 ////    int ret = ChunkAddSample(series->lastChunk, sample);
     int ret = CChunk_AddSample(series->lastChunk, sample);
 ////    if (ret == 0) {

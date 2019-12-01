@@ -6,6 +6,7 @@
 #include <math.h>           // rand
 
 #include "compressed_chunk.h"
+#include "gorilla.h"
 
 void testIter() {
   CompressedChunk *chunk = CChunk_NewChunk(4096);
