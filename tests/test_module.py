@@ -15,19 +15,6 @@ else:
 
 ALLOWED_ERROR = 0.001
 
-def assertInitArgsFail(redis):
-    try:
-        c, s = redis.client, redis.server
-    except Exception:
-        delattr(redis, '_server')
-        redis.assertOk('OK')
-    else:
-        redis.assertOk('NotOK')  
-
-def assertInitArgsSuccess(redis):
-    c, s = redis.client, redis.server
-    redis.assertEqual(True, redis.cmd('PING'))
-
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
         info = redis.execute_command('TS.INFO', key)
@@ -991,34 +978,38 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info[19][1][1] == ABOVE_32BIT_LIMIT
 
 ########## Test init args ##########
-class RedisTimeseriesInitTestRetSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', '100'])):
-    def test_args(self):
-        assertInitArgsSuccess(self)
 
-class RedisTimeseriesInitTestRetFailStr(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', 'RTS'])):
-    def test_args(self):
-        assertInitArgsFail(self)
+def ModuleArgsTestCase(good, args):
+    class _Class(ModuleTestCase(REDISTIMESERIES, module_args=args)):
+        def test(self):
+            ping = False
+            try:
+                ping = self.cmd('PING')
+            except Exception:
+                delattr(self, '_server') # server died, do not try to kill it
+            assert good and ping or not good and not ping
+    return _Class
 
-class RedisTimeseriesInitTestRetFailNeg(ModuleTestCase(REDISTIMESERIES, module_args=['RETENTION_POLICY', -1])):
-    def test_args(self):
-        assertInitArgsFail(self)
+class RedisTimeseriesInitTestRetSuccessNew(ModuleArgsTestCase(True, ['RETENTION_POLICY', '100'])):
+    pass
 
-class RedisTimeseriesInitTestMaxSamplesSuccess(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', '100'])):
-    def test_args(self):
-        assertInitArgsSuccess(self)
+class RedisTimeseriesInitTestRetFailStrNew(ModuleArgsTestCase(False, ['RETENTION_POLICY', 'RTS'])):
+    pass
 
-class RedisTimeseriesInitTestMaxSamplesFailStr(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', 'RTS'])):
-    def test_args(self):
-        assertInitArgsFail(self)
+class RedisTimeseriesInitTestRetFailNeg(ModuleArgsTestCase(False, ['RETENTION_POLICY', -1])):
+    pass
 
-class RedisTimeseriesInitTestMaxSamplesFailNeg(ModuleTestCase(REDISTIMESERIES, module_args=['MAX_SAMPLE_PER_CHUNK', -1])):
-    def test_args(self):
-        assertInitArgsFail(self)
+class RedisTimeseriesInitTestMaxSamplesSuccess(ModuleArgsTestCase(True, ['MAX_SAMPLE_PER_CHUNK', '100'])):
+    pass
 
-class RedisTimeseriesInitTestPolicySuccess(ModuleTestCase(REDISTIMESERIES, module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
-    def test_args(self):
-        assertInitArgsSuccess(self)
+class RedisTimeseriesInitTestMaxSamplesFailStr(ModuleArgsTestCase(False, ['MAX_SAMPLE_PER_CHUNK', 'RTS'])):
+    pass
 
-class RedisTimeseriesInitTestPolicyFail(ModuleTestCase(REDISTIMESERIES, module_args=['COMPACTION_POLICY', 'RTS'])):
-    def test_args(self):
-        assertInitArgsFail(self)
+class RedisTimeseriesInitTestMaxSamplesFailNeg(ModuleArgsTestCase(False, ['MAX_SAMPLE_PER_CHUNK', -1])):
+    pass
+
+class RedisTimeseriesInitTestPolicySuccess(ModuleArgsTestCase(True, ['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
+    pass
+
+class RedisTimeseriesInitTestPolicyFail(ModuleArgsTestCase(False, ['COMPACTION_POLICY', 'RTS'])):
+    pass
