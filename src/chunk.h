@@ -39,7 +39,6 @@ size_t GetChunkSize(Chunk *chunk);
 
 // 0 for failure, 1 for success
 int ChunkAddSample(Chunk *chunk, Sample sample);
-int IsChunkFull(Chunk *chunk);
 int ChunkNumOfSample(Chunk *chunk);
 timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
 timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
