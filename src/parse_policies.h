@@ -14,5 +14,5 @@ typedef struct SimpleCompactionRule {
     int aggType;
 } SimpleCompactionRule;
 
-int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **parsed_rules, size_t *count_rules);
+int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **parsed_rules, uint64_t *count_rules);
 #endif
