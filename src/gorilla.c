@@ -43,7 +43,7 @@ static int64_t bin2int(u_int64_t x, u_int8_t l) {
     return rv;
 }
 
-// Return `true` if byte is off
+// Return `true` if bit is off
 static bool isBitOff(u_int64_t *x, u_int64_t idx) {
     return !(x[idx / 64LL] & (1LL << (idx % 64)));
 }

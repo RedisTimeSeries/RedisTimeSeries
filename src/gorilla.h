@@ -51,7 +51,7 @@ typedef struct CChunk_Iterator {
   u_int8_t prevTrailing;
 } CChunk_Iterator;
 
-enum result {
+enum chunkResults {
   CC_OK = 0,    // RM_OK
   CC_ERR = 1,   // RM_ERR
   CC_END = 2  

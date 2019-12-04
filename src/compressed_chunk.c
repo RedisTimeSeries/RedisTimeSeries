@@ -14,7 +14,7 @@
 /*********************
  *  Chunk functions  *
  *********************/
-CompressedChunk *CChunk_NewChunk(u_int64_t size) {
+Chunk_t *CChunk_NewChunk(u_int64_t size) {
   CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
   chunk->size = size;
   chunk->data = (u_int64_t *)calloc(size, sizeof(char));
@@ -23,60 +23,63 @@ CompressedChunk *CChunk_NewChunk(u_int64_t size) {
   return chunk;
 }
 
-void CChunk_FreeChunk(CompressedChunk *chunk) {
-  free(chunk->data);
-  chunk->data = NULL;
+void CChunk_FreeChunk(Chunk_t *chunk) {
+  CompressedChunk *cmpChunk = chunk;
+  free(cmpChunk->data);
+  cmpChunk->data = NULL;
   free(chunk);
 }
 
-int CChunk_AddSample(CompressedChunk *chunk, Sample sample) {
-  return CChunk_Append(chunk, sample.timestamp, sample.value);
+int CChunk_AddSample(Chunk_t *chunk, Sample *sample) {
+  return CChunk_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
 
-u_int64_t CChunk_ChunkNumOfSample(CompressedChunk *chunk) {
-  return chunk->count;
+u_int64_t CChunk_ChunkNumOfSample(Chunk_t *chunk) {
+  return ((CompressedChunk *)chunk)->count;
 }
 
-u_int64_t CChunk_GetFirstTimestamp(CompressedChunk *chunk) {
-  return chunk->baseTimestamp;
+timestamp_t CChunk_GetFirstTimestamp(Chunk_t *chunk) {
+  return ((CompressedChunk *)chunk)->baseTimestamp;
 }
 
-u_int64_t CChunk_GetLastTimestamp (CompressedChunk *chunk) {
-  return chunk->prevTimestamp;
+timestamp_t CChunk_GetLastTimestamp(Chunk_t *chunk) {
+  return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
-size_t CChunk_GetChunkSize(CompressedChunk *chunk) {
-  return sizeof(*chunk) + chunk->size * sizeof(char);
+size_t CChunk_GetChunkSize(Chunk_t *chunk) {
+  CompressedChunk *cmpChunk = chunk;
+  return sizeof(*cmpChunk) + cmpChunk->size * sizeof(char);
 }
 
 /************************
  *  Iterator functions  *
  ************************/ 
-u_int64_t getIterIdx(CChunk_Iterator *iter) {
-  return iter->idx;
+u_int64_t getIterIdx(ChunkIter_t *iter) {
+  return ((CChunk_Iterator *)iter)->idx;
 }
 
-CChunk_Iterator *CChunk_NewChunkIterator(CompressedChunk *chunk) {
+ChunkIter_t *CChunk_NewChunkIterator(Chunk_t *chunk) {
+  CompressedChunk *compChunk = chunk;
   CChunk_Iterator *iter = (CChunk_Iterator *)calloc(1, sizeof(CChunk_Iterator));
 
-  iter->chunk = chunk;
+  iter->chunk = compChunk;
   iter->idx = 0;
   iter->count = 0;
 
-  iter->prevTS = chunk->baseTimestamp;
+  iter->prevTS = compChunk->baseTimestamp;
   iter->prevDelta = 0;
 
-  iter->prevValue.d = chunk->baseValue.d;  
+  iter->prevValue.d = compChunk->baseValue.d;  
   iter->prevLeading = 32;
   iter->prevTrailing = 32;
 
-  return iter;
+  return (ChunkIter_t *)iter;
 }
 
-void CChunk_FreeIter(CChunk_Iterator *iter) {
+void CChunk_FreeIter(ChunkIter_t *iter) {
   free(iter);
 }
 
-int CChunk_ChunkIteratorGetNext(CChunk_Iterator *iter, Sample* sample) {
-  return CChunk_ReadNext(iter, &sample->timestamp, &sample->value);
+int CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample) {
+  return CChunk_ReadNext((CChunk_Iterator *)iter, &sample->timestamp, &sample->value);
 }

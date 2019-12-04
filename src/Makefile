@@ -62,6 +62,7 @@ _SOURCES=\
 	compaction.c \
 	compressed_chunk.c \
 	config.c \
+	generic_chunk.c \
 	gorilla.c \
 	indexer.c \
 	module.c \

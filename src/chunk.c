@@ -7,8 +7,7 @@
 #include <string.h>
 #include "rmutil/alloc.h"
 
-Chunk * NewChunk(size_t sampleCount)
-{
+Chunk_t *NewChunk(size_t sampleCount) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
     newChunk->max_samples = sampleCount;
@@ -18,71 +17,77 @@ Chunk * NewChunk(size_t sampleCount)
     return newChunk;
 }
 
-void FreeChunk(Chunk *chunk) {
-    free(chunk->samples);
+void FreeChunk(Chunk_t *chunk) {
+    free(((Chunk *)chunk)->samples);
     free(chunk);
 }
 
-int IsChunkFull(Chunk *chunk) {
+static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->max_samples;
 }
 
-int ChunkNumOfSample(Chunk *chunk) {
-    return chunk->num_samples;
+u_int64_t ChunkNumOfSample(Chunk_t *chunk) {
+    return ((Chunk *)chunk)->num_samples;
 }
 
-Sample *ChunkGetSampleArray(Chunk *chunk) {
+static Sample *ChunkGetSampleArray(Chunk *chunk) {
     return (Sample *)chunk->samples;
 }
 
-Sample *ChunkGetSample(Chunk *chunk, int index) {
+static Sample *ChunkGetSample(Chunk *chunk, int index) {
     return &ChunkGetSampleArray(chunk)[index];
 }
 
-timestamp_t ChunkGetLastTimestamp(Chunk *chunk) {
-    if (chunk->num_samples == 0) {
+timestamp_t ChunkGetLastTimestamp(Chunk_t *chunk) {
+    if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
-    return ChunkGetSample(chunk, chunk->num_samples - 1)->timestamp;
+    return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
 }
-timestamp_t ChunkGetFirstTimestamp(Chunk *chunk) {
-    if (chunk->num_samples == 0) {
+
+timestamp_t ChunkGetFirstTimestamp(Chunk_t *chunk) {
+    if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
     return ChunkGetSample(chunk, 0)->timestamp;
 }
 
-int ChunkAddSample(Chunk *chunk, Sample sample) {
-    if (IsChunkFull(chunk)){
-        return 0;
+int ChunkAddSample(Chunk_t *chunk, Sample *sample) {
+    Chunk *regChunk = (Chunk *)chunk;
+    if (IsChunkFull(regChunk)){
+        return CHUNK_END;
     }
 
-    if (ChunkNumOfSample(chunk) == 0) {
+    if (ChunkNumOfSample(regChunk) == 0) {
         // initialize base_timestamp
-        chunk->base_timestamp = sample.timestamp;
+        regChunk->base_timestamp = sample->timestamp;
     }
 
-    ChunkGetSampleArray(chunk)[chunk->num_samples] = sample;
-    chunk->num_samples++;
+    ChunkGetSampleArray(regChunk)[regChunk->num_samples] = *sample;
+    regChunk->num_samples++;
 
-    return 1;
+    return CHUNK_OK;
 }
 
-ChunkIterator NewChunkIterator(Chunk* chunk) {
-    return (ChunkIterator){.chunk = chunk, .currentIndex = 0};
+ChunkIter_t *NewChunkIterator(Chunk_t *chunk) {
+    ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
+    iter->chunk = chunk;
+    iter->currentIndex = 0;
+    return iter;
 }
 
-int ChunkIteratorGetNext(ChunkIterator *iter, Sample *sample) {
+int ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
+    ChunkIterator *iter = iterator;
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;
         Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
         memcpy(sample, internalSample, sizeof(Sample));
-        return 1;
+        return CHUNK_OK;
     } else {
-        return 0;
+        return CHUNK_END;
     }
 }
 
-size_t GetChunkSize(Chunk *chunk) {
-    return sizeof(*chunk) + chunk->max_samples * sizeof(Sample);
+size_t GetChunkSize(Chunk_t *chunk) {
+    return sizeof(Chunk) + ((Chunk *)chunk)->max_samples * sizeof(Sample);
 }

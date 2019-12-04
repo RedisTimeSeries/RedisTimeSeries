@@ -6,17 +6,11 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "chunk.h"
 #include "consts.h"
+#include "generic_chunk.h"
 #include <sys/types.h>
 
-typedef struct Sample {
-    timestamp_t timestamp;
-    double data;
-} Sample;
-
-typedef struct Chunk
-{
+typedef struct Chunk {
     timestamp_t base_timestamp;
     void * samples;
     short num_samples;
@@ -25,25 +19,24 @@ typedef struct Chunk
     // struct Chunk *prevChunk;
 } Chunk;
 
-typedef struct ChunkIterator
-{
+typedef struct ChunkIterator {
     Chunk *chunk;
     int currentIndex;
     timestamp_t lastTimestamp;
     int lastValue;
 } ChunkIterator;
 
-Chunk * NewChunk(size_t sampleCount);
-void FreeChunk(Chunk *chunk);
-size_t GetChunkSize(Chunk *chunk);
+Chunk_t *NewChunk(size_t sampleCount);
+void FreeChunk(Chunk_t *chunk);
+size_t GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success
-int ChunkAddSample(Chunk *chunk, Sample sample);
-int IsChunkFull(Chunk *chunk);
-int ChunkNumOfSample(Chunk *chunk);
-timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
-timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
+int ChunkAddSample(Chunk_t *chunk, Sample *sample);
+u_int64_t ChunkNumOfSample(Chunk_t *chunk);
+timestamp_t ChunkGetLastTimestamp(Chunk_t *chunk);
+timestamp_t ChunkGetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIterator NewChunkIterator(Chunk *chunk);
-int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample);
+ChunkIter_t *NewChunkIterator(Chunk_t *chunk);
+int ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
+
 #endif
