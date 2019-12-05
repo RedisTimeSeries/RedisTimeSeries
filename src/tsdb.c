@@ -37,8 +37,6 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->lastValue = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
-//    Chunk* newChunk = NewChunk(newSeries->maxSamplesPerChunk);
-//    CompressedChunk *newChunk = CChunk_NewChunk(4096);
     newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
 //  newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     Chunk_t *newChunk = newSeries->funcs->NewChunk(4096);
@@ -55,8 +53,6 @@ void SeriesTrim(Series * series) {
 
     // start iterator from smallest key
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
@@ -65,14 +61,11 @@ void SeriesTrim(Series * series) {
 
     while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
     {
-//        if (ChunkGetLastTimestamp(currentChunk) < minTimestamp)
         if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp)
         {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
-//            FreeChunk(currentChunk);
-//            CChunk_FreeChunk(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
             break;
@@ -132,12 +125,8 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *) value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     Chunk_t *currentChunk;
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL){
-//        FreeChunk(currentChunk);
-//        CChunk_FreeChunk(currentChunk);
         currentSeries->funcs->FreeChunk(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -164,13 +153,10 @@ void FreeCompactionRule(void *value) {
 
 size_t SeriesGetChunksSize(Series *series) {
     size_t size = 0;
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
     {
-//        size += CChunk_GetChunkSize(currentChunk);
         size += series->funcs->GetChunkSize(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -205,13 +191,10 @@ size_t SeriesMemUsage(const void *value) {
 
 size_t SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
     {
-//        numSamples += ChunkNumOfSample(currentChunk);
         numSamples += series->funcs->GetNumOfSample(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -226,18 +209,14 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
     Sample sample = {.timestamp = timestamp, .value = value};
-////    int ret = ChunkAddSample(series->lastChunk, sample);
     int ret = series->funcs->AddSample(series->lastChunk, &sample);
-////    if (ret == 0) {
     if (ret == CC_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
-////        Chunk *newChunk = NewChunk(series->maxSamplesPerChunk);
         Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
         seriesEncodeTimestamp(&rax_key, timestamp);
         RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
-////        ChunkAddSample(newChunk, sample);
         series->funcs->AddSample(newChunk, &sample);
         series->lastChunk = newChunk;
     }
@@ -274,20 +253,17 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     Sample internalSample;
     while (iterator->currentChunk != NULL)
     {
-//        Chunk *currentChunk = iterator->currentChunk;
-//        CompressedChunk *currentChunk = iterator->currentChunk;
         Chunk_t *currentChunk = iterator->currentChunk;
         ChunkFuncs *funcs = iterator->series->funcs;
-////        if (ChunkGetLastTimestamp(currentChunk) < iterator->minTimestamp)
         if (funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp)
         {
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }
             iterator->chunkIteratorInitialized = FALSE;
+            free(iterator->chunkIterator);
             continue;
         }
-////        else if (ChunkGetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
         else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
         {
             break;
@@ -295,18 +271,15 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 
         if (!iterator->chunkIteratorInitialized) 
         {
-////            iterator->chunkIterator = NewChunkIterator(iterator->currentChunk);
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
             iterator->chunkIteratorInitialized = TRUE;
         }
 
-////        if (ChunkIteratorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
         if (funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CC_END) { // reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }
             iterator->chunkIteratorInitialized = FALSE;
-            //free(iterator->chunkIterator);
             continue;
         }
         if (internalSample.timestamp < iterator->minTimestamp) {

@@ -44,12 +44,8 @@ typedef struct Series {
 typedef struct SeriesIterator {
     Series *series;
     RedisModuleDictIter *dictIter;
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     Chunk_t *currentChunk;
     int chunkIteratorInitialized;
-//    ChunkIterator chunkIterator;
-//    CChunk_Iterator *chunkIterator;  // TODO: added pointer
     ChunkIter_t *chunkIterator;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
