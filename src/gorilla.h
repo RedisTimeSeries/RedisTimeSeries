@@ -9,8 +9,7 @@
 
 #include <sys/types.h>      // u_int_t
 #include <stdbool.h>        // bool
-
-#define timestamp_t u_int64_t
+#include "consts.h"
 
 typedef union {
     double d;

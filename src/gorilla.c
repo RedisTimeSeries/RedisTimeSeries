@@ -14,6 +14,7 @@
 #define DOUBLE_BLOCK_SIZE 6
 #define DOUBLE_BLOCK_ADJUST 1
 
+// Ensures enough space is available otherwise, returns false 
 #define CHECKSPACE(chunk, x)    if (!isSpaceAvailable(chunk, x)) { \
                                     return CC_ERR; }
 
@@ -85,7 +86,7 @@ static u_int64_t readBits(u_int64_t *arr, u_int64_t *idx, u_int8_t dataLen) {
 static bool bitRange(int64_t x, u_int8_t nbits) {
     // x+1 since int2bin and bin2int are [-32, 31]
 	return -((1LL << (nbits - 1)) - 1) <= (x + 1) && 
-             (1LL << (nbits - 1))      >= (x + 1);
+           (1LL << (nbits - 1))      >= (x + 1);
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
@@ -100,8 +101,6 @@ static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
   int64_t curDelta = timestamp - chunk->prevTimestamp;
   assert(curDelta >= 0);
   doubleDelta.i = curDelta - chunk->prevTimestampDelta;
-  // check if enough size exist
-  // if not return false
 
   if (doubleDelta.i == 0) {
     CHECKSPACE(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
@@ -137,8 +136,7 @@ static int appendV(CompressedChunk *chunk, double value) {
   val.d = value;
   u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
 
-  // Checked for 1 bit in appendTS
-  // CHECKSPACE(chunk, 1);
+  // CHECKSPACE already checked for 1 extra bit availability in appendTS
   if (xorWithPrevious == 0) {
     appendBits(chunk->data, &chunk->idx, 0, 1);
     return CC_OK;   
@@ -234,9 +232,9 @@ static double readV(CChunk_Iterator *iter) {
     xorValue = readBits(iter->chunk->data, &iter->idx, prevBlockInfo);
     xorValue <<= iter->prevTrailing;
   } else {
-    u_int64_t leading = readBits(iter->chunk->data, &iter->idx, DOUBLE_LEADING);
+    u_int64_t leading   = readBits(iter->chunk->data, &iter->idx, DOUBLE_LEADING);
     u_int64_t blocksize = readBits(iter->chunk->data, &iter->idx, DOUBLE_BLOCK_SIZE) + DOUBLE_BLOCK_ADJUST;
-    u_int64_t trailing = _64BIT - leading - blocksize;
+    u_int64_t trailing  = _64BIT - leading - blocksize;
     xorValue = readBits(iter->chunk->data, &iter->idx, blocksize) << trailing;
     iter->prevLeading = leading;
     iter->prevTrailing = trailing;    
