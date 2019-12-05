@@ -16,8 +16,8 @@
  *********************/
 Chunk_t *CChunk_NewChunk(u_int64_t size) {
   CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
-  chunk->size = size;
-  chunk->data = (u_int64_t *)calloc(size, sizeof(char));
+  chunk->size = size * sizeof(Sample);
+  chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
   chunk->prevLeading = 32;
   chunk->prevTrailing = 32;
   return chunk;

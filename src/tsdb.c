@@ -39,7 +39,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->labelsCount = labelsCount;
     newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
 //  newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(4096);
+    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
     newSeries->lastChunk = newChunk;
