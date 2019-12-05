@@ -900,8 +900,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     series = RedisModule_ModuleTypeGetValue(key);
 
     double incrby = 0;
-    if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK)
+    if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid increase/decrease value");
+    }
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
