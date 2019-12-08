@@ -3,6 +3,7 @@
  * 
  * Compression algorithm based on a paper by Facebook, Inc. 
  * "Gorilla: A Fast, Scalable, In-Memory Time Series Database"
+ * Section 4.1 "Time series compression"
  * Link: https://www.vldb.org/pvldb/vol8/p1816-teller.pdf
  * 
  * Implementation by Ariel Shtul
