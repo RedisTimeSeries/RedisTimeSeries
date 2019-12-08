@@ -66,7 +66,7 @@ int ChunkAddSample(Chunk_t *chunk, Sample *sample) {
     ChunkGetSampleArray(regChunk)[regChunk->num_samples] = *sample;
     regChunk->num_samples++;
 
-    return CHUNK_OK;
+    return CR_OK;
 }
 
 ChunkIter_t *NewChunkIterator(Chunk_t *chunk) {
@@ -82,9 +82,9 @@ int ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
         iter->currentIndex++;
         Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
         memcpy(sample, internalSample, sizeof(Sample));
-        return CHUNK_OK;
+        return CR_OK;
     } else {
-        return CHUNK_END;
+        return CR_END;
     }
 }
 
