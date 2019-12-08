@@ -1,8 +1,14 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ * 
+ * Compression algorithm based on a paper by Facebook, Inc. 
+ * "Gorilla: A Fast, Scalable, In-Memory Time Series Database"
+ * Link: https://www.vldb.org/pvldb/vol8/p1816-teller.pdf
+ * 
+ * Implementation by Ariel Shtul
+ * 
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 
 #include <assert.h>
 
