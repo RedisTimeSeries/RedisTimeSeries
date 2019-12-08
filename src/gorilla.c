@@ -32,6 +32,16 @@ static u_int64_t clearBits(u_int64_t data, u_int64_t bits) {
     return data & ((1LL << bits) - 1);
 }
 
+/* 
+ * int2bin and bin2int functions mirror each other.
+ * int2bin is used to encode int64 into smaller representation to conserve space.
+ * bin2int is used to decode input bits into an iny64.
+ * Example 1: int2bin(7, 10) = 7. Bit representation 0000000111
+ *            bin2int(7, 10) = 7
+ * Example 2: int2bin(-7, 10) = 1017. Bit representation 1111111001
+ *            bin2int(1017, 10) = -7
+ */
+
 // Converts `x`, an int64, to binary representation with length `l`
 static u_int64_t int2bin(int64_t x, u_int8_t l) {
     u_int64_t negative = x < 0 ? 1 : 0;
