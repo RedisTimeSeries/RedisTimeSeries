@@ -17,12 +17,12 @@ Chunk_t *CChunk_NewChunk(u_int64_t size);
 void CChunk_FreeChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
-int CChunk_AddSample(Chunk_t *chunk, Sample *sample);
+ChunkResult CChunk_AddSample(Chunk_t *chunk, Sample *sample);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *CChunk_NewChunkIterator(Chunk_t *chunk);
 void CChunk_FreeIter(ChunkIter_t *iter);
-int CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
+ChunkResult CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 
 // Miscellaneous
 size_t CChunk_GetChunkSize(Chunk_t *chunk);

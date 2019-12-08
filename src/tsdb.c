@@ -15,12 +15,6 @@
 #include "indexer.h"
 #include "endianconv.h"
 
-enum chunkResults {
-  CC_OK = 0,    // RM_OK
-  CC_ERR = 1,   // RM_ERR
-  CC_END = 2  
-};
-
 static Series* lastDeletedSeries = NULL;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
@@ -215,7 +209,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     }
     Sample sample = {.timestamp = timestamp, .value = value};
     int ret = series->funcs->AddSample(series->lastChunk, &sample);
-    if (ret == CC_END) {
+    if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
@@ -280,7 +274,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             iterator->chunkIteratorInitialized = TRUE;
         }
 
-        if (funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CC_END) { // reached the end of the chunk
+        if (funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CR_END) { // reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }

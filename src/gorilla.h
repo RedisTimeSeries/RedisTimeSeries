@@ -50,13 +50,7 @@ typedef struct CChunk_Iterator {
   u_int8_t prevTrailing;
 } CChunk_Iterator;
 
-enum chunkResults {
-  CC_OK = 0,    // RM_OK
-  CC_ERR = 1,   // RM_ERR
-  CC_END = 2  
-};
-
-int CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
-int CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value);
+ChunkResult CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
+ChunkResult CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value);
 
 #endif

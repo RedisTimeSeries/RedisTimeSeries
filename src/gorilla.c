@@ -16,7 +16,7 @@
 
 // Ensures enough space is available otherwise, returns false 
 #define CHECKSPACE(chunk, x)    if (!isSpaceAvailable(chunk, x)) { \
-                                    return CC_ERR; }
+                                    return CR_ERR; }
 
 #define  LeadingZeros64(x)  __builtin_clzll(x)
 #define TrailingZeros64(x)  __builtin_ctzll(x)
@@ -95,7 +95,7 @@ static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
 }
 
 /***************************** APPEND ********************************/
-static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
+static ChunkResult appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
   union64bits doubleDelta;
 
   int64_t curDelta = timestamp - chunk->prevTimestamp;
@@ -128,10 +128,10 @@ static int appendTS(CompressedChunk *chunk, u_int64_t timestamp) {
   }
   chunk->prevTimestampDelta = curDelta;
   chunk->prevTimestamp = timestamp;
-  return CC_OK;
+  return CR_OK;
 }
 
-static int appendV(CompressedChunk *chunk, double value) {
+static ChunkResult appendV(CompressedChunk *chunk, double value) {
   union64bits val;
   val.d = value;
   u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
@@ -139,7 +139,7 @@ static int appendV(CompressedChunk *chunk, double value) {
   // CHECKSPACE already checked for 1 extra bit availability in appendTS
   if (xorWithPrevious == 0) {
     appendBits(chunk->data, &chunk->idx, 0, 1);
-    return CC_OK;   
+    return CR_OK;   
   }
   appendBits(chunk->data, &chunk->idx, 1, 1);
 
@@ -174,24 +174,24 @@ static int appendV(CompressedChunk *chunk, double value) {
     chunk->prevTrailing = trailing;
   }
   chunk->prevValue.d = value;
-  return CC_OK;
+  return CR_OK;
 }
 
-int CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value) {
+ChunkResult CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value) {
   if (chunk->count == 0) {
     chunk->baseValue.d   = chunk->prevValue.d = value;
     chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
     chunk->prevTimestampDelta = 0;
   } else {
-    if (appendTS(chunk, timestamp) != CC_OK) return CC_END;
-    if (appendV (chunk, value) != CC_OK) return CC_END;
+    if (appendTS(chunk, timestamp) != CR_OK) return CR_END;
+    if (appendV (chunk, value) != CR_OK) return CR_END;
   }
   chunk->count++;
-  return CC_OK;
+  return CR_OK;
 }
 
 /********************************** READ *********************************/
-static double readTS(CChunk_Iterator *iter) {
+static u_int64_t readTS(CChunk_Iterator *iter) {
   int64_t dd = 0;
   u_int64_t *idx = &iter->idx;
   u_int64_t *runner = iter->chunk->data;
@@ -244,7 +244,7 @@ static double readV(CChunk_Iterator *iter) {
   return iter->prevValue.d = rv.d;
 }
 
-int CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value) {
+ChunkResult CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value) {
   *timestamp = iter->prevTS;
   *value     = iter->prevValue.d;
 
@@ -252,8 +252,8 @@ int CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value) 
     iter->prevTS      = readTS(iter);
     iter->prevValue.d = readV (iter);
     iter->count++;
-    return CC_OK;
+    return CR_OK;
   } else {
-    return CC_END;
+    return CR_END;
   }
 }

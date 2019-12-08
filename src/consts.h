@@ -45,6 +45,13 @@ typedef enum {
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
 
+/* Chunk enum */
+typedef enum {
+  CR_OK = 0,    // RM_OK
+  CR_ERR = 1,   // RM_ERR
+  CR_END = 2  
+} ChunkResult;
+
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \

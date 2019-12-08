@@ -30,7 +30,7 @@ void CChunk_FreeChunk(Chunk_t *chunk) {
   free(chunk);
 }
 
-int CChunk_AddSample(Chunk_t *chunk, Sample *sample) {
+ChunkResult CChunk_AddSample(Chunk_t *chunk, Sample *sample) {
   return CChunk_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
 
@@ -80,6 +80,6 @@ void CChunk_FreeIter(ChunkIter_t *iter) {
   free(iter);
 }
 
-int CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample) {
+ChunkResult CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample) {
   return CChunk_ReadNext((CChunk_Iterator *)iter, &sample->timestamp, &sample->value);
 }
