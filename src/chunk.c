@@ -52,10 +52,10 @@ timestamp_t ChunkGetFirstTimestamp(Chunk_t *chunk) {
     return ChunkGetSample(chunk, 0)->timestamp;
 }
 
-int ChunkAddSample(Chunk_t *chunk, Sample *sample) {
+ChunkResult ChunkAddSample(Chunk_t *chunk, Sample *sample) {
     Chunk *regChunk = (Chunk *)chunk;
     if (IsChunkFull(regChunk)){
-        return CHUNK_END;
+        return CR_END;
     }
 
     if (ChunkNumOfSample(regChunk) == 0) {
@@ -76,7 +76,7 @@ ChunkIter_t *NewChunkIterator(Chunk_t *chunk) {
     return iter;
 }
 
-int ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
+ChunkResult ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = iterator;
     if (iter->currentIndex < iter->chunk->num_samples) {
         iter->currentIndex++;

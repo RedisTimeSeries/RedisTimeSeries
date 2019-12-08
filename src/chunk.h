@@ -31,12 +31,12 @@ void FreeChunk(Chunk_t *chunk);
 size_t GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success
-int ChunkAddSample(Chunk_t *chunk, Sample *sample);
+ChunkResult ChunkAddSample(Chunk_t *chunk, Sample *sample);
 u_int64_t ChunkNumOfSample(Chunk_t *chunk);
 timestamp_t ChunkGetLastTimestamp(Chunk_t *chunk);
 timestamp_t ChunkGetFirstTimestamp(Chunk_t *chunk);
 
 ChunkIter_t *NewChunkIterator(Chunk_t *chunk);
-int ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
+ChunkResult ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 
 #endif

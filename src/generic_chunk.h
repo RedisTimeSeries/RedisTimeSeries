@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <stdlib.h>         // malloc
 #include <stdio.h>          // printf
+#include "consts.h"
 
 typedef void Chunk_t;
 typedef void ChunkIter_t;
@@ -22,18 +23,14 @@ typedef struct Sample {
 #define CHUNK_REGULAR 0
 #define CHUNK_COMPRESSED 1
 
-#define CHUNK_OK 0
-#define CHUNK_ERR 1
-#define CHUNK_END 2
-
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void(*FreeChunk)(Chunk_t *chunk);
 
-    int(*AddSample)(Chunk_t *chunk, Sample *sample);
+    ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk);
-    int(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
+    ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
 
     size_t(*GetChunkSize)(Chunk_t *chunk);
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
