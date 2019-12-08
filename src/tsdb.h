@@ -10,8 +10,6 @@
 #include "compaction.h"
 #include "consts.h"
 #include "indexer.h"
-//#include "chunk.h"
-//#include "compressed_chunk.h"
 #include "generic_chunk.h"
 
 typedef struct CompactionRule {
@@ -26,11 +24,10 @@ typedef struct CompactionRule {
 
 typedef struct Series {
     RedisModuleDict* chunks;
-//    Chunk* lastChunk;
-//    CompressedChunk* lastChunk;
     Chunk_t *lastChunk;
     uint64_t retentionTime;
     short maxSamplesPerChunk;
+    short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
     double lastValue;
@@ -51,7 +48,8 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
+                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);

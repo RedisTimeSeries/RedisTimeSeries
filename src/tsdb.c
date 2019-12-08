@@ -24,7 +24,7 @@ enum chunkResults {
 static Series* lastDeletedSeries = NULL;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
-        short maxSamplesPerChunk)
+        short maxSamplesPerChunk, int uncompressed)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
@@ -37,8 +37,13 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->lastValue = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
-    newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
-//  newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
+    newSeries->options = 0;
+    if (uncompressed & SERIES_OPT_UNCOMPRESSED) {
+        newSeries->options |= SERIES_OPT_UNCOMPRESSED;
+        newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
+    } else {
+        newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
+    }
     Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
@@ -348,7 +353,9 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
         compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
         compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx, destKey, compactedLabels, compactedRuleLabelCount, rule->retentionSizeMillisec, TSGlobalConfig.maxSamplesPerChunk, &compactedSeries, &compactedKey);
+        CreateTsKey(ctx, destKey, compactedLabels, compactedRuleLabelCount, rule->retentionSizeMillisec,
+                TSGlobalConfig.maxSamplesPerChunk, TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+                &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;

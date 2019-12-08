@@ -42,6 +42,9 @@ typedef enum {
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
+/* Series struct options */
+#define SERIES_OPT_UNCOMPRESSED 0x1
+
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
