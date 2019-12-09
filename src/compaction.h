@@ -28,7 +28,6 @@
 typedef struct AggregationClass
 {
     void *(*createContext)();
-    void(*freeContext)(void *context);
     void(*appendValue)(void *context, double value);
     void(*resetContext)(void *context);
     void(*writeContext)(void *context, RedisModuleIO *io);
