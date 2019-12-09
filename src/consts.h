@@ -42,6 +42,9 @@ typedef enum {
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
+/* Series struct options */
+#define SERIES_OPT_UNCOMPRESSED 0x1
+
 /* Chunk enum */
 typedef enum {
   CR_OK = 0,    // RM_OK
