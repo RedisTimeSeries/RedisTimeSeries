@@ -171,7 +171,70 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = self._get_ts_info(r, 'tester')
             assert expected_result == actual_result
 
+    def test_create_params(self):
+        with self.redis() as r:
+            # test string instead of value
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE invalid RETENTION retention')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE invalid CHUNK_SIZE chunk_size')
 
+            r.execute_command('TS.CREATE a')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE a') # filter exists
+
+    def test_errors(self):
+        with self.redis() as r:
+            # test wrong arity
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ALTER')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ADD')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MADD')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.INCRBY')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.DECRBY')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.DELETERULE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.QUERYINDEX')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.GET')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MGET')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MRANGE')
+
+            # different type key
+            r.execute_command('SET foo bar')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.GET foo * 5') # too many args
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.GET foo') # wrong type
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.GET bar') # does not exist
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.INFO foo') # wrong type
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.INFO bar') # does not exist
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE foo 0 -1')           
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ALTER foo')
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ADD values timestamp 5')   # string
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ADD values * value')       # string
+                
     def test_rdb(self):
         start_ts = 1511885909L
         samples_count = 1500
@@ -320,6 +383,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             # negative test
             assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
             assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MGET filter')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MGET filter k+1')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.MGET retlif k!=5')
 
     def test_range_query(self):
         start_ts = 1488823384L
@@ -331,6 +400,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
+        
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE tester string -1')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE tester 0 string')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE nonexist 0 -1')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE tester 0 -1 count number')
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
@@ -505,6 +583,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.DELETERULE', 'tester', 'non_existent')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.DELETERULE', 'non_existent', 'tester')
 
             assert len(self._get_ts_info(r, 'tester')['rules']) == 4
             assert r.execute_command('TS.DELETERULE', 'tester', 'tester_agg_avg_30')
@@ -850,6 +930,21 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
             assert 18 == len(actual_result[0][2]) #just checking that agg count before count works
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string', 'FILTER', 'generation=x')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER', 'generation=x')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange - + FILTER') # missing args
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange - + RETLIF') # no filter word
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
+
     def test_range_count(self):
         start_ts = 1511885908L
         samples_count = 50
@@ -977,8 +1072,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info[19][0][1] == BELOW_32BIT_LIMIT            
             assert info[19][1][1] == ABOVE_32BIT_LIMIT
 
-########## Test init args ##########
 
+
+########## Test init args ##########
 def ModuleArgsTestCase(good, args):
     class _Class(ModuleTestCase(REDISTIMESERIES, module_args=args)):
         def test(self):
