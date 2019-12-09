@@ -139,7 +139,7 @@ void FreeSeries(void *value) {
 void FreeCompactionRule(void *value) {
 	CompactionRule *rule = (CompactionRule *) value;
 	RedisModule_FreeString(NULL, rule->destKey);
-	free(rule->aggContext);
+	((AggregationClass *)rule->aggClass)->freeContext(rule->aggContext);
 	free(rule);
 }
 
