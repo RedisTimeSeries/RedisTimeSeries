@@ -213,7 +213,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 ////    int ret = ChunkAddSample(series->lastChunk, sample);
     int ret = CChunk_AddSample(series->lastChunk, sample);
 ////    if (ret == 0) {
-    if (ret == CC_END) {
+    if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
@@ -283,7 +283,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
         }
 
 ////        if (ChunkIteratorGetNext(&iterator->chunkIterator, &internalSample) == 0) { // reached the end of the chunk
-        if (CChunk_ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CC_END) { // reached the end of the chunk
+        if (CChunk_ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CR_END) { // reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }

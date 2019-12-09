@@ -42,6 +42,13 @@ typedef enum {
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
+/* Chunk enum */
+typedef enum {
+  CR_OK = 0,    // RM_OK
+  CR_ERR = 1,   // RM_ERR
+  CR_END = 2  
+} ChunkResult;
+
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
