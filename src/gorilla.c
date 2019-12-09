@@ -165,9 +165,21 @@ static ChunkResult appendTS(CompressedChunk *chunk, timestamp_t timestamp) {
     
     union64bits doubleDelta;
     doubleDelta.i = curDelta - chunk->prevTimestampDelta;
-
-    // check if enough size exist, if not return false
-
+/* 
+ * Before any insertion the code `CHECKSPACE` ensures there is enough space to
+ * encode timestamp and one additional bit which the minimum to encode the value.
+ * This is why we have `+ 1` in `CHECKSPACE`.
+ * 
+ * If doubleDelta == 0, 1 bit of value 0 is inserted.
+ * 
+ * Else, `Bin_InRange` checks for the minimal number of bits required to represent
+ * `doubleDelta`, the delta of deltas between current and previous timestamps.
+ * Then two values are being inserted. 
+   * The first value is, encoding for the lowest number of bits for which
+     `Bin_InRange` returns `true`.
+   * The second value is a compressed representation of the value with the `length`
+     encoded by the first value. Compression is done using `int2bin`.
+ */
     u_int64_t *bins = chunk->data;
     u_int64_t *bit = &chunk->idx;
     if (doubleDelta.i == 0) {
@@ -207,8 +219,8 @@ static ChunkResult appendV(CompressedChunk *chunk, double value) {
     binary_t *bins = chunk->data;
     globalbit_t *bit = &chunk->idx;
     
-    // Checked for 1 bit in appendTS
-    // CHECKSPACE(chunk, 1);
+    // CHECKSPACE already checked for 1 extra bit availability in appendTS.
+    // Current value is identical to previous value. 1 bit used to encode.
     if (xorWithPrevious == 0) {
         appendBits(bins, bit, 0, 1);
         return CR_OK;   
@@ -230,7 +242,15 @@ static ChunkResult appendV(CompressedChunk *chunk, double value) {
     u_int32_t expectedSize = DOUBLE_LEADING + DOUBLE_BLOCK_SIZE + blockSize;
     assert(prevLeading + prevTrailing <= BINW);
     localbit_t prevBlockInfoSize = BINW - prevLeading - prevTrailing;
-
+/*
+ * First bit encodes whether previous block parameters can be used since
+ * encoding block-size requires 5 + 6 bits.
+ * 
+ * If previous block size is used and the block itself is being appended.
+ * 
+ * Else, number of leading zeros in inserted followed by trailing zeros.
+ * Then the value is the block is being appended. 
+ */
     if (leading >= chunk->prevLeading && 
         trailing >= chunk->prevTrailing &&
         expectedSize > prevBlockInfoSize) 
@@ -267,6 +287,13 @@ ChunkResult CChunk_Append(CompressedChunk *chunk, timestamp_t timestamp, double 
 }
 
 /********************************** READ *********************************/
+/* 
+ * This function decodes timestamps inserted by appendTS.
+ * 
+ * It checks for an OFF bit to decode the doubleDelta with the right size,
+ * then decodes the value back to an int64 and calculate the original value
+ * using `prevTS` and `prevDelta`.
+ */ 
 static u_int64_t readTS(CChunk_Iterator *iter) {
     binary_t *bins = iter->chunk->data;
     globalbit_t *bit = &iter->idx;
@@ -292,6 +319,16 @@ static u_int64_t readTS(CChunk_Iterator *iter) {
     return iter->prevTS = iter->prevTS + iter->prevDelta;  
 }
 
+/* 
+ * This function decodes values inserted by appendV.
+ * 
+ * If first bit if OFF, the value hasn't changed from previous sample.
+ * 
+ * If Next bit is OFF, previous `block size` can be used, otherwise, the
+ * next 5 then 6 bits maintain number of leading and trailing zeros.
+ * 
+ * Finally, the compressed representation of the value is decoded.
+ */ 
 static double readV(CChunk_Iterator *iter) {
     binary_t xorValue;
     union64bits rv;
