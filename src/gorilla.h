@@ -11,6 +11,11 @@
 #include <stdbool.h>        // bool
 #include "consts.h"
 
+typedef u_int64_t timestamp_t;
+typedef u_int64_t binary_t;
+typedef u_int64_t globalbit_t;
+typedef u_int8_t localbit_t;
+
 typedef union {
     double d;
     int64_t i;
