@@ -978,6 +978,36 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info[19][0][1] == BELOW_32BIT_LIMIT            
             assert info[19][1][1] == ABOVE_32BIT_LIMIT
 
+    def test_uncompressed(self):
+        with self.redis() as r:
+            # test simple commands
+            r.execute_command('ts.create not_compressed UNCOMPRESSED')
+            assert 1 == r.execute_command('ts.add not_compressed 1 3.5')
+            assert 3.5 == float(r.execute_command('ts.get not_compressed')[1])
+            assert 2 == r.execute_command('ts.add not_compressed 2 4.5')
+            assert 3 == r.execute_command('ts.add not_compressed 3 5.5')
+            assert 5.5 == float(r.execute_command('ts.get not_compressed')[1])
+            assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
+                        r.execute_command('ts.range not_compressed 0 -1')
+            assert ['totalSamples', 3L, 'memoryUsage', 4136L, 'firstTimestamp', 1L,             \
+                    'lastTimestamp', 3L, 'retentionTime', 0L, 'chunkCount', 1L,                 \
+                    'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []]   \
+                                        == r.execute_command('ts.info not_compressed')
+
+            # rdb load
+            data = r.execute_command('dump', 'not_compressed')
+
+        with self.redis() as r:
+            r.execute_command('RESTORE', 'not_compressed', 0, data)
+            assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
+                        r.execute_command('ts.range not_compressed 0 -1')
+            assert ['totalSamples', 3L, 'memoryUsage', 4136L, 'firstTimestamp', 1L,             \
+                    'lastTimestamp', 3L, 'retentionTime', 0L, 'chunkCount', 1L,                 \
+                    'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []]   \
+                                        == r.execute_command('ts.info not_compressed')
+            # test deletion
+            assert r.delete('not_compressed')
+
 ########## Test init args ##########
 
 def ModuleArgsTestCase(good, args):

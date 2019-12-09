@@ -5,7 +5,7 @@
 
 static ChunkFuncs regChunk = {
     .NewChunk = NewChunk,
-    .FreeChunk = free,
+    .FreeChunk = FreeChunk,
 
     .AddSample = ChunkAddSample,
 

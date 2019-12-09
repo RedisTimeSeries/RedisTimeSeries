@@ -21,7 +21,6 @@ ChunkResult CChunk_AddSample(Chunk_t *chunk, Sample *sample);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *CChunk_NewChunkIterator(Chunk_t *chunk);
-void CChunk_FreeIter(ChunkIter_t *iter);
 ChunkResult CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 
 // Miscellaneous

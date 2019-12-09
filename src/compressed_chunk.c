@@ -54,9 +54,11 @@ size_t CChunk_GetChunkSize(Chunk_t *chunk) {
 /************************
  *  Iterator functions  *
  ************************/ 
+// LCOV_EXCL_START - used for debug
 u_int64_t getIterIdx(ChunkIter_t *iter) {
   return ((CChunk_Iterator *)iter)->idx;
 }
+// LCOV_EXCL_STOP
 
 ChunkIter_t *CChunk_NewChunkIterator(Chunk_t *chunk) {
   CompressedChunk *compChunk = chunk;
@@ -74,10 +76,6 @@ ChunkIter_t *CChunk_NewChunkIterator(Chunk_t *chunk) {
   iter->prevTrailing = 32;
 
   return (ChunkIter_t *)iter;
-}
-
-void CChunk_FreeIter(ChunkIter_t *iter) {
-  free(iter);
 }
 
 ChunkResult CChunk_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample) {
