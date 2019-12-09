@@ -364,17 +364,6 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     return rule;
 }
 
-int SeriesHasRule(Series *series, RedisModuleString *destKey) {
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        if (RMUtil_StringEquals(rule->destKey, destKey)) {
-            return TRUE;
-        }
-        rule = rule->nextRule;
-    }
-    return FALSE;
-}
-
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
 	CompactionRule *rule = series->rules;
 	CompactionRule *prev_rule = NULL;
