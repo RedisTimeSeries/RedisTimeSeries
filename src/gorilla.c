@@ -159,6 +159,23 @@ static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
 }
 
 /***************************** APPEND ********************************/
+
+/* 
+ * Before any insertion the code `CHECKSPACE` ensures there is enough space to
+ * encode timestamp and one additional bit which the minimum to encode the value.
+ * This is why we have `+ 1` in `CHECKSPACE`.
+ * 
+ * If doubleDelta == 0, 1 bit of value 0 is inserted.
+ * 
+ * Else, `Bin_InRange` checks for the minimal number of bits required to represent
+ * `doubleDelta`, the delta of deltas between current and previous timestamps.
+ * Then two values are being inserted. 
+   * The first value is, encoding for the lowest number of bits for which
+     `Bin_InRange` returns `true`.
+   * The second value is a compressed representation of the value with the `length`
+     encoded by the first value. Compression is done using `int2bin`.
+ */
+
 static ChunkResult appendTS(CompressedChunk *chunk, timestamp_t timestamp) {
     assert(timestamp >= chunk->prevTimestamp);
     timestamp_t curDelta = timestamp - chunk->prevTimestamp;
