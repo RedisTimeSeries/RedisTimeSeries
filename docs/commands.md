@@ -7,7 +7,7 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [LABELS field value..]
+TS.CREATE key [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
 ```
 
 * key - Key name for timeseries
@@ -18,6 +18,9 @@ Optional args:
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
+ * UNCOMPRESSED - since version 1.4, both timestamps and values are compressed by default.
+   Adding this flag will keep data in an uncompressed form. Compression not only saves
+   memory but usually improve performance due to lower number of memory accesses.  
 
 #### Create Example
 
@@ -53,7 +56,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new value to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [LABELS field value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
 ```
 
 * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
@@ -65,6 +68,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
+ * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
@@ -121,13 +125,13 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 Increment the latest value.
 
 ```sql
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -142,6 +146,7 @@ Optional args:
   * Default: The global retention secs configuration of the database (by default, `0`)
   * When set to 0, the series is not trimmed at all
 * labels - Set of key-value pairs that represent metadata labels of the key
+* UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
