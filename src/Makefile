@@ -56,6 +56,11 @@ else
 CC_FLAGS += -O3
 endif
 
+ifeq ($(COVERAGE),1)
+CC_FLAGS += -fprofile-arcs -ftest-coverage
+LD_FLAGS += -fprofile-arcs
+endif
+
 _SOURCES=\
 	chunk.c \
 	compaction.c \
@@ -174,6 +179,16 @@ uninstall:
 
 docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
+
+coverage:
+	DEBUG=1 COVERAGE=1 make tests
+	mkdir -p tmp/lcov
+	cp ../bin/linux-x64-debug/src/*.gc* ./
+	lcov -d . -c -o tmp/lcov/coverage.info
+	lcov -l tmp/lcov/coverage.info
+	rm ./*.gc*
+	genhtml --legend -o tmp/lcov/report tmp/lcov/coverage.info > /dev/null 2>&1
+	CODECOV_TOKEN="419906e8-e527-4ed1-a782-bfac1f07a51b" bash <(curl -s https://codecov.io/bash) -f tmp/lcov/coverage.info
 
 #----------------------------------------------------------------------------------------------
 
