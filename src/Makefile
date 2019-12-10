@@ -56,6 +56,9 @@ else
 CC_FLAGS += -O3
 endif
 
+CC_FLAGS += $(CC_FLAGS.coverage)
+LD_FLAGS += $(LD_FLAGS.coverage)
+
 _SOURCES=\
 	chunk.c \
 	compaction.c \
@@ -115,8 +118,24 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 TEST_REPORT_DIR ?= $(PWD)
 
 tests: $(TARGET)
-	$(SHOW)cd ../tests; \
+ifeq ($(COV),1)
+	$(COVERAGE_RESET)
+endif
+	$(SHOW)set -e; \
+	cd ../tests; \
 	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
+ifeq ($(COV),1)
+	$(COVERAGE_COLLECT_REPORT)
+endif
+
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+
+unittests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \
@@ -135,10 +154,15 @@ gdb: $(TARGET)
 cgdb: $(TARGET)
 	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
+#----------------------------------------------------------------------------------------------
+
 VALGRIND_ARGS=\
 	--leak-check=full \
 	--show-leak-kinds=all \
 	-v redis-server
+
+valgrind: $(TARGET)
+	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 CALLGRIND_ARGS=\
 	--tool=callgrind \
@@ -149,19 +173,8 @@ CALLGRIND_ARGS=\
 	--instr-atstart=yes \
 	-v redis-server --protected-mode no --save "" --appendonly no
 
-
-valgrind: $(TARGET)
-	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) --dir /tmp
-
 callgrind: $(TARGET)
 	$(SHOW)valgrind $(CALLGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
-
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
-
-unittests: $(UNITTESTS_RUNNER)
-	@echo Running unit tests...
-	$(SHOW)$<
 
 #----------------------------------------------------------------------------------------------
 

@@ -17,7 +17,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.setup_pip()
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
-        
+
         self.install("git jq curl")
 
     def debian_compat(self):
