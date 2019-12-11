@@ -95,7 +95,7 @@ jobs:
             make setup
             make build COV=1 SHOW=1
             make test COV=1
-            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+            make cov-upload
       - store_artifacts:
           path: coverage
           destination: coverage
