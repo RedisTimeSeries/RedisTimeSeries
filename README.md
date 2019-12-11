@@ -4,6 +4,7 @@
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/RedisTimeSeries/RedisTimeSeries.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/RedisTimeSeries/RedisTimeSeries/context:cpp)
 [![Mailing List](https://img.shields.io/badge/Mailing%20List-RedisTimeSeries-blue)](https://groups.google.com/forum/#!forum/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.

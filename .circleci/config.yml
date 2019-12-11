@@ -83,6 +83,23 @@ jobs:
             sudo make -C build/docker publish
           no_output_timeout: 20m
 
+  coverage:
+    docker:
+      - image: redisfab/rmbuilder:x64-buster
+    steps:
+      - checkout
+      - run:
+          name: Build & Test
+          command: |
+            make fetch
+            mkae setup
+            make build COV=1 SHOW=1
+            make test COV=1
+            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+      - store_artifacts:
+          path: coverage
+          destination: coverage
+
   deploy_package:
     parameters:
       package:
@@ -141,6 +158,12 @@ workflows:
               only: /.*/
             branches:
               only: master
+      - coverage:
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              only: /.*/ 
       - deploy_package:
           name: deploy_branch
           package: branch
