@@ -1,5 +1,5 @@
 
-.PHONY: all setup fetch build test pack
+.PHONY: all setup fetch build clean test pack
 
 all: fetch build
 
@@ -11,13 +11,16 @@ fetch:
 	-@git submodule update --init --recursive
 
 build:
-	@make -C src all -j
+	@$(MAKE) -C src all -j
+
+clean:
+	@$(MAKE) -C src clean
 
 test:
-	@make -C src tests
+	@$(MAKE) -C src tests
 
 pack:
-	@make -C src package
+	@$(MAKE) -C src package
 
 # deploy:
 #	@make -C src deploy
