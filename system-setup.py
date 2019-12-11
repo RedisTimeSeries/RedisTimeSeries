@@ -17,7 +17,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.setup_pip()
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
-        
+
         self.install("git jq curl")
 
     def debian_compat(self):
@@ -36,6 +36,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("redis")
 
     def common_last(self):
+        self.install("lcov")
         if not self.has_command("ramp"):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
         self.pip_install("-r tests/requirements.txt")

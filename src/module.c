@@ -534,17 +534,20 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != AGG_NONE && arraylen != maxResults) {
-        // reply last bucket of data
-        ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-        arraylen++;
+    if (aggObject != AGG_NONE) {
+        if (arraylen != maxResults) {
+            // reply last bucket of data
+            ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+            arraylen++;
+        }
+        aggObject->freeContext(context);
     }
 
     RedisModule_ReplySetArrayLength(ctx,arraylen);
     return REDISMODULE_OK;
 }
 
-void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
+static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
     timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
 
     if (rule->startCurrentTimeBucket == -1LL) {

@@ -212,6 +212,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.RANGE')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.MRANGE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.INFO')
 
             # different type key
             r.execute_command('SET foo bar')
@@ -944,6 +946,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
 
     def test_range_count(self):
         start_ts = 1511885908L
