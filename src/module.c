@@ -574,24 +574,22 @@ static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_time
 
 static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t timestamp, double value) {
     int retval = SeriesAddSample(series, timestamp, value);
-    int result = 0;
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
         RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
-        result = REDISMODULE_ERR;
+        return REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error");
-        result = REDISMODULE_ERR;
-    } else {
-        // handle compaction rules
-        CompactionRule *rule = series->rules;
-        while (rule != NULL) {
-            handleCompaction(ctx, rule, timestamp, value);
-            rule = rule->nextRule;
-        }
-        RedisModule_ReplyWithLongLong(ctx, timestamp);
-        result = REDISMODULE_OK;
+        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
+        return REDISMODULE_ERR;
     }
-    return result;
+
+    // handle compaction rules
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        handleCompaction(ctx, rule, timestamp, value);
+        rule = rule->nextRule;
+    }
+    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    return REDISMODULE_OK;
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
