@@ -1008,6 +1008,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             # test deletion
             assert r.delete('not_compressed')
 
+    
+    def test_trim(self):
+        with self.redis() as r:
+            samples = 2000
+            r.execute_command('ts.create trim_me CHUNK_SIZE 64 RETENTION 10')
+            r.execute_command('ts.create dont_trim_me CHUNK_SIZE 64')
+            for i in range(samples):
+                r.execute_command('ts.add trim_me', i, i * 1.1)
+                r.execute_command('ts.add dont_trim_me', i, i * 1.1)
+                
+            assert 2 == r.execute_command('ts.info trim_me')[11]
+            assert 13 == r.execute_command('ts.info dont_trim_me')[11]
+
 ########## Test init args ##########
 
 def ModuleArgsTestCase(good, args):
