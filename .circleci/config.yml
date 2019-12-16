@@ -204,4 +204,4 @@ workflows:
                only:
                  - master
     jobs:
-      - macos
+      - build-macos
