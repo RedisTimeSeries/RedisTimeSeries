@@ -76,10 +76,16 @@
  * Next, (64 - `leading` - `trailing`) bits are read and shifted left (<<) by
  * `leading` and the function returns this number^prevresult (XOR) and returned.
  * 
- * 
- * 
- * 
- * 
+ ********************************************************************************* 
+ *      final               *   binary           * t  * l  * p * 0 * value * prev*
+ *********************************************************************************                                                                          
+ *                        0 *                    *    *    *   * 0 *   2.2 * 2.2 *
+ * (using prev params)  101 *                  1 *    *    * 0 * 1 *     2 *   3 *
+ *        1 110011 01100 11 *                  1 * 51 * 12 * 1 * 1 *     2 *   3 *
+ *    0x0024b33333333333 01 * 0x0024b33333333333 *    *    * 0 * 1 *  18.7 * 5.5 * 
+ * 0x0024b33333333333 01011 * 0x0024b33333333333 *  0 * 10 * 1 * 1 *  18.7 * 5.5 * 
+ *********************************************************************************
+ * t=trailing, l=leading, p=use of previous params, 0=xor equal zero 
  */
 
 #include <assert.h>
