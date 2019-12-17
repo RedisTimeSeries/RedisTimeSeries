@@ -1,6 +1,10 @@
 /*
  * Copyright 2018-2019 Redis Labs Ltd. and Contributors
  * 
+ * This file is available under the Redis Labs Source Available License Agreement
+ * 
+ ******************************************************************************
+ *
  * Compression algorithm based on a paper by Facebook, Inc. 
  * "Gorilla: A Fast, Scalable, In-Memory Time Series Database"
  * Section 4.1 "Time series compression"
@@ -8,7 +12,74 @@
  * 
  * Implementation by Ariel Shtul
  * 
- * This file is available under the Redis Labs Source Available License Agreement
+ ******************************************************************************
+ * 
+ * DoubleDelta compression algorithm is a combinattion of two separete
+ * algorithms : 
+ * * Compression of Delta of Deltas between integers
+ * * Compression of doubles.
+ * 
+ ******************************************************************************
+ * Compression of Delta of Deltas (DoubleDelta) between integers
+ * 
+ * The DoubleDelta value is calculated using the stored values of the previous
+ * value and the previous delta.
+ * 
+ * Writing:
+ * If DoubleDelta equal 0, one bit is set to 0 and we are done.
+ * Else, the are preset buckets of size 7, 10, 13 and 16 bits. We test for the
+ * minimal bucket which can hold DoubleDelta. Since DoubleDelta can be negative,
+ * the ranges are [-2^(size - 1), 2^(size - 1) - 1]. For each `size` of bucket
+ * we set one bit to 1 and an additional bit to 0. We will then use the next 13
+ * bits to store the value. If DoubleDelta does not fit in any of the buckets,
+ * we will set five bits to 1 and use the following 64 bits.
+ * Example, 999 fits at the bucket-size of 13 and therefore we will use four
+ * bits and set them to `0111`. Then set the following 13 bits to
+ * `0001111100111`. Setting total of 17 bits to '00011111001110111'.
+ * 
+ * Reading:
+ * The reverse process, if the first bit is set to 0, the double delta is 0 and
+ * we return lastValue + lastDelta.
+ * Else, we count consecutive bits set to 1 up to 5 and will use the appropriate
+ * `size` of bucket to read the value (7, 10, 13, 16, 64). For example, 
+ * `00011111001110111` has three consecutive bits set to 1 and therefore the 
+ * bucket-size is 13. The next 13 bits are decoded into DoubleDelta. The
+ * function returns DoubleDelta + lastDelta + lastValue.
+ ************************************************************************************
+ *           final          *       binary       *  bits *      range     * example *
+ ************************************************************************************
+ *                        0 *                  0 *       *                *       0 *
+ *                000010101 *            0000101 *    01 *       [-64,63] *       5 *
+ *            1111100111011 *         1111100111 *   011 *     [-512,511] *    -487 *
+ *        11000010001000111 *      1100001000100 *  0111 *   [-4096,4095] *   -1980 *
+ *    000101100110110001111 *   0001011001101100 * 01111 * [-32768,32767] *    5740 * 
+ * 0x00000000000186A0 11111 * 0x00000000000186A0 * 11111 *  [Min64,Max64] *  100000 *
+ ************************************************************************************
+ * Compression of (XOR of) doubles
+ * 
+ * Writing:
+ * A XOR value is calculated using last double value.
+ * If XOR equal 0, one bit is set to 0 and we are done.
+ * Else, we calculate the number of leading and trailing 0s (MASK).
+ * For optimization, if using the last value's MASK will overall save storage
+ * space. If it does, one bit is set to 0 else, one bit is set to 1, the next 5
+ * bits hold the number of leading 0's and the following 6 bits hold the number
+ * of trailing 0s.
+ * At last, XOR is shifted to the right(>>) by `leading` bit and is store in 
+ * (64 - leading - trailing) bits.
+ * 
+ * Reading:
+ * The reverse process, if the first bit is set to 0, lastValue is returned.
+ * Else, if the following bit is set to 0, last `leading` and `trailing` are
+ * read, otherwise, the 5 then 6 bits are read for `leading` and `trailing`
+ * respectively.
+ * Next, (64 - `leading` - `trailing`) bits are read and shifted left (<<) by
+ * `leading` and the function returns this number^prevresult (XOR) and returned.
+ * 
+ * 
+ * 
+ * 
+ * 
  */
 
 #include <assert.h>
