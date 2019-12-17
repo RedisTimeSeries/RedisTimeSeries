@@ -18,7 +18,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     uint64_t retentionTime = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
 
-    uint64_t options = 0;
+    short options = 0;
     if (encver >= TS_UNCOMPRESSED_VER) {
         options = RedisModule_LoadUnsigned(io);
     } else {

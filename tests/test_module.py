@@ -1021,6 +1021,20 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert 2 == r.execute_command('ts.info trim_me')[11]
             assert 13 == r.execute_command('ts.info dont_trim_me')[11]
 
+    def test_empty(self):
+        with self.redis() as r:
+            r.execute_command('ts.create empty')
+            info = ['totalSamples', 0L, 'memoryUsage', 4184L, 'firstTimestamp', 0L, 'lastTimestamp', 0L, 'retentionTime', 0L,
+                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
+            assert info == r.execute_command('ts.info empty')
+            assert [] == r.execute_command('TS.range empty 0 -1')
+
+            r.execute_command('ts.create empty_uncompressed uncompressed')
+            info = ['totalSamples', 0L, 'memoryUsage', 4136L, 'firstTimestamp', -1L, 'lastTimestamp', 0L, 'retentionTime', 0L,
+                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
+            assert info == r.execute_command('ts.info empty_uncompressed')
+            assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
+
 ########## Test init args ##########
 
 def ModuleArgsTestCase(good, args):

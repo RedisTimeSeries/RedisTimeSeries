@@ -213,8 +213,6 @@ static int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int
 static timestamp_t getSeriesFirstTimestamp(Series *series) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     RedisModule_DictNextC(iter, NULL, (void*)&currentChunk);
     uint64_t firstTimestamp = series->funcs->GetFirstTimestamp(currentChunk);
     RedisModule_DictIteratorStop(iter);
@@ -225,8 +223,6 @@ static uint64_t getTotalSample(Series *series) {
     uint64_t total = 0;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
-//    Chunk *currentChunk;
-//    CompressedChunk *currentChunk;
     while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
         total += series->funcs->GetNumOfSample(currentChunk);
     }

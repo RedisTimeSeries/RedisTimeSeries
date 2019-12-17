@@ -260,7 +260,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
                 iterator->currentChunk = NULL;
             }
             iterator->chunkIteratorInitialized = FALSE;
-            free(iterator->chunkIterator);
+            funcs->FreeChunkIterator(iterator->chunkIterator);
             continue;
         }
         else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
