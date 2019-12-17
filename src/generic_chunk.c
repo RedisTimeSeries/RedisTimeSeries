@@ -2,6 +2,9 @@
 #include "chunk.h"
 #include "compressed_chunk.h"
 
+void FreeChunkIterator(ChunkIter_t *iter) {
+  free(iter);
+}
 
 static ChunkFuncs regChunk = {
     .NewChunk = NewChunk,
@@ -10,6 +13,7 @@ static ChunkFuncs regChunk = {
     .AddSample = ChunkAddSample,
 
     .NewChunkIterator = NewChunkIterator,
+    .FreeChunkIterator = FreeChunkIterator,
     .ChunkIteratorGetNext = ChunkIteratorGetNext,
 
     .GetChunkSize = GetChunkSize,
@@ -23,8 +27,9 @@ static ChunkFuncs comprChunk = {
     .FreeChunk = CChunk_FreeChunk,
 
     .AddSample = CChunk_AddSample,
-
+    .FreeChunkIterator = FreeChunkIterator,
     .NewChunkIterator = CChunk_NewChunkIterator,
+
     .ChunkIteratorGetNext = CChunk_ChunkIteratorGetNext,
 
     .GetChunkSize = CChunk_GetChunkSize,

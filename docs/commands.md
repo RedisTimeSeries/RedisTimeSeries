@@ -18,7 +18,7 @@ Optional args:
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * labels - Set of key-value pairs that represent metadata labels of the key
- * UNCOMPRESSED - since version 1.4, both timestamps and values are compressed by default.
+ * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.  
 
