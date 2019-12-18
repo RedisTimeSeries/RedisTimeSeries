@@ -257,8 +257,8 @@ static ChunkResult appendTS(CompressedChunk *chunk, timestamp_t timestamp) {
    * The second value is a compressed representation of the value with the `length`
      encoded by the first value. Compression is done using `int2bin`.
  */
-    u_int64_t *bins = chunk->data;
-    u_int64_t *bit = &chunk->idx;
+    binary_t *bins = chunk->data;
+    globalbit_t *bit = &chunk->idx;
     if (doubleDelta.i == 0) {
         CHECKSPACE(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
         appendBits(bins, bit, 0x00, 1);
