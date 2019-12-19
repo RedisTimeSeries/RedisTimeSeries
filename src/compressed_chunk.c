@@ -9,6 +9,7 @@
 #include <stdlib.h>         // malloc
 #include <stdio.h>          // printf
 
+#include "rmutil/alloc.h"
 #include "compressed_chunk.h"
 
 /*********************

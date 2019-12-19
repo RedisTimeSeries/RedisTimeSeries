@@ -239,12 +239,14 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
         RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
     }
     iter.chunkIteratorInitialized = FALSE;
+    iter.chunkIterator = NULL;
     iter.minTimestamp = minTimestamp;
     iter.maxTimestamp = maxTimestamp;
     return iter;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
+    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
@@ -260,7 +262,6 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
                 iterator->currentChunk = NULL;
             }
             iterator->chunkIteratorInitialized = FALSE;
-            funcs->FreeChunkIterator(iterator->chunkIterator);
             continue;
         }
         else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
@@ -270,6 +271,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
 
         if (!iterator->chunkIteratorInitialized) 
         {
+            funcs->FreeChunkIterator(iterator->chunkIterator);
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
             iterator->chunkIteratorInitialized = TRUE;
         }

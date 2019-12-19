@@ -1,6 +1,7 @@
 #include "generic_chunk.h"
 #include "chunk.h"
 #include "compressed_chunk.h"
+#include "rmutil/alloc.h"
 
 void FreeChunkIterator(ChunkIter_t *iter) {
   free(iter);
@@ -27,9 +28,9 @@ static ChunkFuncs comprChunk = {
     .FreeChunk = CChunk_FreeChunk,
 
     .AddSample = CChunk_AddSample,
-    .FreeChunkIterator = FreeChunkIterator,
-    .NewChunkIterator = CChunk_NewChunkIterator,
 
+    .NewChunkIterator = CChunk_NewChunkIterator,
+    .FreeChunkIterator = FreeChunkIterator,
     .ChunkIteratorGetNext = CChunk_ChunkIteratorGetNext,
 
     .GetChunkSize = CChunk_GetChunkSize,
