@@ -142,16 +142,16 @@ static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
  */
  
 // Converts `x`, an int64, to binary representation with length `l` bits
+// The commented out code is the full implementation, left for readability.
+// Final code is an optimization.
 static binary_t int2bin(int64_t x, u_int8_t l) {
-#if 1
+/*  binary_t bin = LSB(x, l - 1);
+ *  if (x >= 0) return bin;
+ *  binary_t sign = 1 << (l - 1);
+ *  return bin | sign;*/
+
     binary_t bin = LSB(x, l);
 	return bin;
-#else
-    binary_t bin = LSB(x, l - 1);
-    if (x >= 0) return bin;
-    binary_t sign = 1 << (l - 1);
-    return bin | sign;
-#endif
 }
 
 // Converts `bin`, a binary of length `l` bits, into an int64
