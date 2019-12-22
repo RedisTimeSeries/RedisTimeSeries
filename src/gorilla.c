@@ -100,9 +100,7 @@
 #define DOUBLE_BLOCK_ADJUST 1
 
 #define CHECKSPACE(chunk, x) \
-    do { \
-        if (!isSpaceAvailable((chunk), (x))) return CR_ERR; \
-    } while (0)
+        if (!isSpaceAvailable((chunk), (x))) return CR_ERR;
 
 #define LeadingZeros64(x)   __builtin_clzll(x)
 #define TrailingZeros64(x)  __builtin_ctzll(x)
