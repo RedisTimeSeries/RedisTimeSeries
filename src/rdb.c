@@ -6,18 +6,25 @@
 #include <string.h>
 #include "rmutil/alloc.h"
 #include "rdb.h"
-#include "chunk.h"
 #include "consts.h"
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
-    if (encver != TS_ENC_VER) {
+    if (encver != TS_ENC_VER && encver != TS_UNCOMPRESSED_VER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
     RedisModuleString *keyName = RedisModule_LoadString(io);
     uint64_t retentionTime = RedisModule_LoadUnsigned(io);
     uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+
+    short options = 0;
+    if (encver >= TS_UNCOMPRESSED_VER) {
+        options = RedisModule_LoadUnsigned(io);
+    } else {
+        options |= SERIES_OPT_UNCOMPRESSED;
+    }
+
     uint64_t labelsCount = RedisModule_LoadUnsigned(io);
     Label *labels = malloc(sizeof(Label) * labelsCount);
     for (int i=0; i<labelsCount; i++) {
@@ -27,7 +34,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
-    Series *series = NewSeries(keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk);
+    Series *series = NewSeries(keyName, labels, labelsCount, retentionTime,
+                    maxSamplesPerChunk, options & SERIES_OPT_UNCOMPRESSED);
 
     CompactionRule *lastRule = NULL;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
@@ -79,6 +87,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     RedisModule_SaveString(io, series->keyName);
     RedisModule_SaveUnsigned(io, series->retentionTime);
     RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
+    RedisModule_SaveUnsigned(io, series->options);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
     for (int i=0; i < series->labelsCount; i++) {
@@ -105,7 +114,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     Sample sample;
     while (SeriesIteratorGetNext(&iter, &sample) != 0) {
         RedisModule_SaveUnsigned(io, sample.timestamp);
-        RedisModule_SaveDouble(io, sample.data);
+        RedisModule_SaveDouble(io, sample.value);
     }
     SeriesIteratorClose(&iter);
 }

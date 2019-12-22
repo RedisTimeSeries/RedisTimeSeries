@@ -1,5 +1,6 @@
 *.o
 *.so
+*.xml
 .vscode/
 __pycache__
 .cproject
