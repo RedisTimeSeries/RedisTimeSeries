@@ -32,6 +32,7 @@ CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-Wall \
 	-fPIC \
+	-pedantic \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
@@ -62,7 +63,10 @@ LD_FLAGS += $(LD_FLAGS.coverage)
 _SOURCES=\
 	chunk.c \
 	compaction.c \
+	compressed_chunk.c \
 	config.c \
+	generic_chunk.c \
+	gorilla.c \
 	indexer.c \
 	module.c \
 	parse_policies.c \
@@ -187,6 +191,14 @@ uninstall:
 
 docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
+
+coverage:
+	DEBUG=1 COVERAGE=1 make tests
+	mkdir -p tmp/lcov
+	lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
+	lcov -l tmp/lcov/hiredis.info
+	genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
+
 
 #----------------------------------------------------------------------------------------------
 

@@ -17,6 +17,7 @@
 #define TSDB_OK 0
 #define TSDB_ERROR -1
 #define TSDB_NOTEXISTS 2
+#define TSDB_ERR_TIMESTAMP_OCCUPIED -2
 
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
@@ -40,6 +41,16 @@ typedef enum {
     TS_AGG_VAR_S,
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
+
+/* Series struct options */
+#define SERIES_OPT_UNCOMPRESSED 0x1
+
+/* Chunk enum */
+typedef enum {
+  CR_OK = 0,    // RM_OK
+  CR_ERR = 1,   // RM_ERR
+  CR_END = 2  
+} ChunkResult;
 
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \

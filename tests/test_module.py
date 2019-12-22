@@ -159,9 +159,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             expected_result = {
               'totalSamples': 1500L,
-              'memoryUsage': 29022L,
+              'memoryUsage': 5902L,
               'firstTimestamp': start_ts,
-              'chunkCount': math.ceil((samples_count + 1) / 360.0),
+              'chunkCount': 1L,
               'labels': [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp': start_ts + samples_count - 1,
               'maxSamplesPerChunk': 360L,
@@ -259,9 +259,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert expected_result[:3] == actual_result
 
             expected_result = {'totalSamples': 1500L,
-                               'memoryUsage': 29134L,
+                               'memoryUsage': 6014L,
                                'firstTimestamp': start_ts,
-                               'chunkCount':long(math.ceil((samples_count + 1) / 360.0)),
+                               'chunkCount': 1L,
                                'labels': [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp': 1511887408L,
                                'maxSamplesPerChunk': 360L,
@@ -446,9 +446,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             info_dict = self._get_ts_info(r, 'tester')
             assert info_dict == {'totalSamples': 1501L,
-                                 'memoryUsage': 29024L,
+                                 'memoryUsage': 5904L,
                                  'firstTimestamp': start_ts,
-                                 'chunkCount': math.ceil((samples_count + 1) / 360.0),
+                                 'chunkCount': 1L,
                                  'lastTimestamp': last_ts,
                                  'maxSamplesPerChunk': 360L,
                                  'retentionTime': 0L,
@@ -502,15 +502,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_check_retention_64bit(self):
         with self.redis() as r:
+
             huge_timestamp = 4000000000 # larger than uint32
             r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
             info = r.execute_command('TS.INFO', 'tester')
             assert info[9] == huge_timestamp
-
-            r.execute_command('TS.ADD', 'tester', huge_timestamp, '1')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp, '1']]
-            r.execute_command('TS.ADD', 'tester', huge_timestamp * 3, '2')
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == [[huge_timestamp * 3, '2']]
+            for i in range(10):
+                r.execute_command('TS.ADD', 'tester', huge_timestamp * i / 4, i)
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1) == \
+                [[5000000000L, '5'], [6000000000L, '6'], [7000000000L, '7'],
+                 [8000000000L, '8'], [9000000000L, '9']]
 
     def test_create_compaction_rule_with_wrong_aggregation(self):
         with self.redis() as r:
@@ -839,7 +840,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'totalSamples',
                 1L,
                 'memoryUsage',
-                4164L,
+                4212L,
                 'firstTimestamp',
                 long(ts),
                 'lastTimestamp',
@@ -866,7 +867,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 'totalSamples',
                 1L,
                 'memoryUsage',
-                4196L,
+                4244L,
                 'firstTimestamp',
                 long(ts),                
                 'lastTimestamp',
@@ -1076,7 +1077,62 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info[19][0][1] == BELOW_32BIT_LIMIT            
             assert info[19][1][1] == ABOVE_32BIT_LIMIT
 
+    def test_uncompressed(self):
+        with self.redis() as r:
+            # test simple commands
+            r.execute_command('ts.create not_compressed UNCOMPRESSED')
+            assert 1 == r.execute_command('ts.add not_compressed 1 3.5')
+            assert 3.5 == float(r.execute_command('ts.get not_compressed')[1])
+            assert 2 == r.execute_command('ts.add not_compressed 2 4.5')
+            assert 3 == r.execute_command('ts.add not_compressed 3 5.5')
+            assert 5.5 == float(r.execute_command('ts.get not_compressed')[1])
+            assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
+                        r.execute_command('ts.range not_compressed 0 -1')
+            assert ['totalSamples', 3L, 'memoryUsage', 4136L, 'firstTimestamp', 1L,             \
+                    'lastTimestamp', 3L, 'retentionTime', 0L, 'chunkCount', 1L,                 \
+                    'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []]   \
+                                        == r.execute_command('ts.info not_compressed')
 
+            # rdb load
+            data = r.execute_command('dump', 'not_compressed')
+
+        with self.redis() as r:
+            r.execute_command('RESTORE', 'not_compressed', 0, data)
+            assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
+                        r.execute_command('ts.range not_compressed 0 -1')
+            assert ['totalSamples', 3L, 'memoryUsage', 4136L, 'firstTimestamp', 1L,             \
+                    'lastTimestamp', 3L, 'retentionTime', 0L, 'chunkCount', 1L,                 \
+                    'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []]   \
+                                        == r.execute_command('ts.info not_compressed')
+            # test deletion
+            assert r.delete('not_compressed')
+
+    
+    def test_trim(self):
+        with self.redis() as r:
+            samples = 2000
+            r.execute_command('ts.create trim_me CHUNK_SIZE 64 RETENTION 10')
+            r.execute_command('ts.create dont_trim_me CHUNK_SIZE 64')
+            for i in range(samples):
+                r.execute_command('ts.add trim_me', i, i * 1.1)
+                r.execute_command('ts.add dont_trim_me', i, i * 1.1)
+                
+            assert 2 == r.execute_command('ts.info trim_me')[11]
+            assert 13 == r.execute_command('ts.info dont_trim_me')[11]
+
+    def test_empty(self):
+        with self.redis() as r:
+            r.execute_command('ts.create empty')
+            info = ['totalSamples', 0L, 'memoryUsage', 4184L, 'firstTimestamp', 0L, 'lastTimestamp', 0L, 'retentionTime', 0L,
+                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
+            assert info == r.execute_command('ts.info empty')
+            assert [] == r.execute_command('TS.range empty 0 -1')
+
+            r.execute_command('ts.create empty_uncompressed uncompressed')
+            info = ['totalSamples', 0L, 'memoryUsage', 4136L, 'firstTimestamp', -1L, 'lastTimestamp', 0L, 'retentionTime', 0L,
+                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
+            assert info == r.execute_command('ts.info empty_uncompressed')
+            assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
