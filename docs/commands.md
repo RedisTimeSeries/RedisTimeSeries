@@ -141,12 +141,12 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-* timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
-* retentionTime - Maximum age for samples compared to last event time (in milliseconds)
-  * Default: The global retention secs configuration of the database (by default, `0`)
-  * When set to 0, the series is not trimmed at all
-* labels - Set of key-value pairs that represent metadata labels of the key
-* UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
+ * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
+ * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+    * Default: The global retention secs configuration of the database (by default, `0`)
+    * When set to 0, the series is not trimmed at all
+ * labels - Set of key-value pairs that represent metadata labels of the key
+ * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
