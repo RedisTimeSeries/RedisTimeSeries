@@ -406,12 +406,12 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     AggregationClass *aggObject = NULL;
-    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
+    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
     if (aggregationResult == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 
-    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
     if (filter_location == -1) {
         return RedisModule_WrongArity(ctx);
     }
@@ -421,7 +421,8 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    size_t query_count = argc - 1 - filter_location;
+    const size_t query_count = argc - 1 - filter_location;
+    const int nolabels_location = RMUtil_ArgIndex("NOLABELS", argv, argc);
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) == TSDB_ERROR) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
@@ -450,7 +451,11 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         series = RedisModule_ModuleTypeGetValue(key);
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        ReplyWithSeriesLabels(ctx, series);
+        if (nolabels_location != -1){
+            RedisModule_ReplyWithArray(ctx, 0);
+        } else {
+            ReplyWithSeriesLabels(ctx, series);
+        }    
         ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count);
         replylen++;
     }

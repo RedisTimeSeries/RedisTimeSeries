@@ -851,6 +851,27 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
             assert 18 == len(actual_result[0][2]) #just checking that agg count before count works
 
+    def test_mrange_nolabels(self):
+        start_ts = 1511885909L
+        samples_count = 50
+
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+            self._insert_data(r, 'tester1', start_ts, samples_count, 5)
+            self._insert_data(r, 'tester2', start_ts, samples_count, 15)
+            self._insert_data(r, 'tester3', start_ts, samples_count, 25)
+
+            expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'NOLABELS', 'FILTER', 'name=bob')
+            assert [['tester1', [], expected_result]] == actual_result
+            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'NOLABELS', 'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
+            # assert there is no labels
+            assert len(actual_result[0][1]) == 0
+            assert len(actual_result[1][1]) == 0
+            assert len(actual_result[2][1]) == 0
+
     def test_range_count(self):
         start_ts = 1511885908L
         samples_count = 50
