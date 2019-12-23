@@ -365,11 +365,11 @@ TS.INFO key
 
 #### Description
 
-Returns information and statistics on the series. 
+Returns information and statistics on the time-series. 
 
 #### Parameters
 
-* key - Key name for timeseries
+* key - Key name of the time-series.
 
 #### Complexity
 
@@ -380,14 +380,14 @@ Returns information and statistics on the series.
 Array-reply, specifically:
 
 - Total samples in the Serie.
-- Total number of bytes allocated for the Series.
-- First timestamp present in the Serie.
-- Last timestamp present in the Serie.
-- Retention time, in milliseconds, for the Series.
-- Number of Memory Chunks used for the Series.
+- Total number of bytes allocated for the time-series.
+- First timestamp present in the time-series.
+- Last timestamp present in the time-series.
+- Retention time, in milliseconds, for the time-series.
+- Number of Memory Chunks used for the time-series.
 - Maximum Number of samples per Memory Chunk.
-- A nested array of key-value pairs that represent metadata labels of the Serie.
-- A nested array of compaction Rules of the Serie.
+- A nested array of key-value pairs that represent metadata labels of the time-series.
+- A nested array of compaction Rules of the time-series.
 
 #### `TS.INFO` Example
 
