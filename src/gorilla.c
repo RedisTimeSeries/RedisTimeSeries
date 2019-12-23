@@ -205,7 +205,7 @@ static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t
         *bin_it |= LSB(data, dataLen) << lbit;
     } else {
         *bin_it |= data << lbit;
-        *(++bin_it) |= LSB(data, dataLen) >> available;
+        *(++bin_it) |= LSB(data >> available, lbit);
     }
     *bit += dataLen;
 }
@@ -392,7 +392,7 @@ static u_int64_t readTS(CChunk_Iterator *iter) {
     } else if (Bins_bitoff(bins, (*bit)++)) {
         dd = bin2int(readBits(bins, bit, 32), 32);
     } else {
-        dd = bin2int(readBits(bins, bit, 64), 64);
+        dd = readBits(bins, bit, 64);
     }
 
     // Update iterator
