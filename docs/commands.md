@@ -373,7 +373,7 @@ Returns information and statistics on the time-series.
 
 #### Complexity
 
-`TS.INFO` complexity is O(1).
+O(1)
 
 #### Return Value
 
