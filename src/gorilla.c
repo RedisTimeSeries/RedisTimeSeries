@@ -276,9 +276,13 @@ static ChunkResult appendTS(CompressedChunk *chunk, timestamp_t timestamp) {
         CHECKSPACE(chunk, 5 + 16 + 1);
         appendBits(bins, bit, 0x0f, 5);
         appendBits(bins, bit, int2bin(doubleDelta.i, 16), 16);
+    } else if (Bin_InRange(doubleDelta.i, 32)) {
+        CHECKSPACE(chunk, 6 + 32 + 1);
+        appendBits(bins, bit, 0x1f, 6);
+        appendBits(bins, bit, int2bin(doubleDelta.i, 32), 32);
     } else {
-        CHECKSPACE(chunk, 5 + 64 + 1);
-        appendBits(bins, bit, 0x1f, 5);
+        CHECKSPACE(chunk, 6 + 64 + 1);
+        appendBits(bins, bit, 0x3f, 6);
         appendBits(bins, bit, doubleDelta.u, 64);
     }
     chunk->prevTimestampDelta = curDelta;
@@ -385,6 +389,8 @@ static u_int64_t readTS(CChunk_Iterator *iter) {
         dd = bin2int(readBits(bins, bit, 13), 13);
     } else if (Bins_bitoff(bins, (*bit)++)) {
         dd = bin2int(readBits(bins, bit, 16), 16);
+    } else if (Bins_bitoff(bins, (*bit)++)) {
+        dd = bin2int(readBits(bins, bit, 32), 32);
     } else {
         dd = bin2int(readBits(bins, bit, 64), 64);
     }
