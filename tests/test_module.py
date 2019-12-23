@@ -1133,6 +1133,32 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
             assert info == r.execute_command('ts.info empty_uncompressed')
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
+    
+    def test_gorilla(self):
+        with self.redis() as r:
+            r.execute_command('ts.create monkey')
+            r.execute_command('ts.add monkey 0 1')
+            r.execute_command('ts.add monkey 1 1')
+            r.execute_command('ts.add monkey 2 1')
+            r.execute_command('ts.add monkey 50 1')
+            r.execute_command('ts.add monkey 51 1')
+            r.execute_command('ts.add monkey 500 1')
+            r.execute_command('ts.add monkey 501 1')
+            r.execute_command('ts.add monkey 3000 1')
+            r.execute_command('ts.add monkey 3001 1')
+            r.execute_command('ts.add monkey 10000 1')
+            r.execute_command('ts.add monkey 10001 1')
+            r.execute_command('ts.add monkey 100000 1')
+            r.execute_command('ts.add monkey 100001 1')
+            r.execute_command('ts.add monkey 100002 1')
+            r.execute_command('ts.add monkey 100004 1')
+       #     r.execute_command('ts.add monkey 1000000 1')
+        #    r.execute_command('ts.add monkey 1000001 1')
+            expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'], 
+                               [500L, '1'], [501L, '1'], [3000L, '1'], [3001L, '1'], 
+                               [10000L, '1'], [10001L, '1'], [100000L, '1'], [200001L, '1'], 
+                               [1000000L, '1'], [1000001L, '1']]
+            assert expected_result == r.execute_command('TS.range monkey 0 -1')    
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
