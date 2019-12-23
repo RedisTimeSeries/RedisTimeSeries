@@ -379,7 +379,7 @@ O(1)
 
 Array-reply, specifically:
 
-- Total samples in the Serie.
+- Total samples in the time-series.
 - Total number of bytes allocated for the time-series.
 - First timestamp present in the time-series.
 - Last timestamp present in the time-series.
