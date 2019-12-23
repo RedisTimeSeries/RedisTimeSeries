@@ -402,7 +402,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
-        
+
+            #test out of range returns empty list
+            assert [] == r.execute_command('TS.range', 'tester', start_ts * 2, -1)
+            assert [] == r.execute_command('TS.range', 'tester', start_ts / 3, start_ts / 2)
+                    
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE tester string -1')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -432,6 +436,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', -10)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 0)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
 
             start_ts = 1488823384L
