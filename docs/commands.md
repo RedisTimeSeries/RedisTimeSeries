@@ -141,12 +141,12 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-* timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
-* retentionTime - Maximum age for samples compared to last event time (in milliseconds)
-  * Default: The global retention secs configuration of the database (by default, `0`)
-  * When set to 0, the series is not trimmed at all
-* labels - Set of key-value pairs that represent metadata labels of the key
-* UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
+ * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
+ * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+    * Default: The global retention secs configuration of the database (by default, `0`)
+    * When set to 0, the series is not trimmed at all
+ * labels - Set of key-value pairs that represent metadata labels of the key
+ * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
@@ -409,33 +409,64 @@ TS.MGET FILTER filter...
 
 ### TS.INFO
 
-Query the series metadata
-
+#### Format 
 ```sql
 TS.INFO key
 ```
 
-* key - Key name for timeseries
+#### Description
 
-#### Info Example
+Returns information and statistics on the time-series. 
+
+#### Parameters
+
+* key - Key name of the time-series.
+
+#### Complexity
+
+O(1)
+
+#### Return Value
+
+Array-reply, specifically:
+
+- Total samples in the time-series.
+- Total number of bytes allocated for the time-series.
+- First timestamp present in the time-series.
+- Last timestamp present in the time-series.
+- Retention time, in milliseconds, for the time-series.
+- Number of Memory Chunks used for the time-series.
+- Maximum Number of samples per Memory Chunk.
+- A nested array of key-value pairs that represent metadata labels of the time-series.
+- A nested array of compaction Rules of the time-series.
+
+#### `TS.INFO` Example
 
 ```sql
 TS.INFO temperature:2:32
- 1) lastTimestamp
- 2) (integer) 1548149279000
- 3) retentionTime
- 4) (integer) 0
- 5) chunkCount
- 6) (integer) 1
- 7) maxSamplesPerChunk
- 8) (integer) 1024
- 9) labels
-10) 1) 1) "sensor_id"
+ 1) totalSamples
+ 2) (integer) 100
+ 3) memoryUsage
+ 4) (integer) 4184
+ 5) firstTimestamp
+ 6) (integer) 1548149180
+ 7) lastTimestamp
+ 8) (integer) 1548149279
+ 9) retentionTime
+10) (integer) 0
+11) chunkCount
+12) (integer) 1
+13) maxSamplesPerChunk
+14) (integer) 256
+15) labels
+16) 1) 1) "sensor_id"
        2) "2"
     2) 1) "area_id"
        2) "32"
-11) rules
-12) (empty list or set)
+17) sourceKey
+18) (nil)
+19) rules
+20) (empty list or set)
 ```
 
 ### TS.QUERYINDEX

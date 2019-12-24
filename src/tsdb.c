@@ -295,7 +295,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     return 0;
 }
 
-CompactionRule * SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
+CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
     CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
     if (rule == NULL ) {
         return NULL;
