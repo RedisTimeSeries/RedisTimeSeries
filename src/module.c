@@ -553,7 +553,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     return REDISMODULE_OK;
 }
 
-void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
+static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
     timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
 
     if (rule->startCurrentTimeBucket == -1LL) {
@@ -599,12 +599,11 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
-
-	    double value;
-	    api_timestamp_t timestamp;
-	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    double value;
+    api_timestamp_t timestamp;
+    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
