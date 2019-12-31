@@ -20,6 +20,9 @@ typedef struct Chunk {
 } Chunk;
 
 typedef struct ChunkIterator {
+    // must remain as first member
+    ChunkIter_t base;
+
     Chunk *chunk;
     int currentIndex;
     timestamp_t lastTimestamp;

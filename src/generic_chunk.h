@@ -12,13 +12,15 @@
 #include <stdio.h>          // printf
 #include "consts.h"
 
-typedef void Chunk_t;
-typedef void ChunkIter_t;
-
 typedef struct Sample {
     u_int64_t timestamp;
     double value;
 } Sample;
+
+typedef void Chunk_t;
+typedef struct ChunkIter_s {
+    ChunkResult(*Next)(struct ChunkIter_s *iter, Sample *sample);
+} ChunkIter_t;
 
 #define CHUNK_REGULAR 0
 #define CHUNK_COMPRESSED 1

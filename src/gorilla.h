@@ -10,6 +10,7 @@
 #include <sys/types.h>      // u_int_t
 #include <stdbool.h>        // bool
 #include "consts.h"
+#include "generic_chunk.h"
 
 typedef u_int64_t timestamp_t;
 typedef u_int64_t binary_t;
@@ -23,6 +24,9 @@ typedef union {
 } union64bits;
 
 typedef struct CompressedChunk {
+    // must remain as first member
+    ChunkIter_t base;
+
     u_int64_t size;
     u_int64_t count;
     u_int64_t idx;

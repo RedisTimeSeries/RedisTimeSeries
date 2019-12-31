@@ -272,7 +272,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
         if (!iterator->chunkIteratorInitialized) 
         {
             funcs->FreeChunkIterator(iterator->chunkIterator);
-            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, 0);
+            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, NO_OPT);
             iterator->chunkIteratorInitialized = TRUE;
         }
 
