@@ -30,12 +30,8 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
     return ((Chunk *)chunk)->num_samples;
 }
 
-static Sample *ChunkGetSampleArray(Chunk *chunk) {
-    return chunk->samples;
-}
-
 static Sample *ChunkGetSample(Chunk *chunk, int index) {
-    return &ChunkGetSampleArray(chunk)[index];
+    return &chunk->samples[index];
 }
 
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
@@ -63,29 +59,49 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
         regChunk->base_timestamp = sample->timestamp;
     }
 
-    ChunkGetSampleArray(regChunk)[regChunk->num_samples] = *sample;
+    regChunk->samples[regChunk->num_samples] = *sample;
     regChunk->num_samples++;
 
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    iter->currentIndex = 0;
+    iter->currentIndex = (options & REVERSE) == 0 ? 0 : iter->chunk->max_samples - 1;
+    iter->Next = (options & REVERSE) == 0 ? Uncompressed_ChunkIteratorGetNext : Uncompressed_ChunkIteratorGetNext;
+    iter->options = options;
     return iter;
 }
 
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = iterator;
     if (iter->currentIndex < iter->chunk->num_samples) {
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
         iter->currentIndex++;
-        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
-        memcpy(sample, internalSample, sizeof(Sample));
         return CR_OK;
     } else {
         return CR_END;
     }
+}
+
+ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
+    ChunkIterator *iter = iterator;
+    if (iter->currentIndex >= 0) {
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
+        iter->currentIndex--;
+        return CR_OK;
+    } else {
+        return CR_END;
+    }
+}
+
+void FreeChunkIterator(ChunkIter_t *iter) {
+  ChunkIterator *regIter = (ChunkIterator *)iter;
+  if (regIter && regIter->options & FREE_TEMP_CHUNK) {
+    free(regIter->chunk);
+  }  
+  free(iter);
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk) {

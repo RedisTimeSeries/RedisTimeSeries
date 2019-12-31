@@ -29,9 +29,10 @@ typedef struct ChunkFuncs {
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options);
     void(*FreeChunkIterator)(ChunkIter_t *iter);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
+    ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 
     size_t(*GetChunkSize)(Chunk_t *chunk);
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);

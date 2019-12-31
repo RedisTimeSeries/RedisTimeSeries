@@ -272,11 +272,12 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
         if (!iterator->chunkIteratorInitialized) 
         {
             funcs->FreeChunkIterator(iterator->chunkIterator);
-            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
+            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, 0);
             iterator->chunkIteratorInitialized = TRUE;
         }
 
-        if (funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CR_END) { // reached the end of the chunk
+        ChunkResult result = funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample); 
+        if (result == CR_END) { // reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }

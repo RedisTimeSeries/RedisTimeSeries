@@ -7,6 +7,7 @@
 #define CONSTS_H
 
 #include <sys/types.h>
+#include <stdbool.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -22,6 +23,10 @@
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
+
+/* Iterator flags */
+#define REVERSE 0x1
+#define FREE_TEMP_CHUNK 0x2
 
 /* TS.Range Aggregation types */
 typedef enum {
