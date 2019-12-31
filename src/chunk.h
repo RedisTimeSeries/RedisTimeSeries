@@ -12,7 +12,7 @@
 
 typedef struct Chunk {
     timestamp_t base_timestamp;
-    void * samples;
+    Sample *samples;
     short num_samples;
     short max_samples;
     struct Chunk *nextChunk;
@@ -26,17 +26,17 @@ typedef struct ChunkIterator {
     int lastValue;
 } ChunkIterator;
 
-Chunk_t *NewChunk(size_t sampleCount);
-void FreeChunk(Chunk_t *chunk);
-size_t GetChunkSize(Chunk_t *chunk);
+Chunk_t *U_NewChunk(size_t sampleCount);
+void U_FreeChunk(Chunk_t *chunk);
+size_t U_GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success
-ChunkResult ChunkAddSample(Chunk_t *chunk, Sample *sample);
-u_int64_t ChunkNumOfSample(Chunk_t *chunk);
-timestamp_t ChunkGetLastTimestamp(Chunk_t *chunk);
-timestamp_t ChunkGetFirstTimestamp(Chunk_t *chunk);
+ChunkResult U_AddSample(Chunk_t *chunk, Sample *sample);
+u_int64_t U_NumOfSample(Chunk_t *chunk);
+timestamp_t U_GetLastTimestamp(Chunk_t *chunk);
+timestamp_t U_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIter_t *NewChunkIterator(Chunk_t *chunk);
-ChunkResult ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
+ChunkIter_t *U_NewChunkIterator(Chunk_t *chunk);
+ChunkResult U_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 
 #endif

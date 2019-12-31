@@ -8,19 +8,19 @@ void FreeChunkIterator(ChunkIter_t *iter) {
 }
 
 static ChunkFuncs regChunk = {
-    .NewChunk = NewChunk,
-    .FreeChunk = FreeChunk,
+    .NewChunk = U_NewChunk,
+    .FreeChunk = U_FreeChunk,
 
-    .AddSample = ChunkAddSample,
+    .AddSample = U_AddSample,
 
-    .NewChunkIterator = NewChunkIterator,
+    .NewChunkIterator = U_NewChunkIterator,
     .FreeChunkIterator = FreeChunkIterator,
-    .ChunkIteratorGetNext = ChunkIteratorGetNext,
+    .ChunkIteratorGetNext = U_ChunkIteratorGetNext,
 
-    .GetChunkSize = GetChunkSize,
-    .GetNumOfSample = ChunkNumOfSample,
-    .GetLastTimestamp = ChunkGetLastTimestamp,
-    .GetFirstTimestamp = ChunkGetFirstTimestamp
+    .GetChunkSize = U_GetChunkSize,
+    .GetNumOfSample = U_NumOfSample,
+    .GetLastTimestamp = U_GetLastTimestamp,
+    .GetFirstTimestamp = U_GetFirstTimestamp
 };
 
 static ChunkFuncs comprChunk = {
