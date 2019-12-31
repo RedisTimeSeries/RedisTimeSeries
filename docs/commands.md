@@ -248,10 +248,10 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 ### TS.MRANGE
 
-Query a timestamp range across multiple keys by filters.
+Query a timestamp range across multiple time-series by filters.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -260,14 +260,64 @@ TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType t
 
 Optional args:
 
-* count - Maximum number of returned results per timeseries
+* count - Maximum number of returned results per time-series.
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-* timeBucket - Time bucket for aggregation in milliseconds
+* timeBucket - Time bucket for aggregation in milliseconds.
+* WITHLABELS - Include in the reply the key-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position. 
 
-#### Query by Filters Example
+#### Return Value
 
+Array-reply, specifically:
+
+The command returns the entries with labels matching the specified filter.
+The returned entries are complete, that means that the name, labels and all the values that match the range are returned. 
+
+The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with key-value pairs that represent metadata labels of the time-series.
+
+
+##### Examples
+
+##### Query by Filters Example
 ```sql
 127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
+1) 1) "temperature:2:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149180000
+         2) "27.600000000000001"
+      2) 1) (integer) 1548149185000
+         2) "23.800000000000001"
+      3) 1) (integer) 1548149190000
+         2) "24.399999999999999"
+      4) 1) (integer) 1548149195000
+         2) "24"
+      5) 1) (integer) 1548149200000
+         2) "25.600000000000001"
+      6) 1) (integer) 1548149205000
+         2) "25.800000000000001"
+      7) 1) (integer) 1548149210000
+         2) "21"
+2) 1) "temperature:3:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149180000
+         2) "26.199999999999999"
+      2) 1) (integer) 1548149185000
+         2) "27.399999999999999"
+      3) 1) (integer) 1548149190000
+         2) "24.800000000000001"
+      4) 1) (integer) 1548149195000
+         2) "23.199999999999999"
+      5) 1) (integer) 1548149200000
+         2) "25.199999999999999"
+      6) 1) (integer) 1548149205000
+         2) "28"
+      7) 1) (integer) 1548149210000
+         2) "20"
+```
+
+##### Query by Filters Example with WITHLABELS option
+
+```sql
+127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
