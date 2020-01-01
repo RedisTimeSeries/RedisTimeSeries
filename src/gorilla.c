@@ -350,7 +350,7 @@ static ChunkResult appendV(CompressedChunk *chunk, double value) {
     return CR_OK;
 }
 
-ChunkResult CChunk_Append(CompressedChunk *chunk, timestamp_t timestamp, double value) {
+ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, double value) {
     assert(chunk);
 
     if (chunk->count == 0) {
@@ -373,7 +373,7 @@ ChunkResult CChunk_Append(CompressedChunk *chunk, timestamp_t timestamp, double 
  * then decodes the value back to an int64 and calculate the original value
  * using `prevTS` and `prevDelta`.
  */ 
-static u_int64_t readTS(CChunk_Iterator *iter) {
+static u_int64_t readTS(Compressed_Iterator *iter) {
     binary_t *bins = iter->chunk->data;
     globalbit_t *bit = &iter->idx;
 
@@ -410,7 +410,7 @@ static u_int64_t readTS(CChunk_Iterator *iter) {
  * 
  * Finally, the compressed representation of the value is decoded.
  */ 
-static double readV(CChunk_Iterator *iter) {
+static double readV(Compressed_Iterator *iter) {
     binary_t xorValue;
     union64bits rv;
 
@@ -440,7 +440,7 @@ static double readV(CChunk_Iterator *iter) {
     return iter->prevValue.d = rv.d;
 }
 
-ChunkResult CChunk_ReadNext(CChunk_Iterator *iter, timestamp_t *timestamp, double *value) {
+ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestamp, double *value) {
     assert(iter);
     *timestamp = iter->prevTS;
     *value     = iter->prevValue.d;

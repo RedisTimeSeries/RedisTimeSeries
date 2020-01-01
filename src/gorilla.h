@@ -40,7 +40,7 @@ typedef struct CompressedChunk {
     u_int8_t prevTrailing;
 } CompressedChunk;
 
-typedef struct CChunk_Iterator {
+typedef struct Compressed_Iterator {
   CompressedChunk *chunk;
   u_int64_t idx;
   u_int64_t count;
@@ -53,9 +53,9 @@ typedef struct CChunk_Iterator {
   union64bits prevValue;  
   u_int8_t prevLeading;
   u_int8_t prevTrailing;
-} CChunk_Iterator;
+} Compressed_Iterator;
 
-ChunkResult CChunk_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
-ChunkResult CChunk_ReadNext(CChunk_Iterator *iter, u_int64_t *timestamp, double *value);
+ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
+ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, u_int64_t *timestamp, double *value);
 
 #endif
