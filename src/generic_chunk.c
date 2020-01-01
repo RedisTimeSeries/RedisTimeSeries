@@ -8,35 +8,35 @@ void FreeChunkIterator(ChunkIter_t *iter) {
 }
 
 static ChunkFuncs regChunk = {
-    .NewChunk = NewChunk,
-    .FreeChunk = FreeChunk,
+    .NewChunk = Uncompressed_NewChunk,
+    .FreeChunk = Uncompressed_FreeChunk,
 
-    .AddSample = ChunkAddSample,
+    .AddSample = Uncompressed_AddSample,
 
-    .NewChunkIterator = NewChunkIterator,
+    .NewChunkIterator = Uncompressed_NewChunkIterator,
     .FreeChunkIterator = FreeChunkIterator,
-    .ChunkIteratorGetNext = ChunkIteratorGetNext,
+    .ChunkIteratorGetNext = Uncompressed_ChunkIteratorGetNext,
 
-    .GetChunkSize = GetChunkSize,
-    .GetNumOfSample = ChunkNumOfSample,
-    .GetLastTimestamp = ChunkGetLastTimestamp,
-    .GetFirstTimestamp = ChunkGetFirstTimestamp
+    .GetChunkSize = Uncompressed_GetChunkSize,
+    .GetNumOfSample = Uncompressed_NumOfSample,
+    .GetLastTimestamp = Uncompressed_GetLastTimestamp,
+    .GetFirstTimestamp = Uncompressed_GetFirstTimestamp
 };
 
 static ChunkFuncs comprChunk = {
-    .NewChunk = CChunk_NewChunk,
-    .FreeChunk = CChunk_FreeChunk,
+    .NewChunk = Compressed_NewChunk,
+    .FreeChunk = Compressed_FreeChunk,
 
-    .AddSample = CChunk_AddSample,
+    .AddSample = Compressed_AddSample,
 
-    .NewChunkIterator = CChunk_NewChunkIterator,
+    .NewChunkIterator = Compressed_NewChunkIterator,
     .FreeChunkIterator = FreeChunkIterator,
-    .ChunkIteratorGetNext = CChunk_ChunkIteratorGetNext,
+    .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
 
-    .GetChunkSize = CChunk_GetChunkSize,
-    .GetNumOfSample = CChunk_ChunkNumOfSample,
-    .GetLastTimestamp = CChunk_GetLastTimestamp,
-    .GetFirstTimestamp = CChunk_GetFirstTimestamp
+    .GetChunkSize = Compressed_GetChunkSize,
+    .GetNumOfSample = Compressed_ChunkNumOfSample,
+    .GetLastTimestamp = Compressed_GetLastTimestamp,
+    .GetFirstTimestamp = Compressed_GetFirstTimestamp
 };
 
 ChunkFuncs *GetChunkClass(int chunkType) {
