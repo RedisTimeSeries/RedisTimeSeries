@@ -34,27 +34,27 @@ class TSInfo(object):
         response = dict(zip(args[::2], args[1::2]))
         if 'rules' in response: self.rules = response['rules']
         if 'sourceKey' in response: self.sourceKey = response['sourceKey']
-        if 'chunkCount' in response: self.chunkCount = response['chunkCount']
+        if 'chunkCount' in response: self.chunk_count = response['chunkCount']
         if 'labels' in response: self.labels = list_to_dict(response['labels'])
         if 'memoryUsage' in response: self.memory_usage = response['memoryUsage']
         if 'totalSamples' in response: self.total_samples = response['totalSamples']
         if 'retentionTime' in response: self.retention_msecs = response['retentionTime']
-        if 'lastTimestamp' in response: self.lastTimeStamp = response['lastTimestamp']
+        if 'lastTimestamp' in response: self.last_time_stamp = response['lastTimestamp']
         if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
-        if 'maxSamplesPerChunk' in response: self.maxSamplesPerChunk = response['maxSamplesPerChunk']
+        if 'maxSamplesPerChunk' in response: self.max_samples_per_chunk = response['maxSamplesPerChunk']
     
     def __eq__(self, other): 
         if not isinstance(other, TSInfo):
             return NotImplemented
         return self.rules == other.rules and \
         self.sourceKey == other.sourceKey and \
-        self.chunkCount == other.chunkCount and \
+        self.chunk_count == other.chunk_count and \
         self.memory_usage == other.memory_usage and \
         self.total_samples == other.total_samples and \
         self.retention_msecs == other.retention_msecs and \
-        self.lastTimeStamp == other.lastTimeStamp and \
+        self.last_time_stamp == other.last_time_stamp and \
         self.first_time_stamp == other.first_time_stamp and \
-        self.maxSamplesPerChunk == other.maxSamplesPerChunk
+        self.max_samples_per_chunk == other.max_samples_per_chunk
         
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
@@ -85,7 +85,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         if expected_labels:
             assert list_to_dict(expected_labels) == actual_result.labels
         if expected_chunk_size:
-            assert expected_chunk_size == actual_result.maxSamplesPerChunk
+            assert expected_chunk_size == actual_result.max_samples_per_chunk
 
     @staticmethod
     def _ts_alter_cmd(r, key, set_retention=None, set_chunk_size=None, set_labels=None):
@@ -837,7 +837,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     expected_result = self.calc_rule(rule, values, resolution)
                     assert self._get_series_value(actual_result) == expected_result
                     # last time stamp should be the beginning of the last bucket
-                    assert self._get_ts_info(r, 'tester_{}_{}'.format(rule, resolution)).lastTimeStamp == \
+                    assert self._get_ts_info(r, 'tester_{}_{}'.format(rule, resolution)).last_time_stamp == \
                                             (samples_count - 1) - (samples_count - 1) % resolution
 
             # test for results after empty buckets
@@ -1092,8 +1092,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add trim_me', i, i * 1.1)
                 r.execute_command('ts.add dont_trim_me', i, i * 1.1)
                 
-            assert 2 == self._get_ts_info(r, 'trim_me').chunkCount
-            assert 13 == self._get_ts_info(r, 'dont_trim_me').chunkCount
+            assert 2 == self._get_ts_info(r, 'trim_me').chunk_count
+            assert 13 == self._get_ts_info(r, 'dont_trim_me').chunk_count
 
     def test_empty(self):
         with self.redis() as r:
