@@ -7,7 +7,7 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
+TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
 ```
 
 * key - Key name for timeseries
@@ -56,7 +56,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new value to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
 ```
 
 * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
@@ -125,13 +125,13 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 Increment the latest value.
 
 ```sql
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS field value..] [UNCOMPRESSED]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
