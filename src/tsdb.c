@@ -10,6 +10,7 @@
 #include "rmutil/strings.h"
 #include "rmutil/alloc.h"
 #include "tsdb.h"
+#include "consts.h"
 #include "module.h"
 #include "config.h"
 #include "indexer.h"
@@ -228,16 +229,17 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
     SeriesIterator iter;
     timestamp_t rax_key;
     iter.series = series;
-    // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
+    
+    // get the rightmost/leftmost chunk whose base timestamp is smaller/larger or equal to minTimestamp
     seriesEncodeTimestamp(&rax_key, minTimestamp);
-    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-
-    // if no such chunk exists, we will start the search from the first chunk
-    if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))
-    {
-        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
+    if (rev != REVERSE) {   // Forward iterator
+        iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
+    } else {                // Backword iterator
+        iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, ">=", &rax_key, sizeof(rax_key));
+        RedisModule_DictPrevC(iter.dictIter, NULL, (void*)&iter.currentChunk);
     }
+
     iter.chunkIteratorInitialized = FALSE;
     iter.chunkIterator = NULL;
     iter.minTimestamp = minTimestamp;
@@ -250,27 +252,24 @@ void SeriesIteratorClose(SeriesIterator *iterator) {
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
-int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
+int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample, int rev) {
     Sample internalSample;
     while (iterator->currentChunk != NULL)
     {
         Chunk_t *currentChunk = iterator->currentChunk;
         ChunkFuncs *funcs = iterator->series->funcs;
-        if (funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp)
-        {
+        if (funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
                 iterator->currentChunk = NULL;
             }
             iterator->chunkIteratorInitialized = FALSE;
             continue;
         }
-        else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
-        {
+        else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
             break;
         }
 
-        if (!iterator->chunkIteratorInitialized) 
-        {
+        if (!iterator->chunkIteratorInitialized) {
             funcs->FreeChunkIterator(iterator->chunkIterator);
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, NO_OPT);
             iterator->chunkIteratorInitialized = TRUE;

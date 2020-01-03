@@ -537,7 +537,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         context = aggObject->createContext();
     
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
+    while (SeriesIteratorGetNext(&iterator, &sample, rev) != 0 &&
                     (maxResults == -1 || arraylen < maxResults)) {
         if (aggObject == NULL) { // No aggregation whatssoever
             RedisModule_ReplyWithArray(ctx, 2);
