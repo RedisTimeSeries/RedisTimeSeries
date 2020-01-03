@@ -228,16 +228,12 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
     SeriesIterator iter;
     timestamp_t rax_key;
     iter.series = series;
+    
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
     seriesEncodeTimestamp(&rax_key, minTimestamp);
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
 
-    // if no such chunk exists, we will start the search from the first chunk
-    if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))
-    {
-        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
-        RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
-    }
     iter.chunkIteratorInitialized = FALSE;
     iter.chunkIterator = NULL;
     iter.minTimestamp = minTimestamp;
