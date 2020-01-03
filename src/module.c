@@ -25,9 +25,7 @@
 RedisModuleType *SeriesType;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-                     AggregationClass *aggObject, int64_t time_delta, long long maxResults);
-
-static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
+                     AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev);
 
 static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
@@ -230,6 +228,15 @@ static uint64_t getTotalSample(Series *series) {
     return total;
 }
 
+static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
+    RedisModule_ReplyWithArray(ctx, series->labelsCount);
+    for (int i=0; i < series->labelsCount; i++) {
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithString(ctx, series->labels[i].key);
+        RedisModule_ReplyWithString(ctx, series->labels[i].value);
+    }
+}
+
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
@@ -293,15 +300,6 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(key);
 
     return REDISMODULE_OK;
-}
-
-void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
-    RedisModule_ReplyWithArray(ctx, series->labelsCount);
-    for (int i=0; i < series->labelsCount; i++) {
-        RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithString(ctx, series->labels[i].key);
-        RedisModule_ReplyWithString(ctx, series->labels[i].value);
-    }
 }
 
 void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
@@ -390,7 +388,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4) {
@@ -455,8 +453,8 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             ReplyWithSeriesLabels(ctx, series);
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
-        }    
-        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count);
+        }  
+        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
         replylen++;
     }
     RedisModule_DictIteratorStop(iter);
@@ -465,7 +463,15 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_mrange(ctx, argv, argc, NO_OPT);
+}
+
+int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_mrange(ctx, argv, argc, REVERSE);
+}
+
+int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int rev){
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4) {
@@ -501,12 +507,20 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count);
+    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
     return REDISMODULE_OK;
 }
 
+int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
+    return TSDB_generic_range(ctx, argv, argc, NO_OPT);
+}
+
+int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
+    return TSDB_generic_range(ctx, argv, argc, REVERSE);
+}
+
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-        AggregationClass *aggObject, int64_t time_delta, long long maxResults) {
+        AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev) {
     Sample sample;
     long long arraylen = 0;
     timestamp_t last_agg_timestamp = 0;
@@ -516,7 +530,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     	start_ts = series->lastTimestamp > series->retentionTime ?
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, rev);
 
     void *context = NULL;
     if (aggObject != NULL)
@@ -604,11 +618,11 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
 }
 
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
-    double value;
-    api_timestamp_t timestamp;
-    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+	    double value;
+	    api_timestamp_t timestamp;
+	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
@@ -1061,6 +1075,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.incrby", TSDB_incrby);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
+    RMUtil_RegisterReadCmd(ctx, "ts.revrange", TSDB_revrange);
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
@@ -1069,6 +1084,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, 0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, 0) == REDISMODULE_ERR)
