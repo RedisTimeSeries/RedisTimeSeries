@@ -31,6 +31,6 @@ timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);
 
 /* Used in tests */
-u_int64_t getIterIdx(Chunk_t *iter);
+u_int64_t getIterIdx(ChunkIter_t *iter);
 
 #endif // COMPRESSED_CHUNK_H

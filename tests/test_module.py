@@ -198,7 +198,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert expected_result == actual_result
 
             expected_result = [
-              'totalSamples', 1500L, 'memoryUsage', 5902L,
+              'totalSamples', 1500L, 'memoryUsage', 5910L,
               'firstTimestamp', start_ts, 'chunkCount', 1L,
               'labels', [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp', start_ts + samples_count - 1,
@@ -293,7 +293,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
 
-            expected_result = ['totalSamples', 1500L, 'memoryUsage', 6014L,
+            expected_result = ['totalSamples', 1500L, 'memoryUsage', 6022L,
                                'firstTimestamp', start_ts, 'chunkCount', 1L,
                                'labels', [['name', 'brown'], ['color', 'pink']],
                                'lastTimestamp', 1511887408L, 'maxSamplesPerChunk', 360L,
@@ -484,7 +484,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             info = self._get_ts_info(r, 'tester')
             assert info.rules == [['tester_agg_max_10', 10L, 'AVG']]
-                                 
+            
     def test_delete_key(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
@@ -1119,8 +1119,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_empty(self):
         with self.redis() as r:
             r.execute_command('ts.create empty')
-            info = self._get_ts_info(r, 'empty')
-            assert info.total_samples == 0
+            info = ['totalSamples', 0L, 'memoryUsage', 4192L, 'firstTimestamp', 0L, 'lastTimestamp', 0L, 'retentionTime', 0L,
+                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
+            assert info == r.execute_command('ts.info empty')
             assert [] == r.execute_command('TS.range empty 0 -1')
 
             r.execute_command('ts.create empty_uncompressed uncompressed')
