@@ -257,14 +257,14 @@ void SeriesIteratorClose(SeriesIterator *iterator) {
 }
 
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
-    while (iterator->currentChunk != NULL) {
+    while (1) {
         Chunk_t *currentChunk = iterator->currentChunk;
         ChunkFuncs *funcs = iterator->series->funcs;
 
         ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
         if (res == CR_END) {    // Reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)||
-               funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
+                funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
                 return CR_ERR;       // No more chunks or they out of range
             }
             funcs->FreeChunkIterator(iterator->chunkIterator);
