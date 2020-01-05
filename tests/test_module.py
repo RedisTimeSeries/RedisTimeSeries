@@ -446,6 +446,17 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE tester 0 -1 count number')
 
+    def test_range_midrange(self):
+        samples_count = 5000
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester', i, i)
+            res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
+            assert len(res) == 500
+            res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
+            assert len(res) == 501
+
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
         samples_count = 1500
