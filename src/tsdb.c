@@ -280,7 +280,6 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             return CR_OK;
         }
     }
-    return CR_ERR;
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
