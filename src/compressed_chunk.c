@@ -54,14 +54,14 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk) {
 }
 
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
-  Sample *sample = NULL;
+  Sample sample;
   uint64_t numSamples = compressedChunk->count;
   Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples);
 
-  ChunkIter_t *iter = Uncompressed_NewChunkIterator(compressedChunk, 0);
+  ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, 0);
   for(uint64_t i = 0; i < numSamples; ++i) {
-    Compressed_ChunkIteratorGetNext(iter, sample);
-    Uncompressed_AddSample(uncompressedChunk, sample);
+    Compressed_ChunkIteratorGetNext(iter, &sample);
+    Uncompressed_AddSample(uncompressedChunk, &sample);
   }
   free(iter);
   return uncompressedChunk;

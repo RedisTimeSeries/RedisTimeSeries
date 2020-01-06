@@ -980,6 +980,27 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3)
             assert len(count_results) ==  math.ceil(samples_count / 3.0)
 
+    def test_revrange(self):
+        start_ts = 1511885908L
+        samples_count = 100
+        result_list = []
+
+        with self.redis() as r:
+            r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+                result_list.append([start_ts + i, str(i)])
+            full_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            result_list.reverse()
+            assert full_results == result_list
+            #full_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+
+            r.execute_command('TS.CREATE', 'tester2')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester2', start_ts + i, i)
+            full_results = r.execute_command('TS.REVRANGE', 'tester2', 0, -1)
+            assert full_results == result_list
+
     def test_label_index(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
