@@ -224,31 +224,30 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
-    SeriesIterator iter = { 0 };
+int SeriesQuery(Series *series, SeriesIterator *iter, 
+                            api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
     timestamp_t rax_key;
-    iter.series = series;
-    ChunkFuncs *funcs = iter.series->funcs;
+    iter->series = series;
+    ChunkFuncs *funcs = iter->series->funcs;
     
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
     seriesEncodeTimestamp(&rax_key, minTimestamp);
-    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
+    iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
     
     // iterate to the first relevant chunk
     void *dictResult = (void *)TRUE;
     while (dictResult) {
-        if (funcs->GetLastTimestamp(iter.currentChunk) < minTimestamp) {
-            dictResult = RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
+        if (funcs->GetLastTimestamp(iter->currentChunk) < minTimestamp) {
+            dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         } else {
-            iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk);
-            break;
+            iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk);
+            iter->minTimestamp = minTimestamp;
+            iter->maxTimestamp = maxTimestamp;
+            return REDISMODULE_OK;
         }
     }    
-
-    iter.minTimestamp = minTimestamp;
-    iter.maxTimestamp = maxTimestamp;
-    return iter;
+    return REDISMODULE_ERR;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
