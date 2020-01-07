@@ -983,23 +983,26 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_revrange(self):
         start_ts = 1511885908L
         samples_count = 100
-        result_list = []
+        expected_results = []
 
         with self.redis() as r:
             r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-                result_list.append([start_ts + i, str(i)])
-            full_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
-            result_list.reverse()
-            assert full_results == result_list
-            full_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+                expected_results.append([start_ts + i, str(i)])
+            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            expected_results.reverse()
+            assert actual_results == expected_results
+            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            assert actual_results == expected_results[7:-2]
 
             r.execute_command('TS.CREATE', 'tester2')
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester2', start_ts + i, i)
-            full_results = r.execute_command('TS.REVRANGE', 'tester2', 0, -1)
-            assert full_results == result_list
+            actual_results = r.execute_command('TS.REVRANGE', 'tester2', 0, -1)
+            assert actual_results == expected_results
+            actual_results = r.execute_command('TS.REVRANGE', 'tester2', 1511885910L, 1511886000L)
+            assert actual_results == expected_results[7:-2]
 
     def test_label_index(self):
         with self.redis() as r:

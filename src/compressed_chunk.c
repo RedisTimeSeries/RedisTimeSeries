@@ -105,6 +105,9 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample) {
   return Compressed_ReadNext((Compressed_Iterator *)iter, &sample->timestamp, &sample->value);
 }
 
-void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
+void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk) {
+  if (freeChunk) { 
+    free(((ChunkIterator *)iter)->chunk);
+  }
   free(iter);
 }

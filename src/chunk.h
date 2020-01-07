@@ -27,7 +27,6 @@ typedef struct ChunkIterator {
     int currentIndex;
     timestamp_t lastTimestamp;
     int lastValue;
-    ChunkResult(*Next)(ChunkIter_t *iter, Sample *sample);
     int options;
 } ChunkIterator;
 
@@ -44,6 +43,6 @@ timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
-void FreeChunkIterator(ChunkIter_t *iter);
+void FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 
 #endif
