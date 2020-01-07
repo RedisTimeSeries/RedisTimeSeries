@@ -9,7 +9,7 @@ commands:
       - checkout
       - run:
           name: Pull Submodules
-          command: make fetch
+          command: git submodule update --init --recursive
       - run:
           name: Install prerequisites
           command: make setup
