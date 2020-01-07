@@ -531,7 +531,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
     SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts) != REDISMODULE_OK) { 
+    if (SeriesQuery(series, &iterator, start_ts, end_ts, rev) != REDISMODULE_OK) { 
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
