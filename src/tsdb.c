@@ -233,7 +233,7 @@ int SeriesQuery(Series *series, SeriesIterator *iter,
     
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
     seriesEncodeTimestamp(&rax_key, minTimestamp);
-    const char *direction = (rev == NO_OPT) ? "<=" : ">=";
+    const char *direction = (rev == NO_OPT) ? "<=" : "$";
     iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, direction, &rax_key, sizeof(rax_key));
     RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
     

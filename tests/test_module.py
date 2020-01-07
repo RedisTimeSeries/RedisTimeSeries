@@ -993,7 +993,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             full_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
             result_list.reverse()
             assert full_results == result_list
-            #full_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            full_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
 
             r.execute_command('TS.CREATE', 'tester2')
             for i in range(samples_count):
