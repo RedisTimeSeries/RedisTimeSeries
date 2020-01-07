@@ -1,6 +1,36 @@
 ROOT=..
 include $(ROOT)/deps/readies/mk/main
 
+#----------------------------------------------------------------------------------------------  
+
+define HELP
+make setup         # install packages required for build
+make fetch         # download and prepare dependant modules
+
+make build
+  DEBUG=1          # build debug variant
+  VARIANT=name     # use a build variant 'name'
+  DEPS=1           # also build dependant modules
+  COV=1            # perform coverage analysis (implies debug build)
+make clean         # remove binary files
+  ALL=1            # remove binary directories
+  DEPS=1           # also clean dependant modules
+
+make deps          # build dependant modules
+make all           # build all libraries and packages
+
+make test          # run tests
+  TEST=name        # run test maching 'name'
+  TEST_ARGS="..."  # RLTest arguments
+  COV=1            # perform coverage analysis
+
+make pack          # build packages (ramp & dependencies)
+endef
+
+#----------------------------------------------------------------------------------------------  
+
+MK_CUSTOM_CLEAN=1
+
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
@@ -120,14 +150,25 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 #----------------------------------------------------------------------------------------------
 
 TEST_REPORT_DIR ?= $(PWD)
+TEST_ARGS += \
+	--junitxml=$(TEST_REPORT_DIR)/tests_report.xml
 
 tests: $(TARGET)
+	@if ! command -v redis-server > /dev/null; then \
+		echo "Cannot find redis-server. Aborting." ;\
+		exit 1 ;\
+	fi
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
+ifeq ($(TEST),)
 	$(SHOW)set -e; \
 	cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
+	REDISTIMESERIES=$(TARGET) python -m pytest  $(TEST_ARGS) -svv .
+else
+	cd ../tests; \
+	PYDEBUG=1 REDIS_VERBOSE=1 REDISTIMESERIES=$(TARGET) python -m pytest -k "${TEST}" -svv .
+endif
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif

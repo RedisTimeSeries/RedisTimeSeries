@@ -2,6 +2,8 @@
 ROOT=../..
 include $(ROOT)/deps/readies/mk/main
 
+MK_CUSTOM_CLEAN=1
+
 BINDIR=$(BINROOT)/rmutil
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
