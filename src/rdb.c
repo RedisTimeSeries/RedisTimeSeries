@@ -110,7 +110,8 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     size_t numSamples = SeriesGetNumSamples(series);
     RedisModule_SaveUnsigned(io, numSamples);
 
-    SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, NO_OPT);
+    SeriesIterator iter;
+    SeriesQuery(series, &iter, 0, series->lastTimestamp, NO_OPT);
     Sample sample;
     while (SeriesIteratorGetNext(&iter, &sample, NO_OPT) == CR_OK) {
         RedisModule_SaveUnsigned(io, sample.timestamp);
