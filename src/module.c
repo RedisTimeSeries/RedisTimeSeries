@@ -302,7 +302,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
+static void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
     RedisModule_ReplyWithArray(ctx, 2);
 
     RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
@@ -541,7 +541,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     void *context = NULL;
     if (aggObject != NULL) {
         context = aggObject->createContext();
-        timestamp_t initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
+        timestamp_t initTS;
+        if (rev == NO_OPT) {
+            initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
+        } else {
+            initTS = series->funcs->GetLastTimestamp(iterator.currentChunk);
+        }
         last_agg_timestamp = initTS - (initTS % time_delta);
     }
 
@@ -556,7 +561,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             arraylen++;
         } else {
             timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            if (current_timestamp > last_agg_timestamp) {
+            if ((rev == NO_OPT  && (current_timestamp > last_agg_timestamp)) ||
+                (rev == REVERSE && (current_timestamp < last_agg_timestamp))) {
                 ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                 arraylen++;
                 last_agg_timestamp = current_timestamp;
