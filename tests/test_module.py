@@ -1003,7 +1003,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert actual_results == expected_results
             actual_results = r.execute_command('TS.REVRANGE', 'tester2', 1511885910L, 1511886000L)
             assert actual_results == expected_results[7:-2]
-
+            
+            r.execute_command('TS.CREATE', 'tester3', 'chunk_size', 50)
+            for i in range(samples_count * 10):
+                r.execute_command('TS.ADD', 'tester3', start_ts + i, i * 1.123)
+            info = self._get_ts_info(r, 'tester3')
+            assert info.chunk_count == 9
+            actual_results = r.execute_command('TS.REVRANGE', 'tester3', 1511886110L, 1511886120L)
+            assert len(actual_results) == 11
+            
+    
     def test_label_index(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')

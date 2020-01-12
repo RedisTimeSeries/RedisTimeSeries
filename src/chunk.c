@@ -68,7 +68,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    iter->currentIndex = (options & REVERSE) == 0 ? 0 : iter->chunk->max_samples - 1;
+    iter->currentIndex = (options & REVERSE) == 0 ? 0 : iter->chunk->num_samples - 1;
     iter->options = options;
     return (ChunkIter_t *)iter;
 }
