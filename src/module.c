@@ -521,6 +521,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     void *context = NULL;
     if (aggObject != NULL) {
         context = aggObject->createContext();
+        // setting the first timestamp of the aggregation
         timestamp_t initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
         last_agg_timestamp = initTS - (initTS % time_delta);
     }
