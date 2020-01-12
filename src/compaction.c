@@ -74,6 +74,7 @@ void AvgAddValue(void *contextPtr, double value){
 
 double AvgFinalize(void *contextPtr) {
     AvgContext *context = (AvgContext *)contextPtr;
+    if (context->cnt == 0) return 0;
     return context->val / context->cnt;
 }
 

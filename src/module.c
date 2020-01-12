@@ -523,7 +523,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev) {
     Sample sample;
     long long arraylen = 0;
-    timestamp_t last_agg_timestamp = 0;
+    timestamp_t last_agg_timestamp;
 
     // In case a retention is set shouldn't return chunks older than the retention 
     if(series->retentionTime){
@@ -539,9 +539,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     }
 
     void *context = NULL;
-    if (aggObject != NULL)
+    if (aggObject != NULL) {
         context = aggObject->createContext();
-    
+        timestamp_t initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
+        last_agg_timestamp = initTS - (initTS % time_delta);
+    }
+
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                     (maxResults == -1 || arraylen < maxResults)) {
@@ -554,10 +557,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         } else {
             timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             if (current_timestamp > last_agg_timestamp) {
-                if (last_agg_timestamp != 0) {
-                    ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-                    arraylen++;
-                }
+                ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+                arraylen++;
                 last_agg_timestamp = current_timestamp;
             }
             aggObject->appendValue(context, sample.value);

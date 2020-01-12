@@ -914,8 +914,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
             assert expected_result[0][2][:3] == actual_result[0][2]
-            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
-            assert expected_result[0][2][1:9] == actual_result[0][2][:8]
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
+            assert [[1511885905L, '1']] == actual_result[0][2][:1]
+            assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
             assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
@@ -939,7 +940,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
-
+    
     def test_mrange_withlabels(self):
         start_ts = 1511885909L
         samples_count = 50
@@ -1201,6 +1202,23 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                [100002L, '1'], [100004L, '1'], [1000000L, '1'], [1000001L, '1'],
                                [10000011000001L, '1'], [10000011000002L, '1']]
             assert expected_result == r.execute_command('TS.range monkey 0 -1')    
+
+    def test_issue299(self):
+        with self.redis() as r:
+            r.execute_command('ts.create issue299')
+            for i in range(1000):
+                r.execute_command('ts.add issue299', i * 10, i)
+            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
+            assert actual_result[0] == [0L, '0']
+            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 100')
+            assert actual_result[0] == [0L, '4.5']  
+
+            r.execute_command('del issue299')
+            r.execute_command('ts.create issue299')
+            for i in range(100, 1000):
+                r.execute_command('ts.add issue299', i * 10, i)
+            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
+            assert actual_result[0] != [0L, '0']       
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
