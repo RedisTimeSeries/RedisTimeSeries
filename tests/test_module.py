@@ -985,7 +985,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     
     def test_revrange(self):
         start_ts = 1511885908L
-        samples_count = 100
+        samples_count = 1000
         expected_results = []
 
         with self.redis() as r:
@@ -1004,7 +1004,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-            assert [[1511886000L, '764'], [1511885950L, '3325'], [1511885900L, '861']] == actual_results_rev
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
 
@@ -1025,13 +1024,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-            assert [[1511886000L, '764'], [1511885950L, '3325'], [1511885900L, '861']] == actual_results_rev
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
 
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
             assert len(actual_results_rev) == 5
-            assert actual_results_rev[0][0] > actual_results_rev[1][0]  
+            assert actual_results_rev[0][0] > actual_results_rev[1][0]
 
     def test_mrevrange(self):
         start_ts = 1511885909L
