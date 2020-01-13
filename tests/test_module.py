@@ -992,31 +992,47 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-                expected_results.append([start_ts + i, str(i)])
-            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
-            expected_results.reverse()
-            assert actual_results == expected_results
-            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
-            assert actual_results == expected_results[7:-2]
-
-            r.execute_command('TS.CREATE', 'tester2')
-            for i in range(samples_count):
-                r.execute_command('TS.ADD', 'tester2', start_ts + i, i)
-            actual_results = r.execute_command('TS.REVRANGE', 'tester2', 0, -1)
-            assert actual_results == expected_results
-            actual_results = r.execute_command('TS.REVRANGE', 'tester2', 1511885910L, 1511886000L)
-            assert actual_results == expected_results[7:-2]
-            actual_results = r.execute_command('TS.REVRANGE', 'tester2', 0, -1, 'AGGREGATION', 'sum', 50)
-            assert [[1511886000L, '764'], [1511885950L, '3325'], [1511885900L, '861']] == actual_results
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
             
-            r.execute_command('TS.CREATE', 'tester3', 'chunk_size', 50)
-            for i in range(samples_count * 10):
-                r.execute_command('TS.ADD', 'tester3', start_ts + i, i * 1.123)
-            info = self._get_ts_info(r, 'tester3')
-            assert info.chunk_count == 9
-            actual_results = r.execute_command('TS.REVRANGE', 'tester3', 1511886110L, 1511886120L)
-            assert len(actual_results) == 11
-    
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            assert [[1511886000L, '764'], [1511885950L, '3325'], [1511885900L, '861']] == actual_results_rev
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            # with compression
+            r.execute_command('DEL', 'tester1')
+            r.execute_command('TS.CREATE', 'tester1')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+            
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            assert [[1511886000L, '764'], [1511885950L, '3325'], [1511885900L, '861']] == actual_results_rev
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
+            assert len(actual_results_rev) == 5
+            assert actual_results_rev[0][0] > actual_results_rev[1][0]  
+
     def test_mrevrange(self):
         start_ts = 1511885909L
         samples_count = 50
