@@ -1157,6 +1157,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                [10000011000001L, '1'], [10000011000002L, '1']]
             assert expected_result == r.execute_command('TS.range monkey 0 -1')    
 
+class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
+        module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
+    def test_autocreate(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.ADD', 'tester', '1980', '0', 'LABELS', 'name',
+                                     'brown', 'color', 'pink') == 1980 
+            keys = r.execute_command('keys *')
+            keys = sorted(keys)
+            assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1', 'tester_MIN_10000']
+
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
     class _Class(ModuleTestCase(REDISTIMESERIES, module_args=args)):
