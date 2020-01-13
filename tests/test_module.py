@@ -271,7 +271,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.ADD values timestamp 5')   # string
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.ADD values * value')       # string
-                
+                    
     def test_rdb(self):
         start_ts = 1511885909L
         samples_count = 1500
@@ -280,8 +280,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name', 'brown', 'color', 'pink')
             assert r.execute_command('TS.CREATE', 'tester_agg_avg_10')
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+            assert r.execute_command('TS.CREATE', 'tester_agg_sum_10')
+            assert r.execute_command('TS.CREATE', 'tester_agg_stds_10')
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_avg_10', 'AGGREGATION', 'AVG', 10)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_10', 'AGGREGATION', 'SUM', 10)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_stds_10', 'AGGREGATION', 'STD.S', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
             data = r.execute_command('dump', 'tester')
 
@@ -293,13 +297,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
 
-            expected_result = ['totalSamples', 1500L, 'memoryUsage', 6014L,
-                               'firstTimestamp', start_ts, 'chunkCount', 1L,
-                               'labels', [['name', 'brown'], ['color', 'pink']],
-                               'lastTimestamp', 1511887408L, 'maxSamplesPerChunk', 360L,
-                               'retentionTime', 0L, 'sourceKey', None,
-                               'rules', [['tester_agg_avg_10', 10L, 'AVG'], ['tester_agg_max_10', 10L, 'MAX']]]
-            assert TSInfo(expected_result) == self._get_ts_info(r, 'tester')
+            assert self._get_ts_info(r, 'tester').rules == [['tester_agg_avg_10', 10L, 'AVG'], 
+                                                            ['tester_agg_max_10', 10L, 'MAX'],
+                                                            ['tester_agg_sum_10', 10L, 'SUM'],
+                                                            ['tester_agg_stds_10',10L, 'STD.S']]
 
     def test_rdb_aggregation_context(self):
         """
@@ -314,26 +315,41 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATE', 'tester_agg_avg_3')
             assert r.execute_command('TS.CREATE', 'tester_agg_min_3')
+            assert r.execute_command('TS.CREATE', 'tester_agg_sum_3')
+            assert r.execute_command('TS.CREATE', 'tester_agg_std_3')
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_avg_3', 'AGGREGATION', 'AVG', 3)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_min_3', 'AGGREGATION', 'MIN', 3)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_3', 'AGGREGATION', 'SUM', 3)
+            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_std_3', 'AGGREGATION', 'STD.S', 3)
             self._insert_data(r, 'tester', start_ts, samples_count, range(samples_count))
             data_tester = r.execute_command('dump', 'tester')
             data_avg_tester = r.execute_command('dump', 'tester_agg_avg_3')
             data_min_tester = r.execute_command('dump', 'tester_agg_min_3')
+            data_sum_tester = r.execute_command('dump', 'tester_agg_sum_3')
+            data_std_tester = r.execute_command('dump', 'tester_agg_std_3')
 
         with self.redis() as r:
             r.execute_command('RESTORE', 'tester', 0, data_tester)
             r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
+            r.execute_command('RESTORE', 'tester_agg_sum_3', 0, data_sum_tester)
+            r.execute_command('RESTORE', 'tester_agg_std_3', 0, data_std_tester)
             assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count, samples_count)
             assert r.execute_command('TS.ADD', 'tester', start_ts + samples_count + 10, 0) #closes the last time_bucket
             # if the aggregation context wasn't saved, the results were considering only the new value added
             expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
             expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
+            expected_result_sum = [[start_ts, '3'], [start_ts + 3, '7']]
+            expected_result_std = [[start_ts, '1'], [start_ts + 3, '0.7071']]
             actual_result_avg = r.execute_command('TS.range', 'tester_agg_avg_3', start_ts, start_ts + samples_count)
             assert actual_result_avg == expected_result_avg
             actual_result_min = r.execute_command('TS.range', 'tester_agg_min_3', start_ts, start_ts + samples_count)
             assert actual_result_min == expected_result_min
+            actual_result_sum = r.execute_command('TS.range', 'tester_agg_sum_3', start_ts, start_ts + samples_count)
+            assert actual_result_sum == expected_result_sum
+            actual_result_std = r.execute_command('TS.range', 'tester_agg_std_3', start_ts, start_ts + samples_count)
+            assert actual_result_std[0] == expected_result_std[0]
+            assert abs(float(actual_result_std[1][1]) - float(expected_result_std[1][1])) < ALLOWED_ERROR
 
     def test_sanity_pipeline(self):
         start_ts = 1488823384L
