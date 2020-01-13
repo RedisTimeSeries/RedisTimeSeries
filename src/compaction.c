@@ -451,8 +451,6 @@ const char *AggTypeEnumToString(int aggType) {
 
 AggregationClass *GetAggClass(int aggType) {
     switch (aggType) {
-        case AGG_NONE:
-            return NULL;
         case AGG_MIN:
             return &aggMin;
         case AGG_MAX:
