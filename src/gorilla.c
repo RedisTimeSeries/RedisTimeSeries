@@ -446,7 +446,7 @@ ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestam
     *value     = iter->prevValue.d;
 
     assert(iter->chunk);
-    if (iter->count >= iter->chunk->count || iter->idx > iter->chunk->idx) return CR_END;
+    if (iter->count >= iter->chunk->count) return CR_END;
 
     iter->prevTS      = readTS(iter);
     iter->prevValue.d = readV (iter);
