@@ -229,7 +229,11 @@ static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen) {
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx - 16;
+    // `- 20` is added to prevent overflow while iterating over chunk
+    // 20 bytes = 160 bytes is more than the maximum taken by Gorilla algorithm
+    // for both timestamp and value
+    // TODO: change iterator so fix can be removed
+    u_int64_t available = (chunk->size * 8) - chunk->idx - 20;
     return size <= available;
 }
 
