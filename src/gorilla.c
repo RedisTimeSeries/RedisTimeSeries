@@ -229,7 +229,7 @@ static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen) {
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx;
+    u_int64_t available = (chunk->size * 8) - chunk->idx - 16;
     return size <= available;
 }
 
@@ -446,7 +446,7 @@ ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestam
     *value     = iter->prevValue.d;
 
     assert(iter->chunk);
-    if (iter->count >= iter->chunk->count) return CR_END;
+    if (iter->count >= iter->chunk->count || iter->idx > iter->chunk->idx) return CR_END;
 
     iter->prevTS      = readTS(iter);
     iter->prevValue.d = readV (iter);
