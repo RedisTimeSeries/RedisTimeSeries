@@ -7,7 +7,7 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 * key - Key name for timeseries
@@ -17,7 +17,7 @@ Optional args:
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.  
@@ -35,7 +35,7 @@ TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
 
 ```sql
-TS.ALTER key [RETENTION retentionTime] [LABELS field value..]
+TS.ALTER key [RETENTION retentionTime] [LABELS label value..]
 ```
 
 #### Alter Example
@@ -45,29 +45,29 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
-* The command only alters the fields that are given,
+* The command only alters the labels that are given,
   e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
-* Supplying the labels keyword without any fields will remove all existing labels.  
+* Supplying the `LABELS` keyword without any labels will remove all existing labels.  
 
 ### TS.ADD
 
-Append (or create and append) a new value to the series.
+Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
-* timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
-* value - Sample numeric data value (double)
+* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* value - numeric data value of the sample (double)
 
 These arguments are optional because they can be set by TS.CREATE:
 
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -96,14 +96,14 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 
 ### TS.MADD
 
-Append new values to a list of series.
+Append new samples to a list of series.
 
 ```sql
 TS.MADD key timestamp value [key timestamp value ...]
 ```
 
-* timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
-* value - Sample numeric data value (double)
+* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* value - numeric data value of the sample (double)
 
 #### Examples
 ```sql
@@ -122,30 +122,29 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 
 ### TS.INCRBY/TS.DECRBY
 
-Increment the latest value.
+Creates a new sample that increments/decrements the latest sample's value.
 
 ```sql
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
 
 * key - Key name for timeseries
-* value - Sample numeric data value (double)
+* value - numeric data value of the sample (double)
 
 Optional args:
-
- * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
+ * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -263,16 +262,16 @@ Optional args:
 * count - Maximum number of returned results per time-series.
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 * timeBucket - Time bucket for aggregation in milliseconds.
-* WITHLABELS - Include in the reply the key-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position. 
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
 
 #### Return Value
 
 Array-reply, specifically:
 
 The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels and all the values that match the range are returned. 
+The returned entries are complete, that means that the name, labels and all the samples that match the range are returned.
 
-The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with key-value pairs that represent metadata labels of the time-series.
+The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
 
 
 ##### Examples
@@ -408,14 +407,14 @@ TS.MGET FILTER filter...
 
 ### TS.INFO
 
-#### Format 
+#### Format
 ```sql
 TS.INFO key
 ```
 
 #### Description
 
-Returns information and statistics on the time-series. 
+Returns information and statistics on the time-series.
 
 #### Parameters
 
@@ -436,7 +435,7 @@ Array-reply, specifically:
 - Retention time, in milliseconds, for the time-series.
 - Number of Memory Chunks used for the time-series.
 - Maximum Number of samples per Memory Chunk.
-- A nested array of key-value pairs that represent metadata labels of the time-series.
+- A nested array of label-value pairs that represent metadata labels of the time-series.
 - A nested array of compaction Rules of the time-series.
 
 #### `TS.INFO` Example
