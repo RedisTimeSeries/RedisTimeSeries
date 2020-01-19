@@ -1114,7 +1114,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add dont_trim_me', i, i * 1.1)
                 
             assert 2 == self._get_ts_info(r, 'trim_me').chunk_count
-            assert 13 == self._get_ts_info(r, 'dont_trim_me').chunk_count
+            assert 14 == self._get_ts_info(r, 'dont_trim_me').chunk_count
 
     def test_empty(self):
         with self.redis() as r:

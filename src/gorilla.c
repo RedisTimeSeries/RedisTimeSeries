@@ -229,7 +229,7 @@ static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen) {
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx;
+    u_int64_t available = (chunk->size * 8) - chunk->idx - 16;
     return size <= available;
 }
 
