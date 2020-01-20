@@ -276,7 +276,6 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
         }
         funcs->FreeChunkIterator(iterator->chunkIterator);
         iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, currentSample);
-        funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
     }
 
     if (currentSample->timestamp > iterator->maxTimestamp) {

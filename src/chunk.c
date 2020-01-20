@@ -79,7 +79,7 @@ ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, Sample *sample) {
 
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = iterator;
-    if (iter->currentIndex <= iter->chunk->num_samples) {
+    if (iter->currentIndex < iter->chunk->num_samples) {
         Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex++);
         memcpy(sample, internalSample, sizeof(Sample));
         return CR_OK;
