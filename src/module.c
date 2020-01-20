@@ -517,7 +517,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
     SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts) != REDISMODULE_OK) { 
+    if (SeriesQuery(series, &iterator, &sample, start_ts, end_ts) != REDISMODULE_OK) { 
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
@@ -526,8 +526,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         context = aggObject->createContext();
     
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-                    (maxResults == -1 || arraylen < maxResults)) {
+    do {
         if (aggObject == NULL) { // No aggregation whatssoever
             RedisModule_ReplyWithArray(ctx, 2);
 
@@ -545,7 +544,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             }
             aggObject->appendValue(context, sample.value);
         }
-    }
+    } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+                    (maxResults == -1 || arraylen < maxResults));
+                    
     SeriesIteratorClose(&iterator);
 
     if (aggObject != AGG_NONE) {

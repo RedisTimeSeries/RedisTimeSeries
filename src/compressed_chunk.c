@@ -61,13 +61,13 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk) {
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, Sample *sample) {
   CompressedChunk *compChunk = chunk;
   Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
 
   iter->chunk = compChunk;
   iter->idx = 0;
-  iter->count = 0;
+  iter->count = 1;    // first sample is returned
 
   iter->prevTS = compChunk->baseTimestamp;
   iter->prevDelta = 0;
@@ -75,6 +75,9 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk) {
   iter->prevValue.d = compChunk->baseValue.d;  
   iter->prevLeading = 32;
   iter->prevTrailing = 32;
+
+  sample->timestamp = compChunk->baseTimestamp;
+  sample->value     = compChunk->baseValue.d;
 
   return (ChunkIter_t *)iter;
 }

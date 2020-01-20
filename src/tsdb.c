@@ -224,7 +224,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-int SeriesQuery(Series *series, SeriesIterator *iter, 
+int SeriesQuery(Series *series, SeriesIterator *iter, Sample *sample,
                             api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
     timestamp_t rax_key;
     iter->series = series;
@@ -241,10 +241,19 @@ int SeriesQuery(Series *series, SeriesIterator *iter,
         if (funcs->GetLastTimestamp(iter->currentChunk) < minTimestamp) {
             dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         } else {
-            iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk);
+            iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk, sample);
             iter->minTimestamp = minTimestamp;
             iter->maxTimestamp = maxTimestamp;
-            return REDISMODULE_OK;
+            do {
+                if (sample->timestamp >= iter->minTimestamp) { 
+                    return REDISMODULE_OK;
+                }
+                if (sample->timestamp > iter->maxTimestamp) { 
+                    return REDISMODULE_ERR;
+                }
+            }
+            while (funcs->ChunkIteratorGetNext(iter->chunkIterator, sample) == CR_OK);     // Skip through initial samples
+            break;
         }
     }    
     return REDISMODULE_ERR;
@@ -266,18 +275,10 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             return CR_ERR;       // No more chunks or they out of range
         }
         funcs->FreeChunkIterator(iterator->chunkIterator);
-        iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
+        iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, currentSample);
         funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
     }
 
-    if (currentSample->timestamp < iterator->minTimestamp) {
-        while (1) {     // Skip through initial samples
-            funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
-            if (currentSample->timestamp >= iterator->minTimestamp) { 
-                break;
-            }
-        }
-    }
     if (currentSample->timestamp > iterator->maxTimestamp) {
         return CR_ERR;          // Reach end of range requested
     } 

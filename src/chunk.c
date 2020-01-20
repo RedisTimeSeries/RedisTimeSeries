@@ -69,18 +69,18 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, Sample *sample) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
     iter->currentIndex = 0;
+    *sample = *ChunkGetSample(iter->chunk, iter->currentIndex++);
     return iter;
 }
 
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = iterator;
-    if (iter->currentIndex < iter->chunk->num_samples) {
-        iter->currentIndex++;
-        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex - 1);
+    if (iter->currentIndex <= iter->chunk->num_samples) {
+        Sample *internalSample = ChunkGetSample(iter->chunk, iter->currentIndex++);
         memcpy(sample, internalSample, sizeof(Sample));
         return CR_OK;
     } else {

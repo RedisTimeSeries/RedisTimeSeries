@@ -442,14 +442,14 @@ static double readV(Compressed_Iterator *iter) {
 
 ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestamp, double *value) {
     assert(iter);
-    *timestamp = iter->prevTS;
-    *value     = iter->prevValue.d;
+    //*timestamp = iter->prevTS;
+    //*value     = iter->prevValue.d;
 
     assert(iter->chunk);
     if (iter->count >= iter->chunk->count) return CR_END;
 
-    iter->prevTS      = readTS(iter);
-    iter->prevValue.d = readV (iter);
+    *timestamp = iter->prevTS      = readTS(iter);
+    *value     = iter->prevValue.d = readV (iter);
     iter->count++;
     return CR_OK;
 }

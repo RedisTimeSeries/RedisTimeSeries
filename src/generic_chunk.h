@@ -29,7 +29,7 @@ typedef struct ChunkFuncs {
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, Sample *sample);
     void(*FreeChunkIterator)(ChunkIter_t *iter);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
 

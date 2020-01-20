@@ -63,7 +63,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 size_t SeriesGetNumSamples(Series *series);
 
 // Iterator over the series
-int SeriesQuery(Series *series, SeriesIterator *iter, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
+int SeriesQuery(Series *series, SeriesIterator *iter, Sample *sample, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
