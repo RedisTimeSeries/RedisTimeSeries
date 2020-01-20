@@ -448,8 +448,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_range_midrange(self):
         samples_count = 5000
-        with self.redis() as r:
-            
+        with self.redis() as r:            
             assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester', i, i)
