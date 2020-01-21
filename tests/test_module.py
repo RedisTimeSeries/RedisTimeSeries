@@ -473,6 +473,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                               'SUM', 4)
             assert expected_result == actual_result
 
+            actual_result = r.execute_command('TS.range', 'tester', 5, 8, 'AGGREGATION',
+                                              'SUM', 10)
+            assert expected_result == actual_result
+
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.range', 'tester', 5, 8, 'AGGREGATION',
                                               'SUM', -1)
