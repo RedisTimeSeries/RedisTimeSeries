@@ -517,23 +517,17 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
-    RedisModule_Log(ctx, "warning", "start %d end %d", start_ts, end_ts);
-        RedisModule_Log(ctx, "warning", "start %d ", iterator.minTimestamp);
-
-    const api_timestamp_t intervalStartTs = iterator.minTimestamp;
-
 
     void *context = NULL;
     if (aggObject != NULL)
         context = aggObject->createContext();
     
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
     int64_t delta_pos = 0;
-
     while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
                     (maxResults == -1 || arraylen < maxResults)) {
-        if (aggObject == NULL) { // No aggregation whatssoever
+        // No aggregation 
+        if (aggObject == NULL) { 
             RedisModule_ReplyWithArray(ctx, 2);
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
@@ -553,9 +547,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != AGG_NONE && delta_pos != 0) {
-        if (arraylen != maxResults) {
-            // reply last bucket of data
+    if (aggObject != AGG_NONE) {
+        // reply last bucket of data if any
+        if (arraylen != maxResults && delta_pos != 0) {
             ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
             arraylen++;
         }

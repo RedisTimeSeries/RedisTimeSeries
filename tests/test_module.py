@@ -453,7 +453,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
             
-            expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
+            expected_result = [[start_ts, '500'], [start_ts+500, '500'], [start_ts+1000, '500'], ]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
             assert expected_result == actual_result
@@ -891,7 +891,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_range_by_labels(self):
         start_ts = 1511885909L
-        samples_count = 50
+        # surpass chunk size and make sure we have remainder buckets to make test harder
+        samples_count = 1023
+        aggregation_bucket_size = 5
+        remainder_bucket = 0
+        if samples_count % aggregation_bucket_size != 0:
+            remainder_bucket = 1
+        total_agg_buckets = int(math.ceil((samples_count / aggregation_bucket_size))) + remainder_bucket
+
+        def build_expected( start_ts, time_bucket, aggregation_buckets, val ):
+                return [[long(start_ts + i * time_bucket), str(val)] for i in range(aggregation_buckets)]
 
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -906,26 +915,46 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [['tester1', [], expected_result]] == actual_result
 
-            def build_expected(val, time_bucket):
-                return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count+1, time_bucket)]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-            expected_result = [['tester1', [], build_expected(5, 5)],
-                    ['tester2', [], build_expected(15, 5)],
-                    ['tester3', [], build_expected(25, 5)],
+            # return all aggregation buckets filtered
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', aggregation_bucket_size, 'FILTER', 'generation=x')
+            expected_result = [['tester1', [], build_expected(start_ts, aggregation_bucket_size, total_agg_buckets, 5 )],
+                    ['tester2', [], build_expected(start_ts, aggregation_bucket_size, total_agg_buckets, 15 )],
+                    ['tester3', [], build_expected(start_ts, aggregation_bucket_size, total_agg_buckets, 25 )],
                     ]
             assert expected_result == actual_result
-            assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
-                                                            'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
+            assert len( actual_result[0][2] ) == total_agg_buckets
+            
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
+                                                            'AGGREGATION', 'LAST', aggregation_bucket_size, 'FILTER', 'generation=x', 'class!=middle')
+            assert expected_result[1:] == actual_result
+            
+            # return only the first 3 aggregation buckets
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', aggregation_bucket_size, 'FILTER', 'generation=x')
             assert expected_result[0][2][:3] == actual_result[0][2]
-            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
-            assert expected_result[0][2][1:9] == actual_result[0][2][:8]
+            assert len( actual_result[0][2] ) == 3
+            
+            # aggregate into only one interval 
+            actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'AGGREGATION', 'COUNT', samples_count -1 , 'FILTER', 'generation=x')
+            assert [[start_ts + 1,str(samples_count -1)]] == actual_result[0][2]
+
+            # check that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
+            expected_result = [[start_ts+(i*3), str(3)] for i in range(3)]
+            assert expected_result == actual_result[0][2]
+            assert 3 == len(actual_result[0][2])
+            
+            # check that count before agg works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
+            expected_result = [[start_ts+(i*3), str(3)] for i in range(3)]
+            assert expected_result == actual_result[0][2]
+            assert 3 == len(actual_result[0][2])
+
+            # check that we return the last bucket of sample
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
-            assert 18 == len(actual_result[0][2]) #just checking that agg count before count works
+            remainder_bucket = 0
+            if samples_count % 3 != 0:
+                remainder_bucket = 1
+            assert math.ceil((samples_count/3))+remainder_bucket == len(actual_result[0][2]) 
 
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x')
