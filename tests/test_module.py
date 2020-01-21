@@ -480,6 +480,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.range', 'tester', 5, 8, 'AGGREGATION',
                                               'SUM', -1)
+            
+    def test_range_start_ts_based(self):
+        start_ts = 4L
+        samples_count = 6
+        with self.redis() as r:
+            for i in range(samples_count):
+                r.execute_command("TS.ADD tester", start_ts + i * 2, 1)
+            actual_result = [[5L, '2'], [9L, '2'], [13L, '1']]
+            assert actual_result == r.execute_command('TS.range', 'tester',
+                                    5, -1, 'AGGREGATION', 'SUM', 4)
 
     def test_compaction_rules(self):
         with self.redis() as r:
