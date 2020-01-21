@@ -527,15 +527,19 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
+    if (aggObject == NULL) {
+        // No aggregation
+        while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
                     (maxResults == -1 || arraylen < maxResults)) {
-        if (aggObject == NULL) { // No aggregation whatssoever
             RedisModule_ReplyWithArray(ctx, 2);
 
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;
-        } else {
+        }
+    } else {
+        while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
+                    (maxResults == -1 || arraylen < maxResults)) {
             timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             if (current_timestamp > last_agg_timestamp) {
                 ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
