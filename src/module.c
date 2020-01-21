@@ -517,35 +517,43 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
     }
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
+    RedisModule_Log(ctx, "warning", "start %d end %d", start_ts, end_ts);
+        RedisModule_Log(ctx, "warning", "start %d ", iterator.minTimestamp);
+
+    const api_timestamp_t intervalStartTs = iterator.minTimestamp;
+
 
     void *context = NULL;
     if (aggObject != NULL)
         context = aggObject->createContext();
     
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+
+    int64_t delta_pos = 0;
+
     while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
                     (maxResults == -1 || arraylen < maxResults)) {
         if (aggObject == NULL) { // No aggregation whatssoever
             RedisModule_ReplyWithArray(ctx, 2);
-
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;
         } else {
-            timestamp_t current_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            if (current_timestamp > last_agg_timestamp) {
-                if (last_agg_timestamp != 0) {
-                    ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-                    arraylen++;
-                }
-                last_agg_timestamp = current_timestamp;
+            if (delta_pos==0){
+                last_agg_timestamp = sample.timestamp;
             }
             aggObject->appendValue(context, sample.value);
+            delta_pos++;
+            if (delta_pos==time_delta) {
+                ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+                arraylen++;
+                delta_pos=0;
+            }
         }
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != AGG_NONE) {
+    if (aggObject != AGG_NONE && delta_pos != 0) {
         if (arraylen != maxResults) {
             // reply last bucket of data
             ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
