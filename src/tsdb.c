@@ -245,7 +245,7 @@ int SeriesQuery(Series *series, SeriesIterator *iter, Sample *sample,
             iter->minTimestamp = minTimestamp;
             iter->maxTimestamp = maxTimestamp;
             do {
-                if (sample->timestamp >= iter->minTimestamp) { 
+                if (sample->timestamp >= iter->minTimestamp && sample->timestamp <= iter->maxTimestamp) { 
                     return REDISMODULE_OK;
                 }
                 if (sample->timestamp > iter->maxTimestamp) { 
