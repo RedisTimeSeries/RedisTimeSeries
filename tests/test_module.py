@@ -1123,11 +1123,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             info = self._get_ts_info(r, 'empty')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty 0 -1')
+            assert [] == r.execute_command('TS.get empty')
 
             r.execute_command('ts.create empty_uncompressed uncompressed')
             info = self._get_ts_info(r, 'empty_uncompressed')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
+            assert [] == r.execute_command('TS.get empty')
 
     def test_gorilla(self):
         with self.redis() as r:
