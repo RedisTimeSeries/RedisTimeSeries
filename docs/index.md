@@ -8,6 +8,7 @@ RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
 ## Features
 Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
+
 - High volume inserts, low latency reads
 - Query by start time and end-time
 - Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
