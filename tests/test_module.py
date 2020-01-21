@@ -399,18 +399,41 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         keys = ['k1', 'k2', 'k3']
         labels = ['a', 'a', 'b']
         values = [100, 200, 300]
+        kvlabels = []
 
         with self.redis() as r:
             for i in range(num_of_keys):
                 assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
+                kvlabels.append([labels[i], '1'])
 
                 assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
                 assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
 
-            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [
-                [keys[0], [[labels[0], '1']], time_stamp, str(values[0])],
-                [keys[1], [[labels[1], '1']], time_stamp, str(values[1])]
+            # expect to received time-series k1 and k2
+            expected_result = [
+                [keys[0], [], [time_stamp, str(values[0])]],
+                [keys[1], [], [time_stamp, str(values[1])]]
             ]
+
+            actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
+            assert expected_result == actual_result
+
+            # expect to received time-series k3 with labels
+            expected_result_withlabels = [
+                [keys[2], [kvlabels[2]], [time_stamp, str(values[2])]]
+            ]
+            
+            actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
+            assert expected_result_withlabels == actual_result
+
+            # expect to received time-series k1 and k2 with labels
+            expected_result_withlabels = [
+                [keys[0], [kvlabels[0]], [time_stamp, str(values[0])]],
+                [keys[1], [kvlabels[1]], [time_stamp, str(values[1])]]
+            ]
+            
+            actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
+            assert expected_result_withlabels == actual_result
 
             # negative test
             assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
