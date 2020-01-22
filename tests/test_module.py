@@ -7,6 +7,7 @@ import math
 import random
 import statistics 
 from rmtest import ModuleTestCase
+from includes import *
 
 if os.environ['REDISTIMESERIES'] != '':
     REDISTIMESERIES = os.environ['REDISTIMESERIES']
