@@ -29,6 +29,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
+    newSeries->totalSamples = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     newSeries->options = 0;
@@ -188,15 +189,11 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
-size_t SeriesGetNumSamples(Series *series) {
+size_t  SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
-    Chunk_t *currentChunk;
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
-    {
-        numSamples += series->funcs->GetNumOfSample(currentChunk);
+    if (series!=NULL){
+        numSamples = series->totalSamples;
     }
-    RedisModule_DictIteratorStop(iter);
     return numSamples;
 }
 
@@ -221,6 +218,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     }
     series->lastTimestamp = timestamp;
     series->lastValue = value;
+    series->totalSamples++;
     return TSDB_OK;
 }
 
