@@ -250,12 +250,37 @@ int SeriesQuery(Series *series, SeriesIterator *iter,
     return REDISMODULE_ERR;
 }
 
+ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
+    ChunkFuncs *funcs = iterator->series->funcs;
+    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+
+    if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
+        return CR_END;
+    }
+
+    if (sample->timestamp < iterator->minTimestamp) {
+        while (res == CR_OK) {     
+            // Skip through initial samples
+            res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+            if (sample->timestamp >= iterator->minTimestamp) { 
+                break;
+            }
+        }
+        return res; // shouldn't happen
+    }
+    // No sample within range
+    if (sample->timestamp > iterator->maxTimestamp) {
+        return CR_END;   
+    } 
+    return CR_OK;
+}
+
 void SeriesIteratorClose(SeriesIterator *iterator) {
     iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
-int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
+ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     Chunk_t *currentChunk = iterator->currentChunk;
     ChunkFuncs *funcs = iterator->series->funcs;
 
@@ -270,14 +295,6 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
         funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
     }
 
-    if (currentSample->timestamp < iterator->minTimestamp) {
-        while (1) {     // Skip through initial samples
-            funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
-            if (currentSample->timestamp >= iterator->minTimestamp) { 
-                break;
-            }
-        }
-    }
     if (currentSample->timestamp > iterator->maxTimestamp) {
         return CR_ERR;          // Reach end of range requested
     } 
