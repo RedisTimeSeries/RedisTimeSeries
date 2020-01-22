@@ -66,6 +66,8 @@ void SeriesTrim(Series * series) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
+
+            series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
             break;

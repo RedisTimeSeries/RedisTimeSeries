@@ -1123,15 +1123,29 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     
     def test_trim(self):
         with self.redis() as r:
-            samples = 2000
-            r.execute_command('ts.create trim_me CHUNK_SIZE 64 RETENTION 10')
-            r.execute_command('ts.create dont_trim_me CHUNK_SIZE 64')
-            for i in range(samples):
-                r.execute_command('ts.add trim_me', i, i * 1.1)
-                r.execute_command('ts.add dont_trim_me', i, i * 1.1)
+            for mode in ["UNCOMPRESSED","COMPRESSED"]:
+                samples = 2000
+                chunk_size = 64
+                remainder = samples % chunk_size
+                total_chunk_count = math.ceil( float(samples) / float(chunk_size) )
+                r.execute_command('ts.create trim_me CHUNK_SIZE {0} RETENTION 10 {1}'.format(chunk_size,mode))
+                r.execute_command('ts.create dont_trim_me CHUNK_SIZE {0} {1}'.format(chunk_size,mode))
+                for i in range(samples):
+                    r.execute_command('ts.add trim_me', i, i * 1.1)
+                    r.execute_command('ts.add dont_trim_me', i, i * 1.1)
                 
-            assert 2 == self._get_ts_info(r, 'trim_me').chunk_count
-            assert 13 == self._get_ts_info(r, 'dont_trim_me').chunk_count
+                trimmed_info = self._get_ts_info(r, 'trim_me')
+                untrimmed_info = self._get_ts_info(r, 'dont_trim_me')
+                assert 2 == trimmed_info.chunk_count
+                assert samples == untrimmed_info.total_samples
+                # extra test for uncompressed
+                if mode == "UNCOMPRESSED":
+                    assert chunk_size + remainder == trimmed_info.total_samples
+                    assert total_chunk_count == untrimmed_info.chunk_count
+
+                r.delete("trim_me")
+                r.delete("dont_trim_me")
+
 
     def test_empty(self):
         with self.redis() as r:
