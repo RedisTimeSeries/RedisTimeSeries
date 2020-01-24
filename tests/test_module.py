@@ -1291,24 +1291,7 @@ class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
                                      'brown', 'color', 'pink') == 1980
             keys = r.execute_command('keys *')
             keys = sorted(keys)
-            assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1', 'tester_MIN_10000']
-
-    def test_issue299(self):
-        with self.redis() as r:
-            r.execute_command('ts.create issue299')
-            for i in range(1000):
-                r.execute_command('ts.add issue299', i * 10, i)
-            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
-            assert actual_result[0] == [0L, '0']
-            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 100')
-            assert actual_result[0] == [0L, '4.5']  
-
-            r.execute_command('del issue299')
-            r.execute_command('ts.create issue299')
-            for i in range(100, 1000):
-                r.execute_command('ts.add issue299', i * 10, i)
-            actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
-            assert actual_result[0] != [0L, '0']       
+            assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1', 'tester_MIN_10000']  
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
