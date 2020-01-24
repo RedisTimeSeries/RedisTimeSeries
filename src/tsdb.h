@@ -36,6 +36,7 @@ typedef struct Series {
     size_t labelsCount;
     RedisModuleString *srcKey;
     ChunkFuncs *funcs;
+    size_t totalSamples;
 } Series;
 
 typedef struct SeriesIterator {

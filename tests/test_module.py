@@ -288,9 +288,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_10', 'AGGREGATION', 'SUM', 10)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_stds_10', 'AGGREGATION', 'STD.S', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
-            data = r.execute_command('dump', 'tester')
-
-        with self.redis() as r:
+            data = r.execute_command('DUMP', 'tester')
+            r.execute_command('DEL', 'tester')
             r.execute_command('RESTORE', 'tester', 0, data)
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
@@ -328,8 +327,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             data_min_tester = r.execute_command('dump', 'tester_agg_min_3')
             data_sum_tester = r.execute_command('dump', 'tester_agg_sum_3')
             data_std_tester = r.execute_command('dump', 'tester_agg_std_3')
-
-        with self.redis() as r:
+            r.execute_command('DEL','tester','tester_agg_avg_3','tester_agg_min_3','tester_agg_sum_3','tester_agg_std_3')
             r.execute_command('RESTORE', 'tester', 0, data_tester)
             r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
@@ -415,18 +413,54 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         keys = ['k1', 'k2', 'k3']
         labels = ['a', 'a', 'b']
         values = [100, 200, 300]
+        kvlabels = []
 
         with self.redis() as r:
+            # test for empty series
+            assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
+            assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
+            # expect to received time-series k1 and k2
+            expected_result = [
+                ["key4_empty", [], []],
+                ["key5_empty", [], []]
+            ]
+
+            actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
+            assert expected_result == actual_result
+
+            # test for series with data
             for i in range(num_of_keys):
                 assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
+                kvlabels.append([labels[i], '1'])
 
                 assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
                 assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
 
-            assert r.execute_command('TS.MGET', 'FILTER', 'a=1') == [
-                [keys[0], [[labels[0], '1']], time_stamp, str(values[0])],
-                [keys[1], [[labels[1], '1']], time_stamp, str(values[1])]
+            # expect to received time-series k1 and k2
+            expected_result = [
+                [keys[0], [], [time_stamp, str(values[0])]],
+                [keys[1], [], [time_stamp, str(values[1])]]
             ]
+
+            actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
+            assert expected_result == actual_result
+
+            # expect to received time-series k3 with labels
+            expected_result_withlabels = [
+                [keys[2], [kvlabels[2]], [time_stamp, str(values[2])]]
+            ]
+            
+            actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
+            assert expected_result_withlabels == actual_result
+
+            # expect to received time-series k1 and k2 with labels
+            expected_result_withlabels = [
+                [keys[0], [kvlabels[0]], [time_stamp, str(values[0])]],
+                [keys[1], [kvlabels[1]], [time_stamp, str(values[1])]]
+            ]
+            
+            actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
+            assert expected_result_withlabels == actual_result
 
             # negative test
             assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
@@ -1134,15 +1168,29 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     
     def test_trim(self):
         with self.redis() as r:
-            samples = 2000
-            r.execute_command('ts.create trim_me CHUNK_SIZE 64 RETENTION 10')
-            r.execute_command('ts.create dont_trim_me CHUNK_SIZE 64')
-            for i in range(samples):
-                r.execute_command('ts.add trim_me', i, i * 1.1)
-                r.execute_command('ts.add dont_trim_me', i, i * 1.1)
+            for mode in ["UNCOMPRESSED","COMPRESSED"]:
+                samples = 2000
+                chunk_size = 64
+                remainder = samples % chunk_size
+                total_chunk_count = math.ceil( float(samples) / float(chunk_size) )
+                r.execute_command('ts.create trim_me CHUNK_SIZE {0} RETENTION 10 {1}'.format(chunk_size,mode))
+                r.execute_command('ts.create dont_trim_me CHUNK_SIZE {0} {1}'.format(chunk_size,mode))
+                for i in range(samples):
+                    r.execute_command('ts.add trim_me', i, i * 1.1)
+                    r.execute_command('ts.add dont_trim_me', i, i * 1.1)
                 
-            assert 2 == self._get_ts_info(r, 'trim_me').chunk_count
-            assert 13 == self._get_ts_info(r, 'dont_trim_me').chunk_count
+                trimmed_info = self._get_ts_info(r, 'trim_me')
+                untrimmed_info = self._get_ts_info(r, 'dont_trim_me')
+                assert 2 == trimmed_info.chunk_count
+                assert samples == untrimmed_info.total_samples
+                # extra test for uncompressed
+                if mode == "UNCOMPRESSED":
+                    assert chunk_size + remainder == trimmed_info.total_samples
+                    assert total_chunk_count == untrimmed_info.chunk_count
+
+                r.delete("trim_me")
+                r.delete("dont_trim_me")
+
 
     def test_empty(self):
         with self.redis() as r:
@@ -1150,11 +1198,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             info = self._get_ts_info(r, 'empty')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty 0 -1')
+            assert [] == r.execute_command('TS.get empty')
 
             r.execute_command('ts.create empty_uncompressed uncompressed')
             info = self._get_ts_info(r, 'empty_uncompressed')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
+            assert [] == r.execute_command('TS.get empty')
 
     def test_gorilla(self):
         with self.redis() as r:
