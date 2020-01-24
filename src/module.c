@@ -1022,6 +1022,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
+        RedisModule_ReplyWithArray(ctx, 1);
         ReplyWithSeriesLastDatapoint(ctx, series);
         replylen++;
         RedisModule_CloseKey(key);

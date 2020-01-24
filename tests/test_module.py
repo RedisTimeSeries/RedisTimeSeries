@@ -407,8 +407,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
             # expect to received time-series k1 and k2
             expected_result = [
-                ["key4_empty", [], []],
-                ["key5_empty", [], []]
+                ["key4_empty", [], [[]]],
+                ["key5_empty", [], [[]]]
             ]
 
             actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
@@ -424,8 +424,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             # expect to received time-series k1 and k2
             expected_result = [
-                [keys[0], [], [time_stamp, str(values[0])]],
-                [keys[1], [], [time_stamp, str(values[1])]]
+                [keys[0], [], [[time_stamp, str(values[0])]]],
+                [keys[1], [], [[time_stamp, str(values[1])]]]
             ]
 
             actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
@@ -433,7 +433,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             # expect to received time-series k3 with labels
             expected_result_withlabels = [
-                [keys[2], [kvlabels[2]], [time_stamp, str(values[2])]]
+                [keys[2], [kvlabels[2]], [[time_stamp, str(values[2])]]]
             ]
             
             actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
@@ -441,8 +441,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             # expect to received time-series k1 and k2 with labels
             expected_result_withlabels = [
-                [keys[0], [kvlabels[0]], [time_stamp, str(values[0])]],
-                [keys[1], [kvlabels[1]], [time_stamp, str(values[1])]]
+                [keys[0], [kvlabels[0]], [[time_stamp, str(values[0])]]],
+                [keys[1], [kvlabels[1]], [[time_stamp, str(values[1])]]]
             ]
             
             actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
