@@ -22,6 +22,10 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.  
 
+#### Complexity
+
+TS.CREATE complexity is O(1).
+
 #### Create Example
 
 ```sql
@@ -274,7 +278,7 @@ The returned entries are complete, that means that the name, labels and all the 
 The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
 
 
-##### Examples
+#### Examples
 
 ##### Query by Filters Example
 ```sql
@@ -367,12 +371,35 @@ TS.GET key
 
 * key - Key name for timeseries
 
-#### Get Example
+
+#### Return Value
+
+Array-reply, specifically:
+
+The returned array will contain:
+- The last sample timestamp followed by the last sample value, when the time-series contains data. 
+- An empty array, when the time-series is empty.
+
+
+#### Complexity
+
+TS.GET complexity is O(1).
+
+#### Examples
+
+##### Get Example on time-series containing data
 
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
 1) (integer) 1548149279
 2) "23"
+```
+
+##### Get Example on empty time-series 
+
+```sql
+127.0.0.1:6379> redis-cli TS.GET empty_ts
+(empty array)
 ```
 
 ### TS.MGET
