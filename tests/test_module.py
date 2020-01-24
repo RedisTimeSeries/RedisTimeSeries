@@ -402,6 +402,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         kvlabels = []
 
         with self.redis() as r:
+            # test for empty series
+            assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
+            assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
+            # expect to received time-series k1 and k2
+            expected_result = [
+                ["key4_empty", [], []],
+                ["key5_empty", [], []]
+            ]
+
+            actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
+            assert expected_result == actual_result
+
+            # test for series with data
             for i in range(num_of_keys):
                 assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
                 kvlabels.append([labels[i], '1'])
