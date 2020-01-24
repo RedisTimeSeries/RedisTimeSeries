@@ -22,6 +22,10 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.  
 
+#### Complexity
+
+TS.CREATE complexity is O(1).
+
 #### Create Example
 
 ```sql
@@ -228,20 +232,20 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 #### Aggregated Query Example
 
 ```sql
-127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
-1) 1) (integer) 1548149180000
+127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180007 1548149210007 AGGREGATION avg 5000
+1) 1) (integer) 1548149180007
    2) "26.199999999999999"
-2) 1) (integer) 1548149185000
+2) 1) (integer) 1548149185007
    2) "27.399999999999999"
-3) 1) (integer) 1548149190000
+3) 1) (integer) 1548149190007
    2) "24.800000000000001"
-4) 1) (integer) 1548149195000
+4) 1) (integer) 1548149195007
    2) "23.199999999999999"
-5) 1) (integer) 1548149200000
+5) 1) (integer) 1548149200007
    2) "25.199999999999999"
-6) 1) (integer) 1548149205000
+6) 1) (integer) 1548149205007
    2) "28"
-7) 1) (integer) 1548149210000
+7) 1) (integer) 1548149210007
    2) "20"
 ```
 
@@ -274,11 +278,55 @@ The returned entries are complete, that means that the name, labels and all the 
 The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
 
 
+#### Examples
+
+##### Query by Filters Example
+```sql
+127.0.0.1:6379> TS.MRANGE 1548149180018 1548149210018 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
+1) 1) "temperature:2:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149180018
+         2) "27.600000000000001"
+      2) 1) (integer) 1548149185018
+         2) "23.800000000000001"
+      3) 1) (integer) 1548149190018
+         2) "24.399999999999999"
+      4) 1) (integer) 1548149195018
+         2) "24"
+      5) 1) (integer) 1548149200018
+         2) "25.600000000000001"
+      6) 1) (integer) 1548149205018
+         2) "25.800000000000001"
+      7) 1) (integer) 1548149210018
+         2) "21"
+2) 1) "temperature:3:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149180018
+         2) "26.199999999999999"
+      2) 1) (integer) 1548149185018
+         2) "27.399999999999999"
+      3) 1) (integer) 1548149190018
+         2) "24.800000000000001"
+      4) 1) (integer) 1548149195018
+         2) "23.199999999999999"
+      5) 1) (integer) 1548149200018
+         2) "25.199999999999999"
+      6) 1) (integer) 1548149205018
+         2) "28"
+      7) 1) (integer) 1548149210018
+         2) "20"
+```
+
+##### Query by Filters Example with WITHLABELS option
+
+The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
+
+
 ##### Examples
 
 ##### Query by Filters Example
 ```sql
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
+127.0.0.1:6379> TS.MRANGE 1548149180080 1548149210080 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) (empty list or set)
    3) 1) 1) (integer) 1548149180000
@@ -322,38 +370,38 @@ The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, w
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180080
          2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185080
          2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190080
          2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195080
          2) "24"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200080
          2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205080
          2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210080
          2) "21"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
          2) "3"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180080
          2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185080
          2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190080
          2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195080
          2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200080
          2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205080
          2) "28"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210080
          2) "20"
 ```
 
@@ -367,7 +415,23 @@ TS.GET key
 
 * key - Key name for timeseries
 
-#### Get Example
+
+#### Return Value
+
+Array-reply, specifically:
+
+The returned array will contain:
+- The last sample timestamp followed by the last sample value, when the time-series contains data. 
+- An empty array, when the time-series is empty.
+
+
+#### Complexity
+
+TS.GET complexity is O(1).
+
+#### Examples
+
+##### Get Example on time-series containing data
 
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
@@ -375,16 +439,57 @@ TS.GET key
 2) "23"
 ```
 
+##### Get Example on empty time-series 
+
+```sql
+127.0.0.1:6379> redis-cli TS.GET empty_ts
+(empty array)
+```
+
 ### TS.MGET
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET FILTER filter...
+TS.MGET [WITHLABELS] FILTER filter...
 ```
 * filter - [See Filtering](#filtering)
 
-#### MGET Example
+Optional args:
 
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
+
+#### Return Value
+
+Array-reply, specifically:
+
+The command returns the entries with labels matching the specified filter.
+The returned entries are complete, that means that the name, labels and all the last sample of the time-serie.
+
+The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
+
+
+#### Complexity
+
+TS.MGET complexity is O(n).
+
+n = Number of time-series that match the filters
+
+#### Examples
+
+##### MGET Example with default behaviour
+```sql
+127.0.0.1:6379> TS.MGET FILTER area_id=32
+1) 1) "temperature:2:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149181000
+         2) "30"
+2) 1) "temperature:3:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149181000
+         2) "29"
+```
+
+##### MGET Example with WITHLABELS option
 ```sql
 127.0.0.1:6379> TS.MGET FILTER area_id=32
 1) 1) "temperature:2:32"
@@ -392,15 +497,15 @@ TS.MGET FILTER filter...
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181000
-   4) "30"
+   3) 1) 1) (integer) 1548149181000
+         2) "30"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
-         2) "3"
+         2) "2"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181000
-   4) "29"
+   3) 1) 1) (integer) 1548149181000
+         2) "29"
 ```
 
 ## General
