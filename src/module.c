@@ -958,9 +958,15 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
-    RedisModule_ReplyWithDouble(ctx, series->lastValue);
+    
+    if(SeriesGetNumSamples(series)==0){
+        RedisModule_ReplyWithArray(ctx, 0);
+    }
+    else{
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+        RedisModule_ReplyWithDouble(ctx, series->lastValue);
+    }
 
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
