@@ -1125,10 +1125,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         samples_count = 6
         with self.redis() as r:
             for i in range(samples_count):
-                r.execute_command("TS.ADD tester", start_ts + i * 2, 1.5)
-            actual_result = [[5L, '3'], [9L, '3'], [13L, '1.5']]
+                r.execute_command("TS.ADD tester", start_ts + i * 4, 1.5)
+            actual_result = [[0L, '1.5'], [8L, '3'], [16L, '3'], [24L, '1.5']]
             assert actual_result == r.execute_command('TS.range', 'tester',
-                                    5, -1, 'AGGREGATION', 'SUM', 4)
+                                    0, -1, 'AGGREGATION', 'SUM', 8)
+            actual_result = [[2L, '3'], [10L, '3'], [18L, '3']]
+            assert actual_result == r.execute_command('TS.range', 'tester',
+                                    2, -1, 'AGGREGATION', 'SUM', 8)
+            actual_result = [[4L, '3'], [12L, '3'], [20L, '3']]
+            assert actual_result == r.execute_command('TS.range', 'tester',
+                                    4, -1, 'AGGREGATION', 'SUM', 8)
+            actual_result = [[6L, '3'], [14L, '3'], [22L, '1.5']]
+            assert actual_result == r.execute_command('TS.range', 'tester',
+                                    6, -1, 'AGGREGATION', 'SUM', 8)
 
     def test_trim(self):
         with self.redis() as r:
