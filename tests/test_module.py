@@ -889,9 +889,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             info = self._get_ts_info(r, 'tester2')
             assert info.total_samples == 1L 
             assert info.labels == {'location': 'earth', 'name': 'blabla2'}
-    '''
+
     def test_range_by_labels(self):
-        start_ts = 1511885909L
+        start_ts = 1511885910L
         samples_count = 50
 
         with self.redis() as r:
@@ -908,26 +908,26 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [['tester1', [], expected_result]] == actual_result
 
             def build_expected(val, time_bucket):
-                return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count+1, time_bucket)]
+                return [[long(i - i%time_bucket), str(val)] for i in range(start_ts, start_ts+samples_count, time_bucket)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
             expected_result = [['tester1', [], build_expected(5, 5)],
-                    ['tester2', [], build_expected(15, 5)],
-                    ['tester3', [], build_expected(25, 5)],
-                    ]
+                               ['tester2', [], build_expected(15, 5)],
+                               ['tester3', [], build_expected(25, 5)],
+                                ]
             assert expected_result == actual_result
             assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x', 'class!=middle')
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
             assert expected_result[0][2][:3] == actual_result[0][2]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
-            assert [[1511885905L, '1']] == actual_result[0][2][:1]
+            assert [[1511885910L, '5']] == actual_result[0][2][:1]
             assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
             assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
             assert 3 == len(actual_result[0][2]) #just checking that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
-            assert 18 == len(actual_result[0][2]) #just checking that agg count before count works
+            assert 17 == len(actual_result[0][2]) #just checking that agg count before count works
 
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x')
@@ -945,7 +945,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
-    '''
+
     def test_mrange_withlabels(self):
         start_ts = 1511885909L
         samples_count = 50
