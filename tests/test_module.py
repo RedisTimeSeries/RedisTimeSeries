@@ -288,9 +288,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_10', 'AGGREGATION', 'SUM', 10)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_stds_10', 'AGGREGATION', 'STD.S', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
-            data = r.execute_command('dump', 'tester')
-
-        with self.redis() as r:
+            data = r.execute_command('DUMP', 'tester')
+            r.execute_command('DEL', 'tester')
             r.execute_command('RESTORE', 'tester', 0, data)
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
@@ -328,8 +327,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             data_min_tester = r.execute_command('dump', 'tester_agg_min_3')
             data_sum_tester = r.execute_command('dump', 'tester_agg_sum_3')
             data_std_tester = r.execute_command('dump', 'tester_agg_std_3')
-
-        with self.redis() as r:
+            r.execute_command('DEL','tester','tester_agg_avg_3','tester_agg_min_3','tester_agg_sum_3','tester_agg_std_3')
             r.execute_command('RESTORE', 'tester', 0, data_tester)
             r.execute_command('RESTORE', 'tester_agg_avg_3', 0, data_avg_tester)
             r.execute_command('RESTORE', 'tester_agg_min_3', 0, data_min_tester)
