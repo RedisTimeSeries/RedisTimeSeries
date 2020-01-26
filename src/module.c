@@ -548,13 +548,17 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             arraylen++;
         }
     } else {
+        bool firstSample = TRUE;
         while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
                     (maxResults == -1 || arraylen < maxResults)) {
             if (sample.timestamp >= last_agg_timestamp + time_delta) {
-                ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
-                arraylen++;
+                if (firstSample == FALSE) {
+                    ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+                    arraylen++;
+                }
                 last_agg_timestamp = sample.timestamp - ((sample.timestamp - last_agg_timestamp) % time_delta);
             }
+            firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
         }
     }
