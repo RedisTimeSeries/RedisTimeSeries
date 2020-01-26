@@ -1140,7 +1140,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3 and info.memory_usage == 4136L
+            assert info.total_samples == 3 and info.memory_usage == 4128L
 
             # rdb load
             data = r.execute_command('dump', 'not_compressed')
@@ -1150,7 +1150,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3 and info.memory_usage == 4136L
+            assert info.total_samples == 3 and info.memory_usage == 4128L
             # test deletion
             assert r.delete('not_compressed')
 
