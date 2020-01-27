@@ -116,7 +116,7 @@ static inline double variance(double sum, double sum_2, double count) {
 
     /*  var(X) = sum((x_i - E[X])^2)
      *  = sum(x_i^2) - 2 * sum(x_i) * E[X] + E^2[X] */
-    return  (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
+    return (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
 }
 
 double VarPopulationFinalize(void *contextPtr) {
@@ -324,7 +324,7 @@ static AggregationClass aggSum = {
     .appendValue = SumAppendValue,
     .freeContext = rm_free,
     .finalize = SingleValueFinalize,
-    .writeContext =  SingleValueWriteContext,
+    .writeContext = SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
 };
@@ -334,7 +334,7 @@ static AggregationClass aggCount = {
     .appendValue = CountAppendValue,
     .freeContext = rm_free,
     .finalize = SingleValueFinalize,
-    .writeContext =  SingleValueWriteContext,
+    .writeContext = SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
 };
@@ -344,7 +344,7 @@ static AggregationClass aggFirst = {
     .appendValue = FirstAppendValue,
     .freeContext = rm_free,
     .finalize = SingleValueFinalize,
-    .writeContext =  SingleValueWriteContext,
+    .writeContext = SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
 };
@@ -354,7 +354,7 @@ static AggregationClass aggLast = {
     .appendValue = LastAppendValue,
     .freeContext = rm_free,
     .finalize = SingleValueFinalize,
-    .writeContext =  SingleValueWriteContext,
+    .writeContext = SingleValueWriteContext,
     .readContext = SingleValueReadContext,
     .resetContext = SingleValueReset
 };
@@ -389,31 +389,31 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 		if (strncmp(agg_type_lower, "min", len) == 0 && len == 3){
 			result = TS_AGG_MIN;
 		} else if (strncmp(agg_type_lower, "max", len) == 0) {
-			result =  TS_AGG_MAX;
+			result = TS_AGG_MAX;
 		} else if (strncmp(agg_type_lower, "sum", len) == 0) {
-			result =  TS_AGG_SUM;
+			result = TS_AGG_SUM;
 		} else if (strncmp(agg_type_lower, "avg", len) == 0) {
-			result =  TS_AGG_AVG;
+			result = TS_AGG_AVG;
 		}
 	} else if (len == 4){
 		if (strncmp(agg_type_lower, "last", len) == 0) {
-			result =  TS_AGG_LAST;
+			result = TS_AGG_LAST;
 		}
 	} else if (len == 5){
 		if (strncmp(agg_type_lower, "count", len) == 0) {
-			result =  TS_AGG_COUNT;
+			result = TS_AGG_COUNT;
 		} else if (strncmp(agg_type_lower, "range", len) == 0) {
-			result =  TS_AGG_RANGE;
+			result = TS_AGG_RANGE;
 		} else if (strncmp(agg_type_lower, "first", len) == 0) {
-			result =  TS_AGG_FIRST;
+			result = TS_AGG_FIRST;
 		} else if (strncmp(agg_type_lower, "std.p", len) == 0) {
-			result =  TS_AGG_STD_P;
+			result = TS_AGG_STD_P;
 		} else if (strncmp(agg_type_lower, "std.s", len) == 0) {
-			result =  TS_AGG_STD_S;
+			result = TS_AGG_STD_S;
 		} else if (strncmp(agg_type_lower, "var.p", len) == 0) {
-			result =  TS_AGG_VAR_P;
+			result = TS_AGG_VAR_P;
 		} else if (strncmp(agg_type_lower, "var.s", len) == 0) {
-			result =  TS_AGG_VAR_S;
+			result = TS_AGG_VAR_S;
 		}
 	}
 	return result;
@@ -452,8 +452,6 @@ const char *AggTypeEnumToString(int aggType) {
 
 AggregationClass *GetAggClass(int aggType) {
     switch (aggType) {
-        case AGG_NONE:
-            return NULL;
         case AGG_MIN:
             return &aggMin;
         case AGG_MAX:
