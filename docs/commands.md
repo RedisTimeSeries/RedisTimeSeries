@@ -144,6 +144,7 @@ This command can be used as a counter or gauge that automatically gets history a
 * value - numeric data value of the sample (double)
 
 Optional args:
+
  * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
