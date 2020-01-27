@@ -7,6 +7,7 @@
 #define CONSTS_H
 
 #include <sys/types.h>
+#include <stdbool.h>
 
 #define TRUE 1
 #define FALSE 0

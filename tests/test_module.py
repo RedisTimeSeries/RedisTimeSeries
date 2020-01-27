@@ -486,7 +486,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             #test out of range returns empty list
             assert [] == r.execute_command('TS.range', 'tester', start_ts * 2, -1)
             assert [] == r.execute_command('TS.range', 'tester', start_ts / 3, start_ts / 2)
-                    
+    
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE tester string -1')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -505,6 +505,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             
             expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
             actual_result = r.execute_command('TS.range', 'tester', 1488823000L, -1, 'AGGREGATION',
+                                              'count', 500)
+            assert expected_result == actual_result
+
+            # test first aggregation is not [0,0] if out of range
+            expected_result = [[1488823000L, '116'], [1488823500L, '500']]
+            actual_result = r.execute_command('TS.range', 'tester', 1488822000L, 1488823999L, 'AGGREGATION',
                                               'count', 500)
             assert expected_result == actual_result
 
