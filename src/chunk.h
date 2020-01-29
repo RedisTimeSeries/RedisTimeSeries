@@ -15,8 +15,6 @@ typedef struct Chunk {
     Sample *samples;
     short num_samples;
     short max_samples;
-    struct Chunk *nextChunk;
-    // struct Chunk *prevChunk;
 } Chunk;
 
 typedef struct ChunkIterator {
