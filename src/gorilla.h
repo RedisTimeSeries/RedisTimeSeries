@@ -24,9 +24,6 @@ typedef union {
 } union64bits;
 
 typedef struct CompressedChunk {
-    // must remain as first member
-    ChunkIter_t base;
-
     u_int64_t size;
     u_int64_t count;
     u_int64_t idx;
