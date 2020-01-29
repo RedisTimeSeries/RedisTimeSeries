@@ -30,6 +30,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
+    newSeries->totalSamples = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     newSeries->options = 0;
@@ -66,6 +67,8 @@ void SeriesTrim(Series * series) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
+
+            series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
             break;
@@ -189,15 +192,11 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
-size_t SeriesGetNumSamples(Series *series) {
+size_t  SeriesGetNumSamples(Series *series) {
     size_t numSamples = 0;
-    Chunk_t *currentChunk;
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
-    {
-        numSamples += series->funcs->GetNumOfSample(currentChunk);
+    if (series!=NULL){
+        numSamples = series->totalSamples;
     }
-    RedisModule_DictIteratorStop(iter);
     return numSamples;
 }
 
@@ -222,6 +221,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     }
     series->lastTimestamp = timestamp;
     series->lastValue = value;
+    series->totalSamples++;
     return TSDB_OK;
 }
 
@@ -251,12 +251,37 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
     return REDISMODULE_ERR;
 }
 
+ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
+    ChunkFuncs *funcs = iterator->series->funcs;
+    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+
+    if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
+        return CR_END;
+    }
+
+    if (sample->timestamp < iterator->minTimestamp) {
+        while (res == CR_OK) {     
+            // Skip through initial samples
+            res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+            if (sample->timestamp >= iterator->minTimestamp) { 
+                break;
+            }
+        }
+        return res; // shouldn't happen
+    }
+    // No sample within range
+    if (sample->timestamp > iterator->maxTimestamp) {
+        return CR_END;   
+    } 
+    return CR_OK;
+}
+
 void SeriesIteratorClose(SeriesIterator *iterator) {
     iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
-int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
+ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
@@ -272,17 +297,7 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, false);
             funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
         }
-
-        if (currentSample->timestamp < iterator->minTimestamp) {
-            while (res == CR_OK) {     // Skip through initial samples
-                res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
-                if (currentSample->timestamp >= iterator->minTimestamp) { 
-                    break;
-                }
-            }
-        }
-        if (currentSample->timestamp > iterator->maxTimestamp || 
-            currentSample->timestamp < iterator->minTimestamp) {
+        if (currentSample->timestamp > iterator->maxTimestamp) {
             return CR_ERR;          // Reach end of range requested
         } 
         return CR_OK;
@@ -300,19 +315,10 @@ int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
             funcs->ChunkIteratorGetPrev(iterator->chunkIterator, currentSample);
         }
 
-        if (currentSample->timestamp > iterator->maxTimestamp) {
-            while (res == CR_OK) {     // Skip through initial samples
-                res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, currentSample);
-                if (currentSample->timestamp <= iterator->maxTimestamp) { 
-                    break;
-                }
-            }
-        }
-        if (currentSample->timestamp > iterator->maxTimestamp || 
-            currentSample->timestamp < iterator->minTimestamp) {
+        if (currentSample->timestamp < iterator->minTimestamp) {
             return CR_ERR;          // Reach end of range requested
         } 
-        return CR_OK;            
+        return CR_OK;           
     }
 }
 

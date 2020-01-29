@@ -7,7 +7,7 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 * key - Key name for timeseries
@@ -17,10 +17,14 @@ Optional args:
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.  
+
+#### Complexity
+
+TS.CREATE complexity is O(1).
 
 #### Create Example
 
@@ -35,7 +39,7 @@ TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
 
 ```sql
-TS.ALTER key [RETENTION retentionTime] [LABELS field value..]
+TS.ALTER key [RETENTION retentionTime] [LABELS label value..]
 ```
 
 #### Alter Example
@@ -45,29 +49,29 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
-* The command only alters the fields that are given,
+* The command only alters the labels that are given,
   e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
-* Supplying the labels keyword without any fields will remove all existing labels.  
+* Supplying the `LABELS` keyword without any labels will remove all existing labels.  
 
 ### TS.ADD
 
-Append (or create and append) a new value to the series.
+Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
-* timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
-* value - Sample numeric data value (double)
+* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* value - numeric data value of the sample (double)
 
 These arguments are optional because they can be set by TS.CREATE:
 
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -96,14 +100,14 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 
 ### TS.MADD
 
-Append new values to a list of series.
+Append new samples to a list of series.
 
 ```sql
 TS.MADD key timestamp value [key timestamp value ...]
 ```
 
-* timestamp - UNIX timestamp or `*` for automatic timestamp (using the system clock)
-* value - Sample numeric data value (double)
+* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* value - numeric data value of the sample (double)
 
 #### Examples
 ```sql
@@ -122,30 +126,30 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 
 ### TS.INCRBY/TS.DECRBY
 
-Increment the latest value.
+Creates a new sample that increments/decrements the latest sample's value.
 
 ```sql
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS field value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
 
 * key - Key name for timeseries
-* value - Sample numeric data value (double)
+* value - numeric data value of the sample (double)
 
 Optional args:
 
- * timestamp - UNIX timestamp (in milliseconds) or `*` for automatic timestamp (using the system clock)
+ * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
  * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of key-value pairs that represent metadata labels of the key
+ * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -229,20 +233,20 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 #### Aggregated Query Example
 
 ```sql
-127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
-1) 1) (integer) 1548149180000
+127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180007 1548149210007 AGGREGATION avg 5000
+1) 1) (integer) 1548149180007
    2) "26.199999999999999"
-2) 1) (integer) 1548149185000
+2) 1) (integer) 1548149185007
    2) "27.399999999999999"
-3) 1) (integer) 1548149190000
+3) 1) (integer) 1548149190007
    2) "24.800000000000001"
-4) 1) (integer) 1548149195000
+4) 1) (integer) 1548149195007
    2) "23.199999999999999"
-5) 1) (integer) 1548149200000
+5) 1) (integer) 1548149200007
    2) "25.199999999999999"
-6) 1) (integer) 1548149205000
+6) 1) (integer) 1548149205007
    2) "28"
-7) 1) (integer) 1548149210000
+7) 1) (integer) 1548149210007
    2) "20"
 ```
 
@@ -263,98 +267,98 @@ Optional args:
 * count - Maximum number of returned results per time-series.
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 * timeBucket - Time bucket for aggregation in milliseconds.
-* WITHLABELS - Include in the reply the key-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position. 
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
 
 #### Return Value
 
 Array-reply, specifically:
 
 The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels and all the values that match the range are returned. 
+The returned entries are complete, that means that the name, labels and all the samples that match the range are returned.
 
-The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with key-value pairs that represent metadata labels of the time-series.
+The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
 
 
-##### Examples
+#### Examples
 
 ##### Query by Filters Example
 ```sql
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
+127.0.0.1:6379> TS.MRANGE 1548149180018 1548149210018 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180018
          2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185018
          2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190018
          2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195018
          2) "24"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200018
          2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205018
          2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210018
          2) "21"
 2) 1) "temperature:3:32"
    2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180018
          2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185018
          2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190018
          2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195018
          2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200018
          2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205018
          2) "28"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210018
          2) "20"
 ```
 
 ##### Query by Filters Example with WITHLABELS option
 
 ```sql
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
+127.0.0.1:6379> TS.MRANGE 1548149180080 1548149210080 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180080
          2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185080
          2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190080
          2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195080
          2) "24"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200080
          2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205080
          2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210080
          2) "21"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
          2) "3"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149180000
+   3) 1) 1) (integer) 1548149180080
          2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
+      2) 1) (integer) 1548149185080
          2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
+      3) 1) (integer) 1548149190080
          2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
+      4) 1) (integer) 1548149195080
          2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
+      5) 1) (integer) 1548149200080
          2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
+      6) 1) (integer) 1548149205080
          2) "28"
-      7) 1) (integer) 1548149210000
+      7) 1) (integer) 1548149210080
          2) "20"
 ```
 
@@ -368,7 +372,23 @@ TS.GET key
 
 * key - Key name for timeseries
 
-#### Get Example
+
+#### Return Value
+
+Array-reply, specifically:
+
+The returned array will contain:
+- The last sample timestamp followed by the last sample value, when the time-series contains data. 
+- An empty array, when the time-series is empty.
+
+
+#### Complexity
+
+TS.GET complexity is O(1).
+
+#### Examples
+
+##### Get Example on time-series containing data
 
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
@@ -376,16 +396,57 @@ TS.GET key
 2) "23"
 ```
 
+##### Get Example on empty time-series 
+
+```sql
+127.0.0.1:6379> redis-cli TS.GET empty_ts
+(empty array)
+```
+
 ### TS.MGET
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET FILTER filter...
+TS.MGET [WITHLABELS] FILTER filter...
 ```
 * filter - [See Filtering](#filtering)
 
-#### MGET Example
+Optional args:
 
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
+
+#### Return Value
+
+Array-reply, specifically:
+
+The command returns the entries with labels matching the specified filter.
+The returned entries are complete, that means that the name, labels and all the last sample of the time-serie.
+
+The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
+
+
+#### Complexity
+
+TS.MGET complexity is O(n).
+
+n = Number of time-series that match the filters
+
+#### Examples
+
+##### MGET Example with default behaviour
+```sql
+127.0.0.1:6379> TS.MGET FILTER area_id=32
+1) 1) "temperature:2:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149181000
+         2) "30"
+2) 1) "temperature:3:32"
+   2) (empty list or set)
+   3) 1) 1) (integer) 1548149181000
+         2) "29"
+```
+
+##### MGET Example with WITHLABELS option
 ```sql
 127.0.0.1:6379> TS.MGET FILTER area_id=32
 1) 1) "temperature:2:32"
@@ -393,29 +454,29 @@ TS.MGET FILTER filter...
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181000
-   4) "30"
+   3) 1) 1) (integer) 1548149181000
+         2) "30"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
-         2) "3"
+         2) "2"
       2) 1) "area_id"
          2) "32"
-   3) (integer) 1548149181000
-   4) "29"
+   3) 1) 1) (integer) 1548149181000
+         2) "29"
 ```
 
 ## General
 
 ### TS.INFO
 
-#### Format 
+#### Format
 ```sql
 TS.INFO key
 ```
 
 #### Description
 
-Returns information and statistics on the time-series. 
+Returns information and statistics on the time-series.
 
 #### Parameters
 
@@ -436,7 +497,7 @@ Array-reply, specifically:
 - Retention time, in milliseconds, for the time-series.
 - Number of Memory Chunks used for the time-series.
 - Maximum Number of samples per Memory Chunk.
-- A nested array of key-value pairs that represent metadata labels of the time-series.
+- A nested array of label-value pairs that represent metadata labels of the time-series.
 - A nested array of compaction Rules of the time-series.
 
 #### `TS.INFO` Example
