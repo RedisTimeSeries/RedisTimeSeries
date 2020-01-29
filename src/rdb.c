@@ -111,8 +111,8 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     RedisModule_SaveUnsigned(io, numSamples);
 
     SeriesIterator iter = { .minTimestamp = 0,
-                                .maxTimestamp = series->lastTimestamp,
-                                .reverse = NO_OPT };
+                            .maxTimestamp = series->lastTimestamp,
+                            .reverse = NO_OPT };
     SeriesQuery(series, &iter);
     Sample sample;
     while (SeriesIteratorGetNext(&iter, &sample) == CR_OK) {

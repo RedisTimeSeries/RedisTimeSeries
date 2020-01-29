@@ -231,15 +231,6 @@ static uint64_t getTotalSample(Series *series) {
     return total;
 }
 
-static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
-    RedisModule_ReplyWithArray(ctx, series->labelsCount);
-    for (int i=0; i < series->labelsCount; i++) {
-        RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithString(ctx, series->labels[i].key);
-        RedisModule_ReplyWithString(ctx, series->labels[i].value);
-    }
-}
-
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     
@@ -303,6 +294,15 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(key);
 
     return REDISMODULE_OK;
+}
+
+static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
+    RedisModule_ReplyWithArray(ctx, series->labelsCount);
+    for (int i=0; i < series->labelsCount; i++) {
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithString(ctx, series->labels[i].key);
+        RedisModule_ReplyWithString(ctx, series->labels[i].value);
+    }
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
@@ -589,7 +589,6 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                     arraylen++;
                 }
-                // TODO: REVERSE
                 last_agg_timestamp = iterator.reverse == NO_OPT ?
                     sample.timestamp - ((sample.timestamp - last_agg_timestamp) % time_delta) :
                     sample.timestamp + ((last_agg_timestamp - sample.timestamp) % time_delta);
@@ -659,12 +658,12 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
     return REDISMODULE_OK;
 }
 
-static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-	  RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
-	    double value;
-	    api_timestamp_t timestamp;
-	    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-	        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
+static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc) {
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+    double value;
+    api_timestamp_t timestamp;
+    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
