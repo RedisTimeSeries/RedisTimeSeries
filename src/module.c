@@ -533,7 +533,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             return RedisModule_ReplyWithArray(ctx, 0);
         }
     }
-    SeriesIterator iterator;
+    SeriesIterator iterator = { 0 };
     if (SeriesQuery(series, &iterator, start_ts, end_ts) != REDISMODULE_OK) { 
         return RedisModule_ReplyWithArray(ctx, 0);
     }

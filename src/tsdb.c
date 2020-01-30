@@ -246,7 +246,8 @@ int SeriesQuery(Series *series, SeriesIterator *iter,
             iter->maxTimestamp = maxTimestamp;
             return REDISMODULE_OK;
         }
-    }    
+    }
+    SeriesIteratorClose(iter);
     return REDISMODULE_ERR;
 }
 
@@ -276,8 +277,11 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
-    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
-    RedisModule_DictIteratorStop(iterator->dictIter);
+    if (iterator->chunkIterator != NULL)
+        iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
+    if (iterator->dictIter != NULL)
+        RedisModule_DictIteratorStop(iterator->dictIter);
+    *iterator = (SeriesIterator){ 0 };
 }
 
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
