@@ -438,12 +438,12 @@ n = Number of time-series that match the filters
 127.0.0.1:6379> TS.MGET FILTER area_id=32
 1) 1) "temperature:2:32"
    2) (empty list or set)
-   3) 1) 1) (integer) 1548149181000
-         2) "30"
+   3) 1) (integer) 1548149181000
+      2) "30"
 2) 1) "temperature:3:32"
    2) (empty list or set)
-   3) 1) 1) (integer) 1548149181000
-         2) "29"
+   3) 1) (integer) 1548149181000
+      2) "29"
 ```
 
 ##### MGET Example with WITHLABELS option
@@ -454,15 +454,15 @@ n = Number of time-series that match the filters
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149181000
-         2) "30"
+   3) 1) (integer) 1548149181000
+      2) "30"
 2) 1) "temperature:3:32"
    2) 1) 1) "sensor_id"
          2) "2"
       2) 1) "area_id"
          2) "32"
-   3) 1) 1) (integer) 1548149181000
-         2) "29"
+   3) 1) (integer) 1548149181000
+      2) "29"
 ```
 
 ## General
