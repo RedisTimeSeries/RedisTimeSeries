@@ -523,12 +523,26 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     long long arraylen = 0;
     timestamp_t last_agg_timestamp;
 
-    // In case a retention is set shouldn't return chunks older than the retention 
+    // In case a retention is set shouldn't return chunks older than the retention
+    // TODO: move to parseRangeArguments(?)
     if(series->retentionTime){
     	start_ts = series->lastTimestamp > series->retentionTime ?
     			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
+        // if new start_ts > end_ts, there are no results to return
+        if (start_ts > end_ts) {
+            return RedisModule_ReplyWithArray(ctx, 0);
+        }
     }
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
+    SeriesIterator iterator = { 0 };
+    if (SeriesQuery(series, &iterator, start_ts, end_ts) != REDISMODULE_OK) { 
+        return RedisModule_ReplyWithArray(ctx, 0);
+    }
+
+    ChunkResult res = SeriesIteratorGetFirst(&iterator, &sample);
+    if (res != CR_OK) {
+        SeriesIteratorClose(&iterator);
+        return RedisModule_ReplyWithArray(ctx, 0);
+    }
 
     void *context = NULL;
     if (aggObject != NULL) {
@@ -540,27 +554,28 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     if (aggObject == NULL) {
         // No aggregation
-        while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
-                    (maxResults == -1 || arraylen < maxResults)) {
+        do {
             RedisModule_ReplyWithArray(ctx, 2);
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;
-        }
+        } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+                    (maxResults == -1 || arraylen < maxResults));
     } else {
         bool firstSample = TRUE;
-        while (SeriesIteratorGetNext(&iterator, &sample) != 0 &&
-                    (maxResults == -1 || arraylen < maxResults)) {
+        do {
             if (sample.timestamp >= last_agg_timestamp + time_delta) {
                 if (firstSample == FALSE) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                     arraylen++;
                 }
+
                 last_agg_timestamp = sample.timestamp - ((sample.timestamp - last_agg_timestamp) % time_delta);
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
-        }
+        } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+                    (maxResults == -1 || arraylen < maxResults));
     }
     SeriesIteratorClose(&iterator);
 

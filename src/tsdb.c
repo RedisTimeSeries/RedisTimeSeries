@@ -224,75 +224,85 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
-    SeriesIterator iter;
+int SeriesQuery(Series *series, SeriesIterator *iter, 
+                            api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
     timestamp_t rax_key;
-    iter.series = series;
+    iter->series = series;
+    ChunkFuncs *funcs = iter->series->funcs;
+    
     // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
     seriesEncodeTimestamp(&rax_key, minTimestamp);
-    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-
-    // if no such chunk exists, we will start the search from the first chunk
-    if (!RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk))
-    {
-        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
-        RedisModule_DictNextC(iter.dictIter, NULL, (void*)&iter.currentChunk);
+    iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
+    
+    // iterate to the first relevant chunk
+    void *dictResult = (void *)TRUE;
+    while (dictResult) {
+        if (funcs->GetLastTimestamp(iter->currentChunk) < minTimestamp) {
+            dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
+        } else {
+            iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk);
+            iter->minTimestamp = minTimestamp;
+            iter->maxTimestamp = maxTimestamp;
+            return REDISMODULE_OK;
+        }
     }
-    iter.chunkIteratorInitialized = FALSE;
-    iter.chunkIterator = NULL;
-    iter.minTimestamp = minTimestamp;
-    iter.maxTimestamp = maxTimestamp;
-    return iter;
+    SeriesIteratorClose(iter);
+    return REDISMODULE_ERR;
+}
+
+ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
+    ChunkFuncs *funcs = iterator->series->funcs;
+    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+
+    if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
+        return CR_END;
+    }
+
+    if (sample->timestamp < iterator->minTimestamp) {
+        while (res == CR_OK) {     
+            // Skip through initial samples
+            res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+            if (sample->timestamp >= iterator->minTimestamp) { 
+                break;
+            }
+        }
+        return res; // shouldn't happen
+    }
+    // No sample within range
+    if (sample->timestamp > iterator->maxTimestamp) {
+        return CR_END;   
+    } 
+    return CR_OK;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
-    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
-    RedisModule_DictIteratorStop(iterator->dictIter);
+    if (iterator->chunkIterator != NULL)
+        iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
+    if (iterator->dictIter != NULL)
+        RedisModule_DictIteratorStop(iterator->dictIter);
+    *iterator = (SeriesIterator){ 0 };
 }
 
-int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
-    Sample internalSample;
-    while (iterator->currentChunk != NULL)
-    {
-        Chunk_t *currentChunk = iterator->currentChunk;
-        ChunkFuncs *funcs = iterator->series->funcs;
-        if (funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp)
-        {
-            if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
-                iterator->currentChunk = NULL;
-            }
-            iterator->chunkIteratorInitialized = FALSE;
-            continue;
-        }
-        else if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp)
-        {
-            break;
-        }
+ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
+    Chunk_t *currentChunk = iterator->currentChunk;
+    ChunkFuncs *funcs = iterator->series->funcs;
 
-        if (!iterator->chunkIteratorInitialized) 
-        {
-            funcs->FreeChunkIterator(iterator->chunkIterator);
-            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
-            iterator->chunkIteratorInitialized = TRUE;
+    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
+    if (res == CR_END) { // Reached the end of the chunk
+        if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)||
+            funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
+            return CR_ERR;       // No more chunks or they out of range
         }
-
-        if (funcs->ChunkIteratorGetNext(iterator->chunkIterator, &internalSample) == CR_END) { // reached the end of the chunk
-            if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)) {
-                iterator->currentChunk = NULL;
-            }
-            iterator->chunkIteratorInitialized = FALSE;
-            continue;
-        }
-        if (internalSample.timestamp < iterator->minTimestamp) {
-            continue;
-        } else if (internalSample.timestamp > iterator->maxTimestamp) {
-            break;
-        } else {
-            memcpy(currentSample, &internalSample, sizeof(Sample));
-            return 1;
-        }
+        funcs->FreeChunkIterator(iterator->chunkIterator);
+        iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
+        funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
     }
-    return 0;
+
+    if (currentSample->timestamp > iterator->maxTimestamp) {
+        return CR_ERR;          // Reach end of range requested
+    } 
+    return CR_OK;
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
