@@ -79,7 +79,7 @@ int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, Series **series){
 
 static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                     long long *retentionTime, long long *maxSamplesPerChunk,
-                    size_t *labelsCount, Label **labels, int *uncompressed) {
+                    size_t *labelsCount, Label **labels, int *options) {
     *retentionTime = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
@@ -109,7 +109,11 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     }
 
     if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        *uncompressed |= SERIES_OPT_UNCOMPRESSED;
+        *options |= SERIES_OPT_UNCOMPRESSED;
+    }
+
+    if (RMUtil_ArgIndex("MULTIVALUES", argv, argc) > 0) {
+        *options |= SERIES_OPT_MULTI_TIMESTAMP_SAMPLES;
     }
 
     return REDISMODULE_OK;
@@ -605,7 +609,12 @@ static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_time
 static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t timestamp, double value) {
     int retval = SeriesAddSample(series, timestamp, value);
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
+        RedisModule_ReplyWithError(ctx, 
+            "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
+        return REDISMODULE_ERR;
+    } else if (retval == TSDB_ERR_TIMESTAMP_OCCUPIED){
+        RedisModule_ReplyWithError(ctx, 
+            "TSDB: Timestamp cannot be equal to the latest timestamp in the time series");
         return REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
@@ -645,12 +654,12 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        int uncompressed = 0;
-        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &uncompressed) != REDISMODULE_OK) {
+        int options = 0;
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, uncompressed, &series, &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
@@ -697,13 +706,13 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionTime,
-                long long maxSamplesPerChunk, int uncompressed, Series **series, RedisModuleKey **key) {
+                long long maxSamplesPerChunk, int options, Series **series, RedisModuleKey **key) {
     if (*key == NULL) {
         *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     }
 
     RedisModule_RetainString(ctx, keyName);
-    *series = NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk, uncompressed);
+    *series = NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk, options);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
@@ -726,8 +735,8 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *labels;
-    int uncompressed = 0;
-    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &uncompressed) != REDISMODULE_OK) {
+    int options = 0;
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -738,7 +747,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
     }
 
-    CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, uncompressed, &series, &key);
+    CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
     RedisModule_CloseKey(key);
 
     RedisModule_Log(ctx, "verbose", "created new series");
@@ -760,8 +769,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *newLabels;
-    int uncompressed = 0;
-    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels, &uncompressed) != REDISMODULE_OK) {
+    int options = 0;
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels, &options) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -916,12 +925,12 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        int uncompressed = 0;
-        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &uncompressed) != REDISMODULE_OK) {
+        int options = 0;
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, uncompressed, &series, &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     }
 

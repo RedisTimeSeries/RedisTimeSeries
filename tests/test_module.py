@@ -407,6 +407,30 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key]
             assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
 
+    def test_add(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', "multi", "MULTIVALUES")
+            assert r.execute_command('TS.CREATE', "non_multi")
+
+            assert r.execute_command('TS.ADD', "multi", 1, 2)
+            assert r.execute_command('TS.ADD', "multi", 1, 2)
+            assert r.execute_command('TS.ADD', "non_multi", 1, 2)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                    assert r.execute_command('TS.ADD', "non_multi", 1, 2)
+
+            result_count = []
+            for i in range(100, 150):
+                for j in range(10):
+                    assert r.execute_command('TS.ADD', "multi", i, i * 50 + j)
+                result_count.append([i, '10'])
+            assert result_count == r.execute_command('TS.RANGE', "multi", 100, 150, "aggregation", "count", 1)
+            
+            assert [[100L, '5229.5'], [110L, '5729.5'], [120L, '6229.5'], [130L, '6729.5'], [140L, '7229.5']] == \
+                    r.execute_command('TS.RANGE', "multi", 100, 150, "aggregation", "avg", 10)
+
+            assert [[100L, '746130'], [114L, '844130'], [128L, '942130'], [142L, '582360']] == \
+                    r.execute_command('TS.RANGE', "multi", 100, 150, "aggregation", "sum", 14)
+            
     def test_mget_cmd(self):
         num_of_keys = 3
         time_stamp = 1511885909L

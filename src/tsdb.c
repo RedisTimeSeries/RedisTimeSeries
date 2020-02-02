@@ -18,7 +18,7 @@
 static Series* lastDeletedSeries = NULL;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
-        short maxSamplesPerChunk, int uncompressed)
+        short maxSamplesPerChunk, int options)
 {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
@@ -33,11 +33,14 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     newSeries->options = 0;
-    if (uncompressed & SERIES_OPT_UNCOMPRESSED) {
+    if (options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
+    }
+    if (options & SERIES_OPT_MULTI_TIMESTAMP_SAMPLES) {
+        newSeries->options |= SERIES_OPT_MULTI_TIMESTAMP_SAMPLES;
     }
     Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
@@ -201,9 +204,10 @@ size_t  SeriesGetNumSamples(Series *series) {
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
-    if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
+    if (timestamp < series->lastTimestamp && series->lastTimestamp != 0) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp && timestamp != 0) {
+    } else if ((series->options & SERIES_OPT_MULTI_TIMESTAMP_SAMPLES) == 0 &&
+                timestamp == series->lastTimestamp && timestamp != 0) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
     Sample sample = {.timestamp = timestamp, .value = value};
