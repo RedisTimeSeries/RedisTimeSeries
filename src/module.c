@@ -548,7 +548,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != NULL) {
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
-        last_agg_timestamp = start_ts;
+        timestamp_t initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
+        last_agg_timestamp = initTS - (initTS % time_delta);
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -556,6 +557,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         // No aggregation
         do {
             RedisModule_ReplyWithArray(ctx, 2);
+
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;
@@ -569,8 +571,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                     arraylen++;
                 }
-
-                last_agg_timestamp = sample.timestamp - ((sample.timestamp - last_agg_timestamp) % time_delta);
+                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
