@@ -22,6 +22,13 @@
 #include "indexer.h"
 #include "version.h"
 
+#define CHECK_SERIES_STATUS(status, key1, key2) \
+    if(!status){                                \
+        RedisModule_CloseKey(key1);             \
+        RedisModule_CloseKey(key2);             \
+        return REDISMODULE_ERR;                 \
+    }
+
 RedisModuleType *SeriesType;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
@@ -229,10 +236,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
-    if(!status){
-        RedisModule_CloseKey(key);
-        return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(status, key, NULL);
 
     RedisModule_ReplyWithArray(ctx, 10*2);
 
@@ -472,10 +476,7 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
-    if(!status){
-        RedisModule_CloseKey(key);
-        return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(status, key, NULL);
 
     api_timestamp_t start_ts, end_ts;
     api_timestamp_t time_delta = 0;
@@ -764,10 +765,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
     }
 
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ|REDISMODULE_WRITE);
-    if(!status){
-        RedisModule_CloseKey(key);
-        return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(status, key, NULL);
+
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
         series->retentionTime = retentionTime;
     }
@@ -808,10 +807,8 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *srcSeries;
     RedisModuleKey *srcKey;
     const int statusS = GetSeries(ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
-    if(!statusS){
-        RedisModule_CloseKey(srcKey);
-    	return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(statusS, srcKey, NULL);
+
 
     RedisModuleString *destKeyName = argv[2];
     if (!SeriesDeleteRule(srcSeries, destKeyName)) {
@@ -822,11 +819,8 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *destSeries;
     RedisModuleKey *destKey;
     const int statusD = GetSeries(ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ|REDISMODULE_WRITE);
-    if(!statusD){
-        RedisModule_CloseKey(srcKey);
-        RedisModule_CloseKey(destKey);
-    	return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(statusD, srcKey, destKey);
+
     SeriesDeleteSrcRule(destSeries, srcKeyName);
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
@@ -867,10 +861,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *srcSeries;
     RedisModuleKey *srcKey;
     const int statusS = GetSeries(ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
-    if(!statusS){
-        RedisModule_CloseKey(srcKey);
-    	return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(statusS, srcKey, NULL);
+
     if(srcSeries->srcKey){
     	return RedisModule_ReplyWithError(ctx, "TSDB: the source key already has a source rule");
     }
@@ -879,11 +871,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *destSeries;
     RedisModuleKey *destKey;
     const int statusD = GetSeries(ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ|REDISMODULE_WRITE);
-    if(!statusD){
-        RedisModule_CloseKey(srcKey);
-        RedisModule_CloseKey(destKey);
-    	return REDISMODULE_ERR;
-    }
+    CHECK_SERIES_STATUS(statusD, srcKey, destKey);
+
     srcKeyName = RedisModule_CreateStringFromString(ctx, srcKeyName);
     if(!SeriesSetSrcRule(destSeries, srcKeyName)){
     	return RedisModule_ReplyWithError(ctx, "TSDB: the destination key already has a rule");
@@ -973,11 +962,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
-    if(!status){
-        RedisModule_CloseKey(key);
-        return REDISMODULE_ERR;
-    }
-    
+    CHECK_SERIES_STATUS(status, key, NULL);
+
     ReplyWithSeriesLastDatapoint(ctx, series);
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
