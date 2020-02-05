@@ -103,18 +103,22 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
     if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
+            RedisModuleKey *seriesKey;
             Series *dstSeries;
-            int status = GetSeries(ctx, rule->destKey, &dstSeries);
+            const int status = GetSeries(ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
             rule = rule->nextRule;
         }
         if (lastDeletedSeries->srcKey) {
+            RedisModuleKey *seriesKey;
             Series *srcSeries;
-            int status = GetSeries(ctx, lastDeletedSeries->srcKey, &srcSeries);
+            const int status = GetSeries(ctx, lastDeletedSeries->srcKey, &seriesKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
         }
     }
