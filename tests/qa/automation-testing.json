@@ -8,8 +8,8 @@
     ],
     "tools_environment": {
     },
-    "module_name": "redistimeseries",
-    "module_version": "master",
+    "module_name": "RedisTS",
+    "module_version": "{{MODULE_VERSION}}",
     "cycle_environments_setup": [
       {
         "teardown": true,
