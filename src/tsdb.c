@@ -60,10 +60,8 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
     		series->lastTimestamp - series->retentionTime : 0;
 
-    while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
-    {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp)
-        {
+    while (currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)) {
+        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp){
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
@@ -106,18 +104,22 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
     if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
+            RedisModuleKey *seriesKey;
             Series *dstSeries;
-            int status = GetSeries(ctx, rule->destKey, &dstSeries);
+            const int status = GetSeries(ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
             rule = rule->nextRule;
         }
         if (lastDeletedSeries->srcKey) {
+            RedisModuleKey *seriesKey;
             Series *srcSeries;
-            int status = GetSeries(ctx, lastDeletedSeries->srcKey, &srcSeries);
+            const int status = GetSeries(ctx, lastDeletedSeries->srcKey, &seriesKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
         }
     }
@@ -158,8 +160,7 @@ size_t SeriesGetChunksSize(Series *series) {
     size_t size = 0;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
-    {
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
         size += series->funcs->GetChunkSize(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -192,7 +193,7 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
-size_t  SeriesGetNumSamples(Series *series) {
+size_t SeriesGetNumSamples(const Series *series) {
     size_t numSamples = 0;
     if (series!=NULL){
         numSamples = series->totalSamples;
@@ -232,19 +233,19 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
     ChunkFuncs *funcs = iter->series->funcs;
     
     seriesEncodeTimestamp(&rax_key, iter->minTimestamp);
-
     void *dictResult = (void *)TRUE;
+    // get first chunk within query range 
     if (iter->reverse == NO_OPT) {
         iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-        RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
+        dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         while (dictResult) {
             if (funcs->GetLastTimestamp(iter->currentChunk) < iter->minTimestamp) {
                 dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
             } else break;
-        }        
-    } else {    
+        }
+    } else {
         iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "$", &rax_key, sizeof(rax_key));
-        RedisModule_DictPrevC(iter->dictIter, NULL, (void*)&iter->currentChunk);
+        dictResult = RedisModule_DictPrevC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         while (dictResult) {
             if (funcs->GetFirstTimestamp(iter->currentChunk) > iter->maxTimestamp) {
                 dictResult = RedisModule_DictPrevC(iter->dictIter, NULL, (void*)&iter->currentChunk);
@@ -264,38 +265,27 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
 
+    // Deal with empty series
     if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
         return CR_END;
     }
 
+    // Skip through initial samples
     if (iterator->reverse == NO_OPT) {
         res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
-        if (sample->timestamp < iterator->minTimestamp) {
-            while (res == CR_OK) {     
-                // Skip through initial samples
-                res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
-                if (sample->timestamp >= iterator->minTimestamp) { 
-                    break;
-                }
-            }
-            return res; // shouldn't happen
+        while (res == CR_OK && sample->timestamp < iterator->minTimestamp) {     
+            res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
         }
     } else {
         res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
-        if (sample->timestamp > iterator->maxTimestamp) {
-            while (res == CR_OK) {     
-                // Skip through initial samples
-                res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
-                if (sample->timestamp <= iterator->maxTimestamp) { 
-                    break;
-                }
-            }
-            return res; // shouldn't happen
+        while (res == CR_OK && sample->timestamp > iterator->maxTimestamp) {     
+            res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
         }
     }
+
     // No sample within range
-    if (sample->timestamp > iterator->maxTimestamp ||
-        sample->timestamp < iterator->minTimestamp) {
+    if (res != CR_OK || sample->timestamp > iterator->maxTimestamp ||
+                        sample->timestamp < iterator->minTimestamp) {
         return CR_END;   
     } 
     return CR_OK;
@@ -318,14 +308,14 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
         if (res == CR_END) { // Reached the end of the chunk
             if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk)||
                 funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
-                return CR_ERR;       // No more chunks or they out of range
+                return CR_END;       // No more chunks or they out of range
             }
             funcs->FreeChunkIterator(iterator->chunkIterator, false);
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, false);
             funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
         }
         if (currentSample->timestamp > iterator->maxTimestamp) {
-            return CR_ERR;          // Reach end of range requested
+            return CR_END;          // Reach end of range requested
         } 
         return CR_OK;
     } else { // TS.REVRANGE
@@ -335,18 +325,18 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
             dictResult = RedisModule_DictPrevC(iterator->dictIter, NULL, (void*)&iterator->currentChunk);
             if (!dictResult ||
                 funcs->GetLastTimestamp (currentChunk) < iterator->minTimestamp) {
-                return CR_ERR;       // No more chunks or they out of range
+                return CR_END;       // No more chunks or they out of range
             }
             funcs->FreeChunkIterator(iterator->chunkIterator, true);
             iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, true);
             funcs->ChunkIteratorGetPrev(iterator->chunkIterator, currentSample);
         }
-
         if (currentSample->timestamp < iterator->minTimestamp) {
-            return CR_ERR;          // Reach end of range requested
+            return CR_END;          // Reach end of range requested
         } 
         return CR_OK;           
     }
+
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
