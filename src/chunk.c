@@ -64,11 +64,10 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    iter->currentIndex = (options & REVERSE) == 0 ? 0 : iter->chunk->num_samples - 1;
-    iter->options = options;
+    iter->currentIndex = (rev == false) ? 0 : iter->chunk->num_samples - 1;
     return (ChunkIter_t *)iter;
 }
 
@@ -94,8 +93,8 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
     }
 }
 
-void FreeChunkIterator(ChunkIter_t *iter, bool freeChunk) {
-    (void)freeChunk; // only used with compressed chunk but signature must be similar
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
+    (void)rev; // only used with compressed chunk but signature must be similar
     free(iter);
 }
 

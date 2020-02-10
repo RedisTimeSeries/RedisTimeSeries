@@ -35,9 +35,9 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options);
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
-void FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 
 #endif

@@ -20,7 +20,7 @@ void Compressed_FreeChunk(Chunk_t *chunk);
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
 
 // Read from compressed chunk using an iterator
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options);
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 

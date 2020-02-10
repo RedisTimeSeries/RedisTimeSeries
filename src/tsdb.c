@@ -311,31 +311,28 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
                 return CR_END;       // No more chunks or they out of range
             }
             funcs->FreeChunkIterator(iterator->chunkIterator, false);
-            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, false);
+            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, NO_OPT);
             funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
         }
-        if (currentSample->timestamp > iterator->maxTimestamp) {
-            return CR_END;          // Reach end of range requested
-        } 
-        return CR_OK;
     } else { // TS.REVRANGE
         res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, currentSample);
         if (res == CR_END) { // Reached the end of the chunk
             void *dictResult = (void *)TRUE;
             dictResult = RedisModule_DictPrevC(iterator->dictIter, NULL, (void*)&iterator->currentChunk);
             if (!dictResult ||
-                funcs->GetLastTimestamp (currentChunk) < iterator->minTimestamp) {
+                funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
                 return CR_END;       // No more chunks or they out of range
             }
             funcs->FreeChunkIterator(iterator->chunkIterator, true);
-            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, true);
+            iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk, REVERSE);
             funcs->ChunkIteratorGetPrev(iterator->chunkIterator, currentSample);
         }
-        if (currentSample->timestamp < iterator->minTimestamp) {
-            return CR_END;          // Reach end of range requested
-        } 
-        return CR_OK;           
     }
+    if (currentSample->timestamp < iterator->minTimestamp ||
+        currentSample->timestamp > iterator->maxTimestamp) {
+        return CR_END;          // Reach end of range requested
+    } 
+    return CR_OK;           
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
