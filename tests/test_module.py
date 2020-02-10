@@ -1041,7 +1041,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             
     def test_revrange(self):
         start_ts = 1511885908L
-        samples_count = 100
+        samples_count = 200
         expected_results = []
 
         with self.redis() as r:
@@ -1058,8 +1058,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
 
-            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-            assert actual_results == [[1511886015L, '3297'], [1511885965L, '1625'], [1511885915L, '28']]
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
 
             # with compression
             r.execute_command('DEL', 'tester1')
@@ -1076,8 +1078,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
 
-            actual_results = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-            assert actual_results == [[1511886015L, '3297'], [1511885965L, '1625'], [1511885915L, '28']]
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
 
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
             assert len(actual_results_rev) == 5
@@ -1104,8 +1108,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                     ['tester2', [],[[1511885958L, '15'],[1511885957L, '15'],[1511885956L, '15'],[1511885955L, '15'],[1511885954L, '15']]],
                                     ['tester3', [],[[1511885958L, '25'],[1511885957L, '25'],[1511885956L, '25'],[1511885955L, '25'],[1511885954L, '25']]]]
 
-            rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')
-            assert rev_agg_result[0][2] == [[1511885965L, '215'], [1511885915L, '35']]
+            agg_result = r.execute_command('TS.mrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+            rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+            rev_agg_result.reverse()
+            assert rev_agg_result == agg_result
 
     def test_label_index(self):
         with self.redis() as r:

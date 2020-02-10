@@ -95,7 +95,8 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
 }
 
 void FreeChunkIterator(ChunkIter_t *iter, bool freeChunk) {
-  free(iter);
+    (void)freeChunk; // only used with compressed chunk but signature must be similar
+    free(iter);
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk) {

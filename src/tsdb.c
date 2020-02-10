@@ -60,7 +60,7 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
     		series->lastTimestamp - series->retentionTime : 0;
 
-    while (currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)) {
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
         if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp){
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key

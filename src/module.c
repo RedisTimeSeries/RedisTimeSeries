@@ -63,7 +63,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
     return REDISMODULE_OK;
 }
 
-int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key,  Series **series, int mode){
+int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **series, int mode){
     *key = RedisModule_OpenKey(ctx, keyName, mode );
     if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(*key);
@@ -518,7 +518,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev) {
     Sample sample;
     long long arraylen = 0;
-    timestamp_t last_agg_timestamp;
+    timestamp_t last_agg_timestamp, initTS;
 
     // In case a retention is set shouldn't return chunks older than the retention
     // TODO: move to parseRangeArguments(?)
@@ -548,14 +548,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != NULL) {
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
-        // last_agg_timestamp = (rev == NO_OPT) ? start_ts : end_ts;
-        if (rev == NO_OPT) {
-            timestamp_t initTS = series->funcs->GetFirstTimestamp(iterator.currentChunk);
-            last_agg_timestamp = initTS - (initTS % time_delta);
-        } else {
-            timestamp_t initTS = series->funcs->GetLastTimestamp(iterator.currentChunk);
-            last_agg_timestamp = initTS - (initTS % time_delta);
-        }
+        initTS = (rev == NO_OPT) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
+                                   series->funcs->GetLastTimestamp (iterator.currentChunk);
+        last_agg_timestamp = initTS - (initTS % time_delta);
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -572,12 +567,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         bool firstSample = TRUE;
         do {
             if ((iterator.reverse == NO_OPT && sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == REVERSE && sample.timestamp < last_agg_timestamp - time_delta)) {
+                (iterator.reverse == REVERSE && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                     arraylen++;
                 }
-                last_agg_timestamp = sample.timestamp - (sample.timestamp  % time_delta);
+                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
