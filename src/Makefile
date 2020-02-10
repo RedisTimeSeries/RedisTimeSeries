@@ -1,6 +1,36 @@
 ROOT=..
 include $(ROOT)/deps/readies/mk/main
 
+#----------------------------------------------------------------------------------------------  
+
+define HELP
+make setup         # install packages required for build
+make fetch         # download and prepare dependant modules
+
+make build
+  DEBUG=1          # build debug variant
+  VARIANT=name     # use a build variant 'name'
+  DEPS=1           # also build dependant modules
+  COV=1            # perform coverage analysis (implies debug build)
+make clean         # remove binary files
+  ALL=1            # remove binary directories
+  DEPS=1           # also clean dependant modules
+
+make deps          # build dependant modules
+make all           # build all libraries and packages
+
+make test          # run tests
+  TEST=name        # run test maching 'name'
+  TEST_ARGS="..."  # RLTest arguments
+  COV=1            # perform coverage analysis
+
+make pack          # build packages (ramp & dependencies)
+endef
+
+#----------------------------------------------------------------------------------------------  
+
+MK_CUSTOM_CLEAN=1
+
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
@@ -32,6 +62,7 @@ CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-Wall \
 	-fPIC \
+	-pedantic \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
@@ -56,10 +87,16 @@ else
 CC_FLAGS += -O3
 endif
 
+CC_FLAGS += $(CC_FLAGS.coverage)
+LD_FLAGS += $(LD_FLAGS.coverage)
+
 _SOURCES=\
 	chunk.c \
 	compaction.c \
+	compressed_chunk.c \
 	config.c \
+	generic_chunk.c \
+	gorilla.c \
 	indexer.c \
 	module.c \
 	parse_policies.c \
@@ -113,10 +150,37 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 #----------------------------------------------------------------------------------------------
 
 TEST_REPORT_DIR ?= $(PWD)
+TEST_ARGS += \
+	--junitxml=$(TEST_REPORT_DIR)/tests_report.xml
 
 tests: $(TARGET)
-	$(SHOW)cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python -m pytest --junitxml=$(TEST_REPORT_DIR)/tests_report.xml $(TEST_ARGS) -svv .
+	@if ! command -v redis-server > /dev/null; then \
+		echo "Cannot find redis-server. Aborting." ;\
+		exit 1 ;\
+	fi
+ifeq ($(COV),1)
+	$(COVERAGE_RESET)
+endif
+ifeq ($(TEST),)
+	$(SHOW)set -e; \
+	cd ../tests; \
+	REDISTIMESERIES=$(TARGET) python -m pytest  $(TEST_ARGS) -svv .
+else
+	cd ../tests; \
+	PYDEBUG=1 REDIS_VERBOSE=1 REDISTIMESERIES=$(TARGET) python -m pytest -k "${TEST}" -svv .
+endif
+ifeq ($(COV),1)
+	$(COVERAGE_COLLECT_REPORT)
+endif
+
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+
+unittests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
 
 REDIS_ARGS=\
 	COMPACTION_POLICY "" \
@@ -135,10 +199,15 @@ gdb: $(TARGET)
 cgdb: $(TARGET)
 	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
+#----------------------------------------------------------------------------------------------
+
 VALGRIND_ARGS=\
 	--leak-check=full \
 	--show-leak-kinds=all \
 	-v redis-server
+
+valgrind: $(TARGET)
+	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 CALLGRIND_ARGS=\
 	--tool=callgrind \
@@ -149,19 +218,8 @@ CALLGRIND_ARGS=\
 	--instr-atstart=yes \
 	-v redis-server --protected-mode no --save "" --appendonly no
 
-
-valgrind: $(TARGET)
-	$(SHOW)valgrind $(VALGRIND_ARGS) --loadmodule $(realpath $(TARGET)) --dir /tmp
-
 callgrind: $(TARGET)
 	$(SHOW)valgrind $(CALLGRIND_ARGS) --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
-
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
-
-unittests: $(UNITTESTS_RUNNER)
-	@echo Running unit tests...
-	$(SHOW)$<
 
 #----------------------------------------------------------------------------------------------
 
@@ -174,6 +232,14 @@ uninstall:
 
 docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
+
+coverage:
+	DEBUG=1 COVERAGE=1 make tests
+	mkdir -p tmp/lcov
+	lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
+	lcov -l tmp/lcov/hiredis.info
+	genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
+
 
 #----------------------------------------------------------------------------------------------
 

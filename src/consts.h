@@ -7,6 +7,7 @@
 #define CONSTS_H
 
 #include <sys/types.h>
+#include <stdbool.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -17,6 +18,7 @@
 #define TSDB_OK 0
 #define TSDB_ERROR -1
 #define TSDB_NOTEXISTS 2
+#define TSDB_ERR_TIMESTAMP_OCCUPIED -2
 
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
@@ -44,5 +46,16 @@ typedef enum {
 inline u_int64_t max(u_int64_t a, u_int64_t b) {
     return a > b ? a : b;
 }
+
+/* Series struct options */
+#define SERIES_OPT_UNCOMPRESSED 0x1
+
+/* Chunk enum */
+typedef enum {
+  CR_OK = 0,    // RM_OK
+  CR_ERR = 1,   // RM_ERR
+  CR_END = 2  
+} ChunkResult;
+
 
 #endif

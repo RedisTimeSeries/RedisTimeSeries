@@ -14,6 +14,7 @@ typedef struct {
     size_t compactionRulesCount;
     long long retentionPolicy;
     long long maxSamplesPerChunk;
+    short options;
     int hasGlobalConfig;
 } TSConfig;
 

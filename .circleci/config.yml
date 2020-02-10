@@ -9,7 +9,7 @@ commands:
       - checkout
       - run:
           name: Pull Submodules
-          command: make fetch
+          command: git submodule update --init --recursive
       - run:
           name: Install prerequisites
           command: make setup
@@ -83,6 +83,25 @@ jobs:
             sudo make -C build/docker publish
           no_output_timeout: 20m
 
+  coverage:
+    docker:
+      - image: redislabsmodules/rmbuilder:latest
+    steps:
+      - checkout
+      - run:
+          name: Pull Submodules
+          command: git submodule update --init --recursive
+      - run:
+          name: Build & Test
+          command: |
+            make setup
+            make build COV=1 SHOW=1
+            make test COV=1
+            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+      - store_artifacts:
+          path: coverage
+          destination: coverage
+
   deploy_package:
     parameters:
       package:
@@ -111,6 +130,9 @@ jobs:
             aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl public-read --recursive
 
   run_automation:
+    parameters:
+      module_version:
+        type: string
     docker:
       - image: 'redislabsmodules/rmbuilder:latest'
     steps:
@@ -120,7 +142,7 @@ jobs:
             apt-get update && apt-get install -y curl &&
             curl -f -k -u $QA_AUTOMATION_USERNAME:$QA_AUTOMATION_PASS -X POST
             -H "Content-Type: application/json"
-            -d '{"service_id":"single_module_test_cycle_sanity_and_extended", "name":"redistimeseries automation-testing", "properties":{"sut_version":"master", "email_recipients":"t9b6i7v6e2q3d0s4@redislabs.slack.com", "sut_environments":[], "tools_environment":{}, "module_name": "RedisTS", "module_version":"master", "cycle_environments_setup":[{"teardown":true, "name":"xenial-amd64-aws", "concurrency":1}, {"teardown":true, "name":"bionic-amd64-aws", "concurrency":1}]}}'
+            -d '{"service_id":"single_module_test_cycle_sanity_and_extended", "name":"redistimeseries automation-testing", "properties":{"sut_version":"master", "email_recipients":"t9b6i7v6e2q3d0s4@redislabs.slack.com", "sut_environments":[], "tools_environment":{}, "module_name": "RedisTS", "module_version":"'<<parameters.module_version>>'", "cycle_environments_setup":[{"teardown":true, "name":"xenial-amd64-aws", "concurrency":1}, {"teardown":true, "name":"bionic-amd64-aws", "concurrency":1}]}}'
             https://qa-automation-center.redislabs.com/processes
 
 workflows:
@@ -133,14 +155,25 @@ workflows:
               only: /.*/
       - build-macos:
           filters:
+            branches:
+              # only: /.*/
+              ignore: /.*/
             tags:
-              only: /.*/
+              only: /^v[0-9].*/
       - build-multiarch-docker:
           filters:
-            tags:
-              only: /.*/
             branches:
-              only: master
+              # only: /.*/
+              ignore: /.*/
+            tags:
+              # only: /.*/
+              only: /^v[0-9].*/
+      - coverage:
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              only: /.*/ 
       - deploy_package:
           name: deploy_branch
           package: branch
@@ -160,9 +193,25 @@ workflows:
             tags:
               only: '/^v[0-9].*/'
       - run_automation:
+          module_version: $CIRCLE_BRANCH
           requires:
             - deploy_branch
+      - run_automation:
+          module_version: $CIRCLE_TAG
+          requires:
+            - deploy_release
       - deploy_docs:
           filters:
             branches:
               only: master
+
+  nightly:
+    triggers:
+      - schedule:
+          cron: "20 17 * * *"
+          filters:
+             branches:
+               only:
+                 - master
+    jobs:
+      - build-macos

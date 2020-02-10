@@ -9,8 +9,8 @@
 #include "redismodule.h"
 #include "compaction.h"
 #include "consts.h"
-#include "chunk.h"
 #include "indexer.h"
+#include "generic_chunk.h"
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -24,9 +24,10 @@ typedef struct CompactionRule {
 
 typedef struct Series {
     RedisModuleDict* chunks;
-    Chunk* lastChunk;
+    Chunk_t *lastChunk;
     uint64_t retentionTime;
     short maxSamplesPerChunk;
+    short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
     double lastValue;
@@ -34,36 +35,38 @@ typedef struct Series {
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
+    ChunkFuncs *funcs;
+    size_t totalSamples;
 } Series;
 
 typedef struct SeriesIterator {
     Series *series;
     RedisModuleDictIter *dictIter;
-    Chunk *currentChunk;
-    int chunkIteratorInitialized;
-    ChunkIterator chunkIterator;
+    Chunk_t *currentChunk;
+    ChunkIter_t *chunkIterator;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime, short maxSamplesPerChunk);
+Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
+                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
-int SeriesHasRule(Series *series, RedisModuleString *destKey);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
-size_t SeriesGetNumSamples(Series *series);
+size_t SeriesGetNumSamples(const Series *series);
 
 // Iterator over the series
-SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
-int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+int SeriesQuery(Series *series, SeriesIterator *iter, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
+ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);

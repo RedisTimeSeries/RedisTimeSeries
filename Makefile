@@ -1,7 +1,19 @@
 
-.PHONY: all setup fetch build test pack
+ROOT=.
+include $(ROOT)/deps/readies/mk/main
+
+MK_CUSTOM_CLEAN=1
+BINDIR=$(BINROOT)
+
+include $(MK)/defs
+include $(MK)/rules
+
+.PHONY: all setup fetch build clean test pack help
 
 all: fetch build
+
+help:
+	@$(MAKE) -C src help
 
 setup:
 	@./deps/readies/bin/getpy2
@@ -11,13 +23,16 @@ fetch:
 	-@git submodule update --init --recursive
 
 build:
-	@make -C src all -j
+	@$(MAKE) -C src all -j $(NCPUS)
+
+clean:
+	@$(MAKE) -C src clean
 
 test:
-	@make -C src tests
+	@$(MAKE) -C src tests
 
 pack:
-	@make -C src package
+	@$(MAKE) -C src package
 
 # deploy:
 #	@make -C src deploy

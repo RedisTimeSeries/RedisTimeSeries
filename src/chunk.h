@@ -6,43 +6,35 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "chunk.h"
 #include "consts.h"
+#include "generic_chunk.h"
 #include <sys/types.h>
 
-typedef struct Sample {
-    timestamp_t timestamp;
-    double data;
-} Sample;
-
-typedef struct Chunk
-{
+typedef struct Chunk {
     timestamp_t base_timestamp;
-    void * samples;
+    Sample *samples;
     short num_samples;
     short max_samples;
-    struct Chunk *nextChunk;
-    // struct Chunk *prevChunk;
 } Chunk;
 
-typedef struct ChunkIterator
-{
+typedef struct ChunkIterator {
     Chunk *chunk;
     int currentIndex;
     timestamp_t lastTimestamp;
     int lastValue;
 } ChunkIterator;
 
-Chunk * NewChunk(size_t sampleCount);
-void FreeChunk(Chunk *chunk);
-size_t GetChunkSize(Chunk *chunk);
+Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
+void Uncompressed_FreeChunk(Chunk_t *chunk);
+size_t Uncompressed_GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success
-int ChunkAddSample(Chunk *chunk, Sample sample);
-int ChunkNumOfSample(Chunk *chunk);
-timestamp_t ChunkGetLastTimestamp(Chunk *chunk);
-timestamp_t ChunkGetFirstTimestamp(Chunk *chunk);
+ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
+u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
+timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
+timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIterator NewChunkIterator(Chunk *chunk);
-int ChunkIteratorGetNext(ChunkIterator *iter, Sample* sample);
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk);
+ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
+
 #endif
