@@ -273,12 +273,12 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
     // Skip through initial samples
     if (iterator->reverse == false) {
         res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
-        while (res == CR_OK && sample->timestamp < iterator->minTimestamp) {     
+        while (res == CR_OK && sample->timestamp < iterator->minTimestamp) {
             res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
         }
     } else {
         res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
-        while (res == CR_OK && sample->timestamp > iterator->maxTimestamp) {     
+        while (res == CR_OK && sample->timestamp > iterator->maxTimestamp) {
             res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
         }
     }
@@ -286,7 +286,7 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
     // No sample within range
     if (res != CR_OK || sample->timestamp > iterator->maxTimestamp ||
                         sample->timestamp < iterator->minTimestamp) {
-        return CR_END;   
+        return CR_END;
     } 
     return CR_OK;
 }
@@ -330,7 +330,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
         currentSample->timestamp > iterator->maxTimestamp) {
         return CR_END;          // Reach end of range requested
     } 
-    return CR_OK;           
+    return CR_OK;
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
