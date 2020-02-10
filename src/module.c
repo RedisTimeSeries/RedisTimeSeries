@@ -63,7 +63,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
     return REDISMODULE_OK;
 }
 
-int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **series, int mode){
+int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **series, int mode) {
     *key = RedisModule_OpenKey(ctx, keyName, mode );
     if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(*key);
@@ -502,6 +502,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+  
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -558,6 +559,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         // No aggregation
         do {
             RedisModule_ReplyWithArray(ctx, 2);
+
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;

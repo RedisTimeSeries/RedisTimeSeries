@@ -61,7 +61,7 @@ void SeriesTrim(Series * series) {
     		series->lastTimestamp - series->retentionTime : 0;
 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp){
+        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
@@ -336,7 +336,6 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
         } 
         return CR_OK;           
     }
-
 }
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
