@@ -18,8 +18,7 @@
 static Series* lastDeletedSeries = NULL;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
-        short maxSamplesPerChunk, int uncompressed)
-{
+        short maxSamplesPerChunk, int uncompressed) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
@@ -59,10 +58,8 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
     		series->lastTimestamp - series->retentionTime : 0;
 
-    while (currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))
-    {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp)
-        {
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
+        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
