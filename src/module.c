@@ -25,7 +25,7 @@
 RedisModuleType *SeriesType;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-                     AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev);
+                     AggregationClass *aggObject, int64_t time_delta, long long maxResults, bool rev);
 
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
@@ -463,14 +463,14 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    return TSDB_generic_mrange(ctx, argv, argc, NO_OPT);
+    return TSDB_generic_mrange(ctx, argv, argc, false);
 }
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    return TSDB_generic_mrange(ctx, argv, argc, REVERSE);
+    return TSDB_generic_mrange(ctx, argv, argc, true);
 }
 
-int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int rev){
+int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev){
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4) {
@@ -508,15 +508,15 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 }
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
-    return TSDB_generic_range(ctx, argv, argc, NO_OPT);
+    return TSDB_generic_range(ctx, argv, argc, false);
 }
 
 int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
-    return TSDB_generic_range(ctx, argv, argc, REVERSE);
+    return TSDB_generic_range(ctx, argv, argc, true);
 }
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
-        AggregationClass *aggObject, int64_t time_delta, long long maxResults, int rev) {
+        AggregationClass *aggObject, int64_t time_delta, long long maxResults, bool rev) {
     Sample sample;
     long long arraylen = 0;
     timestamp_t last_agg_timestamp, initTS;
@@ -549,7 +549,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != NULL) {
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
-        initTS = (rev == NO_OPT) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
+        initTS = (rev == false) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
                                    series->funcs->GetLastTimestamp (iterator.currentChunk);
         last_agg_timestamp = initTS - (initTS % time_delta);
     }
@@ -568,8 +568,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     } else {
         bool firstSample = TRUE;
         do {
-            if ((iterator.reverse == NO_OPT && sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == REVERSE && sample.timestamp < last_agg_timestamp)) {
+            if ((iterator.reverse == false && sample.timestamp >= last_agg_timestamp + time_delta) ||
+                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
                     ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
                     arraylen++;
