@@ -155,8 +155,7 @@ size_t SeriesGetChunksSize(Series *series) {
     size_t size = 0;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
-    {
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
         size += series->funcs->GetChunkSize(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
