@@ -61,7 +61,7 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
-size_t SeriesGetNumSamples(Series *series);
+size_t SeriesGetNumSamples(const Series *series);
 
 // Iterator over the series
 int SeriesQuery(Series *series, SeriesIterator *iter, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
