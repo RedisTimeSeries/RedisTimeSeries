@@ -8,7 +8,7 @@
     ],
     "tools_environment": {
     },
-    "module_name": "RedisTS",
+    "module_name": "redistimeseries",
     "module_version": "{{MODULE_VERSION}}",
     "cycle_environments_setup": [
       {
