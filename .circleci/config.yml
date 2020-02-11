@@ -138,6 +138,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Pull Submodules
+          command: git submodule update --init --recursive
+      - run:
           name: Setup
           command: |
             apt-get -qq update
