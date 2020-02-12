@@ -53,8 +53,4 @@ typedef enum {
   CR_END = 2  
 } ChunkResult;
 
-inline u_int64_t max(u_int64_t a, u_int64_t b) {
-    return a > b ? a : b;
-}
-
 #endif
