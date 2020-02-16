@@ -236,6 +236,7 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
     void *dictResult = (void *)TRUE;
     // get first chunk within query range 
     if (iter->reverse == false) {
+        iter->GetNext = funcs->ChunkIteratorGetNext;
         iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         while (dictResult) {
@@ -244,6 +245,7 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
             } else break;
         }
     } else {
+        iter->GetNext = funcs->ChunkIteratorGetPrev;
         iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "$", &rax_key, sizeof(rax_key));
         dictResult = RedisModule_DictPrevC(iter->dictIter, NULL, (void*)&iter->currentChunk);
         while (dictResult) {
@@ -270,6 +272,12 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
         return CR_END;
     }
 
+    res = iterator->GetNext(iterator->chunkIterator, sample);
+    while (res == CR_OK && (sample->timestamp < iterator->minTimestamp ||
+                            sample->timestamp > iterator->maxTimestamp)) {
+        res = iterator->GetNext(iterator->chunkIterator, sample);
+    }
+/*
     // Skip through initial samples
     if (iterator->reverse == false) {
         res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
@@ -281,7 +289,7 @@ ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
         while (res == CR_OK && sample->timestamp > iterator->maxTimestamp) {
             res = funcs->ChunkIteratorGetPrev(iterator->chunkIterator, sample);
         }
-    }
+    }*/
 
     // No sample within range
     if (res != CR_OK || sample->timestamp > iterator->maxTimestamp ||
