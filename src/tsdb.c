@@ -254,7 +254,7 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
 }
 
 // Fill the first sample
-ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
+ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *sample) {
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
 
