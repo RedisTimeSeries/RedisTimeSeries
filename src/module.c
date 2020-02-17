@@ -276,7 +276,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithString(ctx, rule->destKey);
         RedisModule_ReplyWithLongLong(ctx, rule->timeBucket);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
-        
+
         rule = rule->nextRule;
         ruleCount++;
     }
@@ -307,7 +307,6 @@ void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
 
 static void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
     RedisModule_ReplyWithArray(ctx, 2);
-
     RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
     RedisModule_ReplyWithDouble(ctx, aggObject->finalize(context));
 
@@ -455,7 +454,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             ReplyWithSeriesLabels(ctx, series);
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
-        }  
+        }
         ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
         replylen++;
         RedisModule_CloseKey(key);
@@ -506,7 +505,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
-  
+
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -554,7 +553,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
         initTS = (rev == false) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
-                                   series->funcs->GetLastTimestamp (iterator.currentChunk);
+                                  series->funcs->GetLastTimestamp (iterator.currentChunk);
         last_agg_timestamp = initTS - (initTS % time_delta);
     }
 

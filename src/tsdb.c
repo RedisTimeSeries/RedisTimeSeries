@@ -244,11 +244,9 @@ int SeriesQuery(Series *series, SeriesIterator *iter) {
     seriesEncodeTimestamp(&rax_key, iter->minTimestamp);
     void *dictResult = (void *)TRUE;
     iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    dictResult = iter->DictGetNext(iter->dictIter, NULL, (void*)&iter->currentChunk);    
-    
-    if (dictResult == NULL) {
-        return REDISMODULE_ERR;
-    }
+    dictResult = iter->DictGetNext(iter->dictIter, NULL, (void*)&iter->currentChunk);
+    if (dictResult == NULL) return REDISMODULE_ERR;     // cannot happen since we always have a chunk
+
     iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk, iter->reverse);
     return REDISMODULE_OK;
 }
@@ -311,9 +309,8 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
     CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
-    if (rule == NULL ) {
-        return NULL;
-    }
+    if (rule == NULL ) return NULL;
+
     if (series->rules == NULL){
         series->rules = rule;
     } else {
@@ -372,9 +369,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 }
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket) {
-    if (timeBucket <= 0) {
-        return NULL;
-    }
+    if (timeBucket == 0ULL) return NULL;
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);;
