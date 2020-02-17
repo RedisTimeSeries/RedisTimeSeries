@@ -48,6 +48,7 @@ typedef struct SeriesIterator {
     api_timestamp_t minTimestamp;
     bool reverse;
     ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
+    void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,

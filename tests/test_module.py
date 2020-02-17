@@ -476,16 +476,22 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         start_ts = 1488823384L
         samples_count = 1500
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', samples_count-100)
+            assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count-100)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
+            rev_result = r.execute_command('TS.revrange', 'tester', start_ts+50, start_ts+150)
+            rev_result.reverse()
+            assert expected_result == rev_result
 
             #test out of range returns empty list
             assert [] == r.execute_command('TS.range', 'tester', start_ts * 2, -1)
             assert [] == r.execute_command('TS.range', 'tester', start_ts / 3, start_ts / 2)
+
+            assert [] == r.execute_command('TS.revrange', 'tester', start_ts * 2, -1)
+            assert [] == r.execute_command('TS.revrange', 'tester', start_ts / 3, start_ts / 2)
     
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE tester string -1')
