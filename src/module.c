@@ -623,8 +623,7 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
     return REDISMODULE_OK;
 }
 
-static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
+static inline int add(RedisModuleCtx *ctx, Series *series, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
     double value;
     api_timestamp_t timestamp;
     if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
@@ -638,9 +637,44 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
             return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }
 
-    Series *series = NULL;
+    int rv = internalAdd(ctx, series, timestamp, value);
+    return rv;
+}
 
-    if (argv != NULL && RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
+int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 4 || (argc - 1) % 3 != 0) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
+    for(int i = 1; i < argc; i += 3){
+        Series *series = NULL;
+        RedisModuleKey *key = NULL;
+        if (GetSeries(ctx, argv[i], &key, &series, REDISMODULE_READ|REDISMODULE_WRITE) == false) {
+            return REDISMODULE_OK;
+        }
+
+        RedisModuleString *timestampStr = argv[i + 1];
+        RedisModuleString *valueStr = argv[i + 2];
+        add(ctx, series, timestampStr, valueStr, NULL, -1);
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
+int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    Series *series = NULL;
+    RedisModuleString *keyName = argv[1]; 
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
         long long retentionTime;
         long long maxSamplesPerChunk;
@@ -658,43 +692,19 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
-    int rv = internalAdd(ctx, series, timestamp, value);
+
+    /*
+     * TODO: requires change to API
+     */ 
+    for(int i = 2; i < 3; i += 2){
+        RedisModuleString *timestampStr = argv[i];
+        RedisModuleString *valueStr = argv[i + 1];
+        add(ctx, series, timestampStr, valueStr, argv, argc);
+    }
     RedisModule_CloseKey(key);
-    return rv;
-}
 
-int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
-
-    if (argc < 4 || (argc-1)%3 != 0) {
-        return RedisModule_WrongArity(ctx);
-    }
-
-    RedisModule_ReplyWithArray(ctx, (argc-1)/3);
-    for(int i=1; i<argc ; i+=3){
-        RedisModuleString *keyName = argv[i];
-        RedisModuleString *timestampStr = argv[i+1];
-        RedisModuleString *valueStr = argv[i+2];
-        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
-    }
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
-}
-
-int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
-
-    if (argc < 4) {
-        return RedisModule_WrongArity(ctx);
-    }
-
-    RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
-
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
-    RedisModule_ReplicateVerbatim(ctx);
-    return result;
 }
 
 int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionTime,
