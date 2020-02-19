@@ -295,11 +295,11 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
-    RedisModule_ReplyWithArray(ctx, 2);
-    if(SeriesGetNumSamples(series) == 0) {
-        RedisModule_ReplyWithNull(ctx);
-        RedisModule_ReplyWithNull(ctx);
-    } else {
+    if(SeriesGetNumSamples(series)==0){
+        RedisModule_ReplyWithArray(ctx, 0);
+    }
+    else {
+        RedisModule_ReplyWithArray(ctx, 2);
         RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
         RedisModule_ReplyWithDouble(ctx, series->lastValue);
     }
