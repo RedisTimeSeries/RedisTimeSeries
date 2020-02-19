@@ -421,8 +421,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
             # expect to received time-series k1 and k2
             expected_result = [
-                ["key4_empty", [], []],
-                ["key5_empty", [], []]
+                ["key4_empty", [], [None, None]],
+                ["key5_empty", [], [None, None]]
             ]
 
             actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
@@ -1204,13 +1204,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             info = self._get_ts_info(r, 'empty')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty 0 -1')
-            assert [] == r.execute_command('TS.get empty')
+            assert [None, None] == r.execute_command('TS.get empty')
 
             r.execute_command('ts.create empty_uncompressed uncompressed')
             info = self._get_ts_info(r, 'empty_uncompressed')
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
-            assert [] == r.execute_command('TS.get empty')
+            assert [None, None] == r.execute_command('TS.get empty')
 
     def test_gorilla(self):
         with self.redis() as r:
