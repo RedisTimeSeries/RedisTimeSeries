@@ -486,15 +486,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             #test out of range returns empty list
             assert [] == r.execute_command('TS.range', 'tester', start_ts * 2, -1)
             assert [] == r.execute_command('TS.range', 'tester', start_ts / 3, start_ts / 2)
-    
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE tester string -1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE tester 0 string')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE nonexist 0 -1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE tester 0 -1 count number')
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester string -1')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester 0 string')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE nonexist 0 -1')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester 0 -1 count number')
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
