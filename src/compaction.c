@@ -445,7 +445,7 @@ const char *AggTypeEnumToString(int aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
-        default:
+        default:    // covers TS_AGG_NONE/INVALID/MAX
             return "Unknown";
     }
 }
@@ -476,7 +476,7 @@ AggregationClass *GetAggClass(int aggType) {
             return &aggLast;
         case AGG_RANGE:
             return &aggRange;
-        default:
+        default:    // covers AGG_NONE
             return NULL;
     }
 }

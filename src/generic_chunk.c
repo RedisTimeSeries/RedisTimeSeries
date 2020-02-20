@@ -43,6 +43,6 @@ ChunkFuncs *GetChunkClass(int chunkType) {
   switch (chunkType) {
   case CHUNK_REGULAR:     return &regChunk;
   case CHUNK_COMPRESSED:  return &comprChunk;
-  default:                return NULL;
   }
+  return NULL;
 } 
