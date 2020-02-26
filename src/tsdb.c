@@ -249,7 +249,10 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
     seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
     void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void*)&iter.currentChunk);
-    if (dictResult == NULL) return (SeriesIterator){ 0 };   // should not happen since we always have a chunk
+    if (dictResult == NULL) {   // should not happen since we always have a chunk
+        RedisModule_DictIteratorStop(iter.dictIter);
+        return (SeriesIterator){ 0 };
+    }
 
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
     return iter;
@@ -300,7 +303,9 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
         }
         funcs->FreeChunkIterator(iterator->chunkIterator, false);
         iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, false);
-        iterator->GetNext(iterator->chunkIterator, currentSample);
+        if(iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
+            return CR_END;
+        }
     }
 
     // check timestamp is within range

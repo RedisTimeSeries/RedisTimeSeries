@@ -29,6 +29,7 @@ static ChunkFuncs comprChunk = {
     .NewChunkIterator = Compressed_NewChunkIterator,
     .FreeChunkIterator = Compressed_FreeChunkIterator,
     .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
     .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
     .GetChunkSize = Compressed_GetChunkSize,
