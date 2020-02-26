@@ -39,10 +39,10 @@ static ChunkFuncs comprChunk = {
     .GetFirstTimestamp = Compressed_GetFirstTimestamp
 };
 
-ChunkFuncs *GetChunkClass(int chunkType) {
+ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
   switch (chunkType) {
-  case CHUNK_REGULAR:     return &regChunk;
-  case CHUNK_COMPRESSED:  return &comprChunk;
-  default:                return NULL;
+    case CHUNK_REGULAR:     return &regChunk;
+    case CHUNK_COMPRESSED:  return &comprChunk;
   }
+  return NULL;
 } 

@@ -565,7 +565,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != AGG_NONE) {
+    if (aggObject != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
             ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
