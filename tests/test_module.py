@@ -503,9 +503,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester', i, i)
             res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
-            assert len(res) == 500
+            assert len(res) == 500 #sample_count is not in range() so not included
             res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
             assert len(res) == 501
+
+            # test for empty range between two full ranges
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester', samples_count * 2 + i, i)
+            res = r.execute_command('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2))
+            assert res == []
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
