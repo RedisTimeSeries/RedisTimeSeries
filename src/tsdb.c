@@ -337,15 +337,14 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
                                             aggString,
                                             rule->timeBucket);
         RedisModule_RetainString(ctx, destKey);
-        SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
-
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ|REDISMODULE_WRITE);
-
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
+            // TODO: should we break here? Is log enough?
             RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
             RedisModule_CloseKey(compactedKey);
             continue;
         }
+        SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
 
         Label *compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
         // todo: deep copy labels function

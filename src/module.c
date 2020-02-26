@@ -295,7 +295,7 @@ static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
-    if(SeriesGetNumSamples(series)==0){
+    if(SeriesGetNumSamples(series) == 0) {
         RedisModule_ReplyWithArray(ctx, 0);
     }
     else {
