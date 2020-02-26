@@ -227,28 +227,32 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 }
 
 // Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
-int SeriesQuery(Series *series, SeriesIterator *iter) {
+SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev) {
+    SeriesIterator iter = { 0 };
+    iter.series = series;
+    iter.minTimestamp = start_ts;
+    iter.maxTimestamp = end_ts;
+    iter.reverse = rev;
+
     timestamp_t rax_key;
-    iter->series = series;
-    ChunkFuncs *funcs = iter->series->funcs;
+    ChunkFuncs *funcs = series->funcs;
     
-    if (iter->reverse == false) {
-        iter->GetNext = funcs->ChunkIteratorGetNext;
-        iter->DictGetNext = RedisModule_DictNextC;
+    if (iter.reverse == false) {
+        iter.GetNext = funcs->ChunkIteratorGetNext;
+        iter.DictGetNext = RedisModule_DictNextC;
     } else {
-        iter->GetNext = funcs->ChunkIteratorGetPrev;
-        iter->DictGetNext = RedisModule_DictPrevC;
+        iter.GetNext = funcs->ChunkIteratorGetPrev;
+        iter.DictGetNext = RedisModule_DictPrevC;
     }
 
     // get first chunk within query range 
-    seriesEncodeTimestamp(&rax_key, iter->minTimestamp);
-    void *dictResult = (void *)TRUE;
-    iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    dictResult = iter->DictGetNext(iter->dictIter, NULL, (void*)&iter->currentChunk);
-    if (dictResult == NULL) return REDISMODULE_ERR;     // cannot happen since we always have a chunk
+    seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
+    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void*)&iter.currentChunk);
+    if (dictResult == NULL) return (SeriesIterator){ 0 };   // should not happen since we always have a chunk
 
-    iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk, iter->reverse);
-    return REDISMODULE_OK;
+    iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
+    return iter;
 }
 
 // Fill the first sample

@@ -522,7 +522,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         AggregationClass *aggObject, int64_t time_delta, long long maxResults, bool rev) {
     Sample sample;
     long long arraylen = 0;
-    timestamp_t last_agg_timestamp, initTS;
+    timestamp_t last_agg_timestamp, init_ts;
 
     // In case a retention is set shouldn't return chunks older than the retention
     // TODO: move to parseRangeArguments(?)
@@ -535,10 +535,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         }
     }
 
-    SeriesIterator iterator = { .minTimestamp = start_ts,
-                                .maxTimestamp = end_ts,
-                                .reverse = rev };
-    if (SeriesQuery(series, &iterator) != REDISMODULE_OK) { 
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, rev);
+    if (iterator.series == NULL) { 
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
@@ -552,9 +550,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != NULL) {
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
-        initTS = (rev == false) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
+        init_ts = (rev == false) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
                                   series->funcs->GetLastTimestamp (iterator.currentChunk);
-        last_agg_timestamp = initTS - (initTS % time_delta);
+        last_agg_timestamp = init_ts - (init_ts % time_delta);
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -562,7 +560,6 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         // No aggregation
         do {
             RedisModule_ReplyWithArray(ctx, 2);
-
             RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
             RedisModule_ReplyWithDouble(ctx, sample.value);
             arraylen++;

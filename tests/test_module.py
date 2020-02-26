@@ -557,7 +557,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             info = self._get_ts_info(r, 'tester')
             assert info.rules == [['tester_agg_max_10', 10L, 'AVG']]
-            
+
     def test_delete_key(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
@@ -1260,7 +1260,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 samples = 2000
                 chunk_size = 64
                 remainder = samples % chunk_size
-                total_chunk_count = math.ceil( float(samples) / float(chunk_size) )
+                total_chunk_count = math.ceil( float(samples) / float(chunk_size))
                 r.execute_command('ts.create trim_me CHUNK_SIZE {0} RETENTION 10 {1}'.format(chunk_size,mode))
                 r.execute_command('ts.create dont_trim_me CHUNK_SIZE {0} {1}'.format(chunk_size,mode))
                 for i in range(samples):
@@ -1283,9 +1283,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_empty(self):
         with self.redis() as r:
             r.execute_command('ts.create empty')
-            info = ['totalSamples', 0L, 'memoryUsage', 4184L, 'firstTimestamp', 0L, 'lastTimestamp', 0L, 'retentionTime', 0L,
-                    'chunkCount', 1L, 'maxSamplesPerChunk', 256L, 'labels', [], 'sourceKey', None, 'rules', []] 
-            assert info == r.execute_command('ts.info empty')
+            info = self._get_ts_info(r, 'empty')
+            assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty 0 -1')
             assert [] == r.execute_command('TS.get empty')
 
@@ -1317,9 +1316,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('ts.add monkey 1000001 1')
             r.execute_command('ts.add monkey 10000011000001 1')
             r.execute_command('ts.add monkey 10000011000002 1')
-            expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'], 
+            expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'],
                                [500L, '1'], [501L, '1'], [3000L, '1'], [3001L, '1'], 
-                               [10000L, '1'], [10001L, '1'], [100000L, '1'], [100001L, '1'], 
+                               [10000L, '1'], [10001L, '1'], [100000L, '1'], [100001L, '1'],
                                [100002L, '1'], [100004L, '1'], [1000000L, '1'], [1000001L, '1'],
                                [10000011000001L, '1'], [10000011000002L, '1']]
             assert expected_result == r.execute_command('TS.range monkey 0 -1')
