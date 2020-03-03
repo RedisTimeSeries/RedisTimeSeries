@@ -1258,6 +1258,21 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
             assert actual_result[0] != [0L, '0']
 
+    def test_issue358(self):
+        filepath = "./issue358.txt"
+        with self.redis() as r:
+            r.execute_command('ts.create issue358')
+
+            with open(filepath) as fp:
+                line = fp.readline()
+                while line:
+                    line = fp.readline()
+                    if line != '':
+                        r.execute_command(line)
+            range_res = r.execute_command('ts.range issue358', 1582848000, -1)[0][1]
+            get_res = r.execute_command('ts.get issue358')[1]
+            assert range_res == get_res
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
