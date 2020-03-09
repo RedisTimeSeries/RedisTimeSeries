@@ -3,10 +3,6 @@
 #include "compressed_chunk.h"
 #include "rmutil/alloc.h"
 
-void FreeChunkIterator(ChunkIter_t *iter) {
-  free(iter);
-}
-
 static ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
@@ -14,8 +10,9 @@ static ChunkFuncs regChunk = {
     .AddSample = Uncompressed_AddSample,
 
     .NewChunkIterator = Uncompressed_NewChunkIterator,
-    .FreeChunkIterator = FreeChunkIterator,
+    .FreeChunkIterator = Uncompressed_FreeChunkIterator,
     .ChunkIteratorGetNext = Uncompressed_ChunkIteratorGetNext,
+    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
@@ -30,8 +27,10 @@ static ChunkFuncs comprChunk = {
     .AddSample = Compressed_AddSample,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
-    .FreeChunkIterator = FreeChunkIterator,
+    .FreeChunkIterator = Compressed_FreeChunkIterator,
     .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
+    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,

@@ -12,13 +12,13 @@
 #include <stdio.h>          // printf
 #include "consts.h"
 
-typedef void Chunk_t;
-typedef void ChunkIter_t;
-
 typedef struct Sample {
     u_int64_t timestamp;
     double value;
 } Sample;
+
+typedef void Chunk_t;
+typedef void ChunkIter_t;
 
 typedef enum {
     CHUNK_REGULAR,
@@ -31,9 +31,10 @@ typedef struct ChunkFuncs {
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk);
-    void(*FreeChunkIterator)(ChunkIter_t *iter);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
+    void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
+    ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 
     size_t(*GetChunkSize)(Chunk_t *chunk);
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
