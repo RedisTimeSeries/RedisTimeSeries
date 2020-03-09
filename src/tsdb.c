@@ -318,8 +318,9 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
     CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
-    if (rule == NULL ) return NULL;
-
+    if (rule == NULL ) {
+        return NULL;
+    }
     if (series->rules == NULL){
         series->rules = rule;
     } else {
@@ -377,8 +378,10 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 }
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket) {
-    if (timeBucket == 0ULL) return NULL;
-
+    if (timeBucket == 0ULL) {
+        return NULL;
+    }
+    
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);;
     rule->aggType = aggType;
