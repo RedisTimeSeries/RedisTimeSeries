@@ -476,17 +476,23 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         start_ts = 1488823384L
         samples_count = 1500
         with self.redis() as r:
-            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', samples_count-100)
+            assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count-100)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
 
             expected_result = [[start_ts+i, str(5)] for i in range(99, 151)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts+50, start_ts+150)
             assert expected_result == actual_result
+            rev_result = r.execute_command('TS.revrange', 'tester', start_ts+50, start_ts+150)
+            rev_result.reverse()
+            assert expected_result == rev_result
 
             #test out of range returns empty list
             assert [] == r.execute_command('TS.range', 'tester', start_ts * 2, -1)
             assert [] == r.execute_command('TS.range', 'tester', start_ts / 3, start_ts / 2)
 
+            assert [] == r.execute_command('TS.revrange', 'tester', start_ts * 2, -1)
+            assert [] == r.execute_command('TS.revrange', 'tester', start_ts / 3, start_ts / 2)
+            
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.RANGE tester string -1')
             with pytest.raises(redis.ResponseError) as excinfo:
@@ -959,9 +965,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             self._insert_data(r, 'tester2', start_ts, samples_count, 15)
             self._insert_data(r, 'tester3', start_ts, samples_count, 25)
 
-
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+            assert [['tester1', [], expected_result]] == actual_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [['tester1', [], expected_result]] == actual_result
 
             def build_expected(val, time_bucket):
@@ -1042,6 +1050,80 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(count_results) == 10
             count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3)
             assert len(count_results) ==  math.ceil(samples_count / 3.0)
+            
+    def test_revrange(self):
+        start_ts = 1511885908L
+        samples_count = 200
+        expected_results = []
+
+        with self.redis() as r:
+            r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+            
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            # with compression
+            r.execute_command('DEL', 'tester1')
+            r.execute_command('TS.CREATE', 'tester1')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+            
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+            actual_results_rev.reverse()
+            assert actual_results == actual_results_rev
+
+            actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
+            assert len(actual_results_rev) == 5
+            assert actual_results_rev[0][0] > actual_results_rev[1][0]
+
+    def test_mrevrange(self):
+        start_ts = 1511885909L
+        samples_count = 50
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+            self._insert_data(r, 'tester1', start_ts, samples_count, 5)
+            self._insert_data(r, 'tester2', start_ts, samples_count, 15)
+            self._insert_data(r, 'tester3', start_ts, samples_count, 25)        
+
+            expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+            assert [['tester1', [], expected_result]] == actual_result
+
+            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'COUNT', '5', 'FILTER', 'generation=x')
+            assert actual_result == [['tester1',[],[[1511885958L, '5'], [1511885957L, '5'], [1511885956L, '5'], [1511885955L, '5'], [1511885954L, '5']]],
+                                    ['tester2', [],[[1511885958L, '15'],[1511885957L, '15'],[1511885956L, '15'],[1511885955L, '15'],[1511885954L, '15']]],
+                                    ['tester3', [],[[1511885958L, '25'],[1511885957L, '25'],[1511885956L, '25'],[1511885955L, '25'],[1511885954L, '25']]]]
+
+            agg_result = r.execute_command('TS.mrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+            rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+            rev_agg_result.reverse()
+            assert rev_agg_result == agg_result
 
     def test_label_index(self):
         with self.redis() as r:
@@ -1184,7 +1266,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 samples = 2000
                 chunk_size = 64
                 remainder = samples % chunk_size
-                total_chunk_count = math.ceil( float(samples) / float(chunk_size) )
+                total_chunk_count = math.ceil( float(samples) / float(chunk_size))
                 r.execute_command('ts.create trim_me CHUNK_SIZE {0} RETENTION 10 {1}'.format(chunk_size,mode))
                 r.execute_command('ts.create dont_trim_me CHUNK_SIZE {0} {1}'.format(chunk_size,mode))
                 for i in range(samples):
@@ -1240,9 +1322,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('ts.add monkey 1000001 1')
             r.execute_command('ts.add monkey 10000011000001 1')
             r.execute_command('ts.add monkey 10000011000002 1')
-            expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'], 
+            expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'],
                                [500L, '1'], [501L, '1'], [3000L, '1'], [3001L, '1'], 
-                               [10000L, '1'], [10001L, '1'], [100000L, '1'], [100001L, '1'], 
+                               [10000L, '1'], [10001L, '1'], [100000L, '1'], [100001L, '1'],
                                [100002L, '1'], [100004L, '1'], [1000000L, '1'], [1000001L, '1'],
                                [10000011000001L, '1'], [10000011000002L, '1']]
             assert expected_result == r.execute_command('TS.range monkey 0 -1')

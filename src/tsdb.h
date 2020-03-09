@@ -46,6 +46,9 @@ typedef struct SeriesIterator {
     ChunkIter_t *chunkIterator;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
+    bool reverse;
+    ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
+    void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
@@ -64,9 +67,9 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 size_t SeriesGetNumSamples(const Series *series);
 
 // Iterator over the series
-int SeriesQuery(Series *series, SeriesIterator *iter, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
+SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample);
+ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *sample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);

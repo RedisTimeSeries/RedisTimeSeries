@@ -320,9 +320,7 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     u_int64_t trailing = TrailingZeros64(xorWithPrevious);
   
     // Prevent over flow of DOUBLE_LEADING
-    if (leading > 31) { 
-        leading = 31; 
-    }
+    if (leading > 31) leading = 31;
 
     localbit_t prevLeading = chunk->prevLeading;
     localbit_t prevTrailing = chunk->prevTrailing;  

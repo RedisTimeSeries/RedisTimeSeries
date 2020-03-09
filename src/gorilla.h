@@ -10,6 +10,7 @@
 #include <sys/types.h>      // u_int_t
 #include <stdbool.h>        // bool
 #include "consts.h"
+#include "generic_chunk.h"
 
 typedef u_int64_t timestamp_t;
 typedef u_int64_t binary_t;
