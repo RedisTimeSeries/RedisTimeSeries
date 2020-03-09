@@ -44,14 +44,14 @@ commands:
 jobs:
   build:
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:5.0.7-x64-buster
     steps:
       - ci_steps:
           platform: debian
 
   build-macos:
     macos:
-      xcode: 10.2.1
+      xcode: 11.1.0
     steps:
       - run:
           name: Set up workspace
@@ -85,7 +85,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redislabsmodules/rmbuilder:latest
+      - image: redisfab/rmbuilder:5.0.7-x64-buster
     steps:
       - checkout
       - run:
@@ -107,7 +107,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:5.0.7-x64-buster
     steps:
       - attach_workspace:
           at: /workspace
@@ -118,7 +118,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:5.0.7-x64-buster
     steps:
       - checkout
       - run:
@@ -134,7 +134,7 @@ jobs:
       module_version:
         type: string
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:5.0.7-x64-buster
     steps:
       - checkout
       - run:
