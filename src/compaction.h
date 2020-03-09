@@ -10,21 +10,6 @@
 #include "consts.h"
 #include <rmutil/util.h>
 
-#define AGG_NONE 0
-#define AGG_MIN 1
-#define AGG_MAX 2
-#define AGG_SUM 3
-#define AGG_AVG 4
-#define AGG_COUNT 5
-#define AGG_FIRST 6
-#define AGG_LAST 7
-#define AGG_RANGE 8
-#define AGG_STD_P 9
-#define AGG_STD_S 10
-#define AGG_VAR_P 11
-#define AGG_VAR_S 12
-
-
 typedef struct AggregationClass
 {
     void *(*createContext)();
@@ -36,10 +21,10 @@ typedef struct AggregationClass
     double(*finalize)(void *context);
 } AggregationClass;
 
-AggregationClass *GetAggClass(int aggType);
+AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
 int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);
-const char *AggTypeEnumToString(int aggType);
+const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
 
 #endif

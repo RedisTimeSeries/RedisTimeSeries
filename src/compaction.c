@@ -419,7 +419,7 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 	return result;
 }
 
-const char *AggTypeEnumToString(int aggType) {
+const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
         case TS_AGG_MIN:
             return "MIN";
@@ -445,38 +445,44 @@ const char *AggTypeEnumToString(int aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
-        default:
-            return "Unknown";
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+            break;
     }
+    return "Unknown";
 }
 
-AggregationClass *GetAggClass(int aggType) {
+AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
-        case AGG_MIN:
+        case TS_AGG_MIN:
             return &aggMin;
-        case AGG_MAX:
+        case TS_AGG_MAX:
             return &aggMax;
-        case AGG_AVG:
+        case TS_AGG_AVG:
             return &aggAvg;
-        case AGG_STD_P:
+        case TS_AGG_STD_P:
             return &aggStdP;
-        case AGG_STD_S:
+        case TS_AGG_STD_S:
             return &aggStdS;
-        case AGG_VAR_P:
+        case TS_AGG_VAR_P:
             return &aggVarP;
-        case AGG_VAR_S:
+        case TS_AGG_VAR_S:
             return &aggVarS;
-        case AGG_SUM:
+        case TS_AGG_SUM:
             return &aggSum;
-        case AGG_COUNT:
+        case TS_AGG_COUNT:
             return &aggCount;
-        case AGG_FIRST:
+        case TS_AGG_FIRST:
             return &aggFirst;
-        case AGG_LAST:
+        case TS_AGG_LAST:
             return &aggLast;
-        case AGG_RANGE:
+        case TS_AGG_RANGE:
             return &aggRange;
-        default:
-            return NULL;
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+            break;
     }
+    return NULL;
 }

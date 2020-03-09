@@ -20,8 +20,10 @@ typedef struct Sample {
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
-#define CHUNK_REGULAR 0
-#define CHUNK_COMPRESSED 1
+typedef enum {
+    CHUNK_REGULAR,
+    CHUNK_COMPRESSED 
+} CHUNK_TYPES_T;
 
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
@@ -40,6 +42,6 @@ typedef struct ChunkFuncs {
     u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);
 } ChunkFuncs;
 
-ChunkFuncs *GetChunkClass(int chunkClass);
+ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
 
 #endif //GENERIC__CHUNK_H

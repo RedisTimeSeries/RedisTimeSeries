@@ -16,7 +16,7 @@ typedef struct CompactionRule {
     RedisModuleString *destKey;
     timestamp_t timeBucket;
     AggregationClass *aggClass;
-    int aggType;
+    TS_AGG_TYPES_T aggType;
     void *aggContext;
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket;

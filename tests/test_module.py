@@ -509,9 +509,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for i in range(samples_count):
                 r.execute_command('TS.ADD', 'tester', i, i)
             res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
-            assert len(res) == 500
+            assert len(res) == 500 #sample_count is not in range() so not included
             res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
             assert len(res) == 501
+
+            # test for empty range between two full ranges
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester', samples_count * 2 + i, i)
+            res = r.execute_command('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2))
+            assert res == []
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L
@@ -1339,6 +1345,21 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add issue299', i * 10, i)
             actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
             assert actual_result[0] != [0L, '0']
+
+    def test_issue358(self):
+        filepath = "./issue358.txt"
+        with self.redis() as r:
+            r.execute_command('ts.create issue358')
+
+            with open(filepath) as fp:
+                line = fp.readline()
+                while line:
+                    line = fp.readline()
+                    if line != '':
+                        r.execute_command(line)
+            range_res = r.execute_command('ts.range issue358', 1582848000, -1)[0][1]
+            get_res = r.execute_command('ts.get issue358')[1]
+            assert range_res == get_res
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
