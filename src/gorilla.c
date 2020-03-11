@@ -123,18 +123,12 @@ static inline u_int64_t BIT(u_int64_t bit) {
 
 // the LSB `bits` turned on
 static inline u_int64_t MASK(u_int64_t bits) {
-    if (__builtin_expect(bits > 63, 0)) {
-        return -1ULL;
-    }
-    return (1ULL << bits) - 1;
+    return BIT(bits) - 1;
 }
 
 // Clear most significant bits from position `bits`
 static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
-    if (__builtin_expect(bits > 63, 0)) {
-        return x;
-    }
-    return x & ((1ULL << bits) - 1);
+    return x & MASK(bits);
 }
 
 /* 
