@@ -115,14 +115,15 @@
 
 // 2^bit
 static inline u_int64_t BIT(u_int64_t bit) {
-    __uint128_t tmp = 1;
-    return (__uint64_t)(tmp << bit);
+    if (__builtin_expect(bit > 63, 0)) {
+        return 0ULL;
+    }
+    return (1ULL << bit);
 }
 
 // the LSB `bits` turned on
 static inline u_int64_t MASK(u_int64_t bits) {
-    __uint128_t tmp = 1;
-    return (__uint64_t)((tmp << bits) - 1);
+    return BIT(bits) - 1;
 }
 
 // Clear most significant bits from position `bits`
