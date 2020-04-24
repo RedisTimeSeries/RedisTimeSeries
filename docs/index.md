@@ -1,7 +1,7 @@
 <img src="images/logo.svg" alt="logo" width="200"/>
 
 # RedisTimeSeries
-[![Mailing List](https://img.shields.io/badge/Mailing%20List-RedisTimeSeries-blue)](https://groups.google.com/forum/#!forum/redistimeseries)
+[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
@@ -101,7 +101,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 
 ## Mailing List / Forum
 
-Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
+Got questions? Feel free to ask at the [RedisTimeSeries forum](https://forum.redislabs.com/c/modules/redistimeseries).
 
 ## License
 
