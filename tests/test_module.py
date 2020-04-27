@@ -495,6 +495,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.RANGE nonexist 0 -1')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.RANGE tester 0 -1 count number')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester 0 -1 count')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester 0 -1 aggregation count number')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE tester 0 -1 aggregation count')
 
     def test_range_with_agg_query(self):
         start_ts = 1488823384L

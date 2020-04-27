@@ -202,6 +202,10 @@ static int parseRangeArguments(RedisModuleCtx *ctx, Series *series, int start_in
 static int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, long long *count) {
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
+        if (offset + 1 == argc) {
+            RedisModule_ReplyWithError(ctx, "TSDB: COUNT argument is missing");
+            return TSDB_ERROR;
+        }
         if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
             int second_offset = offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
             if (offset == second_offset) { return TSDB_OK; }
