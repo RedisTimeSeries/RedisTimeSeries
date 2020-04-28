@@ -298,23 +298,23 @@ static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
     }
 }
 
+// double string presentation requires 15 digit integers +
+// '.' + "e+" or "e-" + 3 digits of exponent
+#define MAX_VAL_LEN 24
+static void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
+    RedisModule_ReplyWithArray(ctx, 2);
+    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    char buf[MAX_VAL_LEN];
+    snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+    RedisModule_ReplyWithSimpleString(ctx, buf);
+}
+
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
     if(SeriesGetNumSamples(series) == 0) {
         RedisModule_ReplyWithArray(ctx, 0);
+    } else {
+        ReplyWithSample(ctx, series->lastTimestamp, series->lastValue);
     }
-    else {
-        RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
-        RedisModule_ReplyWithDouble(ctx, series->lastValue);
-    }
-}
-
-static void ReplyWithAggValue(RedisModuleCtx *ctx, timestamp_t last_agg_timestamp, AggregationClass *aggObject, void *context) {
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, last_agg_timestamp);
-    RedisModule_ReplyWithDouble(ctx, aggObject->finalize(context));
-
-    aggObject->resetContext(context);
 }
 
 int parseLabelListFromArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int start, int query_count,
@@ -563,9 +563,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject == NULL) {
         // No aggregation
         do {
-            RedisModule_ReplyWithArray(ctx, 2);
-            RedisModule_ReplyWithLongLong(ctx, sample.timestamp);
-            RedisModule_ReplyWithDouble(ctx, sample.value);
+            ReplyWithSample(ctx, sample.timestamp, sample.value);
             arraylen++;
         } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                     (maxResults == -1 || arraylen < maxResults));
@@ -575,7 +573,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             if ((iterator.reverse == false && sample.timestamp >= last_agg_timestamp + time_delta) ||
                 (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
-                    ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+                    ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
+                    aggObject->resetContext(context);
                     arraylen++;
                 }
                 last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
@@ -590,7 +589,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     if (aggObject != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
-            ReplyWithAggValue(ctx, last_agg_timestamp, aggObject, context);
+            ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
+            aggObject->resetContext(context);
             arraylen++;
         }
         aggObject->freeContext(context);
