@@ -7,8 +7,6 @@ ARG OSNICK=buster
 ARG ARCH=x64
 
 #----------------------------------------------------------------------------------------------
-# FROM redis:latest AS builder
-# FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5 AS builder
 FROM redisfab/redis:6.0-rc3-${ARCH}-${OSNICK} AS builder
 
 ADD ./ /build
@@ -23,8 +21,6 @@ RUN echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
 RUN make build
 
 #----------------------------------------------------------------------------------------------
-# FROM redis:latest
-# FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5
 FROM redisfab/redis:6.0-rc3-${ARCH}-${OSNICK}
 
 ENV LIBDIR /usr/lib/redis/modules
