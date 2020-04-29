@@ -279,6 +279,12 @@ ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *samp
     if (res != CR_OK) { 
         return SeriesIteratorGetNext(iterator, sample);
     }
+
+    // No sample within range
+    if (sample->timestamp > iterator->maxTimestamp ||
+        sample->timestamp < iterator->minTimestamp) {
+        return CR_END;
+    } 
     return CR_OK;
 }
 
