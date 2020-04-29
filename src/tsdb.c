@@ -254,6 +254,8 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
         return (SeriesIterator){ 0 };
     }
 
+
+
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
     return iter;
 }
@@ -274,9 +276,14 @@ ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *samp
         res = iterator->GetNext(iterator->chunkIterator, sample);
     }
 
+    // Sample can be 1st in the next chunk
+    if (res != CR_OK) { 
+        return SeriesIteratorGetNext(iterator, sample);
+    }
+
     // No sample within range
-    if (res != CR_OK || sample->timestamp > iterator->maxTimestamp ||
-                        sample->timestamp < iterator->minTimestamp) {
+    if (sample->timestamp > iterator->maxTimestamp ||
+        sample->timestamp < iterator->minTimestamp) {
         return CR_END;
     } 
     return CR_OK;
