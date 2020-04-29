@@ -307,7 +307,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
             funcs->GetLastTimestamp (currentChunk) < iterator->minTimestamp) {
             return CR_END;       // No more chunks or they out of range
         }
-        funcs->FreeChunkIterator(iterator->chunkIterator, false);
+        funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
         iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
         if(iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
             return CR_END;
