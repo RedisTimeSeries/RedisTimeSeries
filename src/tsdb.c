@@ -240,21 +240,20 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
     if (iter.reverse == false) {
         iter.GetNext = funcs->ChunkIteratorGetNext;
         iter.DictGetNext = RedisModule_DictNextC;
+        seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
     } else {
         iter.GetNext = funcs->ChunkIteratorGetPrev;
         iter.DictGetNext = RedisModule_DictPrevC;
+        seriesEncodeTimestamp(&rax_key, iter.maxTimestamp);
     }
 
     // get first chunk within query range 
-    seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
     void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void*)&iter.currentChunk);
     if (dictResult == NULL) {   // should not happen since we always have a chunk
         RedisModule_DictIteratorStop(iter.dictIter);
         return (SeriesIterator){ 0 };
     }
-
-
 
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
     return iter;
@@ -309,7 +308,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
             return CR_END;       // No more chunks or they out of range
         }
         funcs->FreeChunkIterator(iterator->chunkIterator, false);
-        iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, false);
+        iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
         if(iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
             return CR_END;
         }
