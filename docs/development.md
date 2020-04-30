@@ -31,11 +31,13 @@ To build and test RedisTimeSeries one needs to install serveral packages, depend
 If you have ```gnu make``` installed, you can execute
 ```
 cd RedisTimeSeries
+git submodule update --init --recursive
 make setup
 ```
 Alternatively, just invoke the following:
 ```
 cd RedisTimeSeries
+git submodule update --init --recursive    
 ./deps/readies/bin/getpy2
 ./system-setup.py
 ```
