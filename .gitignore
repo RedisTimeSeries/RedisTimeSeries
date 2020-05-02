@@ -16,3 +16,4 @@ venv/
 /VARIANT
 /BINDIR
 /tests/tests_report.xml
+site/
