@@ -37,5 +37,5 @@ markdown_extensions:
       permalink: True
 
 plugins:
-  - versioned-menu:
+  - versions-menu:
 
