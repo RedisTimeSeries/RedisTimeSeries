@@ -116,19 +116,6 @@ jobs:
       - store_artifacts:
           path: /workspace/packages/<<parameters.package>>
 
-  deploy_docs:
-    docker:
-      - image: redisfab/rmbuilder:6.0-rc3-x64-buster
-    steps:
-      - checkout
-      - run:
-          name: Build Docs
-          command: mkdocs build
-      - run:
-          name: Deploy Docs to S3
-          command: >-
-            aws s3 cp site s3://oss.redislabs.com/$WEBSITE_FOLDER/ --acl public-read --recursive
-
   run_automation:
     parameters:
       module_version:
@@ -177,7 +164,7 @@ workflows:
             branches:
               only: /.*/
             tags:
-              only: /.*/ 
+              only: /.*/
       - deploy_package:
           name: deploy_branch
           package: branch
@@ -204,10 +191,6 @@ workflows:
           module_version: $CIRCLE_TAG
           requires:
             - deploy_release
-      - deploy_docs:
-          filters:
-            branches:
-              only: master
 
   nightly:
     triggers:
