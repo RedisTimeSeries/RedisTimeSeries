@@ -38,4 +38,3 @@ markdown_extensions:
 
 plugins:
   - versions-menu:
-
