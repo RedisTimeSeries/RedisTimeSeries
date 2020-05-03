@@ -1,12 +1,14 @@
 <img src="images/logo.svg" alt="logo" width="200"/>
 
 # RedisTimeSeries
+
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
 ## Features
+
 Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
@@ -36,6 +38,7 @@ Each sample is a tuple of the time and the value of 128 bits,
 You can either get RedisTimeSeries setup in a Docker container or on your own machine.
 
 ### Docker
+
 To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
@@ -46,6 +49,7 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 You can also build and run RedisTimeSeries on your own machine.
 
 #### Requirements
+
 -  build-essential
 -  The RedisTimeSeries repository: `git clone https://github.com/RedisTimeSeries/RedisTimeSeries.git`
 
@@ -74,6 +78,7 @@ After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggregation rule.
 
 ### With `redis-cli`
+
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature RETENTION 60 LABELS sensor_id 2 area_id 32
