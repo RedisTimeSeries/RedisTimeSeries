@@ -5,7 +5,6 @@ include $(ROOT)/deps/readies/mk/main
 MK_CUSTOM_CLEAN=1
 BINDIR=$(BINROOT)
 
-
 ifeq ($(wildcard $(MK)/rules),)
   $(error Please run 'git submodule update --init --recursive' first!)
 endif
