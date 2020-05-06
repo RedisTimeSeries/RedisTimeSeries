@@ -132,6 +132,7 @@ jobs:
           command: |
             apt-get -qq update
             apt-get install -y ca-certificates curl jq
+            python -m pip install jinja2
       - run:
           name: Run QA Automation
           command: MODULE_VERSION=<<parameters.module_version>> VERBOSE=1 ./tests/qa/run
