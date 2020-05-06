@@ -16,6 +16,6 @@ capabilities:
     - failover_migrate
     - persistence_aof
     - persistence_rdb
-    - hash_policy
     - clustering
     - reshard_rebalance
+    - backup_restore
