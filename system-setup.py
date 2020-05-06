@@ -40,6 +40,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         if not self.has_command("ramp"):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
         self.pip_install("-r tests/requirements.txt")
+        self.pip_install("jinja2")
 
 #----------------------------------------------------------------------------------------------
 
