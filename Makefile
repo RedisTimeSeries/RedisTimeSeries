@@ -1,5 +1,8 @@
 
 ROOT=.
+ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
+$(error Submodules not present. Please run 'git submodule update --init --recursive')
+endif
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
