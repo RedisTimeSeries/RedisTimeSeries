@@ -355,6 +355,27 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .readContext = MaxMinReadContext,
                                      .resetContext = MaxMinReset };
 
+void DerivativeAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    context->maxValue = value;
+}
+
+void DerivativeReset(void *contextPtr) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    context->minValue = context->maxValue;
+    context->maxValue = NAN;
+}
+
+static AggregationClass aggDerivative = {
+    .createContext = MaxMinCreateContext,
+    .appendValue = DerivativeAppendValue,
+    .freeContext = rm_free,
+    .finalize = RangeFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
+    .resetContext = DerivativeReset
+};
+
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
 }
@@ -366,43 +387,45 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    int result = TS_AGG_INVALID;
-    char agg_type_lower[len];
-    for (int i = 0; i < len; i++) {
-        agg_type_lower[i] = tolower(agg_type[i]);
-    }
-    if (len == 3) {
-        if (strncmp(agg_type_lower, "min", len) == 0 && len == 3) {
-            result = TS_AGG_MIN;
-        } else if (strncmp(agg_type_lower, "max", len) == 0) {
-            result = TS_AGG_MAX;
-        } else if (strncmp(agg_type_lower, "sum", len) == 0) {
-            result = TS_AGG_SUM;
-        } else if (strncmp(agg_type_lower, "avg", len) == 0) {
-            result = TS_AGG_AVG;
-        }
-    } else if (len == 4) {
-        if (strncmp(agg_type_lower, "last", len) == 0) {
-            result = TS_AGG_LAST;
-        }
-    } else if (len == 5) {
-        if (strncmp(agg_type_lower, "count", len) == 0) {
-            result = TS_AGG_COUNT;
-        } else if (strncmp(agg_type_lower, "range", len) == 0) {
-            result = TS_AGG_RANGE;
-        } else if (strncmp(agg_type_lower, "first", len) == 0) {
-            result = TS_AGG_FIRST;
-        } else if (strncmp(agg_type_lower, "std.p", len) == 0) {
-            result = TS_AGG_STD_P;
-        } else if (strncmp(agg_type_lower, "std.s", len) == 0) {
-            result = TS_AGG_STD_S;
-        } else if (strncmp(agg_type_lower, "var.p", len) == 0) {
-            result = TS_AGG_VAR_P;
-        } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
-            result = TS_AGG_VAR_S;
-        }
-    }
-    return result;
+	int result = TS_AGG_INVALID;
+	char agg_type_lower[len];
+	for(int i = 0; i < len; i++){
+		agg_type_lower[i] = tolower(agg_type[i]);
+	}
+	if(len == 3){
+		if (strncmp(agg_type_lower, "min", len) == 0 && len == 3){
+			result = TS_AGG_MIN;
+		} else if (strncmp(agg_type_lower, "max", len) == 0) {
+			result = TS_AGG_MAX;
+		} else if (strncmp(agg_type_lower, "sum", len) == 0) {
+			result = TS_AGG_SUM;
+		} else if (strncmp(agg_type_lower, "avg", len) == 0) {
+			result = TS_AGG_AVG;
+		}
+	} else if (len == 4){
+		if (strncmp(agg_type_lower, "last", len) == 0) {
+			result = TS_AGG_LAST;
+		}
+	} else if (len == 5){
+		if (strncmp(agg_type_lower, "count", len) == 0) {
+			result = TS_AGG_COUNT;
+		} else if (strncmp(agg_type_lower, "range", len) == 0) {
+			result = TS_AGG_RANGE;
+		} else if (strncmp(agg_type_lower, "first", len) == 0) {
+			result = TS_AGG_FIRST;
+		} else if (strncmp(agg_type_lower, "std.p", len) == 0) {
+			result = TS_AGG_STD_P;
+		} else if (strncmp(agg_type_lower, "std.s", len) == 0) {
+			result = TS_AGG_STD_S;
+		} else if (strncmp(agg_type_lower, "var.p", len) == 0) {
+			result = TS_AGG_VAR_P;
+		} else if (strncmp(agg_type_lower, "var.s", len) == 0) {
+			result = TS_AGG_VAR_S;
+		} else if (strncmp(agg_type_lower, "deriv", len) == 0) {
+			result = TS_AGG_DERIV;
+		}
+	}
+	return result;
 }
 
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
@@ -431,6 +454,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
+        case TS_AGG_DERIV:
+            return "DERIV";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -465,6 +490,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_DERIV:
+            return &aggDerivative;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
