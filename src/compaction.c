@@ -9,6 +9,8 @@
 #include "compaction.h"
 #include "rmutil/alloc.h"
 
+#define UNUSED(x) (void)(x)
+
 typedef struct MaxMinContext {
     double minValue;
     double maxValue;
@@ -369,6 +371,27 @@ static AggregationClass aggRange = {
     .resetContext = MaxMinReset
 };
 
+void DerivativeAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    context->maxValue = value;
+}
+
+void DerivativeReset(void *contextPtr) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    context->minValue = context->maxValue;
+    context->maxValue = NAN;
+}
+
+static AggregationClass aggDerivative = {
+    .createContext = MaxMinCreateContext,
+    .appendValue = DerivativeAppendValue,
+    .freeContext = rm_free,
+    .finalize = RangeFinalize,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
+    .resetContext = DerivativeReset
+};
+
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
 }
@@ -414,6 +437,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
 			result = TS_AGG_VAR_P;
 		} else if (strncmp(agg_type_lower, "var.s", len) == 0) {
 			result = TS_AGG_VAR_S;
+		} else if (strncmp(agg_type_lower, "deriv", len) == 0) {
+			result = TS_AGG_DERIV;
 		}
 	}
 	return result;
@@ -445,6 +470,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
+        case TS_AGG_DERIV:
+            return "DERIV";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -479,6 +506,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_DERIV:
+            return &aggDerivative;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
