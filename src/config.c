@@ -8,6 +8,11 @@
 #include "rmutil/strings.h"
 #include "config.h"
 #include "consts.h"
+#include "common.h"
+#include <string.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <assert.h>
 
 TSConfig TSGlobalConfig;
 
@@ -52,4 +57,81 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     RedisModule_Log(ctx, "verbose", "loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
     return TSDB_OK;
+}
+
+RedisVersion currVersion;
+
+RedisVersion supportedVersion = {
+    .redisMajorVersion = 5,
+    .redisMinorVersion = 0,
+    .redisPatchVersion = 0,
+};
+
+int timeseriesRlecMajorVersion;
+int timeseriesRlecMinorVersion;
+int timeseriesRlecPatchVersion;
+int timeseriesRlecBuild;
+
+bool timeseriesIsCrdt;
+
+int TimeSeriesCheckSupportedVestion() {
+  if (currVersion.redisMajorVersion < supportedVersion.redisMajorVersion) {
+    return REDISMODULE_ERR;
+  }
+
+  if (currVersion.redisMajorVersion == supportedVersion.redisMajorVersion) {
+    if (currVersion.redisMinorVersion < supportedVersion.redisMinorVersion) {
+      return REDISMODULE_ERR;
+    }
+
+    if (currVersion.redisMinorVersion == supportedVersion.redisMinorVersion) {
+      if (currVersion.redisPatchVersion < supportedVersion.redisPatchVersion) {
+        return REDISMODULE_ERR;
+      }
+    }
+  }
+
+  return REDISMODULE_OK;
+}
+
+void TimeSeriesGetRedisVersion() {
+  RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+  RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
+  assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
+  size_t len;
+  const char *replyStr = RedisModule_CallReplyStringPtr(reply, &len);
+
+  int n = sscanf(replyStr, "# Server\nredis_version:%d.%d.%d",
+                 &currVersion.redisMajorVersion, &currVersion.redisMinorVersion,
+                 &currVersion.redisPatchVersion);
+
+  assert(n == 3);
+
+  timeseriesRlecMajorVersion = -1;
+  timeseriesRlecMinorVersion = -1;
+  timeseriesRlecPatchVersion = -1;
+  timeseriesRlecBuild = -1;
+  char *enterpriseStr = strstr(replyStr, "rlec_version:");
+  if (enterpriseStr) {
+    n = sscanf(enterpriseStr, "rlec_version:%d.%d.%d-%d",
+               &timeseriesRlecMajorVersion, &timeseriesRlecMinorVersion,
+               &timeseriesRlecPatchVersion, &timeseriesRlecBuild);
+    if (n != 4) {
+      RedisModule_Log(NULL, "warning", "Could not extract enterprise version");
+    }
+  }
+
+  RedisModule_FreeCallReply(reply);
+
+  timeseriesIsCrdt = true;
+  reply = RedisModule_Call(ctx, "CRDT.CONFIG", "cc", "GET", "active-gc");
+  if (!reply || RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_ERROR) {
+    timeseriesIsCrdt = false;
+  }
+
+  if (reply) {
+    RedisModule_FreeCallReply(reply);
+  }
+
+  RedisModule_FreeThreadSafeContext(ctx);
 }

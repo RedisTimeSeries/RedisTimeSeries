@@ -8,6 +8,7 @@
 
 #include "redismodule.h"
 #include "parse_policies.h"
+#include <stdbool.h>
 
 typedef struct {
     SimpleCompactionRule *compactionRules;
@@ -21,4 +22,25 @@ typedef struct {
 extern TSConfig TSGlobalConfig;
 
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+
+typedef struct RedisVersion {
+  int redisMajorVersion;
+  int redisMinorVersion;
+  int redisPatchVersion;
+} RedisVersion;
+
+extern RedisVersion currVersion;
+extern RedisVersion supportedVersion;
+
+extern int timeseriesRlecMajorVersion;
+extern int timeseriesRlecMinorVersion;
+extern int timeseriesRlecPatchVersion;
+extern int timeseriesRlecBuild;
+
+extern bool timeseriesIsCrdt;
+
+static inline int IsEnterprise() { return timeseriesRlecMajorVersion != -1; }
+
+int TimeSeriesCheckSupportedVestion();
+void TimeSeriesGetRedisVersion();
 #endif

@@ -22,6 +22,10 @@
 #include "indexer.h"
 #include "version.h"
 
+#ifndef REDISTIMESERIES_GIT_SHA
+#define REDISTIMESERIES_GIT_SHA "unknown"
+#endif
+
 RedisModuleType *SeriesType;
 
 static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
@@ -1077,6 +1081,34 @@ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY "max:1m:1d;min:
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_Init(ctx, "timeseries", REDISTIMESERIES_MODULE_VERSION, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
+    }
+
+    RedisModule_Log(ctx, "notice", "RedisTimeSeries version %d, git_sha=%s",
+                    REDISTIMESERIES_MODULE_VERSION, REDISTIMESERIES_GIT_SHA);
+
+    TimeSeriesGetRedisVersion();
+    RedisModule_Log(
+        ctx, "notice", "Redis version found by RedisTimeSeries : %d.%d.%d - %s",
+        currVersion.redisMajorVersion, currVersion.redisMinorVersion,
+        currVersion.redisPatchVersion,
+        IsEnterprise() ? (timeseriesIsCrdt ? "enterprise-crdt" : "enterprise")
+                       : "oss");
+    if (IsEnterprise()) {
+      RedisModule_Log(
+          ctx, "notice",
+          "Redis Enterprise version found by RedisTimeSeries : %d.%d.%d-%d",
+          timeseriesRlecMajorVersion, timeseriesRlecMinorVersion,
+          timeseriesRlecPatchVersion, timeseriesRlecBuild);
+    }
+
+    if (TimeSeriesCheckSupportedVestion() != REDISMODULE_OK) {
+      RedisModule_Log(ctx, "warning",
+                      "Redis version is to old, please upgrade to redis "
+                      "%d.%d.%d and above.",
+                      supportedVersion.redisMajorVersion,
+                      supportedVersion.redisMinorVersion,
+                      supportedVersion.redisPatchVersion);
+      return REDISMODULE_ERR;
     }
 
     if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
