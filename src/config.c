@@ -10,8 +10,6 @@
 #include "consts.h"
 #include "common.h"
 #include <string.h>
-#include <stdbool.h>
-#include <stdarg.h>
 #include <assert.h>
 
 TSConfig TSGlobalConfig;
@@ -61,7 +59,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 RTS_RedisVersion RTS_currVersion;
 
-RTS_RedisVersion RTS_supportedVersion = {
+RTS_RedisVersion RTS_minSupportedVersion = {
     .redisMajorVersion = 5,
     .redisMinorVersion = 0,
     .redisPatchVersion = 0,
@@ -73,17 +71,17 @@ int RTS_RlecPatchVersion;
 int RTS_RlecBuild;
 
 int RTS_CheckSupportedVestion() {
-  if (RTS_currVersion.redisMajorVersion < RTS_supportedVersion.redisMajorVersion) {
+  if (RTS_currVersion.redisMajorVersion < RTS_minSupportedVersion.redisMajorVersion) {
     return REDISMODULE_ERR;
   }
 
-  if (RTS_currVersion.redisMajorVersion == RTS_supportedVersion.redisMajorVersion) {
-    if (RTS_currVersion.redisMinorVersion < RTS_supportedVersion.redisMinorVersion) {
+  if (RTS_currVersion.redisMajorVersion == RTS_minSupportedVersion.redisMajorVersion) {
+    if (RTS_currVersion.redisMinorVersion < RTS_minSupportedVersion.redisMinorVersion) {
       return REDISMODULE_ERR;
     }
 
-    if (RTS_currVersion.redisMinorVersion == RTS_supportedVersion.redisMinorVersion) {
-      if (RTS_currVersion.redisPatchVersion < RTS_supportedVersion.redisPatchVersion) {
+    if (RTS_currVersion.redisMinorVersion == RTS_minSupportedVersion.redisMinorVersion) {
+      if (RTS_currVersion.redisPatchVersion < RTS_minSupportedVersion.redisPatchVersion) {
         return REDISMODULE_ERR;
       }
     }

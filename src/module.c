@@ -1103,9 +1103,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
       RedisModule_Log(ctx, "warning",
                       "Redis version is to old, please upgrade to redis "
                       "%d.%d.%d and above.",
-                      RTS_supportedVersion.redisMajorVersion,
-                      RTS_supportedVersion.redisMinorVersion,
-                      RTS_supportedVersion.redisPatchVersion);
+                      RTS_minSupportedVersion.redisMajorVersion,
+                      RTS_minSupportedVersion.redisMinorVersion,
+                      RTS_minSupportedVersion.redisPatchVersion);
       return REDISMODULE_ERR;
     }
 

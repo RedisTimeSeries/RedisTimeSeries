@@ -30,7 +30,7 @@ typedef struct RTS_RedisVersion {
 } RTS_RedisVersion;
 
 extern RTS_RedisVersion RTS_currVersion;
-extern RTS_RedisVersion RTS_supportedVersion;
+extern RTS_RedisVersion RTS_minSupportedVersion;
 
 extern int RTS_RlecMajorVersion;
 extern int RTS_RlecMinorVersion;
