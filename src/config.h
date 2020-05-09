@@ -1,5 +1,5 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
+* Copyright 2018-2020 Redis Labs Ltd. and Contributors
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
@@ -23,24 +23,22 @@ extern TSConfig TSGlobalConfig;
 
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 
-typedef struct RedisVersion {
+typedef struct RTS_RedisVersion {
   int redisMajorVersion;
   int redisMinorVersion;
   int redisPatchVersion;
-} RedisVersion;
+} RTS_RedisVersion;
 
-extern RedisVersion currVersion;
-extern RedisVersion supportedVersion;
+extern RTS_RedisVersion RTS_currVersion;
+extern RTS_RedisVersion RTS_supportedVersion;
 
-extern int timeseriesRlecMajorVersion;
-extern int timeseriesRlecMinorVersion;
-extern int timeseriesRlecPatchVersion;
-extern int timeseriesRlecBuild;
+extern int RTS_RlecMajorVersion;
+extern int RTS_RlecMinorVersion;
+extern int RTS_RlecPatchVersion;
+extern int RTS_RlecBuild;
 
-extern bool timeseriesIsCrdt;
+static inline int RTS_IsEnterprise() { return RTS_RlecMajorVersion != -1; }
 
-static inline int IsEnterprise() { return timeseriesRlecMajorVersion != -1; }
-
-int TimeSeriesCheckSupportedVestion();
-void TimeSeriesGetRedisVersion();
+int RTS_CheckSupportedVestion();
+void RTS_GetRedisVersion();
 #endif

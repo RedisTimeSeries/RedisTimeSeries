@@ -1086,28 +1086,26 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RedisModule_Log(ctx, "notice", "RedisTimeSeries version %d, git_sha=%s",
                     REDISTIMESERIES_MODULE_VERSION, REDISTIMESERIES_GIT_SHA);
 
-    TimeSeriesGetRedisVersion();
+    RTS_GetRedisVersion();
     RedisModule_Log(
         ctx, "notice", "Redis version found by RedisTimeSeries : %d.%d.%d - %s",
-        currVersion.redisMajorVersion, currVersion.redisMinorVersion,
-        currVersion.redisPatchVersion,
-        IsEnterprise() ? (timeseriesIsCrdt ? "enterprise-crdt" : "enterprise")
-                       : "oss");
-    if (IsEnterprise()) {
+        RTS_currVersion.redisMajorVersion, RTS_currVersion.redisMinorVersion,
+        RTS_currVersion.redisPatchVersion, RTS_IsEnterprise() ? "enterprise" : "oss");
+    if (RTS_IsEnterprise()) {
       RedisModule_Log(
           ctx, "notice",
           "Redis Enterprise version found by RedisTimeSeries : %d.%d.%d-%d",
-          timeseriesRlecMajorVersion, timeseriesRlecMinorVersion,
-          timeseriesRlecPatchVersion, timeseriesRlecBuild);
+          RTS_RlecMajorVersion, RTS_RlecMinorVersion,
+          RTS_RlecPatchVersion, RTS_RlecBuild);
     }
 
-    if (TimeSeriesCheckSupportedVestion() != REDISMODULE_OK) {
+    if (RTS_CheckSupportedVestion() != REDISMODULE_OK) {
       RedisModule_Log(ctx, "warning",
                       "Redis version is to old, please upgrade to redis "
                       "%d.%d.%d and above.",
-                      supportedVersion.redisMajorVersion,
-                      supportedVersion.redisMinorVersion,
-                      supportedVersion.redisPatchVersion);
+                      RTS_supportedVersion.redisMajorVersion,
+                      RTS_supportedVersion.redisMinorVersion,
+                      RTS_supportedVersion.redisPatchVersion);
       return REDISMODULE_ERR;
     }
 

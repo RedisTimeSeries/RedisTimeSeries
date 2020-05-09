@@ -59,33 +59,31 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_OK;
 }
 
-RedisVersion currVersion;
+RTS_RedisVersion RTS_currVersion;
 
-RedisVersion supportedVersion = {
+RTS_RedisVersion RTS_supportedVersion = {
     .redisMajorVersion = 5,
     .redisMinorVersion = 0,
     .redisPatchVersion = 0,
 };
 
-int timeseriesRlecMajorVersion;
-int timeseriesRlecMinorVersion;
-int timeseriesRlecPatchVersion;
-int timeseriesRlecBuild;
+int RTS_RlecMajorVersion;
+int RTS_RlecMinorVersion;
+int RTS_RlecPatchVersion;
+int RTS_RlecBuild;
 
-bool timeseriesIsCrdt;
-
-int TimeSeriesCheckSupportedVestion() {
-  if (currVersion.redisMajorVersion < supportedVersion.redisMajorVersion) {
+int RTS_CheckSupportedVestion() {
+  if (RTS_currVersion.redisMajorVersion < RTS_supportedVersion.redisMajorVersion) {
     return REDISMODULE_ERR;
   }
 
-  if (currVersion.redisMajorVersion == supportedVersion.redisMajorVersion) {
-    if (currVersion.redisMinorVersion < supportedVersion.redisMinorVersion) {
+  if (RTS_currVersion.redisMajorVersion == RTS_supportedVersion.redisMajorVersion) {
+    if (RTS_currVersion.redisMinorVersion < RTS_supportedVersion.redisMinorVersion) {
       return REDISMODULE_ERR;
     }
 
-    if (currVersion.redisMinorVersion == supportedVersion.redisMinorVersion) {
-      if (currVersion.redisPatchVersion < supportedVersion.redisPatchVersion) {
+    if (RTS_currVersion.redisMinorVersion == RTS_supportedVersion.redisMinorVersion) {
+      if (RTS_currVersion.redisPatchVersion < RTS_supportedVersion.redisPatchVersion) {
         return REDISMODULE_ERR;
       }
     }
@@ -94,7 +92,7 @@ int TimeSeriesCheckSupportedVestion() {
   return REDISMODULE_OK;
 }
 
-void TimeSeriesGetRedisVersion() {
+void RTS_GetRedisVersion() {
   RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
   RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
   assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
@@ -102,36 +100,26 @@ void TimeSeriesGetRedisVersion() {
   const char *replyStr = RedisModule_CallReplyStringPtr(reply, &len);
 
   int n = sscanf(replyStr, "# Server\nredis_version:%d.%d.%d",
-                 &currVersion.redisMajorVersion, &currVersion.redisMinorVersion,
-                 &currVersion.redisPatchVersion);
+                 &RTS_currVersion.redisMajorVersion, &RTS_currVersion.redisMinorVersion,
+                 &RTS_currVersion.redisPatchVersion);
+  if (n != 3) {
+    RedisModule_Log(NULL, "warning", "Could not extract redis version");
+  }
 
-  assert(n == 3);
-
-  timeseriesRlecMajorVersion = -1;
-  timeseriesRlecMinorVersion = -1;
-  timeseriesRlecPatchVersion = -1;
-  timeseriesRlecBuild = -1;
-  char *enterpriseStr = strstr(replyStr, "rlec_version:");
+  RTS_RlecMajorVersion = -1;
+  RTS_RlecMinorVersion = -1;
+  RTS_RlecPatchVersion = -1;
+  RTS_RlecBuild = -1;
+  const char *enterpriseStr = strstr(replyStr, "rlec_version:");
   if (enterpriseStr) {
     n = sscanf(enterpriseStr, "rlec_version:%d.%d.%d-%d",
-               &timeseriesRlecMajorVersion, &timeseriesRlecMinorVersion,
-               &timeseriesRlecPatchVersion, &timeseriesRlecBuild);
+               &RTS_RlecMajorVersion, &RTS_RlecMinorVersion,
+               &RTS_RlecPatchVersion, &RTS_RlecBuild);
     if (n != 4) {
       RedisModule_Log(NULL, "warning", "Could not extract enterprise version");
     }
   }
 
   RedisModule_FreeCallReply(reply);
-
-  timeseriesIsCrdt = true;
-  reply = RedisModule_Call(ctx, "CRDT.CONFIG", "cc", "GET", "active-gc");
-  if (!reply || RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_ERROR) {
-    timeseriesIsCrdt = false;
-  }
-
-  if (reply) {
-    RedisModule_FreeCallReply(reply);
-  }
-
   RedisModule_FreeThreadSafeContext(ctx);
 }
