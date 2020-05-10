@@ -544,7 +544,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
-    ChunkResult res = SeriesIteratorGetFirstInRange(&iterator, &sample);
+    ChunkResult res = SeriesIteratorGetNext(&iterator, &sample);
     if (res != CR_OK) {
         SeriesIteratorClose(&iterator);
         return RedisModule_ReplyWithArray(ctx, 0);

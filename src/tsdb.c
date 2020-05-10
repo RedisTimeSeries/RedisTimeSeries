@@ -236,50 +236,27 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
 
     timestamp_t rax_key;
     ChunkFuncs *funcs = series->funcs;
-    
+
     if (iter.reverse == false) {
         iter.GetNext = funcs->ChunkIteratorGetNext;
         iter.DictGetNext = RedisModule_DictNextC;
+        seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
     } else {
         iter.GetNext = funcs->ChunkIteratorGetPrev;
         iter.DictGetNext = RedisModule_DictPrevC;
+        seriesEncodeTimestamp(&rax_key, iter.maxTimestamp);
     }
 
-    // get first chunk within query range 
-    seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
+    // get first chunk within query range
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void*)&iter.currentChunk);
+    void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk);
     if (dictResult == NULL) {   // should not happen since we always have a chunk
         RedisModule_DictIteratorStop(iter.dictIter);
-        return (SeriesIterator){ 0 };
+        return (SeriesIterator) {0};
     }
 
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
     return iter;
-}
-
-// Fill the first sample
-ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *sample) {
-    ChunkResult res;
-    ChunkFuncs *funcs = iterator->series->funcs;
-
-    // Deal with empty series
-    if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
-        return CR_END;
-    }
-
-    res = iterator->GetNext(iterator->chunkIterator, sample);
-    while (res == CR_OK && (sample->timestamp < iterator->minTimestamp ||
-                            sample->timestamp > iterator->maxTimestamp)) {
-        res = iterator->GetNext(iterator->chunkIterator, sample);
-    }
-
-    // No sample within range
-    if (res != CR_OK || sample->timestamp > iterator->maxTimestamp ||
-                        sample->timestamp < iterator->minTimestamp) {
-        return CR_END;
-    } 
-    return CR_OK;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
@@ -294,25 +271,45 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
 
-    res = iterator->GetNext(iterator->chunkIterator, currentSample);
-    if (res == CR_END) { // Reached the end of the chunk
-        if (!iterator->DictGetNext(iterator->dictIter, NULL, (void*)&currentChunk) ||
-            funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp ||
-            funcs->GetLastTimestamp (currentChunk) < iterator->minTimestamp) {
-            return CR_END;       // No more chunks or they out of range
+    while (true) {
+        res = iterator->GetNext(iterator->chunkIterator, currentSample);
+        if (res == CR_END) { // Reached the end of the chunk
+            if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *) &currentChunk) ||
+                funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp ||
+                funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
+                return CR_END;       // No more chunks or they out of range
+            }
+            funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
+            iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
+            if (iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
+                return CR_END;
+            }
         }
-        funcs->FreeChunkIterator(iterator->chunkIterator, false);
-        iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, false);
-        if(iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
-            return CR_END;
-        }
-    }
 
-    // check timestamp is within range
-    if (currentSample->timestamp < iterator->minTimestamp ||
-        currentSample->timestamp > iterator->maxTimestamp) {
-        return CR_END;          // Reach end of range requested
-    } 
+        // check timestamp is within range
+        if (!iterator->reverse) {
+            // forward range handling
+            if (currentSample->timestamp < iterator->minTimestamp) {
+                // didn't reach the starting point of the requested range
+                continue;
+            }
+            if (currentSample->timestamp > iterator->maxTimestamp) {
+                // reached the end of the requested range
+                return CR_END;
+            }
+        } else {
+            // reverse range handling
+            if (currentSample->timestamp > iterator->maxTimestamp) {
+                // didn't reach our starting range
+                continue;
+            }
+            if (currentSample->timestamp < iterator->minTimestamp) {
+                // didn't reach the starting point of the requested range
+                return CR_END;
+            }
+        }
+        return CR_OK;
+    }
     return CR_OK;
 }
 
