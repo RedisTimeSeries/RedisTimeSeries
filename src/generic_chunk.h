@@ -13,7 +13,7 @@
 #include "consts.h"
 
 typedef struct Sample {
-    u_int64_t timestamp;
+    timestamp_t timestamp;
     double value;
 } Sample;
 
@@ -30,6 +30,7 @@ typedef struct ChunkFuncs {
     void(*FreeChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
+    ChunkResult(*UpsertSample)(Chunk_t *chunk, Sample *sample);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
     void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);

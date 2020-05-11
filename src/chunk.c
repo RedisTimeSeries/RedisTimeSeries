@@ -64,6 +64,38 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
+ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample) {
+    timestamp_t ts = sample->timestamp;
+    Chunk *regChunk = (Chunk *)chunk;
+    short numSamples = regChunk->num_samples;
+    assert(ts >= Uncompressed_GetFirstTimestamp(regChunk));
+    // find sample location
+    size_t i = 0;
+    for (; i < numSamples; ++i) {
+        if (ts <= ChunkGetSample(regChunk, i)->timestamp) {
+            break;
+        }
+    }
+    // TODO: TS.UPSERT vs TS.ADD
+    if (ts == ChunkGetSample(regChunk, i)->timestamp) {
+        return TSDB_ERR_TIMESTAMP_OCCUPIED;
+    }
+
+    if (numSamples == regChunk->max_samples) {    
+        realloc(regChunk->samples, ++regChunk->max_samples);
+    }
+    
+    if (i != numSamples) { // sample is not last
+        memmove(&regChunk->samples[i + 1],
+                &regChunk->samples[i],
+                (numSamples - i) * sizeof(Sample));
+    }
+
+    regChunk->samples[i] = *sample;
+    regChunk->num_samples++;
+    return CR_OK;
+}
+
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;

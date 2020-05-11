@@ -40,6 +40,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
+    newSeries->options |= SERIES_OPT_OUT_OF_ORDER;  // POC
     Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
     RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
                         (void*)newChunk);
@@ -203,13 +204,32 @@ size_t SeriesGetNumSamples(const Series *series) {
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     timestamp_t rax_key;
-    if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
+    if (timestamp < series->lastTimestamp && series->lastTimestamp != 0 &&
+                                !(series->options & SERIES_OPT_OUT_OF_ORDER)) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp && timestamp != 0) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
+
     Sample sample = {.timestamp = timestamp, .value = value};
+    if (timestamp < series->lastTimestamp) {
+        Chunk_t *chunk = series->lastChunk;
+        if (timestamp < series->funcs->GetFirstTimestamp(series->lastChunk)) {
+            // Upsert in an older chunk
+            seriesEncodeTimestamp(&rax_key, timestamp);
+            RedisModuleDictIter *dictIter = 
+                RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+            void *dictResult = RedisModule_DictNextC(dictIter, NULL, (void*)&chunk);
+            if (dictResult == NULL) {   // should not happen since we always have a chunk
+                // TODO: check if new sample before first sample
+                RedisModule_DictIteratorStop(dictIter);
+                return TSDB_ERROR;
+            }
+        }
+        return series->funcs->UpsertSample(chunk, &sample);
+    }
     int ret = series->funcs->AddSample(series->lastChunk, &sample);
+
     if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
