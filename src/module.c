@@ -451,7 +451,8 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+    if (CountPredicateType(queries, (size_t) query_count, EQ) +
+        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
@@ -1016,7 +1017,8 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+    if (CountPredicateType(queries, (size_t) query_count, EQ) +
+        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
