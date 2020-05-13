@@ -1391,6 +1391,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             get_res = r.execute_command('ts.get issue358')[1]
             assert range_res == get_res
 
+    def test_issue400(self):
+        with self.redis() as r:
+            times = 300
+            r.execute_command('ts.create issue376 UNCOMPRESSED')
+            for i in range(1, times):
+                r.execute_command('ts.add issue376', i * 5, i)
+            for i in range(1, times):
+                range_res = r.execute_command('ts.range issue376', i * 5 - 1, i * 5 + 60)
+                assert len(range_res) > 0
+            for i in range(1, times):
+                range_res = r.execute_command('ts.revrange issue376', i * 5 - 1, i * 5 + 60)
+                assert len(range_res) > 0
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
