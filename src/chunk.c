@@ -78,11 +78,13 @@ ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample) {
     }
     // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
+        // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp, sample->timestamp, sample->value);
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
 
+    // TODO: split chunk (or provide additional API)
     if (numSamples == regChunk->max_samples) {    
-        realloc(regChunk->samples, ++regChunk->max_samples);
+        regChunk->samples = realloc(regChunk->samples, ++regChunk->max_samples * sizeof(Sample));
     }
     
     if (i != numSamples) { // sample is not last

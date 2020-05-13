@@ -26,6 +26,7 @@ static ChunkFuncs comprChunk = {
     .FreeChunk = Compressed_FreeChunk,
 
     .AddSample = Compressed_AddSample,
+    .UpsertSample = Compressed_UpsertSample,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
     .FreeChunkIterator = Compressed_FreeChunkIterator,

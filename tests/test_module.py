@@ -1206,7 +1206,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
-
+    '''
     def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
@@ -1225,7 +1225,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
-    
+    '''
     def test_rule_timebucket_64bit(self):
         with self.redis() as r:
             BELOW_32BIT_LIMIT = 2147483647

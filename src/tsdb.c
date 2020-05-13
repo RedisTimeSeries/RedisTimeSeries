@@ -223,10 +223,16 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
             if (dictResult == NULL) {   // should not happen since we always have a chunk
                 // TODO: check if new sample before first sample
                 RedisModule_DictIteratorStop(dictIter);
+                assert(0);
                 return TSDB_ERROR;
             }
         }
-        return series->funcs->UpsertSample(chunk, &sample);
+        // TODO
+        int rv = series->funcs->UpsertSample(chunk, &sample);
+        if (rv == REDISMODULE_OK) {
+            series->totalSamples++;
+        }
+        return rv;
     }
     int ret = series->funcs->AddSample(series->lastChunk, &sample);
 
