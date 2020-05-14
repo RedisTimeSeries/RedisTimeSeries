@@ -22,6 +22,14 @@ typedef struct CompactionRule {
     timestamp_t startCurrentTimeBucket;
 } CompactionRule;
 
+typedef struct CreateCtx {
+    long long retentionTime;
+    long long maxSamplesPerChunk;
+    size_t labelsCount;
+    Label *labels;
+    int options;
+} CreateCtx;
+
 typedef struct Series {
     RedisModuleDict* chunks;
     Chunk_t *lastChunk;
@@ -51,8 +59,7 @@ typedef struct SeriesIterator {
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
-                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
+Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
