@@ -53,6 +53,13 @@ typedef enum {
   CR_OK = 0,    // RM_OK
   CR_ERR = 1,   // RM_ERR
   CR_END = 2,   // END_OF_CHUNK
+  CR_OCCUPIED = 3
 } ChunkResult;
+
+typedef enum {
+  UPSERT_NOT_ADD = 0,
+  UPSERT_ADD = 1,
+  UPSERT_DEL = 2
+} UpsertType;
 
 #endif

@@ -207,7 +207,8 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     if (timestamp < series->lastTimestamp && series->lastTimestamp != 0 &&
                                 !(series->options & SERIES_OPT_OUT_OF_ORDER)) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp && timestamp != 0) {
+    } else if (!(series->options & SERIES_OPT_OUT_OF_ORDER) &&
+               timestamp == series->lastTimestamp && timestamp != 0) {
         return TSDB_ERR_TIMESTAMP_OCCUPIED;
     }
 
@@ -228,7 +229,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
             }
         }
         // TODO
-        int rv = series->funcs->UpsertSample(chunk, &sample);
+        int rv = series->funcs->UpsertSample(chunk, &sample, UPSERT_ADD);
         if (rv == REDISMODULE_OK) {
             series->totalSamples++;
         }

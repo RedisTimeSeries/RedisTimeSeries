@@ -31,7 +31,8 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success
 ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
-ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample);
+ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType type);
+
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);

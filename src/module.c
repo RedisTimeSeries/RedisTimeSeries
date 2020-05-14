@@ -634,6 +634,9 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
     if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
         RedisModule_ReplyWithError(ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         return REDISMODULE_ERR;
+    } else if (retval == TSDB_ERR_TIMESTAMP_OCCUPIED) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is occupied");
+        return REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
         return REDISMODULE_ERR;

@@ -64,11 +64,10 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample) {
-    timestamp_t ts = sample->timestamp;
+ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType type) {
     Chunk *regChunk = (Chunk *)chunk;
+    timestamp_t ts = sample->timestamp;
     short numSamples = regChunk->num_samples;
-    assert(ts >= Uncompressed_GetFirstTimestamp(regChunk));
     // find sample location
     size_t i = 0;
     for (; i < numSamples; ++i) {
@@ -79,14 +78,28 @@ ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample) {
     // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
         // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp, sample->timestamp, sample->value);
-        return TSDB_ERR_TIMESTAMP_OCCUPIED;
+        if (type == UPSERT_NOT_ADD) {
+            return CR_OCCUPIED;
+        } else if (type == UPSERT_ADD) {
+            regChunk->samples[i] = *sample;
+            return CR_OK;
+        } else if (type == UPSERT_DEL) { //
+            memmove(&regChunk->samples[i],
+                    &regChunk->samples[i + 1],
+                    (numSamples - i) * sizeof(Sample));
+            if (numSamples-- == regChunk->max_samples) {
+                regChunk->samples = realloc(regChunk->samples, --regChunk->max_samples * sizeof(Sample));
+            }
+        }
+    } else if (type == UPSERT_DEL) {
+        return CR_ERR;
     }
 
     // TODO: split chunk (or provide additional API)
-    if (numSamples == regChunk->max_samples) {    
+    if (numSamples == regChunk->max_samples) {
         regChunk->samples = realloc(regChunk->samples, ++regChunk->max_samples * sizeof(Sample));
     }
-    
+
     if (i != numSamples) { // sample is not last
         memmove(&regChunk->samples[i + 1],
                 &regChunk->samples[i],

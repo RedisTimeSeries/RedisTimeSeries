@@ -18,7 +18,7 @@ void Compressed_FreeChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
-ChunkResult Compressed_UpsertSample(Chunk_t *chunk, Sample *sample);
+ChunkResult Compressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType type);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev);
