@@ -1031,7 +1031,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER', 'name=bob')
-            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
+            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result         
             actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS', 'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
             # assert the labels length is 3 (name,class,generation) for each of the returned time-series
             assert len(actual_result[0][1]) == 3
@@ -1130,6 +1130,30 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
             rev_agg_result.reverse()
             assert rev_agg_result == agg_result
+
+    def test_multilabel_filter(self):
+        with self.redis() as r:
+            assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+            assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+            
+            assert r.execute_command('TS.ADD', 'tester1', 0, 1) == 0
+            assert r.execute_command('TS.ADD', 'tester2', 0, 2) == 0
+            assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
+
+            actual_result = r.execute_command('TS.mrange', 0, -1, 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
+            assert actual_result[0][0] == 'tester1'
+            assert actual_result[1][0] == 'tester2'
+
+            actual_result = r.execute_command('TS.mrange', 0, -1, 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
+            assert actual_result[0][0] == 'tester2'
+
+            actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
+            assert actual_result[0][0] == 'tester1'
+            assert actual_result[1][0] == 'tester2'
+
+            actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
+            assert actual_result[0][0] == 'tester2'
 
     def test_label_index(self):
         with self.redis() as r:
@@ -1384,6 +1408,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             no_ooo_res = r.execute_command('ts.range no_ooo - +')
             for i in range(len(ooo_res)):
                 assert ooo_res == no_ooo_res
+                
+    def test_issue400(self):
+        with self.redis() as r:
+            times = 300
+            r.execute_command('ts.create issue376 UNCOMPRESSED')
+            for i in range(1, times):
+                r.execute_command('ts.add issue376', i * 5, i)
+            for i in range(1, times):
+                range_res = r.execute_command('ts.range issue376', i * 5 - 1, i * 5 + 60)
+                assert len(range_res) > 0
+            for i in range(1, times):
+                range_res = r.execute_command('ts.revrange issue376', i * 5 - 1, i * 5 + 60)
+                assert len(range_res) > 0
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

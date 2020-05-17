@@ -69,7 +69,6 @@ size_t SeriesGetNumSamples(const Series *series);
 // Iterator over the series
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-ChunkResult SeriesIteratorGetFirstInRange(SeriesIterator *iterator, Sample *sample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
