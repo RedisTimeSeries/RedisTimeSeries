@@ -1367,6 +1367,24 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             get_res = r.execute_command('ts.get issue358')[1]
             assert range_res == get_res
 
+    def test_ooo(self):
+         with self.redis() as r:
+            r.execute_command('ts.create no_ooo')
+            r.execute_command('ts.create ooo OUT_OF_ORDER')
+            for i in range(0, 1001, 5):
+                r.execute_command('ts.add no_ooo', i, i)
+            for i in range(0, 1001, 10):
+                r.execute_command('ts.add ooo', i, i)
+            for i in range(5, 996, 10):
+                r.execute_command('ts.add ooo', i, i)
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ADD no_ooo 905 905')
+            ooo_res    = r.execute_command('ts.range ooo - +')
+            no_ooo_res = r.execute_command('ts.range no_ooo - +')
+            for i in range(len(ooo_res)):
+                assert ooo_res == no_ooo_res
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):

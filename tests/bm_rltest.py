@@ -21,7 +21,7 @@ def testBM(env):
         pl.execute()
     pl.execute()
     print time.time() - start_time
-    print env.execute_command('ts.info', name)
+    print env.execute_command('ts.info', name, 'OUT_OF_ORDER')
 
     print "out-of-order"
     name_ooo = "rts_ooo"
@@ -46,8 +46,6 @@ def testBM(env):
 
     print time.time() - start_time
     print env.execute_command('ts.info', name_ooo)
-
-
 
     res = env.execute_command('ts.range', name, 0, -1)
     res_ooo = env.execute_command('ts.range', name_ooo, 0, -1)

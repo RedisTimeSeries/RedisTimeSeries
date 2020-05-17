@@ -52,7 +52,7 @@ typedef struct SeriesIterator {
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
-                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
+                uint64_t retentionTime, short maxSamplesPerChunk, int options);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
