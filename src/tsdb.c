@@ -211,12 +211,14 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         }
     // TODO: ensure cover for out of retention insertion.
     } else if (series->retentionTime && 
-               timestamp < series->lastTimestamp - series->retentionTime) {
+               timestamp < timestamp - series->retentionTime) {
+        // TODO: downsample window is partially trimmed
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     }
 
     Sample sample = {.timestamp = timestamp, .value = value};
-    if (timestamp < series->lastTimestamp) {
+    // TODO <=
+    if (timestamp <= series->lastTimestamp && timestamp != 0) {
         Chunk_t *chunk = series->lastChunk;
         if (timestamp < series->funcs->GetFirstTimestamp(series->lastChunk)) {
             // Upsert in an older chunk
@@ -231,12 +233,22 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
                 return TSDB_ERROR;
             }
         }
+        AddCtx aCtx = { .sz = 0,
+                        .chunk = chunk,
+                        //.dict = series->chunks,
+                        .sample = sample,
+                        .type =  UPSERT_ADD
+                        };
         // TODO
-        int rv = series->funcs->UpsertSample(chunk, &sample, UPSERT_ADD);
+        int rv = series->funcs->UpsertSample(&aCtx);
         if (rv == REDISMODULE_OK) {
-            series->totalSamples++;
+            series->totalSamples += aCtx.sz;
+            // fix downsamples
             CompactionRule *rule = series->rules;
             while (rule != NULL) {
+                if (timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
+                    continue; // don't effect current window
+                }
                 timestamp_t start = CalcWindowStart(timestamp, rule->timeBucket);
                 // ensure last include/exclude
                 double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
@@ -503,8 +515,8 @@ void updateDownSample(RedisModuleCtx *ctx, CompactionRule *rule, Sample *sample)
     Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
     SeriesAddSample(destSeries, sample->timestamp, sample->value);
-}
+}*/
 
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) { 
     return timestamp - (timestamp % window);
-}*/
+}

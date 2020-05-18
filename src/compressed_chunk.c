@@ -40,10 +40,10 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
   *b = tmp;
 }
 
-ChunkResult Compressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType type) {
+ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
   ChunkResult res;
   ChunkResult rv = CR_OK;
-  CompressedChunk *oldChunk = (CompressedChunk *)chunk;
+  CompressedChunk *oldChunk = (CompressedChunk *)aCtx->chunk;
 
   short newSize = oldChunk->size / sizeof(Sample);
   // extend size if approaching end
@@ -53,7 +53,7 @@ ChunkResult Compressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType t
 
   CompressedChunk *newChunk = Compressed_NewChunk(newSize);
   Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
-  timestamp_t ts = sample->timestamp;
+  timestamp_t ts = aCtx->sample.timestamp;
   int numSamples = oldChunk->count;
 
   // assert(ts >= Compressed_GetFirstTimestamp(oldChunk));
@@ -72,21 +72,23 @@ ChunkResult Compressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType t
 
   // TODO: TS.UPSERT vs TS.ADD
   if (ts == iterSample.timestamp) {
-    if (type == UPSERT_NOT_ADD) {
+    if (aCtx->type == UPSERT_NOT_ADD) {
       rv = CR_OCCUPIED;
       goto clean;
     } else /*if (type == UPSERT_ADD || type == UPSERT_DEL)*/ {
       // skip previous sample
       res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+      aCtx->sz = -1;
     }    
-  } else if (type == UPSERT_DEL) {
+  } else if (aCtx->type == UPSERT_DEL) {
     rv = CR_ERR;
     goto clean;
   }
 
-  if (type != UPSERT_DEL) {
-    ChunkResult resSample = Compressed_AddSample(newChunk, sample);
+  if (aCtx->type != UPSERT_DEL) {
+    ChunkResult resSample = Compressed_AddSample(newChunk, &aCtx->sample);
     assert(resSample == CR_OK);
+    aCtx->sz = 1;
   }
   // TODO: split chunk (or provide additional API)
   

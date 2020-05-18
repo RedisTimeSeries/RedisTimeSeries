@@ -64,9 +64,9 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType type) {
-    Chunk *regChunk = (Chunk *)chunk;
-    timestamp_t ts = sample->timestamp;
+ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
+    Chunk *regChunk = (Chunk *)aCtx->chunk;
+    timestamp_t ts = aCtx->sample.timestamp;
     short numSamples = regChunk->num_samples;
     // find sample location
     size_t i = 0;
@@ -78,20 +78,21 @@ ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType
     // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
         // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp, sample->timestamp, sample->value);
-        if (type == UPSERT_NOT_ADD) {
+        if (aCtx->type == UPSERT_NOT_ADD) {
             return CR_OCCUPIED;
-        } else if (type == UPSERT_ADD) {
-            regChunk->samples[i] = *sample;
+        } else if (aCtx->type == UPSERT_ADD) {
+            regChunk->samples[i] = aCtx->sample;
             return CR_OK;
-        } else if (type == UPSERT_DEL) { //
+        } else if (aCtx->type == UPSERT_DEL) { //
             memmove(&regChunk->samples[i],
                     &regChunk->samples[i + 1],
                     (numSamples - i) * sizeof(Sample));
             if (numSamples-- == regChunk->max_samples) {
                 regChunk->samples = realloc(regChunk->samples, --regChunk->max_samples * sizeof(Sample));
             }
+            aCtx->sz = -1;
         }
-    } else if (type == UPSERT_DEL) {
+    } else if (aCtx->type == UPSERT_DEL) {
         return CR_ERR;
     }
 
@@ -106,8 +107,9 @@ ChunkResult Uncompressed_UpsertSample(Chunk_t *chunk, Sample *sample, UpsertType
                 (numSamples - i) * sizeof(Sample));
     }
 
-    regChunk->samples[i] = *sample;
+    regChunk->samples[i] = aCtx->sample;
     regChunk->num_samples++;
+    aCtx->sz = 1;
     return CR_OK;
 }
 

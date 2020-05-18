@@ -25,12 +25,20 @@ typedef enum {
     CHUNK_COMPRESSED 
 } CHUNK_TYPES_T;
 
+typedef struct AddCtx {
+    //RedisModuleDict *dict;
+    Chunk_t *chunk;
+    Sample sample;
+    UpsertType type;
+    int sz;
+} AddCtx;
+
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void(*FreeChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
-    ChunkResult(*UpsertSample)(Chunk_t *chunk, Sample *sample, UpsertType type);
+    ChunkResult(*UpsertSample)(AddCtx *aCtx);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
     void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);
