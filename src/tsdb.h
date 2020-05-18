@@ -11,6 +11,7 @@
 #include "consts.h"
 #include "indexer.h"
 #include "generic_chunk.h"
+#include <math.h>
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
@@ -70,6 +71,11 @@ size_t SeriesGetNumSamples(const Series *series);
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
+
+double SeriesCalcRange(Series *series, timestamp_t start_ts, timestamp_t end_ts, AggregationClass *aggObject);
+
+// Calculate the begining of  aggregation window
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */

@@ -235,6 +235,23 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         int rv = series->funcs->UpsertSample(chunk, &sample, UPSERT_ADD);
         if (rv == REDISMODULE_OK) {
             series->totalSamples++;
+            CompactionRule *rule = series->rules;
+            while (rule != NULL) {
+                timestamp_t start = CalcWindowStart(timestamp, rule->timeBucket);
+                // ensure last include/exclude
+                double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
+                if (isnan(val)) {
+                    return TSDB_ERROR;
+                }
+                RedisModuleKey *key;
+                Series destSeries;
+                if (GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &series, REDISMODULE_READ)) {
+                    return TSDB_ERROR;
+                }
+                SeriesAddSample(&destSeries, start, val);
+                RedisModule_CloseKey(key);
+                rule = rule->nextRule;
+            }
         }
         return rv;
     }
@@ -460,3 +477,34 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
 	}
 	return FALSE;
 }
+
+double SeriesCalcRange(Series *series, timestamp_t start_ts, timestamp_t end_ts, AggregationClass *aggObject) {
+    Sample sample = {0};
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
+    if (iterator.series == NULL) { 
+        return 0.0/0.0; // isnan()
+    }
+    void *context = aggObject->createContext();
+
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+        aggObject->appendValue(context, sample.value);
+    }
+    double rv = aggObject->finalize(context);
+    aggObject->freeContext(context);
+    return rv;
+}
+/*
+void updateDownSample(RedisModuleCtx *ctx, CompactionRule *rule, Sample *sample) {
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, rule->destKey, REDISMODULE_READ|REDISMODULE_WRITE);
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
+        // key doesn't exist anymore and we don't do anything
+        return;
+    }
+    Series *destSeries = RedisModule_ModuleTypeGetValue(key);
+
+    SeriesAddSample(destSeries, sample->timestamp, sample->value);
+}
+
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) { 
+    return timestamp - (timestamp % window);
+}*/

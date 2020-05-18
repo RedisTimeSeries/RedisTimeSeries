@@ -1126,6 +1126,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_UNCOMPRESSED_VER, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
+    RTS_GlobalRedisCtx = RedisModule_GetThreadSafeContext(NULL);
     IndexInit();
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.alter", TSDB_alter);

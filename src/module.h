@@ -10,6 +10,7 @@
 #include "tsdb.h"
 
 extern RedisModuleType *SeriesType;
+RedisModuleCtx *RTS_GlobalRedisCtx;
 
 // Create a new TS key, if key is NULL the function will open the key, the user must call to RedisModule_CloseKey
 // The function assumes the key doesn't exists
