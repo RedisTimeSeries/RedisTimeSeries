@@ -602,8 +602,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     return REDISMODULE_OK;
 }
 
-static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_timestamp_t timestamp, double value) {
-    timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
+static void handleCompaction(RedisModuleCtx *ctx, Series *series,
+            CompactionRule *rule, api_timestamp_t timestamp, double value) {
+    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->timeBucket);
 
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
@@ -617,14 +618,21 @@ static void handleCompaction(RedisModuleCtx *ctx, CompactionRule *rule, api_time
             return;
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
-
-        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        if (!rule->backfilled) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        } else {
+            double val = SeriesCalcRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket + rule->timeBucket - 1, rule->aggClass);
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, val);
+            rule->backfilled = false;
+        }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
     }
-
-    rule->aggClass->appendValue(rule->aggContext, value);
+    // have to query on the fly
+    if (!rule->backfilled) {
+        rule->aggClass->appendValue(rule->aggContext, value);
+    }
 }
 
 static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t timestamp, double value) {
@@ -643,7 +651,7 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
     // handle compaction rules
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
-        handleCompaction(ctx, rule, timestamp, value);
+        handleCompaction(ctx, series, rule, timestamp, value);
         rule = rule->nextRule;
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);

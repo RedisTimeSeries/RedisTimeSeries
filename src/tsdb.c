@@ -218,7 +218,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     Sample sample = {.timestamp = timestamp, .value = value};
     // TODO <=
-    if (timestamp <= series->lastTimestamp && timestamp != 0) {
+    if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
         Chunk_t *chunk = series->lastChunk;
         if (timestamp < series->funcs->GetFirstTimestamp(series->lastChunk)) {
             // Upsert in an older chunk
@@ -235,7 +235,6 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         }
         AddCtx aCtx = { .sz = 0,
                         .chunk = chunk,
-                        //.dict = series->chunks,
                         .sample = sample,
                         .type =  UPSERT_ADD
                         };
@@ -247,6 +246,9 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
             CompactionRule *rule = series->rules;
             while (rule != NULL) {
                 if (timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
+                    if (aCtx.sz < 1) { // a sample was updated or remove
+                        rule->backfilled = true;
+                    }
                     continue; // don't effect current window
                 }
                 timestamp_t start = CalcWindowStart(timestamp, rule->timeBucket);
@@ -256,11 +258,11 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
                     return TSDB_ERROR;
                 }
                 RedisModuleKey *key;
-                Series destSeries;
-                if (GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &series, REDISMODULE_READ)) {
+                Series *destSeries;
+                if (!GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
                     return TSDB_ERROR;
                 }
-                SeriesAddSample(&destSeries, start, val);
+                SeriesAddSample(destSeries, start, val);
                 RedisModule_CloseKey(key);
                 rule = rule->nextRule;
             }
@@ -445,6 +447,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     rule->timeBucket = timeBucket;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
+    rule->backfilled = false;
 
     rule->nextRule = NULL;
 
@@ -505,17 +508,6 @@ double SeriesCalcRange(Series *series, timestamp_t start_ts, timestamp_t end_ts,
     aggObject->freeContext(context);
     return rv;
 }
-/*
-void updateDownSample(RedisModuleCtx *ctx, CompactionRule *rule, Sample *sample) {
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, rule->destKey, REDISMODULE_READ|REDISMODULE_WRITE);
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
-        // key doesn't exist anymore and we don't do anything
-        return;
-    }
-    Series *destSeries = RedisModule_ModuleTypeGetValue(key);
-
-    SeriesAddSample(destSeries, sample->timestamp, sample->value);
-}*/
 
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) { 
     return timestamp - (timestamp % window);

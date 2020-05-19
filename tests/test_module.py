@@ -128,11 +128,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             else:
                 assert actual_result
 
-    def _insert_agg_data(self, redis, key, agg_type):
+    def _insert_agg_data(self, redis, key, agg_type, ooo=""):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
-        assert redis.execute_command('TS.CREATE', key)
-        assert redis.execute_command('TS.CREATE', agg_key)
+        assert redis.execute_command('TS.CREATE', key, ooo)
+        assert redis.execute_command('TS.CREATE', agg_key, ooo)
         assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
@@ -1315,7 +1315,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.delete("trim_me")
                 r.delete("dont_trim_me")
 
-
     def test_empty(self):
         with self.redis() as r:
             r.execute_command('ts.create empty')
@@ -1421,6 +1420,24 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for i in range(1, times):
                 range_res = r.execute_command('ts.revrange issue376', i * 5 - 1, i * 5 + 60)
                 assert len(range_res) > 0
+
+    def test_backfill_downsampling(self):
+        with self.redis() as r:
+            key =  'tester'
+            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last'] #more
+            #agg = 'avg'
+            for agg in agg_list:
+                agg_key = self._insert_agg_data(r, key, agg, ooo = 'out_of_order')
+
+                expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                assert expected_result == actual_result
+                r.execute_command('TS.ADD', key, 15, 50)
+                expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                assert expected_result == actual_result
+                r.execute_command('DEL', key)
+                r.execute_command('DEL', agg_key)
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

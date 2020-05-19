@@ -104,7 +104,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
   // trim data
   int excess = newChunk->size - (newChunk->idx + 8) / 8;
   assert(excess >= 0);
-  if (excess > 0) {
+  if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
     newSize = (newChunk->size - excess) > oldChunk->size ? newChunk->size - excess : oldChunk->size;
     newChunk->data = realloc(newChunk->data, newSize);
     newChunk->size = newSize;

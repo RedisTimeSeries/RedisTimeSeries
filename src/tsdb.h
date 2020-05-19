@@ -18,6 +18,7 @@ typedef struct CompactionRule {
     timestamp_t timeBucket;
     AggregationClass *aggClass;
     TS_AGG_TYPES_T aggType;
+    bool backfilled;
     void *aggContext;
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket;
