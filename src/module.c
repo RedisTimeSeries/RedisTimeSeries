@@ -436,7 +436,8 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+    if (CountPredicateType(queries, (size_t) query_count, EQ) +
+        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
@@ -529,8 +530,9 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc){
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_ts, api_timestamp_t end_ts,
         AggregationClass *aggObject, int64_t time_delta, long long maxResults, bool rev) {
     Sample sample;
+    void *context = NULL;
     long long arraylen = 0;
-    timestamp_t last_agg_timestamp, init_ts;
+    timestamp_t last_agg_timestamp;
 
     // In case a retention is set shouldn't return chunks older than the retention
     // TODO: move to parseRangeArguments(?)
@@ -548,32 +550,25 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
-    ChunkResult res = SeriesIteratorGetFirstInRange(&iterator, &sample);
-    if (res != CR_OK) {
-        SeriesIteratorClose(&iterator);
-        return RedisModule_ReplyWithArray(ctx, 0);
-    }
-
-    void *context = NULL;
-    if (aggObject != NULL) {
-        context = aggObject->createContext();
-        // setting the first timestamp of the aggregation
-        init_ts = (rev == false) ? series->funcs->GetFirstTimestamp(iterator.currentChunk) :
-                                  series->funcs->GetLastTimestamp (iterator.currentChunk);
-        last_agg_timestamp = init_ts - (init_ts % time_delta);
-    }
-
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    if (aggObject == NULL) {
+    if (aggObject == TS_AGG_NONE) {
         // No aggregation
-        do {
+        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+                    (maxResults == -1 || arraylen < maxResults)) {
             ReplyWithSample(ctx, sample.timestamp, sample.value);
             arraylen++;
-        } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-                    (maxResults == -1 || arraylen < maxResults));
+        }
     } else {
         bool firstSample = TRUE;
-        do {
+        context = aggObject->createContext();
+        // setting the first timestamp of the aggregation
+        timestamp_t init_ts = (rev == false) ? 
+                            series->funcs->GetFirstTimestamp(iterator.currentChunk) :
+                            series->funcs->GetLastTimestamp (iterator.currentChunk);
+        last_agg_timestamp = init_ts - (init_ts % time_delta);
+
+        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+                    (maxResults == -1 || arraylen < maxResults)) {
             if ((iterator.reverse == false && sample.timestamp >= last_agg_timestamp + time_delta) ||
                 (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
@@ -585,8 +580,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
-        } while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-                    (maxResults == -1 || arraylen < maxResults));
+        }
     }
     SeriesIteratorClose(&iterator);
 
@@ -1023,7 +1017,8 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, (size_t) query_count, EQ) == 0) {
+    if (CountPredicateType(queries, (size_t) query_count, EQ) +
+        CountPredicateType(queries, (size_t) query_count, LIST_MATCH) == 0) {
         return RedisModule_ReplyWithError(ctx, "TSDB: please provide at least one matcher");
     }
 
