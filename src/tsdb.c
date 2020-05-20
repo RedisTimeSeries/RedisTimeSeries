@@ -40,10 +40,7 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
-    RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
-                        (void*)newChunk);
-    newSeries->lastChunk = newChunk;
+    newSeries->lastChunk = NULL;
     return newSeries;
 }
 
@@ -201,8 +198,19 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+static Chunk_t *addChunk(Series *series, api_timestamp_t timestamp) {
     timestamp_t rax_key;
+    Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
+    seriesEncodeTimestamp(&rax_key, timestamp);
+    RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
+    series->lastChunk = newChunk;
+    return newChunk;
+}
+
+int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+    if (series->lastChunk == NULL) {
+        addChunk(series, timestamp);
+    }
     if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     } else if (timestamp == series->lastTimestamp && timestamp != 0) {
@@ -214,11 +222,8 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
-        Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
-        seriesEncodeTimestamp(&rax_key, timestamp);
-        RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
+        Chunk_t *newChunk = addChunk(series, timestamp);
         series->funcs->AddSample(newChunk, &sample);
-        series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
     series->lastValue = value;
@@ -251,7 +256,9 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
     if (!iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk)) {   
         RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
-        iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk);
+        if (!iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk)) {
+            return (SeriesIterator){0};
+        }
     }
 
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
