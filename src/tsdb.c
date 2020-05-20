@@ -354,10 +354,9 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
 
     // get first chunk within query range
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    void *dictResult = iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk);
-    if (dictResult == NULL) {   // should not happen since we always have a chunk
-        RedisModule_DictIteratorStop(iter.dictIter);
-        return (SeriesIterator) {0};
+    if (!iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk)) {   
+        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
+        iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk);
     }
 
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
