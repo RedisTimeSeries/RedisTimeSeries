@@ -201,8 +201,64 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
+static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
+    Chunk_t *chunk = series->lastChunk;
+    if (timestamp < series->funcs->GetFirstTimestamp(series->lastChunk)) {
+        // Upsert in an older chunk
+        timestamp_t rax_key;
+        seriesEncodeTimestamp(&rax_key, timestamp);
+        RedisModuleDictIter *dictIter = 
+            RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+        void *dictResult = RedisModule_DictNextC(dictIter, NULL, (void*)&chunk);
+        if (dictResult == NULL) {   // should not happen since we always have a chunk
+            // TODO: check if new sample before first sample
+            RedisModule_DictIteratorStop(dictIter);
+            assert(0);
+            return TSDB_ERROR;
+        }
+    }
+    Sample sample = {.timestamp = timestamp, .value = value };
+    AddCtx aCtx = { .sz = 0,
+                    .inChunk = chunk,
+                    .sample = sample,
+                    .maxSamples = series->maxSamplesPerChunk,
+                    .type =  UPSERT_ADD // TODO: on-conflict param
+                    };
+    // TODO
+    int rv = series->funcs->UpsertSample(&aCtx);
+    if (rv == REDISMODULE_OK) {
+        series->totalSamples += aCtx.sz;
+        // fix downsamples
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            // upsert in latest timebucket
+            if (timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
+                if (aCtx.sz < 1) { // a sample was updated or removed
+                    rule->backfilled = true;
+                }
+                continue;
+            }
+            rule->backfilled = true; // TODO: fix so handleCompaction does not append but still use on-the-fly agg context 
+            timestamp_t start = CalcWindowStart(timestamp, rule->timeBucket);
+            // ensure last include/exclude
+            double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
+            if (isnan(val)) {
+                return TSDB_ERROR;
+            }
+            RedisModuleKey *key;
+            Series *destSeries;
+            if (!GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
+                return TSDB_ERROR;
+            }
+            SeriesAddSample(destSeries, start, val);
+            RedisModule_CloseKey(key);
+            rule = rule->nextRule;
+        }
+    }
+    return rv;
+}
+
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
-    timestamp_t rax_key;
     if (!(series->options & SERIES_OPT_OUT_OF_ORDER)) {
         if (timestamp < series->lastTimestamp && series->lastTimestamp != 0) {
             return TSDB_ERR_TIMESTAMP_TOO_OLD;
@@ -216,69 +272,24 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     }
 
-    Sample sample = {.timestamp = timestamp, .value = value};
-    // TODO <=
+    // backfilling or update
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
-        Chunk_t *chunk = series->lastChunk;
-        if (timestamp < series->funcs->GetFirstTimestamp(series->lastChunk)) {
-            // Upsert in an older chunk
-            seriesEncodeTimestamp(&rax_key, timestamp);
-            RedisModuleDictIter *dictIter = 
-                RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-            void *dictResult = RedisModule_DictNextC(dictIter, NULL, (void*)&chunk);
-            if (dictResult == NULL) {   // should not happen since we always have a chunk
-                // TODO: check if new sample before first sample
-                RedisModule_DictIteratorStop(dictIter);
-                assert(0);
-                return TSDB_ERROR;
-            }
-        }
-        AddCtx aCtx = { .sz = 0,
-                        .chunk = chunk,
-                        .sample = sample,
-                        .type =  UPSERT_ADD
-                        };
-        // TODO
-        int rv = series->funcs->UpsertSample(&aCtx);
-        if (rv == REDISMODULE_OK) {
-            series->totalSamples += aCtx.sz;
-            // fix downsamples
-            CompactionRule *rule = series->rules;
-            while (rule != NULL) {
-                if (timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
-                    if (aCtx.sz < 1) { // a sample was updated or remove
-                        rule->backfilled = true;
-                    }
-                    continue; // don't effect current window
-                }
-                timestamp_t start = CalcWindowStart(timestamp, rule->timeBucket);
-                // ensure last include/exclude
-                double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
-                if (isnan(val)) {
-                    return TSDB_ERROR;
-                }
-                RedisModuleKey *key;
-                Series *destSeries;
-                if (!GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
-                    return TSDB_ERROR;
-                }
-                SeriesAddSample(destSeries, start, val);
-                RedisModule_CloseKey(key);
-                rule = rule->nextRule;
-            }
-        }
-        return rv;
+        return SeriesUpsertSample(series, timestamp, value);
     }
-    int ret = series->funcs->AddSample(series->lastChunk, &sample);
+
+    Sample sample = {.timestamp = timestamp, .value = value};
+    ChunkResult ret = series->funcs->AddSample(series->lastChunk, &sample);
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
+        timestamp_t rax_key;
         Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
         seriesEncodeTimestamp(&rax_key, timestamp);
         RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
-        series->funcs->AddSample(newChunk, &sample);
+        ret = series->funcs->AddSample(newChunk, &sample);
+        assert(ret == CR_OK);
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;

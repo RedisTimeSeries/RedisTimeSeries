@@ -65,7 +65,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
 }
 
 ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
-    Chunk *regChunk = (Chunk *)aCtx->chunk;
+    Chunk *regChunk = (Chunk *)aCtx->inChunk;
     timestamp_t ts = aCtx->sample.timestamp;
     short numSamples = regChunk->num_samples;
     // find sample location
@@ -93,7 +93,7 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
             aCtx->sz = -1;
         }
     } else if (aCtx->type == UPSERT_DEL) {
-        return CR_ERR;
+        return CR_DEL_FAIL;
     }
 
     // TODO: split chunk (or provide additional API)

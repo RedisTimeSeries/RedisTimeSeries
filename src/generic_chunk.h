@@ -27,10 +27,15 @@ typedef enum {
 
 typedef struct AddCtx {
     //RedisModuleDict *dict;
-    Chunk_t *chunk;
+    Chunk_t *inChunk;       // original chunk
+    Chunk_t *outChunk_1;    // used if 1st sample changed
+    Chunk_t *outChunk_2;    // used if chunk was splitted
+    
     Sample sample;
+    
+    int sz;                 // change in chunk size
     UpsertType type;
-    int sz;
+    short maxSamples;       // used for split
 } AddCtx;
 
 typedef struct ChunkFuncs {

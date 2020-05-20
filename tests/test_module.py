@@ -1230,7 +1230,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
-    '''
+    
     def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
@@ -1249,7 +1249,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
-    '''
+    
     def test_rule_timebucket_64bit(self):
         with self.redis() as r:
             BELOW_32BIT_LIMIT = 2147483647
@@ -1390,24 +1390,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             get_res = r.execute_command('ts.get issue358')[1]
             assert range_res == get_res
 
-    def test_ooo(self):
-         with self.redis() as r:
-            r.execute_command('ts.create no_ooo')
-            r.execute_command('ts.create ooo OUT_OF_ORDER')
-            for i in range(0, 1001, 5):
-                r.execute_command('ts.add no_ooo', i, i)
-            for i in range(0, 1001, 10):
-                r.execute_command('ts.add ooo', i, i)
-            for i in range(5, 996, 10):
-                r.execute_command('ts.add ooo', i, i)
-
-            with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.ADD no_ooo 905 905')
-            ooo_res    = r.execute_command('ts.range ooo - +')
-            no_ooo_res = r.execute_command('ts.range no_ooo - +')
-            for i in range(len(ooo_res)):
-                assert ooo_res == no_ooo_res
-                
     def test_issue400(self):
         with self.redis() as r:
             times = 300
@@ -1420,6 +1402,30 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for i in range(1, times):
                 range_res = r.execute_command('ts.revrange issue376', i * 5 - 1, i * 5 + 60)
                 assert len(range_res) > 0
+
+    def test_ooo(self):
+         with self.redis() as r:
+            quantity = 10001
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'no_ooo', chunk_type)
+                r.execute_command('ts.create', 'ooo', chunk_type, 'OUT_OF_ORDER')
+                for i in range(0, quantity, 5):
+                    r.execute_command('ts.add no_ooo', i, i)
+                for i in range(0, quantity, 10):
+                    r.execute_command('ts.add ooo', i, i)
+                for i in range(5, quantity, 10): #limit
+                    r.execute_command('ts.add ooo', i, i)
+
+                with pytest.raises(redis.ResponseError) as excinfo:
+                    assert r.execute_command('TS.ADD no_ooo 905 905')
+
+                ooo_res    = r.execute_command('ts.range ooo - +')
+                no_ooo_res = r.execute_command('ts.range no_ooo - +')
+                for i in range(len(ooo_res)):
+                    assert ooo_res == no_ooo_res
+                r.execute_command('DEL no_ooo')
+                r.execute_command('DEL ooo')
 
     def test_backfill_downsampling(self):
         with self.redis() as r:

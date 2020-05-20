@@ -43,7 +43,7 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
   ChunkResult res;
   ChunkResult rv = CR_OK;
-  CompressedChunk *oldChunk = (CompressedChunk *)aCtx->chunk;
+  CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
 
   short newSize = oldChunk->size / sizeof(Sample);
   // extend size if approaching end
@@ -81,7 +81,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
       aCtx->sz = -1;
     }    
   } else if (aCtx->type == UPSERT_DEL) {
-    rv = CR_ERR;
+    rv = CR_DEL_FAIL;
     goto clean;
   }
 
