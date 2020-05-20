@@ -24,6 +24,7 @@
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
+#define SPLIT_FACTOR                    1.2
 
 /* TS.Range Aggregation types */
 typedef enum {
@@ -62,5 +63,7 @@ typedef enum {
   UPSERT_ADD = 1,
   UPSERT_DEL = 2
 } UpsertType;
+
+#define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 #endif
