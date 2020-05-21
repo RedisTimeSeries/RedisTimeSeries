@@ -44,7 +44,7 @@ commands:
 jobs:
   build:
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - ci_steps:
           platform: debian
@@ -85,7 +85,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redislabsmodules/rmbuilder:latest
+      - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - checkout
       - run:
@@ -107,7 +107,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - attach_workspace:
           at: /workspace
@@ -118,7 +118,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: 'redislabsmodules/rmbuilder:latest'
+      - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - checkout
       - run:
