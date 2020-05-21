@@ -25,6 +25,7 @@
 #define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
+#define SPLIT_EXTRA                     3
 
 /* TS.Range Aggregation types */
 typedef enum {

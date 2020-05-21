@@ -86,6 +86,26 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
             return CR_OK;
         }
     }
+    return CR_ERR;
+}
+
+static void copyChunk(Chunk *dest, Chunk *src, size_t srcIdx, short qty) {
+    memcpy(dest->samples, src->samples + srcIdx, qty);
+    dest->base_timestamp = dest->samples[0].timestamp;
+    dest->num_samples = qty;
+}
+
+static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
+    if (chunk->num_samples == chunk->max_samples) {
+        chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
+    }
+    if (idx < chunk->num_samples) { // sample is not last
+        memmove(&chunk->samples[idx + 1],
+                &chunk->samples[idx],
+                (chunk->num_samples - idx) * sizeof(Sample));
+    }
+    chunk->samples[idx] = *sample;
+    chunk->num_samples++;
 }
 
 ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
@@ -114,28 +134,21 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
     bool shouldSplit = (numSamples == regChunk->max_samples &&
                         numSamples > aCtx->maxSamples * SPLIT_FACTOR);
     if (!shouldSplit || shouldSplit) {
-        if (numSamples == regChunk->max_samples) {
-            regChunk->samples = realloc(regChunk->samples, ++regChunk->max_samples * sizeof(Sample));
-        }
-
-        if (i != numSamples) { // sample is not last
-            memmove(&regChunk->samples[i + 1],
-                    &regChunk->samples[i],
-                    (numSamples - i) * sizeof(Sample));
-        }
-        regChunk->samples[i] = aCtx->sample;
-        regChunk->num_samples++;
-    } else { // split
+        upsertChunk(regChunk, i, &aCtx->sample);
+    } else { // split - unused
         short split = numSamples / 2;
-        Chunk *newChunk = Uncompressed_NewChunk(split + 1);
+        Chunk *newChunk = Uncompressed_NewChunk(split + SPLIT_EXTRA);
+        copyChunk(newChunk, regChunk, split, numSamples - split);
+        regChunk->max_samples = regChunk->num_samples = split;
         if (i < split) {
-            memcpy(newChunk->samples, regChunk->samples + split, numSamples - split);
-
+            upsertChunk(regChunk, i, &aCtx->sample);
         } else {
-
+            upsertChunk(newChunk, i - split, &aCtx->sample);
+            regChunk->max_samples += SPLIT_EXTRA;
+            regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
         }
+        aCtx->outChunk_1 = newChunk;
     }
-
     aCtx->sz = 1;
     return CR_OK;
 }
