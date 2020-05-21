@@ -8,6 +8,9 @@
 #include "rmutil/strings.h"
 #include "config.h"
 #include "consts.h"
+#include "common.h"
+#include <string.h>
+#include <assert.h>
 
 TSConfig TSGlobalConfig;
 
@@ -52,4 +55,69 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     RedisModule_Log(ctx, "verbose", "loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n", TSGlobalConfig.maxSamplesPerChunk);
     return TSDB_OK;
+}
+
+RTS_RedisVersion RTS_currVersion;
+
+RTS_RedisVersion RTS_minSupportedVersion = {
+    .redisMajorVersion = 5,
+    .redisMinorVersion = 0,
+    .redisPatchVersion = 0,
+};
+
+int RTS_RlecMajorVersion;
+int RTS_RlecMinorVersion;
+int RTS_RlecPatchVersion;
+int RTS_RlecBuild;
+
+int RTS_CheckSupportedVestion() {
+  if (RTS_currVersion.redisMajorVersion < RTS_minSupportedVersion.redisMajorVersion) {
+    return REDISMODULE_ERR;
+  }
+
+  if (RTS_currVersion.redisMajorVersion == RTS_minSupportedVersion.redisMajorVersion) {
+    if (RTS_currVersion.redisMinorVersion < RTS_minSupportedVersion.redisMinorVersion) {
+      return REDISMODULE_ERR;
+    }
+
+    if (RTS_currVersion.redisMinorVersion == RTS_minSupportedVersion.redisMinorVersion) {
+      if (RTS_currVersion.redisPatchVersion < RTS_minSupportedVersion.redisPatchVersion) {
+        return REDISMODULE_ERR;
+      }
+    }
+  }
+
+  return REDISMODULE_OK;
+}
+
+void RTS_GetRedisVersion() {
+  RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+  RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
+  assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
+  size_t len;
+  const char *replyStr = RedisModule_CallReplyStringPtr(reply, &len);
+
+  int n = sscanf(replyStr, "# Server\nredis_version:%d.%d.%d",
+                 &RTS_currVersion.redisMajorVersion, &RTS_currVersion.redisMinorVersion,
+                 &RTS_currVersion.redisPatchVersion);
+  if (n != 3) {
+    RedisModule_Log(NULL, "warning", "Could not extract redis version");
+  }
+
+  RTS_RlecMajorVersion = -1;
+  RTS_RlecMinorVersion = -1;
+  RTS_RlecPatchVersion = -1;
+  RTS_RlecBuild = -1;
+  const char *enterpriseStr = strstr(replyStr, "rlec_version:");
+  if (enterpriseStr) {
+    n = sscanf(enterpriseStr, "rlec_version:%d.%d.%d-%d",
+               &RTS_RlecMajorVersion, &RTS_RlecMinorVersion,
+               &RTS_RlecPatchVersion, &RTS_RlecBuild);
+    if (n != 4) {
+      RedisModule_Log(NULL, "warning", "Could not extract enterprise version");
+    }
+  }
+
+  RedisModule_FreeCallReply(reply);
+  RedisModule_FreeThreadSafeContext(ctx);
 }

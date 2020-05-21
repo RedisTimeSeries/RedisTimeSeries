@@ -59,10 +59,8 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
     		series->lastTimestamp - series->retentionTime : 0;
 
-    while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
-    {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp)
-        {
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
+        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
@@ -105,18 +103,22 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
     if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
+            RedisModuleKey *seriesKey;
             Series *dstSeries;
-            int status = GetSeries(ctx, rule->destKey, &dstSeries);
+            const int status = GetSeries(ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
             rule = rule->nextRule;
         }
         if (lastDeletedSeries->srcKey) {
+            RedisModuleKey *seriesKey;
             Series *srcSeries;
-            int status = GetSeries(ctx, lastDeletedSeries->srcKey, &srcSeries);
+            const int status = GetSeries(ctx, lastDeletedSeries->srcKey, &seriesKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
+                RedisModule_CloseKey(seriesKey);
             }
         }
     }
@@ -157,8 +159,7 @@ size_t SeriesGetChunksSize(Series *series) {
     size_t size = 0;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk))
-    {
+    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
         size += series->funcs->GetChunkSize(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
@@ -191,7 +192,7 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
-size_t  SeriesGetNumSamples(Series *series) {
+size_t SeriesGetNumSamples(const Series *series) {
     size_t numSamples = 0;
     if (series!=NULL){
         numSamples = series->totalSamples;
