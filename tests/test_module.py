@@ -1404,6 +1404,21 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 range_res = r.execute_command('ts.revrange issue376', i * 5 - 1, i * 5 + 60)
                 assert len(range_res) > 0
 
+    def test_dump_trimmed_series(self):
+        with self.redis() as r:
+            samples = 120
+            start_ts = 1589461305983
+            r.execute_command('ts.create test_key RETENTION 3000 CHUNK_SIZE 10 UNCOMPRESSED ')
+            for i in range(1, samples):
+                r.execute_command('ts.add test_key', start_ts + i * 1000, i)
+            assert r.execute_command('ts.range test_key 0 -1') == \
+                    [[1589461421983L, '116'], [1589461422983L, '117'], [1589461423983L, '118'], [1589461424983L, '119']]
+            before = r.execute_command('ts.range test_key - +')
+            dump = r.execute_command('dump test_key')
+            r.execute_command('del test_key')
+            r.execute_command('restore test_key 0', dump)
+            assert r.execute_command('ts.range test_key - +') == before
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
