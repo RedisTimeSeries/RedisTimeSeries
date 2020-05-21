@@ -30,6 +30,10 @@ static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 
+static u_int64_t max(u_int64_t a, u_int64_t b) {
+    return a > b ? a : b;
+}
+
 static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
@@ -306,10 +310,9 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
-    if(SeriesGetNumSamples(series)==0){
+    if (SeriesGetNumSamples(series)==0){
         RedisModule_ReplyWithArray(ctx, 0);
-    }
-    else {
+    } else {
         RedisModule_ReplyWithArray(ctx, 2);
         RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
         RedisModule_ReplyWithDouble(ctx, series->lastValue);

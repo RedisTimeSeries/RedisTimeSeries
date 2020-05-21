@@ -59,10 +59,8 @@ void SeriesTrim(Series * series) {
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
     		series->lastTimestamp - series->retentionTime : 0;
 
-    while ((currentKey=RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk)))
-    {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp)
-        {
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
+        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict, go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
@@ -191,7 +189,7 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
-size_t  SeriesGetNumSamples(Series *series) {
+size_t SeriesGetNumSamples(const Series *series) {
     size_t numSamples = 0;
     if (series!=NULL){
         numSamples = series->totalSamples;
