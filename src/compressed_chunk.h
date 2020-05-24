@@ -13,7 +13,7 @@
 #include "generic_chunk.h"
 
 // Initialize compressed chunk
-Chunk_t *Compressed_NewChunk(u_int64_t size);
+Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
