@@ -22,14 +22,14 @@ class RedisTimeseriesRDBTests(ModuleTestCase(REDISTIMESERIES)):
 
             for rdb_file in os.listdir('rdbs'):
                 with self.redis(dir=os.path.realpath('rdbs'), dbfilename=rdb_file) as r:
-                    key = r.randomkey()
-                    assert r.execute_command('ts.range', key, "-", "+") == \
-                           current_r.execute_command('ts.range', key, "-", "+"), "data in key '{}' is not correct (rdb {})".format(key, rdb_file)
-                    loaded_info = r.execute_command('ts.info', key)
-                    current_info = current_r.execute_command('ts.info', key)
+                    for key in current_r.keys():
+                        assert r.execute_command('ts.range', key, "-", "+") == \
+                               current_r.execute_command('ts.range', key, "-", "+"), "data in key '{}' is not correct (rdb {})".format(key, rdb_file)
+                        loaded_info = r.execute_command('ts.info', key)
+                        current_info = current_r.execute_command('ts.info', key)
 
-                    assert self.normalize_info(loaded_info) == self.normalize_info(current_info), \
-                        "info for key '{}' is not correct (rdb {})".format(key, rdb_file)
+                        assert self.normalize_info(loaded_info) == self.normalize_info(current_info), \
+                            "info for key '{}' is not correct (rdb {})".format(key, rdb_file)
 
     def normalize_info(self, data):
         info = {}
