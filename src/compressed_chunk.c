@@ -70,7 +70,6 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     assert(res == CR_OK);
   }
 
-  // TODO: TS.UPSERT vs TS.ADD
   if (ts == iterSample.timestamp) {
     if (aCtx->type == UPSERT_NOT_ADD) {
       rv = CR_OCCUPIED;
@@ -78,9 +77,11 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     } else /*if (type == UPSERT_ADD || type == UPSERT_DEL)*/ {
       // skip previous sample
       res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-      aCtx->sz = -1;
+      if (aCtx->type == UPSERT_DEL) {
+        aCtx->sz = -1;
+      }
     }    
-  } else if (aCtx->type == UPSERT_DEL) {
+  } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
     rv = CR_DEL_FAIL;
     goto clean;
   }
