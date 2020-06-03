@@ -1,12 +1,14 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
-#include <string.h>
-#include "rmutil/alloc.h"
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #include "rdb.h"
+
 #include "consts.h"
+#include "rmutil/alloc.h"
+
+#include <string.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
@@ -27,15 +29,19 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
 
     uint64_t labelsCount = RedisModule_LoadUnsigned(io);
     Label *labels = malloc(sizeof(Label) * labelsCount);
-    for (int i=0; i<labelsCount; i++) {
+    for (int i = 0; i < labelsCount; i++) {
         labels[i].key = RedisModule_LoadString(io);
         labels[i].value = RedisModule_LoadString(io);
     }
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
-    Series *series = NewSeries(keyName, labels, labelsCount, retentionTime,
-                    maxSamplesPerChunk, options & SERIES_OPT_UNCOMPRESSED);
+    Series *series = NewSeries(keyName,
+                               labels,
+                               labelsCount,
+                               retentionTime,
+                               maxSamplesPerChunk,
+                               options & SERIES_OPT_UNCOMPRESSED);
 
     CompactionRule *lastRule = NULL;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
@@ -71,11 +77,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     return series;
 }
 
-unsigned int countRules(Series *series) {
+unsigned int countRules(Series *series)
+{
     unsigned int count = 0;
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
-        count ++;
+        count++;
         rule = rule->nextRule;
     }
     return count;
@@ -90,7 +97,7 @@ void series_rdb_save(RedisModuleIO *io, void *value)
     RedisModule_SaveUnsigned(io, series->options);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
-    for (int i=0; i < series->labelsCount; i++) {
+    for (int i = 0; i < series->labelsCount; i++) {
         RedisModule_SaveString(io, series->labels[i].key);
         RedisModule_SaveString(io, series->labels[i].value);
     }
