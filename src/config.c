@@ -16,8 +16,7 @@
 
 TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
-{
+int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
     TSGlobalConfig.options = SERIES_OPT_UNCOMPRESSED;
 
@@ -86,8 +85,7 @@ int RTS_RlecMinorVersion;
 int RTS_RlecPatchVersion;
 int RTS_RlecBuild;
 
-int RTS_CheckSupportedVestion()
-{
+int RTS_CheckSupportedVestion() {
     if (RTS_currVersion.redisMajorVersion < RTS_minSupportedVersion.redisMajorVersion) {
         return REDISMODULE_ERR;
     }
@@ -107,8 +105,7 @@ int RTS_CheckSupportedVestion()
     return REDISMODULE_OK;
 }
 
-void RTS_GetRedisVersion()
-{
+void RTS_GetRedisVersion() {
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
     assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);

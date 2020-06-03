@@ -10,107 +10,99 @@
 #include <string.h>
 #include <rmutil/alloc.h>
 
-typedef struct MaxMinContext {
+typedef struct MaxMinContext
+{
     double minValue;
     double maxValue;
     char isResetted;
 } MaxMinContext;
 
-typedef struct SingleValueContext {
+typedef struct SingleValueContext
+{
     double value;
     char isResetted;
 } SingleValueContext;
 
-typedef struct AvgContext {
+typedef struct AvgContext
+{
     double val;
     double cnt;
 } AvgContext;
 
-typedef struct StdContext {
+typedef struct StdContext
+{
     double sum;
     double sum_2; // sum of (values^2)
     u_int64_t cnt;
 } StdContext;
 
-void *SingleValueCreateContext()
-{
+void *SingleValueCreateContext() {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     context->isResetted = TRUE;
     return context;
 }
 
-void SingleValueReset(void *contextPtr)
-{
+void SingleValueReset(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
     context->isResetted = TRUE;
 }
 
-double SingleValueFinalize(void *contextPtr)
-{
+double SingleValueFinalize(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     return context->value;
 }
 
-void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io)
-{
+void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
 }
 
-void SingleValueReadContext(void *contextPtr, RedisModuleIO *io)
-{
+void SingleValueReadContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = RedisModule_LoadDouble(io);
 }
 
-void *AvgCreateContext()
-{
+void *AvgCreateContext() {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     context->cnt = 0;
     context->val = 0;
     return context;
 }
 
-void AvgAddValue(void *contextPtr, double value)
-{
+void AvgAddValue(void *contextPtr, double value) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val += value;
     context->cnt++;
 }
 
-double AvgFinalize(void *contextPtr)
-{
+double AvgFinalize(void *contextPtr) {
     AvgContext *context = (AvgContext *)contextPtr;
     if (context->cnt == 0)
         return 0;
     return context->val / context->cnt;
 }
 
-void AvgReset(void *contextPtr)
-{
+void AvgReset(void *contextPtr) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = 0;
     context->cnt = 0;
 }
 
-void AvgWriteContext(void *contextPtr, RedisModuleIO *io)
-{
+void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
     RedisModule_SaveDouble(io, context->val);
     RedisModule_SaveDouble(io, context->cnt);
 }
 
-void AvgReadContext(void *contextPtr, RedisModuleIO *io)
-{
+void AvgReadContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = RedisModule_LoadDouble(io);
     context->cnt = RedisModule_LoadDouble(io);
 }
 
-void *StdCreateContext()
-{
+void *StdCreateContext() {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->sum = 0;
@@ -118,16 +110,14 @@ void *StdCreateContext()
     return context;
 }
 
-void StdAddValue(void *contextPtr, double value)
-{
+void StdAddValue(void *contextPtr, double value) {
     StdContext *context = (StdContext *)contextPtr;
     ++context->cnt;
     context->sum += value;
     context->sum_2 += value * value;
 }
 
-static inline double variance(double sum, double sum_2, double count)
-{
+static inline double variance(double sum, double sum_2, double count) {
     if (count == 0) {
         return 0;
     }
@@ -137,15 +127,13 @@ static inline double variance(double sum, double sum_2, double count)
     return (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
 }
 
-double VarPopulationFinalize(void *contextPtr)
-{
+double VarPopulationFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
     return variance(context->sum, context->sum_2, count);
 }
 
-double VarSamplesFinalize(void *contextPtr)
-{
+double VarSamplesFinalize(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
     if (count == 1) {
@@ -154,42 +142,36 @@ double VarSamplesFinalize(void *contextPtr)
     return variance(context->sum, context->sum_2, count) * count / (count - 1);
 }
 
-double StdPopulationFinalize(void *contextPtr)
-{
+double StdPopulationFinalize(void *contextPtr) {
     return sqrt(VarPopulationFinalize(contextPtr));
 }
 
-double StdSamplesFinalize(void *contextPtr)
-{
+double StdSamplesFinalize(void *contextPtr) {
     return sqrt(VarSamplesFinalize(contextPtr));
 }
 
-void StdReset(void *contextPtr)
-{
+void StdReset(void *contextPtr) {
     StdContext *context = (StdContext *)contextPtr;
     context->cnt = 0;
     context->sum = 0;
     context->sum_2 = 0;
 }
 
-void StdWriteContext(void *contextPtr, RedisModuleIO *io)
-{
+void StdWriteContext(void *contextPtr, RedisModuleIO *io) {
     StdContext *context = (StdContext *)contextPtr;
     RedisModule_SaveDouble(io, context->sum);
     RedisModule_SaveDouble(io, context->sum_2);
     RedisModule_SaveUnsigned(io, context->cnt);
 }
 
-void StdReadContext(void *contextPtr, RedisModuleIO *io)
-{
+void StdReadContext(void *contextPtr, RedisModuleIO *io) {
     StdContext *context = (StdContext *)contextPtr;
     context->sum = RedisModule_LoadDouble(io);
     context->sum_2 = RedisModule_LoadDouble(io);
     context->cnt = RedisModule_LoadUnsigned(io);
 }
 
-void rm_free(void *ptr)
-{
+void rm_free(void *ptr) {
     free(ptr);
 }
 
@@ -233,8 +215,7 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .readContext = StdReadContext,
                                     .resetContext = StdReset };
 
-void *MaxMinCreateContext()
-{
+void *MaxMinCreateContext() {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = 0;
     context->maxValue = 0;
@@ -242,8 +223,7 @@ void *MaxMinCreateContext()
     return context;
 }
 
-void MaxMinAppendValue(void *contextPtr, double value)
-{
+void MaxMinAppendValue(void *contextPtr, double value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     if (context->isResetted) {
         context->isResetted = FALSE;
@@ -259,42 +239,36 @@ void MaxMinAppendValue(void *contextPtr, double value)
     }
 }
 
-double MaxFinalize(void *contextPtr)
-{
+double MaxFinalize(void *contextPtr) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     return context->maxValue;
 }
 
-double MinFinalize(void *contextPtr)
-{
+double MinFinalize(void *contextPtr) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     return context->minValue;
 }
 
-double RangeFinalize(void *contextPtr)
-{
+double RangeFinalize(void *contextPtr) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     return context->maxValue - context->minValue;
 }
 
-void MaxMinReset(void *contextPtr)
-{
+void MaxMinReset(void *contextPtr) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     context->maxValue = 0;
     context->minValue = 0;
     context->isResetted = TRUE;
 }
 
-void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io)
-{
+void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     RedisModule_SaveDouble(io, context->maxValue);
     RedisModule_SaveDouble(io, context->minValue);
     RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
-void MaxMinReadContext(void *contextPtr, RedisModuleIO *io)
-{
+void MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     size_t len = 1;
     context->maxValue = RedisModule_LoadDouble(io);
@@ -302,20 +276,17 @@ void MaxMinReadContext(void *contextPtr, RedisModuleIO *io)
     context->isResetted = RedisModule_LoadStringBuffer(io, &len)[0];
 }
 
-void SumAppendValue(void *contextPtr, double value)
-{
+void SumAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value += value;
 }
 
-void CountAppendValue(void *contextPtr, double value)
-{
+void CountAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value++;
 }
 
-void FirstAppendValue(void *contextPtr, double value)
-{
+void FirstAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     if (context->isResetted) {
         context->isResetted = FALSE;
@@ -323,8 +294,7 @@ void FirstAppendValue(void *contextPtr, double value)
     }
 }
 
-void LastAppendValue(void *contextPtr, double value)
-{
+void LastAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = value;
 }
@@ -385,20 +355,17 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .readContext = MaxMinReadContext,
                                      .resetContext = MaxMinReset };
 
-int StringAggTypeToEnum(const char *agg_type)
-{
+int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
 }
 
-int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr)
-{
+int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
     size_t str_len;
     const char *aggTypeCStr = RedisModule_StringPtrLen(aggTypeStr, &str_len);
     return StringLenAggTypeToEnum(aggTypeCStr, str_len);
 }
 
-int StringLenAggTypeToEnum(const char *agg_type, size_t len)
-{
+int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
     int result = TS_AGG_INVALID;
     char agg_type_lower[len];
     for (int i = 0; i < len; i++) {
@@ -438,8 +405,7 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len)
     return result;
 }
 
-const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType)
-{
+const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
         case TS_AGG_MIN:
             return "MIN";
@@ -473,8 +439,7 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType)
     return "Unknown";
 }
 
-AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType)
-{
+AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
         case TS_AGG_MIN:
             return &aggMin;

@@ -19,8 +19,7 @@ static const timestamp_t lookup_intervals[] = { ['m'] = 1,
                                                 ['h'] = 1000 * 60 * 60,
                                                 ['d'] = 1000 * 60 * 60 * 24 };
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out)
-{
+static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
@@ -35,8 +34,7 @@ static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out)
     return TRUE;
 }
 
-static int parse_interval_policy(char *policy, SimpleCompactionRule *rule)
-{
+static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *token;
     char *token_iter_ptr;
     char agg_type[20];
@@ -72,8 +70,7 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule)
     return TRUE;
 }
 
-static size_t count_char_in_str(const char *string, size_t len, char lookup)
-{
+static size_t count_char_in_str(const char *string, size_t len, char lookup) {
     size_t count = 0;
     for (size_t i = 0; i < len; i++) {
         if (string[i] == lookup) {
@@ -87,8 +84,7 @@ static size_t count_char_in_str(const char *string, size_t len, char lookup)
 // the format is AGGREGATION_FUNCTION:\d[s|m|h|d];
 int ParseCompactionPolicy(const char *policy_string,
                           SimpleCompactionRule **parsed_rules_out,
-                          uint64_t *rules_count)
-{
+                          uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
     size_t len = strlen(policy_string);

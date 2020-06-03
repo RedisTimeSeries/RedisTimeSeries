@@ -115,8 +115,7 @@
 #define CMPR_L5 32
 
 // 2^bit
-static inline u_int64_t BIT(u_int64_t bit)
-{
+static inline u_int64_t BIT(u_int64_t bit) {
     if (__builtin_expect(bit > 63, 0)) {
         return 0ULL;
     }
@@ -124,14 +123,12 @@ static inline u_int64_t BIT(u_int64_t bit)
 }
 
 // the LSB `bits` turned on
-static inline u_int64_t MASK(u_int64_t bits)
-{
+static inline u_int64_t MASK(u_int64_t bits) {
     return BIT(bits) - 1;
 }
 
 // Clear most significant bits from position `bits`
-static inline u_int64_t LSB(u_int64_t x, u_int64_t bits)
-{
+static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
     return x & MASK(bits);
 }
 
@@ -157,8 +154,7 @@ static inline u_int64_t LSB(u_int64_t x, u_int64_t bits)
 // Converts `x`, an int64, to binary representation with length `l` bits
 // The commented out code is the full implementation, left for readability.
 // Final code is an optimization.
-static binary_t int2bin(int64_t x, u_int8_t l)
-{
+static binary_t int2bin(int64_t x, u_int8_t l) {
     /*  binary_t bin = LSB(x, l - 1);
      *  if (x >= 0) return bin;
      *  binary_t sign = 1 << (l - 1);
@@ -169,8 +165,7 @@ static binary_t int2bin(int64_t x, u_int8_t l)
 }
 
 // Converts `bin`, a binary of length `l` bits, into an int64
-static int64_t bin2int(binary_t bin, u_int8_t l)
-{
+static int64_t bin2int(binary_t bin, u_int8_t l) {
     bool pos = !(bin & BIT(l - 1));
     if (pos)
         return bin;
@@ -179,50 +174,42 @@ static int64_t bin2int(binary_t bin, u_int8_t l)
 }
 
 // note that return value is a signed int
-static inline int64_t Bin_MaxVal(u_int8_t nbits)
-{
+static inline int64_t Bin_MaxVal(u_int8_t nbits) {
     return BIT(nbits - 1) - 1;
 }
 
 // note that return value is a signed int
-static inline int64_t Bin_MinVal(u_int8_t nbits)
-{
+static inline int64_t Bin_MinVal(u_int8_t nbits) {
     return -BIT(nbits - 1);
 }
 
 // `bit` is a global bit (can be out of scope of a single binary_t)
 
-static inline u_int8_t localbit(globalbit_t bit)
-{
+static inline u_int8_t localbit(globalbit_t bit) {
     return bit % BINW;
 }
 
 // return `true` if `x` is in [-(2^(n-1)), 2^(n-1)-1]
 // e.g. for n=6, range is [-32, 31]
 
-static bool Bin_InRange(int64_t x, u_int8_t nbits)
-{
+static bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
-static inline binary_t *Bins_bitbin(u_int64_t *bins, globalbit_t bit)
-{
+static inline binary_t *Bins_bitbin(u_int64_t *bins, globalbit_t bit) {
     return &bins[bit / BINW];
 }
 
-static inline bool Bins_bitoff(u_int64_t *bins, globalbit_t bit)
-{
+static inline bool Bins_bitoff(u_int64_t *bins, globalbit_t bit) {
     return !(bins[bit / BINW] & BIT(localbit(bit)));
 }
 
-static inline bool Bins_biton(u_int64_t *bins, globalbit_t bit)
-{
+static inline bool Bins_biton(u_int64_t *bins, globalbit_t bit) {
     return !Bins_bitoff(bins, bit);
 }
 
 // Append `dataLen` bits from `data` into `bins` at bit position `bit`
-static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen)
-{
+static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen) {
     binary_t *bin_it = Bins_bitbin(bins, *bit);
     localbit_t lbit = localbit(*bit);
     localbit_t available = BINW - lbit;
@@ -237,8 +224,7 @@ static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t
 }
 
 // Read `dataLen` bits from `bins` at position `bit`
-static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen)
-{
+static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen) {
     binary_t *bin_it = Bins_bitbin(bins, *bit);
     localbit_t lbit = localbit(*bit);
     localbit_t available = BINW - lbit;
@@ -255,15 +241,13 @@ static binary_t readBits(binary_t *bins, globalbit_t *bit, u_int8_t dataLen)
     return bin;
 }
 
-static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size)
-{
+static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
     u_int64_t available = (chunk->size * 8) - chunk->idx;
     return size <= available;
 }
 
 /***************************** APPEND ********************************/
-static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp)
-{
+static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
     assert(timestamp >= chunk->prevTimestamp);
     timestamp_t curDelta = timestamp - chunk->prevTimestamp;
 
@@ -319,8 +303,7 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp)
     return CR_OK;
 }
 
-static ChunkResult appendFloat(CompressedChunk *chunk, double value)
-{
+static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     union64bits val;
     val.d = value;
     u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
@@ -377,8 +360,7 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value)
     return CR_OK;
 }
 
-ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, double value)
-{
+ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, double value) {
     assert(chunk);
 
     if (chunk->count == 0) {
@@ -403,8 +385,7 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * then decodes the value back to an int64 and calculate the original value
  * using `prevTS` and `prevDelta`.
  */
-static u_int64_t readInteger(Compressed_Iterator *iter)
-{
+static u_int64_t readInteger(Compressed_Iterator *iter) {
     binary_t *bins = iter->chunk->data;
     globalbit_t *bit = &iter->idx;
 
@@ -441,8 +422,7 @@ static u_int64_t readInteger(Compressed_Iterator *iter)
  *
  * Finally, the compressed representation of the value is decoded.
  */
-static double readFloat(Compressed_Iterator *iter)
-{
+static double readFloat(Compressed_Iterator *iter) {
     binary_t xorValue;
     union64bits rv;
 
@@ -473,8 +453,7 @@ static double readFloat(Compressed_Iterator *iter)
     return iter->prevValue.d = rv.d;
 }
 
-ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestamp, double *value)
-{
+ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestamp, double *value) {
     assert(iter);
     assert(iter->chunk);
 

@@ -16,15 +16,17 @@ RedisModuleDict *labelsIndex;
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
 
-typedef enum { Indexer_Add, Indexer_Remove } INDEXER_OPERATION_T;
-
-void IndexInit()
+typedef enum
 {
+    Indexer_Add,
+    Indexer_Remove
+} INDEXER_OPERATION_T;
+
+void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
 }
 
-void FreeLabels(void *value, size_t labelsCount)
-{
+void FreeLabels(void *value, size_t labelsCount) {
     Label *labels = (Label *)value;
     for (int i = 0; i < labelsCount; ++i) {
         RedisModule_FreeString(NULL, labels[i].key);
@@ -36,8 +38,7 @@ void FreeLabels(void *value, size_t labelsCount)
 int parsePredicate(RedisModuleCtx *ctx,
                    RedisModuleString *label,
                    QueryPredicate *retQuery,
-                   const char *separator)
-{
+                   const char *separator) {
     char *token;
     char *iter_ptr;
     size_t _s;
@@ -101,8 +102,7 @@ int parsePredicate(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
-int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type)
-{
+int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type) {
     int count = 0;
     for (int i = 0; i < query_count; i++) {
         if (queries[i].type == type) {
@@ -112,8 +112,7 @@ int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateTyp
     return count;
 }
 
-void indexUnderKey(INDEXER_OPERATION_T op, RedisModuleString *key, RedisModuleString *ts_key)
-{
+void indexUnderKey(INDEXER_OPERATION_T op, RedisModuleString *key, RedisModuleString *ts_key) {
     int nokey = 0;
     RedisModuleDict *leaf = RedisModule_DictGet(labelsIndex, key, &nokey);
     if (nokey) {
@@ -132,8 +131,7 @@ void IndexOperation(RedisModuleCtx *ctx,
                     INDEXER_OPERATION_T op,
                     RedisModuleString *ts_key,
                     Label *labels,
-                    size_t labels_count)
-{
+                    size_t labels_count) {
     const char *key_string, *value_string;
     for (int i = 0; i < labels_count; i++) {
         size_t _s;
@@ -151,21 +149,21 @@ void IndexOperation(RedisModuleCtx *ctx,
     }
 }
 
-void IndexMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *labels, size_t labels_count)
-{
+void IndexMetric(RedisModuleCtx *ctx,
+                 RedisModuleString *ts_key,
+                 Label *labels,
+                 size_t labels_count) {
     IndexOperation(ctx, Indexer_Add, ts_key, labels, labels_count);
 }
 
 void RemoveIndexedMetric(RedisModuleCtx *ctx,
                          RedisModuleString *ts_key,
                          Label *labels,
-                         size_t labels_count)
-{
+                         size_t labels_count) {
     IndexOperation(ctx, Indexer_Remove, ts_key, labels, labels_count);
 }
 
-void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src)
-{
+void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
     /*
      * Copy all elements from src to dest
      */
@@ -177,8 +175,7 @@ void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src)
     RedisModule_DictIteratorStop(iter);
 }
 
-void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right)
-{
+void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;
@@ -194,8 +191,7 @@ void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *rig
     RedisModule_DictIteratorStop(iter);
 }
 
-void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right)
-{
+void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
     if (RedisModule_DictSize(right) == 0) {
         // the right leaf is empty, this means that the diff is basically no-op since the left will
         // remain intact.
@@ -220,8 +216,7 @@ void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *ri
     RedisModule_DictIteratorStop(iter);
 }
 
-RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predicate)
-{
+RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predicate) {
     /*
      * Return the dictionary of all the keys that match the predicate.
      */
@@ -263,8 +258,7 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
 RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
                                      QueryPredicate *predicate,
                                      RedisModuleDict *prevResults,
-                                     int createResultDict)
-{
+                                     int createResultDict) {
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
     RedisModuleDict *currentLeaf;
 
@@ -310,8 +304,7 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
                                      QueryPredicate *index_predicate,
-                                     size_t predicate_count)
-{
+                                     size_t predicate_count) {
     /*
      * Find the predicate that has the minimal amount of keys that match to it, and move it to the
      * beginning of the predicate list so we will start our calculation from the smallest predicate.
@@ -340,8 +333,7 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
 }
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count)
-{
+                            size_t predicate_count) {
     RedisModuleDict *result = NULL;
     int shouldCreateNewDict = (predicate_count > 1);
 

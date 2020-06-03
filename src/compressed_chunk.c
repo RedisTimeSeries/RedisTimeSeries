@@ -17,8 +17,7 @@
 /*********************
  *  Chunk functions  *
  *********************/
-Chunk_t *Compressed_NewChunk(size_t size)
-{
+Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size * sizeof(Sample);
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
@@ -27,42 +26,35 @@ Chunk_t *Compressed_NewChunk(size_t size)
     return chunk;
 }
 
-void Compressed_FreeChunk(Chunk_t *chunk)
-{
+void Compressed_FreeChunk(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
     free(cmpChunk->data);
     cmpChunk->data = NULL;
     free(chunk);
 }
 
-ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample)
-{
+ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
 
-u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk)
-{
+u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->count;
 }
 
-timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk)
-{
+timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->baseTimestamp;
 }
 
-timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk)
-{
+timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
-size_t Compressed_GetChunkSize(Chunk_t *chunk)
-{
+size_t Compressed_GetChunkSize(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
     return sizeof(*cmpChunk) + cmpChunk->size * sizeof(char);
 }
 
-static Chunk *decompressChunk(CompressedChunk *compressedChunk)
-{
+static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
     uint64_t numSamples = compressedChunk->count;
     Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples);
@@ -80,14 +72,12 @@ static Chunk *decompressChunk(CompressedChunk *compressedChunk)
  *  Iterator functions  *
  ************************/
 // LCOV_EXCL_START - used for debug
-u_int64_t getIterIdx(ChunkIter_t *iter)
-{
+u_int64_t getIterIdx(ChunkIter_t *iter) {
     return ((Compressed_Iterator *)iter)->idx;
 }
 // LCOV_EXCL_STOP
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev)
-{
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     CompressedChunk *compressedChunk = chunk;
 
     // for reverse iterator of compressed chunks
@@ -112,13 +102,11 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev)
     return (ChunkIter_t *)iter;
 }
 
-ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample)
-{
+ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample) {
     return Compressed_ReadNext((Compressed_Iterator *)iter, &sample->timestamp, &sample->value);
 }
 
-void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev)
-{
+void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
     // compressed iterator on reverse query has to release decompressed chunk
     if (rev) {
         free(((ChunkIterator *)iter)->chunk);
