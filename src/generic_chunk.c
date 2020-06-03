@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "compressed_chunk.h"
+
 #include "rmutil/alloc.h"
 
 static ChunkFuncs regChunk = { .NewChunk = Uncompressed_NewChunk,

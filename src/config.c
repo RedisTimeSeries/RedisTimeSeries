@@ -8,11 +8,11 @@
 #include "common.h"
 #include "consts.h"
 #include "redismodule.h"
-#include "rmutil/strings.h"
-#include "rmutil/util.h"
 
 #include <assert.h>
 #include <string.h>
+#include "rmutil/strings.h"
+#include "rmutil/util.h"
 
 TSConfig TSGlobalConfig;
 

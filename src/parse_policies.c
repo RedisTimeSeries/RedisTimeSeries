@@ -8,9 +8,10 @@
 #include "compaction.h"
 #include "consts.h"
 
-#include <rmutil/alloc.h>
 #include <stdio.h>
 #include <string.h>
+#include "rmutil/util.h"
+#include <rmutil/alloc.h>
 
 static const timestamp_t lookup_intervals[] = { ['m'] = 1,
                                                 ['s'] = 1000,

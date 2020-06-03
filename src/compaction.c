@@ -5,11 +5,10 @@
  */
 #include "compaction.h"
 
-#include "rmutil/alloc.h"
-
 #include <ctype.h>
 #include <math.h> // sqrt
 #include <string.h>
+#include <rmutil/alloc.h>
 
 typedef struct MaxMinContext {
     double minValue;

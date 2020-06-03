@@ -6,9 +6,9 @@
 #include "rdb.h"
 
 #include "consts.h"
-#include "rmutil/alloc.h"
 
 #include <string.h>
+#include <rmutil/alloc.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {

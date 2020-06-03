@@ -7,12 +7,12 @@
 #include "compressed_chunk.h"
 
 #include "chunk.h"
-#include "rmutil/alloc.h"
 
 #include <assert.h> // assert
 #include <limits.h>
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
+#include "rmutil/alloc.h"
 
 /*********************
  *  Chunk functions  *

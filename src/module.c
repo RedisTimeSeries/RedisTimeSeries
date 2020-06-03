@@ -10,9 +10,6 @@
 #include "indexer.h"
 #include "rdb.h"
 #include "redismodule.h"
-#include "rmutil/alloc.h"
-#include "rmutil/strings.h"
-#include "rmutil/util.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -21,6 +18,9 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include "rmutil/strings.h"
+#include "rmutil/util.h"
+#include <rmutil/alloc.h>
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"

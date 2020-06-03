@@ -8,9 +8,8 @@
 #include "consts.h"
 
 #include <limits.h>
-#include <rmutil/alloc.h>
-#include <rmutil/vector.h>
 #include <string.h>
+#include <rmutil/alloc.h>
 
 RedisModuleDict *labelsIndex;
 

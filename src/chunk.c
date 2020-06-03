@@ -7,8 +7,6 @@
 
 #include "rmutil/alloc.h"
 
-#include <string.h>
-
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount)
 {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));

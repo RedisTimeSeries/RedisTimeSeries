@@ -10,13 +10,13 @@
 #include "endianconv.h"
 #include "indexer.h"
 #include "module.h"
-#include "rmutil/alloc.h"
-#include "rmutil/logging.h"
-#include "rmutil/strings.h"
 
 #include <redismodule.h>
 #include <string.h>
 #include <time.h>
+#include <rmutil/alloc.h>
+#include <rmutil/logging.h>
+#include <rmutil/strings.h>
 
 static Series *lastDeletedSeries = NULL;
 
