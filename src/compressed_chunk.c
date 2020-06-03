@@ -63,7 +63,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
   for (; i < numSamples; ++i) {
     res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
     assert(res == CR_OK);
-    if (ts <= iterSample.timestamp) {
+    if (iterSample.timestamp >= ts) {
         break;
     }
     res = Compressed_AddSample(newChunk, &iterSample);

@@ -80,7 +80,8 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
                     (numSamples - idx) * sizeof(Sample));
             if (numSamples == regChunk->max_samples) {
                 regChunk->num_samples = regChunk->max_samples = numSamples - 1;
-                regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
+                // TODO: adjust memory
+                // regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
             }
             aCtx->sz = -1;
             return CR_OK;

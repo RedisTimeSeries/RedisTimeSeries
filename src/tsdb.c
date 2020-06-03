@@ -222,6 +222,7 @@ size_t SeriesGetNumSamples(const Series *series) {
 
 static void upsertHandleRules(Series *series, AddCtx *aCtx) {
     CompactionRule *rule = series->rules;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
         // upsert in latest timebucket
         if (aCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
@@ -238,7 +239,7 @@ static void upsertHandleRules(Series *series, AddCtx *aCtx) {
 
         RedisModuleKey *key;
         Series *destSeries;
-        if (!GetSeries(RTS_GlobalRedisCtx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
+        if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
             // TODO: log something
             continue;
         }
@@ -246,6 +247,7 @@ static void upsertHandleRules(Series *series, AddCtx *aCtx) {
         RedisModule_CloseKey(key);
         rule = rule->nextRule;
     }
+    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
@@ -275,7 +277,7 @@ static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double 
                     .type =  UPSERT_ADD // TODO: on-conflict param
                     };
     // TODO
-    int rv = series->funcs->UpsertSample(&aCtx);
+    ChunkResult rv = series->funcs->UpsertSample(&aCtx);
     if (rv == REDISMODULE_OK) {
         series->totalSamples += aCtx.sz;
 
