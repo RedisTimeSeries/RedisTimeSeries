@@ -10,8 +10,7 @@
 #include <string.h>
 #include <rmutil/alloc.h>
 
-void *series_rdb_load(RedisModuleIO *io, int encver)
-{
+void *series_rdb_load(RedisModuleIO *io, int encver) {
     if (encver != TS_ENC_VER && encver != TS_UNCOMPRESSED_VER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -77,8 +76,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
     return series;
 }
 
-unsigned int countRules(Series *series)
-{
+unsigned int countRules(Series *series) {
     unsigned int count = 0;
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
@@ -88,8 +86,7 @@ unsigned int countRules(Series *series)
     return count;
 }
 
-void series_rdb_save(RedisModuleIO *io, void *value)
-{
+void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
     RedisModule_SaveUnsigned(io, series->retentionTime);
