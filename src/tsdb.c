@@ -35,7 +35,7 @@ static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp 
             return RedisModule_DictDelC(d, &rax_key, sizeof(rax_key), NULL);
     }
     assert(0);
-    return REDISMODULE_OK;
+    return REDISMODULE_OK; // silence compiler
 }
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
@@ -235,7 +235,10 @@ static void upsertHandleRules(Series *series, AddCtx *aCtx) {
         timestamp_t start = CalcWindowStart(aCtx->sample.timestamp, rule->timeBucket);
         // ensure last include/exclude
         double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
-        // if (isnan(val)) return TSDB_ERROR;
+        if (isnan(val)) {
+            RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+            continue;
+        }
 
         RedisModuleKey *key;
         Series *destSeries;
@@ -266,7 +269,6 @@ static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double 
             // TODO: check if new sample before first sample
             RedisModule_DictIteratorStop(dictIter);
             assert(0);
-            return TSDB_ERROR;
         }
     }
     Sample sample = {.timestamp = timestamp, .value = value };
@@ -542,7 +544,6 @@ double SeriesCalcRange(Series *series, timestamp_t start_ts, timestamp_t end_ts,
     Sample sample = {0};
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     if (iterator.series == NULL) { 
-        assert(0);
         return 0.0/0.0; // isnan()
     }
     void *context = aggObject->createContext();

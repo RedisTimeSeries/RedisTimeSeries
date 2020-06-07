@@ -621,7 +621,13 @@ static void handleCompaction(RedisModuleCtx *ctx, Series *series,
         if (!rule->backfilled) {
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
         } else {
-            double val = SeriesCalcRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket + rule->timeBucket - 1, rule->aggClass);
+            u_int64_t ts = rule->startCurrentTimeBucket;
+            u_int64_t es = ts + rule->timeBucket - 1;
+            double val = SeriesCalcRange(series, ts, es, rule->aggClass);
+            if (isnan(val)) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                return;
+            }
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, val);
             rule->backfilled = false;
         }
