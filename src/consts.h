@@ -8,6 +8,7 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -23,6 +24,8 @@
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
+#define SPLIT_FACTOR                    1.2
+#define SPLIT_EXTRA                     3
 
 /* TS.Range Aggregation types */
 typedef enum {
@@ -44,13 +47,24 @@ typedef enum {
 } TS_AGG_TYPES_T;
 
 /* Series struct options */
-#define SERIES_OPT_UNCOMPRESSED 0x1
+#define SERIES_OPT_UNCOMPRESSED (1 << 0)
+#define SERIES_OPT_OUT_OF_ORDER (1 << 1)
 
 /* Chunk enum */
 typedef enum {
   CR_OK = 0,    // RM_OK
   CR_ERR = 1,   // RM_ERR
-  CR_END = 2  
+  CR_END = 2,   // END_OF_CHUNK
+  CR_OCCUPIED = 3,
+  CR_DEL_FAIL = 4,
 } ChunkResult;
+
+typedef enum {
+  UPSERT_NOT_ADD = 0,
+  UPSERT_ADD = 1,
+  UPSERT_DEL = 2
+} UpsertType;
+
+#define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 #endif

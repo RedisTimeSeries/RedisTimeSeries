@@ -11,12 +11,14 @@
 #include "consts.h"
 #include "indexer.h"
 #include "generic_chunk.h"
+#include <math.h>
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;
     timestamp_t timeBucket;
     AggregationClass *aggClass;
     TS_AGG_TYPES_T aggType;
+    bool backfilled;
     void *aggContext;
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket;
@@ -52,7 +54,7 @@ typedef struct SeriesIterator {
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
-                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
+                uint64_t retentionTime, short maxSamplesPerChunk, int options);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
@@ -70,6 +72,11 @@ size_t SeriesGetNumSamples(const Series *series);
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
+
+double SeriesCalcRange(Series *series, timestamp_t start_ts, timestamp_t end_ts, AggregationClass *aggObject);
+
+// Calculate the begining of  aggregation window
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */

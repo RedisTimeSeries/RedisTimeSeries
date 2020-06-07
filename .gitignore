@@ -2,6 +2,7 @@
 *.so
 *.xml
 *.pyc
+*.log
 .vscode/
 __pycache__
 .cproject

@@ -13,7 +13,7 @@
 #include "consts.h"
 
 typedef struct Sample {
-    u_int64_t timestamp;
+    timestamp_t timestamp;
     double value;
 } Sample;
 
@@ -25,11 +25,26 @@ typedef enum {
     CHUNK_COMPRESSED 
 } CHUNK_TYPES_T;
 
+typedef struct AddCtx {
+    //RedisModuleDict *dict;
+    Chunk_t *inChunk;       // original chunk
+    Chunk_t *outChunk_1;    // used if 1st sample changed
+    Chunk_t *outChunk_2;    // used if chunk was splitted
+    
+    Sample sample;
+    
+    int sz;                 // change in chunk size
+    UpsertType type;
+    short maxSamples;       // used for split
+    bool reindex;
+} AddCtx;
+
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void(*FreeChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
+    ChunkResult(*UpsertSample)(AddCtx *aCtx);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
     void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);
