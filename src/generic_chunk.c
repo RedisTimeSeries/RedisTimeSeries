@@ -46,4 +46,4 @@ ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     case CHUNK_COMPRESSED:  return &comprChunk;
   }
   return NULL;
-} 
+}

@@ -18,7 +18,7 @@
 /*********************
  *  Chunk functions  *
  *********************/
-Chunk_t *Compressed_NewChunk(u_int64_t size) {
+Chunk_t *Compressed_NewChunk(size_t size) {
   CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
   chunk->size = size * sizeof(Sample);
   chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
