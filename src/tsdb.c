@@ -265,10 +265,9 @@ static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double 
         RedisModuleDictIter *dictIter = 
             RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         chunkKey = RedisModule_DictNextC(dictIter, NULL, (void*)&chunk);
-        if (chunkKey == NULL) {   // should not happen since we always have a chunk
-            // TODO: check if new sample before first sample
+        if (chunkKey == NULL) {
             RedisModule_DictIteratorStop(dictIter);
-            assert(0);
+            return REDISMODULE_ERR;
         }
     }
     Sample sample = {.timestamp = timestamp, .value = value };
@@ -304,7 +303,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         } else if (timestamp == series->lastTimestamp && timestamp != 0) {
             return TSDB_ERR_TIMESTAMP_OCCUPIED;
         }
-    // TODO: ensure cover for out of retention insertion.
+    // ensure inside retention period.
     } else if (series->retentionTime && 
                timestamp < timestamp - series->retentionTime) {
         // TODO: downsample window is partially trimmed
