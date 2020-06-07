@@ -108,7 +108,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
                            long long *maxSamplesPerChunk,
                            size_t *labelsCount,
                            Label **labels,
-                           int *uncompressed) {
+                           int *options) {
     *retentionTime = TSGlobalConfig.retentionPolicy;
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
@@ -141,7 +141,11 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     }
 
     if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        *uncompressed |= SERIES_OPT_UNCOMPRESSED;
+        *options|= SERIES_OPT_UNCOMPRESSED;
+    }
+
+    if (RMUtil_ArgIndex("OUT_OF_ORDER", argv, argc) > 0) {
+        *options |= SERIES_OPT_OUT_OF_ORDER;
     }
 
     return REDISMODULE_OK;
@@ -658,11 +662,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static void handleCompaction(RedisModuleCtx *ctx,
-                             CompactionRule *rule,
-                             api_timestamp_t timestamp,
-                             double value) {
-    timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
+static void handleCompaction(RedisModuleCtx *ctx, Series *series,
+            CompactionRule *rule, api_timestamp_t timestamp, double value) {
+    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->timeBucket);
 
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
@@ -677,15 +679,27 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
-
-        SeriesAddSample(
-            destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        if (!rule->backfilled) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        } else {
+            u_int64_t ts = rule->startCurrentTimeBucket;
+            u_int64_t es = ts + rule->timeBucket - 1;
+            double val = SeriesCalcRange(series, ts, es, rule->aggClass);
+            if (isnan(val)) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                return;
+            }
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, val);
+            rule->backfilled = false;
+        }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
     }
-
-    rule->aggClass->appendValue(rule->aggContext, value);
+    // have to query on the fly
+    if (!rule->backfilled) {
+        rule->aggClass->appendValue(rule->aggContext, value);
+    }
 }
 
 static int internalAdd(RedisModuleCtx *ctx,
@@ -697,6 +711,9 @@ static int internalAdd(RedisModuleCtx *ctx,
         RedisModule_ReplyWithError(
             ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         return REDISMODULE_ERR;
+    } else if (retval == TSDB_ERR_TIMESTAMP_OCCUPIED) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is occupied");
+        return REDISMODULE_ERR;
     } else if (retval != TSDB_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
         return REDISMODULE_ERR;
@@ -705,7 +722,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     // handle compaction rules
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
-        handleCompaction(ctx, rule, timestamp, value);
+        handleCompaction(ctx, series, rule, timestamp, value);
         rule = rule->nextRule;
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);
@@ -741,27 +758,12 @@ static inline int add(RedisModuleCtx *ctx,
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        int uncompressed = 0;
-        if (parseCreateArgs(ctx,
-                            argv,
-                            argc,
-                            &retentionTime,
-                            &maxSamplesPerChunk,
-                            &labelsCount,
-                            &labels,
-                            &uncompressed) != REDISMODULE_OK) {
+        int options = 0;
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx,
-                    keyName,
-                    labels,
-                    labelsCount,
-                    retentionTime,
-                    maxSamplesPerChunk,
-                    uncompressed,
-                    &series,
-                    &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
@@ -807,22 +809,14 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return result;
 }
 
-int CreateTsKey(RedisModuleCtx *ctx,
-                RedisModuleString *keyName,
-                Label *labels,
-                size_t labelsCounts,
-                long long retentionTime,
-                long long maxSamplesPerChunk,
-                int uncompressed,
-                Series **series,
-                RedisModuleKey **key) {
+int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, size_t labelsCounts, long long retentionTime,
+                long long maxSamplesPerChunk, int options, Series **series, RedisModuleKey **key) {
     if (*key == NULL) {
         *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     }
 
     RedisModule_RetainString(ctx, keyName);
-    *series =
-        NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk, uncompressed);
+    *series = NewSeries(keyName, labels, labelsCounts, retentionTime, maxSamplesPerChunk, options);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
@@ -845,15 +839,8 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *labels;
-    int uncompressed = 0;
-    if (parseCreateArgs(ctx,
-                        argv,
-                        argc,
-                        &retentionTime,
-                        &maxSamplesPerChunk,
-                        &labelsCount,
-                        &labels,
-                        &uncompressed) != REDISMODULE_OK) {
+    int options = 0;
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -861,18 +848,10 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(key);
-        return RedisModule_ReplyWithError(ctx, "TSDB: key already exists");
+        return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
     }
 
-    CreateTsKey(ctx,
-                keyName,
-                labels,
-                labelsCount,
-                retentionTime,
-                maxSamplesPerChunk,
-                uncompressed,
-                &series,
-                &key);
+    CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
     RedisModule_CloseKey(key);
 
     RedisModule_Log(ctx, "verbose", "created new series");
@@ -895,15 +874,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long maxSamplesPerChunk;
     size_t labelsCount;
     Label *newLabels;
-    int uncompressed = 0;
-    if (parseCreateArgs(ctx,
-                        argv,
-                        argc,
-                        &retentionTime,
-                        &maxSamplesPerChunk,
-                        &labelsCount,
-                        &newLabels,
-                        &uncompressed) != REDISMODULE_OK) {
+    int options = 0;
+    if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &newLabels, &options) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -1066,27 +1038,12 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         long long maxSamplesPerChunk;
         size_t labelsCount;
         Label *labels;
-        int uncompressed = 0;
-        if (parseCreateArgs(ctx,
-                            argv,
-                            argc,
-                            &retentionTime,
-                            &maxSamplesPerChunk,
-                            &labelsCount,
-                            &labels,
-                            &uncompressed) != REDISMODULE_OK) {
+        int options = 0;
+        if (parseCreateArgs(ctx, argv, argc, &retentionTime, &maxSamplesPerChunk, &labelsCount, &labels, &options) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
-        CreateTsKey(ctx,
-                    keyName,
-                    labels,
-                    labelsCount,
-                    retentionTime,
-                    maxSamplesPerChunk,
-                    uncompressed,
-                    &series,
-                    &key);
+        CreateTsKey(ctx, keyName, labels, labelsCount, retentionTime, maxSamplesPerChunk, options, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     }
 

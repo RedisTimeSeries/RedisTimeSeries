@@ -64,6 +64,96 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
+static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
+    Chunk *regChunk = (Chunk *)aCtx->inChunk;
+    short numSamples = regChunk->num_samples;
+    // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp, sample->timestamp, sample->value);
+    switch (aCtx->type) {
+        case UPSERT_NOT_ADD:    
+            return CR_OCCUPIED;
+        case UPSERT_ADD:        
+            regChunk->samples[idx] = aCtx->sample;
+            return CR_OK;
+        case UPSERT_DEL: { 
+            memmove(&regChunk->samples[idx],
+                    &regChunk->samples[idx + 1],
+                    (numSamples - idx) * sizeof(Sample));
+            if (numSamples == regChunk->max_samples) {
+                regChunk->num_samples = regChunk->max_samples = numSamples - 1;
+                // TODO: adjust memory
+                // regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
+            }
+            aCtx->sz = -1;
+            return CR_OK;
+        }
+    }
+    return CR_ERR;
+}
+
+static void copyChunk(Chunk *dest, Chunk *src, size_t srcIdx, short qty) {
+    memcpy(dest->samples, src->samples + srcIdx, qty);
+    dest->base_timestamp = dest->samples[0].timestamp;
+    dest->num_samples = qty;
+}
+
+static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
+    if (chunk->num_samples == chunk->max_samples) {
+        chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
+    }
+    if (idx < chunk->num_samples) { // sample is not last
+        memmove(&chunk->samples[idx + 1],
+                &chunk->samples[idx],
+                (chunk->num_samples - idx) * sizeof(Sample));
+    }
+    chunk->samples[idx] = *sample;
+    chunk->num_samples++;
+}
+
+ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
+    Chunk *regChunk = (Chunk *)aCtx->inChunk;
+    timestamp_t ts = aCtx->sample.timestamp;
+    short numSamples = regChunk->num_samples;
+    // find sample location
+    size_t i = 0;
+    for (; i < numSamples; ++i) {
+        if (ts <= ChunkGetSample(regChunk, i)->timestamp) {
+            break;
+        }
+    }
+    // TODO: TS.UPSERT vs TS.ADD
+    if (ts == ChunkGetSample(regChunk, i)->timestamp) {
+        return operateOccupiedSample(aCtx , i);
+    } else if (aCtx->type == UPSERT_DEL) {
+        return CR_DEL_FAIL;
+    }
+
+    if (i == 0) {
+        regChunk->base_timestamp = ts;
+        aCtx->reindex = true;
+    }
+
+    bool shouldSplit = (numSamples == regChunk->max_samples &&
+                        numSamples > aCtx->maxSamples * SPLIT_FACTOR);
+    if (!shouldSplit || shouldSplit) {
+        upsertChunk(regChunk, i, &aCtx->sample);
+    } else { // split - unused
+        short split = numSamples / 2;
+        Chunk *newChunk = Uncompressed_NewChunk(split + SPLIT_EXTRA);
+        copyChunk(newChunk, regChunk, split, numSamples - split);
+        regChunk->max_samples = regChunk->num_samples = split;
+        if (i < split) {
+            upsertChunk(regChunk, i, &aCtx->sample);
+        } else {
+            upsertChunk(newChunk, i - split, &aCtx->sample);
+            regChunk->max_samples += SPLIT_EXTRA;
+            regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
+        }
+        aCtx->outChunk_1 = newChunk;
+    }
+    aCtx->sz = 1;
+    return CR_OK;
+}
+
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
