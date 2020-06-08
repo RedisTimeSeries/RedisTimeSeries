@@ -132,6 +132,16 @@ rmutil:
 
 $(LIBRMUTIL): rmutil
 
+docker_lint:
+	docker build -t llvm-toolset -f llvm.Dockerfile .
+	docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+
+lint:
+	clang-format -Werror -n $(SOURCES)
+
+format:
+	clang-format -i $(SOURCES)
+
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
