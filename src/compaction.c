@@ -17,6 +17,12 @@ typedef struct MaxMinContext {
     char isResetted;
 } MaxMinContext;
 
+typedef struct DerivContext {
+    double prev;
+    double cur;
+    char isResetted;
+} DerivContext;
+
 typedef struct SingleValueContext {
     double value;
     char isResetted;
@@ -371,24 +377,52 @@ static AggregationClass aggRange = {
     .resetContext = MaxMinReset
 };
 
+void *DerivativeCreateContext() {
+    DerivContext *context = (DerivContext *)malloc(sizeof(DerivContext));
+    context->prev = 0;
+    context->cur = 0;
+    context->isResetted = TRUE;
+    return context;
+}
+
 void DerivativeAppendValue(void *contextPtr, double value) {
-    MaxMinContext *context = (MaxMinContext *)contextPtr;
-    context->maxValue = value;
+    DerivContext *context = (DerivContext *)contextPtr;
+    context->cur = value;
+}
+
+double DerivativeFinalize(void *contextPtr) {
+    DerivContext *context = (DerivContext *)contextPtr;
+    return context->cur - context->prev;
+}
+
+void DerivativeWriteContext(void *contextPtr, RedisModuleIO *io) {
+    DerivContext *context = (DerivContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->prev);
+    RedisModule_SaveDouble(io, context->cur);
+    RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
+}
+
+void DerivativeReadContext(void *contextPtr, RedisModuleIO *io) {
+    DerivContext *context = (DerivContext *)contextPtr;
+    size_t len = 1;
+    context->prev = RedisModule_LoadDouble(io);
+    context->cur = RedisModule_LoadDouble(io);
+    context->isResetted = RedisModule_LoadStringBuffer(io, &len)[0];
 }
 
 void DerivativeReset(void *contextPtr) {
-    MaxMinContext *context = (MaxMinContext *)contextPtr;
-    context->minValue = context->maxValue;
-    context->maxValue = NAN;
+    DerivContext *context = (DerivContext *)contextPtr;
+    context->prev = context->cur;
+    context->cur = NAN;
 }
 
 static AggregationClass aggDerivative = {
-    .createContext = MaxMinCreateContext,
+    .createContext = DerivativeCreateContext,
     .appendValue = DerivativeAppendValue,
     .freeContext = rm_free,
-    .finalize = RangeFinalize,
-    .writeContext = MaxMinWriteContext,
-    .readContext = MaxMinReadContext,
+    .finalize = DerivativeFinalize,
+    .writeContext = DerivativeWriteContext,
+    .readContext = DerivativeReadContext,
     .resetContext = DerivativeReset
 };
 
