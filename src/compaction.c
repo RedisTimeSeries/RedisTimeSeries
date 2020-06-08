@@ -17,13 +17,15 @@ typedef struct MaxMinContext
     char isResetted;
 } MaxMinContext;
 
-typedef struct DerivContext {
+typedef struct DerivContext
+{
     double prev;
     double cur;
     char isResetted;
 } DerivContext;
 
-typedef struct SingleValueContext {
+typedef struct SingleValueContext
+{
     double value;
     char isResetted;
 } SingleValueContext;
