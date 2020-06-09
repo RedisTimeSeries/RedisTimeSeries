@@ -11,6 +11,8 @@
 #include "indexer.h"
 #include "module.h"
 
+#include "rmutil/strings.h"
+
 typedef enum
 {
     DICT_OP_SET = 0,
@@ -304,14 +306,10 @@ static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double 
 }
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
-    if (!(series->options & SERIES_OPT_OUT_OF_ORDER)) {
-        if (timestamp < series->lastTimestamp && series->lastTimestamp != 0) {
-            return TSDB_ERR_TIMESTAMP_TOO_OLD;
-        } else if (timestamp == series->lastTimestamp && timestamp != 0) {
-            return TSDB_ERR_TIMESTAMP_OCCUPIED;
-        }
-        // ensure inside retention period.
-    } else if (series->retentionTime && timestamp < timestamp - series->retentionTime) {
+    // ensure inside retention period.
+    if (timestamp < series->lastTimestamp && series->retentionTime &&
+        timestamp < series->lastTimestamp - series->retentionTime &&
+        timestamp > series->retentionTime) {
         // TODO: downsample window is partially trimmed
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     }

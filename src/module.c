@@ -144,10 +144,6 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
         *options |= SERIES_OPT_UNCOMPRESSED;
     }
 
-    if (RMUtil_ArgIndex("OUT_OF_ORDER", argv, argc) > 0) {
-        *options |= SERIES_OPT_OUT_OF_ORDER;
-    }
-
     return REDISMODULE_OK;
 }
 

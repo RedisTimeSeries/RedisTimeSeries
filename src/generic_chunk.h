@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <stdlib.h>         // malloc
 #include <stdio.h>          // printf
+#include <string.h>         // memcpy, memmove
 #include "consts.h"
 
 typedef struct Sample {
