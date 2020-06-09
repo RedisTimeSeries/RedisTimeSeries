@@ -1,4 +1,3 @@
-/*
  * Copyright 2018-2019 Redis Labs Ltd. and Contributors
  *
  * This file is available under the Redis Labs Source Available License Agreement
@@ -7,8 +6,8 @@
 
 #include <ctype.h>
 #include <math.h> // sqrt
-#include <string.h>
 #include <rmutil/alloc.h>
+#include <string.h>
 
 typedef struct MaxMinContext
 {
@@ -401,15 +400,13 @@ void DerivativeReset(void *contextPtr) {
     context->cur = NAN;
 }
 
-static AggregationClass aggDerivative = {
-    .createContext = DerivativeCreateContext,
-    .appendValue = DerivativeAppendValue,
-    .freeContext = rm_free,
-    .finalize = DerivativeFinalize,
-    .writeContext = DerivativeWriteContext,
-    .readContext = DerivativeReadContext,
-    .resetContext = DerivativeReset
-};
+static AggregationClass aggDerivative = { .createContext = DerivativeCreateContext,
+                                          .appendValue = DerivativeAppendValue,
+                                          .freeContext = rm_free,
+                                          .finalize = DerivativeFinalize,
+                                          .writeContext = DerivativeWriteContext,
+                                          .readContext = DerivativeReadContext,
+                                          .resetContext = DerivativeReset };
 
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
@@ -456,8 +453,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_VAR_P;
         } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
             result = TS_AGG_VAR_S;
-		} else if (strncmp(agg_type_lower, "deriv", len) == 0) {
-			result = TS_AGG_DERIV;
+        } else if (strncmp(agg_type_lower, "deriv", len) == 0) {
+            result = TS_AGG_DERIV;
         }
     }
     return result;
