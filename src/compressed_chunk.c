@@ -36,86 +36,87 @@ void Compressed_FreeChunk(Chunk_t *chunk) {
 }
 
 static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
-  CompressedChunk tmp = *a;
-  *a = *b;
-  *b = tmp;
+    CompressedChunk tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
 
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
-  ChunkResult res;
-  ChunkResult rv = CR_OK;
-  CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
+    ChunkResult res;
+    ChunkResult rv = CR_OK;
+    CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
 
-  short newSize = oldChunk->size / sizeof(Sample);
-  // extend size if approaching end
-  if (((oldChunk->idx) / 8) >= oldChunk->size - EXTRA_SPACE) {
-    newSize += EXTRA_SPACE / sizeof(Sample); // excessive
-  }; // TODO: ensure
+    short newSize = oldChunk->size / sizeof(Sample);
+    // extend size if approaching end
+    if (((oldChunk->idx) / 8) >= oldChunk->size - EXTRA_SPACE) {
+        newSize += EXTRA_SPACE / sizeof(Sample); // excessive
+    };                                           // TODO: ensure
 
-  CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-  Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
-  timestamp_t ts = aCtx->sample.timestamp;
-  int numSamples = oldChunk->count;
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
+    timestamp_t ts = aCtx->sample.timestamp;
+    int numSamples = oldChunk->count;
 
-  // assert(ts >= Compressed_GetFirstTimestamp(oldChunk));
-  // find sample location
-  size_t i = 0;
-  Sample iterSample;
-  for (; i < numSamples; ++i) {
-    res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-    assert(res == CR_OK);
-    if (iterSample.timestamp >= ts) {
-        break;
+    // assert(ts >= Compressed_GetFirstTimestamp(oldChunk));
+    // find sample location
+    size_t i = 0;
+    Sample iterSample;
+    for (; i < numSamples; ++i) {
+        res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        assert(res == CR_OK);
+        if (iterSample.timestamp >= ts) {
+            break;
+        }
+        res = Compressed_AddSample(newChunk, &iterSample);
+        assert(res == CR_OK);
     }
-    res = Compressed_AddSample(newChunk, &iterSample);
-    assert(res == CR_OK);
-  }
 
-  if (ts == iterSample.timestamp) {
-    if (aCtx->type == UPSERT_NOT_ADD) {
-      rv = CR_OCCUPIED;
-      goto clean;
-    } else /*if (type == UPSERT_ADD || type == UPSERT_DEL)*/ {
-      // skip previous sample
-      res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-      if (aCtx->type == UPSERT_DEL) {
-        aCtx->sz = -1;
-      }
-    }    
-  } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
-    rv = CR_DEL_FAIL;
-    goto clean;
-  }
+    if (ts == iterSample.timestamp) {
+        if (aCtx->type == UPSERT_NOT_ADD) {
+            rv = CR_OCCUPIED;
+            goto clean;
+        } else /*if (type == UPSERT_ADD || type == UPSERT_DEL)*/ {
+            // skip previous sample
+            res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+            if (aCtx->type == UPSERT_DEL) {
+                aCtx->sz = -1;
+            }
+        }
+    } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
+        rv = CR_DEL_FAIL;
+        goto clean;
+    }
 
-  if (aCtx->type != UPSERT_DEL) {
-    ChunkResult resSample = Compressed_AddSample(newChunk, &aCtx->sample);
-    assert(resSample == CR_OK);
-    aCtx->sz = 1;
-  }
-  // TODO: split chunk (or provide additional API)
-  
-  if (i != numSamples) { // sample is not last
-    while (res == CR_OK) {
-      res = Compressed_AddSample(newChunk, &iterSample);
-      assert(res == CR_OK);
-      res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-   }
-  }
-  //assert(type != UPSERT_ADD || oldChunk->count + 1 == newChunk->count);
-  //assert(type != UPSERT_DEL || oldChunk->count - 1 == newChunk->count);
-  // trim data
-  int excess = newChunk->size - (newChunk->idx + 8) / 8;
-  assert(excess >= 0);
-  if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
-    newSize = (newChunk->size - excess) > oldChunk->size ? newChunk->size - excess : oldChunk->size;
-    newChunk->data = realloc(newChunk->data, newSize);
-    newChunk->size = newSize;
-  }
-  swapChunks (newChunk, oldChunk);
+    if (aCtx->type != UPSERT_DEL) {
+        ChunkResult resSample = Compressed_AddSample(newChunk, &aCtx->sample);
+        assert(resSample == CR_OK);
+        aCtx->sz = 1;
+    }
+    // TODO: split chunk (or provide additional API)
+
+    if (i != numSamples) { // sample is not last
+        while (res == CR_OK) {
+            res = Compressed_AddSample(newChunk, &iterSample);
+            assert(res == CR_OK);
+            res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        }
+    }
+    // assert(type != UPSERT_ADD || oldChunk->count + 1 == newChunk->count);
+    // assert(type != UPSERT_DEL || oldChunk->count - 1 == newChunk->count);
+    // trim data
+    int excess = newChunk->size - (newChunk->idx + 8) / 8;
+    assert(excess >= 0);
+    if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
+        newSize =
+            (newChunk->size - excess) > oldChunk->size ? newChunk->size - excess : oldChunk->size;
+        newChunk->data = realloc(newChunk->data, newSize);
+        newChunk->size = newSize;
+    }
+    swapChunks(newChunk, oldChunk);
 clean:
-  Compressed_FreeChunkIterator(iter, false);
-  Compressed_FreeChunk(newChunk);
-  return rv;
+    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunk(newChunk);
+    return rv;
 }
 
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
