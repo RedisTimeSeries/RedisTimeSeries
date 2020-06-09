@@ -67,21 +67,23 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
 static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
     Chunk *regChunk = (Chunk *)aCtx->inChunk;
     short numSamples = regChunk->num_samples;
-    // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp, sample->timestamp, sample->value);
+    // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp,
+    // sample->timestamp, sample->value);
     switch (aCtx->type) {
-        case UPSERT_NOT_ADD:    
+        case UPSERT_NOT_ADD:
             return CR_OCCUPIED;
-        case UPSERT_ADD:        
+        case UPSERT_ADD:
             regChunk->samples[idx] = aCtx->sample;
             return CR_OK;
-        case UPSERT_DEL: { 
+        case UPSERT_DEL: {
             memmove(&regChunk->samples[idx],
                     &regChunk->samples[idx + 1],
                     (numSamples - idx) * sizeof(Sample));
             if (numSamples == regChunk->max_samples) {
                 regChunk->num_samples = regChunk->max_samples = numSamples - 1;
                 // TODO: adjust memory
-                // regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
+                // regChunk->samples = realloc(regChunk->samples, regChunk->max_samples *
+                // sizeof(Sample));
             }
             aCtx->sz = -1;
             return CR_OK;
@@ -122,7 +124,7 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
     }
     // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
-        return operateOccupiedSample(aCtx , i);
+        return operateOccupiedSample(aCtx, i);
     } else if (aCtx->type == UPSERT_DEL) {
         return CR_DEL_FAIL;
     }
@@ -132,8 +134,8 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
         aCtx->reindex = true;
     }
 
-    bool shouldSplit = (numSamples == regChunk->max_samples &&
-                        numSamples > aCtx->maxSamples * SPLIT_FACTOR);
+    bool shouldSplit =
+        (numSamples == regChunk->max_samples && numSamples > aCtx->maxSamples * SPLIT_FACTOR);
     if (!shouldSplit || shouldSplit) {
         upsertChunk(regChunk, i, &aCtx->sample);
     } else { // split - unused
