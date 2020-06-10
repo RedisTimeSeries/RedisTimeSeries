@@ -1460,6 +1460,40 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
 
+    def test_del_sample(self):
+         with self.redis() as r:
+            quantity = 10001
+            del_q = 100
+
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'del', chunk_type)
+                for i in range(0, quantity, 1):
+                    r.execute_command('ts.add del', i, i)
+
+                ooo_res = r.execute_command('ts.range del - +')
+                assert quantity == len(ooo_res)
+                assert quantity == self._get_ts_info(r, 'del').total_samples
+
+                for i in range(del_q):
+                    r.execute_command('ts.del del', i * 100)
+                    assert quantity - i - 1 == self._get_ts_info(r, 'del').total_samples
+
+                ooo_res = r.execute_command('ts.range del - +')
+                assert quantity - del_q == len(ooo_res)
+                assert quantity - del_q == self._get_ts_info(r, 'del').total_samples
+                assert quantity - 1 == self._get_ts_info(r, 'del').last_time_stamp
+
+                r.execute_command('ts.del del', quantity - 1)
+
+                ooo_res = r.execute_command('ts.range del - +')
+                
+                #assert quantity - del_q - 1 == len(ooo_res)
+                assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
+                assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
+
+                r.execute_command('DEL del')
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
