@@ -70,8 +70,8 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
     // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp,
     // sample->timestamp, sample->value);
     switch (aCtx->type) {
-        case UPSERT_NOT_ADD:
-            return CR_OCCUPIED;
+        //case UPSERT_NOT_ADD:
+        //    return CR_OCCUPIED;
         case UPSERT_ADD:
             regChunk->samples[idx] = aCtx->sample;
             return CR_OK;
@@ -80,11 +80,9 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
                     &regChunk->samples[idx + 1],
                     (numSamples - idx) * sizeof(Sample));
             if (numSamples == regChunk->max_samples) {
-                regChunk->num_samples = regChunk->max_samples = numSamples - 1;
                 // TODO: adjust memory
-                // regChunk->samples = realloc(regChunk->samples, regChunk->max_samples *
-                // sizeof(Sample));
             }
+            regChunk->num_samples--;
             aCtx->sz = -1;
             return CR_OK;
         }

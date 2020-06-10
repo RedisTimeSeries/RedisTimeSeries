@@ -261,7 +261,7 @@ static void upsertHandleRules(Series *series, AddCtx *aCtx) {
     RedisModule_FreeThreadSafeContext(ctx);
 }
 
-static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, UpsertType type) {
     void *chunkKey = NULL;
     Chunk_t *chunk = series->lastChunk;
     timestamp_t lastChunkFirstTS = series->funcs->GetFirstTimestamp(series->lastChunk);
@@ -284,7 +284,7 @@ static int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double 
         .inChunk = chunk,
         .sample = sample,
         .maxSamples = series->maxSamplesPerChunk,
-        .type = UPSERT_ADD // TODO: on-conflict param
+        .type = type
     };
     // TODO
     ChunkResult rv = series->funcs->UpsertSample(&aCtx);
@@ -316,7 +316,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     // backfilling or update
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
-        return SeriesUpsertSample(series, timestamp, value);
+        return SeriesUpsertSample(series, timestamp, value, UPSERT_ADD);
     }
 
     Sample sample = { .timestamp = timestamp, .value = value };
@@ -422,6 +422,21 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
         return CR_OK;
     }
     return CR_OK;
+}
+
+int SeriesUpdateLastSample(Series *series, Sample *sample) {
+    // iterate in reverse and get first sample
+    int rv = REDISMODULE_OK;
+    SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, true);
+    if (iter.series == NULL) {
+        return REDISMODULE_ERR;
+    }
+
+    if (SeriesIteratorGetNext(&iter, sample) != CR_OK) {
+        rv = REDISMODULE_ERR;
+    }
+    SeriesIteratorClose(&iter);
+    return rv;
 }
 
 CompactionRule *SeriesAddRule(Series *series,

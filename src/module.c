@@ -825,6 +825,43 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return result;
 }
 
+int TSDB_del(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    if (argc != 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    Series *series;
+    RedisModuleKey *key;
+    if (GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE) == FALSE) {
+        return REDISMODULE_OK;
+    }
+
+    timestamp_t ts;
+    if (RedisModule_StringToLongLong(argv[2], (long long int *)&ts) != REDISMODULE_OK) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+    } else if (ts > series->lastTimestamp) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: timestamp was not found");
+    }
+
+    if (SeriesUpsertSample(series, ts, NAN, UPSERT_DEL) != REDISMODULE_OK) {
+        return RedisModule_ReplyWithError(ctx, "TSDB: delete failed");
+    }
+    if (ts == series->lastTimestamp) {
+        Sample sample = {0};
+        if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
+            return RedisModule_ReplyWithError(ctx, "TSDB: failed last sample deletion");
+        }
+        // printf("Changed %ld %f\n", sample.timestamp, sample.value);
+        series->lastTimestamp = sample.timestamp;
+        series->lastValue = sample.value;
+    }
+    RedisModule_CloseKey(key);
+    RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    return REDISMODULE_OK;
+}
+
 int CreateTsKey(RedisModuleCtx *ctx,
                 RedisModuleString *keyName,
                 Label *labels,
@@ -1302,6 +1339,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.createrule", TSDB_createRule);
     RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.add", TSDB_add);
+    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.del", TSDB_del);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.incrby", TSDB_incrby);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);

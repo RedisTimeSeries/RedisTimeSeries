@@ -60,9 +60,8 @@ typedef enum {
 } ChunkResult;
 
 typedef enum {
-  UPSERT_NOT_ADD = 0,
-  UPSERT_ADD = 1,
-  UPSERT_DEL = 2
+  UPSERT_ADD,
+  UPSERT_DEL
 } UpsertType;
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
