@@ -992,6 +992,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
     
+            #issue 414
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,rudy,)')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
+
     def test_mrange_withlabels(self):
         start_ts = 1511885909L
         samples_count = 50

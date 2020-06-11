@@ -81,7 +81,7 @@ int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate
         char* subToken = strtok_r(token, ",", &iter_ptr);
         for (int i=0; i < retQuery->valueListCount; i++) {
             if (subToken == NULL) {
-                continue;
+                return TSDB_ERROR;
             }
             retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, subToken);
             subToken = strtok_r(NULL, ",", &iter_ptr);
