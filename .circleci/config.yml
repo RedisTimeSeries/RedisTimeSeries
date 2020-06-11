@@ -18,19 +18,20 @@ commands:
           command: make build SHOW=1
       - run:
           name: Test
-          command: >-
-            mkdir -p /workspace/tests;
-            make test TEST_REPORT_DIR=/workspace/tests SHOW=1
+          command: |
+            mkdir -p ~/workspace/tests
+            make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
       - run:
           name: Package
-          command: make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=/workspace/packages SHOW=1
+          command: |
+            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
       - persist_to_workspace:
-          root: /workspace
+          root: ~/workspace
           paths:
             - 'packages/release/*.zip'
             - 'packages/branch/*.zip'
       - store_test_results:
-          path: /workspace/tests
+          path: ~/workspace/tests
   deploy:
     parameters:
       from:
@@ -67,8 +68,8 @@ jobs:
       - run:
           name: Set up workspace
           command: |
-            sudo mkdir -p /workspace
-            sudo chown $USER /workspace
+            sudo mkdir -p ~/workspace
+            sudo chown $USER ~/workspace
       - ci_steps:
           platform: macosx
 
@@ -121,11 +122,11 @@ jobs:
       - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - attach_workspace:
-          at: /workspace
+          at: ~/workspace
       - deploy:
-          from: /workspace/packages/<<parameters.package>>
+          from: ~/workspace/packages/<<parameters.package>>
       - store_artifacts:
-          path: /workspace/packages/<<parameters.package>>
+          path: ~/workspace/packages/<<parameters.package>>
 
   run_automation:
     parameters:
@@ -192,7 +193,8 @@ workflows:
       - build:
           <<: *on-any-branch
       - build-macos:
-          <<: *on-master-and-version-tags
+          #@@ <<: *on-master-and-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
