@@ -848,13 +848,10 @@ int TSDB_del(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: delete failed");
     }
     if (ts == series->lastTimestamp) {
-        Sample sample = {0};
+        Sample sample = { 0 };
         if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
             return RedisModule_ReplyWithError(ctx, "TSDB: failed last sample deletion");
         }
-        // printf("Changed %ld %f\n", sample.timestamp, sample.value);
-        series->lastTimestamp = sample.timestamp;
-        series->lastValue = sample.value;
     }
     RedisModule_CloseKey(key);
     RedisModule_ReplicateVerbatim(ctx);
