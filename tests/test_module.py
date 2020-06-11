@@ -1472,6 +1472,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     r.execute_command('ts.add del', i, i)
 
                 ooo_res = r.execute_command('ts.range del - +')
+                assert [10000L, '10000'] == r.execute_command('ts.get del')
                 assert quantity == len(ooo_res)
                 assert quantity == self._get_ts_info(r, 'del').total_samples
 
@@ -1483,6 +1484,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity - del_q == len(ooo_res)
                 assert quantity - del_q == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 1 == self._get_ts_info(r, 'del').last_time_stamp
+                assert [10000L, '10000'] == r.execute_command('ts.get del')
 
                 r.execute_command('ts.del del', quantity - 1)
 
@@ -1491,6 +1493,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 #assert quantity - del_q - 1 == len(ooo_res)
                 assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
+                assert [9999L, '9999'] == r.execute_command('ts.get del')
+
 
                 r.execute_command('DEL del')
 

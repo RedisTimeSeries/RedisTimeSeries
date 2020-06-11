@@ -70,8 +70,6 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
     // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp,
     // sample->timestamp, sample->value);
     switch (aCtx->type) {
-        //case UPSERT_NOT_ADD:
-        //    return CR_OCCUPIED;
         case UPSERT_ADD:
             regChunk->samples[idx] = aCtx->sample;
             return CR_OK;

@@ -279,13 +279,11 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         }
     }
     Sample sample = { .timestamp = timestamp, .value = value };
-    AddCtx aCtx = {
-        .sz = 0,
-        .inChunk = chunk,
-        .sample = sample,
-        .maxSamples = series->maxSamplesPerChunk,
-        .type = type
-    };
+    AddCtx aCtx = { .sz = 0,
+                    .inChunk = chunk,
+                    .sample = sample,
+                    .maxSamples = series->maxSamplesPerChunk,
+                    .type = type };
     // TODO
     ChunkResult rv = series->funcs->UpsertSample(&aCtx);
     if (rv == REDISMODULE_OK) {
@@ -426,17 +424,20 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 
 int SeriesUpdateLastSample(Series *series, Sample *sample) {
     // iterate in reverse and get first sample
-    int rv = REDISMODULE_OK;
     SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, true);
     if (iter.series == NULL) {
         return REDISMODULE_ERR;
     }
 
     if (SeriesIteratorGetNext(&iter, sample) != CR_OK) {
-        rv = REDISMODULE_ERR;
+        SeriesIteratorClose(&iter);
+        return REDISMODULE_ERR;
     }
+
+    series->lastTimestamp = sample->timestamp;
+    series->lastValue = sample->value;
     SeriesIteratorClose(&iter);
-    return rv;
+    return REDISMODULE_OK;
 }
 
 CompactionRule *SeriesAddRule(Series *series,
