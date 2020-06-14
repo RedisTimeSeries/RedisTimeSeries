@@ -28,13 +28,15 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
 
     // create chunk and copy samples
     Chunk *newChunk = Uncompressed_NewChunk(split);
-    memcpy(newChunk->samples, curChunk->samples + curNumSamples, split * sizeof(Sample));
-    newChunk->num_samples = split;
-    newChunk->base_timestamp = newChunk->samples[0].timestamp;
+    for (size_t i = 0; i < split; ++i) {
+        Sample *sample = &curChunk->samples[curNumSamples + i];
+        ChunkResult res = Uncompressed_AddSample(newChunk, sample);
+        assert(res == CR_OK);
+    }
 
     // update current chunk
     curChunk->max_samples = curChunk->num_samples = curNumSamples;
-    realloc(curChunk->samples, curNumSamples * sizeof(*curChunk->samples));
+    curChunk->samples = realloc(curChunk->samples, curNumSamples * sizeof(Sample));
 
     return newChunk;
 }
