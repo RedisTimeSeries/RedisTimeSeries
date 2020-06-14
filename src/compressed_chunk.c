@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ * Copyright 2018-2020 Redis Labs Ltd. and Contributors
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
@@ -14,6 +14,7 @@
 #include <stdlib.h> // malloc
 #include "rmutil/alloc.h"
 
+#define BIT 8
 #define EXTRA_SPACE 1024
 
 /*********************
@@ -41,6 +42,46 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
     *b = tmp;
 }
 
+static void trimChunk(CompressedChunk *chunk) {
+    size_t excess = chunk->size - (chunk->idx + BIT) / BIT;
+    assert(excess >= 0);
+    if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
+        size_t newSize = chunk->size - excess;
+        chunk->data = realloc(chunk->data, newSize);
+        chunk->size = newSize;
+    }
+}
+
+Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
+    CompressedChunk *curChunk = chunk;
+    size_t split = curChunk->count / 2;
+    size_t curNumSamples = curChunk->count - split;
+
+    // add samples in new chunks
+    size_t i = 0;
+    Sample sample;
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
+    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
+    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
+    for (; i < curNumSamples; ++i) {
+        Uncompressed_ChunkIteratorGetNext(iter, &sample);
+        Uncompressed_AddSample(newChunk1, &sample);
+    }
+    for (; i < curChunk->count; ++i) {
+        Uncompressed_ChunkIteratorGetNext(iter, &sample);
+        Uncompressed_AddSample(newChunk2, &sample);
+    }
+
+    trimChunk(newChunk1);
+    trimChunk(newChunk2);
+    swapChunks(curChunk, newChunk1);
+
+    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunk(newChunk1);
+
+    return newChunk2;
+}
+
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     ChunkResult res;
     ChunkResult rv = CR_OK;
@@ -57,8 +98,6 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     timestamp_t ts = aCtx->sample.timestamp;
     int numSamples = oldChunk->count;
 
-    // assert(ts >= Compressed_GetFirstTimestamp(oldChunk));
-    // find sample location
     size_t i = 0;
     Sample iterSample;
     for (; i < numSamples; ++i) {
@@ -95,8 +134,6 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
             res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         }
     }
-    // assert(type != UPSERT_ADD || oldChunk->count + 1 == newChunk->count);
-    // assert(type != UPSERT_DEL || oldChunk->count - 1 == newChunk->count);
     // trim data
     int excess = newChunk->size - (newChunk->idx + 8) / 8;
     assert(excess >= 0);

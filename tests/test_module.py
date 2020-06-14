@@ -1443,8 +1443,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
                 ooo_res    = r.execute_command('ts.range ooo - +')
                 no_ooo_res = r.execute_command('ts.range no_ooo - +')
+                assert len(ooo_res) == len(no_ooo_res)
                 for i in range(len(ooo_res)):
-                    assert ooo_res == no_ooo_res
+                    assert ooo_res[i] == no_ooo_res[i]
                 r.execute_command('DEL no_ooo')
                 r.execute_command('DEL ooo')
 

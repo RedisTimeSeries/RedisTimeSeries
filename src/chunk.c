@@ -21,6 +21,24 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
+    Chunk *curChunk = (Chunk *)chunk;
+    size_t split = curChunk->num_samples / 2;
+    size_t curNumSamples = curChunk->num_samples - split;
+
+    // create chunk and copy samples
+    Chunk *newChunk = Uncompressed_NewChunk(split);
+    memcpy(newChunk->samples, curChunk->samples + curNumSamples, split * sizeof(Sample));
+    newChunk->num_samples = split;
+    newChunk->base_timestamp = newChunk->samples[0].timestamp;
+
+    // update current chunk
+    curChunk->max_samples = curChunk->num_samples = curNumSamples;
+    realloc(curChunk->samples, curNumSamples * sizeof(*curChunk->samples));
+
+    return newChunk;
+}
+
 static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->max_samples;
 }

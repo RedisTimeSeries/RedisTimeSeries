@@ -27,6 +27,7 @@ typedef struct ChunkIterator {
 
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
+Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk);
 
 // 0 for failure, 1 for success

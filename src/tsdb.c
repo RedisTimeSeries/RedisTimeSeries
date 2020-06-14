@@ -11,6 +11,7 @@
 #include "indexer.h"
 #include "module.h"
 
+#include <math.h>
 #include "rmutil/strings.h"
 
 typedef enum
