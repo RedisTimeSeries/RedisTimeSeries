@@ -1420,11 +1420,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_ooo(self):
          with self.redis() as r:
-            quantity = 10001
+            quantity = 50001
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
-                r.execute_command('ts.create', 'no_ooo', chunk_type)
-                r.execute_command('ts.create', 'ooo', chunk_type, 'OUT_OF_ORDER')
+                #r.execute_command('ts.create', 'no_ooo', chunk_type)
+                #r.execute_command('ts.create', 'ooo', chunk_type)
+                r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100)
+                r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100)
                 for i in range(0, quantity, 5):
                     r.execute_command('ts.add no_ooo', i, i)
                 for i in range(0, quantity, 10):

@@ -64,12 +64,16 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
     for (; i < curNumSamples; ++i) {
-        Uncompressed_ChunkIteratorGetNext(iter, &sample);
-        Uncompressed_AddSample(newChunk1, &sample);
+        Compressed_ChunkIteratorGetNext(iter, &sample);
+        if (Compressed_AddSample(newChunk1, &sample) != CR_OK) {
+            goto error;
+        }
     }
     for (; i < curChunk->count; ++i) {
-        Uncompressed_ChunkIteratorGetNext(iter, &sample);
-        Uncompressed_AddSample(newChunk2, &sample);
+        Compressed_ChunkIteratorGetNext(iter, &sample);
+        if (Compressed_AddSample(newChunk2, &sample) != CR_OK) {
+            goto error;
+        }
     }
 
     trimChunk(newChunk1);
@@ -80,6 +84,12 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
+
+error:
+    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunk(newChunk1);
+    Compressed_FreeChunk(newChunk2);
+    return NULL;
 }
 
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
@@ -89,7 +99,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
 
     short newSize = oldChunk->size / sizeof(Sample);
     // extend size if approaching end
-    if (((oldChunk->idx) / 8) >= oldChunk->size - EXTRA_SPACE) {
+    if (((oldChunk->idx) / 8) + EXTRA_SPACE >= oldChunk->size) {
         newSize += EXTRA_SPACE / sizeof(Sample); // excessive
     };                                           // TODO: ensure
 

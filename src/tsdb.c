@@ -228,7 +228,7 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-static void upsertHandleRules(Series *series, AddCtx *aCtx) {
+static void upsertRules(Series *series, AddCtx *aCtx) {
     CompactionRule *rule = series->rules;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
@@ -264,8 +264,9 @@ static void upsertHandleRules(Series *series, AddCtx *aCtx) {
 
 int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, UpsertType type) {
     void *chunkKey = NULL;
+    ChunkFuncs *funcs = series->funcs;
     Chunk_t *chunk = series->lastChunk;
-    timestamp_t lastChunkFirstTS = series->funcs->GetFirstTimestamp(series->lastChunk);
+    timestamp_t lastChunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 
     if (timestamp < lastChunkFirstTS) {
         // Upsert in an older chunk
@@ -279,14 +280,31 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
             return REDISMODULE_ERR;
         }
     }
+
+    // Split chunks
+    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+        Chunk_t *newChunk = funcs->SplitChunk(chunk);
+        if (newChunk == NULL) {
+            return REDISMODULE_ERR;
+        }
+        uint64_t newChunkFirstTimestamp = funcs->GetFirstTimestamp(newChunk);
+        dictOperator(series->chunks, newChunk, newChunkFirstTimestamp, DICT_OP_SET);
+        if (timestamp >= newChunkFirstTimestamp) {
+            chunk = newChunk;
+        }
+        if (!chunkKey) { // split of latest chunk
+            series->lastChunk = newChunk;
+        }
+    }
+
     Sample sample = { .timestamp = timestamp, .value = value };
     AddCtx aCtx = { .sz = 0,
                     .inChunk = chunk,
                     .sample = sample,
                     .maxSamples = series->maxSamplesPerChunk,
                     .type = type };
-    // TODO
-    ChunkResult rv = series->funcs->UpsertSample(&aCtx);
+
+    ChunkResult rv = funcs->UpsertSample(&aCtx);
     if (rv == REDISMODULE_OK) {
         series->totalSamples += aCtx.sz;
 
@@ -299,7 +317,8 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
             }
             dictOperator(series->chunks, chunk, timestamp, DICT_OP_SET);
         }
-        upsertHandleRules(series, &aCtx);
+
+        upsertRules(series, &aCtx);
     }
     return rv;
 }
@@ -328,7 +347,6 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
         ret = series->funcs->AddSample(newChunk, &sample);
-        assert(ret == CR_OK);
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
