@@ -43,6 +43,7 @@ typedef struct AddCtx {
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void(*FreeChunk)(Chunk_t *chunk);
+    Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult(*UpsertSample)(AddCtx *aCtx);
