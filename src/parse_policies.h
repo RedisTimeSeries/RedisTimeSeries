@@ -7,6 +7,7 @@
 #define PARSE_POLICIES_H
 
 #include <sys/types.h>
+#include <stdint.h>
 
 typedef struct SimpleCompactionRule {
     uint64_t timeBucket;

@@ -18,19 +18,20 @@ commands:
           command: make build SHOW=1
       - run:
           name: Test
-          command: >-
-            mkdir -p /workspace/tests;
-            make test TEST_REPORT_DIR=/workspace/tests SHOW=1
+          command: |
+            mkdir -p ~/workspace/tests
+            make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
       - run:
           name: Package
-          command: make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=/workspace/packages SHOW=1
+          command: |
+            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
       - persist_to_workspace:
-          root: /workspace
+          root: ~/workspace
           paths:
             - 'packages/release/*.zip'
             - 'packages/branch/*.zip'
       - store_test_results:
-          path: /workspace/tests
+          path: ~/workspace/tests
   deploy:
     parameters:
       from:
@@ -42,6 +43,17 @@ commands:
             aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
 jobs:
+  lint:
+    docker:
+      - image: redislabsmodules/llvm-toolset:latest
+    steps:
+      - checkout
+      - run:
+          name: Checkout submodules
+          command: git submodule update --init --recursive
+      - run:
+          name: lint
+          command: cd src && make lint
   build:
     docker:
       - image: redisfab/rmbuilder:6.0.1-x64-buster
@@ -51,20 +63,20 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 11.1.0
+      xcode: 11.3.0
     steps:
       - run:
           name: Set up workspace
           command: |
-            sudo mkdir -p /workspace
-            sudo chown $USER /workspace
+            sudo mkdir -p ~/workspace
+            sudo chown $USER ~/workspace
       - ci_steps:
           platform: macosx
 
   build-multiarch-docker:
     machine:
       enabled: true
-      image: ubuntu-1604:201903-01
+      image: cimg/base:2020.01
     steps:
       - checkout
       - run:
@@ -110,11 +122,11 @@ jobs:
       - image: redisfab/rmbuilder:6.0.1-x64-buster
     steps:
       - attach_workspace:
-          at: /workspace
+          at: ~/workspace
       - deploy:
-          from: /workspace/packages/<<parameters.package>>
+          from: ~/workspace/packages/<<parameters.package>>
       - store_artifacts:
-          path: /workspace/packages/<<parameters.package>>
+          path: ~/workspace/packages/<<parameters.package>>
 
   run_automation:
     parameters:
@@ -137,53 +149,67 @@ jobs:
           name: Run QA Automation
           command: MODULE_VERSION=<<parameters.module_version>> VERBOSE=1 ./tests/qa/run
 
+on-any-branch: &on-any-branch
+  filters:
+    branches:
+      only: /.*/
+    tags:
+      only: /.*/
+
+never: &never
+  filters:
+    branches:
+      ignore: /.*/
+    tags:
+      ignore: /.*/
+
+on-master: &on-master
+  filters:
+    branches:
+      only: master
+
+on-version-tags: &on-version-tags
+  filters:
+    branches:
+      ignore: /.*/
+    tags:
+      only: /^v[0-9].*/
+
+on-master-and-version-tags: &on-master-and-version-tags
+  filters:
+    branches:
+      only:
+        - master
+    tags:
+      only: /^v[0-9].*/
+
+
 workflows:
   version: 2
   build_and_package:
     jobs:
+      - lint:
+          <<: *on-any-branch
       - build:
-          filters:
-            tags:
-              only: /.*/
+          <<: *on-any-branch
       - build-macos:
-          filters:
-            branches:
-              # only: /.*/
-              ignore: /.*/
-            tags:
-              only: /^v[0-9].*/
+          <<: *on-master-and-version-tags
       - build-multiarch-docker:
-          filters:
-            branches:
-              # only: /.*/
-              ignore: /.*/
-            tags:
-              # only: /.*/
-              only: /^v[0-9].*/
+          <<: *on-version-tags
       - coverage:
-          filters:
-            branches:
-              only: /.*/
-            tags:
-              only: /.*/
+          <<: *on-any-branch
       - deploy_package:
           name: deploy_branch
           package: branch
           requires:
             - build
-          filters:
-            branches:
-              only: master
+          <<: *on-master
       - deploy_package:
           name: deploy_release
           package: release
           requires:
             - build
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: '/^v[0-9].*/'
+          <<: *on-version-tags
       - run_automation:
           module_version: $CIRCLE_BRANCH
           requires:
@@ -197,9 +223,6 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * *"
-          filters:
-             branches:
-               only:
-                 - master
+          <<: *on-master
     jobs:
       - build-macos

@@ -1,28 +1,29 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
-#include <string.h>
-#include <stdio.h>
-#include <rmutil/alloc.h>
-#include "consts.h"
-#include "compaction.h"
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #include "parse_policies.h"
 
-static const timestamp_t lookup_intervals[] = {
-   ['m'] = 1,
-   ['s'] = 1000,
-   ['M'] = 1000*60,
-   ['h'] = 1000*60*60,
-   ['d'] = 1000*60*60*24
-};
+#include "compaction.h"
+#include "consts.h"
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out){
+#include <stdio.h>
+#include <string.h>
+#include "rmutil/util.h"
+#include <rmutil/alloc.h>
+
+static const timestamp_t lookup_intervals[] = { ['m'] = 1,
+                                                ['s'] = 1000,
+                                                ['M'] = 1000 * 60,
+                                                ['h'] = 1000 * 60 * 60,
+                                                ['d'] = 1000 * 60 * 60 * 24 };
+
+static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
-    if (sscanf(timeStr, "%lu%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
+    if (sscanf(timeStr, "%llu%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
         return FALSE;
     }
     timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
@@ -39,8 +40,7 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char agg_type[20];
 
     token = strtok_r(policy, ":", &token_iter_ptr);
-    for (int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         if (token == NULL) {
             return FALSE;
         }
@@ -59,7 +59,7 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
             return FALSE;
         }
 
-        token = strtok_r (NULL, ":", &token_iter_ptr);
+        token = strtok_r(NULL, ":", &token_iter_ptr);
     }
     int agg_type_index = StringAggTypeToEnum(agg_type);
     if (agg_type_index == TS_AGG_INVALID) {
@@ -82,8 +82,9 @@ static size_t count_char_in_str(const char *string, size_t len, char lookup) {
 
 // parse compaction policies in the following format: "max:1m;min:10s;avg:2h;avg:3d"
 // the format is AGGREGATION_FUNCTION:\d[s|m|h|d];
-int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **parsed_rules_out,
-            uint64_t *rules_count) {
+int ParseCompactionPolicy(const char *policy_string,
+                          SimpleCompactionRule **parsed_rules_out,
+                          uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
     size_t len = strlen(policy_string);
@@ -96,16 +97,15 @@ int ParseCompactionPolicy(const char *policy_string, SimpleCompactionRule **pars
     *parsed_rules_out = malloc(sizeof(SimpleCompactionRule) * policies_count);
     SimpleCompactionRule *parsed_rules_runner = *parsed_rules_out;
 
-    token = strtok_r (rest, ";", &token_iter_ptr);
+    token = strtok_r(rest, ";", &token_iter_ptr);
     int success = TRUE;
-    while (token != NULL)
-    {
+    while (token != NULL) {
         int result = parse_interval_policy(token, parsed_rules_runner);
-        if (result == FALSE ) {
+        if (result == FALSE) {
             success = FALSE;
             break;
         }
-        token = strtok_r (NULL, ";", &token_iter_ptr);
+        token = strtok_r(NULL, ";", &token_iter_ptr);
         parsed_rules_runner++;
         *rules_count = *rules_count + 1;
     }

@@ -1,10 +1,10 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #include "chunk.h"
-#include <string.h>
+
 #include "rmutil/alloc.h"
 
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount) {
@@ -49,7 +49,7 @@ timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
 
 ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     Chunk *regChunk = (Chunk *)chunk;
-    if (IsChunkFull(regChunk)){
+    if (IsChunkFull(regChunk)) {
         return CR_END;
     }
 
@@ -67,9 +67,9 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    if (rev == false) {             // iterate from first to last
+    if (rev == false) { // iterate from first to last
         iter->currentIndex = 0;
-    } else {                        // iterate from last to first
+    } else { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
     }
     return (ChunkIter_t *)iter;
