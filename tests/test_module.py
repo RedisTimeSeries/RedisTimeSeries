@@ -1440,14 +1440,18 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 for i in range(5, quantity, 10): #limit
                     r.execute_command('ts.add ooo', i, i)
 
-                #with pytest.raises(redis.ResponseError) as excinfo:
-                #    assert r.execute_command('TS.ADD no_ooo 905 905')
-
                 ooo_res    = r.execute_command('ts.range ooo - +')
                 no_ooo_res = r.execute_command('ts.range no_ooo - +')
                 assert len(ooo_res) == len(no_ooo_res)
                 for i in range(len(ooo_res)):
                     assert ooo_res[i] == no_ooo_res[i]
+
+                ooo_res = r.execute_command('ts.range ooo 1000 1000')
+                assert ooo_res[0] == [1000L, '1000']
+                r.execute_command('ts.add ooo', 1000, 42)
+                ooo_res = r.execute_command('ts.range ooo 1000 1000')
+                assert ooo_res[0] == [1000L, '42']
+
                 r.execute_command('DEL no_ooo')
                 r.execute_command('DEL ooo')
 
