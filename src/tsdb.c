@@ -33,7 +33,7 @@ static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp 
         case DICT_OP_DEL:
             return RedisModule_DictDelC(d, &rax_key, sizeof(rax_key), NULL);
     }
-    assert(0);
+    chunk = NULL;
     return REDISMODULE_OK; // silence compiler
 }
 
@@ -263,6 +263,7 @@ static void upsertRules(Series *series, AddCtx *aCtx) {
 }
 
 int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, UpsertType type) {
+    bool latestChunk = true;
     void *chunkKey = NULL;
     ChunkFuncs *funcs = series->funcs;
     Chunk_t *chunk = series->lastChunk;
@@ -270,6 +271,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
 
     if (timestamp < lastChunkFirstTS) {
         // Upsert in an older chunk
+        latestChunk = false;
         timestamp_t rax_key;
         seriesEncodeTimestamp(&rax_key, timestamp);
         RedisModuleDictIter *dictIter =
@@ -292,17 +294,20 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         if (timestamp >= newChunkFirstTimestamp) {
             chunk = newChunk;
         }
-        if (!chunkKey) { // split of latest chunk
+        if (latestChunk) { // split of latest chunk
             series->lastChunk = newChunk;
         }
     }
 
     Sample sample = { .timestamp = timestamp, .value = value };
-    AddCtx aCtx = { .sz = 0,
-                    .inChunk = chunk,
-                    .sample = sample,
-                    .maxSamples = series->maxSamplesPerChunk,
-                    .type = type };
+    AddCtx aCtx = {
+        .sz = 0,
+        .type = type,
+        .inChunk = chunk,
+        .sample = sample,
+        .latestChunk = latestChunk,
+        .maxSamples = series->maxSamplesPerChunk,
+    };
 
     ChunkResult rv = funcs->UpsertSample(&aCtx);
     if (rv == REDISMODULE_OK) {
@@ -310,7 +315,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
 
         // reindex if first timestamp changed
         if (aCtx.reindex == true) {
-            if (chunkKey) {
+            if (!latestChunk) {
                 RedisModule_DictDelC(series->chunks, chunkKey, sizeof(timestamp_t), NULL);
             } else {
                 dictOperator(series->chunks, NULL, lastChunkFirstTS, DICT_OP_DEL);
