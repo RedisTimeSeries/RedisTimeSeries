@@ -116,13 +116,27 @@ TS.MADD key timestamp value [key timestamp value ...]
 2) (integer) 1548149183000
 127.0.0.1:6379>TS.MADD temperature:2:32 1548149181000 45 cpu:2:32 1548149180000 30
 1) (integer) 1548149181000
-2) (error) TSDB: timestamp is too old
+2) (integer) 1548149180000
 ```
 
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
 The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
+
+### TS.DEL
+
+Delete a sample from a series
+
+```sql
+TS.ADD key timestamp
+```
+
+* timestamp - UNIX timestamp of the sample.
+
+#### Complexity
+
+The complexity of `TS.DEL` is O(chunk_size).
 
 ### TS.INCRBY/TS.DECRBY
 
