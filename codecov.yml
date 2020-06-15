@@ -1,0 +1,11 @@
+coverage:
+  status:
+    project:
+      default:
+        base: auto 
+        paths: 
+          - "src"
+        if_not_found: success
+        if_ci_failed: error
+        informational: True
+        only_pulls: false 
