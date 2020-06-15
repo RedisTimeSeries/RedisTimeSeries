@@ -284,7 +284,8 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR &&
+        type != UPSERT_DEL) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;

@@ -1504,6 +1504,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [9999L, '9999'] == r.execute_command('ts.get del')
 
+                with pytest.raises(redis.ResponseError) as excinfo:
+                    assert r.execute_command('ts.del del', 100)
 
                 r.execute_command('DEL del')
 
