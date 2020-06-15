@@ -54,7 +54,7 @@ static void extendChunk(CompressedChunk *chunk) {
 }
 
 static void trimChunk(CompressedChunk *chunk) {
-    size_t excess = chunk->size - (chunk->idx + BIT) / BIT;
+    int excess = chunk->size - (chunk->idx + BIT) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
@@ -156,13 +156,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
 
     // trim data
     if (!aCtx->latestChunk) {
-        int excess = newChunk->size - (newChunk->idx + 8) / 8;
-        assert(excess >= 0);
-        if (excess > 0) {
-            newSize = newChunk->size - excess;
-            newChunk->data = realloc(newChunk->data, newSize);
-            newChunk->size = newSize;
-        }
+        trimChunk(newChunk);
     }
     swapChunks(newChunk, oldChunk);
 clean:
