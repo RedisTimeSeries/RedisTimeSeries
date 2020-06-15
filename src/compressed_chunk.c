@@ -17,6 +17,12 @@
 #define BIT 8
 #define EXTRA_SPACE 1024
 
+#define CHECK_EXTEND_CHUNK(res, chunk, sample)                                                     \
+    if (res != CR_OK) {                                                                            \
+        extendChunk(chunk);                                                                        \
+        Compressed_AddSample(chunk, &sample);                                                      \
+    }
+
 /*********************
  *  Chunk functions  *
  *********************/
@@ -42,10 +48,17 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
     *b = tmp;
 }
 
+static void extendChunk(CompressedChunk *chunk) {
+    chunk->size += 64;
+    chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
+}
+
 static void trimChunk(CompressedChunk *chunk) {
     size_t excess = chunk->size - (chunk->idx + BIT) / BIT;
-    assert(excess >= 0);
-    if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
+
+    assert(excess >= 0); // else we have written beyond allocated memory
+
+    if (excess > 0) {
         size_t newSize = chunk->size - excess;
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
@@ -93,15 +106,15 @@ error:
 }
 
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
-    ChunkResult res;
     ChunkResult rv = CR_OK;
+    ChunkResult res = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
 
     short newSize = oldChunk->size / sizeof(Sample);
     // extend size if approaching end
-    if (((oldChunk->idx) / 8) + EXTRA_SPACE >= oldChunk->size) {
-        newSize += EXTRA_SPACE / sizeof(Sample); // excessive
-    };                                           // TODO: ensure
+    if (((oldChunk->idx) / BIT) + EXTRA_SPACE >= oldChunk->size) {
+        newSize += EXTRA_SPACE / sizeof(Sample);
+    };
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
@@ -112,19 +125,16 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     Sample iterSample;
     for (; i < numSamples; ++i) {
         res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        assert(res == CR_OK);
         if (iterSample.timestamp >= ts) {
             break;
         }
         res = Compressed_AddSample(newChunk, &iterSample);
-        assert(res == CR_OK);
+        CHECK_EXTEND_CHUNK(res, newChunk, iterSample);
     }
 
     if (ts == iterSample.timestamp) {
         res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        if (aCtx->type == UPSERT_DEL) {
-            aCtx->sz = -1;
-        }
+        aCtx->sz = -1;                     // we skipped a sample
     } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
         rv = CR_DEL_FAIL;
         goto clean;
@@ -132,26 +142,27 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
 
     if (aCtx->type != UPSERT_DEL) {
         ChunkResult resSample = Compressed_AddSample(newChunk, &aCtx->sample);
-        assert(resSample == CR_OK);
-        aCtx->sz = 1;
+        CHECK_EXTEND_CHUNK(resSample, newChunk, aCtx->sample);
+        aCtx->sz += 1;
     }
-    // TODO: split chunk (or provide additional API)
 
     if (i != numSamples) { // sample is not last
         while (res == CR_OK) {
             res = Compressed_AddSample(newChunk, &iterSample);
-            assert(res == CR_OK);
+            CHECK_EXTEND_CHUNK(res, newChunk, iterSample);
             res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         }
     }
+
     // trim data
-    int excess = newChunk->size - (newChunk->idx + 8) / 8;
-    assert(excess >= 0);
-    if (excess > 0) { // && (newChunk->size - excess) > oldChunk->size
-        newSize =
-            (newChunk->size - excess) > oldChunk->size ? newChunk->size - excess : oldChunk->size;
-        newChunk->data = realloc(newChunk->data, newSize);
-        newChunk->size = newSize;
+    if (!aCtx->latestChunk) {
+        int excess = newChunk->size - (newChunk->idx + 8) / 8;
+        assert(excess >= 0);
+        if (excess > 0) {
+            newSize = newChunk->size - excess;
+            newChunk->data = realloc(newChunk->data, newSize);
+            newChunk->size = newSize;
+        }
     }
     swapChunks(newChunk, oldChunk);
 clean:

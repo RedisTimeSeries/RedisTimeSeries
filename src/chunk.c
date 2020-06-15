@@ -30,8 +30,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *newChunk = Uncompressed_NewChunk(split);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
-        ChunkResult res = Uncompressed_AddSample(newChunk, sample);
-        assert(res == CR_OK);
+        Uncompressed_AddSample(newChunk, sample);
     }
 
     // update current chunk
@@ -108,12 +107,6 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
     return CR_ERR;
 }
 
-static void copyChunk(Chunk *dest, Chunk *src, size_t srcIdx, short qty) {
-    memcpy(dest->samples, src->samples + srcIdx, qty);
-    dest->base_timestamp = dest->samples[0].timestamp;
-    dest->num_samples = qty;
-}
-
 static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
     if (chunk->num_samples == chunk->max_samples) {
         chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
@@ -150,24 +143,7 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
         aCtx->reindex = true;
     }
 
-    bool shouldSplit =
-        (numSamples == regChunk->max_samples && numSamples > aCtx->maxSamples * SPLIT_FACTOR);
-    if (!shouldSplit || shouldSplit) {
-        upsertChunk(regChunk, i, &aCtx->sample);
-    } else { // split - unused
-        short split = numSamples / 2;
-        Chunk *newChunk = Uncompressed_NewChunk(split + SPLIT_EXTRA);
-        copyChunk(newChunk, regChunk, split, numSamples - split);
-        regChunk->max_samples = regChunk->num_samples = split;
-        if (i < split) {
-            upsertChunk(regChunk, i, &aCtx->sample);
-        } else {
-            upsertChunk(newChunk, i - split, &aCtx->sample);
-            regChunk->max_samples += SPLIT_EXTRA;
-            regChunk->samples = realloc(regChunk->samples, regChunk->max_samples * sizeof(Sample));
-        }
-        aCtx->outChunk_1 = newChunk;
-    }
+    upsertChunk(regChunk, i, &aCtx->sample);
     aCtx->sz = 1;
     return CR_OK;
 }
