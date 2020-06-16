@@ -112,6 +112,7 @@ After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggregation rule.
 
 ### With `redis-cli`
+
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature:3:11 RETENTION 6000 LABELS sensor_id 2 area_id 32
@@ -142,6 +143,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
 
 ## Tests
+
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
 ```
 $ cd src
