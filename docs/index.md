@@ -46,7 +46,7 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 
 First download the pre-compiled version from [RedisLabs download center](https://redislabs.com/download-center/modules/).
 
-Next, run Redis with RediSearch: 
+Next, run Redis with RedisTimeSeries: 
 
 ```
 $ redis-server --loadmodule /path/to/module/redistimeseries.so
