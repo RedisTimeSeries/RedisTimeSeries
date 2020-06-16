@@ -42,7 +42,7 @@ To quickly try out RedisTimeSeries, launch an instance using docker:
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
 
-## Download and running binaries
+### Download and running binaries
 
 First download the pre-compiled version from [RedisLabs download center](https://redislabs.com/download-center/modules/).
 
