@@ -40,10 +40,6 @@ static int ReplySeriesRange(RedisModuleCtx *ctx,
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 
-static u_int64_t max(u_int64_t a, u_int64_t b) {
-    return a > b ? a : b;
-}
-
 static int parseLabelsFromArgs(RedisModuleString **argv,
                                int argc,
                                size_t *label_count,

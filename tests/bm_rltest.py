@@ -21,7 +21,7 @@ def testBM(env):
         pl.execute()
     pl.execute()
     print time.time() - start_time
-    print env.execute_command('ts.info', name, 'OUT_OF_ORDER')
+    print env.execute_command('ts.info', name)
 
     print "out-of-order"
     name_ooo = "rts_ooo"

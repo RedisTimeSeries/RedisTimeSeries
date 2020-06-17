@@ -315,6 +315,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         series->totalSamples += aCtx.sz;
 
         // reindex if first timestamp changed
+        // TODO: remove empty chunks on delete
         if (aCtx.reindex == true) {
             if (!latestChunk) {
                 RedisModule_DictDelC(series->chunks, chunkKey, sizeof(timestamp_t), NULL);
