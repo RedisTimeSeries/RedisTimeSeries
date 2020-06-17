@@ -140,7 +140,6 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
 
     if (i == 0) {
         regChunk->base_timestamp = ts;
-        aCtx->reindex = true;
     }
 
     upsertChunk(regChunk, i, &aCtx->sample);

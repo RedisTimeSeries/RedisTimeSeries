@@ -234,8 +234,9 @@ static void upsertRules(Series *series, AddCtx *aCtx) {
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
         // upsert in latest timebucket
-        rule->backfilled = true;
         if (aCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
+            rule->backfilled = true;
+            rule = rule->nextRule;
             continue;
         }
         timestamp_t start = CalcWindowStart(aCtx->sample.timestamp, rule->timeBucket);
