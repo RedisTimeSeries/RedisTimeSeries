@@ -128,7 +128,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             else:
                 assert actual_result
 
-    def _insert_agg_data(self, redis, key, agg_type, chunk_type=""):
+    def _insert_agg_data(self, redis, key, agg_type, chunk_type="", fromTS=10, toTS=50):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
         assert redis.execute_command('TS.CREATE', key, chunk_type)
@@ -136,10 +136,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
-        for i in range(10, 50):
+        for i in range(fromTS, toTS):
             assert redis.execute_command('TS.ADD', key, i, i // 10 * 100 + values[i % 10])
         # close last bucket
-        assert redis.execute_command('TS.ADD', key, 100, 0)
+        assert redis.execute_command('TS.ADD', key, toTS + 1000, 0)
 
         return agg_key
 
@@ -1466,19 +1466,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('ts.add ooo', 100, 100)
 
-
-    def test_ooo_reindex_chunk(self):
-         with self.redis() as r:
-            type_list = ['', 'uncompressed']
-            for chunk_type in type_list:
-                r.execute_command('ts.create', 'ooo', chunk_type)
-                for i in range(100, 150):
-                    r.execute_command('ts.add ooo', i * 10, i)
-                r.execute_command('ts.add ooo', 0, 0)
-                res = r.execute_command('ts.range ooo - +')
-                assert res[0] == [0L, '0']
-                r.execute_command('DEL', 'ooo')
-
     def test_backfill_downsampling(self):
         with self.redis() as r:
             key =  'tester'
@@ -1498,6 +1485,76 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
 
+    def test_downsampling_extensive(self):
+        with self.redis() as r:
+            key =  'tester'
+            fromTS = 10
+            toTS = 10000
+            type_list = ['', 'uncompressed']
+            for chunk_type in type_list:
+                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
+                for agg in agg_list:
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type, fromTS, toTS)
+
+                    # sanity + check result have changed
+                    expected_result1 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
+                    actual_result1 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
+                    assert expected_result1 == actual_result1
+                    assert len(expected_result1) == 999
+
+                    for i in range(fromTS + 5, toTS - 4, 10):
+                        assert r.execute_command('TS.ADD', key, i, 42)
+
+                    expected_result2 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
+                    actual_result2 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
+                    assert expected_result2 == actual_result2
+
+                    # remove aggs with identical results
+                    compare_list = ['avg', 'sum', 'min', 'std.p', 'std.s', 'var.p', 'var.s']
+                    if agg in compare_list:
+                        assert expected_result1 != expected_result2
+                        assert actual_result1 != actual_result2
+
+                    sliced_actual_list1 = actual_result1[5:10]
+                    sliced_actual_list2 = actual_result2[5:10]
+
+                    if agg == 'avg':
+                        assert sliced_actual_list1 == [[60L, '656.5'], [70L, '756.5'], [80L, '856.5'], [90L, '956.5'], [100L, '1056.5']]
+                        assert sliced_actual_list2 == [[60L, '594.9'], [70L, '684.9'], [80L, '774.9'], [90L, '864.9'], [100L, '954.9']]
+                    elif agg == 'sum':
+                        assert sliced_actual_list1 == [[60L, '6565'], [70L, '7565'], [80L, '8565'], [90L, '9565'], [100L, '10565']]
+                        assert sliced_actual_list2 == [[60L, '5949'], [70L, '6849'], [80L, '7749'], [90L, '8649'], [100L, '9549']]
+                    elif agg == 'min':
+                        assert sliced_actual_list1 == [[60L, '623'], [70L, '723'], [80L, '823'], [90L, '923'], [100L, '1023']]
+                        assert sliced_actual_list2 == [[60L, '42'], [70L, '42'], [80L, '42'], [90L, '42'], [100L, '42']]
+                    elif agg == 'max':
+                        assert sliced_actual_list1 == [[60L, '697'], [70L, '797'], [80L, '897'], [90L, '997'], [100L, '1097']]
+                        assert sliced_actual_list2 == [[60L, '697'], [70L, '797'], [80L, '897'], [90L, '997'], [100L, '1097']]
+                    elif agg == 'count':
+                        assert sliced_actual_list1 == [[60L, '10'], [70L, '10'], [80L, '10'], [90L, '10'], [100L, '10']]
+                        assert sliced_actual_list2 == [[60L, '10'], [70L, '10'], [80L, '10'], [90L, '10'], [100L, '10']]
+                    elif agg == 'first':
+                        assert sliced_actual_list1 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
+                        assert sliced_actual_list2 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
+                    elif agg == 'last':
+                        assert sliced_actual_list1 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
+                        assert sliced_actual_list2 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
+                    elif agg == 'std.p':
+                        assert sliced_actual_list1 == [[60L, '25.8698666405531'], [70L, '25.8698666405531'], [80L, '25.8698666405531'], [90L, '25.8698666405531'], [100L, '25.8698666405531']]
+                        assert sliced_actual_list2 == [[60L, '186.106125638035'], [70L, '215.85525242625'], [80L, '245.665402529538'], [90L, '275.516768999638'], [100L, '305.397265868573']]
+                    elif agg == 'std.s':
+                        assert sliced_actual_list1 == [[60L, '27.2692337829854'], [70L, '27.2692337829854'], [80L, '27.2692337829854'], [90L, '27.2692337829854'], [100L, '27.2692337829854']]
+                        assert sliced_actual_list2 == [[60L, '196.173081175216'], [70L, '227.531414192512'], [80L, '258.95407143181'], [90L, '290.420174536443'], [100L, '321.916983777564']]
+                    elif agg == 'var.p':
+                        assert sliced_actual_list1 == [[60L, '669.25'], [70L, '669.25'], [80L, '669.25'], [90L, '669.25'], [100L, '669.25']]
+                        assert sliced_actual_list2 == [[60L, '34635.4899999999'], [70L, '46593.49'], [80L, '60351.49'], [90L, '75909.49'], [100L, '93267.49']]
+                    elif agg == 'var.s':
+                        assert sliced_actual_list1 == [[60L, '743.611111111111'], [70L, '743.611111111111'], [80L, '743.611111111111'], [90L, '743.611111111111'], [100L, '743.611111111111']]
+                        assert sliced_actual_list2 == [[60L, '38483.8777777777'], [70L, '51770.5444444445'], [80L, '67057.2111111112'], [90L, '84343.8777777778'], [100L, '103630.544444444']]
+
+                    r.execute_command('DEL', key)
+                    r.execute_command('DEL', agg_key)
+  
     def test_del_sample(self):
          with self.redis() as r:
             quantity = 10001
@@ -1544,7 +1601,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
                 assert r.execute_command('ts.range del - +') == []
                 assert self._get_ts_info(r, 'del').total_samples == 0
-                #TODO 
+                #TODO after remove chunks
                 #assert self._get_ts_info(r, 'del').chunk_count == 1
 
                 r.execute_command('DEL del')
@@ -1562,8 +1619,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('ts.del notexist 42') # filter exists
-
-    
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

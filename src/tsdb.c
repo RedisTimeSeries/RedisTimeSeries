@@ -78,6 +78,7 @@ void SeriesTrim(Series *series) {
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
+    // TODO: retain data of largest downsample windows update/deletes
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime
                                    ? series->lastTimestamp - series->retentionTime
                                    : 0;
@@ -85,8 +86,8 @@ void SeriesTrim(Series *series) {
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
-            // reseek iterator since we modified the dict, go to first element that is bigger than
-            // current key
+            // reseek iterator since we modified the dict,
+            // go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
 
             series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
@@ -233,14 +234,10 @@ static void upsertRules(Series *series, AddCtx *aCtx) {
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
         // upsert in latest timebucket
+        rule->backfilled = true;
         if (aCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
-            if (aCtx->sz < 1) { // a sample was updated or removed
-                rule->backfilled = true;
-            }
             continue;
         }
-        rule->backfilled = true; // TODO: fix so handleCompaction does not append but still use
-                                 // on-the-fly agg context
         timestamp_t start = CalcWindowStart(aCtx->sample.timestamp, rule->timeBucket);
         // ensure last include/exclude
         double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
