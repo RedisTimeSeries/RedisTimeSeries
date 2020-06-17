@@ -33,7 +33,6 @@ typedef struct AddCtx {
     int sz;                 // change in chunk size
     UpsertType type;
     short maxSamples;       // used for split
-    bool reindex;
     bool latestChunk;
 } AddCtx;
 

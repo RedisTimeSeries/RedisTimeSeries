@@ -1429,6 +1429,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_ooo(self):
         with self.redis() as r:
             quantity = 50001
+            to_dbl = 1.001
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
                 #r.execute_command('ts.create', 'no_ooo', chunk_type)
@@ -1436,11 +1437,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100)
                 r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100)
                 for i in range(0, quantity, 5):
-                    r.execute_command('ts.add no_ooo', i, i)
+                    r.execute_command('ts.add no_ooo', i, i * to_dbl)
                 for i in range(0, quantity, 10):
-                    r.execute_command('ts.add ooo', i, i)
+                    r.execute_command('ts.add ooo', i, i * to_dbl)
                 for i in range(5, quantity, 10): #limit
-                    r.execute_command('ts.add ooo', i, i)
+                    r.execute_command('ts.add ooo', i, i * to_dbl)
 
                 ooo_res    = r.execute_command('ts.range ooo - +')
                 no_ooo_res = r.execute_command('ts.range no_ooo - +')
@@ -1449,7 +1450,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert ooo_res[i] == no_ooo_res[i]
 
                 ooo_res = r.execute_command('ts.range ooo 1000 1000')
-                assert ooo_res[0] == [1000L, '1000']
+                assert ooo_res[0] == [1000L, '1001']
                 r.execute_command('ts.add ooo', 1000, 42)
                 ooo_res = r.execute_command('ts.range ooo 1000 1000')
                 assert ooo_res[0] == [1000L, '42']
@@ -1458,7 +1459,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('DEL ooo')
 
     def test_ooo_with_retention(self):
-         with self.redis() as r:
+        with self.redis() as r:
             r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 100, 'RETENTION', 100)
             r.execute_command('ts.add ooo', 0, 0)
             r.execute_command('ts.add ooo', 1000, 1000)
@@ -1482,6 +1483,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
                     assert expected_result == actual_result
+
+                    # change in latest window
+                    r.execute_command('TS.ADD', key, 1055, 50)
+                    r.execute_command('TS.ADD', key, 1053, 50)
+                    r.execute_command('TS.ADD', key, 1062, 50)
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 100, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 100)
+                    assert expected_result == actual_result
+
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
 
@@ -1556,7 +1566,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     r.execute_command('DEL', agg_key)
   
     def test_del_sample(self):
-         with self.redis() as r:
+        with self.redis() as r:
             quantity = 10001
             del_q = 100
 
@@ -1571,28 +1581,24 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity == len(ooo_res)
                 assert quantity == self._get_ts_info(r, 'del').total_samples
 
+                # delete multiple random samples
                 for i in range(del_q):
                     r.execute_command('ts.del del', i * 100)
                     assert quantity - i - 1 == self._get_ts_info(r, 'del').total_samples
-
                 ooo_res = r.execute_command('ts.range del - +')
                 assert quantity - del_q == len(ooo_res)
                 assert quantity - del_q == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 1 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [10000L, '10000'] == r.execute_command('ts.get del')
 
+                # delete last sample
                 r.execute_command('ts.del del', quantity - 1)
-
-                ooo_res = r.execute_command('ts.range del - +')
-                
-                #assert quantity - del_q - 1 == len(ooo_res)
+                ooo_res = r.execute_command('ts.range del - +')                
                 assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [9999L, '9999'] == r.execute_command('ts.get del')
 
-                with pytest.raises(redis.ResponseError) as excinfo:
-                    assert r.execute_command('ts.del del', 100)
-
+                # delete all samples
                 for i in range(0, quantity, 1):
                     try:
                         r.execute_command('ts.del del', i)
@@ -1607,7 +1613,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('DEL del')
 
     def test_del_errors(self):
-         with self.redis() as r:
+        with self.redis() as r:
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
                 r.execute_command('ts.create', 'del', chunk_type)
@@ -1619,6 +1625,19 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('ts.del notexist 42') # filter exists
+
+    def test_ooo_split(self):
+        with self.redis() as r:
+            quantity = 5000
+            
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'split', chunk_type)
+                r.execute_command('ts.add split', quantity, 42)
+                for i in range(quantity):
+                    r.execute_command('ts.add split', i, i * 1.01)
+                assert self._get_ts_info(r, 'split').chunk_count in [13, 32]
+                r.execute_command('DEL split')
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
