@@ -269,7 +269,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     Chunk_t *chunk = series->lastChunk;
     timestamp_t lastChunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 
-    if (timestamp < lastChunkFirstTS) {
+    if (timestamp < lastChunkFirstTS || RedisModule_DictSize(series->chunks) > 1) {
         // Upsert in an older chunk
         latestChunk = false;
         timestamp_t rax_key;
@@ -313,28 +313,17 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     ChunkResult rv = funcs->UpsertSample(&aCtx);
     if (rv == REDISMODULE_OK) {
         series->totalSamples += aCtx.sz;
-
-        // reindex if first timestamp changed
         // TODO: remove empty chunks on delete
-        if (aCtx.reindex == true) {
-            if (!latestChunk) {
-                RedisModule_DictDelC(series->chunks, chunkKey, sizeof(timestamp_t), NULL);
-            } else {
-                dictOperator(series->chunks, NULL, lastChunkFirstTS, DICT_OP_DEL);
-            }
-            dictOperator(series->chunks, chunk, timestamp, DICT_OP_SET);
-        }
-
         upsertRules(series, &aCtx);
     }
     return rv;
 }
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+    timestamp_t lastTS = series->lastTimestamp;
+    uint64_t retention = series->retentionTime;
     // ensure inside retention period.
-    if (timestamp < series->lastTimestamp && series->retentionTime &&
-        timestamp < series->lastTimestamp - series->retentionTime &&
-        timestamp > series->retentionTime) {
+    if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
         // TODO: downsample window is partially trimmed
         return TSDB_ERR_TIMESTAMP_TOO_OLD;
     }
