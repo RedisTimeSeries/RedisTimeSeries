@@ -128,11 +128,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             else:
                 assert actual_result
 
-    def _insert_agg_data(self, redis, key, agg_type, ooo=""):
+    def _insert_agg_data(self, redis, key, agg_type, chunk_type=""):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
-        assert redis.execute_command('TS.CREATE', key, ooo)
-        assert redis.execute_command('TS.CREATE', agg_key, ooo)
+        assert redis.execute_command('TS.CREATE', key, chunk_type)
+        assert redis.execute_command('TS.CREATE', agg_key, chunk_type)
         assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
@@ -1427,7 +1427,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('ts.range test_key - +') == before
 
     def test_ooo(self):
-         with self.redis() as r:
+        with self.redis() as r:
             quantity = 50001
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
@@ -1457,23 +1457,46 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('DEL no_ooo')
                 r.execute_command('DEL ooo')
 
+    def test_ooo_with_retention(self):
+         with self.redis() as r:
+            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 100, 'RETENTION', 100)
+            r.execute_command('ts.add ooo', 0, 0)
+            r.execute_command('ts.add ooo', 1000, 1000)
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.add ooo', 100, 100)
+
+
+    def test_ooo_reindex_chunk(self):
+         with self.redis() as r:
+            type_list = ['', 'uncompressed']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'ooo', chunk_type)
+                for i in range(100, 150):
+                    r.execute_command('ts.add ooo', i * 10, i)
+                r.execute_command('ts.add ooo', 0, 0)
+                res = r.execute_command('ts.range ooo - +')
+                assert res[0] == [0L, '0']
+                r.execute_command('DEL', 'ooo')
+
     def test_backfill_downsampling(self):
         with self.redis() as r:
             key =  'tester'
-            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last'] #more
-            #agg = 'avg'
-            for agg in agg_list:
-                agg_key = self._insert_agg_data(r, key, agg, ooo = 'out_of_order')
+            type_list = ['', 'uncompressed']
+            for chunk_type in type_list:
+                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last'] #more
+                for agg in agg_list:
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type)
 
-                expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
-                actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-                assert expected_result == actual_result
-                r.execute_command('TS.ADD', key, 15, 50)
-                expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
-                actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-                assert expected_result == actual_result
-                r.execute_command('DEL', key)
-                r.execute_command('DEL', agg_key)
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                    assert expected_result == actual_result
+                    r.execute_command('TS.ADD', key, 15, 50)
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                    assert expected_result == actual_result
+                    r.execute_command('DEL', key)
+                    r.execute_command('DEL', agg_key)
 
     def test_del_sample(self):
          with self.redis() as r:
@@ -1539,6 +1562,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('ts.del notexist 42') # filter exists
+
+    
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

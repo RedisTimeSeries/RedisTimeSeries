@@ -53,13 +53,13 @@ static void extendChunk(CompressedChunk *chunk) {
     chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
 }
 
-static void trimChunk(CompressedChunk *chunk, short minSize) {
+static void trimChunk(CompressedChunk *chunk) {
     int excess = chunk->size - (chunk->idx + BIT) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 0) {
-        size_t newSize = max(chunk->size - excess, minSize);
+        size_t newSize = chunk->size - excess;
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
     }
@@ -89,8 +89,8 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
         }
     }
 
-    trimChunk(newChunk1, 0);
-    trimChunk(newChunk2, 0);
+    trimChunk(newChunk1);
+    trimChunk(newChunk2);
     swapChunks(curChunk, newChunk1);
 
     Compressed_FreeChunkIterator(iter, false);
@@ -156,7 +156,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
 
     // trim data
     if (!aCtx->latestChunk) {
-        trimChunk(newChunk, oldChunk->size);
+        trimChunk(newChunk);
     }
     swapChunks(newChunk, oldChunk);
 clean:
