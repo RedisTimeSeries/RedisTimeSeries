@@ -229,6 +229,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.ADD')
             with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.DEL')
+            with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.MADD')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.INCRBY')
@@ -1511,7 +1513,32 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 with pytest.raises(redis.ResponseError) as excinfo:
                     assert r.execute_command('ts.del del', 100)
 
+                for i in range(0, quantity, 1):
+                    try:
+                        r.execute_command('ts.del del', i)
+                    except: 
+                        pass
+
+                assert r.execute_command('ts.range del - +') == []
+                assert self._get_ts_info(r, 'del').total_samples == 0
+                #TODO 
+                #assert self._get_ts_info(r, 'del').chunk_count == 1
+
                 r.execute_command('DEL del')
+
+    def test_del_errors(self):
+         with self.redis() as r:
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'del', chunk_type)
+                with pytest.raises(redis.ResponseError) as excinfo:
+                    assert r.execute_command('ts.del del 42') # filter exists
+                with pytest.raises(redis.ResponseError) as excinfo:
+                    assert r.execute_command('ts.del del string') # filter exists
+                r.execute_command('DEL del')
+            
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.del notexist 42') # filter exists
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
