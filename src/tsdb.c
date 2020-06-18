@@ -234,8 +234,8 @@ static void upsertRules(Series *series, AddCtx *aCtx) {
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
         // upsert in latest timebucket
+        rule->backfilled = true;
         if (aCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
-            rule->backfilled = true;
             rule = rule->nextRule;
             continue;
         }
@@ -250,7 +250,7 @@ static void upsertRules(Series *series, AddCtx *aCtx) {
         RedisModuleKey *key;
         Series *destSeries;
         if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
-            // TODO: log something
+            RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
             continue;
         }
         SeriesAddSample(destSeries, start, val);
