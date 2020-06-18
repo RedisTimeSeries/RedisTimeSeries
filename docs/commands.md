@@ -203,12 +203,13 @@ For certain read commands a list of filters needs to be applied.  This is the li
 
 Note: Whenever filters need to be provided, a minimum of one `l=v` filter must be applied.
 
-### TS.RANGE
+### TS.RANGE/TS.REVRANGE
 
-Query a range.
+Query a range in forward or reverse directions.
 
 ```sql
 TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
+TS.REVRANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -250,12 +251,13 @@ But because m is pretty small, we can neglect it and look at the operation as O(
    2) "20"
 ```
 
-### TS.MRANGE
+### TS.MRANGE/TS.MREVRANGE
 
-Query a timestamp range across multiple time-series by filters.
+Query a range across multiple time-series by filters in forward or reverse directions.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MREVRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
