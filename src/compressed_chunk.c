@@ -134,7 +134,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx, int *size) {
 
     if (ts == iterSample.timestamp) {
         res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        *size = -1;                     // we skipped a sample
+        *size = -1;                        // we skipped a sample
     } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
         rv = CR_DEL_FAIL;
         goto clean;
