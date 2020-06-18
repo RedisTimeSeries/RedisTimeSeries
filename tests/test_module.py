@@ -1631,7 +1631,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             quantity = 10001
             del_q = 100
 
-            type_list = ['', 'UNCOMPRESSED']
+            type_list = ['UNCOMPRESSED']
             for chunk_type in type_list:
                 r.execute_command('ts.create', 'del', chunk_type)
                 for i in range(0, quantity, 1):
@@ -1659,6 +1659,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [9999L, '9999'] == r.execute_command('ts.get del')
+
+                # delete whole chunks
+                for i in range(3000, 7000):
+                    try:
+                        r.execute_command('ts.del del', i)
+                    except: 
+                        pass
+                res = r.execute_command('ts.range del - +')
+                assert len(res) == 5940
 
                 # delete all samples
                 for i in range(0, quantity, 1):

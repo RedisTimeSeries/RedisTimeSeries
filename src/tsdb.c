@@ -266,9 +266,9 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     void *chunkKey = NULL;
     ChunkFuncs *funcs = series->funcs;
     Chunk_t *chunk = series->lastChunk;
-    timestamp_t lastChunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
+    timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 
-    if (timestamp < lastChunkFirstTS || RedisModule_DictSize(series->chunks) > 1) {
+    if (timestamp < chunkFirstTS || RedisModule_DictSize(series->chunks) > 1) {
         // Upsert in an older chunk
         latestChunk = false;
         timestamp_t rax_key;
@@ -280,6 +280,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
             RedisModule_DictIteratorStop(dictIter);
             return REDISMODULE_ERR;
         }
+        chunkFirstTS = funcs->GetFirstTimestamp(chunk);
     }
 
     // Split chunks
@@ -289,9 +290,9 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
         }
-        uint64_t newChunkFirstTimestamp = funcs->GetFirstTimestamp(newChunk);
-        dictOperator(series->chunks, newChunk, newChunkFirstTimestamp, DICT_OP_SET);
-        if (timestamp >= newChunkFirstTimestamp) {
+        uint64_t chunkFirstTS = funcs->GetFirstTimestamp(newChunk);
+        dictOperator(series->chunks, newChunk, chunkFirstTS, DICT_OP_SET);
+        if (timestamp >= chunkFirstTS) {
             chunk = newChunk;
         }
         if (latestChunk) { // split of latest chunk
@@ -318,7 +319,12 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
                 return REDISMODULE_ERR;
             }
         }
-        // TODO: remove empty chunks on delete
+        if (type == UPSERT_DEL && funcs->GetNumOfSample(aCtx.inChunk) == 0 &&
+            aCtx.inChunk != series->lastChunk) {
+            dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL);
+            funcs->FreeChunk(aCtx.inChunk);
+        }
+
         upsertRules(series, &aCtx);
     }
     return rv;
