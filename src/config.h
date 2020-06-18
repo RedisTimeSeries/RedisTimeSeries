@@ -12,7 +12,7 @@
 
 typedef struct {
     SimpleCompactionRule *compactionRules;
-    size_t compactionRulesCount;
+    uint64_t compactionRulesCount;
     long long retentionPolicy;
     long long maxSamplesPerChunk;
     short options;
