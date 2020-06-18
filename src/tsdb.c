@@ -12,6 +12,7 @@
 #include "module.h"
 
 #include <math.h>
+#include "rmutil/logging.h"
 #include "rmutil/strings.h"
 
 typedef enum
@@ -300,7 +301,6 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
 
     Sample sample = { .timestamp = timestamp, .value = value };
     AddCtx aCtx = {
-        .sz = 0,
         .type = type,
         .inChunk = chunk,
         .sample = sample,
@@ -308,9 +308,16 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         .maxSamples = series->maxSamplesPerChunk,
     };
 
-    ChunkResult rv = funcs->UpsertSample(&aCtx);
+    int size = 0;
+    ChunkResult rv = funcs->UpsertSample(&aCtx, &size);
     if (rv == REDISMODULE_OK) {
-        series->totalSamples += aCtx.sz;
+        series->totalSamples += size;
+        if (timestamp == series->lastTimestamp) {
+            Sample sample = { 0 };
+            if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
+                return REDISMODULE_ERR;
+            }
+        }
         // TODO: remove empty chunks on delete
         upsertRules(series, &aCtx);
     }
@@ -492,7 +499,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
-            // RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
+            RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
             RedisModule_CloseKey(compactedKey);
             continue;
         }

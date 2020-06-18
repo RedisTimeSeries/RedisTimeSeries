@@ -8,7 +8,6 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <assert.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -47,8 +46,7 @@ typedef enum {
 } TS_AGG_TYPES_T;
 
 /* Series struct options */
-#define SERIES_OPT_UNCOMPRESSED (1 << 0)
-#define SERIES_OPT_OUT_OF_ORDER (1 << 1)
+#define SERIES_OPT_UNCOMPRESSED 0x1
 
 /* Chunk enum */
 typedef enum {

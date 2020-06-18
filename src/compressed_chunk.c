@@ -105,7 +105,7 @@ error:
     return NULL;
 }
 
-ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
+ChunkResult Compressed_UpsertSample(AddCtx *aCtx, int *size) {
     ChunkResult rv = CR_OK;
     ChunkResult res = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
@@ -134,7 +134,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
 
     if (ts == iterSample.timestamp) {
         res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        aCtx->sz = -1;                     // we skipped a sample
+        *size = -1;                     // we skipped a sample
     } else if (aCtx->type == UPSERT_DEL) { // No sample to delete
         rv = CR_DEL_FAIL;
         goto clean;
@@ -143,7 +143,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx) {
     if (aCtx->type != UPSERT_DEL) {
         ChunkResult resSample = Compressed_AddSample(newChunk, &aCtx->sample);
         CHECK_EXTEND_CHUNK(resSample, newChunk, aCtx->sample);
-        aCtx->sz += 1;
+        *size += 1;
     }
 
     if (i != numSamples) { // sample is not last
