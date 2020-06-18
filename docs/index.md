@@ -42,6 +42,16 @@ To quickly try out RedisTimeSeries, launch an instance using docker:
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 ```
 
+### Download and running binaries
+
+First download the pre-compiled version from [RedisLabs download center](https://redislabs.com/download-center/modules/).
+
+Next, run Redis with RedisTimeSeries: 
+
+```
+$ redis-server --loadmodule /path/to/module/redistimeseries.so
+```
+
 ### Build and Run it yourself
 
 You can also build and run RedisTimeSeries on your own machine.
@@ -102,6 +112,7 @@ After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggregation rule.
 
 ### With `redis-cli`
+
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature:3:11 RETENTION 6000 LABELS sensor_id 2 area_id 32
@@ -130,8 +141,11 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
 | redis-time-series | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [Github](https://github.com/averias/redis-time-series) |
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
+| redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
+| redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
 
 ## Tests
+
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
 ```
 $ cd src
