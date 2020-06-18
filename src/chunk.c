@@ -83,7 +83,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
+static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx, int *size) {
     Chunk *regChunk = (Chunk *)aCtx->inChunk;
     short numSamples = regChunk->num_samples;
     // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp,
@@ -100,7 +100,7 @@ static ChunkResult operateOccupiedSample(AddCtx *aCtx, size_t idx) {
                 // TODO: adjust memory
             }
             regChunk->num_samples--;
-            aCtx->sz = -1;
+            *size = -1;
             return CR_OK;
         }
     }
@@ -120,7 +120,7 @@ static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
     chunk->num_samples++;
 }
 
-ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
+ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx, int *size) {
     Chunk *regChunk = (Chunk *)aCtx->inChunk;
     timestamp_t ts = aCtx->sample.timestamp;
     short numSamples = regChunk->num_samples;
@@ -133,7 +133,7 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
     }
     // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
-        return operateOccupiedSample(aCtx, i);
+        return operateOccupiedSample(aCtx, i, size);
     } else if (aCtx->type == UPSERT_DEL) {
         return CR_DEL_FAIL;
     }
@@ -143,7 +143,7 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx) {
     }
 
     upsertChunk(regChunk, i, &aCtx->sample);
-    aCtx->sz = 1;
+    *size = 1;
     return CR_OK;
 }
 

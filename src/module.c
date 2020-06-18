@@ -830,7 +830,7 @@ int TSDB_del(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     if (GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE) == FALSE) {
-        return REDISMODULE_OK;
+        return REDISMODULE_ERR;
     }
 
     timestamp_t ts;
@@ -843,12 +843,7 @@ int TSDB_del(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (SeriesUpsertSample(series, ts, NAN, UPSERT_DEL) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: delete failed");
     }
-    if (ts == series->lastTimestamp) {
-        Sample sample = { 0 };
-        if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
-            return RedisModule_ReplyWithError(ctx, "TSDB: failed last sample deletion");
-        }
-    }
+
     RedisModule_CloseKey(key);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_ReplyWithSimpleString(ctx, "OK");

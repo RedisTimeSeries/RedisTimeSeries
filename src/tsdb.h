@@ -11,7 +11,7 @@
 #include "consts.h"
 #include "indexer.h"
 #include "generic_chunk.h"
-#include <math.h>
+#include <math.h> // NAN
 
 typedef struct CompactionRule {
     RedisModuleString *destKey;

@@ -1655,6 +1655,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 # delete last sample
                 r.execute_command('ts.del del', quantity - 1)
                 ooo_res = r.execute_command('ts.range del - +')
+                assert len(ooo_res) == 9900
                 assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [9999L, '9999'] == r.execute_command('ts.get del')
