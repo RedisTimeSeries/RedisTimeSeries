@@ -101,16 +101,21 @@ int GetSeries(RedisModuleCtx *ctx,
     return TRUE;
 }
 
-static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx) {
+static int parseCreateArgs(RedisModuleCtx *ctx,
+                           RedisModuleString **argv,
+                           int argc,
+                           CreateCtx *cCtx) {
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
     cCtx->maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     cCtx->labelsCount = 0;
-    if(parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR){
+    if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse LABELS");
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 && RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &cCtx->retentionTime) != REDISMODULE_OK) {
+    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 &&
+        RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &cCtx->retentionTime) !=
+            REDISMODULE_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
@@ -120,7 +125,9 @@ static int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 && RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->maxSamplesPerChunk) != REDISMODULE_OK) {
+    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
+        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->maxSamplesPerChunk) !=
+            REDISMODULE_OK) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
@@ -727,14 +734,14 @@ static inline int add(RedisModuleCtx *ctx,
 
     if (argv != NULL && RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
-        CreateCtx cCtx = {0};
+        CreateCtx cCtx = { 0 };
         if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
 
         CreateTsKey(ctx, keyName, &cCtx, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RedisModule_ReplyWithError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
@@ -778,8 +785,11 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return result;
 }
 
-int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, CreateCtx *cCtx,
-                Series **series, RedisModuleKey **key) {
+int CreateTsKey(RedisModuleCtx *ctx,
+                RedisModuleString *keyName,
+                CreateCtx *cCtx,
+                Series **series,
+                RedisModuleKey **key) {
     if (*key == NULL) {
         *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     }
@@ -804,7 +814,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleString *keyName = argv[1];
-    CreateCtx cCtx = {0};
+    CreateCtx cCtx = { 0 };
     if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
@@ -813,7 +823,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(key);
-        return RedisModule_ReplyWithError(ctx,"TSDB: key already exists");
+        return RedisModule_ReplyWithError(ctx, "TSDB: key already exists");
     }
 
     CreateTsKey(ctx, keyName, &cCtx, &series, &key);
@@ -835,7 +845,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     RedisModuleString *keyName = argv[1];
-    CreateCtx cCtx = {0};
+    CreateCtx cCtx = { 0 };
     if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
@@ -995,7 +1005,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
     if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
-        CreateCtx cCtx = {0};
+        CreateCtx cCtx = { 0 };
         if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }

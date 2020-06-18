@@ -15,7 +15,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    CreateCtx cCtx = {0};
+    CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = RedisModule_LoadString(io);
     cCtx.retentionTime = RedisModule_LoadUnsigned(io);
     cCtx.maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
@@ -28,7 +28,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     cCtx.labelsCount = RedisModule_LoadUnsigned(io);
     cCtx.labels = malloc(sizeof(Label) * cCtx.labelsCount);
-    for (int i=0; i<cCtx.labelsCount; i++) {
+    for (int i = 0; i < cCtx.labelsCount; i++) {
         cCtx.labels[i].key = RedisModule_LoadString(io);
         cCtx.labels[i].value = RedisModule_LoadString(io);
     }

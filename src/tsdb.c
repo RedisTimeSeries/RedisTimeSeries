@@ -373,9 +373,11 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 
         // For every aggregated key create 2 labels: `aggregation` and `time_bucket`.
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
-        compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
-        compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
-        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
+        compactedLabels[labelsCount].value =
+            RedisModule_CreateString(NULL, aggString, strlen(aggString));
+        compactedLabels[labelsCount + 1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
+        compactedLabels[labelsCount + 1].value =
+            RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
