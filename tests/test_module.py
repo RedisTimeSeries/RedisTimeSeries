@@ -1508,13 +1508,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             key = 'src'
             agg_key = 'dest'
-            agg_type = 'avg'
             type_list = ['', 'uncompressed']
+            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
             for chunk_type in type_list:
-
-                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
-                for agg in agg_list:
-
+                for agg_type in agg_list:
                     assert r.execute_command('TS.CREATE', key, chunk_type)
                     assert r.execute_command('TS.CREATE', agg_key, chunk_type)
                     assert r.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
@@ -1550,6 +1547,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
                     assert expected_result[0:3] == actual_result[0:3]
+                    assert 3 == self._get_ts_info(r, agg_key).total_samples
+                    assert 11 == self._get_ts_info(r, key).total_samples
 
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
@@ -1561,7 +1560,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             toTS = 10000
             type_list = ['', 'uncompressed']
             for chunk_type in type_list:
-                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
+                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
                 for agg in agg_list:
                     agg_key = self._insert_agg_data(r, key, agg, chunk_type, fromTS, toTS)
 
@@ -1579,7 +1578,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert expected_result2 == actual_result2
 
                     # remove aggs with identical results
-                    compare_list = ['avg', 'sum', 'min', 'std.p', 'std.s', 'var.p', 'var.s']
+                    compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
                     if agg in compare_list:
                         assert expected_result1 != expected_result2
                         assert actual_result1 != actual_result2
@@ -1605,6 +1604,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     elif agg == 'first':
                         assert sliced_actual_list1 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
                         assert sliced_actual_list2 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
+                    elif agg == 'range':
+                        assert sliced_actual_list1 == [[60L, '74'], [70L, '74'], [80L, '74'], [90L, '74'], [100L, '74']]
+                        assert sliced_actual_list2 == [[60L, '655'], [70L, '755'], [80L, '855'], [90L, '955'], [100L, '1055']]
                     elif agg == 'last':
                         assert sliced_actual_list1 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
                         assert sliced_actual_list2 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
