@@ -230,20 +230,21 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-static void upsertRules(Series *series, AddCtx *aCtx) {
+static void upsertRules(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
         // upsert in latest timebucket
         rule->backfilled = true;
-        if (aCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
+        if (uCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
             rule = rule->nextRule;
             continue;
         }
-        timestamp_t start = CalcWindowStart(aCtx->sample.timestamp, rule->timeBucket);
+        timestamp_t start = CalcWindowStart(uCtx->sample.timestamp, rule->timeBucket);
         // ensure last include/exclude
-        double val = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass);
-        if (isnan(val)) {
+        double val = 0;
+        int rv = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass, &val);
+        if (rv == TSDB_ERROR) {
             RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
             continue;
         }
@@ -302,7 +303,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     }
 
     Sample sample = { .timestamp = timestamp, .value = value };
-    AddCtx aCtx = {
+    UpsertCtx uCtx = {
         .type = type,
         .inChunk = chunk,
         .sample = sample,
@@ -311,7 +312,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     };
 
     int size = 0;
-    ChunkResult rv = funcs->UpsertSample(&aCtx, &size);
+    ChunkResult rv = funcs->UpsertSample(&uCtx, &size);
     if (rv == REDISMODULE_OK) {
         series->totalSamples += size;
         if (timestamp == series->lastTimestamp) {
@@ -324,27 +325,27 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
                 }
             }
         }
-        timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(aCtx.inChunk);
-        if (type == UPSERT_DEL && funcs->GetNumOfSample(aCtx.inChunk) == 0) {
+        timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
+        if (type == UPSERT_DEL && funcs->GetNumOfSample(uCtx.inChunk) == 0) {
             // remove from dictionary and free empty chunk
             if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
                 dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
             }
-            funcs->FreeChunk(aCtx.inChunk);
+            funcs->FreeChunk(uCtx.inChunk);
             if (RedisModule_DictSize(series->chunks) == 0) {
                 Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
                 dictOperator(series->chunks, newChunk, 0, DICT_OP_SET);
                 series->lastChunk = newChunk;
             }
-        } else if (funcs->GetFirstTimestamp(aCtx.inChunk) != chunkFirstTS) {
+        } else if (funcs->GetFirstTimestamp(uCtx.inChunk) != chunkFirstTS) {
             // update chunk in dictionary if first timestamp changed
             if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
                 dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
             }
-            dictOperator(series->chunks, aCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
+            dictOperator(series->chunks, uCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
         }
 
-        upsertRules(series, &aCtx);
+        upsertRules(series, &uCtx);
     }
     return rv;
 }
@@ -619,23 +620,24 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
     return FALSE;
 }
 
-double SeriesCalcRange(Series *series,
+int SeriesCalcRange(Series *series,
                        timestamp_t start_ts,
                        timestamp_t end_ts,
-                       AggregationClass *aggObject) {
+                       AggregationClass *aggObject,
+                       double *val) {
     Sample sample = { 0 };
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     if (iterator.series == NULL) {
-        return 0.0 / 0.0; // isnan()
+        return TSDB_ERROR;
     }
     void *context = aggObject->createContext();
 
     while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
     }
-    double rv = aggObject->finalize(context);
+    *val = aggObject->finalize(context);
     aggObject->freeContext(context);
-    return rv;
+    return TSDB_OK;
 }
 
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {

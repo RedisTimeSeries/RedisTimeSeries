@@ -19,7 +19,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
-ChunkResult Compressed_UpsertSample(AddCtx *aCtx, int *size);
+ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev);

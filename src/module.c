@@ -681,8 +681,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
         } else {
             u_int64_t ts = rule->startCurrentTimeBucket;
             u_int64_t es = ts + rule->timeBucket - 1;
-            double val = SeriesCalcRange(series, ts, es, rule->aggClass);
-            if (isnan(val)) {
+            double val;
+            if (SeriesCalcRange(series, ts, es, rule->aggClass, &val) != TSDB_OK) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 return;
             }
@@ -840,7 +840,7 @@ int TSDB_del(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: timestamp was not found");
     }
 
-    if (SeriesUpsertSample(series, ts, NAN, UPSERT_DEL) != REDISMODULE_OK) {
+    if (SeriesUpsertSample(series, ts, DEL_VALUE, UPSERT_DEL) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: delete failed");
     }
 
