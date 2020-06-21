@@ -213,7 +213,7 @@ static Chunk_t *addChunk(Series *series, api_timestamp_t timestamp) {
     timestamp_t rax_key;
     Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
     seriesEncodeTimestamp(&rax_key, timestamp);
-    RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
+    RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void *)newChunk);
     series->lastChunk = newChunk;
     return newChunk;
 }
@@ -267,8 +267,8 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
     iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
     if (!iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk)) {
         RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
-        if (!iter.DictGetNext(iter.dictIter, NULL, (void *) &iter.currentChunk)) {
-            return (SeriesIterator){0};
+        if (!iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk)) {
+            return (SeriesIterator){ 0 };
         }
     }
 
