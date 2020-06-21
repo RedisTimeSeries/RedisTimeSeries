@@ -121,6 +121,7 @@ static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
 }
 
 ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx, int *size) {
+    *size = 0;
     Chunk *regChunk = (Chunk *)aCtx->inChunk;
     timestamp_t ts = aCtx->sample.timestamp;
     short numSamples = regChunk->num_samples;
@@ -131,7 +132,6 @@ ChunkResult Uncompressed_UpsertSample(AddCtx *aCtx, int *size) {
             break;
         }
     }
-    // TODO: TS.UPSERT vs TS.ADD
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
         return operateOccupiedSample(aCtx, i, size);
     } else if (aCtx->type == UPSERT_DEL) {
