@@ -319,24 +319,25 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
             if (type == UPSERT_ADD) {
                 series->lastValue = value;
             } else { // UPSERT_DEL
-                Sample sample = { 0 };
-                if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
+                if (SeriesUpdateLastSample(series) != REDISMODULE_OK) {
                     return REDISMODULE_ERR;
                 }
             }
         }
         timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(aCtx.inChunk);
-        // remove and free empty chunk
         if (type == UPSERT_DEL && funcs->GetNumOfSample(aCtx.inChunk) == 0) {
-            dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL);
+            // remove from dictionary and free empty chunk
+            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
+                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+            }
             funcs->FreeChunk(aCtx.inChunk);
             if (RedisModule_DictSize(series->chunks) == 0) {
                 Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
                 dictOperator(series->chunks, newChunk, 0, DICT_OP_SET);
                 series->lastChunk = newChunk;
             }
-            // update chunk if first timestamp changed
         } else if (funcs->GetFirstTimestamp(aCtx.inChunk) != chunkFirstTS) {
+            // update chunk in dictionary if first timestamp changed
             if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
                 dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
             }
@@ -466,20 +467,21 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     return CR_OK;
 }
 
-int SeriesUpdateLastSample(Series *series, Sample *sample) {
+int SeriesUpdateLastSample(Series *series) {
+    Sample sample = { 0 };
     // iterate in reverse and get first sample
     SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, true);
     if (iter.series == NULL) {
         return REDISMODULE_ERR;
     }
 
-    if (SeriesIteratorGetNext(&iter, sample) != CR_OK) {
+    if (SeriesIteratorGetNext(&iter, &sample) != CR_OK) {
         SeriesIteratorClose(&iter);
         return REDISMODULE_ERR;
     }
 
-    series->lastTimestamp = sample->timestamp;
-    series->lastValue = sample->value;
+    series->lastTimestamp = sample.timestamp;
+    series->lastValue = sample.value;
     SeriesIteratorClose(&iter);
     return REDISMODULE_OK;
 }

@@ -1479,24 +1479,24 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
                     assert expected_result == actual_result
-                    r.execute_command('TS.ADD', key, 15, 50)
+                    assert r.execute_command('TS.ADD', key, 15, 50) == 15
                     expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
                     assert expected_result == actual_result
 
                     # add in latest window
-                    r.execute_command('TS.ADD', key, 1055, 50)
-                    r.execute_command('TS.ADD', key, 1053, 55)
-                    r.execute_command('TS.ADD', key, 1062, 60)
+                    r.execute_command('TS.ADD', key, 1055, 50) == 1055
+                    r.execute_command('TS.ADD', key, 1053, 55) == 1053
+                    r.execute_command('TS.ADD', key, 1062, 60) == 1062
                     expected_result = r.execute_command('TS.RANGE', key, 10, 1060, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1060)
                     assert expected_result == actual_result
 
                     # update in latest window
-                    r.execute_command('TS.ADD', key, 1065, 65)
-                    r.execute_command('TS.ADD', key, 1066, 66)
-                    r.execute_command('TS.ADD', key, 1001, 42)
-                    r.execute_command('TS.ADD', key, 1075, 50)
+                    r.execute_command('TS.ADD', key, 1065, 65) == 1065
+                    r.execute_command('TS.ADD', key, 1066, 66) == 1066
+                    r.execute_command('TS.ADD', key, 1001, 42) == 1001
+                    r.execute_command('TS.ADD', key, 1075, 50) == 1075
                     expected_result = r.execute_command('TS.RANGE', key, 10, 1070, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1070)
                     assert expected_result == actual_result
@@ -1517,32 +1517,32 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert r.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
                     # present update
-                    r.execute_command('TS.ADD', key, 3, 3)
-                    r.execute_command('TS.ADD', key, 5, 5)
-                    r.execute_command('TS.ADD', key, 7, 7)
-                    r.execute_command('TS.ADD', key, 5, 2)
-                    r.execute_command('TS.ADD', key, 10, 10)
+                    assert r.execute_command('TS.ADD', key, 3, 3) == 3
+                    assert r.execute_command('TS.ADD', key, 5, 5) == 5
+                    assert r.execute_command('TS.ADD', key, 7, 7) == 7
+                    assert r.execute_command('TS.ADD', key, 5, 2) == 5
+                    assert r.execute_command('TS.ADD', key, 10, 10) == 10
 
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
                     assert expected_result[0] == actual_result[0]
 
                     # present add
-                    r.execute_command('TS.ADD', key, 11, 11)
-                    r.execute_command('TS.ADD', key, 15, 15)
-                    r.execute_command('TS.ADD', key, 14, 14)
-                    r.execute_command('TS.ADD', key, 20, 20)
+                    assert r.execute_command('TS.ADD', key, 11, 11) == 11
+                    assert r.execute_command('TS.ADD', key, 15, 15) == 15
+                    assert r.execute_command('TS.ADD', key, 14, 14) == 14
+                    assert r.execute_command('TS.ADD', key, 20, 20) == 20
                     
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
                     assert expected_result[0:1] == actual_result[0:1]
 
                     # present + past add
-                    r.execute_command('TS.ADD', key, 23, 23)
-                    r.execute_command('TS.ADD', key, 15, 22)
-                    r.execute_command('TS.ADD', key, 27, 27)
-                    r.execute_command('TS.ADD', key, 23, 25)
-                    r.execute_command('TS.ADD', key, 30, 30)
+                    assert r.execute_command('TS.ADD', key, 23, 23) == 23
+                    assert r.execute_command('TS.ADD', key, 15, 22) == 15
+                    assert r.execute_command('TS.ADD', key, 27, 27) == 27
+                    assert r.execute_command('TS.ADD', key, 23, 25) == 23
+                    assert r.execute_command('TS.ADD', key, 30, 30) == 30
                     
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
@@ -1642,7 +1642,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity == len(ooo_res)
                 assert quantity == self._get_ts_info(r, 'del').total_samples
 
-                # delete multiple random samples
+                # delete multiple samples
                 for i in range(del_q):
                     r.execute_command('ts.del del', i * 100)
                     assert quantity - i - 1 == self._get_ts_info(r, 'del').total_samples
@@ -1651,6 +1651,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity - del_q == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 1 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [10000L, '10000'] == r.execute_command('ts.get del')
+                for i in range(del_q):
+                    assert r.execute_command('ts.range del', i * 100, i * 100) == []
 
                 # delete last sample
                 r.execute_command('ts.del del', quantity - 1)
@@ -1659,6 +1661,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert quantity - del_q - 1 == self._get_ts_info(r, 'del').total_samples
                 assert quantity - 2 == self._get_ts_info(r, 'del').last_time_stamp
                 assert [9999L, '9999'] == r.execute_command('ts.get del')
+                assert r.execute_command('ts.range del', 10000, 10000) == []
 
                 # delete whole chunks
                 for i in range(3000, 7000):
@@ -1682,6 +1685,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
                 r.execute_command('ts.add del', 100, 100)
                 r.execute_command('ts.add del', 200, 200)
+                #r.execute_command('ts.add del', 50, 50)
                 r.execute_command('ts.add del', 150, 150)
                 assert r.execute_command('ts.range del - +') == [[100L, '100'], [150L, '150'], [200L, '200']]
 

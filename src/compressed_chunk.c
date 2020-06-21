@@ -20,7 +20,7 @@
 #define CHECK_EXTEND_CHUNK(res, chunk, sample)                                                     \
     if (res != CR_OK) {                                                                            \
         extendChunk(chunk);                                                                        \
-        printf("Chunk extended to %ld", chunk->size);                                                \
+        printf("Chunk extended to %ld", chunk->size);                                              \
         res = Compressed_AddSample(chunk, &sample);                                                \
     }
 
@@ -109,6 +109,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
 }
 
 ChunkResult Compressed_UpsertSample(AddCtx *aCtx, int *size) {
+    *size = 0;
     ChunkResult rv = CR_OK;
     ChunkResult res = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)aCtx->inChunk;
