@@ -276,8 +276,8 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         RedisModuleDictIter *dictIter =
             RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
+        RedisModule_DictIteratorStop(dictIter);
         if (chunkKey == NULL) {
-            RedisModule_DictIteratorStop(dictIter);
             return REDISMODULE_ERR;
         }
         chunkFirstTS = funcs->GetFirstTimestamp(chunk);
@@ -290,10 +290,11 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
         }
-        uint64_t chunkFirstTS = funcs->GetFirstTimestamp(newChunk);
-        dictOperator(series->chunks, newChunk, chunkFirstTS, DICT_OP_SET);
-        if (timestamp >= chunkFirstTS) {
+        timestamp_t newChunkFirstTS = funcs->GetFirstTimestamp(newChunk);
+        dictOperator(series->chunks, newChunk, newChunkFirstTS, DICT_OP_SET);
+        if (timestamp >= newChunkFirstTS) {
             chunk = newChunk;
+            chunkFirstTS = newChunkFirstTS;
         }
         if (latestChunk) { // split of latest chunk
             series->lastChunk = newChunk;
@@ -314,15 +315,32 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     if (rv == REDISMODULE_OK) {
         series->totalSamples += size;
         if (timestamp == series->lastTimestamp) {
-            Sample sample = { 0 };
-            if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
-                return REDISMODULE_ERR;
+            //
+            if (type == UPSERT_ADD) {
+                series->lastValue = value;
+            } else { // UPSERT_DEL
+                Sample sample = { 0 };
+                if (SeriesUpdateLastSample(series, &sample) != REDISMODULE_OK) {
+                    return REDISMODULE_ERR;
+                }
             }
         }
-        if (type == UPSERT_DEL && funcs->GetNumOfSample(aCtx.inChunk) == 0 &&
-            aCtx.inChunk != series->lastChunk) {
+        timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(aCtx.inChunk);
+        // remove and free empty chunk
+        if (type == UPSERT_DEL && funcs->GetNumOfSample(aCtx.inChunk) == 0) {
             dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL);
             funcs->FreeChunk(aCtx.inChunk);
+            if (RedisModule_DictSize(series->chunks) == 0) {
+                Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
+                dictOperator(series->chunks, newChunk, 0, DICT_OP_SET);
+                series->lastChunk = newChunk;
+            }
+            // update chunk if first timestamp changed
+        } else if (funcs->GetFirstTimestamp(aCtx.inChunk) != chunkFirstTS) {
+            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
+                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+            }
+            dictOperator(series->chunks, aCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
         }
 
         upsertRules(series, &aCtx);
