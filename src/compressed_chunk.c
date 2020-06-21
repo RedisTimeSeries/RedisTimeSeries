@@ -20,7 +20,8 @@
 #define CHECK_EXTEND_CHUNK(res, chunk, sample)                                                     \
     if (res != CR_OK) {                                                                            \
         extendChunk(chunk);                                                                        \
-        Compressed_AddSample(chunk, &sample);                                                      \
+        printf("Chunk extended to %ld", chunk->size);                                                \
+        res = Compressed_AddSample(chunk, &sample);                                                \
     }
 
 /*********************
@@ -53,13 +54,13 @@ static void extendChunk(CompressedChunk *chunk) {
     chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
 }
 
-static void trimChunk(CompressedChunk *chunk) {
+static void trimChunk(CompressedChunk *chunk, short minSize) {
     int excess = chunk->size - (chunk->idx + BIT) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 0) {
-        size_t newSize = chunk->size - excess;
+        size_t newSize = max(chunk->size - excess, minSize);
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
     }
@@ -78,19 +79,21 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
-        if (Compressed_AddSample(newChunk1, &sample) != CR_OK) {
-            goto error;
+        ChunkResult res = Compressed_AddSample(newChunk1, &sample);
+        if (res != CR_OK) {
+            CHECK_EXTEND_CHUNK(res, newChunk1, sample);
         }
     }
     for (; i < curChunk->count; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
-        if (Compressed_AddSample(newChunk2, &sample) != CR_OK) {
-            goto error;
+        ChunkResult res = Compressed_AddSample(newChunk2, &sample);
+        if (res != CR_OK) {
+            CHECK_EXTEND_CHUNK(res, newChunk2, sample);
         }
     }
 
-    trimChunk(newChunk1);
-    trimChunk(newChunk2);
+    trimChunk(newChunk1, 0);
+    trimChunk(newChunk2, 0);
     swapChunks(curChunk, newChunk1);
 
     Compressed_FreeChunkIterator(iter, false);
@@ -98,7 +101,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
 
     return newChunk2;
 
-error:
+    // error:
     Compressed_FreeChunkIterator(iter, false);
     Compressed_FreeChunk(newChunk1);
     Compressed_FreeChunk(newChunk2);
@@ -155,9 +158,7 @@ ChunkResult Compressed_UpsertSample(AddCtx *aCtx, int *size) {
     }
 
     // trim data
-    if (!aCtx->latestChunk) {
-        trimChunk(newChunk);
-    }
+    trimChunk(newChunk, oldChunk->size);
     swapChunks(newChunk, oldChunk);
 clean:
     Compressed_FreeChunkIterator(iter, false);
