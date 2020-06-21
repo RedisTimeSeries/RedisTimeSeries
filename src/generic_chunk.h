@@ -26,13 +26,13 @@ typedef enum {
     CHUNK_COMPRESSED 
 } CHUNK_TYPES_T;
 
-typedef struct AddCtx {
+typedef struct UpsertCtx {
     Sample sample;
     Chunk_t *inChunk;       // original chunk  
     UpsertType type;        // upsert type
     short maxSamples;       // used for split
     bool latestChunk;       // used for split
-} AddCtx;
+} UpsertCtx;
 
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
@@ -40,7 +40,7 @@ typedef struct ChunkFuncs {
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
-    ChunkResult(*UpsertSample)(AddCtx *aCtx, int *size);
+    ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
     void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);

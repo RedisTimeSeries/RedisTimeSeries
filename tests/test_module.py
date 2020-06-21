@@ -1460,12 +1460,21 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
     def test_ooo_with_retention(self):
         with self.redis() as r:
-            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 100, 'RETENTION', 100)
-            r.execute_command('ts.add ooo', 0, 0)
-            r.execute_command('ts.add ooo', 1000, 1000)
+            retention = 13
+            batch = 100
+            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 10, 'RETENTION', retention)
+            for i in range(batch):
+                assert r.execute_command('ts.add ooo', i, i) == i
+            assert r.execute_command('ts.range ooo 0', batch - retention - 2) == []
+            assert len(r.execute_command('ts.range ooo - +')) == retention + 1
 
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('ts.add ooo', 100, 100)
+                assert r.execute_command('ts.add ooo', 70, 70)
+
+            for i in range(batch, batch * 2):
+                assert r.execute_command('ts.add ooo', i, i) == i
+            assert r.execute_command('ts.range ooo 0', batch * 2 - retention - 2) == []
+            assert len(r.execute_command('ts.range ooo - +')) == retention + 1
 
     def test_backfill_downsampling(self):
         with self.redis() as r:
@@ -1664,9 +1673,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('ts.range del', 10000, 10000) == []
 
                 # delete whole chunks
+                num_samples = self._get_ts_info(r, 'del').total_samples
                 for i in range(3000, 7000):
                     try:
                         r.execute_command('ts.del del', i)
+                        num_samples -= 1
+                        assert num_samples == self._get_ts_info(r, 'del').total_samples
                     except: 
                         pass
                 res = r.execute_command('ts.range del - +')
@@ -1676,6 +1688,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 for i in range(0, quantity, 1):
                     try:
                         r.execute_command('ts.del del', i)
+                        num_samples -= 1
+                        assert num_samples == self._get_ts_info(r, 'del').total_samples
                     except: 
                         pass
 
@@ -1716,6 +1730,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 for i in range(quantity):
                     r.execute_command('ts.add split', i, i * 1.01)
                 assert self._get_ts_info(r, 'split').chunk_count in [13, 32]
+                res = r.execute_command('ts.range split - +')
+                for i in range(quantity - 1):
+                    assert res[i][0] + 1 == res[i + 1][0]
+                    assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
+                    
                 r.execute_command('DEL split')
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
