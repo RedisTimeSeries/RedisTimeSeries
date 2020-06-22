@@ -230,33 +230,37 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-static void upsertRules(Series *series, UpsertCtx *uCtx) {
+static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     while (rule != NULL) {
-        // upsert in latest timebucket
-        rule->backfilled = true;
-        if (uCtx->sample.timestamp >= CalcWindowStart(series->lastTimestamp, rule->timeBucket)) {
-            rule = rule->nextRule;
-            continue;
-        }
-        timestamp_t start = CalcWindowStart(uCtx->sample.timestamp, rule->timeBucket);
-        // ensure last include/exclude
-        double val = 0;
-        int rv = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule->aggClass, &val);
-        if (rv == TSDB_ERROR) {
-            RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
-            continue;
-        }
+        timestamp_t curAggWindowStart = CalcWindowStart(series->lastTimestamp, rule->timeBucket);
+        if (uCtx->sample.timestamp >= curAggWindowStart) {
+            // upsert in latest timebucket
+            int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL);
+            if (rv == TSDB_ERROR) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
+        } else {
+            timestamp_t start = CalcWindowStart(uCtx->sample.timestamp, rule->timeBucket);
+            // ensure last include/exclude
+            double val = 0;
+            int rv = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule, &val);
+            if (rv == TSDB_ERROR) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
 
-        RedisModuleKey *key;
-        Series *destSeries;
-        if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
-            RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
-            continue;
+            RedisModuleKey *key;
+            Series *destSeries;
+            if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+                continue;
+            }
+            SeriesUpsertSample(destSeries, start, val);
+            RedisModule_CloseKey(key);
         }
-        SeriesAddSample(destSeries, start, val);
-        RedisModule_CloseKey(key);
         rule = rule->nextRule;
     }
     RedisModule_FreeThreadSafeContext(ctx);
@@ -323,25 +327,13 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
             dictOperator(series->chunks, uCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
         }
 
-        upsertRules(series, &uCtx);
+        upsertCompaction(series, &uCtx);
     }
     return rv;
 }
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
-    timestamp_t lastTS = series->lastTimestamp;
-    uint64_t retention = series->retentionTime;
-    // ensure inside retention period.
-    if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
-        // TODO: downsample window is partially trimmed
-        return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    }
-
     // backfilling or update
-    if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
-        return SeriesUpsertSample(series, timestamp, value);
-    }
-
     Sample sample = { .timestamp = timestamp, .value = value };
     ChunkResult ret = series->funcs->AddSample(series->lastChunk, &sample);
 
@@ -579,11 +571,18 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
     return FALSE;
 }
 
+/*
+ * This function calculate aggregation value of a range.
+ *
+ * If `val` is NULL, the function will update the context of `rule`.
+ */
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
                     timestamp_t end_ts,
-                    AggregationClass *aggObject,
+                    CompactionRule *rule,
                     double *val) {
+    AggregationClass *aggObject = rule->aggClass;
+
     Sample sample = { 0 };
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     if (iterator.series == NULL) {
@@ -595,9 +594,13 @@ int SeriesCalcRange(Series *series,
         aggObject->appendValue(context, sample.value);
     }
     SeriesIteratorClose(&iterator);
-
-    *val = aggObject->finalize(context);
-    aggObject->freeContext(context);
+    if (val == NULL) { // just update context for current window
+        aggObject->freeContext(rule->aggContext);
+        rule->aggContext = context;
+    } else {
+        *val = aggObject->finalize(context);
+        aggObject->freeContext(context);
+    }
     return TSDB_OK;
 }
 
