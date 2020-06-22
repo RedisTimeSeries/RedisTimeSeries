@@ -54,6 +54,8 @@ Series *NewSeries(RedisModuleString *keyName,
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
     newSeries->totalSamples = 0;
+    newSeries->totalInserts = 0;
+    newSeries->totalUpserts = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
     newSeries->options = options;
@@ -230,6 +232,22 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
+size_t SeriesGetNumInserts(const Series *series) {
+    size_t numberInserts = 0;
+    if (series != NULL) {
+        numberInserts = series->totalInserts;
+    }
+    return numberInserts;
+}
+
+size_t SeriesGetNumUpserts(const Series *series) {
+    size_t numberUpserts = 0;
+    if (series != NULL) {
+        numberUpserts = series->totalUpserts;
+    }
+    return numberUpserts;
+}
+
 static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
@@ -329,6 +347,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
 
         upsertCompaction(series, &uCtx);
     }
+    series->totalUpserts++;
     return rv;
 }
 

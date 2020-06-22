@@ -38,6 +38,8 @@ typedef struct Series {
     RedisModuleString *srcKey;
     ChunkFuncs *funcs;
     size_t totalSamples;
+    size_t totalInserts; // this is different from totalSamples ( retention rules does not substract this )
+    size_t totalUpserts;
 } Series;
 
 typedef struct SeriesIterator {
@@ -68,6 +70,8 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series, Label *labels, size_t labelsCount);
 size_t SeriesGetNumSamples(const Series *series);
+size_t SeriesGetNumInserts(const Series *series);
+size_t SeriesGetNumUpserts(const Series *series);
 
 // Iterator over the series
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);

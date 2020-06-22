@@ -1475,6 +1475,24 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('ts.add ooo', i, i) == i
             assert r.execute_command('ts.range ooo 0', batch * 2 - retention - 2) == []
             assert len(r.execute_command('ts.range ooo - +')) == retention + 1
+    
+    def test_ooo_percentage(self):
+        with self.redis() as r:
+            retention = 13
+            batch = 99
+            r.execute_command('ts.create', 'ooo_percentage', 'CHUNK_SIZE', 10)
+            info_dict = r.execute_command('ts.info ooo_percentage')
+            oooPercentage = float(info_dict[3])
+            assert oooPercentage == 0.0
+
+            for i in range(batch):
+                assert r.execute_command('ts.add ooo_percentage', i, i) == i
+
+            assert r.execute_command('ts.add ooo_percentage', 5, i) == 5
+        
+            info_dict = r.execute_command('ts.info ooo_percentage')
+            oooPercentage = float(info_dict[3])
+            assert oooPercentage >= 0.99 and oooPercentage <= 1.01
 
     def test_backfill_downsampling(self):
         with self.redis() as r:

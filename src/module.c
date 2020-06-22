@@ -285,10 +285,20 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    RedisModule_ReplyWithArray(ctx, 10 * 2);
+    RedisModule_ReplyWithArray(ctx, 11 * 2);
 
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
     RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series));
+    const long long totalInserts = SeriesGetNumInserts(series);
+    const long long totalUpserts = SeriesGetNumUpserts(series);
+    double OutOfOrderRate = 0.0;
+    if (totalInserts!=0){
+        OutOfOrderRate = ((double)totalUpserts) / ((double)totalInserts) * 100.0;
+    }
+    char buf[7];
+    snprintf(buf, 7, "%3.3f", OutOfOrderRate);
+    RedisModule_ReplyWithSimpleString(ctx, "OutOfOrderPercentage");
+    RedisModule_ReplyWithSimpleString(ctx, buf);
     RedisModule_ReplyWithSimpleString(ctx, "memoryUsage");
     RedisModule_ReplyWithLongLong(ctx, SeriesMemUsage(series));
     RedisModule_ReplyWithSimpleString(ctx, "firstTimestamp");
@@ -301,7 +311,6 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "maxSamplesPerChunk");
     RedisModule_ReplyWithLongLong(ctx, series->maxSamplesPerChunk);
-
     RedisModule_ReplyWithSimpleString(ctx, "labels");
     ReplyWithSeriesLabels(ctx, series);
 
@@ -716,6 +725,7 @@ static int internalAdd(RedisModuleCtx *ctx,
         }
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);
+    series->totalInserts++;
     return REDISMODULE_OK;
 }
 
