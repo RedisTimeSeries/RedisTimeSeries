@@ -674,53 +674,46 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
-        if (!rule->backfilled) {
-            SeriesAddSample(destSeries,
-                            rule->startCurrentTimeBucket,
-                            rule->aggClass->finalize(rule->aggContext));
-        } else {
-            u_int64_t ts = rule->startCurrentTimeBucket;
-            u_int64_t es = ts + rule->timeBucket - 1;
-            double val;
-            if (SeriesCalcRange(series, ts, es, rule->aggClass, &val) != TSDB_OK) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
-                return;
-            }
-            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, val);
-            rule->backfilled = false;
-        }
+
+        SeriesAddSample(
+            destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
     }
-    // have to query on the fly
-    if (!rule->backfilled) {
-        rule->aggClass->appendValue(rule->aggContext, value);
-    }
+    rule->aggClass->appendValue(rule->aggContext, value);
 }
 
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
                        double value) {
-    int retval = SeriesAddSample(series, timestamp, value);
-    if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
+    timestamp_t lastTS = series->lastTimestamp;
+    uint64_t retention = series->retentionTime;
+    // ensure inside retention period.
+    if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
+        // TODO: downsample window is partially trimmed
         RedisModule_ReplyWithError(
             ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
         return REDISMODULE_ERR;
-    } else if (retval == TSDB_ERR_TIMESTAMP_OCCUPIED) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is occupied");
-        return REDISMODULE_ERR;
-    } else if (retval != TSDB_OK) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
-        return REDISMODULE_ERR;
     }
 
-    // handle compaction rules
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        handleCompaction(ctx, series, rule, timestamp, value);
-        rule = rule->nextRule;
+    if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
+        if (SeriesUpsertSample(series, timestamp, value) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: Error at upsert");
+            return REDISMODULE_ERR;
+        }
+    } else {
+        if (SeriesAddSample(series, timestamp, value) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: Error at add");
+            return REDISMODULE_ERR;
+        }
+        // handle compaction rules
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            handleCompaction(ctx, series, rule, timestamp, value);
+            rule = rule->nextRule;
+        }
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     return REDISMODULE_OK;
