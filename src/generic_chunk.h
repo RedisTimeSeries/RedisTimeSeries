@@ -29,8 +29,6 @@ typedef enum {
 typedef struct UpsertCtx {
     Sample sample;
     Chunk_t *inChunk;       // original chunk  
-    short maxSamples;       // used for split
-    bool latestChunk;       // used for split
 } UpsertCtx;
 
 typedef struct ChunkFuncs {
