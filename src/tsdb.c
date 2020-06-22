@@ -305,8 +305,6 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
     UpsertCtx uCtx = {
         .inChunk = chunk,
         .sample = sample,
-        .latestChunk = latestChunk,
-        .maxSamples = series->maxSamplesPerChunk,
     };
 
     int size = 0;

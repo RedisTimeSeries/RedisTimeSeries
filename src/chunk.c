@@ -110,7 +110,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
             break;
         }
     }
-    // update value in case timestamp exists 
+    // update value in case timestamp exists
     if (ts == sample->timestamp) {
         regChunk->samples[i].value = uCtx->sample.value;
         return CR_OK;

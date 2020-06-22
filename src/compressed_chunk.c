@@ -15,7 +15,7 @@
 #include "rmutil/alloc.h"
 
 #define BIT 8
-#define EXTRA_SPACE 128
+#define EXTRA_SPACE 1024
 
 /*********************
  *  Chunk functions  *
@@ -51,7 +51,7 @@ static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample)
     }
 }
 
-static void trimChunk(CompressedChunk *chunk, short minSize) {
+static void trimChunk(CompressedChunk *chunk, int minSize) {
     int excess = chunk->size - (chunk->idx) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
