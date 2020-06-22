@@ -372,8 +372,17 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         // 16 bytes of value + gorilla overhead
         return CR_END;
     } else {
-        appendInteger(chunk, timestamp);
-        appendFloat(chunk, value);
+        u_int64_t idx = chunk->idx;
+        u_int64_t prevTimestamp = chunk->prevTimestamp;
+        int64_t prevTimestampDelta = chunk->prevTimestampDelta;
+        if (appendInteger(chunk, timestamp) != CR_OK)
+            return CR_END;
+        if (appendFloat(chunk, value) != CR_OK) {
+            chunk->idx = idx;
+            chunk->prevTimestamp = prevTimestamp;
+            chunk->prevTimestampDelta = prevTimestampDelta;
+            return CR_END;
+        }
     }
     chunk->count++;
     return CR_OK;
