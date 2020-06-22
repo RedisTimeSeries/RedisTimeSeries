@@ -54,14 +54,7 @@ typedef enum {
   CR_OK = 0,    // RM_OK
   CR_ERR = 1,   // RM_ERR
   CR_END = 2,   // END_OF_CHUNK
-  CR_OCCUPIED = 3,
-  CR_DEL_FAIL = 4,
 } ChunkResult;
-
-typedef enum {
-  UPSERT_ADD,
-  UPSERT_DEL
-} UpsertType;
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 

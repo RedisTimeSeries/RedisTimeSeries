@@ -131,18 +131,12 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
 
     if (ts == iterSample.timestamp) {
         res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        *size = -1;                        // we skipped a sample
-    } else if (uCtx->type == UPSERT_DEL) { // No sample to delete
-        rv = CR_DEL_FAIL;
-        goto clean;
+        *size = -1; // we skipped a sample
     }
-
-    if (uCtx->type != UPSERT_DEL) {
-        ChunkResult resSample = Compressed_AddSample(newChunk, &uCtx->sample);
-        extendChunk(resSample, newChunk, &uCtx->sample);
-        *size += 1;
-    }
-
+    // upsert the sample
+    ChunkResult resSample = Compressed_AddSample(newChunk, &uCtx->sample);
+    extendChunk(resSample, newChunk, &uCtx->sample);
+    *size += 1;
     if (i != numSamples) { // sample is not last
         while (res == CR_OK) {
             res = Compressed_AddSample(newChunk, &iterSample);
@@ -154,7 +148,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     // trim data
     trimChunk(newChunk, oldChunk->size);
     swapChunks(newChunk, oldChunk);
-clean:
+
     Compressed_FreeChunkIterator(iter, false);
     Compressed_FreeChunk(newChunk);
     return rv;
