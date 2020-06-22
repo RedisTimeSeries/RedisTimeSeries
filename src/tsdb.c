@@ -448,25 +448,6 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     return CR_OK;
 }
 
-int SeriesUpdateLastSample(Series *series) {
-    Sample sample = { 0 };
-    // iterate in reverse and get first sample
-    SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, true);
-    if (iter.series == NULL) {
-        return REDISMODULE_ERR;
-    }
-
-    if (SeriesIteratorGetNext(&iter, &sample) != CR_OK) {
-        SeriesIteratorClose(&iter);
-        return REDISMODULE_ERR;
-    }
-
-    series->lastTimestamp = sample.timestamp;
-    series->lastValue = sample.value;
-    SeriesIteratorClose(&iter);
-    return REDISMODULE_OK;
-}
-
 CompactionRule *SeriesAddRule(Series *series,
                               RedisModuleString *destKeyStr,
                               int aggType,
@@ -615,6 +596,8 @@ int SeriesCalcRange(Series *series,
     while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
     }
+    SeriesIteratorClose(&iterator);
+
     *val = aggObject->finalize(context);
     aggObject->freeContext(context);
     return TSDB_OK;
