@@ -262,7 +262,7 @@ static void upsertRules(Series *series, UpsertCtx *uCtx) {
     RedisModule_FreeThreadSafeContext(ctx);
 }
 
-int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, UpsertType type) {
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
     bool latestChunk = true;
     void *chunkKey = NULL;
     ChunkFuncs *funcs = series->funcs;
@@ -285,8 +285,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR &&
-        type != UPSERT_DEL) {
+    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
@@ -304,7 +303,6 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
 
     Sample sample = { .timestamp = timestamp, .value = value };
     UpsertCtx uCtx = {
-        .type = type,
         .inChunk = chunk,
         .sample = sample,
         .latestChunk = latestChunk,
@@ -316,28 +314,10 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, 
     if (rv == REDISMODULE_OK) {
         series->totalSamples += size;
         if (timestamp == series->lastTimestamp) {
-            //
-            if (type == UPSERT_ADD) {
-                series->lastValue = value;
-            } else { // UPSERT_DEL
-                if (SeriesUpdateLastSample(series) != REDISMODULE_OK) {
-                    return REDISMODULE_ERR;
-                }
-            }
+            series->lastValue = value;
         }
         timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
-        if (type == UPSERT_DEL && funcs->GetNumOfSample(uCtx.inChunk) == 0) {
-            // remove from dictionary and free empty chunk
-            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
-                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
-            }
-            funcs->FreeChunk(uCtx.inChunk);
-            if (RedisModule_DictSize(series->chunks) == 0) {
-                Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
-                dictOperator(series->chunks, newChunk, 0, DICT_OP_SET);
-                series->lastChunk = newChunk;
-            }
-        } else if (funcs->GetFirstTimestamp(uCtx.inChunk) != chunkFirstTS) {
+        if (chunkFirstTSAfterOp != chunkFirstTS) {
             // update chunk in dictionary if first timestamp changed
             if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
                 dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
@@ -361,7 +341,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     // backfilling or update
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
-        return SeriesUpsertSample(series, timestamp, value, UPSERT_ADD);
+        return SeriesUpsertSample(series, timestamp, value);
     }
 
     Sample sample = { .timestamp = timestamp, .value = value };
@@ -621,10 +601,10 @@ int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
 }
 
 int SeriesCalcRange(Series *series,
-                       timestamp_t start_ts,
-                       timestamp_t end_ts,
-                       AggregationClass *aggObject,
-                       double *val) {
+                    timestamp_t start_ts,
+                    timestamp_t end_ts,
+                    AggregationClass *aggObject,
+                    double *val) {
     Sample sample = { 0 };
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     if (iterator.series == NULL) {

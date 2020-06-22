@@ -83,30 +83,6 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
-static ChunkResult operateOccupiedSample(UpsertCtx *uCtx, size_t idx, int *size) {
-    Chunk *regChunk = (Chunk *)uCtx->inChunk;
-    short numSamples = regChunk->num_samples;
-    // printf("cur %lu vs sample %lu, %f\n", ChunkGetSample(regChunk, i)->timestamp,
-    // sample->timestamp, sample->value);
-    switch (uCtx->type) {
-        case UPSERT_ADD:
-            regChunk->samples[idx] = uCtx->sample;
-            return CR_OK;
-        case UPSERT_DEL: {
-            memmove(&regChunk->samples[idx],
-                    &regChunk->samples[idx + 1],
-                    (numSamples - idx) * sizeof(Sample));
-            if (numSamples == regChunk->max_samples) {
-                // TODO: adjust memory
-            }
-            regChunk->num_samples--;
-            *size = -1;
-            return CR_OK;
-        }
-    }
-    return CR_ERR;
-}
-
 static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
     if (chunk->num_samples == chunk->max_samples) {
         chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
@@ -133,9 +109,8 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
         }
     }
     if (ts == ChunkGetSample(regChunk, i)->timestamp) {
-        return operateOccupiedSample(uCtx, i, size);
-    } else if (uCtx->type == UPSERT_DEL) {
-        return CR_DEL_FAIL;
+        regChunk->samples[i] = uCtx->sample;
+        return CR_OK;
     }
 
     if (i == 0) {
