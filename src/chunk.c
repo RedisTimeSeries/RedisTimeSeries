@@ -103,13 +103,16 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     short numSamples = regChunk->num_samples;
     // find sample location
     size_t i = 0;
+    Sample *sample = NULL;
     for (; i < numSamples; ++i) {
-        if (ts <= ChunkGetSample(regChunk, i)->timestamp) {
+        sample = ChunkGetSample(regChunk, i);
+        if (ts <= sample->timestamp) {
             break;
         }
     }
-    if (ts == ChunkGetSample(regChunk, i)->timestamp) {
-        regChunk->samples[i] = uCtx->sample;
+    // update value in case timestamp exists 
+    if (ts == sample->timestamp) {
+        regChunk->samples[i].value = uCtx->sample.value;
         return CR_OK;
     }
 
