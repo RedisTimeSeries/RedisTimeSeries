@@ -15,7 +15,6 @@
 #include "rmutil/alloc.h"
 
 #define BIT 8
-#define EXTRA_SPACE 1024
 
 /*********************
  *  Chunk functions  *
@@ -46,7 +45,7 @@ static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample)
     if (res != CR_OK) {
         chunk->size += 64;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
-        printf("Chunk extended to %ld", chunk->size);
+        printf("Chunk extended to %ld ", chunk->size);
         Compressed_AddSample(chunk, sample);
     }
 }
@@ -104,14 +103,11 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     *size = 0;
     ChunkResult rv = CR_OK;
-    ChunkResult res = CR_OK;
+    ChunkResult addRes = CR_OK;
+    ChunkResult nextRes = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
 
-    short newSize = oldChunk->size / sizeof(Sample);
-    // extend size if approaching end
-    if (((oldChunk->idx) / BIT) + EXTRA_SPACE >= oldChunk->size) {
-        newSize += EXTRA_SPACE / sizeof(Sample);
-    };
+    size_t newSize = oldChunk->size / sizeof(Sample) + 64;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
@@ -121,27 +117,28 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     size_t i = 0;
     Sample iterSample;
     for (; i < numSamples; ++i) {
-        res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         if (iterSample.timestamp >= ts) {
             break;
         }
-        res = Compressed_AddSample(newChunk, &iterSample);
-        extendChunk(res, newChunk, &iterSample);
+        addRes = Compressed_AddSample(newChunk, &iterSample);
+        extendChunk(addRes, newChunk, &iterSample);
     }
 
     if (ts == iterSample.timestamp) {
-        res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         *size = -1; // we skipped a sample
+        ++i;
     }
     // upsert the sample
     ChunkResult resSample = Compressed_AddSample(newChunk, &uCtx->sample);
     extendChunk(resSample, newChunk, &uCtx->sample);
     *size += 1;
     if (i != numSamples) { // sample is not last
-        while (res == CR_OK) {
-            res = Compressed_AddSample(newChunk, &iterSample);
-            extendChunk(res, newChunk, &iterSample);
-            res = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        while (nextRes == CR_OK) {
+            addRes = Compressed_AddSample(newChunk, &iterSample);
+            extendChunk(addRes, newChunk, &iterSample);
+            nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         }
     }
 
