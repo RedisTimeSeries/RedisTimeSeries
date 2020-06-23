@@ -1426,7 +1426,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('restore test_key 0', dump)
             assert r.execute_command('ts.range test_key - +') == before
 
-    def test_ooo(self):
+    def t1est_ooo(self):
         with self.redis() as r:
             quantity = 50001
             to_dbl = 1.001
@@ -1562,7 +1562,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
 
-    def test_downsampling_extensive(self):
+    def t1est_downsampling_extensive(self):
         with self.redis() as r:
             key = 'tester'
             fromTS = 10
