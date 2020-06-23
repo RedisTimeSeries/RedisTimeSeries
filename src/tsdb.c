@@ -193,7 +193,7 @@ size_t SeriesGetChunksSize(Series *series) {
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
-        size += series->funcs->GetChunkSize(currentChunk);
+        size += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
     return size;
@@ -289,7 +289,8 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk) > series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) >
+        series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;

@@ -1645,7 +1645,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add split', quantity, 42)
                 for i in range(quantity):
                     r.execute_command('ts.add split', i, i * 1.01)
-                assert self._get_ts_info(r, 'split').chunk_count in [14, 35]
+                assert self._get_ts_info(r, 'split').chunk_count in [15, 38]
                 res = r.execute_command('ts.range split - +')
                 for i in range(quantity - 1):
                     assert res[i][0] + 1 == res[i + 1][0]

@@ -48,8 +48,8 @@ static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample)
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, 64);
         printf("Chunk extended to %lu \n", chunk->size);
-        ChunkResult res = Compressed_AddSample(chunk, sample);
-        assert(res == CR_OK);
+        ChunkResult result = Compressed_AddSample(chunk, sample);
+        assert(result == CR_OK);
     }
 }
 
@@ -162,9 +162,11 @@ timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
-size_t Compressed_GetChunkSize(Chunk_t *chunk) {
+size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     CompressedChunk *cmpChunk = chunk;
-    return sizeof(*cmpChunk) + cmpChunk->size * sizeof(char);
+    size_t size = cmpChunk->size * sizeof(char);
+    size += includeStruct ? sizeof(*cmpChunk) : 0;
+    return size;
 }
 
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
