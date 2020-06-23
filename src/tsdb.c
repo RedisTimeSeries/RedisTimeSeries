@@ -273,7 +273,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
     Chunk_t *chunk = series->lastChunk;
     timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 
-    if (timestamp < chunkFirstTS || RedisModule_DictSize(series->chunks) > 1) {
+    if (timestamp < chunkFirstTS && RedisModule_DictSize(series->chunks) > 1) {
         // Upsert in an older chunk
         latestChunk = false;
         timestamp_t rax_key;
