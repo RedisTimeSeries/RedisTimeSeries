@@ -125,18 +125,16 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     if (ts == iterSample.timestamp) {
         nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         *size = -1; // we skipped a sample
-        ++i;
     }
     // upsert the sample
     ChunkResult resSample = Compressed_AddSample(newChunk, &uCtx->sample);
     extendChunk(resSample, newChunk, &uCtx->sample);
     *size += 1;
-    if (i != numSamples) { // sample is not last
-        while (nextRes == CR_OK) {
-            addRes = Compressed_AddSample(newChunk, &iterSample);
-            extendChunk(addRes, newChunk, &iterSample);
-            nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
-        }
+
+    while (nextRes == CR_OK) {
+        addRes = Compressed_AddSample(newChunk, &iterSample);
+        extendChunk(addRes, newChunk, &iterSample);
+        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
     }
 
     // trim data
