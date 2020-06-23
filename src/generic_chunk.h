@@ -44,7 +44,7 @@ typedef struct ChunkFuncs {
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 
-    size_t(*GetChunkSize)(Chunk_t *chunk);
+    size_t(*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
     u_int64_t(*GetLastTimestamp)(Chunk_t *chunk);
     u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);

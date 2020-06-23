@@ -163,6 +163,9 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
     free(iter);
 }
 
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk) {
-    return sizeof(Chunk) + ((Chunk *)chunk)->max_samples * sizeof(Sample);
+size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
+    Chunk *uncompChunk = chunk;
+    size_t size = uncompChunk->max_samples * sizeof(Sample);
+    size += includeStruct ? sizeof(*uncompChunk) : 0;
+    return size;
 }
