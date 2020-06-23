@@ -43,10 +43,13 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
 
 static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
+        int oldsize = chunk->size;
         chunk->size += 64;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
-        printf("Chunk extended to %ld ", chunk->size);
-        Compressed_AddSample(chunk, sample);
+        memset((char *)chunk->data + oldsize, 0, 64);
+        printf("Chunk extended to %lu \n", chunk->size);
+        ChunkResult res = Compressed_AddSample(chunk, sample);
+        assert(res == CR_OK);
     }
 }
 
@@ -92,12 +95,6 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
-
-    // error:
-    Compressed_FreeChunkIterator(iter, false);
-    Compressed_FreeChunk(newChunk1);
-    Compressed_FreeChunk(newChunk2);
-    return NULL;
 }
 
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
