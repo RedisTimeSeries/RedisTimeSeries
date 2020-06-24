@@ -313,7 +313,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
 
     int size = 0;
     ChunkResult rv = funcs->UpsertSample(&uCtx, &size);
-    if (rv == REDISMODULE_OK) {
+    if (rv == CR_OK) {
         series->totalSamples += size;
         if (timestamp == series->lastTimestamp) {
             series->lastValue = value;
