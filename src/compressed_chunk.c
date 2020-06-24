@@ -47,7 +47,7 @@ static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample)
         chunk->size += 64;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, 64);
-        printf("Chunk extended to %lu \n", chunk->size);
+        // printf("Chunk extended to %lu \n", chunk->size);
         ChunkResult result = Compressed_AddSample(chunk, sample);
         assert(result == CR_OK);
     }
@@ -104,7 +104,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     ChunkResult nextRes = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
 
-    size_t newSize = oldChunk->size / sizeof(Sample) + 64;
+    size_t newSize = oldChunk->size / sizeof(Sample);
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
