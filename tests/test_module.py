@@ -229,8 +229,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.ADD')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.DEL')
-            with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.MADD')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.INCRBY')
@@ -1252,8 +1250,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert 3000 == res[2]
 
             res = r.execute_command("ts.madd", 'test_key1', now + 1000, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
-            assert (now + 1000, 3001) == (res[0], res[2])
-            #assert isinstance(res[1], redis.ResponseError)
+            assert (now + 1000, 1000, 3001) == (res[0], res[1], res[2])
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
@@ -1426,7 +1423,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('restore test_key 0', dump)
             assert r.execute_command('ts.range test_key - +') == before
 
-    def t1est_ooo(self):
+    def test_ooo(self):
         with self.redis() as r:
             quantity = 50001
             to_dbl = 1.001
@@ -1562,7 +1559,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
 
-    def t1est_downsampling_extensive(self):
+    def test_downsampling_extensive(self):
         with self.redis() as r:
             key = 'tester'
             fromTS = 10
@@ -1592,46 +1589,6 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                         assert expected_result1 != expected_result2
                         assert actual_result1 != actual_result2
 
-                    sliced_actual_list1 = actual_result1[5:10]
-                    sliced_actual_list2 = actual_result2[5:10]
-
-                    if agg == 'avg':
-                        assert sliced_actual_list1 == [[60L, '656.5'], [70L, '756.5'], [80L, '856.5'], [90L, '956.5'], [100L, '1056.5']]
-                        assert sliced_actual_list2 == [[60L, '594.9'], [70L, '684.9'], [80L, '774.9'], [90L, '864.9'], [100L, '954.9']]
-                    elif agg == 'sum':
-                        assert sliced_actual_list1 == [[60L, '6565'], [70L, '7565'], [80L, '8565'], [90L, '9565'], [100L, '10565']]
-                        assert sliced_actual_list2 == [[60L, '5949'], [70L, '6849'], [80L, '7749'], [90L, '8649'], [100L, '9549']]
-                    elif agg == 'min':
-                        assert sliced_actual_list1 == [[60L, '623'], [70L, '723'], [80L, '823'], [90L, '923'], [100L, '1023']]
-                        assert sliced_actual_list2 == [[60L, '42'], [70L, '42'], [80L, '42'], [90L, '42'], [100L, '42']]
-                    elif agg == 'max':
-                        assert sliced_actual_list1 == [[60L, '697'], [70L, '797'], [80L, '897'], [90L, '997'], [100L, '1097']]
-                        assert sliced_actual_list2 == [[60L, '697'], [70L, '797'], [80L, '897'], [90L, '997'], [100L, '1097']]
-                    elif agg == 'count':
-                        assert sliced_actual_list1 == [[60L, '10'], [70L, '10'], [80L, '10'], [90L, '10'], [100L, '10']]
-                        assert sliced_actual_list2 == [[60L, '10'], [70L, '10'], [80L, '10'], [90L, '10'], [100L, '10']]
-                    elif agg == 'first':
-                        assert sliced_actual_list1 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
-                        assert sliced_actual_list2 == [[60L, '631'], [70L, '731'], [80L, '831'], [90L, '931'], [100L, '1031']]
-                    elif agg == 'range':
-                        assert sliced_actual_list1 == [[60L, '74'], [70L, '74'], [80L, '74'], [90L, '74'], [100L, '74']]
-                        assert sliced_actual_list2 == [[60L, '655'], [70L, '755'], [80L, '855'], [90L, '955'], [100L, '1055']]
-                    elif agg == 'last':
-                        assert sliced_actual_list1 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
-                        assert sliced_actual_list2 == [[60L, '684'], [70L, '784'], [80L, '884'], [90L, '984'], [100L, '1084']]
-                    elif agg == 'std.p':
-                        assert sliced_actual_list1 == [[60L, '25.8698666405531'], [70L, '25.8698666405531'], [80L, '25.8698666405531'], [90L, '25.8698666405531'], [100L, '25.8698666405531']]
-                        assert sliced_actual_list2 == [[60L, '186.106125638035'], [70L, '215.85525242625'], [80L, '245.665402529538'], [90L, '275.516768999638'], [100L, '305.397265868573']]
-                    elif agg == 'std.s':
-                        assert sliced_actual_list1 == [[60L, '27.2692337829854'], [70L, '27.2692337829854'], [80L, '27.2692337829854'], [90L, '27.2692337829854'], [100L, '27.2692337829854']]
-                        assert sliced_actual_list2 == [[60L, '196.173081175216'], [70L, '227.531414192512'], [80L, '258.95407143181'], [90L, '290.420174536443'], [100L, '321.916983777564']]
-                    elif agg == 'var.p':
-                        assert sliced_actual_list1 == [[60L, '669.25'], [70L, '669.25'], [80L, '669.25'], [90L, '669.25'], [100L, '669.25']]
-                        assert sliced_actual_list2 == [[60L, '34635.4899999999'], [70L, '46593.49'], [80L, '60351.49'], [90L, '75909.49'], [100L, '93267.49']]
-                    elif agg == 'var.s':
-                        assert sliced_actual_list1 == [[60L, '743.611111111111'], [70L, '743.611111111111'], [80L, '743.611111111111'], [90L, '743.611111111111'], [100L, '743.611111111111']]
-                        assert sliced_actual_list2 == [[60L, '38483.8777777777'], [70L, '51770.5444444445'], [80L, '67057.2111111112'], [90L, '84343.8777777778'], [100L, '103630.544444444']]
-
                     r.execute_command('DEL', key)
                     r.execute_command('DEL', agg_key)
 
@@ -1645,7 +1602,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add split', quantity, 42)
                 for i in range(quantity):
                     r.execute_command('ts.add split', i, i * 1.01)
-                assert self._get_ts_info(r, 'split').chunk_count in [15, 38]
+                assert self._get_ts_info(r, 'split').chunk_count in [13, 32]
                 res = r.execute_command('ts.range split - +')
                 for i in range(quantity - 1):
                     assert res[i][0] + 1 == res[i + 1][0]

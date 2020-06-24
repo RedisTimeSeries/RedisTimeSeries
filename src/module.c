@@ -693,8 +693,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     // ensure inside retention period.
     if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
         // TODO: downsample window is partially trimmed
-        RedisModule_ReplyWithError(
-            ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
 

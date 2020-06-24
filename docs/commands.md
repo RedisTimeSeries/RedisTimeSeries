@@ -97,6 +97,7 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
   This is the reason why `labels` and `retentionTime` are optional arguments.
 - When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionTime`.
   Setting the `labels` and `retentionTime` introduces additional time complexity.
+- Updating a sample in a trimmed window will update down-sampling aggregation based on the existing data.
 
 ### TS.MADD
 
@@ -123,20 +124,6 @@ TS.MADD key timestamp value [key timestamp value ...]
 
 If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
 The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
-
-### TS.DEL
-
-Delete a sample from a series
-
-```sql
-TS.ADD key timestamp
-```
-
-* timestamp - UNIX timestamp of the sample.
-
-#### Complexity
-
-The complexity of `TS.DEL` is O(chunk_size).
 
 ### TS.INCRBY/TS.DECRBY
 
