@@ -692,7 +692,6 @@ static int internalAdd(RedisModuleCtx *ctx,
     uint64_t retention = series->retentionTime;
     // ensure inside retention period.
     if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
-        // TODO: downsample window is partially trimmed
         RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
