@@ -59,8 +59,8 @@ static void trimChunk(CompressedChunk *chunk, int minSize) {
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
-    if (excess > 0) {
-        size_t newSize = max(chunk->size - excess + 2, minSize);
+    if (excess > 1) {
+        size_t newSize = max(chunk->size - excess + 1, minSize);
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
     }
