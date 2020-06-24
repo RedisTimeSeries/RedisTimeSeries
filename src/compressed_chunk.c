@@ -41,15 +41,16 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
     *b = tmp;
 }
 
-static void extendChunk(ChunkResult res, CompressedChunk *chunk, Sample *sample) {
+static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
+    ChunkResult res = Compressed_AddSample(chunk, sample);
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += 64;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, 64);
         // printf("Chunk extended to %lu \n", chunk->size);
-        ChunkResult result = Compressed_AddSample(chunk, sample);
-        assert(result == CR_OK);
+        res = Compressed_AddSample(chunk, sample);
+        assert(res == CR_OK);
     }
 }
 
@@ -78,13 +79,11 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
-        ChunkResult res = Compressed_AddSample(newChunk1, &sample);
-        extendChunk(res, newChunk1, &sample);
+        ensureAddSample(newChunk1, &sample);
     }
     for (; i < curChunk->count; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
-        ChunkResult res = Compressed_AddSample(newChunk2, &sample);
-        extendChunk(res, newChunk2, &sample);
+        ensureAddSample(newChunk2, &sample);
     }
 
     trimChunk(newChunk1, 0);
@@ -100,7 +99,6 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     *size = 0;
     ChunkResult rv = CR_OK;
-    ChunkResult addRes = CR_OK;
     ChunkResult nextRes = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
 
@@ -118,8 +116,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
         if (iterSample.timestamp >= ts) {
             break;
         }
-        addRes = Compressed_AddSample(newChunk, &iterSample);
-        extendChunk(addRes, newChunk, &iterSample);
+        ensureAddSample(newChunk, &iterSample);
     }
 
     if (ts == iterSample.timestamp) {
@@ -127,14 +124,14 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
         *size = -1; // we skipped a sample
     }
     // upsert the sample
-    ChunkResult resSample = Compressed_AddSample(newChunk, &uCtx->sample);
-    extendChunk(resSample, newChunk, &uCtx->sample);
+    ensureAddSample(newChunk, &uCtx->sample);
     *size += 1;
 
-    while (nextRes == CR_OK) {
-        addRes = Compressed_AddSample(newChunk, &iterSample);
-        extendChunk(addRes, newChunk, &iterSample);
-        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+    if (i < numSamples) {
+        while (nextRes == CR_OK) {
+            ensureAddSample(newChunk, &iterSample);
+            nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        }
     }
 
     // trim data

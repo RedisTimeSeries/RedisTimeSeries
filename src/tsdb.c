@@ -79,7 +79,6 @@ void SeriesTrim(Series *series) {
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
-    // TODO: retain data of largest downsample windows update/deletes
     timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime
                                    ? series->lastTimestamp - series->retentionTime
                                    : 0;
@@ -526,8 +525,6 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     rule->timeBucket = timeBucket;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
-    rule->backfilled = false;
-
     rule->nextRule = NULL;
 
     return rule;
