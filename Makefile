@@ -31,6 +31,9 @@ build:
 clean:
 	@$(MAKE) -C src clean
 
+format:
+	@$(MAKE) -C src format
+
 test:
 	@$(MAKE) -C src tests
 

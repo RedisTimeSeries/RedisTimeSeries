@@ -21,6 +21,25 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
+    Chunk *curChunk = (Chunk *)chunk;
+    size_t split = curChunk->num_samples / 2;
+    size_t curNumSamples = curChunk->num_samples - split;
+
+    // create chunk and copy samples
+    Chunk *newChunk = Uncompressed_NewChunk(split);
+    for (size_t i = 0; i < split; ++i) {
+        Sample *sample = &curChunk->samples[curNumSamples + i];
+        Uncompressed_AddSample(newChunk, sample);
+    }
+
+    // update current chunk
+    curChunk->max_samples = curChunk->num_samples = curNumSamples;
+    curChunk->samples = realloc(curChunk->samples, curNumSamples * sizeof(Sample));
+
+    return newChunk;
+}
+
 static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->max_samples;
 }
@@ -64,6 +83,48 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
+static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
+    if (chunk->num_samples == chunk->max_samples) {
+        chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
+    }
+    if (idx < chunk->num_samples) { // sample is not last
+        memmove(&chunk->samples[idx + 1],
+                &chunk->samples[idx],
+                (chunk->num_samples - idx) * sizeof(Sample));
+    }
+    chunk->samples[idx] = *sample;
+    chunk->num_samples++;
+}
+
+ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
+    *size = 0;
+    Chunk *regChunk = (Chunk *)uCtx->inChunk;
+    timestamp_t ts = uCtx->sample.timestamp;
+    short numSamples = regChunk->num_samples;
+    // find sample location
+    size_t i = 0;
+    Sample *sample = NULL;
+    for (; i < numSamples; ++i) {
+        sample = ChunkGetSample(regChunk, i);
+        if (ts <= sample->timestamp) {
+            break;
+        }
+    }
+    // update value in case timestamp exists
+    if (ts == sample->timestamp) {
+        regChunk->samples[i].value = uCtx->sample.value;
+        return CR_OK;
+    }
+
+    if (i == 0) {
+        regChunk->base_timestamp = ts;
+    }
+
+    upsertChunk(regChunk, i, &uCtx->sample);
+    *size = 1;
+    return CR_OK;
+}
+
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
@@ -102,6 +163,9 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
     free(iter);
 }
 
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk) {
-    return sizeof(Chunk) + ((Chunk *)chunk)->max_samples * sizeof(Sample);
+size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
+    Chunk *uncompChunk = chunk;
+    size_t size = uncompChunk->max_samples * sizeof(Sample);
+    size += includeStruct ? sizeof(*uncompChunk) : 0;
+    return size;
 }

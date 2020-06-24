@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ * Copyright 2018-2020 Redis Labs Ltd. and Contributors
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
@@ -13,6 +13,8 @@
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
 #include "rmutil/alloc.h"
+
+#define BIT 8
 
 /*********************
  *  Chunk functions  *
@@ -33,6 +35,114 @@ void Compressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
+    CompressedChunk tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
+    ChunkResult res = Compressed_AddSample(chunk, sample);
+    if (res != CR_OK) {
+        int oldsize = chunk->size;
+        chunk->size += 64;
+        chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
+        memset((char *)chunk->data + oldsize, 0, 64);
+        // printf("Chunk extended to %lu \n", chunk->size);
+        res = Compressed_AddSample(chunk, sample);
+        assert(res == CR_OK);
+    }
+}
+
+static void trimChunk(CompressedChunk *chunk, int minSize) {
+    int excess = chunk->size - (chunk->idx) / BIT;
+
+    assert(excess >= 0); // else we have written beyond allocated memory
+
+    if (excess > 0) {
+        size_t newSize = max(chunk->size - excess + 2, minSize);
+        chunk->data = realloc(chunk->data, newSize);
+        chunk->size = newSize;
+    }
+}
+
+Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
+    CompressedChunk *curChunk = chunk;
+    size_t split = curChunk->count / 2;
+    size_t curNumSamples = curChunk->count - split;
+
+    // add samples in new chunks
+    size_t i = 0;
+    Sample sample;
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
+    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
+    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
+    for (; i < curNumSamples; ++i) {
+        Compressed_ChunkIteratorGetNext(iter, &sample);
+        ensureAddSample(newChunk1, &sample);
+    }
+    for (; i < curChunk->count; ++i) {
+        Compressed_ChunkIteratorGetNext(iter, &sample);
+        ensureAddSample(newChunk2, &sample);
+    }
+
+    trimChunk(newChunk1, 0);
+    trimChunk(newChunk2, 0);
+    swapChunks(curChunk, newChunk1);
+
+    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunk(newChunk1);
+
+    return newChunk2;
+}
+
+ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
+    *size = 0;
+    ChunkResult rv = CR_OK;
+    ChunkResult nextRes = CR_OK;
+    CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
+
+    size_t newSize = oldChunk->size / sizeof(Sample);
+
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
+    timestamp_t ts = uCtx->sample.timestamp;
+    int numSamples = oldChunk->count;
+
+    size_t i = 0;
+    Sample iterSample;
+    for (; i < numSamples; ++i) {
+        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        if (iterSample.timestamp >= ts) {
+            break;
+        }
+        ensureAddSample(newChunk, &iterSample);
+    }
+
+    if (ts == iterSample.timestamp) {
+        nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        *size = -1; // we skipped a sample
+    }
+    // upsert the sample
+    ensureAddSample(newChunk, &uCtx->sample);
+    *size += 1;
+
+    if (i < numSamples) {
+        while (nextRes == CR_OK) {
+            ensureAddSample(newChunk, &iterSample);
+            nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        }
+    }
+
+    // trim data
+    trimChunk(newChunk, oldChunk->size);
+    swapChunks(newChunk, oldChunk);
+
+    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunk(newChunk);
+    return rv;
+}
+
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
@@ -49,9 +159,11 @@ timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
-size_t Compressed_GetChunkSize(Chunk_t *chunk) {
+size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     CompressedChunk *cmpChunk = chunk;
-    return sizeof(*cmpChunk) + cmpChunk->size * sizeof(char);
+    size_t size = cmpChunk->size * sizeof(char);
+    size += includeStruct ? sizeof(*cmpChunk) : 0;
+    return size;
 }
 
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {

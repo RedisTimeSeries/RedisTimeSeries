@@ -371,9 +371,7 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         u_int64_t idx = chunk->idx;
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
-        if (appendInteger(chunk, timestamp) != CR_OK)
-            return CR_END;
-        if (appendFloat(chunk, value) != CR_OK) {
+        if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
             chunk->idx = idx;
             chunk->prevTimestamp = prevTimestamp;
             chunk->prevTimestampDelta = prevTimestampDelta;
