@@ -1653,6 +1653,35 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     
                 r.execute_command('DEL split')
 
+    def test_rand_oom(self):
+        random.seed(20)
+        start_ts = 1592917924000
+        current_ts = long(start_ts)
+        data = []
+        ooo_data = []
+        start_ooo = random.randrange(500, 9000)
+        amount = random.randrange(250, 1000)
+        for i in xrange(10000):
+            val = '%.5f' % random.gauss(50, 10.5)
+            if i < start_ooo or i > start_ooo + amount:
+                data.append([current_ts, val])
+            else:
+                ooo_data.append([current_ts, val])
+            current_ts += random.randrange(20,1000)
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for sample in data:
+                r.execute_command('ts.add', 'tester', sample[0], sample[1])
+            for sample in ooo_data:
+                r.execute_command('ts.add', 'tester', sample[0], sample[1])
+
+            all_data = sorted(data + ooo_data, key=lambda x: x[0])
+            res = r.execute_command('ts.range', 'tester', '-', '+')
+            assert len(res) == len(all_data)
+            for i in  range(len(all_data)):
+                assert all_data[i][0] == res[i][0]
+                assert float(all_data[i][1]) == float(res[i][1])
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
