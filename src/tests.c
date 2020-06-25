@@ -125,6 +125,52 @@ MU_TEST(test_compressed_fail_appendInteger) {
     mu_assert_int_eq(1,Compressed_GetFirstTimestamp(chunk));
     mu_assert_int_eq(6,Compressed_GetLastTimestamp(chunk));
     Compressed_FreeChunk(chunk);
+    Compressed_FreeChunk(chunk2);
+}
+
+
+MU_TEST(test_Compressed_SplitChunk_empty) {
+    srand((unsigned int)time(NULL));
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create compressed chunk");
+    
+    CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
+    mu_assert(chunk2 != NULL, "splitted compressed chunk");
+    mu_assert_int_eq(0,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(0,Compressed_ChunkNumOfSample(chunk2));
+
+    Compressed_FreeChunk(chunk);
+    Compressed_FreeChunk(chunk2);
+}
+
+MU_TEST(test_Compressed_SplitChunk_odd) {
+    srand((unsigned int)time(NULL));
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create compressed chunk");
+
+    Sample s1 = { .timestamp = 4, .value = 5.0 };
+    Sample s2 = { .timestamp = 50, .value = 10.0 };
+    Sample s3 = { .timestamp = 100, .value = 10.0 };
+    ChunkResult rv = Compressed_AddSample(chunk,&s1);
+    mu_assert(rv == CR_OK, "add sample s1");
+
+    rv = Compressed_AddSample(chunk,&s2);
+    mu_assert(rv == CR_OK, "add sample s2");
+
+    rv = Compressed_AddSample(chunk,&s2);
+    mu_assert(rv == CR_OK, "add sample s3");
+    
+    mu_assert_int_eq(3,Compressed_ChunkNumOfSample(chunk));
+    
+    CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
+    mu_assert(chunk2 != NULL, "splitted compressed chunk");
+    mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1,Compressed_ChunkNumOfSample(chunk2));
+
+    Compressed_FreeChunk(chunk);
+    Compressed_FreeChunk(chunk2);
 }
 
 MU_TEST(test_invalid_policy) {
@@ -158,6 +204,8 @@ MU_TEST_SUITE(test_suite) {
 	MU_RUN_TEST(test_StringLenAggTypeToEnum);
     MU_RUN_TEST(test_compressed_upsert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
+    MU_RUN_TEST(test_Compressed_SplitChunk_empty);
+    MU_RUN_TEST(test_Compressed_SplitChunk_odd); 
 }
 
 int main(int argc, char *argv[]) {
