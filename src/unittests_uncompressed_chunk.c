@@ -13,7 +13,7 @@
 #include "tsdb.h"
 
 
-MU_TEST(test_uncompressed_upsert) {
+MU_TEST(test_Uncompressed_NewChunk) {
     srand((unsigned int)time(NULL));
     int total_data_points = 500;
     size_t max_chunk_size = 8192;
@@ -22,12 +22,13 @@ MU_TEST(test_uncompressed_upsert) {
     float minV = 0.0;
     float maxV = 100.0;
     for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size+=64 ){
-        Chunk_t *chunk = Uncompressed_NewChunk(chunk_size);
+        Chunk *chunk = Uncompressed_NewChunk(chunk_size);
         mu_assert(chunk != NULL, "create compressed chunk");
+        mu_assert_short_eq(0,chunk->num_samples);
         Uncompressed_FreeChunk(chunk);
     }
 }
 
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
-    MU_RUN_TEST(test_uncompressed_upsert);
+    MU_RUN_TEST(test_Uncompressed_NewChunk);
 }

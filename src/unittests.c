@@ -15,6 +15,7 @@
 
 int main(int argc, char *argv[]) {
     RMUTil_InitAlloc();
+    MU_DISABLE_PROGRESS_PRINT();
     MU_RUN_SUITE(parse_policies_test_suite);
     MU_RUN_SUITE(uncompressed_chunk_test_suite);
     MU_RUN_SUITE(compressed_chunk_test_suite);

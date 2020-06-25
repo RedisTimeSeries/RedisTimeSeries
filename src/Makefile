@@ -105,7 +105,10 @@ _SOURCES=\
 	tsdb.c
 
 _TEST_SOURCES=\
-	tests.c \
+	unittests.c \
+	unittests_parse_policies.c \
+	unittests_uncompressed_chunk.c \
+	unittests_compressed_chunk.c \
 	endianconv.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))

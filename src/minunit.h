@@ -54,6 +54,10 @@
 #include <mach/mach_time.h>
 #endif
 
+#if __GNUC__ >= 5 && !defined(__STDC_VERSION__)
+#define __func__ __extension__ __FUNCTION__
+#endif
+
 #else
 #error "Unable to define timers for an unknown OS."
 #endif
@@ -65,6 +69,8 @@
 #define MINUNIT_MESSAGE_LEN 1024
 /*  Accuracy with which floats are compared */
 #define MINUNIT_EPSILON 1E-12
+
+static int minunit_progress_print = 1;
 
 /*  Misc. counters */
 static int minunit_run = 0;
@@ -104,6 +110,11 @@ static void (*minunit_teardown)(void) = NULL;
 	minunit_teardown = teardown_fun;\
 )
 
+/*  Configure setup and teardown functions */
+#define MU_DISABLE_PROGRESS_PRINT() MU__SAFE_BLOCK(\
+	minunit_progress_print = 0;\
+)
+
 /*  Test runner */
 #define MU_RUN_TEST(test) MU__SAFE_BLOCK(\
 	if (minunit_real_timer==0 && minunit_proc_timer==0) {\
@@ -134,6 +145,7 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_end_real_timer - minunit_real_timer,\
 		minunit_end_proc_timer - minunit_proc_timer);\
 )
+#define MU_EXIT_CODE minunit_fail
 
 /*  Assertions */
 #define mu_check(test) MU__SAFE_BLOCK(\
@@ -143,7 +155,7 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_status = 1;\
 		return;\
 	} else {\
-		printf(".");\
+		if(minunit_progress_print==1){printf(".");}\
 	}\
 )
 
@@ -161,7 +173,37 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_status = 1;\
 		return;\
 	} else {\
-		printf(".");\
+		if(minunit_progress_print==1){printf(".");}\
+	}\
+)
+
+#define mu_assert_short_eq(expected, result) MU__SAFE_BLOCK(\
+	short minunit_tmp_e;\
+	short minunit_tmp_r;\
+	minunit_assert++;\
+	minunit_tmp_e = (expected);\
+	minunit_tmp_r = (result);\
+	if (minunit_tmp_e != minunit_tmp_r) {\
+		snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: %d expected but was %d", __func__, __FILE__, __LINE__, minunit_tmp_e, minunit_tmp_r);\
+		minunit_status = 1;\
+		return;\
+	} else {\
+		if(minunit_progress_print==1){printf(".");}\
+	}\
+)
+
+#define mu_assert_long_eq(expected, result) MU__SAFE_BLOCK(\
+	long long minunit_tmp_e;\
+	long long minunit_tmp_r;\
+	minunit_assert++;\
+	minunit_tmp_e = (expected);\
+	minunit_tmp_r = (result);\
+	if (minunit_tmp_e != minunit_tmp_r) {\
+		snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: %lld expected but was %lld", __func__, __FILE__, __LINE__, minunit_tmp_e, minunit_tmp_r);\
+		minunit_status = 1;\
+		return;\
+	} else {\
+		if(minunit_progress_print==1){printf(".");}\
 	}\
 )
 
@@ -176,7 +218,7 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_status = 1;\
 		return;\
 	} else {\
-		printf(".");\
+		if(minunit_progress_print==1){printf(".");}\
 	}\
 )
 
@@ -192,7 +234,23 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_status = 1;\
 		return;\
 	} else {\
-		printf(".");\
+		if(minunit_progress_print==1){printf(".");}\
+	}\
+)
+
+#define mu_assert_double_eq_epsilon(expected, result, epsilon ) MU__SAFE_BLOCK(\
+	double minunit_tmp_e;\
+	double minunit_tmp_r;\
+	minunit_assert++;\
+	minunit_tmp_e = (expected);\
+	minunit_tmp_r = (result);\
+	if (fabs(minunit_tmp_e-minunit_tmp_r) > epsilon) {\
+		int minunit_significant_figures = 1 - log10(epsilon);\
+		snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: %.*g expected but was %.*g ( using epsilon %.*g )", __func__, __FILE__, __LINE__, minunit_significant_figures, minunit_tmp_e,  minunit_significant_figures, minunit_tmp_r, minunit_significant_figures, epsilon );\
+		minunit_status = 1;\
+		return;\
+	} else {\
+		if(minunit_progress_print==1){printf(".");}\
 	}\
 )
 
@@ -211,7 +269,7 @@ static void (*minunit_teardown)(void) = NULL;
 		minunit_status = 1;\
 		return;\
 	} else {\
-		printf(".");\
+		if(minunit_progress_print==1){printf(".");}\
 	}\
 )
 
