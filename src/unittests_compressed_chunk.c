@@ -134,7 +134,7 @@ MU_TEST(test_Compressed_SplitChunk_odd) {
     rv = Compressed_AddSample(chunk,&s2);
     mu_assert(rv == CR_OK, "add sample s2");
 
-    rv = Compressed_AddSample(chunk,&s2);
+    rv = Compressed_AddSample(chunk,&s3);
     mu_assert(rv == CR_OK, "add sample s3");
     
     mu_assert_int_eq(3,Compressed_ChunkNumOfSample(chunk));
