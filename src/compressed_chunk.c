@@ -15,6 +15,7 @@
 #include "rmutil/alloc.h"
 
 #define BIT 8
+#define CHUNK_RESIZE_STEP 32
 
 /*********************
  *  Chunk functions  *
@@ -45,22 +46,22 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     ChunkResult res = Compressed_AddSample(chunk, sample);
     if (res != CR_OK) {
         int oldsize = chunk->size;
-        chunk->size += 64;
+        chunk->size += CHUNK_RESIZE_STEP;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
-        memset((char *)chunk->data + oldsize, 0, 64);
+        memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);
     }
 }
 
-static void trimChunk(CompressedChunk *chunk, int minSize) {
-    int excess = chunk->size - (chunk->idx) / BIT;
+static void trimChunk(CompressedChunk *chunk) {
+    int excess = (chunk->size * 8 - chunk->idx) / 8;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 1) {
-        size_t newSize = max(chunk->size - excess + 1, minSize);
+        size_t newSize = chunk->size - excess + 1;
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
     }
@@ -86,8 +87,8 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
         ensureAddSample(newChunk2, &sample);
     }
 
-    trimChunk(newChunk1, 0);
-    trimChunk(newChunk2, 0);
+    trimChunk(newChunk1);
+    trimChunk(newChunk2);
     swapChunks(curChunk, newChunk1);
 
     Compressed_FreeChunkIterator(iter, false);
@@ -134,8 +135,6 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
         }
     }
 
-    // trim data
-    trimChunk(newChunk, oldChunk->size);
     swapChunks(newChunk, oldChunk);
 
     Compressed_FreeChunkIterator(iter, false);
