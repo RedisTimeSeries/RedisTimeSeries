@@ -12,7 +12,6 @@
 #include "compressed_chunk.h"
 #include "gorilla.h"
 #include "tsdb.h"
-#include "redismodule.h"
 
 
 MU_TEST(test_valid_policy) {
@@ -50,10 +49,8 @@ MU_TEST(test_compressed_upsert) {
     float maxV = 100.0;
     for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size+=64 ){
         CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
-        for (size_t i = 0; i < total_data_points; i++){
-            // between [0.0,upsert_percentage] will be upsert
-            // between ]upsert_percentage,100.0] will be insert
-            // const int is_upsert = (float)rand()/(float)(RAND_MAX/100.0) <= upsert_percentage ? 1 : 0;
+        mu_assert(chunk != NULL, "create compressed chunk");
+        for (size_t i = 1; i <= total_data_points; i++){
             float value = minV + (float)rand()/(float)(RAND_MAX/maxV);
             Sample sample = { .timestamp = i, .value = value };
             total_upserts++;
@@ -65,21 +62,69 @@ MU_TEST(test_compressed_upsert) {
         }
         uint64_t total_samples = Compressed_ChunkNumOfSample(chunk);
         mu_assert_int_eq(total_data_points,total_samples);
+        Compressed_FreeChunk(chunk);
     }
 }
 
-MU_TEST(test_compressed_serie_upsert) {
+MU_TEST(test_compressed_fail_appendInteger) {
+    // either Compressed_UpsertSample or Compressed_SplitChunk
+    // ensureAddSample -> Compressed_AddSample -> Compressed_Append -> appendInteger
     srand((unsigned int)time(NULL));
-    int total_data_points = 500;
-    size_t max_chunk_size = 8192;
-    int total_upserts = 0;
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create compressed chunk");
+    Sample s1 = { .timestamp = 10, .value = 5.0 };
+    Sample s2 = { .timestamp = 6, .value = 10.0 };
+    Compressed_AddSample(chunk,&s1);
+    mu_assert_int_eq(1,Compressed_ChunkNumOfSample(chunk));
     int size = 0;
     float minV = 0.0;
     float maxV = 100.0;
-    short options = 0;
-    options |= SERIES_OPT_UNCOMPRESSED;
-    // Series *series = NewSeries(NULL,NULL,0,0,256,options);
-    // RedisModuleString* key = RedisModule_CreateStringPrintf(NULL,"serie1");
+    UpsertCtx uCtx = {
+    .inChunk = chunk,
+    .sample = s2,
+    };
+    Compressed_UpsertSample(&uCtx, &size);
+    mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1,size);
+    Compressed_UpsertSample(&uCtx, &size);
+    mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(0,size);
+    mu_assert_int_eq(6,Compressed_GetFirstTimestamp(chunk));
+    mu_assert_int_eq(10,Compressed_GetLastTimestamp(chunk));
+    for (size_t i = 0; i < 10; i++)
+    {
+        s2.value = minV + (float)rand()/(float)(RAND_MAX/maxV);
+        Compressed_UpsertSample(&uCtx, &size);
+        // ensure we're not adding more datapoints and only overwritting previous ones
+        mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
+        mu_assert_int_eq(0,size);
+    }
+    CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
+    mu_assert(chunk2 != NULL, "splitted compressed chunk");
+    mu_assert_int_eq(1,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1,Compressed_ChunkNumOfSample(chunk2));
+
+    mu_assert_int_eq(6,Compressed_GetFirstTimestamp(chunk));
+    mu_assert_int_eq(6,Compressed_GetLastTimestamp(chunk));
+
+    mu_assert_int_eq(10,Compressed_GetFirstTimestamp(chunk2));
+    mu_assert_int_eq(10,Compressed_GetLastTimestamp(chunk2));
+
+    for (size_t i = 1; i < 6; i++)
+    {   
+        Sample s3 = { .timestamp = i, .value =minV + (float)rand()/(float)(RAND_MAX/maxV) };
+        UpsertCtx uCtxS3 = {
+        .inChunk = chunk,
+        .sample = s3,
+    };
+        ChunkResult rv = Compressed_UpsertSample(&uCtxS3, &size);
+        mu_assert(rv == CR_OK, "upsert");
+    }
+    mu_assert_int_eq(6,Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1,Compressed_GetFirstTimestamp(chunk));
+    mu_assert_int_eq(6,Compressed_GetLastTimestamp(chunk));
+    Compressed_FreeChunk(chunk);
 }
 
 MU_TEST(test_invalid_policy) {
@@ -112,7 +157,7 @@ MU_TEST_SUITE(test_suite) {
 	MU_RUN_TEST(test_invalid_policy);
 	MU_RUN_TEST(test_StringLenAggTypeToEnum);
     MU_RUN_TEST(test_compressed_upsert);
-    MU_RUN_TEST(test_compressed_serie_upsert);
+    MU_RUN_TEST(test_compressed_fail_appendInteger);
 }
 
 int main(int argc, char *argv[]) {
