@@ -213,7 +213,7 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     total_added_samples++;
     mu_assert(rv == CR_OK, "upsert");
     mu_assert_int_eq(total_added_samples,chunk->count);
-    mu_assert_int_eq(chunk_size_bytes+64,chunk->size);
+    mu_assert_int_eq(chunk_size_bytes+32,chunk->size);
     
     Compressed_FreeChunk(chunk);
 }
