@@ -173,6 +173,51 @@ MU_TEST(test_Compressed_SplitChunk_odd) {
     Compressed_FreeChunk(chunk2);
 }
 
+MU_TEST(test_Compressed_SplitChunk_force_realloc) {
+    srand((unsigned int)time(NULL));
+    const size_t chunk_size = 256; // 4096 bytes (data) chunck
+    const size_t chunk_size_bytes = chunk_size * sizeof(Sample);
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create compressed chunk");
+    ChunkResult rv = CR_OK;
+    int64_t ts = 1;
+    int64_t total_added_samples = 0;
+
+    // adding 1,3,5....
+    while (rv != CR_END){
+        double tsv = ts*1.0;
+        Sample s1 = { .timestamp = ts, .value = tsv };
+        rv = Compressed_AddSample(chunk,&s1);
+        mu_assert(rv == CR_OK || rv == CR_END, "add sample");
+        if(rv!=CR_END){
+            total_added_samples++;
+            mu_assert_int_eq(total_added_samples,chunk->count);
+        }
+    }
+    const size_t chunk_current_size = Compressed_GetChunkSize(chunk,false);
+    
+    mu_assert_int_eq(chunk_size_bytes,chunk_current_size);
+    mu_assert_int_eq(chunk_size_bytes,chunk->size);
+    
+    // Now we're at the max of the chunck's capacity
+    Sample s3 = { .timestamp = 2, .value =10.0 };
+        UpsertCtx uCtxS3 = {
+        .inChunk = chunk,
+        .sample = s3,
+    };
+
+    int size = 0;
+
+    // We're forcing the chunk to grow 
+    rv = Compressed_UpsertSample(&uCtxS3, &size);
+    total_added_samples++;
+    mu_assert(rv == CR_OK, "upsert");
+    mu_assert_int_eq(total_added_samples,chunk->count);
+    mu_assert_int_eq(chunk_size_bytes+64,chunk->size);
+    
+    Compressed_FreeChunk(chunk);
+}
+
 MU_TEST(test_invalid_policy) {
     SimpleCompactionRule* parsedRules;
     size_t rulesCount;
@@ -205,7 +250,8 @@ MU_TEST_SUITE(test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
     MU_RUN_TEST(test_Compressed_SplitChunk_empty);
-    MU_RUN_TEST(test_Compressed_SplitChunk_odd); 
+    MU_RUN_TEST(test_Compressed_SplitChunk_odd);
+    MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
 }
 
 int main(int argc, char *argv[]) {
