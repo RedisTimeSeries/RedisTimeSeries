@@ -201,7 +201,7 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l=` key does not have the label `l`
 * `l!=` key has label `l`
 * `l=(v1,v2,...)` key with label `l` that equals one of the values in the list
-* `l!=(v1,v2,...)` key with label `l` that doesn't equals to the values in the list
+* `l!=(v1,v2,...)` key with label `l` that doesn't equal any of the values in the list
 
 Note: Whenever filters need to be provided, a minimum of one `l=v` filter must be applied.
 
