@@ -207,6 +207,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
               'sourceKey', None, 'rules', []]
             assert TSInfo(expected_result) == self._get_ts_info(r, 'tester')
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.add', 'tester', start_ts, 42, 'append_only')
+            later_ts = start_ts + samples_count + 1
+            assert r.execute_command('ts.add', 'tester', later_ts, 42, 'append_only') == later_ts
+
     def test_create_params(self):
         with self.redis() as r:
             # test string instead of value
@@ -762,6 +767,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert query_res >= cur_time
             assert query_res <= cur_time + 1
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
+
     def test_agg_min(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'min')
@@ -1236,6 +1244,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
+
+            res = r.execute_command('ts.madd', 'append_only', 'test_key1', 6000, '1',
+                                    'test_key2', 6000, '2', 'test_key3', 6000, '3',)
+            assert res[0:2] == [6000L, 6000L]
+            assert isinstance(res[2], redis.ResponseError)
     
     def test_partial_madd(self):
         with self.redis() as r:

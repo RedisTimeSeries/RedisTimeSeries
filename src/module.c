@@ -722,7 +722,8 @@ static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString *timestampStr,
                       RedisModuleString *valueStr,
                       RedisModuleString **argv,
-                      int argc) {
+                      int argc,
+                      bool append_only) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
     api_timestamp_t timestamp;
@@ -773,6 +774,13 @@ static inline int add(RedisModuleCtx *ctx,
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
+
+    if (append_only && timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
+        RedisModule_ReplyWithError(
+            ctx, "TSDB: for append-only, timestamp should be newer than the lastest one");
+        return REDISMODULE_ERR;
+    }
+
     int rv = internalAdd(ctx, series, timestamp, value);
     RedisModule_CloseKey(key);
     return rv;
@@ -781,16 +789,23 @@ static inline int add(RedisModuleCtx *ctx,
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 4 || (argc - 1) % 3 != 0) {
+    if (argc < 4 || (argc) % 3 == 0) {
         return RedisModule_WrongArity(ctx);
     }
 
-    RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
-    for (int i = 1; i < argc; i += 3) {
+    int i = 1;
+    bool appendOnly = false;
+    if (RMUtil_ArgIndex("APPEND_ONLY", &argv[1], 1) != -1) {
+        appendOnly = true;
+        i++;
+    }
+
+    RedisModule_ReplyWithArray(ctx, (argc - i) / 3);
+    for (; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
         RedisModuleString *valueStr = argv[i + 2];
-        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
+        add(ctx, keyName, timestampStr, valueStr, NULL, -1, appendOnly);
     }
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -803,11 +818,16 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
+    bool appendOnly = false;
+    if (RMUtil_ArgIndex("APPEND_ONLY", argv, argc) > 0) {
+        appendOnly = true;
+    }
+
     RedisModuleString *keyName = argv[1];
     RedisModuleString *timestampStr = argv[2];
     RedisModuleString *valueStr = argv[3];
 
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc, appendOnly);
     RedisModule_ReplicateVerbatim(ctx);
     return result;
 }
@@ -1108,6 +1128,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+    }
+
+    if (currentUpdatedTime <= series->lastTimestamp && series->lastTimestamp != 0) {
+        return RedisModule_ReplyWithError(
+            ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
     }
 
     double result = series->lastValue;

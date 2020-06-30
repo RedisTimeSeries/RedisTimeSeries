@@ -60,11 +60,12 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
+TS.ADD key timestamp value [APPEND_ONLY] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
 * value - numeric data value of the sample (double)
+* APPEND_ONLY (optional) - Prevent back-filling of out-of-order samples
 
 These arguments are optional because they can be set by TS.CREATE:
 
@@ -104,11 +105,12 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
 Append new samples to a list of series.
 
 ```sql
-TS.MADD key timestamp value [key timestamp value ...]
+TS.MADD [APPEND_ONLY] key timestamp value [key timestamp value ...]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
 * value - numeric data value of the sample (double)
+* APPEND_ONLY (optional) - Prevent back-filling of out-of-order samples
 
 #### Examples
 ```sql
@@ -127,7 +129,7 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 
 ### TS.INCRBY/TS.DECRBY
 
-Creates a new sample that increments/decrements the latest sample's value.
+Creates a new sample that increments/decrements the latest sample's value. Append only support.
 
 ```sql
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
