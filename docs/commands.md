@@ -110,7 +110,7 @@ TS.MADD [APPEND_ONLY] key timestamp value [key timestamp value ...]
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
 * value - numeric data value of the sample (double)
-* APPEND_ONLY (optional) - Prevent back-filling of out-of-order samples
+* APPEND_ONLY (optional) - Only allow to insert samples in order.
 
 #### Examples
 ```sql
