@@ -12,6 +12,7 @@
 #include "redismodule.h"
 #include "tsdb.h"
 #include "version.h"
+#include "common.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -85,12 +86,12 @@ int GetSeries(RedisModuleCtx *ctx,
     *key = RedisModule_OpenKey(ctx, keyName, mode);
     if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(*key);
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: the key does not exist");
+        RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
         return FALSE;
     }
     if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
         RedisModule_CloseKey(*key);
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
         return FALSE;
     }
     *series = RedisModule_ModuleTypeGetValue(*key);
@@ -109,30 +110,30 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     *maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
     *labelsCount = 0;
     if (parseLabelsFromArgs(argv, argc, labelsCount, labels) == REDISMODULE_ERR) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse LABELS");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
         return REDISMODULE_ERR;
     }
 
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", retentionTime) != REDISMODULE_OK) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse RETENTION");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
 
     if (*retentionTime < 0) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse RETENTION");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse RETENTION");
         return REDISMODULE_ERR;
     }
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", maxSamplesPerChunk) !=
             REDISMODULE_OK) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse CHUNK_SIZE");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
 
     if (*maxSamplesPerChunk <= 0) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse CHUNK_SIZE");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
 
@@ -154,24 +155,24 @@ static int _parseAggregationArgs(RedisModuleCtx *ctx,
         long long temp_time_delta = 0;
         if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, &temp_time_delta) !=
             REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse AGGREGATION");
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse AGGREGATION");
             return TSDB_ERROR;
         }
 
         if (!aggTypeStr) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: Unknown aggregation type");
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
         }
 
         *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
 
         if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: Unknown aggregation type");
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
         }
 
         if (temp_time_delta <= 0) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: timeBucket must be greater than zero");
+            RTS_ReplyGeneralError(ctx, "TSDB: timeBucket must be greater than zero");
             return TSDB_ERROR;
         } else {
             *time_delta = (api_timestamp_t)temp_time_delta;
@@ -193,7 +194,7 @@ static int parseAggregationArgs(RedisModuleCtx *ctx,
     if (result == TSDB_OK) {
         *agg_object = GetAggClass(agg_type);
         if (*agg_object == NULL) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: Failed to retrieve aggregation class");
+            RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
             return TSDB_ERROR;
         }
         return TSDB_OK;
@@ -215,7 +216,7 @@ static int parseRangeArguments(RedisModuleCtx *ctx,
     } else {
         if (RedisModule_StringToLongLong(argv[start_index], (long long int *)start_ts) !=
             REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: wrong fromTimestamp");
+            RTS_ReplyGeneralError(ctx, "TSDB: wrong fromTimestamp");
             return REDISMODULE_ERR;
         }
     }
@@ -227,7 +228,7 @@ static int parseRangeArguments(RedisModuleCtx *ctx,
     } else {
         if (RedisModule_StringToLongLong(argv[start_index + 1], (long long int *)end_ts) !=
             REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: wrong toTimestamp");
+            RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
             return REDISMODULE_ERR;
         }
     }
@@ -242,7 +243,7 @@ static int parseCountArgument(RedisModuleCtx *ctx,
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
         if (offset + 1 == argc) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: COUNT argument is missing");
+            RTS_ReplyGeneralError(ctx, "TSDB: COUNT argument is missing");
             return TSDB_ERROR;
         }
         if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
@@ -254,7 +255,7 @@ static int parseCountArgument(RedisModuleCtx *ctx,
             offset = second_offset;
         }
         if (RedisModule_StringToLongLong(argv[offset + 1], count) != REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "ERR TSDB: Couldn't parse COUNT");
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse COUNT");
             return TSDB_ERROR;
         }
     }
@@ -412,13 +413,13 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, 1, query_count, queries) == TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: failed parsing labels");
+        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
     if (CountPredicateType(queries, (size_t)query_count, EQ) +
             CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
         0) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: please provide at least one matcher");
+        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
@@ -475,13 +476,13 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
         TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: failed parsing labels");
+        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
     if (CountPredicateType(queries, (size_t)query_count, EQ) +
             CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
         0) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: please provide at least one matcher");
+        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
@@ -692,18 +693,18 @@ static int internalAdd(RedisModuleCtx *ctx,
     uint64_t retention = series->retentionTime;
     // ensure inside retention period.
     if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
-        RedisModule_ReplyWithError(ctx, "ERR TSDB: Timestamp is older than retention");
+        RTS_ReplyGeneralError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
         if (SeriesUpsertSample(series, timestamp, value) != REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "TSDB: Error at upsert");
+            RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert");
             return REDISMODULE_ERR;
         }
     } else {
         if (SeriesAddSample(series, timestamp, value) != REDISMODULE_OK) {
-            RedisModule_ReplyWithError(ctx, "TSDB: Error at add");
+            RTS_ReplyGeneralError(ctx, "TSDB: Error at add");
             return REDISMODULE_ERR;
         }
         // handle compaction rules
@@ -727,7 +728,7 @@ static inline int add(RedisModuleCtx *ctx,
     double value;
     api_timestamp_t timestamp;
     if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: invalid value");
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *)&timestamp) !=
          REDISMODULE_OK)) {
@@ -735,7 +736,7 @@ static inline int add(RedisModuleCtx *ctx,
         if (RMUtil_StringEqualsC(timestampStr, "*"))
             timestamp = (u_int64_t)RedisModule_Milliseconds();
         else
-            return RedisModule_ReplyWithError(ctx, "ERR TSDB: invalid timestamp");
+            return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
     }
 
     Series *series = NULL;
@@ -769,7 +770,7 @@ static inline int add(RedisModuleCtx *ctx,
                     &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, labels, labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: the key is not a TSDB key");
+        return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
@@ -865,7 +866,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(key);
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: key already exists");
+        return RTS_ReplyGeneralError(ctx, "TSDB: key already exists");
     }
 
     CreateTsKey(ctx,
@@ -962,7 +963,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleString *destKeyName = argv[2];
     if (!SeriesDeleteRule(srcSeries, destKeyName)) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: compaction rule does not exist");
+        return RTS_ReplyGeneralError(ctx, "TSDB: compaction rule does not exist");
     }
 
     // If succeed to remove the rule from the source key remove from the destination too
@@ -1006,8 +1007,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *srcKeyName = argv[1];
     RedisModuleString *destKeyName = argv[2];
     if (!RedisModule_StringCompare(srcKeyName, destKeyName)) {
-        return RedisModule_ReplyWithError(
-            ctx, "ERR TSDB: the source key and destination key should be different");
+        return RTS_ReplyGeneralError(
+            ctx, "TSDB: the source key and destination key should be different");
     }
 
     // First we verify the source is not a destination
@@ -1019,7 +1020,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
     if (srcSeries->srcKey) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: the source key already has a source rule");
+        return RTS_ReplyGeneralError(ctx, "TSDB: the source key already has a source rule");
     }
 
     // Second verify the destination doesn't have other rule
@@ -1032,7 +1033,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     srcKeyName = RedisModule_CreateStringFromString(ctx, srcKeyName);
     if (!SeriesSetSrcRule(destSeries, srcKeyName)) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: the destination key already has a rule");
+        return RTS_ReplyGeneralError(ctx, "TSDB: the destination key already has a rule");
     }
     RedisModule_RetainString(ctx, srcKeyName);
 
@@ -1098,7 +1099,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: invalid increase/decrease value");
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid increase/decrease value");
     }
 
     long long currentUpdatedTime = -1;
@@ -1107,7 +1108,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: invalid timestamp");
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
     }
 
     double result = series->lastValue;
@@ -1159,13 +1160,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
         TSDB_ERROR) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: failed parsing labels");
+        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
     if (CountPredicateType(queries, (size_t)query_count, EQ) +
             CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
         0) {
-        return RedisModule_ReplyWithError(ctx, "ERR TSDB: please provide at least one matcher");
+        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
     RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
