@@ -128,6 +128,7 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 ### TS.INCRBY/TS.DECRBY
 
 Creates a new sample that increments/decrements the latest sample's value.
+> Note: TS.INCRBY/TS.DECRBY are supported only in append only mode.
 
 ```sql
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
