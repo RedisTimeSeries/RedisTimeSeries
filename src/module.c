@@ -5,6 +5,7 @@
  */
 #include "module.h"
 
+#include "common.h"
 #include "compaction.h"
 #include "config.h"
 #include "indexer.h"
@@ -12,7 +13,6 @@
 #include "redismodule.h"
 #include "tsdb.h"
 #include "version.h"
-#include "common.h"
 
 #include <ctype.h>
 #include <limits.h>
