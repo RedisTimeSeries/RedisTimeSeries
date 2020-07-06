@@ -25,8 +25,9 @@ $ROOT/deps/readies/bin/xtx -e MODULE_VERSION automation-testing.json > $json_in
 [[ $VERBOSE == 1 ]] && cat $json_in
 
 JSON=$(curl -sk \
-	-u "$QA_AUTOMATION_USERNAME":"$QA_AUTOMATION_PASS" \
-	-X POST -H "Content-Type: application/json" \
+	-X POST \
+	-H "Content-Type: application/json" \
+	-H "Authorization: Bearer $QA_AUTOMATION_ACCESS_TOKEN" \
 	-d @$json_in \
 	https://qa-automation-center.redislabs.com/processes 2>&1)
 rc=$?
