@@ -762,6 +762,29 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert query_res >= cur_time
             assert query_res <= cur_time + 1
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
+
+    def test_incrby_with_update_latest(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for i in range(1, 21):
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
+
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '100']
+
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '105']
+
+            assert r.execute_command('ts.decrby', 'tester', '10', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '95']
+
     def test_agg_min(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'min')
