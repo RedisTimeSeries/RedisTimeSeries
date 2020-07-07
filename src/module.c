@@ -1110,7 +1110,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }
 
-    if (currentUpdatedTime <= series->lastTimestamp && series->lastTimestamp != 0) {
+    if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
         return RedisModule_ReplyWithError(
             ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
     }
