@@ -31,6 +31,7 @@ WORKDIR /data
 RUN mkdir -p "$LIBDIR"
 
 COPY --from=builder /build/bin/redistimeseries.so "$LIBDIR"
+COPY ./redis.conf /etc/redis.conf
 
 EXPOSE 6379
-CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
+CMD ["redis-server", "/etc/redis.conf", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so", "MAX_SAMPLE_PER_CHUNK", "50"]
