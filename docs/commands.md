@@ -451,7 +451,7 @@ n = Number of time-series that match the filters
 
 ##### MGET Example with WITHLABELS option
 ```sql
-127.0.0.1:6379> TS.MGET FILTER area_id=32
+127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
