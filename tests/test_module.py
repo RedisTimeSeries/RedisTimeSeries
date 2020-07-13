@@ -1473,6 +1473,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('ts.range ooo 0', batch * 2 - retention - 2) == []
             assert len(r.execute_command('ts.range ooo - +')) == retention + 1
 
+            # test for retention larger than timestamp
+            r.execute_command('ts.create', 'large', 'RETENTION', 1000000)
+            assert r.execute_command('ts.add large', 100, 0) == 100
+            assert r.execute_command('ts.add large', 101, 0) == 101
+            assert r.execute_command('ts.add large', 100, 0) == 100
+
     def test_backfill_downsampling(self):
         with self.redis() as r:
             key = 'tester'
