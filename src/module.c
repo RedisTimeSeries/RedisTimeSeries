@@ -700,7 +700,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     timestamp_t lastTS = series->lastTimestamp;
     uint64_t retention = series->retentionTime;
     // ensure inside retention period.
-    if (retention && timestamp < lastTS && timestamp < lastTS - retention) {
+    if (retention && timestamp < lastTS && retention < lastTS - timestamp) {
         RTS_ReplyGeneralError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
