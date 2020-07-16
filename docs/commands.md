@@ -32,6 +32,13 @@ TS.CREATE complexity is O(1).
 TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
+## Delete
+
+### DEL
+
+A series can be deleted using redis `DEL` command. Timeout can be set for a series using
+redis `EXPIRE` command.
+
 ## Update
 
 ### TS.ALTER
@@ -179,6 +186,11 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 * timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+
+!!! info "Note on existing samples in the source time series"
+        
+        Currently, only new samples that are added into the source series after creation of the rule will be aggregated.
+
 
 ### TS.DELETERULE
 
