@@ -1361,6 +1361,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
             assert [] == r.execute_command('TS.get empty')
+    
+    def test_expire(self):
+        with self.redis() as r:
+            assert r.execute_command('ts.create test') == 'OK'
+            assert r.execute_command('keys *') == ['test']
+            assert r.execute_command('expire test 1') == 1
+            time.sleep(2)
+            assert r.execute_command('keys *') == []
 
     def test_gorilla(self):
         with self.redis() as r:
