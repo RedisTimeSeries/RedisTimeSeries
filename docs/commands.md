@@ -187,6 +187,11 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
+!!! info "Note on existing samples in the source time series"
+        
+        Currently, only new samples that are added into the source series after creation of the rule will be aggregated.
+
+
 ### TS.DELETERULE
 
 Delete a compaction rule.
