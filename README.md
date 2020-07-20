@@ -135,6 +135,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
 | redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
 | redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
+| redis-time-series | Ruby | MIT | [Matt Duszynski](https://github.com/dzunk) | [Github](https://github.com/dzunk/redis-time-series) |
 
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
