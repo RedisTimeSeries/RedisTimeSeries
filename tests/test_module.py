@@ -762,6 +762,29 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert query_res >= cur_time
             assert query_res <= cur_time + 1
 
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
+
+    def test_incrby_with_update_latest(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for i in range(1, 21):
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
+
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '100']
+
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '105']
+
+            assert r.execute_command('ts.decrby', 'tester', '10', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '95']
+
     def test_agg_min(self):
         with self.redis() as r:
             agg_key = self._insert_agg_data(r, 'tester', 'min')
@@ -1333,6 +1356,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
             assert [] == r.execute_command('TS.get empty')
+    
+    def test_expire(self):
+        with self.redis() as r:
+            assert r.execute_command('ts.create test') == 'OK'
+            assert r.execute_command('keys *') == ['test']
+            assert r.execute_command('expire test 1') == 1
+            time.sleep(2)
+            assert r.execute_command('keys *') == []
 
     def test_gorilla(self):
         with self.redis() as r:
@@ -1472,6 +1503,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('ts.add ooo', i, i) == i
             assert r.execute_command('ts.range ooo 0', batch * 2 - retention - 2) == []
             assert len(r.execute_command('ts.range ooo - +')) == retention + 1
+
+            # test for retention larger than timestamp
+            r.execute_command('ts.create', 'large', 'RETENTION', 1000000)
+            assert r.execute_command('ts.add large', 100, 0) == 100
+            assert r.execute_command('ts.add large', 101, 0) == 101
+            assert r.execute_command('ts.add large', 100, 0) == 100
 
     def test_backfill_downsampling(self):
         with self.redis() as r:

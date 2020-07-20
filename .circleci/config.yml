@@ -81,7 +81,7 @@ jobs:
   build-multiarch-docker:
     machine:
       enabled: true
-      image: cimg/base:2020.01
+      image: ubuntu-1604:201903-01
     steps:
       - checkout
       - run:
@@ -180,14 +180,6 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-master-and-version-tags: &on-master-and-version-tags
-  filters:
-    branches:
-      only:
-        - master
-    tags:
-      only: /^v[0-9].*/
-
 
 workflows:
   version: 2
@@ -198,7 +190,7 @@ workflows:
       - build:
           <<: *on-any-branch
       - build-macos:
-          <<: *on-master-and-version-tags
+          <<: *on-version-tags
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
