@@ -628,9 +628,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                  sample.timestamp >= last_agg_timestamp + time_delta) ||
                 (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
-                    ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-                    aggObject->resetContext(context);
-                    arraylen++;
+                    double value;
+                    if (aggObject->finalize(context, &value) == TSDB_OK) {
+                        ReplyWithSample(ctx, last_agg_timestamp, value);
+                        aggObject->resetContext(context);
+                        arraylen++;
+                    }
                 }
                 last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             }
@@ -643,9 +646,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     if (aggObject != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
-            ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-            aggObject->resetContext(context);
-            arraylen++;
+            double value;
+            if (aggObject->finalize(context, &value) == TSDB_OK) {
+                ReplyWithSample(ctx, last_agg_timestamp, value);
+                aggObject->resetContext(context);
+                arraylen++;
+            }
         }
         aggObject->freeContext(context);
     }
@@ -675,8 +681,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-        SeriesAddSample(
-            destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        double value;
+        if (rule->aggClass->finalize(rule->aggContext, &value) == TSDB_OK) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, value);
+        }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
