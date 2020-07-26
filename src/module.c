@@ -681,9 +681,9 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-        double value;
-        if (rule->aggClass->finalize(rule->aggContext, &value) == TSDB_OK) {
-            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, value);
+        double aggVal;
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
