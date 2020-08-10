@@ -596,7 +596,7 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
     } else {
-        *val = aggObject->finalize(context);
+        aggObject->finalize(context, val);
         aggObject->freeContext(context);
     }
     return TSDB_OK;

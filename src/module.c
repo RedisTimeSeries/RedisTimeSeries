@@ -629,9 +629,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                  sample.timestamp >= last_agg_timestamp + time_delta) ||
                 (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
-                    ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-                    aggObject->resetContext(context);
-                    arraylen++;
+                    double value;
+                    if (aggObject->finalize(context, &value) == TSDB_OK) {
+                        ReplyWithSample(ctx, last_agg_timestamp, value);
+                        aggObject->resetContext(context);
+                        arraylen++;
+                    }
                 }
                 last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             }
@@ -644,9 +647,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     if (aggObject != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
-            ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-            aggObject->resetContext(context);
-            arraylen++;
+            double value;
+            if (aggObject->finalize(context, &value) == TSDB_OK) {
+                ReplyWithSample(ctx, last_agg_timestamp, value);
+                aggObject->resetContext(context);
+                arraylen++;
+            }
         }
         aggObject->freeContext(context);
     }
@@ -676,8 +682,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-        SeriesAddSample(
-            destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        double aggVal;
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
@@ -1109,6 +1117,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+    }
+
+    if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
+        return RedisModule_ReplyWithError(
+            ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
     }
 
     double result = series->lastValue;

@@ -32,6 +32,13 @@ TS.CREATE complexity is O(1).
 TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
+## Delete
+
+### DEL
+
+A series can be deleted using redis `DEL` command. Timeout can be set for a series using
+redis `EXPIRE` command.
+
 ## Update
 
 ### TS.ALTER
@@ -128,6 +135,7 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 ### TS.INCRBY/TS.DECRBY
 
 Creates a new sample that increments/decrements the latest sample's value.
+> Note: TS.INCRBY/TS.DECRBY support updates for the latest sample.
 
 ```sql
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
@@ -178,6 +186,11 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 * timeBucket - Time bucket for aggregation in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+
+!!! info "Note on existing samples in the source time series"
+        
+        Currently, only new samples that are added into the source series after creation of the rule will be aggregated.
+
 
 ### TS.DELETERULE
 
@@ -451,7 +464,7 @@ n = Number of time-series that match the filters
 
 ##### MGET Example with WITHLABELS option
 ```sql
-127.0.0.1:6379> TS.MGET FILTER area_id=32
+127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
