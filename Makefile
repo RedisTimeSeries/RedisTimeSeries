@@ -38,6 +38,9 @@ format:
 test:
 	@$(MAKE) -C src tests
 
+unittests:
+	@$(MAKE) -C src unittests
+
 pack:
 	@$(MAKE) -C src package
 
