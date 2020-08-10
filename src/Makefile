@@ -105,7 +105,10 @@ _SOURCES=\
 	tsdb.c
 
 _TEST_SOURCES=\
-	tests.c \
+	unittests.c \
+	unittests_parse_policies.c \
+	unittests_uncompressed_chunk.c \
+	unittests_compressed_chunk.c \
 	endianconv.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
@@ -246,6 +249,7 @@ docker:
 
 coverage:
 	DEBUG=1 COVERAGE=1 make tests
+	DEBUG=1 COVERAGE=1 make unittests
 	mkdir -p tmp/lcov
 	lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
 	lcov -l tmp/lcov/hiredis.info

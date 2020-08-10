@@ -23,6 +23,7 @@
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
 #define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
+#define SPLIT_FACTOR                    1.2
 
 /* TS.Range Aggregation types */
 typedef enum {
@@ -50,7 +51,13 @@ typedef enum {
 typedef enum {
   CR_OK = 0,    // RM_OK
   CR_ERR = 1,   // RM_ERR
-  CR_END = 2  
+  CR_END = 2,   // END_OF_CHUNK
 } ChunkResult;
+
+#define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
+
+static inline u_int64_t max(u_int64_t a, u_int64_t b) {
+    return a > b ? a : b;
+}
 
 #endif

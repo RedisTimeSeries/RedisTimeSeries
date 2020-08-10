@@ -17,7 +17,12 @@ commands:
           name: Build
           command: make build SHOW=1
       - run:
-          name: Test
+          name: Unit Test
+          command: |
+            mkdir -p ~/workspace/tests
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+      - run:
+          name: Flow Test
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
@@ -53,7 +58,10 @@ jobs:
           command: git submodule update --init --recursive
       - run:
           name: lint
-          command: cd src && make lint
+          command: |
+            make setup
+            make -C src lint
+
   build:
     docker:
       - image: redisfab/rmbuilder:6.0.1-x64-buster
@@ -76,7 +84,7 @@ jobs:
   build-multiarch-docker:
     machine:
       enabled: true
-      image: cimg/base:2020.01
+      image: ubuntu-1604:201903-01
     steps:
       - checkout
       - run:
@@ -175,14 +183,6 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-master-and-version-tags: &on-master-and-version-tags
-  filters:
-    branches:
-      only:
-        - master
-    tags:
-      only: /^v[0-9].*/
-
 
 workflows:
   version: 2
@@ -193,7 +193,7 @@ workflows:
       - build:
           <<: *on-any-branch
       - build-macos:
-          <<: *on-master-and-version-tags
+          <<: *on-version-tags
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
