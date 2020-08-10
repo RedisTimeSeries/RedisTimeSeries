@@ -21,6 +21,11 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+/**
+ * TODO: describe me
+ * @param chunk
+ * @return
+ */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
     size_t split = curChunk->num_samples / 2;
@@ -83,6 +88,12 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return CR_OK;
 }
 
+/**
+ * TODO: describe me
+ * @param chunk
+ * @param idx
+ * @param sample
+ */
 static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
     if (chunk->num_samples == chunk->max_samples) {
         chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
@@ -96,6 +107,12 @@ static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
     chunk->num_samples++;
 }
 
+/**
+ * TODO: describe me
+ * @param uCtx
+ * @param size
+ * @return
+ */
 ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     *size = 0;
     Chunk *regChunk = (Chunk *)uCtx->inChunk;
