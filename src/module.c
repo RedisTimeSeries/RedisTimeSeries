@@ -261,16 +261,6 @@ static int parseCountArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
-static timestamp_t getSeriesFirstTimestamp(Series *series) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    Chunk_t *currentChunk;
-    if (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk) == NULL)
-        return 0;
-    uint64_t firstTimestamp = series->funcs->GetFirstTimestamp(currentChunk);
-    RedisModule_DictIteratorStop(iter);
-    return firstTimestamp;
-}
-
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -287,12 +277,15 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithArray(ctx, 10 * 2);
 
+    long long skippedSamples;
+    long long firstTimestamp = SkipExpiredSamples(series, &skippedSamples);
+
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
-    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series));
+    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);
     RedisModule_ReplyWithSimpleString(ctx, "memoryUsage");
     RedisModule_ReplyWithLongLong(ctx, SeriesMemUsage(series));
     RedisModule_ReplyWithSimpleString(ctx, "firstTimestamp");
-    RedisModule_ReplyWithLongLong(ctx, getSeriesFirstTimestamp(series));
+    RedisModule_ReplyWithLongLong(ctx, firstTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "retentionTime");

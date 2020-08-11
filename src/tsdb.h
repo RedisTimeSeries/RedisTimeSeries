@@ -81,6 +81,7 @@ int SeriesCalcRange(Series *series,
                     
 // Calculate the begining of  aggregation window
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
+timestamp_t SkipExpiredSamples(Series *series, long long *skipped);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */
