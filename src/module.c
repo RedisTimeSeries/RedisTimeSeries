@@ -278,7 +278,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithArray(ctx, 10 * 2);
 
     long long skippedSamples;
-    long long firstTimestamp = SkipExpiredSamples(series, &skippedSamples);
+    long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
 
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
     RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);

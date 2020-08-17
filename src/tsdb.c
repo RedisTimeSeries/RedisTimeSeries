@@ -607,7 +607,7 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
     return timestamp - (timestamp % window);
 }
 
-timestamp_t SkipExpiredSamples(Series *series, long long *skipped) {
+timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     *skipped = 0;
     if (series->totalSamples == 0) {
         return 0;
