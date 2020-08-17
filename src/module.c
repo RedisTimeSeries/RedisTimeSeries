@@ -40,10 +40,6 @@ static int ReplySeriesRange(RedisModuleCtx *ctx,
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 
-static u_int64_t max(u_int64_t a, u_int64_t b) {
-    return a > b ? a : b;
-}
-
 static int parseLabelsFromArgs(RedisModuleString **argv,
                                int argc,
                                size_t *label_count,
@@ -262,16 +258,6 @@ static int parseCountArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
-static timestamp_t getSeriesFirstTimestamp(Series *series) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    Chunk_t *currentChunk;
-    if (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk) == NULL)
-        return 0;
-    uint64_t firstTimestamp = series->funcs->GetFirstTimestamp(currentChunk);
-    RedisModule_DictIteratorStop(iter);
-    return firstTimestamp;
-}
-
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -288,12 +274,15 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithArray(ctx, 10 * 2);
 
+    long long skippedSamples;
+    long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
+
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
-    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series));
+    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);
     RedisModule_ReplyWithSimpleString(ctx, "memoryUsage");
     RedisModule_ReplyWithLongLong(ctx, SeriesMemUsage(series));
     RedisModule_ReplyWithSimpleString(ctx, "firstTimestamp");
-    RedisModule_ReplyWithLongLong(ctx, getSeriesFirstTimestamp(series));
+    RedisModule_ReplyWithLongLong(ctx, firstTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "retentionTime");
@@ -629,9 +618,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                  sample.timestamp >= last_agg_timestamp + time_delta) ||
                 (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
-                    ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-                    aggObject->resetContext(context);
-                    arraylen++;
+                    double value;
+                    if (aggObject->finalize(context, &value) == TSDB_OK) {
+                        ReplyWithSample(ctx, last_agg_timestamp, value);
+                        aggObject->resetContext(context);
+                        arraylen++;
+                    }
                 }
                 last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
             }
@@ -644,9 +636,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     if (aggObject != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
-            ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
-            aggObject->resetContext(context);
-            arraylen++;
+            double value;
+            if (aggObject->finalize(context, &value) == TSDB_OK) {
+                ReplyWithSample(ctx, last_agg_timestamp, value);
+                aggObject->resetContext(context);
+                arraylen++;
+            }
         }
         aggObject->freeContext(context);
     }
@@ -656,10 +651,11 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
 }
 
 static void handleCompaction(RedisModuleCtx *ctx,
+                             Series *series,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
-    timestamp_t currentTimestamp = timestamp - timestamp % rule->timeBucket;
+    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->timeBucket);
 
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
@@ -675,13 +671,14 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         Series *destSeries = RedisModule_ModuleTypeGetValue(key);
 
-        SeriesAddSample(
-            destSeries, rule->startCurrentTimeBucket, rule->aggClass->finalize(rule->aggContext));
+        double aggVal;
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
     }
-
     rule->aggClass->appendValue(rule->aggContext, value);
 }
 
@@ -689,21 +686,30 @@ static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
                        double value) {
-    int retval = SeriesAddSample(series, timestamp, value);
-    if (retval == TSDB_ERR_TIMESTAMP_TOO_OLD) {
-        RedisModule_ReplyWithError(
-            ctx, "TSDB: Timestamp cannot be older than the latest timestamp in the time series");
-        return REDISMODULE_ERR;
-    } else if (retval != TSDB_OK) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Unknown Error at internalAdd");
+    timestamp_t lastTS = series->lastTimestamp;
+    uint64_t retention = series->retentionTime;
+    // ensure inside retention period.
+    if (retention && timestamp < lastTS && retention < lastTS - timestamp) {
+        RedisModule_ReplyWithError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
 
-    // handle compaction rules
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        handleCompaction(ctx, rule, timestamp, value);
-        rule = rule->nextRule;
+    if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
+        if (SeriesUpsertSample(series, timestamp, value) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: Error at upsert");
+            return REDISMODULE_ERR;
+        }
+    } else {
+        if (SeriesAddSample(series, timestamp, value) != REDISMODULE_OK) {
+            RedisModule_ReplyWithError(ctx, "TSDB: Error at add");
+            return REDISMODULE_ERR;
+        }
+        // handle compaction rules
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            handleCompaction(ctx, series, rule, timestamp, value);
+            rule = rule->nextRule;
+        }
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     return REDISMODULE_OK;
@@ -1028,6 +1034,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+    }
+
+    if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
+        return RedisModule_ReplyWithError(
+            ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
     }
 
     double result = series->lastValue;

@@ -34,7 +34,14 @@ Each sample is a tuple of the time and the value of 128 bits,
 
 ## Setup
 
-You can either get RedisTimeSeries setup in a Docker container or on your own machine.
+You can either get RedisTimeSeries setup in the cloud, in a Docker container or on your own machine.
+
+### Redis Cloud
+
+RedisTimeSeries is available on all Redis Cloud managed services. Redis Cloud Essentials offers a completely free managed database up to 30MB.
+
+[Get started here](https://redislabs.com/try-free/)
+
 
 ### Docker
 To quickly try out RedisTimeSeries, launch an instance using docker:

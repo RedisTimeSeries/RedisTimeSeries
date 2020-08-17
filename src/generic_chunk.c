@@ -7,8 +7,10 @@
 
 static ChunkFuncs regChunk = { .NewChunk = Uncompressed_NewChunk,
                                .FreeChunk = Uncompressed_FreeChunk,
+                               .SplitChunk = Uncompressed_SplitChunk,
 
                                .AddSample = Uncompressed_AddSample,
+                               .UpsertSample = Uncompressed_UpsertSample,
 
                                .NewChunkIterator = Uncompressed_NewChunkIterator,
                                .FreeChunkIterator = Uncompressed_FreeChunkIterator,
@@ -22,8 +24,10 @@ static ChunkFuncs regChunk = { .NewChunk = Uncompressed_NewChunk,
 
 static ChunkFuncs comprChunk = { .NewChunk = Compressed_NewChunk,
                                  .FreeChunk = Compressed_FreeChunk,
+                                 .SplitChunk = Compressed_SplitChunk,
 
                                  .AddSample = Compressed_AddSample,
+                                 .UpsertSample = Compressed_UpsertSample,
 
                                  .NewChunkIterator = Compressed_NewChunkIterator,
                                  .FreeChunkIterator = Compressed_FreeChunkIterator,

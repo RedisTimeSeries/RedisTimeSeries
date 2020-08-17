@@ -65,6 +65,8 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value);
+int SeriesUpdateLastSample(Series *series);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
@@ -77,6 +79,18 @@ size_t SeriesGetNumSamples(const Series *series);
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
+
+int SeriesCalcRange(Series *series,
+                    timestamp_t start_ts,
+                    timestamp_t end_ts,
+                    CompactionRule * rule,
+                    double *val);
+                    
+// Calculate the begining of  aggregation window
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
+
+// return first timestamp in retention window, and set `skipped` to number of samples outside of retention
+timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */

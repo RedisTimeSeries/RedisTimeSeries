@@ -128,18 +128,18 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             else:
                 assert actual_result
 
-    def _insert_agg_data(self, redis, key, agg_type):
+    def _insert_agg_data(self, redis, key, agg_type, chunk_type="", fromTS=10, toTS=50):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
-        assert redis.execute_command('TS.CREATE', key)
-        assert redis.execute_command('TS.CREATE', agg_key)
+        assert redis.execute_command('TS.CREATE', key, chunk_type)
+        assert redis.execute_command('TS.CREATE', agg_key, chunk_type)
         assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
-        for i in range(10, 50):
+        for i in range(fromTS, toTS):
             assert redis.execute_command('TS.ADD', key, i, i // 10 * 100 + values[i % 10])
         # close last bucket
-        assert redis.execute_command('TS.ADD', key, 100, 0)
+        assert redis.execute_command('TS.ADD', key, toTS + 1000, 0)
 
         return agg_key
 
@@ -711,6 +711,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_empty_series(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
+            agg_list = ['avg', 'sum', 'min', 'max', 'range', 'first', 'last',
+                        'std.p', 'std.s', 'var.p', 'var.s']
+            for agg in agg_list:
+                assert [] == r.execute_command('TS.range tester 0 -1 aggregation ' + agg + ' 1000')
+            assert [[0L, '0']] == r.execute_command('TS.range tester 0 -1 aggregation count 1000')
             assert r.execute_command('DUMP', 'tester')
 
     def test_valid_labels(self):
@@ -761,6 +766,29 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             cur_time = int(time.time())
             assert query_res >= cur_time
             assert query_res <= cur_time + 1
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
+
+    def test_incrby_with_update_latest(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for i in range(1, 21):
+                assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
+
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '100']
+
+            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '105']
+
+            assert r.execute_command('ts.decrby', 'tester', '10', 'TIMESTAMP', 20) == i
+            result = r.execute_command('TS.RANGE', 'tester', 0, 20)
+            assert len(result) == 20
+            assert result[19] == [20L, '95']
 
     def test_agg_min(self):
         with self.redis() as r:
@@ -1037,7 +1065,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER', 'name=bob')
-            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result         
+            assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]] == actual_result
             actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS', 'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
             # assert the labels length is 3 (name,class,generation) for each of the returned time-series
             assert len(actual_result[0][1]) == 3
@@ -1061,7 +1089,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3, 'COUNT', 10)
             assert len(count_results) == 10
             count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3)
-            assert len(count_results) ==  math.ceil(samples_count / 3.0)
+            assert len(count_results) == math.ceil(samples_count / 3.0)
             
     def test_revrange(self):
         start_ts = 1511885908L
@@ -1120,7 +1148,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
             self._insert_data(r, 'tester1', start_ts, samples_count, 5)
             self._insert_data(r, 'tester2', start_ts, samples_count, 15)
-            self._insert_data(r, 'tester3', start_ts, samples_count, 25)        
+            self._insert_data(r, 'tester3', start_ts, samples_count, 25)
 
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             expected_result.reverse()
@@ -1236,7 +1264,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
-
+    
     def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
@@ -1250,10 +1278,9 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert 3000 == res[2]
 
             res = r.execute_command("ts.madd", 'test_key1', now + 1000, 10, 'test_key2', 1000, 20, 'test_key3', 3001 , 30)
-            assert (now + 1000, 3001) == (res[0], res[2])
-            assert isinstance(res[1], redis.ResponseError)
+            assert (now + 1000, 1000, 3001) == (res[0], res[1], res[2])
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
-            assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 1
+            assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
     
     def test_rule_timebucket_64bit(self):
@@ -1311,16 +1338,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 
                 trimmed_info = self._get_ts_info(r, 'trim_me')
                 untrimmed_info = self._get_ts_info(r, 'dont_trim_me')
-                assert 2 == trimmed_info.chunk_count
+                assert 1 == trimmed_info.chunk_count
                 assert samples == untrimmed_info.total_samples
                 # extra test for uncompressed
                 if mode == "UNCOMPRESSED":
-                    assert chunk_size + remainder == trimmed_info.total_samples
+                    assert 10 == trimmed_info.total_samples
                     assert total_chunk_count == untrimmed_info.chunk_count
 
                 r.delete("trim_me")
                 r.delete("dont_trim_me")
-
 
     def test_empty(self):
         with self.redis() as r:
@@ -1335,6 +1361,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
             assert [] == r.execute_command('TS.get empty')
+    
+    def test_expire(self):
+        with self.redis() as r:
+            assert r.execute_command('ts.create test') == 'OK'
+            assert r.execute_command('keys *') == ['test']
+            assert r.execute_command('expire test 1') == 1
+            time.sleep(2)
+            assert r.execute_command('keys *') == []
 
     def test_gorilla(self):
         with self.redis() as r:
@@ -1373,7 +1407,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 10')
             assert actual_result[0] == [0L, '0']
             actual_result = r.execute_command('ts.range issue299 0 -1 aggregation avg 100')
-            assert actual_result[0] == [0L, '4.5']  
+            assert actual_result[0] == [0L, '4.5']
 
             r.execute_command('del issue299')
             r.execute_command('ts.create issue299')
@@ -1424,6 +1458,228 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('del test_key')
             r.execute_command('restore test_key 0', dump)
             assert r.execute_command('ts.range test_key - +') == before
+
+    def test_ooo(self):
+        with self.redis() as r:
+            quantity = 50001
+            to_dbl = 1.001
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                #r.execute_command('ts.create', 'no_ooo', chunk_type)
+                #r.execute_command('ts.create', 'ooo', chunk_type)
+                r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100)
+                r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100)
+                for i in range(0, quantity, 5):
+                    r.execute_command('ts.add no_ooo', i, i * to_dbl)
+                for i in range(0, quantity, 10):
+                    r.execute_command('ts.add ooo', i, i * to_dbl)
+                for i in range(5, quantity, 10): #limit
+                    r.execute_command('ts.add ooo', i, i * to_dbl)
+
+                ooo_res    = r.execute_command('ts.range ooo - +')
+                no_ooo_res = r.execute_command('ts.range no_ooo - +')
+                assert len(ooo_res) == len(no_ooo_res)
+                for i in range(len(ooo_res)):
+                    assert ooo_res[i] == no_ooo_res[i]
+
+                ooo_res = r.execute_command('ts.range ooo 1000 1000')
+                assert ooo_res[0] == [1000L, '1001']
+                r.execute_command('ts.add ooo', 1000, 42)
+                ooo_res = r.execute_command('ts.range ooo 1000 1000')
+                assert ooo_res[0] == [1000L, '42']
+
+                r.execute_command('DEL no_ooo')
+                r.execute_command('DEL ooo')
+
+    def test_ooo_with_retention(self):
+        with self.redis() as r:
+            retention = 13
+            batch = 100
+            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 10, 'RETENTION', retention)
+            for i in range(batch):
+                assert r.execute_command('ts.add ooo', i, i) == i
+            assert r.execute_command('ts.range ooo 0', batch - retention - 2) == []
+            assert len(r.execute_command('ts.range ooo - +')) == retention + 1
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('ts.add ooo', 70, 70)
+
+            for i in range(batch, batch * 2):
+                assert r.execute_command('ts.add ooo', i, i) == i
+            assert r.execute_command('ts.range ooo 0', batch * 2 - retention - 2) == []
+            assert len(r.execute_command('ts.range ooo - +')) == retention + 1
+
+            # test for retention larger than timestamp
+            r.execute_command('ts.create', 'large', 'RETENTION', 1000000)
+            assert r.execute_command('ts.add large', 100, 0) == 100
+            assert r.execute_command('ts.add large', 101, 0) == 101
+            assert r.execute_command('ts.add large', 100, 0) == 100
+
+    def test_backfill_downsampling(self):
+        with self.redis() as r:
+            key = 'tester'
+            type_list = ['', 'uncompressed']
+            for chunk_type in type_list:
+                agg_list = ['sum', 'min', 'max', 'count', 'first', 'last'] #more
+                for agg in agg_list:
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type)
+
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                    assert expected_result == actual_result
+                    assert r.execute_command('TS.ADD', key, 15, 50) == 15
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+                    assert expected_result == actual_result
+
+                    # add in latest window
+                    r.execute_command('TS.ADD', key, 1055, 50) == 1055
+                    r.execute_command('TS.ADD', key, 1053, 55) == 1053
+                    r.execute_command('TS.ADD', key, 1062, 60) == 1062
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 1060, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1060)
+                    assert expected_result == actual_result
+
+                    # update in latest window
+                    r.execute_command('TS.ADD', key, 1065, 65) == 1065
+                    r.execute_command('TS.ADD', key, 1066, 66) == 1066
+                    r.execute_command('TS.ADD', key, 1001, 42) == 1001
+                    r.execute_command('TS.ADD', key, 1075, 50) == 1075
+                    expected_result = r.execute_command('TS.RANGE', key, 10, 1070, 'aggregation', agg, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1070)
+                    assert expected_result == actual_result
+
+                    r.execute_command('DEL', key)
+                    r.execute_command('DEL', agg_key)
+
+    def test_downsampling_current(self):
+        with self.redis() as r:
+            key = 'src'
+            agg_key = 'dest'
+            type_list = ['', 'uncompressed']
+            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
+            for chunk_type in type_list:
+                for agg_type in agg_list:
+                    assert r.execute_command('TS.CREATE', key, chunk_type)
+                    assert r.execute_command('TS.CREATE', agg_key, chunk_type)
+                    assert r.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
+
+                    # present update
+                    assert r.execute_command('TS.ADD', key, 3, 3) == 3
+                    assert r.execute_command('TS.ADD', key, 5, 5) == 5
+                    assert r.execute_command('TS.ADD', key, 7, 7) == 7
+                    assert r.execute_command('TS.ADD', key, 5, 2) == 5
+                    assert r.execute_command('TS.ADD', key, 10, 10) == 10
+
+                    expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                    assert expected_result[0] == actual_result[0]
+
+                    # present add
+                    assert r.execute_command('TS.ADD', key, 11, 11) == 11
+                    assert r.execute_command('TS.ADD', key, 15, 15) == 15
+                    assert r.execute_command('TS.ADD', key, 14, 14) == 14
+                    assert r.execute_command('TS.ADD', key, 20, 20) == 20
+                    
+                    expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                    assert expected_result[0:1] == actual_result[0:1]
+
+                    # present + past add
+                    assert r.execute_command('TS.ADD', key, 23, 23) == 23
+                    assert r.execute_command('TS.ADD', key, 15, 22) == 15
+                    assert r.execute_command('TS.ADD', key, 27, 27) == 27
+                    assert r.execute_command('TS.ADD', key, 23, 25) == 23
+                    assert r.execute_command('TS.ADD', key, 30, 30) == 30
+                    
+                    expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
+                    actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                    assert expected_result[0:3] == actual_result[0:3]
+                    assert 3 == self._get_ts_info(r, agg_key).total_samples
+                    assert 11 == self._get_ts_info(r, key).total_samples
+
+                    r.execute_command('DEL', key)
+                    r.execute_command('DEL', agg_key)
+
+    def test_downsampling_extensive(self):
+        with self.redis() as r:
+            key = 'tester'
+            fromTS = 10
+            toTS = 10000
+            type_list = ['', 'uncompressed']
+            for chunk_type in type_list:
+                agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
+                for agg in agg_list:
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type, fromTS, toTS)
+
+                    # sanity + check result have changed
+                    expected_result1 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
+                    actual_result1 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
+                    assert expected_result1 == actual_result1
+                    assert len(expected_result1) == 999
+
+                    for i in range(fromTS + 5, toTS - 4, 10):
+                        assert r.execute_command('TS.ADD', key, i, 42)
+
+                    expected_result2 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
+                    actual_result2 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
+                    assert expected_result2 == actual_result2
+
+                    # remove aggs with identical results
+                    compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
+                    if agg in compare_list:
+                        assert expected_result1 != expected_result2
+                        assert actual_result1 != actual_result2
+
+                    r.execute_command('DEL', key)
+                    r.execute_command('DEL', agg_key)
+
+    def test_ooo_split(self):
+        with self.redis() as r:
+            quantity = 5000
+            
+            type_list = ['', 'UNCOMPRESSED']
+            for chunk_type in type_list:
+                r.execute_command('ts.create', 'split', chunk_type)
+                r.execute_command('ts.add split', quantity, 42)
+                for i in range(quantity):
+                    r.execute_command('ts.add split', i, i * 1.01)
+                assert self._get_ts_info(r, 'split').chunk_count in [13, 32]
+                res = r.execute_command('ts.range split - +')
+                for i in range(quantity - 1):
+                    assert res[i][0] + 1 == res[i + 1][0]
+                    assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
+                    
+                r.execute_command('DEL split')
+
+    def test_rand_oom(self):
+        random.seed(20)
+        start_ts = 1592917924000
+        current_ts = long(start_ts)
+        data = []
+        ooo_data = []
+        start_ooo = random.randrange(500, 9000)
+        amount = random.randrange(250, 1000)
+        for i in xrange(10000):
+            val = '%.5f' % random.gauss(50, 10.5)
+            if i < start_ooo or i > start_ooo + amount:
+                data.append([current_ts, val])
+            else:
+                ooo_data.append([current_ts, val])
+            current_ts += random.randrange(20,1000)
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for sample in data:
+                r.execute_command('ts.add', 'tester', sample[0], sample[1])
+            for sample in ooo_data:
+                r.execute_command('ts.add', 'tester', sample[0], sample[1])
+
+            all_data = sorted(data + ooo_data, key=lambda x: x[0])
+            res = r.execute_command('ts.range', 'tester', '-', '+')
+            assert len(res) == len(all_data)
+            for i in  range(len(all_data)):
+                assert all_data[i][0] == res[i][0]
+                assert float(all_data[i][1]) == float(res[i][1])
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

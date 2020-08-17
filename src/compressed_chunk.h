@@ -15,9 +15,11 @@
 // Initialize compressed chunk
 Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
+Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
+ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev);
@@ -25,7 +27,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 
 // Miscellaneous
-size_t Compressed_GetChunkSize(Chunk_t *chunk);
+size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 u_int64_t Compressed_ChunkNumOfSample (Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);

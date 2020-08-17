@@ -32,6 +32,13 @@ TS.CREATE complexity is O(1).
 TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
 ```
 
+## Delete
+
+### DEL
+
+A series can be deleted using redis `DEL` command. Timeout can be set for a series using
+redis `EXPIRE` command.
+
 ## Update
 
 ### TS.ALTER
@@ -97,6 +104,7 @@ The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rul
   This is the reason why `labels` and `retentionTime` are optional arguments.
 - When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionTime`.
   Setting the `labels` and `retentionTime` introduces additional time complexity.
+- Updating a sample in a trimmed window will update down-sampling aggregation based on the existing data.
 
 ### TS.MADD
 
@@ -116,7 +124,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 2) (integer) 1548149183000
 127.0.0.1:6379>TS.MADD temperature:2:32 1548149181000 45 cpu:2:32 1548149180000 30
 1) (integer) 1548149181000
-2) (error) TSDB: timestamp is too old
+2) (integer) 1548149180000
 ```
 
 #### Complexity
@@ -127,6 +135,7 @@ The complexity of `TS.MADD` is always O(N*M) when N is the amount of series upda
 ### TS.INCRBY/TS.DECRBY
 
 Creates a new sample that increments/decrements the latest sample's value.
+> Note: TS.INCRBY/TS.DECRBY support updates for the latest sample.
 
 ```sql
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
@@ -178,6 +187,11 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
+!!! info "Note on existing samples in the source time series"
+        
+        Currently, only new samples that are added into the source series after creation of the rule will be aggregated.
+
+
 ### TS.DELETERULE
 
 Delete a compaction rule.
@@ -199,16 +213,17 @@ For certain read commands a list of filters needs to be applied.  This is the li
 * `l=` key does not have the label `l`
 * `l!=` key has label `l`
 * `l=(v1,v2,...)` key with label `l` that equals one of the values in the list
-* `l!=(v1,v2,...)` key with label `l` that doesn't equals to the values in the list
+* `l!=(v1,v2,...)` key with label `l` that doesn't equal any of the values in the list
 
 Note: Whenever filters need to be provided, a minimum of one `l=v` filter must be applied.
 
-### TS.RANGE
+### TS.RANGE/TS.REVRANGE
 
-Query a range.
+Query a range in forward or reverse directions.
 
 ```sql
 TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
+TS.REVRANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -250,12 +265,13 @@ But because m is pretty small, we can neglect it and look at the operation as O(
    2) "20"
 ```
 
-### TS.MRANGE
+### TS.MRANGE/TS.MREVRANGE
 
-Query a timestamp range across multiple time-series by filters.
+Query a range across multiple time-series by filters in forward or reverse directions.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MREVRANGE fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -448,7 +464,7 @@ n = Number of time-series that match the filters
 
 ##### MGET Example with WITHLABELS option
 ```sql
-127.0.0.1:6379> TS.MGET FILTER area_id=32
+127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"
    2) 1) 1) "sensor_id"
          2) "2"
