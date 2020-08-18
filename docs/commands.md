@@ -506,16 +506,16 @@ O(1)
 
 Array-reply, specifically:
 
-* totalSamples - Total samples in the time-series.
-* memoryUsage - Total number of bytes allocated for the time-series.
-* firstTimestamp - First timestamp present in the time-series.
-* lastTimestamp - Last timestamp present in the time-series.
-* retentionTime - Retention time, in milliseconds, for the time-series.
-* chunkCount - Number of Memory Chunks used for the time-series.
+* totalSamples - Total number of samples in the time series.
+* memoryUsage - Total number of bytes allocated for the time series.
+* firstTimestamp - First timestamp present in the time series.
+* lastTimestamp - Last timestamp present in the time series.
+* retentionTime - Retention time, in milliseconds, for the time series.
+* chunkCount - Number of Memory Chunks used for the time series.
 * maxSamplesPerChunk - Maximum Number of samples per Memory Chunk.
-* labels - A nested array of label-value pairs that represent metadata labels of the time-series.
-* sourceKey - Key name for source time series in case the current series is a target of a rule.
-* rules - A nested array of compaction Rules of the time-series.
+* labels - A nested array of label-value pairs that represent the metadata labels of the time series.
+* sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
+* rules - A nested array of compaction [rules](#tscreaterule) of the time series.
 
 #### `TS.INFO` Example
 
