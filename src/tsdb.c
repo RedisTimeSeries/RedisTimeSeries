@@ -11,7 +11,6 @@
 #include "indexer.h"
 #include "module.h"
 
-#include <assert.h>
 #include <math.h>
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
@@ -624,9 +623,6 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     SeriesTrim(series);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     RedisModule_DictNextC(iter, NULL, (void *)&chunk);
-
-    // should never fail since we just trimmed
-    assert(minTimestamp <= funcs->GetLastTimestamp(chunk));
 
     ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, rev);
     sample.timestamp = funcs->GetFirstTimestamp(chunk);
