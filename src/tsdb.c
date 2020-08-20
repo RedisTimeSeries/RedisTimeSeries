@@ -38,25 +38,20 @@ static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp 
     return REDISMODULE_OK; // silence compiler
 }
 
-Series *NewSeries(RedisModuleString *keyName,
-                  Label *labels,
-                  size_t labelsCount,
-                  uint64_t retentionTime,
-                  short maxSamplesPerChunk,
-                  int options) {
+Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
-    newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
-    newSeries->retentionTime = retentionTime;
+    newSeries->maxSamplesPerChunk = cCtx->maxSamplesPerChunk;
+    newSeries->retentionTime = cCtx->retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
     newSeries->totalSamples = 0;
-    newSeries->labels = labels;
-    newSeries->labelsCount = labelsCount;
-    newSeries->options = options;
+    newSeries->labels = cCtx->labels;
+    newSeries->labelsCount = cCtx->labelsCount;
+    newSeries->options = cCtx->options;
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
@@ -498,15 +493,14 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount + 1].value =
             RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx,
-                    destKey,
-                    compactedLabels,
-                    compactedRuleLabelCount,
-                    rule->retentionSizeMillisec,
-                    TSGlobalConfig.maxSamplesPerChunk,
-                    TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
-                    &compactedSeries,
-                    &compactedKey);
+        CreateCtx cCtx = {
+            .retentionTime = rule->retentionSizeMillisec,
+            .maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk,
+            .labelsCount = compactedRuleLabelCount,
+            .labels = compactedLabels,
+            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+        };
+        CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
