@@ -15,32 +15,27 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
+    CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = RedisModule_LoadString(io);
-    uint64_t retentionTime = RedisModule_LoadUnsigned(io);
-    uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+    cCtx.retentionTime = RedisModule_LoadUnsigned(io);
+    cCtx.maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
 
-    short options = 0;
     if (encver >= TS_UNCOMPRESSED_VER) {
-        options = RedisModule_LoadUnsigned(io);
+        cCtx.options = RedisModule_LoadUnsigned(io);
     } else {
-        options |= SERIES_OPT_UNCOMPRESSED;
+        cCtx.options |= SERIES_OPT_UNCOMPRESSED;
     }
 
-    uint64_t labelsCount = RedisModule_LoadUnsigned(io);
-    Label *labels = malloc(sizeof(Label) * labelsCount);
-    for (int i = 0; i < labelsCount; i++) {
-        labels[i].key = RedisModule_LoadString(io);
-        labels[i].value = RedisModule_LoadString(io);
+    cCtx.labelsCount = RedisModule_LoadUnsigned(io);
+    cCtx.labels = malloc(sizeof(Label) * cCtx.labelsCount);
+    for (int i = 0; i < cCtx.labelsCount; i++) {
+        cCtx.labels[i].key = RedisModule_LoadString(io);
+        cCtx.labels[i].value = RedisModule_LoadString(io);
     }
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
-    Series *series = NewSeries(keyName,
-                               labels,
-                               labelsCount,
-                               retentionTime,
-                               maxSamplesPerChunk,
-                               options & SERIES_OPT_UNCOMPRESSED);
+    Series *series = NewSeries(keyName, &cCtx);
 
     CompactionRule *lastRule = NULL;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
