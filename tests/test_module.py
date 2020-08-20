@@ -595,16 +595,20 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result = [[500L, '10']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result
-            
+            # check for (lastTimestamp - retension < 0)
+            assert self._get_ts_info(r, 'tester').total_samples == 1
+
             assert r.execute_command('TS.ADD', 'tester', 1001, 20)
             expected_result = [[500L, '10'], [1001L, '20']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result
+            assert self._get_ts_info(r, 'tester').total_samples == 2
             
             assert r.execute_command('TS.ADD', 'tester', 2000, 30)
             expected_result = [[1001L, '20'], [2000L, '30']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result
+            assert self._get_ts_info(r, 'tester').total_samples == 2
 
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.CREATE', 'negative', 'RETENTION', -10)
@@ -1342,7 +1346,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert samples == untrimmed_info.total_samples
                 # extra test for uncompressed
                 if mode == "UNCOMPRESSED":
-                    assert 10 == trimmed_info.total_samples
+                    assert 11 == trimmed_info.total_samples
                     assert total_chunk_count == untrimmed_info.chunk_count
 
                 r.delete("trim_me")
