@@ -11,14 +11,17 @@
 #include <rmutil/alloc.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
-    if (encver != TS_ENC_VER && encver != TS_UNCOMPRESSED_VER) {
+    if (encver < TS_ENC_VER && encver > TS_SIZE_RDB_VER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
     CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = RedisModule_LoadString(io);
     cCtx.retentionTime = RedisModule_LoadUnsigned(io);
-    cCtx.maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+    cCtx.chunkSizeBytes = RedisModule_LoadUnsigned(io);
+    if (encver < 2) {
+        cCtx.chunkSizeBytes *= 16;
+    }
 
     if (encver >= TS_UNCOMPRESSED_VER) {
         cCtx.options = RedisModule_LoadUnsigned(io);
@@ -85,7 +88,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
     RedisModule_SaveUnsigned(io, series->retentionTime);
-    RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
+    RedisModule_SaveUnsigned(io, series->chunkSizeBytes);
     RedisModule_SaveUnsigned(io, series->options);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);

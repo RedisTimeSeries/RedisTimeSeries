@@ -14,7 +14,7 @@ typedef struct {
     SimpleCompactionRule *compactionRules;
     uint64_t compactionRulesCount;
     long long retentionPolicy;
-    long long maxSamplesPerChunk;
+    long long chunkSizeBytes;
     short options;
     int hasGlobalConfig;
 } TSConfig;

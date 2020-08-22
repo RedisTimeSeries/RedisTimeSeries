@@ -42,7 +42,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
-    newSeries->maxSamplesPerChunk = cCtx->maxSamplesPerChunk;
+    newSeries->chunkSizeBytes = cCtx->chunkSizeBytes;
     newSeries->retentionTime = cCtx->retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
@@ -58,7 +58,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
+    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
     dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
     newSeries->lastChunk = newChunk;
     return newSeries;
@@ -283,8 +283,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk, false) >
-        series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
@@ -336,7 +335,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
-        Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
+        Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
         ret = series->funcs->AddSample(newChunk, &sample);
         series->lastChunk = newChunk;
@@ -495,7 +494,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
-            .maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk,
+            .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
             .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
