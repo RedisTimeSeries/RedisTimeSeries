@@ -21,6 +21,14 @@ typedef struct Sample {
 } Sample;
 
 typedef void Chunk_t;
+
+typedef struct {
+    timestamp_t baseTimestamp;
+    short numSamples;
+    short size;
+    short type;
+} Chunk_base;
+
 typedef void ChunkIter_t;
 
 typedef enum {
