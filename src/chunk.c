@@ -188,3 +188,16 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     size += includeStruct ? sizeof(*uncompChunk) : 0;
     return size;
 }
+
+void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+    Chunk *uncompchunk = chunk;
+    RedisModule_SaveStringBuffer(io, (char *)uncompchunk, sizeof(*uncompchunk));
+    RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->size);
+}
+
+void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
+    uncompchunk = (Chunk *)RedisModule_LoadStringBuffer(io, NULL);
+    uncompchunk->samples = (Sample *)RedisModule_LoadStringBuffer(io, NULL);
+    *chunk = (Chunk_t *)uncompchunk;
+}

@@ -13,6 +13,8 @@
 #include <string.h>         // memcpy, memmove
 #include "consts.h"
 
+struct RedisModuleIO;
+
 typedef struct Sample {
     timestamp_t timestamp;
     double value;
@@ -48,6 +50,9 @@ typedef struct ChunkFuncs {
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
     u_int64_t(*GetLastTimestamp)(Chunk_t *chunk);
     u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);
+
+    void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
+    void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
 } ChunkFuncs;
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);

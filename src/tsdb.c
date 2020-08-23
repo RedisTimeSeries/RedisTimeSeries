@@ -15,28 +15,7 @@
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 
-typedef enum
-{
-    DICT_OP_SET = 0,
-    DICT_OP_REPLACE = 1,
-    DICT_OP_DEL = 2
-} DictOp;
-
 static Series *lastDeletedSeries = NULL;
-
-static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
-    timestamp_t rax_key = htonu64(ts);
-    switch (op) {
-        case DICT_OP_SET:
-            return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
-        case DICT_OP_REPLACE:
-            return RedisModule_DictReplaceC(d, &rax_key, sizeof(rax_key), chunk);
-        case DICT_OP_DEL:
-            return RedisModule_DictDelC(d, &rax_key, sizeof(rax_key), NULL);
-    }
-    chunk = NULL;
-    return REDISMODULE_OK; // silence compiler
-}
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     Series *newSeries = (Series *)malloc(sizeof(Series));

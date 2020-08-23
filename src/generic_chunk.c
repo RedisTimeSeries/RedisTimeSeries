@@ -5,40 +5,50 @@
 
 #include "rmutil/alloc.h"
 
-static ChunkFuncs regChunk = { .NewChunk = Uncompressed_NewChunk,
-                               .FreeChunk = Uncompressed_FreeChunk,
-                               .SplitChunk = Uncompressed_SplitChunk,
+static ChunkFuncs regChunk = {
+    .NewChunk = Uncompressed_NewChunk,
+    .FreeChunk = Uncompressed_FreeChunk,
+    .SplitChunk = Uncompressed_SplitChunk,
 
-                               .AddSample = Uncompressed_AddSample,
-                               .UpsertSample = Uncompressed_UpsertSample,
+    .AddSample = Uncompressed_AddSample,
+    .UpsertSample = Uncompressed_UpsertSample,
 
-                               .NewChunkIterator = Uncompressed_NewChunkIterator,
-                               .FreeChunkIterator = Uncompressed_FreeChunkIterator,
-                               .ChunkIteratorGetNext = Uncompressed_ChunkIteratorGetNext,
-                               .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
+    .NewChunkIterator = Uncompressed_NewChunkIterator,
+    .FreeChunkIterator = Uncompressed_FreeChunkIterator,
+    .ChunkIteratorGetNext = Uncompressed_ChunkIteratorGetNext,
+    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
-                               .GetChunkSize = Uncompressed_GetChunkSize,
-                               .GetNumOfSample = Uncompressed_NumOfSample,
-                               .GetLastTimestamp = Uncompressed_GetLastTimestamp,
-                               .GetFirstTimestamp = Uncompressed_GetFirstTimestamp };
+    .GetChunkSize = Uncompressed_GetChunkSize,
+    .GetNumOfSample = Uncompressed_NumOfSample,
+    .GetLastTimestamp = Uncompressed_GetLastTimestamp,
+    .GetFirstTimestamp = Uncompressed_GetFirstTimestamp,
 
-static ChunkFuncs comprChunk = { .NewChunk = Compressed_NewChunk,
-                                 .FreeChunk = Compressed_FreeChunk,
-                                 .SplitChunk = Compressed_SplitChunk,
+    .SaveToRDB = Uncompressed_SaveToRDB,
+    .LoadFromRDB = Uncompressed_LoadFromRDB,
+};
 
-                                 .AddSample = Compressed_AddSample,
-                                 .UpsertSample = Compressed_UpsertSample,
+static ChunkFuncs comprChunk = {
+    .NewChunk = Compressed_NewChunk,
+    .FreeChunk = Compressed_FreeChunk,
+    .SplitChunk = Compressed_SplitChunk,
 
-                                 .NewChunkIterator = Compressed_NewChunkIterator,
-                                 .FreeChunkIterator = Compressed_FreeChunkIterator,
-                                 .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
-                                 /*** Reverse iteration is on temporary decompressed chunk ***/
-                                 .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
+    .AddSample = Compressed_AddSample,
+    .UpsertSample = Compressed_UpsertSample,
 
-                                 .GetChunkSize = Compressed_GetChunkSize,
-                                 .GetNumOfSample = Compressed_ChunkNumOfSample,
-                                 .GetLastTimestamp = Compressed_GetLastTimestamp,
-                                 .GetFirstTimestamp = Compressed_GetFirstTimestamp };
+    .NewChunkIterator = Compressed_NewChunkIterator,
+    .FreeChunkIterator = Compressed_FreeChunkIterator,
+    .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
+    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
+
+    .GetChunkSize = Compressed_GetChunkSize,
+    .GetNumOfSample = Compressed_ChunkNumOfSample,
+    .GetLastTimestamp = Compressed_GetLastTimestamp,
+    .GetFirstTimestamp = Compressed_GetFirstTimestamp,
+
+    .SaveToRDB = Compressed_SaveToRDB,
+    .LoadFromRDB = Compressed_LoadFromRDB,
+};
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     switch (chunkType) {
