@@ -22,8 +22,8 @@
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
-    chunk->size = size;
-    chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
+    chunk->base.size = size;
+    chunk->data = (u_int64_t *)calloc(chunk->base.size, sizeof(char));
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
     return chunk;
@@ -45,9 +45,9 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
 static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     ChunkResult res = Compressed_AddSample(chunk, sample);
     if (res != CR_OK) {
-        int oldsize = chunk->size;
-        chunk->size += CHUNK_RESIZE_STEP;
-        chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
+        int oldsize = chunk->base.size;
+        chunk->base.size += CHUNK_RESIZE_STEP;
+        chunk->data = (u_int64_t *)realloc(chunk->data, chunk->base.size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
@@ -56,33 +56,33 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 }
 
 static void trimChunk(CompressedChunk *chunk) {
-    int excess = (chunk->size * 8 - chunk->idx) / 8;
+    int excess = (chunk->base.size * 8 - chunk->idx) / 8;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 1) {
-        size_t newSize = chunk->size - excess + 1;
+        size_t newSize = chunk->base.size - excess + 1;
         chunk->data = realloc(chunk->data, newSize);
-        chunk->size = newSize;
+        chunk->base.size = newSize;
     }
 }
 
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
-    size_t split = curChunk->count / 2;
-    size_t curNumSamples = curChunk->count - split;
+    size_t split = curChunk->base.numSamples / 2;
+    size_t curNumSamples = curChunk->base.numSamples - split;
 
     // add samples in new chunks
     size_t i = 0;
     Sample sample;
     ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
-    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
-    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
+    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->base.size);
+    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->base.size);
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         ensureAddSample(newChunk1, &sample);
     }
-    for (; i < curChunk->count; ++i) {
+    for (; i < curChunk->base.numSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         ensureAddSample(newChunk2, &sample);
     }
@@ -103,12 +103,12 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     ChunkResult nextRes = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
 
-    size_t newSize = oldChunk->size;
+    size_t newSize = oldChunk->base.size;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
     timestamp_t ts = uCtx->sample.timestamp;
-    int numSamples = oldChunk->count;
+    int numSamples = oldChunk->base.numSamples;
 
     size_t i = 0;
     Sample iterSample;
@@ -147,11 +147,11 @@ ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
 }
 
 u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
-    return ((CompressedChunk *)chunk)->count;
+    return ((CompressedChunk *)chunk)->base.numSamples;
 }
 
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk) {
-    return ((CompressedChunk *)chunk)->baseTimestamp;
+    return ((CompressedChunk *)chunk)->base.baseTimestamp;
 }
 
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
@@ -160,14 +160,14 @@ timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
 
 size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     CompressedChunk *cmpChunk = chunk;
-    size_t size = cmpChunk->size * sizeof(char);
+    size_t size = cmpChunk->base.size * sizeof(char);
     size += includeStruct ? sizeof(*cmpChunk) : 0;
     return size;
 }
 
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
-    uint64_t numSamples = compressedChunk->count;
+    uint64_t numSamples = compressedChunk->base.numSamples;
     Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
 
     ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, 0);
@@ -203,7 +203,7 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     iter->idx = 0;
     iter->count = 0;
 
-    iter->prevTS = compressedChunk->baseTimestamp;
+    iter->prevTS = compressedChunk->base.baseTimestamp;
     iter->prevDelta = 0;
 
     iter->prevValue.d = compressedChunk->baseValue.d;
@@ -228,7 +228,7 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = chunk;
     RedisModule_SaveStringBuffer(io, (char *)compchunk, sizeof(*compchunk));
-    RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->size);
+    RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->base.size);
 }
 
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {

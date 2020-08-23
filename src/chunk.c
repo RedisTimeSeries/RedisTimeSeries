@@ -9,8 +9,8 @@
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
-    newChunk->num_samples = 0;
-    newChunk->size = size;
+    newChunk->base.numSamples = 0;
+    newChunk->base.size = size;
     newChunk->samples = (Sample *)malloc(size);
 
     return newChunk;
@@ -28,8 +28,8 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
-    size_t split = curChunk->num_samples / 2;
-    size_t curNumSamples = curChunk->num_samples - split;
+    size_t split = curChunk->base.numSamples / 2;
+    size_t curNumSamples = curChunk->base.numSamples - split;
 
     // create chunk and copy samples
     Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
@@ -39,19 +39,19 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     }
 
     // update current chunk
-    curChunk->num_samples = curNumSamples;
-    curChunk->size = curNumSamples * SAMPLE_SIZE;
-    curChunk->samples = realloc(curChunk->samples, curChunk->size);
+    curChunk->base.numSamples = curNumSamples;
+    curChunk->base.size = curNumSamples * SAMPLE_SIZE;
+    curChunk->samples = realloc(curChunk->samples, curChunk->base.size);
 
     return newChunk;
 }
 
 static int IsChunkFull(Chunk *chunk) {
-    return chunk->num_samples == chunk->size / SAMPLE_SIZE;
+    return chunk->base.numSamples == chunk->base.size / SAMPLE_SIZE;
 }
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
-    return ((Chunk *)chunk)->num_samples;
+    return ((Chunk *)chunk)->base.numSamples;
 }
 
 static Sample *ChunkGetSample(Chunk *chunk, int index) {
@@ -59,14 +59,14 @@ static Sample *ChunkGetSample(Chunk *chunk, int index) {
 }
 
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
-    if (((Chunk *)chunk)->num_samples == 0) {
+    if (((Chunk *)chunk)->base.numSamples == 0) {
         return -1;
     }
-    return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
+    return ChunkGetSample(chunk, ((Chunk *)chunk)->base.numSamples - 1)->timestamp;
 }
 
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
-    if (((Chunk *)chunk)->num_samples == 0) {
+    if (((Chunk *)chunk)->base.numSamples == 0) {
         return -1;
     }
     return ChunkGetSample(chunk, 0)->timestamp;
@@ -79,12 +79,12 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     }
 
     if (Uncompressed_NumOfSample(regChunk) == 0) {
-        // initialize base_timestamp
-        regChunk->base_timestamp = sample->timestamp;
+        // initialize baseTimestamp
+        regChunk->base.baseTimestamp = sample->timestamp;
     }
 
-    regChunk->samples[regChunk->num_samples] = *sample;
-    regChunk->num_samples++;
+    regChunk->samples[regChunk->base.numSamples] = *sample;
+    regChunk->base.numSamples++;
 
     return CR_OK;
 }
@@ -96,17 +96,17 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
  * @param sample
  */
 static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
-    if (chunk->num_samples == chunk->size / SAMPLE_SIZE) {
-        chunk->size += sizeof(Sample);
-        chunk->samples = realloc(chunk->samples, chunk->size);
+    if (chunk->base.numSamples == chunk->base.size / SAMPLE_SIZE) {
+        chunk->base.size += sizeof(Sample);
+        chunk->samples = realloc(chunk->samples, chunk->base.size);
     }
-    if (idx < chunk->num_samples) { // sample is not last
+    if (idx < chunk->base.numSamples) { // sample is not last
         memmove(&chunk->samples[idx + 1],
                 &chunk->samples[idx],
-                (chunk->num_samples - idx) * sizeof(Sample));
+                (chunk->base.numSamples - idx) * sizeof(Sample));
     }
     chunk->samples[idx] = *sample;
-    chunk->num_samples++;
+    chunk->base.numSamples++;
 }
 
 /**
@@ -119,7 +119,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     *size = 0;
     Chunk *regChunk = (Chunk *)uCtx->inChunk;
     timestamp_t ts = uCtx->sample.timestamp;
-    short numSamples = regChunk->num_samples;
+    short numSamples = regChunk->base.numSamples;
     // find sample location
     size_t i = 0;
     Sample *sample = NULL;
@@ -136,7 +136,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     }
 
     if (i == 0) {
-        regChunk->base_timestamp = ts;
+        regChunk->base.baseTimestamp = ts;
     }
 
     upsertChunk(regChunk, i, &uCtx->sample);
@@ -150,14 +150,14 @@ ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     if (rev == false) { // iterate from first to last
         iter->currentIndex = 0;
     } else { // iterate from last to first
-        iter->currentIndex = iter->chunk->num_samples - 1;
+        iter->currentIndex = iter->chunk->base.numSamples - 1;
     }
     return (ChunkIter_t *)iter;
 }
 
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->currentIndex < iter->chunk->num_samples) {
+    if (iter->currentIndex < iter->chunk->base.numSamples) {
         *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
         iter->currentIndex++;
         return CR_OK;
@@ -184,7 +184,7 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     Chunk *uncompChunk = chunk;
-    size_t size = uncompChunk->size;
+    size_t size = uncompChunk->base.size;
     size += includeStruct ? sizeof(*uncompChunk) : 0;
     return size;
 }
@@ -192,7 +192,7 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Chunk *uncompchunk = chunk;
     RedisModule_SaveStringBuffer(io, (char *)uncompchunk, sizeof(*uncompchunk));
-    RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->size);
+    RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->base.size);
 }
 
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
