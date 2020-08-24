@@ -11,6 +11,8 @@ Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base.numSamples = 0;
     newChunk->base.size = size;
+    newChunk->base.type = CHUNK_REGULAR;
+    newChunk->base.funcs = GetChunkClass(CHUNK_REGULAR);
     newChunk->samples = (Sample *)malloc(size);
 
     return newChunk;

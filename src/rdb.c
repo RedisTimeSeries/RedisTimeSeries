@@ -87,7 +87,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         for (int i = 0; i < numChunks; ++i) {
             series->funcs->LoadFromRDB(&chunk, io);
             dictOperator(
-                series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
+                series->chunks, chunk, GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         series->totalSamples = totalSamples;
         series->lastTimestamp = lastTimestamp;
@@ -138,11 +138,13 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     }
 
     Chunk_t *chunk;
+    ChunkFuncs *funcs;
     uint64_t numChunks = RedisModule_DictSize(series->chunks);
     RedisModule_SaveUnsigned(io, numChunks);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
-        series->funcs->SaveToRDB(chunk, io);
+        funcs = GetChunkFuncs(chunk);
+        funcs->SaveToRDB(chunk, io);
         numChunks--;
     }
     RedisModule_DictIteratorStop(iter);

@@ -23,6 +23,8 @@
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->base.size = size;
+    chunk->base.type = CHUNK_COMPRESSED;
+    chunk->base.funcs = GetChunkClass(CHUNK_COMPRESSED);
     chunk->data = (u_int64_t *)calloc(chunk->base.size, sizeof(char));
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;

@@ -27,6 +27,7 @@ typedef struct {
     short numSamples;
     short size;
     short type;
+    struct ChunkFuncs *funcs;
 } Chunk_base;
 
 typedef void ChunkIter_t;
@@ -55,7 +56,6 @@ typedef struct ChunkFuncs {
     ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 
     size_t(*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
-    u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
     u_int64_t(*GetLastTimestamp)(Chunk_t *chunk);
     u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);
 
@@ -64,5 +64,17 @@ typedef struct ChunkFuncs {
 } ChunkFuncs;
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
+
+inline static timestamp_t GetFirstTimestamp(Chunk_t *chunk) {
+    return ((Chunk_base *)chunk)->baseTimestamp;
+}
+
+inline static short GetNumOfSample(Chunk_t *chunk) {
+    return ((Chunk_base *)chunk)->numSamples;
+}
+
+inline static ChunkFuncs *GetChunkFuncs(Chunk_t *chunk) {
+    return ((Chunk_base *)chunk)->funcs;
+}
 
 #endif //GENERIC__CHUNK_H
