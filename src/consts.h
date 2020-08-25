@@ -24,7 +24,7 @@
 
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
-#define Chunk_SIZE_BYTES_SECS           4000LL   // fills one page 4096
+#define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
 
 /* TS.Range Aggregation types */

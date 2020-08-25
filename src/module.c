@@ -290,7 +290,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithLongLong(ctx, series->retentionTime);
     RedisModule_ReplyWithSimpleString(ctx, "chunkCount");
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
-    RedisModule_ReplyWithSimpleString(ctx, "defaultChunkSizeBytes");
+    RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
     RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
 
     RedisModule_ReplyWithSimpleString(ctx, "labels");
