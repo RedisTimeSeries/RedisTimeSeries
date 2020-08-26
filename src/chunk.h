@@ -62,4 +62,8 @@ ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sam
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 
+// RDB
+void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
+void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+
 #endif

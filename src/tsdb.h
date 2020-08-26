@@ -93,4 +93,13 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
+
+// set/delete/replace a chunk in a dictionary
+typedef enum {
+    DICT_OP_SET = 0,
+    DICT_OP_REPLACE = 1,
+    DICT_OP_DEL = 2
+} DictOp;
+int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
+
 #endif /* TSDB_H */
