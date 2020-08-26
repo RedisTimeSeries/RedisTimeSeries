@@ -103,7 +103,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
                            int argc,
                            CreateCtx *cCtx) {
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
-    cCtx->maxSamplesPerChunk = TSGlobalConfig.maxSamplesPerChunk;
+    cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx->labelsCount = 0;
     if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
@@ -123,13 +123,13 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     }
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
-        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->maxSamplesPerChunk) !=
+        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
             REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
 
-    if (cCtx->maxSamplesPerChunk <= 0) {
+    if (cCtx->chunkSizeBytes <= 0) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         return REDISMODULE_ERR;
     }
@@ -290,8 +290,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithLongLong(ctx, series->retentionTime);
     RedisModule_ReplyWithSimpleString(ctx, "chunkCount");
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
-    RedisModule_ReplyWithSimpleString(ctx, "maxSamplesPerChunk");
-    RedisModule_ReplyWithLongLong(ctx, series->maxSamplesPerChunk);
+    RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
+    RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
 
     RedisModule_ReplyWithSimpleString(ctx, "labels");
     ReplyWithSeriesLabels(ctx, series);
@@ -866,7 +866,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0) {
-        series->maxSamplesPerChunk = cCtx.maxSamplesPerChunk;
+        series->chunkSizeBytes = cCtx.chunkSizeBytes;
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
@@ -1212,7 +1212,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .mem_usage = SeriesMemUsage,
                                   .free = FreeSeries };
 
-    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_UNCOMPRESSED_VER, &tm);
+    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_SIZE_RDB_VER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
     IndexInit();

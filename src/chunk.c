@@ -7,11 +7,11 @@
 
 #include "rmutil/alloc.h"
 
-Chunk_t *Uncompressed_NewChunk(size_t sampleCount) {
+Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
-    newChunk->max_samples = sampleCount;
-    newChunk->samples = (Sample *)malloc(sizeof(Sample) * sampleCount);
+    newChunk->size = size;
+    newChunk->samples = (Sample *)malloc(size);
 
     return newChunk;
 }
@@ -32,21 +32,22 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(split);
+    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
         Uncompressed_AddSample(newChunk, sample);
     }
 
     // update current chunk
-    curChunk->max_samples = curChunk->num_samples = curNumSamples;
-    curChunk->samples = realloc(curChunk->samples, curNumSamples * sizeof(Sample));
+    curChunk->num_samples = curNumSamples;
+    curChunk->size = curNumSamples * SAMPLE_SIZE;
+    curChunk->samples = realloc(curChunk->samples, curChunk->size);
 
     return newChunk;
 }
 
 static int IsChunkFull(Chunk *chunk) {
-    return chunk->num_samples == chunk->max_samples;
+    return chunk->num_samples == chunk->size / SAMPLE_SIZE;
 }
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
@@ -95,8 +96,9 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
  * @param sample
  */
 static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
-    if (chunk->num_samples == chunk->max_samples) {
-        chunk->samples = realloc(chunk->samples, ++chunk->max_samples * sizeof(Sample));
+    if (chunk->num_samples == chunk->size / SAMPLE_SIZE) {
+        chunk->size += sizeof(Sample);
+        chunk->samples = realloc(chunk->samples, chunk->size);
     }
     if (idx < chunk->num_samples) { // sample is not last
         memmove(&chunk->samples[idx + 1],
@@ -182,7 +184,7 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     Chunk *uncompChunk = chunk;
-    size_t size = uncompChunk->max_samples * sizeof(Sample);
+    size_t size = uncompChunk->size;
     size += includeStruct ? sizeof(*uncompChunk) : 0;
     return size;
 }

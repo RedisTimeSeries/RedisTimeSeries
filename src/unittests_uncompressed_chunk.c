@@ -26,8 +26,7 @@ MU_TEST(test_Uncompressed_NewChunk) {
 
 MU_TEST(test_Uncompressed_Uncompressed_AddSample) {
     srand((unsigned int)time(NULL));
-    const size_t chunk_size = 256; // 4096 bytes (data) chunck
-    const size_t chunk_size_bytes = chunk_size * sizeof(Sample);
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
      Chunk *chunk = Uncompressed_NewChunk(chunk_size);
     mu_assert(chunk != NULL, "create uncompressed chunk");
     mu_assert_short_eq(0,chunk->num_samples);
@@ -47,15 +46,14 @@ MU_TEST(test_Uncompressed_Uncompressed_AddSample) {
         }
     }
     const size_t chunk_current_size = Uncompressed_GetChunkSize(chunk,false);
-    mu_assert_int_eq(chunk_size_bytes,chunk_current_size);    
+    mu_assert_int_eq(chunk_size,chunk_current_size);    
     Uncompressed_FreeChunk(chunk);
 }
 
 
 MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
     srand((unsigned int)time(NULL));
-    const size_t chunk_size = 256; // 4096 bytes (data) chunck
-    const size_t chunk_size_bytes = chunk_size * sizeof(Sample);
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
      Chunk *chunk = Uncompressed_NewChunk(chunk_size);
     mu_assert(chunk != NULL, "create uncompressed chunk");
     mu_assert_short_eq(0,chunk->num_samples);
@@ -75,7 +73,7 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
         }
     }
     const size_t chunk_current_size = Uncompressed_GetChunkSize(chunk,false);
-    mu_assert_int_eq(chunk_size_bytes,chunk_current_size);
+    mu_assert_int_eq(chunk_size,chunk_current_size);
 
     // Now we're at the max of the chunck's capacity
     Sample s3 = { .timestamp = 2, .value =10.0 };
@@ -90,7 +88,6 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
     total_added_samples++;
     mu_assert(rv == CR_OK, "upsert");
     mu_assert_int_eq(total_added_samples,chunk->num_samples);
-    mu_assert_int_eq(total_added_samples,chunk->max_samples);
     Uncompressed_FreeChunk(chunk);
 }
 
