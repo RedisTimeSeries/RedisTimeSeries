@@ -270,7 +270,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
         chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
         if (chunkKey == NULL) {
             RedisModule_DictIteratorReseekC(dictIter, "^", NULL, 0);
-            chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);    
+            chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
         }
         RedisModule_DictIteratorStop(dictIter);
         if (chunkKey == NULL) {
