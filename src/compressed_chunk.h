@@ -32,6 +32,10 @@ u_int64_t Compressed_ChunkNumOfSample (Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);
 
+// RDB
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
+void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+
 /* Used in tests */
 u_int64_t getIterIdx(ChunkIter_t *iter);
 

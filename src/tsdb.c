@@ -15,16 +15,9 @@
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 
-typedef enum
-{
-    DICT_OP_SET = 0,
-    DICT_OP_REPLACE = 1,
-    DICT_OP_DEL = 2
-} DictOp;
-
 static Series *lastDeletedSeries = NULL;
 
-static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
+int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
     timestamp_t rax_key = htonu64(ts);
     switch (op) {
         case DICT_OP_SET:

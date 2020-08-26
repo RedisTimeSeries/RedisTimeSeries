@@ -224,3 +224,16 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
     }
     free(iter);
 }
+
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+    CompressedChunk *compchunk = chunk;
+    RedisModule_SaveStringBuffer(io, (char *)compchunk, sizeof(*compchunk));
+    RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->size);
+}
+
+void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+    compchunk = (CompressedChunk *)RedisModule_LoadStringBuffer(io, NULL);
+    compchunk->data = (uint64_t *)RedisModule_LoadStringBuffer(io, NULL);
+    *chunk = (Chunk_t *)compchunk;
+}
