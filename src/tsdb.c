@@ -17,6 +17,20 @@
 
 static Series *lastDeletedSeries = NULL;
 
+int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
+    timestamp_t rax_key = htonu64(ts);
+    switch (op) {
+        case DICT_OP_SET:
+            return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
+        case DICT_OP_REPLACE:
+            return RedisModule_DictReplaceC(d, &rax_key, sizeof(rax_key), chunk);
+        case DICT_OP_DEL:
+            return RedisModule_DictDelC(d, &rax_key, sizeof(rax_key), NULL);
+    }
+    chunk = NULL;
+    return REDISMODULE_OK; // silence compiler
+}
+
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
