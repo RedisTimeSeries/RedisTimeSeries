@@ -86,8 +86,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         Chunk_t *chunk = NULL;
         for (int i = 0; i < numChunks; ++i) {
             series->funcs->LoadFromRDB(&chunk, io);
-            dictOperator(
-                series->chunks, chunk, GetFirstTimestamp(chunk), DICT_OP_SET);
+            dictOperator(series->chunks, chunk, GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         series->totalSamples = totalSamples;
         series->lastTimestamp = lastTimestamp;
