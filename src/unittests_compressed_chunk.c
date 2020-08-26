@@ -150,8 +150,7 @@ MU_TEST(test_Compressed_SplitChunk_odd) {
 
 MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     srand((unsigned int)time(NULL));
-    const size_t chunk_size = 256; // 4096 bytes (data) chunck
-    const size_t chunk_size_bytes = chunk_size * sizeof(Sample);
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
     CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
     ChunkResult rv = CR_OK;
@@ -171,8 +170,8 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     }
     const size_t chunk_current_size = Compressed_GetChunkSize(chunk,false);
     
-    mu_assert_int_eq(chunk_size_bytes,chunk_current_size);
-    mu_assert_int_eq(chunk_size_bytes,chunk->size);
+    mu_assert_int_eq(chunk_size,chunk_current_size);
+    mu_assert_int_eq(chunk_size,chunk->size);
     
     // Now we're at the max of the chunck's capacity
     Sample s3 = { .timestamp = 2, .value =10.0 };
@@ -188,7 +187,7 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     total_added_samples++;
     mu_assert(rv == CR_OK, "upsert");
     mu_assert_int_eq(total_added_samples,chunk->count);
-    mu_assert_int_eq(chunk_size_bytes+32,chunk->size);
+    mu_assert_int_eq(chunk_size+32,chunk->size);
     
     Compressed_FreeChunk(chunk);
 }

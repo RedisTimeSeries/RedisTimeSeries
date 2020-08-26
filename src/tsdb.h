@@ -24,7 +24,7 @@ typedef struct CompactionRule {
 
 typedef struct CreateCtx {
     long long retentionTime;
-    long long maxSamplesPerChunk;
+    long long chunkSizeBytes;
     size_t labelsCount;
     Label *labels;
     int options;
@@ -34,7 +34,7 @@ typedef struct Series {
     RedisModuleDict* chunks;
     Chunk_t *lastChunk;
     uint64_t retentionTime;
-    short maxSamplesPerChunk;
+    short chunkSizeBytes;
     short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;

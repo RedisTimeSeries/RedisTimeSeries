@@ -12,6 +12,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define SAMPLE_SIZE sizeof(Sample)
+
 #define timestamp_t u_int64_t
 #define api_timestamp_t u_int64_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
@@ -22,7 +24,7 @@
 
 /* TS.CREATE Defaults */
 #define RETENTION_TIME_DEFAULT          0LL
-#define SAMPLES_PER_CHUNK_DEFAULT_SECS  256LL   // fills one page 4096
+#define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
 
 /* TS.Range Aggregation types */

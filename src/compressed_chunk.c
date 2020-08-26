@@ -22,7 +22,7 @@
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
-    chunk->size = size * sizeof(Sample);
+    chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
@@ -76,8 +76,8 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     size_t i = 0;
     Sample sample;
     ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
-    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
-    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size / sizeof(Sample));
+    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
+    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         ensureAddSample(newChunk1, &sample);
@@ -103,7 +103,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     ChunkResult nextRes = CR_OK;
     CompressedChunk *oldChunk = (CompressedChunk *)uCtx->inChunk;
 
-    size_t newSize = oldChunk->size / sizeof(Sample);
+    size_t newSize = oldChunk->size;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
@@ -168,7 +168,7 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
     uint64_t numSamples = compressedChunk->count;
-    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples);
+    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
 
     ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, 0);
     for (uint64_t i = 0; i < numSamples; ++i) {
