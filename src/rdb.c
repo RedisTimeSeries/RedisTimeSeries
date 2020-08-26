@@ -24,7 +24,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     cCtx.retentionTime = RedisModule_LoadUnsigned(io);
     cCtx.chunkSizeBytes = RedisModule_LoadUnsigned(io);
     if (encver < TS_SIZE_RDB_VER) {
-        cCtx.chunkSizeBytes *= 16;
+        cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
 
     if (encver >= TS_UNCOMPRESSED_VER) {

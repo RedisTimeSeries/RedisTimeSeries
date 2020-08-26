@@ -43,7 +43,7 @@ class TSInfo(object):
         if 'retentionTime' in response: self.retention_msecs = response['retentionTime']
         if 'lastTimestamp' in response: self.last_time_stamp = response['lastTimestamp']
         if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
-        if 'defaultChunkSizeBytes' in response: self.chunk_size_bytes = response['defaultChunkSizeBytes']
+        if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
 
     def __eq__(self, other): 
         if not isinstance(other, TSInfo):
@@ -203,7 +203,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
               'firstTimestamp', start_ts, 'chunkCount', 1L,
               'labels', [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp', start_ts + samples_count - 1,
-              'defaultChunkSizeBytes', 1024, 'retentionTime', 0L,
+              'chunkSize', 1024, 'retentionTime', 0L,
               'sourceKey', None, 'rules', []]
             assert TSInfo(expected_result) == self._get_ts_info(r, 'tester')
 
@@ -1312,7 +1312,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4032L
+            assert info.total_samples == 3L and info.memory_usage == 4128L
 
             # rdb load
             data = r.execute_command('dump', 'not_compressed')
@@ -1323,7 +1323,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4032L
+            assert info.total_samples == 3L and info.memory_usage == 4128L
             # test deletion
             assert r.delete('not_compressed')
 
@@ -1648,7 +1648,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 r.execute_command('ts.add split', quantity, 42)
                 for i in range(quantity):
                     r.execute_command('ts.add split', i, i * 1.01)
-                assert self._get_ts_info(r, 'split').chunk_count in [13, 33]
+                assert self._get_ts_info(r, 'split').chunk_count in [13, 32]
                 res = r.execute_command('ts.range split - +')
                 for i in range(quantity - 1):
                     assert res[i][0] + 1 == res[i + 1][0]

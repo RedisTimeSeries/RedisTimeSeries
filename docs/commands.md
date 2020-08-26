@@ -7,20 +7,21 @@
 Create a new time-series.
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
+TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
 ```
 
 * key - Key name for timeseries
 
 Optional args:
 
- * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+ * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
-   memory but usually improve performance due to lower number of memory accesses.  
+   memory but usually improve performance due to lower number of memory accesses. 
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * labels - Set of label-value pairs that represent metadata labels of the key
 
 #### Complexity
 
@@ -67,7 +68,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
@@ -75,11 +76,12 @@ TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [LABELS labe
 
 These arguments are optional because they can be set by TS.CREATE:
 
- * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+ * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
@@ -138,13 +140,13 @@ Creates a new sample that increments/decrements the latest sample's value.
 > Note: TS.INCRBY/TS.DECRBY support updates for the latest sample.
 
 ```sql
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
+TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
 ```
 
 or
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [LABELS label value..]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -154,12 +156,13 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
- * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
- * retentionTime - Maximum age for samples compared to last event time (in milliseconds)
+ * TIMESTAMP - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+ * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
