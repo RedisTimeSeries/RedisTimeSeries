@@ -78,8 +78,11 @@ void AvgAddValue(void *contextPtr, double value){
 
 int AvgFinalize(void *contextPtr, double *value) {
     AvgContext *context = (AvgContext *)contextPtr;
-    if (context->cnt == 0) return 0;
-    return context->val / context->cnt;
+    if (context->cnt == 0) {
+        return TSDB_ERROR;
+    }
+    *value = context->val / context->cnt;
+    return TSDB_OK;
 }
 
 void AvgReset(void *contextPtr) {
