@@ -406,10 +406,47 @@ int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
 }
 
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
-	if(RMUtil_StringEquals(series->srcKey, srctKey)){
-		RedisModule_FreeString(NULL, series->srcKey);
-		series->srcKey = NULL;
-		return TRUE;
-	}
-	return FALSE;
+    if (RMUtil_StringEquals(series->srcKey, srctKey)) {
+        RedisModule_FreeString(NULL, series->srcKey);
+        series->srcKey = NULL;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/*
+ * This function calculate aggregation value of a range.
+ *
+ * If `val` is NULL, the function will update the context of `rule`.
+ */
+int SeriesCalcRange(Series *series,
+                    timestamp_t start_ts,
+                    timestamp_t end_ts,
+                    CompactionRule *rule,
+                    double *val) {
+    AggregationClass *aggObject = rule->aggClass;
+
+    Sample sample = { 0 };
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts);
+    if (iterator.series == NULL) {
+        return TSDB_ERROR;
+    }
+    void *context = aggObject->createContext();
+
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+        aggObject->appendValue(context, sample.value);
+    }
+    SeriesIteratorClose(&iterator);
+    if (val == NULL) { // just update context for current window
+        aggObject->freeContext(rule->aggContext);
+        rule->aggContext = context;
+    } else {
+        aggObject->finalize(context, val);
+        aggObject->freeContext(context);
+    }
+    return TSDB_OK;
+}
+
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
+    return timestamp - (timestamp % window);
 }

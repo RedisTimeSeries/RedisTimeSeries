@@ -33,7 +33,7 @@ typedef struct AggregationClass
     void(*resetContext)(void *context);
     void(*writeContext)(void *context, RedisModuleIO *io);
     void(*readContext)(void *context, RedisModuleIO *io);
-    double(*finalize)(void *context);
+    int(*finalize)(void *context, double *value);
 } AggregationClass;
 
 AggregationClass *GetAggClass(int aggType);
