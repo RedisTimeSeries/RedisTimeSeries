@@ -227,13 +227,34 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = chunk;
-    RedisModule_SaveStringBuffer(io, (char *)compchunk, sizeof(*compchunk));
+    
+    RedisModule_SaveUnsigned(io, compchunk->size);
+    RedisModule_SaveUnsigned(io, compchunk->count);
+    RedisModule_SaveUnsigned(io, compchunk->idx);
+    RedisModule_SaveUnsigned(io, compchunk->baseValue.u);
+    RedisModule_SaveUnsigned(io, compchunk->baseTimestamp);
+    RedisModule_SaveUnsigned(io, compchunk->prevTimestamp);
+    RedisModule_SaveSigned(io, compchunk->prevTimestampDelta);
+    RedisModule_SaveUnsigned(io, compchunk->prevValue.u);
+    RedisModule_SaveUnsigned(io, compchunk->prevLeading);
+    RedisModule_SaveUnsigned(io, compchunk->prevTrailing);
     RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->size);
 }
 
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
-    compchunk = (CompressedChunk *)RedisModule_LoadStringBuffer(io, NULL);
+   
+    compchunk->size = RedisModule_LoadUnsigned(io);
+    compchunk->count = RedisModule_LoadUnsigned(io);
+    compchunk->idx = RedisModule_LoadUnsigned(io);
+    compchunk->baseValue.u = RedisModule_LoadUnsigned(io);
+    compchunk->baseTimestamp = RedisModule_LoadUnsigned(io);
+    compchunk->prevTimestamp = RedisModule_LoadUnsigned(io);
+    compchunk->prevTimestampDelta = RedisModule_LoadSigned(io);
+    compchunk->prevValue.u = RedisModule_LoadUnsigned(io);
+    compchunk->prevLeading = RedisModule_LoadUnsigned(io);
+    compchunk->prevTrailing = RedisModule_LoadUnsigned(io);
+
     compchunk->data = (uint64_t *)RedisModule_LoadStringBuffer(io, NULL);
     *chunk = (Chunk_t *)compchunk;
 }
