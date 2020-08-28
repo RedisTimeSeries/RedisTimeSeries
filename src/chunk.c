@@ -195,7 +195,7 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, uncompchunk->base_timestamp);
     RedisModule_SaveUnsigned(io, uncompchunk->num_samples);
     RedisModule_SaveUnsigned(io, uncompchunk->size);
-    
+
     RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->size);
 }
 

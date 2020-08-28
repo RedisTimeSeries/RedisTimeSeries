@@ -227,7 +227,7 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = chunk;
-    
+
     RedisModule_SaveUnsigned(io, compchunk->size);
     RedisModule_SaveUnsigned(io, compchunk->count);
     RedisModule_SaveUnsigned(io, compchunk->idx);
@@ -243,7 +243,7 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
 
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
-   
+
     compchunk->size = RedisModule_LoadUnsigned(io);
     compchunk->count = RedisModule_LoadUnsigned(io);
     compchunk->idx = RedisModule_LoadUnsigned(io);
