@@ -38,11 +38,18 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
     Sample sample;
     long long arraylen = 0;
 
+    AggregationClass *aggObject = args->aggregationArgs.aggregationClass;
+
+    if (aggObject && SeriesIsBlob(series))
+        aggObject = BlobAggClass(aggObject);
+
     AbstractIterator *iter = SeriesQuery(series, args, reverse);
+
+    bool replyIsBlob = (aggObject == NULL && SeriesIsBlob(series)) || aggClassIsBlob(aggObject);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while (iter->GetNext(iter, &sample) == CR_OK && (args->count == -1 || arraylen < args->count)) {
-        ReplyWithSample(ctx, sample.timestamp, sample.value);
+        ReplyWithSample(ctx, replyIsBlob, sample.timestamp, sample.value);
         arraylen++;
     }
     iter->Close(iter);
@@ -100,18 +107,23 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
-void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
+void ReplyWithSample(RedisModuleCtx *ctx, bool isBlob, u_int64_t timestamp, SampleValue value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
-    char buf[MAX_VAL_LEN + 1];
-    dragonbox_double_to_chars(value, buf);
-    RedisModule_ReplyWithSimpleString(ctx, buf);
+    if (!isBlob) {
+        char buf[MAX_VAL_LEN + 1];
+        dragonbox_double_to_chars(VALUE_DOUBLE(&value), buf);
+        RedisModule_ReplyWithSimpleString(ctx, buf);
+    } else {
+        TSBlob *blob = VALUE_BLOB(&value);
+        RedisModule_ReplyWithStringBuffer(ctx, blob->data, blob->len);
+    }
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
     if (SeriesGetNumSamples(series) == 0) {
         RedisModule_ReplyWithArray(ctx, 0);
     } else {
-        ReplyWithSample(ctx, series->lastTimestamp, series->lastValue);
+        ReplyWithSample(ctx, SeriesIsBlob(series), series->lastTimestamp, series->lastValue);
     }
 }

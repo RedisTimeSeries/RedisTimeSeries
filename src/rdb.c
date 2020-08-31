@@ -18,9 +18,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    double lastValue;
-    timestamp_t lastTimestamp;
-    uint64_t totalSamples;
+    SampleValue lastValue = { .d.value = 0, .d.buf = NULL };
+    timestamp_t lastTimestamp = 0;
+    uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
@@ -44,7 +44,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     if (encver >= TS_SIZE_RDB_VER) {
         lastTimestamp = LoadUnsigned_IOError(io, goto err);
-        lastValue = LoadDouble_IOError(io, goto err);
+        if ((cCtx.options & SERIES_OPT_BLOB) == SERIES_OPT_BLOB)
+            VALUE_BLOB(&lastValue) = LoadBlob_IOError(io, goto err);
+        else
+            VALUE_DOUBLE(&lastValue) = LoadDouble_IOError(io, goto err);
         totalSamples = LoadUnsigned_IOError(io, goto err);
         if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
             duplicatePolicy = LoadUnsigned_IOError(io, goto err);
@@ -93,8 +96,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         uint64_t samplesCount = LoadUnsigned_IOError(io, goto err);
         for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
             timestamp_t ts = LoadUnsigned_IOError(io, goto err);
+            // Before TS_SIZE_RDB_VER, blobs are not supported
             double val = LoadDouble_IOError(io, goto err);
-            int result = SeriesAddSample(series, ts, val);
+            SampleValue sValue = { .d.value = val };
+            int result = SeriesAddSample(series, ts, sValue);
             if (result != TSDB_OK) {
                 RedisModule_LogIOError(
                     io, "warning", "couldn't load sample: %" PRIu64 " %lf", ts, val);
@@ -111,7 +116,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         uint64_t numChunks = LoadUnsigned_IOError(io, goto err);
         for (int i = 0; i < numChunks; ++i) {
-            if (series->funcs->LoadFromRDB(&chunk, io)) {
+            if (series->funcs->LoadFromRDB(&chunk, io, SeriesIsBlob(series))) {
                 goto err;
             }
             dictOperator(
@@ -177,7 +182,12 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->chunkSizeBytes);
     RedisModule_SaveUnsigned(io, series->options);
     RedisModule_SaveUnsigned(io, series->lastTimestamp);
-    RedisModule_SaveDouble(io, series->lastValue);
+
+    if (SeriesIsBlob(series)) {
+        RedisModule_SaveBlob(io, VALUE_BLOB(&series->lastValue));
+    } else
+        RedisModule_SaveDouble(io, VALUE_DOUBLE(&series->lastValue));
+
     RedisModule_SaveUnsigned(io, series->totalSamples);
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
     if (series->srcKey != NULL) {
@@ -210,7 +220,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, numChunks);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
-        series->funcs->SaveToRDB(chunk, io);
+        series->funcs->SaveToRDB(chunk, io, SeriesIsBlob(series));
         numChunks--;
     }
     RedisModule_DictIteratorStop(iter);

@@ -53,7 +53,10 @@ typedef enum {
     TS_AGG_STD_S,
     TS_AGG_VAR_P,
     TS_AGG_VAR_S,
-    TS_AGG_TYPES_MAX // 13
+    TS_AGG_BLOB_COUNT,
+    TS_AGG_BLOB_FIRST,
+    TS_AGG_BLOB_LAST,
+    TS_AGG_TYPES_MAX // 16
 } TS_AGG_TYPES_T;
 
 
@@ -70,8 +73,8 @@ typedef enum DuplicatePolicy {
 
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
-
 #define SERIES_OPT_COMPRESSED_GORILLA 0x2
+#define SERIES_OPT_BLOB 0x4
 
 #define SERIES_OPT_DEFAULT_COMPRESSION SERIES_OPT_COMPRESSED_GORILLA
 

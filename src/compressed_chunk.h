@@ -14,7 +14,7 @@
 #include <sys/types.h> // u_int_t
 
 // Initialize compressed chunk
-Chunk_t *Compressed_NewChunk(size_t size);
+Chunk_t *Compressed_NewChunk(bool, size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
 Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk);
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
@@ -38,12 +38,12 @@ timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);
 
 // RDB
-void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io, bool isBlob);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, bool isBlob);
 
 // LibMR
-void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
-int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx, bool isBlob);
+int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx, bool isBlob);
 
 /* Used in tests */
 u_int64_t getIterIdx(ChunkIter_t *iter);

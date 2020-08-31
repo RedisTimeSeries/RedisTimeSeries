@@ -38,5 +38,13 @@
         (res);                                                                                     \
     })
 
+#define LoadBlob_IOError(rdb, cleanup_exp)                                                         \
+    __extension__({                                                                                \
+        TSBlob *res = RedisModule_LoadBlob((rdb));                                                   \
+        if (RedisModule_IsIOError(rdb)) {                                                          \
+            cleanup_exp;                                                                           \
+        }                                                                                          \
+        (res);                                                                                     \
+    })
 
 #endif //REDIS_TIMESERIES_LOAD_IO_ERROR_MACROS_H
