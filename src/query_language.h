@@ -37,7 +37,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          api_timestamp_t *time_delta,
-                         AggregationClass **agg_object);
+                         AggregationClass **agg_object,
+                         TS_AGG_TYPES_T *type);
 
 int parseRangeArguments(RedisModuleCtx *ctx,
                         Series *series,

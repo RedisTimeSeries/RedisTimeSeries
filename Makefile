@@ -51,5 +51,15 @@ pack:
 run:
 	@$(MAKE) -C src run
 
+valgrind:
+	@$(MAKE) -C src $@
+
+run:
+	@$(MAKE) -C src $@
+
+gdb:
+	@$(MAKE) -C src $@
+
+
 # deploy:
 #	@make -C src deploy

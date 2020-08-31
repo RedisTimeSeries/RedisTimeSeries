@@ -7,18 +7,36 @@
 
 #include "rmutil/alloc.h"
 
-Chunk_t *Uncompressed_NewChunk(size_t size) {
+Chunk_t *Uncompressed_NewChunk(bool isBlob, size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
     newChunk->size = size;
     newChunk->samples = (Sample *)malloc(size);
+    newChunk->isBlob = isBlob;
+
+    // pre-allocate blob containers
+    if (isBlob) {
+        for (Sample *sample = newChunk->samples; (char *)sample < (char *)newChunk->samples + size;
+             sample++) {
+            VALUE_BLOB(&sample->value) = NewBlob(NULL, 0);
+        }
+    }
 
     return newChunk;
 }
 
 void Uncompressed_FreeChunk(Chunk_t *chunk) {
-    free(((Chunk *)chunk)->samples);
-    free(chunk);
+    Chunk *thisChunk = (Chunk *)chunk;
+    if (thisChunk->isBlob) {
+        for (Sample *sample = thisChunk->samples;
+             (char *)sample < (char *)thisChunk->samples + thisChunk->size;
+             sample++) {
+            FreeBlob(VALUE_BLOB(&sample->value));
+        }
+    }
+
+    free(thisChunk->samples);
+    free(thisChunk);
 }
 
 /**
@@ -32,7 +50,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
+    Chunk *newChunk = Uncompressed_NewChunk(curChunk->isBlob, split * SAMPLE_SIZE);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
         Uncompressed_AddSample(newChunk, sample);
@@ -83,7 +101,10 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
         regChunk->base_timestamp = sample->timestamp;
     }
 
-    regChunk->samples[regChunk->num_samples] = *sample;
+    Sample *dstSample = &regChunk->samples[regChunk->num_samples];
+    updateSampleValue(regChunk->isBlob, &dstSample->value, &sample->value);
+    dstSample->timestamp = sample->timestamp;
+
     regChunk->num_samples++;
 
     return CR_OK;
@@ -135,7 +156,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
         if (cr != CR_OK) {
             return CR_ERR;
         }
-        regChunk->samples[i].value = uCtx->sample.value;
+        updateSampleValue(uCtx->isBlob, &regChunk->samples[i].value, &uCtx->sample.value);
         return CR_OK;
     }
 
@@ -204,7 +225,7 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     return size;
 }
 
-void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io, bool isBlob) {
     Chunk *uncompchunk = chunk;
 
     RedisModule_SaveUnsigned(io, uncompchunk->base_timestamp);
@@ -212,9 +233,17 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, uncompchunk->size);
 
     RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->size);
+    if (!isBlob)
+        return;
+
+    for (int ix = 0; ix < uncompchunk->num_samples; ix++) {
+        Sample *sample = &uncompchunk->samples[ix];
+        TSBlob *blob = VALUE_BLOB(&sample->value);
+        RedisModule_SaveBlob(io, blob);
+    }
 }
 
-void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, bool blob) {
     Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
 
     uncompchunk->base_timestamp = RedisModule_LoadUnsigned(io);
@@ -222,5 +251,19 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     uncompchunk->size = RedisModule_LoadUnsigned(io);
     size_t string_buffer_size;
     uncompchunk->samples = (Sample *)RedisModule_LoadStringBuffer(io, &string_buffer_size);
+    uncompchunk->isBlob = blob;
     *chunk = (Chunk_t *)uncompchunk;
+    if (!blob)
+        return;
+
+    for (int ix = 0; ix < uncompchunk->num_samples; ix++) {
+        Sample *sample = &uncompchunk->samples[ix];
+        VALUE_BLOB(&sample->value) = RedisModule_LoadBlob(io);
+    }
+
+    for (Sample *sample = &uncompchunk->samples[uncompchunk->num_samples];
+         (char *)sample < (char *)uncompchunk->samples + string_buffer_size;
+         sample++) {
+        VALUE_BLOB(&sample->value) = NewBlob(NULL, 0);
+    }
 }
