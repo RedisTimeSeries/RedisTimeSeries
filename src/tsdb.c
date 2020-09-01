@@ -343,6 +343,14 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
+static int SeriesChunkIteratorOptions(SeriesIterator *iter) {
+    int options = 0;
+    if (iter->reverse) {
+        options |= CHUNK_ITER_OP_REVERSE;
+    }
+    return options;
+}
+
 // Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev) {
     SeriesIterator iter = { 0 };
@@ -371,12 +379,13 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
         iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk);
     }
 
-    iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
+    iter.chunkIterator =
+        funcs->NewChunkIterator(iter.currentChunk, SeriesChunkIteratorOptions(&iter));
     return iter;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
-    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
+    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
@@ -395,8 +404,9 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
                 funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
                 return CR_END; // No more chunks or they out of range
             }
-            funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
-            iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
+            funcs->FreeChunkIterator(iterator->chunkIterator);
+            iterator->chunkIterator =
+                funcs->NewChunkIterator(currentChunk, SeriesChunkIteratorOptions(iterator));
             if (iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
                 return CR_END;
             }
@@ -604,7 +614,6 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
 
     size_t i = 0;
     Chunk_t *chunk;
-    bool rev = false;
     Sample sample = { 0 };
     ChunkFuncs *funcs = series->funcs;
     timestamp_t minTimestamp = 0;
@@ -616,14 +625,14 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     RedisModule_DictNextC(iter, NULL, (void *)&chunk);
 
-    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, rev);
+    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, 0);
     funcs->ChunkIteratorGetNext(chunkIter, &sample);
     while (sample.timestamp < minTimestamp) {
         funcs->ChunkIteratorGetNext(chunkIter, &sample);
         ++i;
     }
     *skipped = i;
-    funcs->FreeChunkIterator(chunkIter, rev);
+    funcs->FreeChunkIterator(chunkIter);
     RedisModule_DictIteratorStop(iter);
     return sample.timestamp;
 }
