@@ -22,7 +22,7 @@ ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size);
 
 // Read from compressed chunk using an iterator
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options);
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 

@@ -52,10 +52,10 @@ typedef struct SeriesIterator {
     RedisModuleDictIter *dictIter;
     Chunk_t *currentChunk;
     ChunkIter_t *chunkIterator;
+    ChunkIterFuncs chunkIteratorFuncs;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
     bool reverse;
-    ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 

@@ -39,6 +39,13 @@ typedef struct UpsertCtx {
     Chunk_t *inChunk;       // original chunk  
 } UpsertCtx;
 
+typedef struct ChunkIterFuncs {
+    void(*Free)(ChunkIter_t *iter);
+    ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
+    ChunkResult(*GetPrev)(ChunkIter_t *iter, Sample *sample);
+} ChunkIterFuncs;
+
+
 typedef struct ChunkFuncs {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void(*FreeChunk)(Chunk_t *chunk);
@@ -47,10 +54,7 @@ typedef struct ChunkFuncs {
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options);
-    void(*FreeChunkIterator)(ChunkIter_t *iter);
-    ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
-    ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
 
     size_t(*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
@@ -62,5 +66,6 @@ typedef struct ChunkFuncs {
 } ChunkFuncs;
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
+ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);
 
 #endif //GENERIC__CHUNK_H
