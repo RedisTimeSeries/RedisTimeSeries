@@ -146,13 +146,13 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    if (rev == false) { // iterate from first to last
-        iter->currentIndex = 0;
-    } else { // iterate from last to first
+    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->base.numSamples - 1;
+    } else { // iterate from first to last
+        iter->currentIndex = 0;
     }
     return (ChunkIter_t *)iter;
 }
@@ -179,8 +179,11 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
     }
 }
 
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
-    (void)rev; // only used with compressed chunk but signature must be similar
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
+    ChunkIterator *iter = (ChunkIterator *)iterator;
+    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
+        free(iter->chunk);
+    }
     free(iter);
 }
 
@@ -193,13 +196,21 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Chunk *uncompchunk = chunk;
-    RedisModule_SaveStringBuffer(io, (char *)uncompchunk, sizeof(*uncompchunk));
+
+    RedisModule_SaveUnsigned(io, uncompchunk->base.baseTimestamp);
+    RedisModule_SaveUnsigned(io, uncompchunk->base.numSamples);
+    RedisModule_SaveUnsigned(io, uncompchunk->base.size);
+
     RedisModule_SaveStringBuffer(io, (char *)uncompchunk->samples, uncompchunk->base.size);
 }
 
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
-    uncompchunk = (Chunk *)RedisModule_LoadStringBuffer(io, NULL);
+
+    uncompchunk->base.baseTimestamp = RedisModule_LoadUnsigned(io);
+    uncompchunk->base.numSamples = RedisModule_LoadUnsigned(io);
+    uncompchunk->base.size = RedisModule_LoadUnsigned(io);
+
     uncompchunk->samples = (Sample *)RedisModule_LoadStringBuffer(io, NULL);
     *chunk = (Chunk_t *)uncompchunk;
 }

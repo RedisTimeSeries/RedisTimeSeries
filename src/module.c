@@ -597,7 +597,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    if (aggObject == TS_AGG_NONE) {
+    if (aggObject == NULL) {
         // No aggregation
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                (maxResults == -1 || arraylen < maxResults)) {
@@ -634,7 +634,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != TS_AGG_NONE) {
+    if (aggObject != NULL) {
         if (arraylen != maxResults) {
             // reply last bucket of data
             double value;

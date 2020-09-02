@@ -32,6 +32,12 @@ typedef struct {
 
 typedef void ChunkIter_t;
 
+#define CHUNK_ITER_OP_NONE 0
+#define CHUNK_ITER_OP_REVERSE 1
+// This is supported *only* by uncompressed chunk, this is used when we reverse read a compressed chunk by
+// uncompressing it into a *un*compressed chunk and returning a reverse iterator on that "temporary" uncompressed chunk.
+#define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
+
 typedef enum {
     CHUNK_REGULAR,
     CHUNK_COMPRESSED 
@@ -50,8 +56,8 @@ typedef struct ChunkFuncs {
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
-    void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options);
+    void(*FreeChunkIterator)(ChunkIter_t *iter);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 

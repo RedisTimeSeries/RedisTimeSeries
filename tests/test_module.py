@@ -1685,6 +1685,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert all_data[i][0] == res[i][0]
                 assert float(all_data[i][1]) == float(res[i][1])
 
+    def test_issue_504(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'tester')
+            for i in range(100,3000):
+                assert r.execute_command('ts.add', 'tester', i, i*1.1) == i
+            assert r.execute_command('ts.add', 'tester', 99, 1) == 99
+            assert r.execute_command('ts.add', 'tester', 98, 1) == 98
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):

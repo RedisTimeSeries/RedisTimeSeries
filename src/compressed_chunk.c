@@ -58,12 +58,15 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 }
 
 static void trimChunk(CompressedChunk *chunk) {
-    int excess = (chunk->base.size * 8 - chunk->idx) / 8;
+    int excess = (chunk->base.size * BIT - chunk->idx) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 1) {
         size_t newSize = chunk->base.size - excess + 1;
+        // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
+        // each write happens in 8 bytes blocks.
+        newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
         chunk->data = realloc(chunk->data, newSize);
         chunk->base.size = newSize;
     }
@@ -77,7 +80,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     // add samples in new chunks
     size_t i = 0;
     Sample sample;
-    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, CHUNK_ITER_OP_NONE);
     CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->base.size);
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->base.size);
     for (; i < curNumSamples; ++i) {
@@ -93,7 +96,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     trimChunk(newChunk2);
     swapChunks(curChunk, newChunk1);
 
-    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunkIterator(iter);
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
@@ -108,7 +111,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     size_t newSize = oldChunk->base.size;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE);
     timestamp_t ts = uCtx->sample.timestamp;
     int numSamples = oldChunk->base.numSamples;
 
@@ -139,7 +142,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
 
     swapChunks(newChunk, oldChunk);
 
-    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunkIterator(iter);
     Compressed_FreeChunk(newChunk);
     return rv;
 }
@@ -172,12 +175,12 @@ static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     uint64_t numSamples = compressedChunk->base.numSamples;
     Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
 
-    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, 0);
+    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE);
     for (uint64_t i = 0; i < numSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         Uncompressed_AddSample(uncompressedChunk, &sample);
     }
-    Compressed_FreeChunkIterator(iter, false);
+    Compressed_FreeChunkIterator(iter);
     return uncompressedChunk;
 }
 
@@ -190,13 +193,14 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options) {
     CompressedChunk *compressedChunk = chunk;
 
     // for reverse iterator of compressed chunks
-    if (rev == true) {
+    if (options & CHUNK_ITER_OP_REVERSE) {
+        int uncompressed_options = CHUNK_ITER_OP_REVERSE | CHUNK_ITER_OP_FREE_CHUNK;
         Chunk *uncompressedChunk = decompressChunk(compressedChunk);
-        return Uncompressed_NewChunkIterator(uncompressedChunk, true);
+        return Uncompressed_NewChunkIterator(uncompressedChunk, uncompressed_options);
     }
 
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
@@ -219,23 +223,40 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample) {
     return Compressed_ReadNext((Compressed_Iterator *)iter, &sample->timestamp, &sample->value);
 }
 
-void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
-    // compressed iterator on reverse query has to release decompressed chunk
-    if (rev) {
-        free(((ChunkIterator *)iter)->chunk);
-    }
+void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
     free(iter);
 }
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = chunk;
-    RedisModule_SaveStringBuffer(io, (char *)compchunk, sizeof(*compchunk));
+
+    RedisModule_SaveUnsigned(io, compchunk->base.size);
+    RedisModule_SaveUnsigned(io, compchunk->base.numSamples);
+    RedisModule_SaveUnsigned(io, compchunk->idx);
+    RedisModule_SaveUnsigned(io, compchunk->baseValue.u);
+    RedisModule_SaveUnsigned(io, compchunk->base.baseTimestamp);
+    RedisModule_SaveUnsigned(io, compchunk->prevTimestamp);
+    RedisModule_SaveSigned(io, compchunk->prevTimestampDelta);
+    RedisModule_SaveUnsigned(io, compchunk->prevValue.u);
+    RedisModule_SaveUnsigned(io, compchunk->prevLeading);
+    RedisModule_SaveUnsigned(io, compchunk->prevTrailing);
     RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->base.size);
 }
 
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
-    compchunk = (CompressedChunk *)RedisModule_LoadStringBuffer(io, NULL);
+
+    compchunk->base.size = RedisModule_LoadUnsigned(io);
+    compchunk->base.numSamples = RedisModule_LoadUnsigned(io);
+    compchunk->idx = RedisModule_LoadUnsigned(io);
+    compchunk->baseValue.u = RedisModule_LoadUnsigned(io);
+    compchunk->base.baseTimestamp = RedisModule_LoadUnsigned(io);
+    compchunk->prevTimestamp = RedisModule_LoadUnsigned(io);
+    compchunk->prevTimestampDelta = RedisModule_LoadSigned(io);
+    compchunk->prevValue.u = RedisModule_LoadUnsigned(io);
+    compchunk->prevLeading = RedisModule_LoadUnsigned(io);
+    compchunk->prevTrailing = RedisModule_LoadUnsigned(io);
+
     compchunk->data = (uint64_t *)RedisModule_LoadStringBuffer(io, NULL);
     *chunk = (Chunk_t *)compchunk;
 }
