@@ -56,12 +56,15 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 }
 
 static void trimChunk(CompressedChunk *chunk) {
-    int excess = (chunk->size * 8 - chunk->idx) / 8;
+    int excess = (chunk->size * BIT - chunk->idx) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
     if (excess > 1) {
         size_t newSize = chunk->size - excess + 1;
+        // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
+        // each write happens in 8 bytes blocks.
+        newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
         chunk->data = realloc(chunk->data, newSize);
         chunk->size = newSize;
     }
