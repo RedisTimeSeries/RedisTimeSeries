@@ -377,8 +377,8 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
         iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk);
     }
 
-    iter.chunkIterator =
-        funcs->NewChunkIterator(iter.currentChunk, SeriesChunkIteratorOptions(&iter), &iter.chunkIteratorFuncs);
+    iter.chunkIterator = funcs->NewChunkIterator(
+        iter.currentChunk, SeriesChunkIteratorOptions(&iter), &iter.chunkIteratorFuncs);
     return iter;
 }
 
@@ -412,8 +412,8 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
                 return CR_END; // No more chunks or they out of range
             }
             iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
-            iterator->chunkIterator =
-                funcs->NewChunkIterator(currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
+            iterator->chunkIterator = funcs->NewChunkIterator(
+                currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
             if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                 return CR_END;
             }

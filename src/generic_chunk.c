@@ -25,9 +25,9 @@ static ChunkFuncs regChunk = {
 };
 
 ChunkIterFuncs uncompressedChunkIteratorClass = {
-        .Free = Uncompressed_FreeChunkIterator,
-        .GetNext = Uncompressed_ChunkIteratorGetNext,
-        .GetPrev = Uncompressed_ChunkIteratorGetPrev,
+    .Free = Uncompressed_FreeChunkIterator,
+    .GetNext = Uncompressed_ChunkIteratorGetNext,
+    .GetPrev = Uncompressed_ChunkIteratorGetPrev,
 };
 
 static ChunkFuncs comprChunk = {
@@ -50,10 +50,10 @@ static ChunkFuncs comprChunk = {
 };
 
 static ChunkIterFuncs compressedChunkIteratorClass = {
-        .Free = Compressed_FreeChunkIterator,
-        .GetNext = Compressed_ChunkIteratorGetNext,
-        /*** Reverse iteration is on temporary decompressed chunk ***/
-        .GetPrev = NULL,
+    .Free = Compressed_FreeChunkIterator,
+    .GetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
+    .GetPrev = NULL,
 };
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {

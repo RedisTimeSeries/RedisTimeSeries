@@ -192,18 +192,22 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass) {
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
+                                         int options,
+                                         ChunkIterFuncs *retChunkIterClass) {
     CompressedChunk *compressedChunk = chunk;
 
     // for reverse iterator of compressed chunks
     if (options & CHUNK_ITER_OP_REVERSE) {
         int uncompressed_options = CHUNK_ITER_OP_REVERSE | CHUNK_ITER_OP_FREE_CHUNK;
         Chunk *uncompressedChunk = decompressChunk(compressedChunk);
-        return Uncompressed_NewChunkIterator(uncompressedChunk, uncompressed_options, retChunkIterClass);
+        return Uncompressed_NewChunkIterator(
+            uncompressedChunk, uncompressed_options, retChunkIterClass);
     }
 
     if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);;
+        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);
+        ;
     }
 
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));

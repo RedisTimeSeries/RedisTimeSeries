@@ -144,7 +144,9 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+                                           int options,
+                                           ChunkIterFuncs *retChunkIterClass) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
     iter->options = options;
