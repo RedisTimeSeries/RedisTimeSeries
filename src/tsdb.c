@@ -625,7 +625,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     RedisModule_DictNextC(iter, NULL, (void *)&chunk);
 
-    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, 0);
+    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, CHUNK_ITER_OP_NONE);
     funcs->ChunkIteratorGetNext(chunkIter, &sample);
     while (sample.timestamp < minTimestamp) {
         funcs->ChunkIteratorGetNext(chunkIter, &sample);
