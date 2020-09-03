@@ -387,6 +387,9 @@ static ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
     if (iter->reverse == false) {
         return iter->chunkIteratorFuncs.GetNext(iter->chunkIterator, sample);
     } else {
+        if (iter->chunkIteratorFuncs.GetPrev == NULL) {
+            return CR_ERR;
+        }
         return iter->chunkIteratorFuncs.GetPrev(iter->chunkIterator, sample);
     }
 }
@@ -417,6 +420,8 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
             if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                 return CR_END;
             }
+        } else if (res == CR_ERR) {
+            return CR_ERR;
         }
 
         // check timestamp is within range
