@@ -23,10 +23,8 @@ typedef struct Sample {
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
-#define CHUNK_ITER_OP_NONE 0
 #define CHUNK_ITER_OP_REVERSE 1
-// This is supported *only* by uncompressed chunk, this is used when we reverse read a compressed chunk by
-// uncompressing it into a *un*compressed chunk and returning a reverse iterator on that "temporary" uncompressed chunk.
+// This is supported *only* by uncompressed chunk
 #define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
 typedef enum {
