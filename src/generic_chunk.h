@@ -23,10 +23,6 @@ typedef struct Sample {
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
-#define CHUNK_ITER_OP_REVERSE 1
-// This is supported *only* by uncompressed chunk
-#define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
-
 typedef enum {
     CHUNK_REGULAR,
     CHUNK_COMPRESSED 
@@ -45,8 +41,8 @@ typedef struct ChunkFuncs {
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options);
-    void(*FreeChunkIterator)(ChunkIter_t *iter);
+    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, bool rev);
+    void(*FreeChunkIterator)(ChunkIter_t *iter, bool rev);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult(*ChunkIteratorGetPrev)(ChunkIter_t *iter, Sample *sample);
 

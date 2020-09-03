@@ -78,7 +78,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     // add samples in new chunks
     size_t i = 0;
     Sample sample;
-    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, 0);
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, false);
     CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
     for (; i < curNumSamples; ++i) {
@@ -94,7 +94,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     trimChunk(newChunk2);
     swapChunks(curChunk, newChunk1);
 
-    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunkIterator(iter, false);
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
@@ -109,7 +109,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     size_t newSize = oldChunk->size;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, 0);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, false);
     timestamp_t ts = uCtx->sample.timestamp;
     int numSamples = oldChunk->count;
 
@@ -140,7 +140,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
 
     swapChunks(newChunk, oldChunk);
 
-    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunkIterator(iter, false);
     Compressed_FreeChunk(newChunk);
     return rv;
 }
@@ -178,7 +178,7 @@ static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         Uncompressed_AddSample(uncompressedChunk, &sample);
     }
-    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunkIterator(iter, false);
     return uncompressedChunk;
 }
 
@@ -191,14 +191,13 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options) {
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     CompressedChunk *compressedChunk = chunk;
 
     // for reverse iterator of compressed chunks
-    if (options & CHUNK_ITER_OP_REVERSE) {
-        int uncompressed_options = CHUNK_ITER_OP_REVERSE | CHUNK_ITER_OP_FREE_CHUNK;
+    if (rev == true) {
         Chunk *uncompressedChunk = decompressChunk(compressedChunk);
-        return Uncompressed_NewChunkIterator(uncompressedChunk, uncompressed_options);
+        return Uncompressed_NewChunkIterator(uncompressedChunk, true);
     }
 
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
@@ -221,7 +220,11 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample) {
     return Compressed_ReadNext((Compressed_Iterator *)iter, &sample->timestamp, &sample->value);
 }
 
-void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
+void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
+    // compressed iterator on reverse query has to release decompressed chunk
+    if (rev) {
+        free(((ChunkIterator *)iter)->chunk);
+    }
     free(iter);
 }
 

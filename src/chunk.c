@@ -144,13 +144,13 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
-        iter->currentIndex = iter->chunk->num_samples - 1;
-    } else { // iterate from first to last
+    if (rev == false) { // iterate from first to last
         iter->currentIndex = 0;
+    } else { // iterate from last to first
+        iter->currentIndex = iter->chunk->num_samples - 1;
     }
     return (ChunkIter_t *)iter;
 }
@@ -177,11 +177,8 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
     }
 }
 
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
-        free(iter->chunk);
-    }
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
+    (void)rev; // only used with compressed chunk but signature must be similar
     free(iter);
 }
 
