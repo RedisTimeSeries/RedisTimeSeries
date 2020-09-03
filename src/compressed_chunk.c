@@ -223,7 +223,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample) {
 void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
     // compressed iterator on reverse query has to release decompressed chunk
     if (rev) {
-        free(((ChunkIterator *)iter)->chunk);
+        Uncompressed_FreeChunk(((ChunkIterator *)iter)->chunk);
     }
     free(iter);
 }
