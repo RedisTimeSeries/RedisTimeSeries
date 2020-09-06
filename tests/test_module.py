@@ -1342,7 +1342,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 
                 trimmed_info = self._get_ts_info(r, 'trim_me')
                 untrimmed_info = self._get_ts_info(r, 'dont_trim_me')
-                assert 1 == trimmed_info.chunk_count
+                assert 2 == trimmed_info.chunk_count
                 assert samples == untrimmed_info.total_samples
                 # extra test for uncompressed
                 if mode == "UNCOMPRESSED":

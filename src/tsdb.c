@@ -625,27 +625,22 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     }
 
     size_t i = 0;
-    Chunk_t *chunk;
     Sample sample = { 0 };
-    ChunkFuncs *funcs = series->funcs;
+
     timestamp_t minTimestamp = 0;
     if (series->retentionTime && series->retentionTime < series->lastTimestamp) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    SeriesTrim(series);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    RedisModule_DictNextC(iter, NULL, (void *)&chunk);
+    SeriesIterator iterator = SeriesQuery(series, 0, series->lastTimestamp, FALSE);
+    ChunkResult result = SeriesIteratorGetNext(&iterator, &sample);
 
-    ChunkIterFuncs iteratorFuncs;
-    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, CHUNK_ITER_OP_NONE, &iteratorFuncs);
-    iteratorFuncs.GetNext(chunkIter, &sample);
-    while (sample.timestamp < minTimestamp) {
-        iteratorFuncs.GetNext(chunkIter, &sample);
+    while (result == CR_OK && sample.timestamp < minTimestamp) {
+        result = SeriesIteratorGetNext(&iterator, &sample);
         ++i;
     }
+
     *skipped = i;
-    iteratorFuncs.Free(chunkIter);
-    RedisModule_DictIteratorStop(iter);
+    SeriesIteratorClose(&iterator);
     return sample.timestamp;
 }
