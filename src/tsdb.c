@@ -16,16 +16,9 @@
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 
-typedef enum
-{
-    DICT_OP_SET = 0,
-    DICT_OP_REPLACE = 1,
-    DICT_OP_DEL = 2
-} DictOp;
-
 static Series *lastDeletedSeries = NULL;
 
-static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
+int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
     timestamp_t rax_key = htonu64(ts);
     switch (op) {
         case DICT_OP_SET:
@@ -39,32 +32,27 @@ static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp 
     return REDISMODULE_OK; // silence compiler
 }
 
-Series *NewSeries(RedisModuleString *keyName,
-                  Label *labels,
-                  size_t labelsCount,
-                  uint64_t retentionTime,
-                  short maxSamplesPerChunk,
-                  int options) {
+Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
-    newSeries->maxSamplesPerChunk = maxSamplesPerChunk;
-    newSeries->retentionTime = retentionTime;
+    newSeries->chunkSizeBytes = cCtx->chunkSizeBytes;
+    newSeries->retentionTime = cCtx->retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
     newSeries->totalSamples = 0;
-    newSeries->labels = labels;
-    newSeries->labelsCount = labelsCount;
-    newSeries->options = options;
+    newSeries->labels = cCtx->labels;
+    newSeries->labelsCount = cCtx->labelsCount;
+    newSeries->options = cCtx->options;
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
+    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
     dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
     newSeries->lastChunk = newChunk;
     return newSeries;
@@ -281,6 +269,10 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
         RedisModuleDictIter *dictIter =
             RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
+        if (chunkKey == NULL) {
+            RedisModule_DictIteratorReseekC(dictIter, "^", NULL, 0);
+            chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
+        }
         RedisModule_DictIteratorStop(dictIter);
         if (chunkKey == NULL) {
             return REDISMODULE_ERR;
@@ -289,8 +281,7 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk, false) >
-        series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
@@ -342,7 +333,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
-        Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
+        Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
         ret = series->funcs->AddSample(newChunk, &sample);
         series->lastChunk = newChunk;
@@ -351,6 +342,14 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     series->lastValue = value;
     series->totalSamples++;
     return TSDB_OK;
+}
+
+static int SeriesChunkIteratorOptions(SeriesIterator *iter) {
+    int options = 0;
+    if (iter->reverse) {
+        options |= CHUNK_ITER_OP_REVERSE;
+    }
+    return options;
 }
 
 // Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
@@ -365,11 +364,9 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
     ChunkFuncs *funcs = series->funcs;
 
     if (iter.reverse == false) {
-        iter.GetNext = funcs->ChunkIteratorGetNext;
         iter.DictGetNext = RedisModule_DictNextC;
         seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
     } else {
-        iter.GetNext = funcs->ChunkIteratorGetPrev;
         iter.DictGetNext = RedisModule_DictPrevC;
         seriesEncodeTimestamp(&rax_key, iter.maxTimestamp);
     }
@@ -381,12 +378,25 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
         iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk);
     }
 
-    iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
+    iter.chunkIterator = funcs->NewChunkIterator(
+        iter.currentChunk, SeriesChunkIteratorOptions(&iter), &iter.chunkIteratorFuncs);
     return iter;
 }
 
+// this is an internal function that routes the next call to the appropriate chunk iterator function
+static ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
+    if (iter->reverse == false) {
+        return iter->chunkIteratorFuncs.GetNext(iter->chunkIterator, sample);
+    } else {
+        if (iter->chunkIteratorFuncs.GetPrev == NULL) {
+            return CR_ERR;
+        }
+        return iter->chunkIteratorFuncs.GetPrev(iter->chunkIterator, sample);
+    }
+}
+
 void SeriesIteratorClose(SeriesIterator *iterator) {
-    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
+    iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
@@ -398,18 +408,21 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     Chunk_t *currentChunk = iterator->currentChunk;
 
     while (true) {
-        res = iterator->GetNext(iterator->chunkIterator, currentSample);
+        res = SeriesGetNext(iterator, currentSample);
         if (res == CR_END) { // Reached the end of the chunk
             if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
                 funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp ||
                 funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
                 return CR_END; // No more chunks or they out of range
             }
-            funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
-            iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
-            if (iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
+            iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
+            iterator->chunkIterator = funcs->NewChunkIterator(
+                currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
+            if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                 return CR_END;
             }
+        } else if (res == CR_ERR) {
+            return CR_ERR;
         }
 
         // check timestamp is within range
@@ -499,15 +512,14 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount + 1].value =
             RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx,
-                    destKey,
-                    compactedLabels,
-                    compactedRuleLabelCount,
-                    rule->retentionSizeMillisec,
-                    TSGlobalConfig.maxSamplesPerChunk,
-                    TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
-                    &compactedSeries,
-                    &compactedKey);
+        CreateCtx cCtx = {
+            .retentionTime = rule->retentionSizeMillisec,
+            .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
+            .labelsCount = compactedRuleLabelCount,
+            .labels = compactedLabels,
+            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+        };
+        CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
@@ -614,28 +626,22 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     }
 
     size_t i = 0;
-    Chunk_t *chunk;
-    bool rev = false;
     Sample sample = { 0 };
-    ChunkFuncs *funcs = series->funcs;
-    timestamp_t minTimestamp =
-        series->retentionTime ? series->lastTimestamp - series->retentionTime : 0;
 
-    SeriesTrim(series);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    RedisModule_DictNextC(iter, NULL, (void *)&chunk);
+    timestamp_t minTimestamp = 0;
+    if (series->retentionTime && series->retentionTime < series->lastTimestamp) {
+        minTimestamp = series->lastTimestamp - series->retentionTime;
+    }
 
-    // should never fail since we just trimmed
-    assert(minTimestamp <= funcs->GetLastTimestamp(chunk));
+    SeriesIterator iterator = SeriesQuery(series, 0, series->lastTimestamp, FALSE);
+    ChunkResult result = SeriesIteratorGetNext(&iterator, &sample);
 
-    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, rev);
-    sample.timestamp = funcs->GetFirstTimestamp(chunk);
-    while (sample.timestamp < minTimestamp) {
-        funcs->ChunkIteratorGetNext(chunkIter, &sample);
+    while (result == CR_OK && sample.timestamp < minTimestamp) {
+        result = SeriesIteratorGetNext(&iterator, &sample);
         ++i;
     }
+
     *skipped = i;
-    funcs->FreeChunkIterator(chunkIter, rev);
-    RedisModule_DictIteratorStop(iter);
+    SeriesIteratorClose(&iterator);
     return sample.timestamp;
 }

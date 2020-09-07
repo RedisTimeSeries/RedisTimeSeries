@@ -14,7 +14,7 @@ typedef struct Chunk {
     timestamp_t base_timestamp;
     Sample *samples;
     short num_samples;
-    short max_samples;
+    short size;
 } Chunk;
 
 typedef struct ChunkIterator {
@@ -27,20 +27,43 @@ typedef struct ChunkIterator {
 
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
+
+/**
+ * TODO: describe me
+ * @param chunk
+ * @return
+ */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 
-// 0 for failure, 1 for success
+/**
+ * TODO: describe me
+ * 0 for failure, 1 for success
+ * @param chunk
+ * @param sample
+ * @return
+ */
 ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
+
+/**
+ * TODO: describe me
+ * @param uCtx
+ * @param size
+ * @return
+ */
 ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size);
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev);
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
+
+// RDB
+void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
+void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 #endif

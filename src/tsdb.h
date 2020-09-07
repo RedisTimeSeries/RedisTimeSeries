@@ -22,11 +22,19 @@ typedef struct CompactionRule {
     timestamp_t startCurrentTimeBucket;
 } CompactionRule;
 
+typedef struct CreateCtx {
+    long long retentionTime;
+    long long chunkSizeBytes;
+    size_t labelsCount;
+    Label *labels;
+    int options;
+} CreateCtx;
+
 typedef struct Series {
     RedisModuleDict* chunks;
     Chunk_t *lastChunk;
     uint64_t retentionTime;
-    short maxSamplesPerChunk;
+    short chunkSizeBytes;
     short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
@@ -44,15 +52,14 @@ typedef struct SeriesIterator {
     RedisModuleDictIter *dictIter;
     Chunk_t *currentChunk;
     ChunkIter_t *chunkIterator;
+    ChunkIterFuncs chunkIteratorFuncs;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
     bool reverse;
-    ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
-                uint64_t retentionTime, short maxSamplesPerChunk, int options);
+Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
@@ -86,4 +93,13 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
+
+// set/delete/replace a chunk in a dictionary
+typedef enum {
+    DICT_OP_SET = 0,
+    DICT_OP_REPLACE = 1,
+    DICT_OP_DEL = 2
+} DictOp;
+int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
+
 #endif /* TSDB_H */

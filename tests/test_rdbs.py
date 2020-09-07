@@ -36,5 +36,5 @@ class RedisTimeseriesRDBTests(ModuleTestCase(REDISTIMESERIES)):
         for i in range(0, len(data), 2):
             info[data[i]] = data[i + 1]
         info.pop('memoryUsage')
-        info.pop('maxSamplesPerChunk')
+        info.pop('chunkSize')
         return info

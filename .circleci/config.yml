@@ -17,7 +17,12 @@ commands:
           name: Build
           command: make build SHOW=1
       - run:
-          name: Test
+          name: Unit Test
+          command: |
+            mkdir -p ~/workspace/tests
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+      - run:
+          name: Flow Test
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
@@ -79,7 +84,7 @@ jobs:
   build-multiarch-docker:
     machine:
       enabled: true
-      image: cimg/base:2020.01
+      image: ubuntu-1604:201903-01
     steps:
       - checkout
       - run:
