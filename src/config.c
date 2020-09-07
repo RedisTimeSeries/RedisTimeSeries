@@ -16,6 +16,11 @@
 
 TSConfig TSGlobalConfig;
 
+int ParseDuplicatePolicy(RedisModuleCtx *ctx,
+                         RedisModuleString **argv,
+                         int argc,
+                         DuplicatePolicy *policy);
+
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
     TSGlobalConfig.options = SERIES_OPT_UNCOMPRESSED;
@@ -69,6 +74,16 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                     "verbose",
                     "loaded default CHUNK_SIZE_BYTES policy: %lld \n",
                     TSGlobalConfig.chunkSizeBytes);
+
+    TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
+    if (ParseDuplicatePolicy(ctx, argv, argc, &TSGlobalConfig.duplicatePolicy) != TSDB_OK) {
+        return TSDB_ERROR;
+    }
+    RedisModule_Log(ctx,
+                    "verbose",
+                    "loaded server DUPLICATE_POLICY: %s \n",
+                    DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
+
     return TSDB_OK;
 }
 

@@ -129,11 +129,14 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             else:
                 assert actual_result
 
-    def _insert_agg_data(self, redis, key, agg_type, chunk_type="", fromTS=10, toTS=50):
+    def _insert_agg_data(self, redis, key, agg_type, chunk_type="", fromTS=10, toTS=50, key_create_args=None):
         agg_key = '%s_agg_%s_10' % (key, agg_type)
 
-        assert redis.execute_command('TS.CREATE', key, chunk_type)
-        assert redis.execute_command('TS.CREATE', agg_key, chunk_type)
+        if key_create_args is None:
+            key_create_args = []
+
+        assert redis.execute_command('TS.CREATE', key, chunk_type, *key_create_args)
+        assert redis.execute_command('TS.CREATE', agg_key, chunk_type, *key_create_args)
         assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
         values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
@@ -1471,8 +1474,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for chunk_type in type_list:
                 #r.execute_command('ts.create', 'no_ooo', chunk_type)
                 #r.execute_command('ts.create', 'ooo', chunk_type)
-                r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100)
-                r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100)
+                r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100, 'DUPLICATE_POLICY', 'BLOCK')
+                r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100, 'DUPLICATE_POLICY', 'LAST')
                 for i in range(0, quantity, 5):
                     r.execute_command('ts.add no_ooo', i, i * to_dbl)
                 for i in range(0, quantity, 10):
@@ -1499,7 +1502,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             retention = 13
             batch = 100
-            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 10, 'RETENTION', retention)
+            r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 10, 'RETENTION', retention, 'DUPLICATE_POLICY', 'LAST')
             for i in range(batch):
                 assert r.execute_command('ts.add ooo', i, i) == i
             assert r.execute_command('ts.range ooo 0', batch - retention - 2) == []
@@ -1514,7 +1517,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range ooo - +')) == retention + 1
 
             # test for retention larger than timestamp
-            r.execute_command('ts.create', 'large', 'RETENTION', 1000000)
+            r.execute_command('ts.create', 'large', 'RETENTION', 1000000, 'DUPLICATE_POLICY', 'LAST')
             assert r.execute_command('ts.add large', 100, 0) == 100
             assert r.execute_command('ts.add large', 101, 0) == 101
             assert r.execute_command('ts.add large', 100, 0) == 100
@@ -1526,7 +1529,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for chunk_type in type_list:
                 agg_list = ['sum', 'min', 'max', 'count', 'first', 'last'] #more
                 for agg in agg_list:
-                    agg_key = self._insert_agg_data(r, key, agg, chunk_type)
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type, key_create_args=['DUPLICATE_POLICY', 'LAST'])
 
                     expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -1564,7 +1567,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
             for chunk_type in type_list:
                 for agg_type in agg_list:
-                    assert r.execute_command('TS.CREATE', key, chunk_type)
+                    assert r.execute_command('TS.CREATE', key, chunk_type, "DUPLICATE_POLICY", "LAST")
                     assert r.execute_command('TS.CREATE', agg_key, chunk_type)
                     assert r.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
 
@@ -1614,7 +1617,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for chunk_type in type_list:
                 agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s'] #more
                 for agg in agg_list:
-                    agg_key = self._insert_agg_data(r, key, agg, chunk_type, fromTS, toTS)
+                    agg_key = self._insert_agg_data(r, key, agg, chunk_type, fromTS, toTS,
+                                                    key_create_args=['DUPLICATE_POLICY', 'LAST'])
 
                     # sanity + check result have changed
                     expected_result1 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)

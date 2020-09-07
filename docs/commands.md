@@ -21,6 +21,8 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * DUPLICATE_POLICY - configure what to do on duplicate sample, possible values: BLOCK, FIRST, LAST.
+   When this is not set, the server-wide default will be used. 
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 #### Complexity
@@ -515,7 +517,8 @@ Array-reply, specifically:
 * lastTimestamp - Last timestamp present in the time series.
 * retentionTime - Retention time, in milliseconds, for the time series.
 * chunkCount - Number of Memory Chunks used for the time series.
-* maxSamplesPerChunk - Maximum Number of samples per Memory Chunk.
+* chunkSize - Maximum Number of samples per Memory Chunk.
+* duplicatePolicy - Duplicate sample handling policy.
 * labels - A nested array of label-value pairs that represent the metadata labels of the time series.
 * sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
 * rules - A nested array of compaction [rules](#tscreaterule) of the time series.

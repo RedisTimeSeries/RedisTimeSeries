@@ -28,6 +28,7 @@ typedef struct CreateCtx {
     size_t labelsCount;
     Label *labels;
     int options;
+    DuplicatePolicy duplicatePolicy;
 } CreateCtx;
 
 typedef struct Series {
@@ -45,6 +46,7 @@ typedef struct Series {
     RedisModuleString *srcKey;
     ChunkFuncs *funcs;
     size_t totalSamples;
+    DuplicatePolicy duplicatePolicy;
 } Series;
 
 typedef struct SeriesIterator {
@@ -65,7 +67,7 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
-int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value);
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, DuplicatePolicy dp_override);
 int SeriesUpdateLastSample(Series *series);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);

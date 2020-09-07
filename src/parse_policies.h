@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+#include "generic_chunk.h"
+
 typedef struct SimpleCompactionRule {
     uint64_t timeBucket;
     uint64_t retentionSizeMillisec;

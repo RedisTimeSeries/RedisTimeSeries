@@ -64,5 +64,26 @@ the default retention for newly created keys that do not have a an override.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so 20
+$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
+```
+
+### DUPLICATE_POLICY
+
+Policy that will define handling of duplicate samples.
+The following are the possible policies:
+* BlOCK
+* FIRST
+* LAST
+
+#### Precedence order
+Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
+
+1. TS.ADD input
+2. Key level policy
+3. Module configuration (AKA server-wide)
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```

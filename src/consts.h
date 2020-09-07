@@ -26,6 +26,7 @@
 #define RETENTION_TIME_DEFAULT          0LL
 #define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
+#define DEFAULT_DUPLICATE_POLICY        1       // DP_BLOCK
 
 /* TS.Range Aggregation types */
 typedef enum {

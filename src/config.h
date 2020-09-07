@@ -17,6 +17,7 @@ typedef struct {
     long long chunkSizeBytes;
     short options;
     int hasGlobalConfig;
+    DuplicatePolicy duplicatePolicy;
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
