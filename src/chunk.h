@@ -13,8 +13,8 @@
 typedef struct Chunk {
     timestamp_t base_timestamp;
     Sample *samples;
-    short num_samples;
-    short size;
+    unsigned int num_samples;
+    size_t size;
 } Chunk;
 
 typedef struct ChunkIterator {
