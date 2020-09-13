@@ -518,7 +518,7 @@ Array-reply, specifically:
 * lastTimestamp - Last timestamp present in the time series.
 * retentionTime - Retention time, in milliseconds, for the time series.
 * chunkCount - Number of Memory Chunks used for the time series.
-* chunkSize - Maximum Number of samples per Memory Chunk.
+* chunkSize - amount of memory, in bytes, allocated for data.
 * duplicatePolicy - Duplicate sample handling policy.
 * labels - A nested array of label-value pairs that represent the metadata labels of the time series.
 * sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
