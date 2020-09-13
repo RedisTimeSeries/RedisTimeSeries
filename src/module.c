@@ -101,10 +101,11 @@ int GetSeries(RedisModuleCtx *ctx,
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
+                         const char *arg_prefix,
                          DuplicatePolicy *policy) {
     RedisModuleString *duplicationPolicyInput = NULL;
-    if (RMUtil_ArgIndex("DUPLICATE_POLICY", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("DUPLICATE_POLICY", argv, argc, "s", &duplicationPolicyInput) !=
+    if (RMUtil_ArgIndex(arg_prefix, argv, argc) != -1) {
+        if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "s", &duplicationPolicyInput) !=
             REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse DUPLICATE_POLICY");
             return TSDB_ERROR;
@@ -162,7 +163,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     }
 
     cCtx->duplicatePolicy = DP_NONE;
-    if (ParseDuplicatePolicy(ctx, argv, argc, &cCtx->duplicatePolicy) != TSDB_OK) {
+    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) != TSDB_OK) {
         return TSDB_ERROR;
     }
 
@@ -788,7 +789,7 @@ static inline int add(RedisModuleCtx *ctx,
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
-        if (ParseDuplicatePolicy(ctx, argv, argc, &dp) != TSDB_OK) {
+        if (ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
             return REDISMODULE_ERR;
         }
     }

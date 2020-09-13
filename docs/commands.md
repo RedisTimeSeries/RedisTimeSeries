@@ -21,7 +21,7 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
- * DUPLICATE_POLICY - configure what to do on duplicate sample, possible values: BLOCK, FIRST, LAST.
+ * DUPLICATE_POLICY - configure what to do on duplicate sample, possible values: BLOCK, FIRST, LAST, MIN, MAX.
    When this is not set, the server-wide default will be used. 
  * labels - Set of label-value pairs that represent metadata labels of the key
 
@@ -70,7 +70,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
@@ -83,6 +83,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`.
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.

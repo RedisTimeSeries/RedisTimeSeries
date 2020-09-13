@@ -57,6 +57,11 @@ typedef enum {
   CR_END = 2,   // END_OF_CHUNK
 } ChunkResult;
 
+/* parsing */
+
+#define DUPLICATE_POLICY_ARG "DUPLICATE_POLICY"
+#define TS_ADD_DUPLICATE_POLICY_ARG "ON_DUPLICATE"
+
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 static inline u_int64_t max(u_int64_t a, u_int64_t b) {

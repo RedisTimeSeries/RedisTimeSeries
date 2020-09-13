@@ -71,16 +71,18 @@ $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 
 Policy that will define handling of duplicate samples.
 The following are the possible policies:
-* BlOCK
+* BLOCK
 * FIRST
 * LAST
+* MIN
+* MAX
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
 
 1. TS.ADD input
 2. Key level policy
-3. Module configuration (AKA server-wide)
+3. Module configuration (AKA database-wide)
 
 #### Example
 
