@@ -1732,6 +1732,84 @@ class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
             assert r.execute_command('TS.REVRANGE', 'tester', '-', '+') == rev_samples
 
 
+class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
+                                            module_args=['DUPLICATE_POLICY', 'BLOCK'])):
+    def _fill_data(self, r, key):
+        start_ts = 1600001540000
+        self.date_ranges = [(start_ts, start_ts+100), (start_ts+1000, start_ts+1100)]
+        for start, end in self.date_ranges:
+            for ts in range(start, end):
+                r.execute_command('TS.ADD', key, ts, ts)
+
+    def test_precendence_key(self):
+        with self.redis() as r:
+            key = 'tester'
+            key_no_dup = 'tester_no_dup'
+            r.execute_command('TS.CREATE', key, 'DUPLICATE_POLICY', 'LAST')
+            r.execute_command('TS.CREATE', key_no_dup)
+            self._fill_data(r, key)
+            self._fill_data(r, key_no_dup)
+
+            overrided_ts = self.date_ranges[0][0] + 10
+            overrided_value = 666
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value)
+            assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value) == overrided_ts
+
+            assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_ts)]]
+            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_value)]]
+
+            # check that inserting a non-duplicate sample doesn't fail
+            non_dup_ts = self.date_ranges[0][1] + 1
+            assert r.execute_command('TS.ADD', key_no_dup, non_dup_ts, overrided_value) == non_dup_ts
+
+            # check that `ON_DUPLICATE` overrides the module configuration
+            assert r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value, 'ON_DUPLICATE', 'LAST') == overrided_ts
+            assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_value)]]
+
+            # check that `ON_DUPLICATE` overrides the key configuration
+            assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value * 10, 'ON_DUPLICATE', 'MAX') == overrided_ts
+            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == \
+                   [[overrided_ts, str(overrided_value * 10)]]
+
+    def test_alter_key(self):
+        with self.redis() as r:
+            key = 'tester'
+            r.execute_command('TS.CREATE', key)
+            self._fill_data(r, key)
+            overrided_ts = self.date_ranges[0][0] + 10
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.ADD', key, overrided_ts, 10)
+
+            r.execute_command('TS.ALTER', key, 'DUPLICATE_POLICY', 'LAST')
+            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_ts)]]
+            r.execute_command('TS.ADD', key, self.date_ranges[0][0] + 10, 10)
+            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [[overrided_ts, "10"]]
+
+    def test_policies_correctness(self):
+        policies = {
+            'LAST': lambda x, y: y,
+            'FIRST': lambda x, y: x,
+            'MIN': min,
+            'MAX': max
+        }
+
+        with self.redis() as r:
+            key = 'tester'
+            r.execute_command('TS.CREATE', key)
+            self._fill_data(r, key)
+            overrided_ts = self.date_ranges[0][0] + 10
+            # Verified Block
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.ADD', key, overrided_ts, 1)
+
+            for policy in policies:
+                old_value = r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1]
+                new_value = random.randint(5000, 1000000)
+                assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
+                proccessed_value = r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1]
+                assert str(policies[policy](old_value, new_value)) == proccessed_value, "check that {} is correct".format(policy)
+
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
     class _Class(ModuleTestCase(REDISTIMESERIES, module_args=args)):
@@ -1766,4 +1844,10 @@ class RedisTimeseriesInitTestPolicySuccess(ModuleArgsTestCase(True, ['COMPACTION
     pass
 
 class RedisTimeseriesInitTestPolicyFail(ModuleArgsTestCase(False, ['COMPACTION_POLICY', 'RTS'])):
+    pass
+
+class RedisTimeseriesInitTestDuplicatePolicyFail(ModuleArgsTestCase(False, ['DUPLICATE_POLICY', 'RANDOM'])):
+    pass
+
+class RedisTimeseriesInitTestDuplicatePolicySuccess(ModuleArgsTestCase(True, ['DUPLICATE_POLICY', 'MAX'])):
     pass
