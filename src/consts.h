@@ -26,7 +26,7 @@
 #define RETENTION_TIME_DEFAULT          0LL
 #define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
-#define DEFAULT_DUPLICATE_POLICY        1       // DP_BLOCK
+#define DEFAULT_DUPLICATE_POLICY        DP_BLOCK
 
 /* TS.Range Aggregation types */
 typedef enum {
@@ -46,6 +46,17 @@ typedef enum {
     TS_AGG_VAR_S,
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
+
+
+typedef enum DuplicatePolicy {
+    DP_INVALID = -1,
+    DP_NONE = 0,
+    DP_BLOCK,
+    DP_LAST,
+    DP_FIRST,
+    DP_MIN,
+    DP_MAX,
+} DuplicatePolicy;
 
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1

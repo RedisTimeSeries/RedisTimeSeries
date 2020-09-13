@@ -35,16 +35,6 @@ typedef enum {
     CHUNK_COMPRESSED 
 } CHUNK_TYPES_T;
 
-typedef enum DuplicatePolicy {
-    DP_NONE,
-    DP_BLOCK,
-    DP_LAST,
-    DP_FIRST,
-    DP_MIN,
-    DP_MAX,
-    DP_INVALID,
-} DuplicatePolicy;
-
 typedef struct UpsertCtx {
     Sample sample;
     Chunk_t *inChunk;       // original chunk  

@@ -63,11 +63,9 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
     switch (policy) {
         case DP_BLOCK:
             return CR_ERR;
-            break;
         case DP_FIRST:
             *newSample = oldSample;
             return CR_OK;
-            break;
         case DP_LAST:
             return CR_OK;
         case DP_MIN:
