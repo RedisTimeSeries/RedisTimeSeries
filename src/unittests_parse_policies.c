@@ -41,7 +41,7 @@ MU_TEST(test_valid_policy) {
 
 MU_TEST(test_invalid_policy) {
     SimpleCompactionRule* parsedRules;
-    size_t rulesCount;
+    uint64_t rulesCount;
     int result;
     result = ParseCompactionPolicy("max:1M;mins:10s;avg:2h;avg:1d", &parsedRules, &rulesCount);
 	mu_check(result == FALSE);
