@@ -32,7 +32,7 @@ TS.CREATE complexity is O(1).
 #### Create Example
 
 ```sql
-TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
+TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
 ```
 
 ## Delete

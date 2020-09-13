@@ -84,6 +84,9 @@ Since the duplication policy can be provided at different levels, the actual pre
 2. Key level policy
 3. Module configuration (AKA database-wide)
 
+#### Default configuration
+The default policy for database-wide is `BLOCK`, new and pre-existing keys will have no default policy.
+
 #### Example
 
 ```
