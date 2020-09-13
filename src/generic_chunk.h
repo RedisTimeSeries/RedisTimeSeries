@@ -40,6 +40,8 @@ typedef enum DuplicatePolicy {
     DP_BLOCK,
     DP_LAST,
     DP_FIRST,
+    DP_MIN,
+    DP_MAX,
     DP_INVALID,
 } DuplicatePolicy;
 

@@ -57,6 +57,8 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .GetPrev = NULL,
 };
 
+// This function will decide according to the policy how to handle duplicate sample, the `newSample` will contain the
+// data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
     switch (policy) {
         case DP_BLOCK:
@@ -67,6 +69,12 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
             return CR_OK;
             break;
         case DP_LAST:
+            return CR_OK;
+        case DP_MIN:
+            newSample->value = min(oldSample.value, newSample->value);
+            return CR_OK;
+        case DP_MAX:
+            newSample->value = max(oldSample.value, newSample->value);
             return CR_OK;
         default:
             return CR_ERR;
@@ -103,6 +111,10 @@ const char *DuplicatePolicyToString(DuplicatePolicy policy) {
             return "last";
         case DP_FIRST:
             return "first";
+        case DP_MAX:
+            return "max";
+        case DP_MIN:
+            return "min";
         default:
             return "invalid";
     }
@@ -119,7 +131,13 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
     for (int i = 0; i < len; i++) {
         input_lower[i] = tolower(input[i]);
     }
-    if (len == 4) {
+    if (len == 3) {
+        if (strncmp(input_lower, "min", len) == 0) {
+            return DP_MIN;
+        } else if (strncmp(input_lower, "max", len) == 0) {
+            return DP_MAX;
+        }
+    } else if (len == 4) {
         if (strncmp(input_lower, "last", len) == 0) {
             return DP_LAST;
         }

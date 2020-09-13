@@ -63,4 +63,8 @@ static inline u_int64_t max(u_int64_t a, u_int64_t b) {
     return a > b ? a : b;
 }
 
+static inline u_int64_t min(u_int64_t a, u_int64_t b) {
+    return a < b ? a : b;
+}
+
 #endif
