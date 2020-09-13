@@ -51,11 +51,11 @@ typedef enum {
 typedef enum DuplicatePolicy {
     DP_INVALID = -1,
     DP_NONE = 0,
-    DP_BLOCK,
-    DP_LAST,
-    DP_FIRST,
-    DP_MIN,
-    DP_MAX,
+    DP_BLOCK = 1,
+    DP_LAST = 2,
+    DP_FIRST = 3,
+    DP_MIN = 4,
+    DP_MAX = 5,
 } DuplicatePolicy;
 
 /* Series struct options */
