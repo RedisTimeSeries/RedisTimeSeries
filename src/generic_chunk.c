@@ -57,8 +57,8 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .GetPrev = NULL,
 };
 
-// This function will decide according to the policy how to handle duplicate sample, the `newSample` will contain the
-// data that will be kept in the database.
+// This function will decide according to the policy how to handle duplicate sample, the `newSample`
+// will contain the data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
     switch (policy) {
         case DP_BLOCK:

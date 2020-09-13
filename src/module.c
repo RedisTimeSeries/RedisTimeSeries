@@ -163,7 +163,8 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     }
 
     cCtx->duplicatePolicy = DP_NONE;
-    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) != TSDB_OK) {
+    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
+        TSDB_OK) {
         return TSDB_ERROR;
     }
 
