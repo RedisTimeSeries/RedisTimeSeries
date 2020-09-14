@@ -14,9 +14,6 @@ static ChunkFuncs regChunk = {
     .UpsertSample = Uncompressed_UpsertSample,
 
     .NewChunkIterator = Uncompressed_NewChunkIterator,
-    .FreeChunkIterator = Uncompressed_FreeChunkIterator,
-    .ChunkIteratorGetNext = Uncompressed_ChunkIteratorGetNext,
-    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
@@ -25,6 +22,12 @@ static ChunkFuncs regChunk = {
 
     .SaveToRDB = Uncompressed_SaveToRDB,
     .LoadFromRDB = Uncompressed_LoadFromRDB,
+};
+
+ChunkIterFuncs uncompressedChunkIteratorClass = {
+    .Free = Uncompressed_FreeChunkIterator,
+    .GetNext = Uncompressed_ChunkIteratorGetNext,
+    .GetPrev = Uncompressed_ChunkIteratorGetPrev,
 };
 
 static ChunkFuncs comprChunk = {
@@ -36,10 +39,6 @@ static ChunkFuncs comprChunk = {
     .UpsertSample = Compressed_UpsertSample,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
-    .FreeChunkIterator = Compressed_FreeChunkIterator,
-    .ChunkIteratorGetNext = Compressed_ChunkIteratorGetNext,
-    /*** Reverse iteration is on temporary decompressed chunk ***/
-    .ChunkIteratorGetPrev = Uncompressed_ChunkIteratorGetPrev,
 
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,
@@ -50,12 +49,29 @@ static ChunkFuncs comprChunk = {
     .LoadFromRDB = Compressed_LoadFromRDB,
 };
 
+static ChunkIterFuncs compressedChunkIteratorClass = {
+    .Free = Compressed_FreeChunkIterator,
+    .GetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
+    .GetPrev = NULL,
+};
+
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     switch (chunkType) {
         case CHUNK_REGULAR:
             return &regChunk;
         case CHUNK_COMPRESSED:
             return &comprChunk;
+    }
+    return NULL;
+}
+
+ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType) {
+    switch (chunkType) {
+        case CHUNK_REGULAR:
+            return &uncompressedChunkIteratorClass;
+        case CHUNK_COMPRESSED:
+            return &compressedChunkIteratorClass;
     }
     return NULL;
 }

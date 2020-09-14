@@ -144,14 +144,22 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     return CR_OK;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev) {
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+                                           int options,
+                                           ChunkIterFuncs *retChunkIterClass) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->chunk = chunk;
-    if (rev == false) { // iterate from first to last
-        iter->currentIndex = 0;
-    } else { // iterate from last to first
+    iter->options = options;
+    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
+    } else { // iterate from first to last
+        iter->currentIndex = 0;
     }
+
+    if (retChunkIterClass != NULL) {
+        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
+    }
+
     return (ChunkIter_t *)iter;
 }
 
@@ -177,8 +185,11 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
     }
 }
 
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool rev) {
-    (void)rev; // only used with compressed chunk but signature must be similar
+void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
+    ChunkIterator *iter = (ChunkIterator *)iterator;
+    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
+        Uncompressed_FreeChunk(iter->chunk);
+    }
     free(iter);
 }
 
