@@ -21,6 +21,9 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * DUPLICATE_POLICY - configure what to do on duplicate sample.
+   When this is not set, the server-wide default will be used. 
+   For further details: [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 #### Complexity
@@ -30,7 +33,7 @@ TS.CREATE complexity is O(1).
 #### Create Example
 
 ```sql
-TS.CREATE temperature:2:32 RETENTION 60000 LABELS sensor_id 2 area_id 32
+TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
 ```
 
 ## Delete
@@ -68,7 +71,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append (or create and append) a new sample to the series.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
@@ -81,6 +84,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -515,7 +519,8 @@ Array-reply, specifically:
 * lastTimestamp - Last timestamp present in the time series.
 * retentionTime - Retention time, in milliseconds, for the time series.
 * chunkCount - Number of Memory Chunks used for the time series.
-* maxSamplesPerChunk - Maximum Number of samples per Memory Chunk.
+* chunkSize - amount of memory, in bytes, allocated for data.
+* duplicatePolicy - [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
 * labels - A nested array of label-value pairs that represent the metadata labels of the time series.
 * sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
 * rules - A nested array of compaction [rules](#tscreaterule) of the time series.
