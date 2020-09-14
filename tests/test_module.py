@@ -1312,7 +1312,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4128L
+            assert info.total_samples == 3L and info.memory_usage == 4136L
 
             # rdb load
             data = r.execute_command('dump', 'not_compressed')
@@ -1323,7 +1323,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4128L
+            assert info.total_samples == 3L and info.memory_usage == 4136L
             # test deletion
             assert r.delete('not_compressed')
 
@@ -1711,6 +1711,22 @@ class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
             assert keys == ['exist', 'exist_AVG_259200000', 'exist_AVG_7200000', 'exist_MAX_1', 'exist_MIN_10000',
                             'tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1', 'tester_MIN_10000']
             r.execute_command('TS.ADD exist 1981 0')
+
+    def test_big_comprssed_chunk_reverserange(self):
+        with self.redis() as r:
+            start_ts = 1599941160000
+            last_ts = 0
+            samples = []
+            for i in range(4099):
+                last_ts = start_ts + i * 60000
+                samples.append([last_ts, '1'])
+                r.execute_command('TS.ADD', 'tester', last_ts, 1)
+            rev_samples = list(samples)
+            rev_samples.reverse()
+            assert r.execute_command('TS.GET', 'tester') == [last_ts, '1']
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+') == samples
+            assert r.execute_command('TS.REVRANGE', 'tester', '-', '+') == rev_samples
+
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
