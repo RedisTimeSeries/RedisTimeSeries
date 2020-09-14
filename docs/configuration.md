@@ -71,11 +71,11 @@ $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 
 Policy that will define handling of duplicate samples.
 The following are the possible policies:
-* BLOCK
-* FIRST
-* LAST
-* MIN
-* MAX
+* `BLOCK` - an error will occur for any out of order sample
+* `FIRST` - ignore the new value
+* `LAST` - override with latest value
+* `MIN` - only override if the value is lower than the existing value
+* `MAX` - only override if the value is higher than the existing value
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:

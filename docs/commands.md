@@ -21,8 +21,9 @@ Optional args:
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
- * DUPLICATE_POLICY - configure what to do on duplicate sample, possible values: BLOCK, FIRST, LAST, MIN, MAX.
+ * DUPLICATE_POLICY - configure what to do on duplicate sample.
    When this is not set, the server-wide default will be used. 
+   For further details: [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 #### Complexity
@@ -83,7 +84,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
- * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`.
+ * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
@@ -519,7 +520,7 @@ Array-reply, specifically:
 * retentionTime - Retention time, in milliseconds, for the time series.
 * chunkCount - Number of Memory Chunks used for the time series.
 * chunkSize - amount of memory, in bytes, allocated for data.
-* duplicatePolicy - Duplicate sample handling policy.
+* duplicatePolicy - [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
 * labels - A nested array of label-value pairs that represent the metadata labels of the time series.
 * sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
 * rules - A nested array of compaction [rules](#tscreaterule) of the time series.
