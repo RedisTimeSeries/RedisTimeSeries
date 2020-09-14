@@ -115,7 +115,7 @@ static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
  * @param size
  * @return
  */
-ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size) {
+ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
     *size = 0;
     Chunk *regChunk = (Chunk *)uCtx->inChunk;
     timestamp_t ts = uCtx->sample.timestamp;

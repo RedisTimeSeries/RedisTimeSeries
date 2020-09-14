@@ -8,6 +8,7 @@
 #define GENERIC__CHUNK_H
 
 #include <sys/types.h>
+#include <rmutil/strings.h>
 #include <stdlib.h>         // malloc
 #include <stdio.h>          // printf
 #include <string.h>         // memcpy, memmove
@@ -52,7 +53,7 @@ typedef struct ChunkFuncs {
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
-    ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size);
+    ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
 
@@ -64,6 +65,11 @@ typedef struct ChunkFuncs {
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
     void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
 } ChunkFuncs;
+
+ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample);
+const char * DuplicatePolicyToString(DuplicatePolicy policy);
+int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr);
+DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len);
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
 ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);

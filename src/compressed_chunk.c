@@ -101,7 +101,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     return newChunk2;
 }
 
-ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
+ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
     *size = 0;
     ChunkResult rv = CR_OK;
     ChunkResult nextRes = CR_OK;
@@ -125,6 +125,12 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size) {
     }
 
     if (ts == iterSample.timestamp) {
+        ChunkResult cr = handleDuplicateSample(duplicatePolicy, iterSample, &uCtx->sample);
+        if (cr != CR_OK) {
+            Compressed_FreeChunkIterator(iter);
+            Compressed_FreeChunk(newChunk);
+            return CR_ERR;
+        }
         nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         *size = -1; // we skipped a sample
     }

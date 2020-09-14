@@ -98,6 +98,30 @@ int GetSeries(RedisModuleCtx *ctx,
     return TRUE;
 }
 
+int ParseDuplicatePolicy(RedisModuleCtx *ctx,
+                         RedisModuleString **argv,
+                         int argc,
+                         const char *arg_prefix,
+                         DuplicatePolicy *policy) {
+    RedisModuleString *duplicationPolicyInput = NULL;
+    if (RMUtil_ArgIndex(arg_prefix, argv, argc) != -1) {
+        if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "s", &duplicationPolicyInput) !=
+            REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse DUPLICATE_POLICY");
+            return TSDB_ERROR;
+        }
+
+        DuplicatePolicy parsePolicy = RMStringLenDuplicationPolicyToEnum(duplicationPolicyInput);
+        if (parsePolicy == DP_INVALID) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown DUPLICATE_POLICY");
+            return TSDB_ERROR;
+        }
+        *policy = parsePolicy;
+        return TSDB_OK;
+    }
+    return TSDB_OK;
+}
+
 static int parseCreateArgs(RedisModuleCtx *ctx,
                            RedisModuleString **argv,
                            int argc,
@@ -136,6 +160,12 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
 
     if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
         cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    }
+
+    cCtx->duplicatePolicy = DP_NONE;
+    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
+        TSDB_OK) {
+        return TSDB_ERROR;
     }
 
     return REDISMODULE_OK;
@@ -273,7 +303,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    RedisModule_ReplyWithArray(ctx, 10 * 2);
+    RedisModule_ReplyWithArray(ctx, 11 * 2);
 
     long long skippedSamples;
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
@@ -292,6 +322,12 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
     RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
+    RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
+    if (series->duplicatePolicy != DP_NONE) {
+        RedisModule_ReplyWithSimpleString(ctx, DuplicatePolicyToString(series->duplicatePolicy));
+    } else {
+        RedisModule_ReplyWithNull(ctx);
+    }
 
     RedisModule_ReplyWithSimpleString(ctx, "labels");
     ReplyWithSeriesLabels(ctx, series);
@@ -686,7 +722,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
-                       double value) {
+                       double value,
+                       DuplicatePolicy dp_override) {
     timestamp_t lastTS = series->lastTimestamp;
     uint64_t retention = series->retentionTime;
     // ensure inside retention period.
@@ -696,7 +733,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     }
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
-        if (SeriesUpsertSample(series, timestamp, value) != REDISMODULE_OK) {
+        if (SeriesUpsertSample(series, timestamp, value, dp_override) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert");
             return REDISMODULE_ERR;
         }
@@ -738,6 +775,7 @@ static inline int add(RedisModuleCtx *ctx,
     }
 
     Series *series = NULL;
+    DuplicatePolicy dp = DP_NONE;
 
     if (argv != NULL && RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
         // the key doesn't exist, lets check we have enough information to create one
@@ -752,8 +790,11 @@ static inline int add(RedisModuleCtx *ctx,
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
+        if (ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
+            return REDISMODULE_ERR;
+        }
     }
-    int rv = internalAdd(ctx, series, timestamp, value);
+    int rv = internalAdd(ctx, series, timestamp, value, dp);
     RedisModule_CloseKey(key);
     return rv;
 }
@@ -867,6 +908,10 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0) {
         series->chunkSizeBytes = cCtx.chunkSizeBytes;
+    }
+
+    if (RMUtil_ArgIndex("DUPLICATE_POLICY", argv, argc) > 0) {
+        series->duplicatePolicy = cCtx.duplicatePolicy;
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
@@ -1050,7 +1095,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result -= incrby;
     }
 
-    int rv = internalAdd(ctx, series, currentUpdatedTime, result);
+    int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
     return rv;
