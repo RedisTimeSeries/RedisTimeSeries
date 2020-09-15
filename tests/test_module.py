@@ -1151,8 +1151,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert actual_results == actual_results_rev
 
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
+            actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+            actual_results.reverse()
             assert len(actual_results_rev) == 5
-            assert actual_results_rev[0][0] > actual_results_rev[1][0]
+            assert actual_results[0:5] == actual_results_rev[0:5]
 
     def test_mrevrange(self):
         start_ts = 1511885909L
@@ -1179,6 +1181,10 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
             rev_agg_result.reverse()
             assert rev_agg_result == agg_result
+            last_results = list(agg_result)
+            last_results.reverse()
+            last_results = last_results[0:3]
+            assert r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][2] == last_results
 
     def test_multilabel_filter(self):
         with self.redis() as r:
@@ -1279,7 +1285,25 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
-    
+
+    def test_ooo_madd(self):
+        sample_len = 100
+        start_ts = 1600204334000
+
+        with self.redis() as r:
+            r.execute_command("ts.create", 'test_key1')
+            last_sample = None
+            samples = []
+            for i in range(0, sample_len, 3):
+                assert [start_ts + (i*1000+2000), start_ts + (i*1000+1000), start_ts + (i*1000)] == r.execute_command("ts.madd", 'test_key1', start_ts + (i*1000+2000), i, 'test_key1', start_ts + i*1000+1000, i, 'test_key1', start_ts + i*1000, i)
+                samples.append([start_ts + (i*1000), str(i)])
+                samples.append([start_ts + (i*1000+1000), str(i)])
+                samples.append([start_ts + (i*1000+2000), str(i)])
+                last_sample = [start_ts + (i*1000+2000), str(i)]
+
+            assert r.execute_command('ts.get', 'test_key1') == last_sample
+            assert r.execute_command('ts.range', 'test_key1', '-', '+') == samples
+
     def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
@@ -1477,19 +1501,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_ooo(self):
         with self.redis() as r:
             quantity = 50001
-            to_dbl = 1.001
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
-                #r.execute_command('ts.create', 'no_ooo', chunk_type)
-                #r.execute_command('ts.create', 'ooo', chunk_type)
                 r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 100, 'DUPLICATE_POLICY', 'BLOCK')
                 r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 100, 'DUPLICATE_POLICY', 'LAST')
                 for i in range(0, quantity, 5):
-                    r.execute_command('ts.add no_ooo', i, i * to_dbl)
+                    r.execute_command('ts.add no_ooo', i, i)
                 for i in range(0, quantity, 10):
-                    r.execute_command('ts.add ooo', i, i * to_dbl)
+                    r.execute_command('ts.add ooo', i, i)
                 for i in range(5, quantity, 10): #limit
-                    r.execute_command('ts.add ooo', i, i * to_dbl)
+                    r.execute_command('ts.add ooo', i, i)
 
                 ooo_res    = r.execute_command('ts.range ooo - +')
                 no_ooo_res = r.execute_command('ts.range no_ooo - +')
@@ -1498,10 +1519,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert ooo_res[i] == no_ooo_res[i]
 
                 ooo_res = r.execute_command('ts.range ooo 1000 1000')
-                assert ooo_res[0] == [1000L, '1001']
+                assert ooo_res[0] == [1000L, '1000']
+                last_sample = r.execute_command('ts.get ooo')
                 r.execute_command('ts.add ooo', 1000, 42)
                 ooo_res = r.execute_command('ts.range ooo 1000 1000')
                 assert ooo_res[0] == [1000L, '42']
+                assert last_sample == r.execute_command('ts.get ooo')
+
+                r.execute_command('ts.add ooo', last_sample[0], 42)
+                assert [last_sample[0], "42"] == r.execute_command('ts.get ooo')
 
                 r.execute_command('DEL no_ooo')
                 r.execute_command('DEL ooo')
