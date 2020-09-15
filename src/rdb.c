@@ -18,6 +18,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     double lastValue;
     timestamp_t lastTimestamp;
     uint64_t totalSamples;
+    RedisModuleString *srcKey = NULL;
 
     CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = RedisModule_LoadString(io);
@@ -37,6 +38,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         lastTimestamp = RedisModule_LoadUnsigned(io);
         lastValue = RedisModule_LoadDouble(io);
         totalSamples = RedisModule_LoadUnsigned(io);
+        uint64_t hasSrcKey = RedisModule_LoadUnsigned(io);
+        if (hasSrcKey) {
+            srcKey = RedisModule_LoadString(io);
+        }
     }
 
     cCtx.labelsCount = RedisModule_LoadUnsigned(io);
@@ -90,6 +95,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         series->totalSamples = totalSamples;
+        series->srcKey = srcKey;
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
         series->lastChunk = chunk;
@@ -118,6 +124,12 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->lastTimestamp);
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
+    if (series->srcKey != NULL) {
+        RedisModule_SaveUnsigned(io, TRUE);
+        RedisModule_SaveString(io, series->srcKey);
+    } else {
+        RedisModule_SaveUnsigned(io, FALSE);
+    }
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
     for (int i = 0; i < series->labelsCount; i++) {

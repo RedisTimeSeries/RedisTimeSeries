@@ -291,9 +291,15 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_10', 'AGGREGATION', 'SUM', 10)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_stds_10', 'AGGREGATION', 'STD.S', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
+            
             data = r.execute_command('DUMP', 'tester')
-            r.execute_command('DEL', 'tester')
+            avg_data = r.execute_command('DUMP', 'tester_agg_avg_10')
+            
+            r.execute_command('DEL', 'tester', 'tester_agg_avg_10')
+            
             r.execute_command('RESTORE', 'tester', 0, data)
+            r.execute_command('RESTORE', 'tester_agg_avg_10', 0, avg_data)
+            
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
@@ -304,6 +310,8 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                                                             ['tester_agg_max_10', 10L, 'MAX'],
                                                             ['tester_agg_sum_10', 10L, 'SUM'],
                                                             ['tester_agg_stds_10',10L, 'STD.S']]
+                                   
+            assert self._get_ts_info(r, 'tester_agg_avg_10').sourceKey == 'tester'
 
     def test_rdb_aggregation_context(self):
         """
