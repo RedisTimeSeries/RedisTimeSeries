@@ -13,8 +13,8 @@
 typedef struct Chunk {
     timestamp_t base_timestamp;
     Sample *samples;
-    short num_samples;
-    short size;
+    unsigned int num_samples;
+    size_t size;
 } Chunk;
 
 typedef struct ChunkIterator {
@@ -51,7 +51,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
  * @param size
  * @return
  */
-ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size);
+ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
