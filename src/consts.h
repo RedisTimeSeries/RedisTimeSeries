@@ -26,6 +26,7 @@
 #define RETENTION_TIME_DEFAULT          0LL
 #define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
 #define SPLIT_FACTOR                    1.2
+#define DEFAULT_DUPLICATE_POLICY        DP_BLOCK
 
 /* TS.Range Aggregation types */
 typedef enum {
@@ -46,6 +47,17 @@ typedef enum {
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
+
+typedef enum DuplicatePolicy {
+    DP_INVALID = -1,
+    DP_NONE = 0,
+    DP_BLOCK = 1,
+    DP_LAST = 2,
+    DP_FIRST = 3,
+    DP_MIN = 4,
+    DP_MAX = 5,
+} DuplicatePolicy;
+
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
 
@@ -56,10 +68,19 @@ typedef enum {
   CR_END = 2,   // END_OF_CHUNK
 } ChunkResult;
 
+/* parsing */
+
+#define DUPLICATE_POLICY_ARG "DUPLICATE_POLICY"
+#define TS_ADD_DUPLICATE_POLICY_ARG "ON_DUPLICATE"
+
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 static inline u_int64_t max(u_int64_t a, u_int64_t b) {
     return a > b ? a : b;
+}
+
+static inline u_int64_t min(u_int64_t a, u_int64_t b) {
+    return a < b ? a : b;
 }
 
 #endif

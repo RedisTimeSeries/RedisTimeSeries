@@ -33,7 +33,7 @@ MU_TEST(test_compressed_upsert) {
             .inChunk = chunk,
             .sample = sample,
             };
-            Compressed_UpsertSample(&uCtx, &size);
+            Compressed_UpsertSample(&uCtx, &size, DP_LAST);
         }
         uint64_t total_samples = Compressed_ChunkNumOfSample(chunk);
         mu_assert_int_eq(total_data_points,total_samples);
@@ -59,10 +59,10 @@ MU_TEST(test_compressed_fail_appendInteger) {
     .inChunk = chunk,
     .sample = s2,
     };
-    Compressed_UpsertSample(&uCtx, &size);
+    Compressed_UpsertSample(&uCtx, &size, DP_LAST);
     mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
     mu_assert_int_eq(1,size);
-    Compressed_UpsertSample(&uCtx, &size);
+    Compressed_UpsertSample(&uCtx, &size, DP_LAST);
     mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
     mu_assert_int_eq(0,size);
     mu_assert_int_eq(6,Compressed_GetFirstTimestamp(chunk));
@@ -70,7 +70,7 @@ MU_TEST(test_compressed_fail_appendInteger) {
     for (size_t i = 0; i < 10; i++)
     {
         s2.value = minV + (float)rand()/(float)(RAND_MAX/maxV);
-        Compressed_UpsertSample(&uCtx, &size);
+        Compressed_UpsertSample(&uCtx, &size, DP_LAST);
         // ensure we're not adding more datapoints and only overwritting previous ones
         mu_assert_int_eq(2,Compressed_ChunkNumOfSample(chunk));
         mu_assert_int_eq(0,size);
@@ -93,7 +93,7 @@ MU_TEST(test_compressed_fail_appendInteger) {
         .inChunk = chunk,
         .sample = s3,
     };
-        ChunkResult rv = Compressed_UpsertSample(&uCtxS3, &size);
+        ChunkResult rv = Compressed_UpsertSample(&uCtxS3, &size, DP_LAST);
         mu_assert(rv == CR_OK, "upsert");
     }
     mu_assert_int_eq(6,Compressed_ChunkNumOfSample(chunk));
@@ -164,6 +164,7 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
         rv = Compressed_AddSample(chunk,&s1);
         mu_assert(rv == CR_OK || rv == CR_END, "add sample");
         if(rv!=CR_END){
+            ts++;
             total_added_samples++;
             mu_assert_int_eq(total_added_samples,chunk->count);
         }
@@ -183,9 +184,15 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     int size = 0;
 
     // We're forcing the chunk to grow 
-    rv = Compressed_UpsertSample(&uCtxS3, &size);
+    rv = Compressed_UpsertSample(&uCtxS3, &size, DP_BLOCK);
+    mu_assert(rv == CR_ERR, "Upsert should fail");
+    rv = Compressed_UpsertSample(&uCtxS3, &size, DP_LAST);
+    mu_assert(rv == CR_OK, "upserted existing sample");
+
+    uCtxS3.sample.timestamp = ts + 1;
+    rv = Compressed_UpsertSample(&uCtxS3, &size, DP_LAST);
+    mu_assert(rv == CR_OK, "upsert non existing sample");
     total_added_samples++;
-    mu_assert(rv == CR_OK, "upsert");
     mu_assert_int_eq(total_added_samples,chunk->count);
     mu_assert_int_eq(chunk_size+32,chunk->size);
     

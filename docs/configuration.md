@@ -31,8 +31,10 @@ $ redis-server --loadmodule ./redistimeseries.so OPT1 OPT2
 Default compaction/downsampling rules for newly created key with `TS.ADD`.
 
 Each rule is separated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
+
 * aggregation function - avg, sum, min, max, count, first, last
 * time bucket - number and the time representation (Example for 1 minute: 1M)
+
     * m - millisecond
     * M - minute
     * s - seconds
@@ -64,5 +66,32 @@ the default retention for newly created keys that do not have a an override.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so 20
+$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
+```
+
+### DUPLICATE_POLICY
+
+Policy that will define handling of duplicate samples.
+The following are the possible policies:
+
+* `BLOCK` - an error will occur for any out of order sample
+* `FIRST` - ignore the new value
+* `LAST` - override with latest value
+* `MIN` - only override if the value is lower than the existing value
+* `MAX` - only override if the value is higher than the existing value
+
+#### Precedence order
+Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
+
+1. TS.ADD input
+2. Key level policy
+3. Module configuration (AKA database-wide)
+
+#### Default configuration
+The default policy for database-wide is `BLOCK`, new and pre-existing keys will have no default policy.
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```

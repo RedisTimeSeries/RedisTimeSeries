@@ -46,6 +46,8 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labels = cCtx->labels;
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
+    newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
@@ -246,7 +248,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
                 continue;
             }
-            SeriesUpsertSample(destSeries, start, val);
+            SeriesUpsertSample(destSeries, start, val, DP_LAST);
             RedisModule_CloseKey(key);
         }
         rule = rule->nextRule;
@@ -254,7 +256,10 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     RedisModule_FreeThreadSafeContext(ctx);
 }
 
-int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
+int SeriesUpsertSample(Series *series,
+                       api_timestamp_t timestamp,
+                       double value,
+                       DuplicatePolicy dp_override) {
     bool latestChunk = true;
     void *chunkKey = NULL;
     ChunkFuncs *funcs = series->funcs;
@@ -297,18 +302,28 @@ int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) 
         }
     }
 
-    Sample sample = { .timestamp = timestamp, .value = value };
     UpsertCtx uCtx = {
         .inChunk = chunk,
-        .sample = sample,
+        .sample = { .timestamp = timestamp, .value = value },
     };
 
     int size = 0;
-    ChunkResult rv = funcs->UpsertSample(&uCtx, &size);
+
+    // Use module level configuration if key level configuration doesn't exists
+    DuplicatePolicy dp_policy;
+    if (dp_override != DP_NONE) {
+        dp_policy = dp_override;
+    } else if (series->duplicatePolicy != DP_NONE) {
+        dp_policy = series->duplicatePolicy;
+    } else {
+        dp_policy = TSGlobalConfig.duplicatePolicy;
+    }
+
+    ChunkResult rv = funcs->UpsertSample(&uCtx, &size, dp_policy);
     if (rv == CR_OK) {
         series->totalSamples += size;
         if (timestamp == series->lastTimestamp) {
-            series->lastValue = value;
+            series->lastValue = uCtx.sample.value;
         }
         timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
         if (chunkFirstTSAfterOp != chunkFirstTS) {

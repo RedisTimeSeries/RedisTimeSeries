@@ -84,7 +84,7 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
 
     int size = 0;
     // We're forcing the chunk to grow 
-    rv = Uncompressed_UpsertSample(&uCtxS3, &size);
+    rv = Uncompressed_UpsertSample(&uCtxS3, &size, DP_LAST);
     total_added_samples++;
     mu_assert(rv == CR_OK, "upsert");
     mu_assert_int_eq(total_added_samples,chunk->num_samples);
