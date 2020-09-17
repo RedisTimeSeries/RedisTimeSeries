@@ -734,7 +734,7 @@ static int internalAdd(RedisModuleCtx *ctx,
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
         if (SeriesUpsertSample(series, timestamp, value, dp_override) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert");
+            RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert, update is not supported in BLOCK mode");
             return REDISMODULE_ERR;
         }
     } else {
