@@ -34,7 +34,7 @@ MK_CUSTOM_CLEAN=1
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
-ifeq ($(OS),macosx)
+ifeq ($(OS),macos)
 # pip installed packages like ramp reside here:
 export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
 endif
@@ -77,7 +77,7 @@ ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
-ifeq ($(OS),macosx)
+ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup -Wl,-macosx_version_min,10.8 $(LD_FLAGS)
 endif
 
