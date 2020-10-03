@@ -1,6 +1,6 @@
 # Run-time configuration
 
-RedisTimeSeries supports a few run-time configuration options that should be determined when loading the module. In time more options will be added. 
+RedisTimeSeries supports a few run-time configuration options that should be determined when loading the module. In time more options will be added.
 
 ## Passing Configuration Options During Loading
 
@@ -79,6 +79,7 @@ The following are the possible policies:
 * `LAST` - override with latest value
 * `MIN` - only override if the value is lower than the existing value
 * `MAX` - only override if the value is higher than the existing value
+* `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:

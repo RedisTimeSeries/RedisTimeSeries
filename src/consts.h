@@ -56,6 +56,7 @@ typedef enum DuplicatePolicy {
     DP_FIRST = 3,
     DP_MIN = 4,
     DP_MAX = 5,
+    DP_SUM = 6,
 } DuplicatePolicy;
 
 /* Series struct options */

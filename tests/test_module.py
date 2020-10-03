@@ -5,7 +5,7 @@ import time
 import __builtin__
 import math
 import random
-import statistics 
+import statistics
 from rmtest import ModuleTestCase
 from includes import *
 
@@ -45,7 +45,7 @@ class TSInfo(object):
         if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
         if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
         if not isinstance(other, TSInfo):
             return NotImplemented
         return self.rules == other.rules and \
@@ -57,7 +57,7 @@ class TSInfo(object):
         self.last_time_stamp == other.last_time_stamp and \
         self.first_time_stamp == other.first_time_stamp and \
         self.chunk_size_bytes == other.chunk_size_bytes
-        
+
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
         return TSInfo(redis.execute_command('TS.INFO', key))
@@ -291,26 +291,26 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_sum_10', 'AGGREGATION', 'SUM', 10)
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_stds_10', 'AGGREGATION', 'STD.S', 10)
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
-            
+
             data = r.execute_command('DUMP', 'tester')
             avg_data = r.execute_command('DUMP', 'tester_agg_avg_10')
-            
+
             r.execute_command('DEL', 'tester', 'tester_agg_avg_10')
-            
+
             r.execute_command('RESTORE', 'tester', 0, data)
             r.execute_command('RESTORE', 'tester_agg_avg_10', 0, avg_data)
-            
+
             expected_result = [[start_ts+i, str(5)] for i in range(samples_count)]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'count', 3)
             assert expected_result[:3] == actual_result
 
-            assert self._get_ts_info(r, 'tester').rules == [['tester_agg_avg_10', 10L, 'AVG'], 
+            assert self._get_ts_info(r, 'tester').rules == [['tester_agg_avg_10', 10L, 'AVG'],
                                                             ['tester_agg_max_10', 10L, 'MAX'],
                                                             ['tester_agg_sum_10', 10L, 'SUM'],
                                                             ['tester_agg_stds_10',10L, 'STD.S']]
-                                   
+
             assert self._get_ts_info(r, 'tester_agg_avg_10').sourceKey == 'tester'
 
     def test_rdb_aggregation_context(self):
@@ -400,7 +400,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             self._ts_alter_cmd(r, key, set_retention=expected_retention)
             self._assert_alter_cmd(r, key, end_ts-201, end_ts, expected_data[-201:], expected_retention,
                                    expected_chunk_size, expected_labels)
-            
+
             # test alter chunk size
             expected_chunk_size = 100
             expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
@@ -460,7 +460,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             expected_result_withlabels = [
                 [keys[2], [kvlabels[2]], [time_stamp, str(values[2])]]
             ]
-            
+
             actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
             assert expected_result_withlabels == actual_result
 
@@ -469,7 +469,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 [keys[0], [kvlabels[0]], [time_stamp, str(values[0])]],
                 [keys[1], [kvlabels[1]], [time_stamp, str(values[1])]]
             ]
-            
+
             actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
             assert expected_result_withlabels == actual_result
 
@@ -503,7 +503,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
 
             assert [] == r.execute_command('TS.revrange', 'tester', start_ts * 2, -1)
             assert [] == r.execute_command('TS.revrange', 'tester', start_ts / 3, start_ts / 2)
-            
+
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.RANGE tester string -1')
             with pytest.raises(redis.ResponseError) as excinfo:
@@ -542,7 +542,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
             self._insert_data(r, 'tester', start_ts, samples_count, 5)
-            
+
             expected_result = [[1488823000L, '116'], [1488823500L, '500'], [1488824000L, '500'], [1488824500L, '384']]
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
                                               'count', 500)
@@ -588,12 +588,12 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
             assert r.delete('tester_agg_max_10')
             assert self._get_ts_info(r, 'tester').rules == []
-            
+
             assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 11)
             assert r.delete('tester')
             assert self._get_ts_info(r, 'tester_agg_max_10').sourceKey == None
-            
+
             assert r.execute_command('TS.CREATE', 'tester')
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 12)
             assert self._get_ts_info(r, 'tester').rules == [['tester_agg_max_10', 12L, 'AVG']]
@@ -601,7 +601,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_create_retention(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
-            
+
             assert r.execute_command('TS.ADD', 'tester', 500, 10)
             expected_result = [[500L, '10']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
@@ -614,7 +614,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
             assert expected_result == actual_result
             assert self._get_ts_info(r, 'tester').total_samples == 2
-            
+
             assert r.execute_command('TS.ADD', 'tester', 2000, 30)
             expected_result = [[1001L, '20'], [2000L, '30']]
             actual_result = r.execute_command('TS.range', 'tester', '-', '+')
@@ -664,7 +664,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
-                
+
     def test_create_compaction_rule_override_dest(self):
         with self.redis() as r:
             assert r.execute_command('TS.CREATE', 'tester')
@@ -777,7 +777,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(result) == 20
             assert result[19][1] == '100'
 
-            query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000 
+            query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*')/1000
             cur_time = int(time.time())
             assert query_res >= cur_time
             assert query_res <= cur_time + 1
@@ -838,7 +838,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             random_numbers = 100
             random.seed(0)
             items = random.sample(range(random_numbers), random_numbers)
-        
+
             stdev = statistics.stdev(items)
             var = statistics.variance(items)
             assert r.execute_command('TS.CREATE', raw_key)
@@ -846,11 +846,11 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', var_key)
             assert r.execute_command('TS.CREATERULE', raw_key, std_key, "AGGREGATION", 'std.s', random_numbers)
             assert r.execute_command('TS.CREATERULE', raw_key, var_key, "AGGREGATION", 'var.s', random_numbers)
-    
+
             for i in range(random_numbers):
                 r.execute_command('TS.ADD', raw_key, i, items[i])
             r.execute_command('TS.ADD', raw_key, random_numbers, 0) #close time bucket
-    
+
             assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
             assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR
 
@@ -956,7 +956,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             values = range(samples_count)
             self._insert_data(r, 'tester', start_ts, samples_count, values)
             r.execute_command('TS.ADD', 'tester', 3000, 7.77)
-            
+
             for rule in rules:
                 for resolution in resolutions:
                     actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
@@ -993,13 +993,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             ts = time.time()
             assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             info = self._get_ts_info(r, 'tester1')
-            assert info.total_samples == 1L 
+            assert info.total_samples == 1L
             assert info.retention_msecs == 666L
             assert info.labels == {'name': 'blabla'}
 
             assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location', 'earth')
             info = self._get_ts_info(r, 'tester2')
-            assert info.total_samples == 1L 
+            assert info.total_samples == 1L
             assert info.labels == {'location': 'earth', 'name': 'blabla2'}
 
     def test_range_by_labels(self):
@@ -1059,7 +1059,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
-    
+
             #issue 414
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,rudy,)')
@@ -1105,7 +1105,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(count_results) == 10
             count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'COUNT', 3)
             assert len(count_results) == math.ceil(samples_count / 3.0)
-            
+
     def test_revrange(self):
         start_ts = 1511885908L
         samples_count = 200
@@ -1119,7 +1119,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
-            
+
             actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
             actual_results_rev.reverse()
@@ -1139,7 +1139,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
             actual_results_rev.reverse()
             assert actual_results == actual_results_rev
-            
+
             actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910L, 1511886000L)
             actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910L, 1511886000L)
             actual_results_rev.reverse()
@@ -1185,7 +1185,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
             assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
             assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
-            
+
             assert r.execute_command('TS.ADD', 'tester1', 0, 1) == 0
             assert r.execute_command('TS.ADD', 'tester2', 0, 2) == 0
             assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
@@ -1279,7 +1279,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             for sample in res:
                 assert sample == [6000+i, str(i)]
                 i += 1
-    
+
     def test_partial_madd(self):
         with self.redis() as r:
             r.execute_command("ts.create", 'test_key1')
@@ -1297,7 +1297,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
             assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
-    
+
     def test_rule_timebucket_64bit(self):
         with self.redis() as r:
             BELOW_32BIT_LIMIT = 2147483647
@@ -1307,7 +1307,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command("ts.create", 'above_32bit_limit')
             r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
             r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
-            info = self._get_ts_info(r, 'test_key') 
+            info = self._get_ts_info(r, 'test_key')
             assert info.rules[0][1] == BELOW_32BIT_LIMIT
             assert info.rules[1][1] == ABOVE_32BIT_LIMIT
 
@@ -1338,7 +1338,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             # test deletion
             assert r.delete('not_compressed')
 
-    
+
     def test_trim(self):
         with self.redis() as r:
             for mode in ["UNCOMPRESSED","COMPRESSED"]:
@@ -1350,7 +1350,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 for i in range(samples):
                     r.execute_command('ts.add trim_me', i, i * 1.1)
                     r.execute_command('ts.add dont_trim_me', i, i * 1.1)
-                
+
                 trimmed_info = self._get_ts_info(r, 'trim_me')
                 untrimmed_info = self._get_ts_info(r, 'dont_trim_me')
                 assert 2 == trimmed_info.chunk_count
@@ -1376,7 +1376,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert info.total_samples == 0
             assert [] == r.execute_command('TS.range empty_uncompressed 0 -1')
             assert [] == r.execute_command('TS.get empty')
-    
+
     def test_expire(self):
         with self.redis() as r:
             assert r.execute_command('ts.create test') == 'OK'
@@ -1408,7 +1408,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('ts.add monkey 10000011000001 1')
             r.execute_command('ts.add monkey 10000011000002 1')
             expected_result = [[0L, '1'], [1L, '1'], [2L, '1'], [50L, '1'], [51L, '1'],
-                               [500L, '1'], [501L, '1'], [3000L, '1'], [3001L, '1'], 
+                               [500L, '1'], [501L, '1'], [3000L, '1'], [3001L, '1'],
                                [10000L, '1'], [10001L, '1'], [100000L, '1'], [100001L, '1'],
                                [100002L, '1'], [100004L, '1'], [1000000L, '1'], [1000001L, '1'],
                                [10000011000001L, '1'], [10000011000002L, '1']]
@@ -1595,7 +1595,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert r.execute_command('TS.ADD', key, 15, 15) == 15
                     assert r.execute_command('TS.ADD', key, 14, 14) == 14
                     assert r.execute_command('TS.ADD', key, 20, 20) == 20
-                    
+
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
                     assert expected_result[0:1] == actual_result[0:1]
@@ -1606,7 +1606,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                     assert r.execute_command('TS.ADD', key, 27, 27) == 27
                     assert r.execute_command('TS.ADD', key, 23, 25) == 23
                     assert r.execute_command('TS.ADD', key, 30, 30) == 30
-                    
+
                     expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
                     actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
                     assert expected_result[0:3] == actual_result[0:3]
@@ -1653,7 +1653,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def test_ooo_split(self):
         with self.redis() as r:
             quantity = 5000
-            
+
             type_list = ['', 'UNCOMPRESSED']
             for chunk_type in type_list:
                 r.execute_command('ts.create', 'split', chunk_type)
@@ -1665,7 +1665,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 for i in range(quantity - 1):
                     assert res[i][0] + 1 == res[i + 1][0]
                     assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
-                    
+
                 r.execute_command('DEL split')
 
     def test_rand_oom(self):
@@ -1705,7 +1705,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('ts.add', 'tester', 99, 1) == 99
             assert r.execute_command('ts.add', 'tester', 98, 1) == 98
 
-class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
+class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
         with self.redis() as r:
@@ -1799,7 +1799,8 @@ class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
             'LAST': lambda x, y: y,
             'FIRST': lambda x, y: x,
             'MIN': min,
-            'MAX': max
+            'MAX': max,
+            'SUM': lambda x, y: x + y
         }
 
         with self.redis() as r:
@@ -1812,11 +1813,11 @@ class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
                 r.execute_command('TS.ADD', key, overrided_ts, 1)
 
             for policy in policies:
-                old_value = r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1]
+                old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
                 new_value = random.randint(5000, 1000000)
                 assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
-                proccessed_value = r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1]
-                assert str(policies[policy](old_value, new_value)) == proccessed_value, "check that {} is correct".format(policy)
+                proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
+                assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
