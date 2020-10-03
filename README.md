@@ -95,11 +95,35 @@ In your redis-server run: `loadmodule bin/redistimeseries.so`
 
 For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
+### Development with Docker
+
+This repository contains a `Dockerfile` that can be used for local development in case you prefer to or have trouble getting your machine configured. You can run:
+
+```
+$ docker-compose build
+$ docker-compose up -d
+```
+
+To build and launch a container that contains all of the necessary requirements. The source code from your host machine will also be linked into the Docker container, meaning you can edit your code using your favorite editor on your host machine and build/debug in the standardized docker environment:
+
+```
+$ docker exec -it redis-timeseries bash
+# make clean
+# make build
+# cd src && make tests
+```
+
+When finished, spin down the container with:
+
+```
+$ docker-compose down -t0
+```
+
 ## Give it a try
 
 After you setup RedisTimeSeries, you can interact with it using redis-cli.
 
-Here we'll create a time series representing sensor temperature measurements. 
+Here we'll create a time series representing sensor temperature measurements.
 After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggregation rule.
 
@@ -140,10 +164,12 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
 ```
-$ cd src
 $ pip install -r tests/requirements.txt # optional, use virtualenv
+$ cd src
 $ make tests
 ```
+
+To run a single or subset of tests, replace `make tests` in the above with `TEST="" make tests` where the `TEST` string will by passed to `pytest` using the `-k` flag and therefore follow's `pytest`'s standard filtering rules.
 
 ## Documentation
 Read the docs at http://redistimeseries.io

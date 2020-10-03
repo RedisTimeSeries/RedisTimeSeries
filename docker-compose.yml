@@ -1,0 +1,18 @@
+version: "2.3"
+
+services:
+
+  redis-timeseries:
+    container_name: redis-timeseries
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+      args:
+        REDIS_VER: 6.0.5
+        OSNICK: buster
+        ARCH: x64
+    volumes:
+      - ".:/build"
+    network_mode: host
+    command: tail -f /dev/null

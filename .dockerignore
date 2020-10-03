@@ -1,4 +1,14 @@
-bin/
-/VARIANT
-/BINDIR
+# ignore everything
+**
 
+# except
+!/system-setup.py
+!/deps/**
+!/docs/**
+!/src/**
+!/tests/**
+!/tools/**
+!/build/**
+!/.git/**
+!/.gitmodules
+!/Makefile
