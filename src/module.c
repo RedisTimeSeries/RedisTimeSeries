@@ -530,7 +530,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         if (!status) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
-            continue;
+            break;
         }
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
