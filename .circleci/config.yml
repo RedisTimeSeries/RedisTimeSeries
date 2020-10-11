@@ -71,7 +71,7 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 12.0.0
+      xcode: 11.3.0
     steps:
       - run:
           name: Set up workspace
@@ -193,7 +193,8 @@ workflows:
       - build:
           <<: *on-any-branch
       - build-macos:
-          <<: *on-version-tags
+          #@@ <<: *on-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
