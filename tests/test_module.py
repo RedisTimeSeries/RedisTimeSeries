@@ -1385,6 +1385,16 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             time.sleep(2)
             assert r.execute_command('keys *') == []
 
+    def test_mrange_expire_issue549(self):
+        with self.redis() as r:
+            # Lower hz value to make it more likely that mrange triggers key expiration
+            assert r.execute_command('config set hz 1') == 'OK'
+            assert r.execute_command('ts.add k1 1 10 LABELS l 1') == 1
+            assert r.execute_command('ts.add k2 2 20 LABELS l 1') == 2
+            assert r.execute_command('expire k1 1') == 1
+            for i in range(0, 50000):
+                assert r.execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
+
     def test_gorilla(self):
         with self.redis() as r:
             r.execute_command('ts.create monkey')
