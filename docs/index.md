@@ -19,7 +19,7 @@ Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistime
 
 ## Client Libraries
 
-Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C#, and PHP. 
+Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C#, Rust, and PHP. 
 
 See the [Clients page](clients.md) for the full list.
 
