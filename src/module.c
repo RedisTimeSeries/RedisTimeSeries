@@ -530,6 +530,9 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         if (!status) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
         RedisModule_ReplyWithArray(ctx, 3);
@@ -734,7 +737,8 @@ static int internalAdd(RedisModuleCtx *ctx,
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
         if (SeriesUpsertSample(series, timestamp, value, dp_override) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert");
+            RTS_ReplyGeneralError(ctx,
+                                  "TSDB: Error at upsert, update is not supported in BLOCK mode");
             return REDISMODULE_ERR;
         }
     } else {
