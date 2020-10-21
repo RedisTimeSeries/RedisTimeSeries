@@ -196,8 +196,7 @@ workflows:
       - build:
           <<: *on-any-branch
       - build-macos:
-          #@@ <<: *on-version-tags
-          <<: *on-any-branch
+          <<: *on-version-tags
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
