@@ -30,10 +30,9 @@ class RedisTimeSeriesSetup(paella.Setup):
     def fedora(self):
         self.group_install("'Development Tools'")
 
-    def macosx(self):
+    def macos(self):
         if sh('xcode-select -p') == '':
             fatal("Xcode tools are not installed. Please run xcode-select --install.")
-        self.install("redis")
 
     def common_last(self):
         self.install("lcov")

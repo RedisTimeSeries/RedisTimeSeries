@@ -14,6 +14,9 @@ commands:
           name: Install prerequisites
           command: make setup
       - run:
+          name: Install Redis
+          command: python2 ./deps/readies/bin/getredis -v 6 --force
+      - run:
           name: Build
           command: make build SHOW=1
       - run:
@@ -79,7 +82,7 @@ jobs:
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
       - ci_steps:
-          platform: macosx
+          platform: macos
 
   build-multiarch-docker:
     machine:
