@@ -8,6 +8,7 @@
 #include "compaction.h"
 #include "consts.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include "rmutil/util.h"
@@ -23,7 +24,7 @@ static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
-    if (sscanf(timeStr, "%llu%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
+    if (sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
         return FALSE;
     }
     timestamp_t interval_in_millisecs = lookup_intervals[interval_type];

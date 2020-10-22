@@ -16,6 +16,12 @@
 
 TSConfig TSGlobalConfig;
 
+int ParseDuplicatePolicy(RedisModuleCtx *ctx,
+                         RedisModuleString **argv,
+                         int argc,
+                         const char *arg_prefix,
+                         DuplicatePolicy *policy);
+
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
     TSGlobalConfig.options = SERIES_OPT_UNCOMPRESSED;
@@ -56,19 +62,30 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("MAX_SAMPLE_PER_CHUNK", argv, argc) >= 0) {
+    if (argc > 1 && RMUtil_ArgIndex("CHUNK_SIZE_BYTES", argv, argc) >= 0) {
         if (RMUtil_ParseArgsAfter(
-                "MAX_SAMPLE_PER_CHUNK", argv, argc, "l", &TSGlobalConfig.maxSamplesPerChunk) !=
+                "CHUNK_SIZE_BYTES", argv, argc, "l", &TSGlobalConfig.chunkSizeBytes) !=
             REDISMODULE_OK) {
             return TSDB_ERROR;
         }
     } else {
-        TSGlobalConfig.maxSamplesPerChunk = SAMPLES_PER_CHUNK_DEFAULT_SECS;
+        TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
     }
     RedisModule_Log(ctx,
                     "verbose",
-                    "loaded default MAX_SAMPLE_PER_CHUNK policy: %lld \n",
-                    TSGlobalConfig.maxSamplesPerChunk);
+                    "loaded default CHUNK_SIZE_BYTES policy: %lld \n",
+                    TSGlobalConfig.chunkSizeBytes);
+
+    TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
+    if (ParseDuplicatePolicy(
+            ctx, argv, argc, DUPLICATE_POLICY_ARG, &TSGlobalConfig.duplicatePolicy) != TSDB_OK) {
+        return TSDB_ERROR;
+    }
+    RedisModule_Log(ctx,
+                    "verbose",
+                    "loaded server DUPLICATE_POLICY: %s \n",
+                    DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
+
     return TSDB_OK;
 }
 

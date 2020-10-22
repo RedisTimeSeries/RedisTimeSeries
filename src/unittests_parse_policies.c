@@ -1,12 +1,18 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
+* Copyright 2018-2020 Redis Labs Ltd. and Contributors
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
+#include <stdio.h>
+#include <stdlib.h>
 #include "parse_policies.h"
 #include "minunit.h"
 #include "compaction.h"
 #include "rmutil/alloc.h"
+#include "compressed_chunk.h"
+#include "gorilla.h"
+#include "tsdb.h"
+
 
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule* parsedRules;
@@ -32,9 +38,10 @@ MU_TEST(test_valid_policy) {
     free(parsedRules);
 }
 
+
 MU_TEST(test_invalid_policy) {
     SimpleCompactionRule* parsedRules;
-    size_t rulesCount;
+    uint64_t rulesCount;
     int result;
     result = ParseCompactionPolicy("max:1M;mins:10s;avg:2h;avg:1d", &parsedRules, &rulesCount);
 	mu_check(result == FALSE);
@@ -45,6 +52,7 @@ MU_TEST(test_invalid_policy) {
 	mu_check(rulesCount == 0);
     free(parsedRules);
 }
+
 
 MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("min") == TS_AGG_MIN);
@@ -57,15 +65,8 @@ MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("range") == TS_AGG_RANGE);
 }
 
-MU_TEST_SUITE(test_suite) {
+MU_TEST_SUITE(parse_policies_test_suite) {
 	MU_RUN_TEST(test_valid_policy);
 	MU_RUN_TEST(test_invalid_policy);
 	MU_RUN_TEST(test_StringLenAggTypeToEnum);
-}
-
-int main(int argc, char *argv[]) {
-    RMUTil_InitAlloc();
-    MU_RUN_SUITE(test_suite);
-	MU_REPORT();
-	return 0;
 }

@@ -11,36 +11,49 @@
 #include <rmutil/alloc.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
-    if (encver != TS_ENC_VER && encver != TS_UNCOMPRESSED_VER) {
+    if (encver < TS_ENC_VER && encver > TS_SIZE_RDB_VER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    RedisModuleString *keyName = RedisModule_LoadString(io);
-    uint64_t retentionTime = RedisModule_LoadUnsigned(io);
-    uint64_t maxSamplesPerChunk = RedisModule_LoadUnsigned(io);
+    double lastValue;
+    timestamp_t lastTimestamp;
+    uint64_t totalSamples;
+    RedisModuleString *srcKey = NULL;
 
-    short options = 0;
-    if (encver >= TS_UNCOMPRESSED_VER) {
-        options = RedisModule_LoadUnsigned(io);
-    } else {
-        options |= SERIES_OPT_UNCOMPRESSED;
+    CreateCtx cCtx = { 0 };
+    RedisModuleString *keyName = RedisModule_LoadString(io);
+    cCtx.retentionTime = RedisModule_LoadUnsigned(io);
+    cCtx.chunkSizeBytes = RedisModule_LoadUnsigned(io);
+    if (encver < TS_SIZE_RDB_VER) {
+        cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
 
-    uint64_t labelsCount = RedisModule_LoadUnsigned(io);
-    Label *labels = malloc(sizeof(Label) * labelsCount);
-    for (int i = 0; i < labelsCount; i++) {
-        labels[i].key = RedisModule_LoadString(io);
-        labels[i].value = RedisModule_LoadString(io);
+    if (encver >= TS_UNCOMPRESSED_VER) {
+        cCtx.options = RedisModule_LoadUnsigned(io);
+    } else {
+        cCtx.options |= SERIES_OPT_UNCOMPRESSED;
+    }
+
+    if (encver >= TS_SIZE_RDB_VER) {
+        lastTimestamp = RedisModule_LoadUnsigned(io);
+        lastValue = RedisModule_LoadDouble(io);
+        totalSamples = RedisModule_LoadUnsigned(io);
+        uint64_t hasSrcKey = RedisModule_LoadUnsigned(io);
+        if (hasSrcKey) {
+            srcKey = RedisModule_LoadString(io);
+        }
+    }
+
+    cCtx.labelsCount = RedisModule_LoadUnsigned(io);
+    cCtx.labels = malloc(sizeof(Label) * cCtx.labelsCount);
+    for (int i = 0; i < cCtx.labelsCount; i++) {
+        cCtx.labels[i].key = RedisModule_LoadString(io);
+        cCtx.labels[i].value = RedisModule_LoadString(io);
     }
 
     uint64_t rulesCount = RedisModule_LoadUnsigned(io);
 
-    Series *series = NewSeries(keyName,
-                               labels,
-                               labelsCount,
-                               retentionTime,
-                               maxSamplesPerChunk,
-                               options & SERIES_OPT_UNCOMPRESSED);
+    Series *series = NewSeries(keyName, &cCtx);
 
     CompactionRule *lastRule = NULL;
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
@@ -62,14 +75,30 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         lastRule = rule;
     }
 
-    uint64_t samplesCount = RedisModule_LoadUnsigned(io);
-    for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
-        timestamp_t ts = RedisModule_LoadUnsigned(io);
-        double val = RedisModule_LoadDouble(io);
-        int result = SeriesAddSample(series, ts, val);
-        if (result != TSDB_OK) {
-            RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+    if (encver < TS_SIZE_RDB_VER) {
+        uint64_t samplesCount = RedisModule_LoadUnsigned(io);
+        for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
+            timestamp_t ts = RedisModule_LoadUnsigned(io);
+            double val = RedisModule_LoadDouble(io);
+            int result = SeriesAddSample(series, ts, val);
+            if (result != TSDB_OK) {
+                RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+            }
         }
+    } else {
+        dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+        uint64_t numChunks = RedisModule_LoadUnsigned(io);
+        Chunk_t *chunk = NULL;
+        for (int i = 0; i < numChunks; ++i) {
+            series->funcs->LoadFromRDB(&chunk, io);
+            dictOperator(
+                series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
+        }
+        series->totalSamples = totalSamples;
+        series->srcKey = srcKey;
+        series->lastTimestamp = lastTimestamp;
+        series->lastValue = lastValue;
+        series->lastChunk = chunk;
     }
 
     IndexMetric(ctx, keyName, series->labels, series->labelsCount);
@@ -90,8 +119,17 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
     RedisModule_SaveUnsigned(io, series->retentionTime);
-    RedisModule_SaveUnsigned(io, series->maxSamplesPerChunk);
+    RedisModule_SaveUnsigned(io, series->chunkSizeBytes);
     RedisModule_SaveUnsigned(io, series->options);
+    RedisModule_SaveUnsigned(io, series->lastTimestamp);
+    RedisModule_SaveDouble(io, series->lastValue);
+    RedisModule_SaveUnsigned(io, series->totalSamples);
+    if (series->srcKey != NULL) {
+        RedisModule_SaveUnsigned(io, TRUE);
+        RedisModule_SaveString(io, series->srcKey);
+    } else {
+        RedisModule_SaveUnsigned(io, FALSE);
+    }
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
     for (int i = 0; i < series->labelsCount; i++) {
@@ -111,14 +149,13 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
         rule = rule->nextRule;
     }
 
-    size_t numSamples = SeriesGetNumSamples(series);
-    RedisModule_SaveUnsigned(io, numSamples);
-
-    SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, false);
-    Sample sample;
-    while (SeriesIteratorGetNext(&iter, &sample) == CR_OK) {
-        RedisModule_SaveUnsigned(io, sample.timestamp);
-        RedisModule_SaveDouble(io, sample.value);
+    Chunk_t *chunk;
+    uint64_t numChunks = RedisModule_DictSize(series->chunks);
+    RedisModule_SaveUnsigned(io, numChunks);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    while (RedisModule_DictNextC(iter, NULL, &chunk)) {
+        series->funcs->SaveToRDB(chunk, io);
+        numChunks--;
     }
-    SeriesIteratorClose(&iter);
+    RedisModule_DictIteratorStop(iter);
 }

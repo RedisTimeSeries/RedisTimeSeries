@@ -21,7 +21,7 @@ In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you ca
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
-2. [Grafana](https://github.com/RedisTimeSeries/grafana-redistimeseries) - using a SimpleJson datasource.
+2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
 3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
@@ -38,7 +38,7 @@ You can either get RedisTimeSeries setup in the cloud, in a Docker container or 
 
 ### Redis Cloud
 
-RedisTimeSeries is available on all Redis Cloud managed services.  Redis Cloud Essentials offers a completely free managed databbases up to 30MB.
+RedisTimeSeries is available on all Redis Cloud managed services. Redis Cloud Essentials offers a completely free managed database up to 30MB.
 
 [Get started here](https://redislabs.com/try-free/)
 
