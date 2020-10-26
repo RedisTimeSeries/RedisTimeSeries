@@ -292,18 +292,27 @@ static int parseCountArgument(RedisModuleCtx *ctx,
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) {
+    if (argc < 2 || argc > 3) {
         return RedisModule_WrongArity(ctx);
     }
 
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
-    RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
-    if (!status) {
-        return REDISMODULE_ERR;
+
+    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY){
+        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType){
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    } else {
+        series = RedisModule_ModuleTypeGetValue(key);
     }
 
-    RedisModule_ReplyWithArray(ctx, 11 * 2);
+    int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
+    if (is_debug) {
+        RedisModule_ReplyWithArray(ctx, 12 * 2);
+    } else {
+        RedisModule_ReplyWithArray(ctx, 11 * 2);
+    }
 
     long long skippedSamples;
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
@@ -353,7 +362,34 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ruleCount++;
     }
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
+
+    if (is_debug) {
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
+        Chunk_t *chunk = NULL;
+        int chunkCount = 0;
+        RedisModule_ReplyWithSimpleString(ctx, "Chunks");
+        RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+        while(RedisModule_DictNextC(iter, NULL, (void*)&chunk)) {
+            size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
+            RedisModule_ReplyWithArray(ctx, 5 * 2);
+            RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
+            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetFirstTimestamp(chunk));
+            RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
+            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetLastTimestamp(chunk));
+            RedisModule_ReplyWithSimpleString(ctx, "samples");
+            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
+            RedisModule_ReplyWithLongLong(ctx, numOfSamples);
+            RedisModule_ReplyWithSimpleString(ctx, "size");
+            RedisModule_ReplyWithLongLong(ctx, chunkSize);
+            RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
+            RedisModule_ReplyWithDouble(ctx, chunkSize / numOfSamples);
+            chunkCount++;
+        }
+        RedisModule_DictIteratorStop(iter);
+        RedisModule_ReplySetArrayLength(ctx, chunkCount);
+    }
     RedisModule_CloseKey(key);
+
     return REDISMODULE_OK;
 }
 

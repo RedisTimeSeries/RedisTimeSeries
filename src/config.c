@@ -24,7 +24,7 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
 
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
-    TSGlobalConfig.options = SERIES_OPT_UNCOMPRESSED;
+    TSGlobalConfig.options = 0;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
         RedisModuleString *policy;
