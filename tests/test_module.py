@@ -31,6 +31,7 @@ class TSInfo(object):
     last_time_stamp = None
     first_time_stamp = None
     chunk_size_bytes = None
+    chunk_type = None
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
@@ -44,6 +45,7 @@ class TSInfo(object):
         if 'lastTimestamp' in response: self.last_time_stamp = response['lastTimestamp']
         if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
         if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
+        if 'chunkType' in response: self.chunk_type = response['chunkType']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
@@ -1896,3 +1898,19 @@ class RedisTimeseriesInitTestDuplicatePolicyFail(ModuleArgsTestCase(False, ['DUP
 
 class RedisTimeseriesInitTestDuplicatePolicySuccess(ModuleArgsTestCase(True, ['DUPLICATE_POLICY', 'MAX'])):
     pass
+
+
+class RedisTimeseriesInitTestChunkTypeFail(ModuleArgsTestCase(False, ['CHUNK_TYPE', 'MAX'])):
+    pass
+
+class RedisTimeseriesInitTestChunkTypeUncompressedPass(ModuleArgsTestCase(True, ['CHUNK_TYPE', 'uncompressed'])):
+    def test_actual_key(self):
+        with self.redis() as r:
+            r.execute_command('TS.ADD', 'tester', '*', 123)
+            assert TSInfo(r.execute_command('TS.INFO', 'tester')).chunk_type == 'compressed'
+
+class RedisTimeseriesInitTestChunkTypecompressedPass(ModuleArgsTestCase(True, ['CHUNK_TYPE', 'compressed'])):
+    def test_actual_key(self):
+        with self.redis() as r:
+            r.execute_command('TS.ADD', 'tester', '*', 123)
+            assert TSInfo(r.execute_command('TS.INFO', 'tester')).chunk_type == 'compressed'
