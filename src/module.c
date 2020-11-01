@@ -309,9 +309,9 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithArray(ctx, 12 * 2);
+        RedisModule_ReplyWithArray(ctx, 13 * 2);
     } else {
-        RedisModule_ReplyWithArray(ctx, 11 * 2);
+        RedisModule_ReplyWithArray(ctx, 12 * 2);
     }
 
     long long skippedSamples;
