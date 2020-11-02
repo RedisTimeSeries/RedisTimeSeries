@@ -296,15 +296,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     Series *series;
-
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        return RedisModule_ReplyWithError(ctx, "TSDB: key does not exist");
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-    } else {
-        series = RedisModule_ModuleTypeGetValue(key);
+    RedisModuleKey *key;
+    int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    if (!status) {
+        return REDISMODULE_ERR;
     }
 
     int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
