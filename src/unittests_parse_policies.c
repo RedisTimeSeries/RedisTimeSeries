@@ -16,7 +16,7 @@
 
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule* parsedRules;
-    size_t rulesCount;
+    uint64_t rulesCount;
     int result = ParseCompactionPolicy("max:1m:1h;min:10s:10d;last:5M:10m;avg:2h:10d;avg:3d:100d", &parsedRules, &rulesCount);
 	mu_check(result == TRUE);
 	mu_check(rulesCount == 5);
