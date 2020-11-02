@@ -280,3 +280,21 @@ package: $(TARGET)
 ifneq ($(BRANCH),)
 	$(call ramp_pack,$(BRANCH),branch)
 endif
+
+#---------------------------------------------------------------------------------------------
+# static analysis
+
+INFER?=infer
+INFER_DOCKER?=redisbench/infer-linux64:1.0.0
+
+# find the OS
+uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
+username := $(shell sh -c 'id -u')
+
+static-analysis-docker:
+	$(MAKE) clean
+	docker run --rm -v `pwd`/../:/RedisTimeSeries/ --user "$(username):$(usergroup)" $(INFER_DOCKER) bash -c "cd RedisTimeSeries && CC=clang infer run --fail-on-issue --biabduction  -- make"
+
+static-analysis:
+	$(MAKE) clean
+	$(INFER) run --fail-on-issue --biabduction -- $(MAKE)

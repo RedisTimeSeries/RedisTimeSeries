@@ -18,3 +18,5 @@ venv/
 /BINDIR
 /tests/tests_report.xml
 site/
+infer-out/
+src/infer-out/

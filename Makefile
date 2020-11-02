@@ -44,5 +44,11 @@ unittests:
 pack:
 	@$(MAKE) -C src package
 
+static-analysis:
+	@$(MAKE) -C src static-analysis
+
+static-analysis-docker:
+	@$(MAKE) -C src static-analysis-docker
+	
 # deploy:
 #	@make -C src deploy

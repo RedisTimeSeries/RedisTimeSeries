@@ -64,6 +64,18 @@ jobs:
           command: |
             make setup
             make -C src lint
+  static-analysis-infer:
+    docker:
+      - image: redisbench/infer-linux64:1.0.0
+    steps:
+      - checkout
+      - run:
+          name: Checkout submodules
+          command: git submodule update --init --recursive
+      - run:
+          name: run fbinfer
+          command: |
+            CC=clang INFER=infer make static-analysis
 
   build:
     docker:
@@ -192,6 +204,8 @@ workflows:
   build_and_package:
     jobs:
       - lint:
+          <<: *on-any-branch
+      - static-analysis-infer:
           <<: *on-any-branch
       - build:
           <<: *on-any-branch
