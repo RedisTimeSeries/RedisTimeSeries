@@ -16,6 +16,13 @@ Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistime
 - Downsampling/Compaction - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (field value pairs) which will allows to query by labels
 
+
+## Client Libraries
+
+Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C#, Rust, and PHP. 
+
+See the [Clients page](clients.md) for the full list.
+
 ## Using with other tools metrics tools
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
@@ -135,30 +142,6 @@ OK
    2) "42"
 ```
 
-### Client libraries
-
-Some languages have client libraries that provide support for RedisTimeSeries commands:
-
-| Project | Language | License | Author | URL |
-| ------- | -------- | ------- | ------ | --- |
-| JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
-| redis-modules-java | Java | Apache-2 | [dengliming](https://github.com/dengliming) | [Github](https://github.com/dengliming/redis-modules-java) |
-| redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
-| redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
-| phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
-| redis-time-series | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [Github](https://github.com/averias/redis-time-series) |
-| redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
-| redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
-| redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
-
-## Tests
-
-Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
-```
-$ cd src
-$ pip install -r tests/requirements.txt # optional, use virtualenv
-$ make tests
-```
 
 ## Mailing List / Forum
 
