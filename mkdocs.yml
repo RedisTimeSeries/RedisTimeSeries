@@ -32,6 +32,8 @@ nav:
   - 'Configuration': configuration.md
   - 'Development': development.md
   - 'Clients': clients.md
+  - Reference:
+    - 'Out-of-order/backfilled ingestion performance considerations': 'out-of-order_performance_considerations.md'
 
 markdown_extensions:
   - admonition
