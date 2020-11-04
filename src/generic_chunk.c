@@ -74,6 +74,9 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
         case DP_MAX:
             newSample->value = max(oldSample.value, newSample->value);
             return CR_OK;
+        case DP_SUM:
+            newSample->value = oldSample.value + newSample->value;
+            return CR_OK;
         default:
             return CR_ERR;
     }
@@ -113,6 +116,8 @@ const char *DuplicatePolicyToString(DuplicatePolicy policy) {
             return "max";
         case DP_MIN:
             return "min";
+        case DP_SUM:
+            return "sum";
         default:
             return "invalid";
     }
@@ -134,6 +139,8 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
             return DP_MIN;
         } else if (strncmp(input_lower, "max", len) == 0) {
             return DP_MAX;
+        } else if (strncmp(input_lower, "sum", len) == 0) {
+            return DP_SUM;
         }
     } else if (len == 4) {
         if (strncmp(input_lower, "last", len) == 0) {
