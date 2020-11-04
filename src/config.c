@@ -24,7 +24,7 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
 
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
-    TSGlobalConfig.options = SERIES_OPT_UNCOMPRESSED;
+    TSGlobalConfig.options = 0;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
         RedisModuleString *policy;
@@ -86,6 +86,28 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                     "loaded server DUPLICATE_POLICY: %s \n",
                     DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
 
+    if (argc > 1 && RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0) {
+        RedisModuleString *chunk_type;
+        size_t len;
+        const char *chunk_type_cstr;
+        if (RMUtil_ParseArgsAfter("CHUNK_TYPE", argv, argc, "s", &chunk_type) != REDISMODULE_OK) {
+            return TSDB_ERROR;
+        }
+        RMUtil_StringToLower(chunk_type);
+        chunk_type_cstr = RedisModule_StringPtrLen(chunk_type, &len);
+
+        if (strncmp(chunk_type_cstr, "compressed", len) == 0) {
+            TSGlobalConfig.options =
+                0; // since we don't have any other options ATM its safe to use 0
+        } else if (strncmp(chunk_type_cstr, "uncompressed", len) == 0) {
+            TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
+        } else {
+            RedisModule_Log(ctx, "error", "unknown chunk type: %s \n", chunk_type_cstr);
+            return TSDB_ERROR;
+        }
+
+        RedisModule_Log(ctx, "verbose", "loaded default chunk type: %s \n", chunk_type_cstr);
+    }
     return TSDB_OK;
 }
 
