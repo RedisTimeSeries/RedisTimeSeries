@@ -1777,6 +1777,27 @@ class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
             assert r.execute_command('TS.RANGE', 'tester', '-', '+') == samples
             assert r.execute_command('TS.REVRANGE', 'tester', '-', '+') == rev_samples
 
+    def test_561_compressed(self):
+        self.verify_561('')
+
+    def test_561_uncompressed(self):
+        self.verify_561('UNCOMPRESSED')
+
+    def verify_561(self, chunk_type):
+        with self.redis() as r:
+            r.execute_command('TS.CREATE', 'tester', chunk_type, 'DUPLICATE_POLICY', 'Last', 'RETENTION', '86400000')
+            r.execute_command('TS.CREATE', 'tester_agg', chunk_type, 'DUPLICATE_POLICY', 'Last')
+            r.execute_command('TS.CREATERULE', 'tester', 'tester_agg', 'AGGREGATION', 'sum', '10000')
+
+            r.execute_command('TS.ADD', 'tester', 1602166828000, 1)
+            r.execute_command('TS.ADD', 'tester', 1602151165000, 1)
+
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10000')[:1] == \
+                   r.execute_command('TS.RANGE', 'tester_agg', '-', '+')
+
+            r.execute_command('DEL', 'tester')
+            r.execute_command('DEL', 'tester_agg')
+
 
 class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
                                             module_args=['DUPLICATE_POLICY', 'BLOCK'])):
@@ -1843,19 +1864,23 @@ class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
 
         with self.redis() as r:
             key = 'tester'
-            r.execute_command('TS.CREATE', key)
-            self._fill_data(r, key)
-            overrided_ts = self.date_ranges[0][0] + 10
-            # Verified Block
-            with pytest.raises(redis.ResponseError):
-                r.execute_command('TS.ADD', key, overrided_ts, 1)
 
-            for policy in policies:
-                old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
-                new_value = random.randint(5000, 1000000)
-                assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
-                proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
-                assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
+            for chunk_type in ['', 'UNCOMPRESSED']:
+                r.execute_command('TS.CREATE', key, chunk_type)
+                self._fill_data(r, key)
+                overrided_ts = self.date_ranges[0][0] + 10
+                # Verified Block
+                with pytest.raises(redis.ResponseError):
+                    r.execute_command('TS.ADD', key, overrided_ts, 1)
+
+                for policy in policies:
+                    old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
+                    new_value = random.randint(5000, 1000000)
+                    assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
+                    proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
+                    assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
+
+                r.execute_command('DEL', key)
 
 ########## Test init args ##########
 def ModuleArgsTestCase(good, args):
