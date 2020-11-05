@@ -223,20 +223,23 @@ size_t SeriesGetNumSamples(const Series *series) {
 static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
+    const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
-        timestamp_t curAggWindowStart = CalcWindowStart(series->lastTimestamp, rule->timeBucket);
-        if (uCtx->sample.timestamp >= curAggWindowStart) {
+        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
+        if (upsertTimestamp >= curAggWindowStart) {
             // upsert in latest timebucket
-            int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL);
+            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
-            timestamp_t start = CalcWindowStart(uCtx->sample.timestamp, rule->timeBucket);
+            const timestamp_t start = CalcWindowStart(upsertTimestamp, ruleTimebucket);
             // ensure last include/exclude
             double val = 0;
-            int rv = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule, &val);
+            const int rv = SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
@@ -248,7 +251,11 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
                 continue;
             }
-            SeriesUpsertSample(destSeries, start, val, DP_LAST);
+            if (destSeries->totalSamples == 0) {
+                SeriesAddSample(destSeries, start, val);
+            } else {
+                SeriesUpsertSample(destSeries, start, val, DP_LAST);
+            }
             RedisModule_CloseKey(key);
         }
         rule = rule->nextRule;
