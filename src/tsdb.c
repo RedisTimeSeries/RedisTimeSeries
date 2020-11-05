@@ -247,7 +247,11 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
                 continue;
             }
-            SeriesUpsertSample(destSeries, start, val, DP_LAST);
+            if (destSeries->totalSamples == 0) {
+                SeriesAddSample(destSeries, start, val);
+            } else {
+                SeriesUpsertSample(destSeries, start, val, DP_LAST);
+            }
             RedisModule_CloseKey(key);
         }
         rule = rule->nextRule;
