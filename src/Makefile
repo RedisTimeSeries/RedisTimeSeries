@@ -109,6 +109,7 @@ _TEST_SOURCES=\
 	unittests_parse_policies.c \
 	unittests_uncompressed_chunk.c \
 	unittests_compressed_chunk.c \
+	unittests_parse_duplicate_policy.c \
 	endianconv.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))

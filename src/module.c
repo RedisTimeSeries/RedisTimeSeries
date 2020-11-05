@@ -292,18 +292,23 @@ static int parseCountArgument(RedisModuleCtx *ctx,
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) {
+    if (argc < 2 || argc > 3) {
         return RedisModule_WrongArity(ctx);
     }
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
     if (!status) {
         return REDISMODULE_ERR;
     }
 
-    RedisModule_ReplyWithArray(ctx, 11 * 2);
+    int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
+    if (is_debug) {
+        RedisModule_ReplyWithArray(ctx, 13 * 2);
+    } else {
+        RedisModule_ReplyWithArray(ctx, 12 * 2);
+    }
 
     long long skippedSamples;
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
@@ -322,6 +327,12 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
     RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
+    RedisModule_ReplyWithSimpleString(ctx, "chunkType");
+    if (series->options & SERIES_OPT_UNCOMPRESSED) {
+        RedisModule_ReplyWithSimpleString(ctx, "uncompressed");
+    } else {
+        RedisModule_ReplyWithSimpleString(ctx, "compressed");
+    };
     RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
     if (series->duplicatePolicy != DP_NONE) {
         RedisModule_ReplyWithSimpleString(ctx, DuplicatePolicyToString(series->duplicatePolicy));
@@ -353,7 +364,34 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ruleCount++;
     }
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
+
+    if (is_debug) {
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
+        Chunk_t *chunk = NULL;
+        int chunkCount = 0;
+        RedisModule_ReplyWithSimpleString(ctx, "Chunks");
+        RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+        while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
+            size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
+            RedisModule_ReplyWithArray(ctx, 5 * 2);
+            RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
+            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetFirstTimestamp(chunk));
+            RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
+            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetLastTimestamp(chunk));
+            RedisModule_ReplyWithSimpleString(ctx, "samples");
+            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
+            RedisModule_ReplyWithLongLong(ctx, numOfSamples);
+            RedisModule_ReplyWithSimpleString(ctx, "size");
+            RedisModule_ReplyWithLongLong(ctx, chunkSize);
+            RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
+            RedisModule_ReplyWithDouble(ctx, chunkSize / numOfSamples);
+            chunkCount++;
+        }
+        RedisModule_DictIteratorStop(iter);
+        RedisModule_ReplySetArrayLength(ctx, chunkCount);
+    }
     RedisModule_CloseKey(key);
+
     return REDISMODULE_OK;
 }
 
@@ -530,6 +568,9 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         if (!status) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
         RedisModule_ReplyWithArray(ctx, 3);
@@ -734,7 +775,8 @@ static int internalAdd(RedisModuleCtx *ctx,
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
         if (SeriesUpsertSample(series, timestamp, value, dp_override) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Error at upsert");
+            RTS_ReplyGeneralError(ctx,
+                                  "TSDB: Error at upsert, update is not supported in BLOCK mode");
             return REDISMODULE_ERR;
         }
     } else {
