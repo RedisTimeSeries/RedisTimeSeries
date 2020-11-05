@@ -25,6 +25,7 @@ typedef union {
 
 typedef struct CompressedChunk {
     u_int64_t size;
+    u_int64_t max_size;
     u_int64_t count;
     u_int64_t idx;
 

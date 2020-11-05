@@ -63,7 +63,7 @@ typedef struct ChunkFuncs {
     u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
-    void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
+    void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
 } ChunkFuncs;
 
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample);

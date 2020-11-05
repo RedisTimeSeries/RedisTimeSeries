@@ -1299,7 +1299,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .mem_usage = SeriesMemUsage,
                                   .free = FreeSeries };
 
-    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_SIZE_RDB_VER, &tm);
+    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_FLEXIBLE_CHUNK_RDB_VER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
     IndexInit();

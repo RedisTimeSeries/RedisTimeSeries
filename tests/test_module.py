@@ -47,6 +47,16 @@ class TSInfo(object):
         if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
         if 'chunkType' in response: self.chunk_type = response['chunkType']
 
+    def assert_eq(self, other):
+        assert self.rules == other.rules
+        assert self.sourceKey == other.sourceKey
+        assert self.chunk_count == other.chunk_count
+        assert self.total_samples == other.total_samples
+        assert self.retention_msecs == other.retention_msecs
+        assert self.last_time_stamp == other.last_time_stamp
+        assert self.first_time_stamp == other.first_time_stamp
+        # assert self.chunk_size_bytes == other.chunk_size_bytes
+
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
             return NotImplemented
@@ -204,13 +214,13 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
             expected_result = [
-              'totalSamples', 1500L, 'memoryUsage', 1166,
+              'totalSamples', 1500L,
               'firstTimestamp', start_ts, 'chunkCount', 1L,
               'labels', [['name', 'brown'], ['color', 'pink']],
               'lastTimestamp', start_ts + samples_count - 1,
-              'chunkSize', 1024, 'retentionTime', 0L,
+              'retentionTime', 0L,
               'sourceKey', None, 'rules', []]
-            assert TSInfo(expected_result) == self._get_ts_info(r, 'tester')
+            TSInfo(expected_result).assert_eq(self._get_ts_info(r, 'tester'))
 
     def test_create_params(self):
         with self.redis() as r:

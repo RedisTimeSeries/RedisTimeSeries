@@ -12,6 +12,7 @@
 #define TS_ENC_VER 0
 #define TS_UNCOMPRESSED_VER 1
 #define TS_SIZE_RDB_VER 2
+#define TS_FLEXIBLE_CHUNK_RDB_VER 3
 
 void *series_rdb_load(RedisModuleIO *io, int encver);
 void series_rdb_save(RedisModuleIO *io, void *value);

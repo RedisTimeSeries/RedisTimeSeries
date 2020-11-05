@@ -90,7 +90,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         uint64_t numChunks = RedisModule_LoadUnsigned(io);
         Chunk_t *chunk = NULL;
         for (int i = 0; i < numChunks; ++i) {
-            series->funcs->LoadFromRDB(&chunk, io);
+            series->funcs->LoadFromRDB(&chunk, io, encver);
             dictOperator(
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }

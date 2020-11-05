@@ -7,6 +7,7 @@
 #include "compressed_chunk.h"
 
 #include "chunk.h"
+#include "rdb.h"
 #include "generic_chunk.h"
 
 #include <assert.h> // assert
@@ -23,7 +24,8 @@
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
-    chunk->size = size;
+    chunk->size = 16;
+    chunk->max_size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
@@ -153,7 +155,26 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
 }
 
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
-    return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
+    CompressedChunk *cchunk =  chunk;
+     ChunkResult cr = Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
+     if (cr == CR_END &&  (cchunk->size < cchunk->max_size )) {
+         u_int64_t old_size = cchunk->size;
+         u_int64_t * old_data = cchunk->data;
+         if (cchunk->size * 2 < cchunk->max_size) {
+             cchunk->size = cchunk->size * 2;
+         } else {
+             cchunk->size = cchunk->max_size;
+         }
+//         cchunk->data = (u_int64_t *)malloc(cchunk->size * sizeof(char));
+//         memcpy(cchunk->data, old_data, old_size);
+
+         cchunk->data = (u_int64_t *)realloc(cchunk->data, cchunk->size);
+         memset((char *)cchunk->data + old_size, 0, cchunk->size - old_size);
+//         free(old_data);
+         return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
+     } else {
+         return cr;
+     }
 }
 
 u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
@@ -244,6 +265,7 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     CompressedChunk *compchunk = chunk;
 
     RedisModule_SaveUnsigned(io, compchunk->size);
+    RedisModule_SaveUnsigned(io, compchunk->max_size);
     RedisModule_SaveUnsigned(io, compchunk->count);
     RedisModule_SaveUnsigned(io, compchunk->idx);
     RedisModule_SaveUnsigned(io, compchunk->baseValue.u);
@@ -256,10 +278,16 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->size);
 }
 
-void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver) {
     CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
 
     compchunk->size = RedisModule_LoadUnsigned(io);
+    if (encver < TS_FLEXIBLE_CHUNK_RDB_VER)
+    {
+        compchunk->max_size = compchunk->size;
+    } else {
+        compchunk->max_size = RedisModule_LoadUnsigned(io);
+    }
     compchunk->count = RedisModule_LoadUnsigned(io);
     compchunk->idx = RedisModule_LoadUnsigned(io);
     compchunk->baseValue.u = RedisModule_LoadUnsigned(io);
