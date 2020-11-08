@@ -1,201 +1,200 @@
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149180 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149181 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149182 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149183 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149184 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149185 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149186 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149187 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149188 20
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149189 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149190 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149191 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149192 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149193 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149194 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149195 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149196 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149197 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149198 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149199 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149200 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149201 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149202 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149203 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149204 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149205 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149206 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149207 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149208 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149209 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149210 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149211 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149212 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149213 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149214 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149215 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149216 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149217 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149218 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149219 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149220 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149221 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149222 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149223 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149224 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149225 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149226 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149227 20
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149228 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149229 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149230 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149231 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149232 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149233 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149234 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149235 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149236 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149237 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149238 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149239 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149240 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149241 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149242 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149243 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149244 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149245 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149246 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149247 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149248 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149249 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149250 29
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149251 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149252 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149253 21
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149254 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149255 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149256 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149257 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149258 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149259 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149260 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149261 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149262 20
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149263 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149264 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149265 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149266 23
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149267 28
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149268 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149269 30
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149270 24
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149271 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149272 25
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149273 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149274 26
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149275 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149276 20
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149277 27
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149278 22
-TS.ADD temperature:2:32 sensor_id=2 area_id=32 1548149279 20
-
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149180 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149181 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149182 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149183 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149184 22
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149185 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149186 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149187 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149188 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149189 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149190 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149191 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149192 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149193 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149194 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149195 21
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149196 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149197 22
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149198 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149199 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149200 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149201 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149202 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149203 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149204 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149205 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149206 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149207 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149208 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149209 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149210 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149211 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149212 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149213 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149214 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149215 21
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149216 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149217 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149218 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149219 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149220 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149221 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149222 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149223 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149224 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149225 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149226 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149227 21
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149228 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149229 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149230 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149231 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149232 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149233 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149234 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149235 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149236 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149237 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149238 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149239 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149240 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149241 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149242 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149243 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149244 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149245 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149246 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149247 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149248 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149249 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149250 24
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149251 28
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149252 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149253 22
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149254 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149255 21
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149256 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149257 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149258 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149259 29
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149260 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149261 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149262 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149263 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149264 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149265 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149266 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149267 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149268 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149269 22
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149270 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149271 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149272 27
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149273 25
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149274 21
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149275 30
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149276 26
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149277 23
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149278 20
-TS.ADD temperature:3:32 sensor_id=3 area_id=32  1548149279 23
+TS.ADD temperature:2:32 1548149180 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149181 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149182 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149183 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149184 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149185 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149186 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149187 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149188 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149189 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149190 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149191 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149192 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149193 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149194 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149195 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149196 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149197 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149198 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149199 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149200 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149201 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149202 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149203 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149204 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149205 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149206 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149207 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149208 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149209 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149210 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149211 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149212 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149213 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149214 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149215 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149216 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149217 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149218 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149219 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149220 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149221 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149222 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149223 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149224 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149225 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149226 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149227 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149228 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149229 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149230 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149231 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149232 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149233 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149234 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149235 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149236 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149237 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149238 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149239 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149240 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149241 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149242 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149243 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149244 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149245 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149246 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149247 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149248 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149249 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149250 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149251 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149252 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149253 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149254 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149255 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149256 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149257 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149258 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149259 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149260 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149261 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149262 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149263 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149264 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149265 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149266 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149267 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149268 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149269 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149270 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149271 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149272 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149273 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149274 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149275 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149276 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149277 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149278 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149279 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149180 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149181 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149182 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149183 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149184 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149185 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149186 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149187 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149188 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149189 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149190 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149191 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149192 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149193 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149194 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149195 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149196 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149197 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149198 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149199 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149200 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149201 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149202 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149203 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149204 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149205 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149206 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149207 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149208 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149209 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149210 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149211 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149212 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149213 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149214 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149215 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149216 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149217 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149218 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149219 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149220 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149221 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149222 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149223 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149224 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149225 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149226 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149227 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149228 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149229 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149230 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149231 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149232 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149233 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149234 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149235 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149236 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149237 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149238 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149239 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149240 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149241 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149242 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149243 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149244 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149245 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149246 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149247 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149248 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149249 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149250 24  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149251 28  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149252 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149253 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149254 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149255 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149256 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149257 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149258 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149259 29  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149260 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149261 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149262 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149263 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149264 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149265 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149266 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149267 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149268 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149269 22  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149270 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149271 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149272 27  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149273 25  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149274 21  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149275 30  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149276 26  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149277 23  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149278 20  LABELS sensor_id 2 area_id 32
+TS.ADD temperature:2:32 1548149279 23
