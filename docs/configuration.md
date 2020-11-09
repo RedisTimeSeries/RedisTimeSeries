@@ -69,6 +69,21 @@ the default retention for newly created keys that do not have a an override.
 $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 ```
 
+### CHUNK_TYPE
+Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
+Possible values: `COMPRESSED`, `UNCOMPRESSED`.
+
+
+#### Default
+
+`COMPRESSED`
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_TYPE COMPRESSED
+```
+
 ### DUPLICATE_POLICY
 
 Policy that will define handling of duplicate samples.
