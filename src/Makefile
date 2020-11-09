@@ -60,6 +60,7 @@ CC=gcc
 
 CC_FLAGS = \
 	-I$(SDK_DIR) \
+	-I$(ROOT)/deps \
 	-Wall \
 	-fPIC \
 	-pedantic \
@@ -78,7 +79,7 @@ SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup -Wl,-macosx_version_min,10.8 $(LD_FLAGS)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
 ifeq ($(DEBUG),1)

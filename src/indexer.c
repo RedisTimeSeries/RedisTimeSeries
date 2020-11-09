@@ -88,7 +88,7 @@ int parsePredicate(RedisModuleCtx *ctx,
             if (subToken == NULL) {
                 return TSDB_ERROR;
             }
-            retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, subToken);
+            retQuery->valuesList[i] = RedisModule_CreateStringPrintf(ctx, "%s", subToken);
             subToken = strtok_r(NULL, ",", &iter_ptr);
         }
     } else if (token != NULL) {

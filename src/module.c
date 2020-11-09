@@ -3,6 +3,9 @@
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
+
+#define REDISMODULE_MAIN
+
 #include "module.h"
 
 #include "common.h"
@@ -10,18 +13,20 @@
 #include "config.h"
 #include "indexer.h"
 #include "rdb.h"
-#include "redismodule.h"
 #include "tsdb.h"
 #include "version.h"
+
+#include "rmutil/strings.h"
+#include "rmutil/util.h"
+#include "rmutil/alloc.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
-#include "rmutil/strings.h"
-#include "rmutil/util.h"
-#include <rmutil/alloc.h>
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
