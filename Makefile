@@ -32,6 +32,9 @@ build:
 clean:
 	@$(MAKE) -C src clean
 
+lint:
+	@$(MAKE) -C src lint
+
 format:
 	@$(MAKE) -C src format
 
