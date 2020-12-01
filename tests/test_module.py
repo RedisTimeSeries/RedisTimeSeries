@@ -1743,6 +1743,20 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert r.execute_command('ts.add', 'tester', 99, 1) == 99
             assert r.execute_command('ts.add', 'tester', 98, 1) == 98
 
+    def test_issue_588(self):
+        with self.redis() as r:
+            r.execute_command('ts.create', 'test1', "DUPLICATE_POLICY", "min")
+            r.execute_command('ts.add', 'test1', 1, -0.05)
+            assert float(r.execute_command('TS.RANGE',  'test1', "-", "+")[0][1]) == -0.05
+            r.execute_command('ts.add', 'test1', 1, -0.06)
+            assert float(r.execute_command('TS.RANGE',  'test1', "-", "+")[0][1]) == -0.06
+
+            r.execute_command('ts.create', 'test2', "DUPLICATE_POLICY", "max")
+            r.execute_command('ts.add', 'test2', 1, -0.06)
+            assert float(r.execute_command('TS.RANGE',  'test2', "-", "+")[0][1]) == -0.06
+            r.execute_command('ts.add', 'test2', 1, -0.05)
+            assert float(r.execute_command('TS.RANGE',  'test2', "-", "+")[0][1]) == -0.05
+
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
@@ -1875,7 +1889,7 @@ class DuplicationPolicyTests(ModuleTestCase(REDISTIMESERIES,
 
                 for policy in policies:
                     old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
-                    new_value = random.randint(5000, 1000000)
+                    new_value = random.randint(-5000, 1000000)
                     assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
                     proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
                     assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
