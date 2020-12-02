@@ -77,7 +77,7 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
                 newSample->value = oldSample.value;
             return CR_OK;
         case DP_SUM:
-            newSample->value += (oldSample.value);
+            newSample->value += oldSample.value;
             return CR_OK;
         default:
             return CR_ERR;
