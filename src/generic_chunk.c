@@ -69,13 +69,15 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
         case DP_LAST:
             return CR_OK;
         case DP_MIN:
-            newSample->value = min(oldSample.value, newSample->value);
+            if (oldSample.value < newSample->value)
+                newSample->value = oldSample.value;
             return CR_OK;
         case DP_MAX:
-            newSample->value = max(oldSample.value, newSample->value);
+            if (oldSample.value > newSample->value)
+                newSample->value = oldSample.value;
             return CR_OK;
         case DP_SUM:
-            newSample->value = oldSample.value + newSample->value;
+            newSample->value += oldSample.value;
             return CR_OK;
         default:
             return CR_ERR;

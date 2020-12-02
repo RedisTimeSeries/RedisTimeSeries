@@ -13,6 +13,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include "rmutil/alloc.h"
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 

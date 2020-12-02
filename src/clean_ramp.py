@@ -15,7 +15,7 @@ def main(zip_path):
             data = zf.read(item.filename)
             if item.filename == 'module.json':
                 modules_json = json.loads(data)
-                modules_json['commands'] = list(filter(lambda x: x['command_name'] not in ['ts.mrange', 'ts.mget'], modules_json['commands']))
+                modules_json['commands'] = list(filter(lambda x: x['command_name'] not in ['ts.mrange', 'ts.mget', 'ts.queryindex'], modules_json['commands']))
 
                 zf_write.writestr(item, json.dumps(modules_json, indent=4))
             else:

@@ -91,8 +91,59 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
     Uncompressed_FreeChunk(chunk);
 }
 
+MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
+    srand((unsigned int)time(NULL));
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
+     Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create uncompressed chunk");
+    mu_assert_short_eq(0,chunk->num_samples);
+    ChunkResult rv = CR_OK;
+    Sample s1 = { .timestamp = 1, .value = -0.5 };
+    Sample s2 = { .timestamp = 1, .value = -0.6 };
+    rv = Uncompressed_AddSample(chunk,&s1);
+    mu_assert(rv == CR_OK, "add sample");
+    UpsertCtx uCtx = {
+        .inChunk = chunk,
+        .sample = s2,
+    };
+
+    int size = 0;
+    // We're forcing the chunk to insert a duplicate and test different policies
+    // DP_BLOCK should not change old sample
+    rv = Uncompressed_UpsertSample(&uCtx, &size, DP_BLOCK);
+    mu_assert(rv == CR_ERR, "duplicate block");
+    mu_assert_int_eq(1,chunk->num_samples);
+    const u_int64_t firstTs = Uncompressed_GetFirstTimestamp(chunk);
+    mu_assert_int_eq(1,firstTs);
+    mu_assert_double_eq(-0.5,chunk->samples[0].value);
+    // DP_MAX should keep -0.5 given that -0.4 is smaller
+    uCtx.sample.value = -0.4;
+    rv = Uncompressed_UpsertSample(&uCtx, &size, DP_MIN);
+    mu_assert(rv == CR_OK, "duplicate min not changing old value");
+    mu_assert_int_eq(1,chunk->num_samples);
+    mu_assert_double_eq(-0.5,chunk->samples[0].value);
+    // DP_MIN should replace -0.5 by -0.6 
+    uCtx.sample.value = -0.6;
+    rv = Uncompressed_UpsertSample(&uCtx, &size, DP_MIN);
+    mu_assert(rv == CR_OK, "duplicate min changing old value");
+    mu_assert_int_eq(1,chunk->num_samples);
+    mu_assert_double_eq(-0.6,chunk->samples[0].value);
+    // DP_MAX should keep -0.6 given that -1 is smaller
+    uCtx.sample.value = -1.0;
+    rv = Uncompressed_UpsertSample(&uCtx, &size, DP_MAX);
+    mu_assert(rv == CR_OK, "duplicate max not changing old value");
+    mu_assert_double_eq(-0.6,chunk->samples[0].value);
+    // DP_MAX should replace -0.6 by -0.2
+    uCtx.sample.value = -0.2;
+    rv = Uncompressed_UpsertSample(&uCtx, &size, DP_MAX);
+    mu_assert(rv == CR_OK, "duplicate max changing old value");
+    mu_assert_double_eq(-0.2,chunk->samples[0].value);
+    Uncompressed_FreeChunk(chunk);
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
+    MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy);
 }
