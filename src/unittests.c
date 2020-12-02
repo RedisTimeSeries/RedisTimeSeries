@@ -22,5 +22,5 @@ int main(int argc, char *argv[]) {
     MU_RUN_SUITE(compressed_chunk_test_suite);
     MU_RUN_SUITE(parse_duplicate_policy_test_suite);
 	MU_REPORT();
-	return 0;
+	return minunit_fail;
 }
