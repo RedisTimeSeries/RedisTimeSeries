@@ -87,12 +87,15 @@ jobs:
   build-multiarch-docker:
     machine:
       enabled: true
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202010-01
     steps:
       - checkout
       - run:
           name: Checkout submodules
           command: git submodule update --init --recursive
+      - run:
+          name: Set up Python3
+          command: pyenv global 3.7.0
       - run:
           name: Setup Docker client experimental features
           command: |
