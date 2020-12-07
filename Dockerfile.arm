@@ -20,7 +20,7 @@ RUN make fetch
 
 ENV X_NPROC "cat /proc/cpuinfo|grep processor|wc -l"
 RUN echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
-RUN make build
+RUN make build CC_OPTIMIZATION_FLAGS=""
 
 RUN [ "cross-build-end" ]
 

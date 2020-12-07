@@ -9,6 +9,8 @@ make fetch         # download and prepare dependant modules
 
 make build
   DEBUG=1          # build debug variant
+  PROFILE=1        # enable profiling compile flags (and debug symbols) for release type.
+                   # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   VARIANT=name     # use a build variant 'name'
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
@@ -58,10 +60,16 @@ UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
 
 CC=gcc
 
+# Optimization flags to use during compilation
+# Using -march=native enables all instruction subsets supported by the local machine 
+# (hence the result might not run on different machines).
+CC_OPTIMIZATION_FLAGS?= -march=native
+
 CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-I$(ROOT)/deps \
 	-Wall \
+	-Winline \
 	-fPIC \
 	-pedantic \
 	-std=gnu99 \
@@ -69,17 +77,24 @@ CC_FLAGS = \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
-	-DREDISMODULE_EXPERIMENTAL_API
+	-DREDISMODULE_EXPERIMENTAL_API \
+	$(CC_OPTIMIZATION_FLAGS)
+
 
 LD_FLAGS += 
 LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
 
-ifeq ($(OS),linux)
-SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+# Clang vectorization report flags
+ifneq (,$(findstring clang,"$(CC)"))
+CC_FLAGS += -Rpass-analysis=loop-vectorize -Rpass=loop-vectorize -Rpass-missed=loop-vectorize
 endif
-
-ifeq ($(OS),macos)
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+# GCC vectorization report flags
+ifneq (,$(findstring gcc,"$(CC)"))
+CC_FLAGS += -ftree-vectorize -fopt-info-vec-all
+endif
+LD_FLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
@@ -87,6 +102,14 @@ CC_FLAGS += -g -ggdb -O0 -DVALGRIND
 LD_FLAGS += -g
 else
 CC_FLAGS += -O3
+endif
+
+ifeq ($(OS),linux)
+SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
+endif
+
+ifeq ($(OS),macos)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
 CC_FLAGS += $(CC_FLAGS.coverage)
@@ -156,11 +179,11 @@ clean:
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(CC) $(CC_FLAGS) -c $< -o $@ 2> $(basename $@).compiler_stedrr_output.txt
 
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------

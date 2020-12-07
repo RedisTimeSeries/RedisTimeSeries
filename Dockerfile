@@ -19,7 +19,7 @@ WORKDIR /build
 RUN ./deps/readies/bin/getpy2
 RUN ./system-setup.py
 RUN make fetch
-RUN make build
+RUN make build CC_OPTIMIZATION_FLAGS=""
 
 #----------------------------------------------------------------------------------------------
 FROM redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}

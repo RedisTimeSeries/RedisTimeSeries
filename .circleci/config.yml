@@ -32,7 +32,7 @@ commands:
       - run:
           name: Package
           command: |
-            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
+            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1 CC_OPTIMIZATION_FLAGS=""
       - persist_to_workspace:
           root: ~/workspace
           paths:
