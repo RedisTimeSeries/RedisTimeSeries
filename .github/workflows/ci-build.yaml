@@ -33,9 +33,10 @@ jobs:
         make unittests
 
   build-centos:
-    runs-on: ubuntu-latest
+    strategy:
       matrix:
-        centos: ["7", "8"]
+        centos: [7,8]
+    runs-on: ubuntu-latest
     container:
       image: centos:${{ matrix.centos }}
     steps:
