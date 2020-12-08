@@ -44,7 +44,7 @@ jobs:
       run: yum install -y install git gcc make
     - name: Submodule checkout
       run: |
-        git submodule update --init --recursive
+        export GIT_DISCOVERY_ACROSS_FILESYSTEM=1 && git submodule update --init --recursive
     - name: make
       run: |
         make
