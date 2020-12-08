@@ -35,12 +35,12 @@ jobs:
   build-centos:
     runs-on: ubuntu-latest
     container:
-      image: centos7
+      image: centos:7
     steps:
-    - uses: actions/checkout@v2
     - name: Install packages
       run: yum install -y install git gcc make
     - name: Submodule checkout
+    - uses: actions/checkout@v2
       run: |
         export GIT_DISCOVERY_ACROSS_FILESYSTEM=1 && git submodule update --init --recursive
     - name: make
