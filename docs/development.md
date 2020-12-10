@@ -88,7 +88,7 @@ to further diagnose the build process.
 ## Running Redis with RedisTimeSeries
 The following will run ```redis``` and load RedisTimeSeries module.
 ```
-make run
+redis-server --loadmodule bin/redistimeseries.so
 ```
 You can open ```redis-cli``` in another terminal to interact with it.
 
