@@ -1,20 +1,18 @@
-import shutil
-import subprocess
+import calendar
 import csv
 import os
-import calendar
+import shutil
+import subprocess
 import sys
 from datetime import datetime
 
 import redis
-
 
 WORK_DIR = '/tmp/redis_wd'
 OUTPUT_RDB = 'output.rdb'
 PORT = 26379
 RDB_PATH = os.path.join(WORK_DIR, OUTPUT_RDB)
 PIPELINE_SIZE = 1000
-
 
 # CSV file headers
 

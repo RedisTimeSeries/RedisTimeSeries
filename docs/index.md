@@ -91,7 +91,7 @@ Or you can install required dependencies manually listed in [system-setup.py](ht
 If ```make``` is not yet available, the following commands are equivalent:
 
 ```
-./deps/readies/bin/getpy2
+./deps/readies/bin/getpy3
 ./system-setup.py
 ```
 

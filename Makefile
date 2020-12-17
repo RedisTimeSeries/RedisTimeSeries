@@ -1,5 +1,6 @@
-
 ROOT=.
+MK.pyver:=3
+
 ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
 $(error Submodules not present. Please run 'git submodule update --init --recursive')
 endif
@@ -20,7 +21,7 @@ help:
 
 setup:
 	@echo Setting up system...
-	@./deps/readies/bin/getpy2
+	@./deps/readies/bin/getpy3
 	@./system-setup.py
 
 fetch:
