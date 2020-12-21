@@ -158,9 +158,11 @@ docker_lint:
 
 lint:
 	clang-format -Werror -n $(SOURCES)
+	clang-format -Werror -n $(TEST_SOURCES)
 
 format:
 	clang-format -i $(SOURCES)
+	clang-format -i $(TEST_SOURCES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
