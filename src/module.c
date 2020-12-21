@@ -1225,6 +1225,54 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    Series *series;
+    RedisModuleKey *key;
+    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    if (!status) {
+        return REDISMODULE_ERR;
+    }
+
+    api_timestamp_t start_ts, end_ts;
+    api_timestamp_t time_delta = 0;
+    if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    long long count = -1;
+    if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+
+    RedisModule_CloseKey(key);
+    return REDISMODULE_OK;
+};
+
+int internalDel(RedisModuleCtx *ctx,
+                Series *series,
+                api_timestamp_t start_ts,
+                api_timestamp_t end_ts,
+                int64_t time_delta) {
+
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
+
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+           (maxResults == -1 || arraylen < maxResults)) {
+        ReplyWithSample(ctx, sample.timestamp, sample.value);
+        arraylen++;
+    }
+    SeriesIteratorClose(&)
+}
+
+
 int NotifyCallback(RedisModuleCtx *original_ctx,
                    int type,
                    const char *event,
@@ -1318,6 +1366,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
+    RMUtil_RegisterWriteCmd(ctx, "ts.del", TSDB_delete);
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR)

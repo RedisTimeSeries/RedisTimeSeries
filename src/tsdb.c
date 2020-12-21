@@ -474,6 +474,24 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     return CR_OK;
 }
 
+ChunkResult SeriesIteratorDelNext(SeriesIterator *iterator, Sample *currentSample) {
+    ChunkResult res;
+    ChunkFuncs *funcs = iterator->series->funcs;
+    Chunk_t *currentChunk = iterator->currentChunk;
+
+    // if currentChunk
+    while (funcs->GetFirstTimestamp(currentChunk) < iterator->minTimestamp ||
+        funcs->GetLastTimestamp(currentChunk) < iterator->maxTimestamp) {
+        // delete all data in currentChunk
+        funcs->FreeChunk(currentChunk);
+        iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
+        iterator->chunkIterator = funcs->NewChunkIterator(
+                currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
+        currentChunk = iterator->currentChunk;
+    }
+
+}
+
 CompactionRule *SeriesAddRule(Series *series,
                               RedisModuleString *destKeyStr,
                               int aggType,
