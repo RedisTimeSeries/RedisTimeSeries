@@ -80,6 +80,7 @@ size_t SeriesGetNumSamples(const Series *series);
 // Iterator over the series
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+ChunkResult SeriesIteratorDelRange(SeriesIterator *iterator);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 int SeriesCalcRange(Series *series,

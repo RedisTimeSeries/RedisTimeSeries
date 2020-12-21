@@ -1225,6 +1225,17 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static int internalDel(RedisModuleCtx *ctx,
+                       Series *series,
+                       api_timestamp_t start_ts,
+                       api_timestamp_t end_ts) {
+
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
+    SeriesIteratorDelRange(&iterator);
+    SeriesIteratorClose(&iterator);
+    return CR_OK;
+}
+
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -1240,7 +1251,6 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     api_timestamp_t start_ts, end_ts;
-    api_timestamp_t time_delta = 0;
     if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
@@ -1250,28 +1260,11 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+    internalDel(ctx, series, start_ts, end_ts);
 
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
-};
-
-int internalDel(RedisModuleCtx *ctx,
-                Series *series,
-                api_timestamp_t start_ts,
-                api_timestamp_t end_ts,
-                int64_t time_delta) {
-
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
-
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-           (maxResults == -1 || arraylen < maxResults)) {
-        ReplyWithSample(ctx, sample.timestamp, sample.value);
-        arraylen++;
-    }
-    SeriesIteratorClose(&)
 }
-
 
 int NotifyCallback(RedisModuleCtx *original_ctx,
                    int type,

@@ -417,6 +417,17 @@ static ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
     }
 }
 
+static ChunkResult SeriesDel(SeriesIterator *iter, Sample *sample) {
+    if (iter->reverse == false) {
+        return iter->chunkIteratorFuncs.GetNext(iter->chunkIterator, sample);
+    } else {
+        if (iter->chunkIteratorFuncs.GetPrev == NULL) {
+            return CR_ERR;
+        }
+        return iter->chunkIteratorFuncs.GetPrev(iter->chunkIterator, sample);
+    }
+}
+
 void SeriesIteratorClose(SeriesIterator *iterator) {
     iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
     RedisModule_DictIteratorStop(iterator->dictIter);
@@ -474,21 +485,32 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     return CR_OK;
 }
 
-ChunkResult SeriesIteratorDelNext(SeriesIterator *iterator, Sample *currentSample) {
+ChunkResult SeriesIteratorDelRange(SeriesIterator *iterator) {
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
+    timestamp_t startTs;
+    timestamp_t endTs;
+
+    if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
+        funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
+        // No more chunks or out of range
+        return CR_END;
+    }
 
     // if currentChunk
-    while (funcs->GetFirstTimestamp(currentChunk) < iterator->minTimestamp ||
+    while (funcs->GetFirstTimestamp(currentChunk) > iterator->minTimestamp &&
         funcs->GetLastTimestamp(currentChunk) < iterator->maxTimestamp) {
         // delete all data in currentChunk
         funcs->FreeChunk(currentChunk);
         iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
+        // get the next chunk iterator
         iterator->chunkIterator = funcs->NewChunkIterator(
                 currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
         currentChunk = iterator->currentChunk;
     }
+
+    res = funcs->DelRange(currentChunk, iterator->minTimestamp, iterator->maxTimestamp);
 
 }
 

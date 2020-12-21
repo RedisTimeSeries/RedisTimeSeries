@@ -54,6 +54,7 @@ typedef struct ChunkFuncs {
 
     ChunkResult(*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult(*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
+    ChunkResult(*DelRange)(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
 
     ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
 
