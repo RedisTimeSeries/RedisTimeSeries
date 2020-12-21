@@ -1,3 +1,8 @@
+/*
+ * Copyright 2018-2020 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #include "consts.h"
 #include "generic_chunk.h"
 #include "minunit.h"
@@ -21,31 +26,7 @@ MU_TEST(test_duplicate_policy_to_string) {
     mu_check(strcmp(DuplicatePolicyToString(DP_MIN), "min") == 0);
 }
 
-MU_TEST(test_ParseCompactionPolicy) {
-    SimpleCompactionRule *parsed_rules_out = NULL;
-    uint64_t rules_count;
-    // postive tests
-    int result = ParseCompactionPolicy(
-        "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d", &parsed_rules_out, &rules_count);
-    mu_check(result == TRUE);
-    // negative tests
-    mu_check(rules_count == 4);
-    result = ParseCompactionPolicy("------", &parsed_rules_out, &rules_count);
-    mu_check(result == FALSE);
-    mu_check(rules_count == 0);
-    result = ParseCompactionPolicy("max", &parsed_rules_out, &rules_count);
-    mu_check(result == FALSE);
-    mu_check(rules_count == 0);
-    result = ParseCompactionPolicy("max:", &parsed_rules_out, &rules_count);
-    mu_check(result == FALSE);
-    mu_check(rules_count == 0);
-    result = ParseCompactionPolicy("max:abcdfeffas", &parsed_rules_out, &rules_count);
-    mu_check(result == FALSE);
-    mu_check(rules_count == 0);
-}
-
 MU_TEST_SUITE(parse_duplicate_policy_test_suite) {
-    MU_RUN_TEST(test_ParseCompactionPolicy);
     MU_RUN_TEST(test_duplicate_policy_parse);
     MU_RUN_TEST(test_duplicate_policy_to_string);
 }

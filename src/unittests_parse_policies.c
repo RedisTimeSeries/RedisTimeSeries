@@ -50,6 +50,20 @@ MU_TEST(test_invalid_policy) {
     result = ParseCompactionPolicy("max:12hd;", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
+
+    result = ParseCompactionPolicy("------", &parsedRules, &rulesCount);
+    mu_check(result == FALSE);
+    mu_check(rulesCount == 0);
+    result = ParseCompactionPolicy("max", &parsedRules, &rulesCount);
+    mu_check(result == FALSE);
+    mu_check(rulesCount == 0);
+    result = ParseCompactionPolicy("max:", &parsedRules, &rulesCount);
+    mu_check(result == FALSE);
+    mu_check(rulesCount == 0);
+    result = ParseCompactionPolicy("max:abcdfeffas", &parsedRules, &rulesCount);
+    mu_check(result == FALSE);
+    mu_check(rulesCount == 0);
+
     free(parsedRules);
 }
 
