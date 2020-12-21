@@ -45,11 +45,6 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("lcov")
         if not self.has_command("ramp"):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
-        if not self.has_command("RLTest"):  
-            # redis-py-cluster should be installed from git due to redis-py dependency
-            self.pip_install("--no-cache-dir git+https://github.com/Grokzen/redis-py-cluster.git@master")
-            self.pip_install("--no-cache-dir git+https://github.com/RedisLabsModules/RLTest.git@master")
-            
         self.pip_install("-r tests/flow/requirements.txt")
         self.pip_install("jinja2")
 
