@@ -149,7 +149,7 @@ jobs:
       - checkout
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION=$CIRCLE_TAG VERBOSE=1 TEST=release ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
 
   nightly-automation:
     docker:
@@ -158,7 +158,7 @@ jobs:
       - checkout
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION=$CIRCLE_BRANCH VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
 
 
 on-any-branch: &on-any-branch

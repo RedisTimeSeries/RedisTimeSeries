@@ -20,6 +20,7 @@ if [[ $1 == --help || $1 == help ]]; then
 		NOP=1                         Do not execute automation command
 		VERBOSE=N                     Set verbosity level (N=1,2)
 		QUICK=1                       Only test one RS version
+		EMAIL=addr                     Send notification to `addr`
 
 		Other configuration:
 		RS_VERSIONS file includes Redis Enterprive versions for release tests.
@@ -61,8 +62,13 @@ run_test() {
 
 	cd $HERE
 
+	if [[ ! -z $EMAIL ]]; then
+		export EMAIL_CLAUSE="\"email_recipients\": \"$EMAIL\","
+	else
+		export EMAIL_CLAUSE=""
+	fi
 	json_in=$(mktemp /tmp/$TEST.json.XXXX)
-	$READIES/bin/xtx -e RS_MODULE -e MODULE_VERSION -e RS_VERSION $TEST.json > $json_in
+	$READIES/bin/xtx -e RS_MODULE -e MODULE_VERSION -e RS_VERSION -e EMAIL_CLAUSE $TEST.json > $json_in
 	(( VERBOSE >= 1 )) && cat $json_in
 
 	if [[ $NOP == 1 ]]; then

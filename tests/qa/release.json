@@ -3,7 +3,7 @@
   "name": "redistimeseries automation-testing",
   "properties": {
     "sut_version": "{{RS_VERSION}}",
-    "email_recipients": "t9b6i7v6e2q3d0s4@redislabs.slack.com",
+    {{EMAIL_CLAUSE}}
     "sut_environments": [],
     "tools_environment": {},
     "modules_version": "{{MODULE_VERSION}}",
