@@ -1,9 +1,14 @@
-#include <string.h>
-
+/*
+ * Copyright 2018-2020 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #include "consts.h"
 #include "generic_chunk.h"
 #include "minunit.h"
+#include "parse_policies.h"
 
+#include <string.h>
 
 #define DuplicatePolicyFromCString(str) DuplicatePolicyFromString(str, strlen(str))
 
@@ -22,6 +27,6 @@ MU_TEST(test_duplicate_policy_to_string) {
 }
 
 MU_TEST_SUITE(parse_duplicate_policy_test_suite) {
-        MU_RUN_TEST(test_duplicate_policy_parse);
-        MU_RUN_TEST(test_duplicate_policy_to_string);
+    MU_RUN_TEST(test_duplicate_policy_parse);
+    MU_RUN_TEST(test_duplicate_policy_to_string);
 }
