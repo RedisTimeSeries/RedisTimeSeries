@@ -46,11 +46,9 @@ MU_TEST(test_invalid_policy) {
     result = ParseCompactionPolicy("max:1M;mins:10s;avg:2h;avg:1d", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
-
     result = ParseCompactionPolicy("max:12hd;", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
-
     result = ParseCompactionPolicy("------", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
@@ -66,7 +64,6 @@ MU_TEST(test_invalid_policy) {
 
     free(parsedRules);
 }
-
 MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("min") == TS_AGG_MIN);
     mu_check(StringAggTypeToEnum("max") == TS_AGG_MAX);

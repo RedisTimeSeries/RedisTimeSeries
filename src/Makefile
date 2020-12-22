@@ -200,7 +200,6 @@ tests: $(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
-	$(COVERAGE_RESET)
 	$(SHOW)\
 		MODULE=$(realpath $(TARGET)) \
 		CLUSTER=$(CLUSTER) \

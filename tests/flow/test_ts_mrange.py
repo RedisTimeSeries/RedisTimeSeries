@@ -5,6 +5,7 @@ from test_helper_classes import _insert_data
 
 
 def test_mrange_expire_issue549():
+    Env().skipOnDebugger()
     with Env().getConnection() as r:
         # Lower hz value to make it more likely that mrange triggers key expiration
         assert r.execute_command('config set hz 1') == b'OK'
