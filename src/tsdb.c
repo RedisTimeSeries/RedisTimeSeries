@@ -485,7 +485,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 
 ChunkResult SeriesIteratorDelRange(Series *series, SeriesIterator *iterator) {
     SeriesTrim(series, false, iterator->minTimestamp, iterator->maxTimestamp);
-    return CR_OK;
+    return TSDB_OK;
 }
 
 CompactionRule *SeriesAddRule(Series *series,

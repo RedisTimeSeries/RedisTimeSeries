@@ -1233,7 +1233,7 @@ static int internalDel(RedisModuleCtx *ctx,
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     SeriesIteratorDelRange(series, &iterator);
     SeriesIteratorClose(&iterator);
-    return CR_OK;
+    return REDISMODULE_OK;
 }
 
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -1260,10 +1260,12 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    internalDel(ctx, series, start_ts, end_ts);
+    int rv = internalDel(ctx, series, start_ts, end_ts);
 
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
-    return REDISMODULE_OK;
+    return rv;
 }
 
 int NotifyCallback(RedisModuleCtx *original_ctx,
