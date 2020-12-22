@@ -1,0 +1,22 @@
+{
+  "service_id": "single_module_test_cycle",
+  "name": "redistimeseries automation-testing",
+  "properties": {
+    "sut_version": "master",
+    {{EMAIL_CLAUSE}}
+    "sut_environments": [],
+    "tools_environment": {},
+    "modules_version": "master",
+    "test_names_modules": [
+        "{{RS_MODULE}}"
+    ],
+    "cycle_environments_setup": [
+      {
+        "teardown": true,
+        "name": "bionic-amd64-aws",
+        "concurrency": 1
+      }
+    ]
+  }
+}
+

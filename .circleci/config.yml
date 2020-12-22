@@ -164,26 +164,24 @@ jobs:
       - store_artifacts:
           path: ~/workspace/packages/<<parameters.package>>
 
-  run_automation:
-    parameters:
-      module_version:
-        type: string
+  release-automation:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - checkout
       - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
-      - run:
-          name: Setup
-          command: |
-            apt-get -qq update
-            apt-get install -y ca-certificates curl jq
-            python -m pip install jinja2
+          name: Run QA Automation
+          command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
+
+  nightly-automation:
+    docker:
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
+    steps:
+      - checkout
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION=<<parameters.module_version>> VERBOSE=1 ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+
 
 on-any-branch: &on-any-branch
   filters:
@@ -208,6 +206,14 @@ on-version-tags: &on-version-tags
   filters:
     branches:
       ignore: /.*/
+    tags:
+      only: /^v[0-9].*/
+
+on-master-and-version-tags: &on-master-and-version-tags
+  filters:
+    branches:
+      only:
+        - master
     tags:
       only: /^v[0-9].*/
 
@@ -242,14 +248,10 @@ workflows:
             - build
             - valgrind
           <<: *on-version-tags
-      - run_automation:
-          module_version: $CIRCLE_BRANCH
-          requires:
-            - deploy_branch
-      - run_automation:
-          module_version: $CIRCLE_TAG
+      - release-automation:
           requires:
             - deploy_release
+          <<: *on-version-tags
 
   nightly:
     triggers:
@@ -259,3 +261,4 @@ workflows:
     jobs:
       - build-macos
       - valgrind
+      - nightly-automation
