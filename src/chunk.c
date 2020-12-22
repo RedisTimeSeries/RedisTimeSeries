@@ -148,8 +148,8 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
     return CR_OK;
 }
 
-ChunkResult Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
-    return CR_OK;
+size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
+    return 0;
 }
 
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,

@@ -20,7 +20,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
-ChunkResult Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
+size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);

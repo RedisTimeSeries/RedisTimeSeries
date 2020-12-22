@@ -91,7 +91,7 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
             series->funcs->FreeChunk(currentChunk);
         } else {
             if (!causedByRetention) {
-                series->funcs->DelRange(currentChunk, startTs, endTs);
+                series->totalSamples -= series->funcs->DelRange(currentChunk, startTs, endTs);
             }
             break;
         }
