@@ -60,8 +60,9 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
-void SeriesTrim(Series *series) {
-    if (series->retentionTime == 0) {
+void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
+    // if not causedByRetention, caused by ts.del
+    if (causedByRetention && series->retentionTime == 0) {
         return;
     }
 
@@ -75,7 +76,12 @@ void SeriesTrim(Series *series) {
                                    : 0;
 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
+        bool retentionCondition = causedByRetention
+                && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
+        bool ts_delCondition = !causedByRetention
+                && (series->funcs->GetFirstTimestamp(currentChunk) >= startTs
+                && series->funcs->GetLastTimestamp(currentChunk) <= endTs);
+        if (retentionCondition || ts_delCondition) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict,
             // go to first element that is bigger than current key
@@ -84,6 +90,9 @@ void SeriesTrim(Series *series) {
             series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
+            if (!causedByRetention) {
+                series->funcs->DelRange(currentChunk, startTs, endTs);
+            }
             break;
         }
     }
@@ -353,7 +362,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        SeriesTrim(series);
+        SeriesTrim(series, true, 0, 0);
 
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
@@ -475,31 +484,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 }
 
 ChunkResult SeriesIteratorDelRange(Series *series, SeriesIterator *iterator) {
-    ChunkResult res;
-    ChunkFuncs *funcs = iterator->series->funcs;
-    Chunk_t *currentChunk = iterator->currentChunk;
-    timestamp_t startTs;
-    timestamp_t endTs;
-    void *rax_key;
-
-    while (true) {
-        if (funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
-            return CR_OK;
-        }
-        if (funcs->GetFirstTimestamp(currentChunk) >= iterator->minTimestamp &&
-               funcs->GetLastTimestamp(currentChunk) <= iterator->maxTimestamp) {
-            // delete all data in currentChunk
-            funcs->FreeChunk(currentChunk);
-            seriesEncodeTimestamp(&rax_key, funcs->GetFirstTimestamp(currentChunk));
-            // get the next chunk and init it's iterator
-            RedisModule_DictDelC(series->chunks, &rax_key, sizeof(rax_key), NULL);
-            iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk);
-            iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
-            iterator->chunkIterator = funcs->NewChunkIterator(
-                    currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
-        } else break;
-    }
-    res = funcs->DelRange(currentChunk, iterator->minTimestamp, iterator->maxTimestamp);
+    SeriesTrim(series, false, iterator->minTimestamp, iterator->maxTimestamp);
     return CR_OK;
 }
 

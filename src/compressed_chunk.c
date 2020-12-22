@@ -191,6 +191,8 @@ ChunkResult Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t
         ensureAddSample(newChunk, &iterSample);
     }
     swapChunks(newChunk, oldChunk);
+    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunk(newChunk);
     return CR_OK;
 }
 
