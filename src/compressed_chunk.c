@@ -187,8 +187,9 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     for (; i < numSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &iterSample);
         if (iterSample.timestamp >= startTs && iterSample.timestamp <= endTs) {
+            // in delete range, skip adding to the new chunk
             deleted_count++;
-            continue; // in delete range, skip adding to the new chunk
+            continue;
         }
         ensureAddSample(newChunk, &iterSample);
     }
