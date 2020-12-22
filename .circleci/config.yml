@@ -67,7 +67,7 @@ jobs:
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - ci_steps:
           platform: debian
@@ -111,7 +111,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - checkout
       - run:
@@ -133,7 +133,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - attach_workspace:
           at: ~/workspace
@@ -142,26 +142,26 @@ jobs:
       - store_artifacts:
           path: ~/workspace/packages/<<parameters.package>>
 
-  run_automation:
-    parameters:
-      module_version:
-        type: string
+  release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - checkout
-      - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
-      - run:
-          name: Setup
-          command: |
-            apt-get -qq update
-            apt-get install -y ca-certificates curl jq
-            python -m pip install jinja2
+      - setup-automation
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION=<<parameters.module_version>> VERBOSE=1 ./tests/qa/run
+          command: MODULE_VERSION=$CIRCLE_TAG VERBOSE=1 TEST=release ./tests/qa/run
+
+  nightly-automation:
+    docker:
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
+    steps:
+      - checkout
+      - setup-automation
+      - run:
+          name: Run QA Automation
+          command: MODULE_VERSION=$CIRCLE_BRANCH VERBOSE=1 TEST=nightly ./tests/qa/run
+
 
 on-any-branch: &on-any-branch
   filters:
@@ -216,14 +216,10 @@ workflows:
           requires:
             - build
           <<: *on-version-tags
-      - run_automation:
-          module_version: $CIRCLE_BRANCH
-          requires:
-            - deploy_branch
-      - run_automation:
-          module_version: $CIRCLE_TAG
+      - release-automation:
           requires:
             - deploy_release
+          <<: *on-version-tags
 
   nightly:
     triggers:
@@ -232,3 +228,4 @@ workflows:
           <<: *on-master
     jobs:
       - build-macos
+      - nightly-automation

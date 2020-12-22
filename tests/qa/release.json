@@ -1,0 +1,27 @@
+{
+  "service_id": "single_module_test_cycle",
+  "name": "redistimeseries automation-testing",
+  "properties": {
+    "sut_version": "{{RS_VERSION}}",
+    "email_recipients": "t9b6i7v6e2q3d0s4@redislabs.slack.com",
+    "sut_environments": [],
+    "tools_environment": {},
+    "modules_version": "{{MODULE_VERSION}}",
+    "test_names_modules": [
+        "{{RS_MODULE}}"
+    ],
+    "cycle_environments_setup": [
+      {
+        "teardown": true,
+        "name": "xenial-amd64-aws",
+        "concurrency": 1
+      },
+      {
+        "teardown": true,
+        "name": "bionic-amd64-aws",
+        "concurrency": 1
+      }
+    ]
+  }
+}
+
