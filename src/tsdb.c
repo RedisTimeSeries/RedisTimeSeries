@@ -80,7 +80,8 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
                 && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
         bool ts_delCondition = !causedByRetention
                 && (series->funcs->GetFirstTimestamp(currentChunk) >= startTs
-                && series->funcs->GetLastTimestamp(currentChunk) <= endTs);
+                && series->funcs->GetLastTimestamp(currentChunk) <= endTs)
+                && currentChunk != series->lastChunk;
         if (retentionCondition || ts_delCondition) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict,
