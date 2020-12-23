@@ -149,8 +149,8 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
 }
 
 size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
-    Chunk *regChunk = (Chunk *)chunk;
-    Sample *newSamples = (Sample *)malloc(regChunk->size);
+    Chunk *regChunk = (Chunk *) chunk;
+    Sample *newSamples = (Sample *) malloc(regChunk->size);
     size_t i = 0;
     size_t new_count = 0;
     for (; i < regChunk->num_samples; ++i) {
