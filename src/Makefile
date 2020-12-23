@@ -1,4 +1,6 @@
 ROOT=..
+MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
@@ -20,9 +22,14 @@ make deps          # build dependant modules
 make all           # build all libraries and packages
 
 make test          # run tests
-  TEST=name        # run test maching 'name'
+  TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
   COV=1            # perform coverage analysis
+  GEN=0|1          # run general tests on a standalone Redis topology
+  AOF=0|1          # run AOF persistency tests on a standalone Redis topology
+  SLAVES=0|1       # run replication tests on standalone Redis topology
+  CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
+  VALGRIND|VGD=1   # run specified tests with Valgrind
 
 make pack          # build packages (ramp & dependencies)
 endef
@@ -80,6 +87,14 @@ endif
 
 ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+endif
+
+ifneq ($(VGD),)
+VALGRIND=$(VGD)
+endif
+
+ifeq ($(VALGRIND),1)
+DEBUG ?= 1
 endif
 
 ifeq ($(DEBUG),1)
@@ -143,9 +158,11 @@ docker_lint:
 
 lint:
 	clang-format -Werror -n $(SOURCES)
+	clang-format -Werror -n $(TEST_SOURCES)
 
 format:
 	clang-format -i $(SOURCES)
+	clang-format -i $(TEST_SOURCES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
@@ -166,25 +183,30 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 #----------------------------------------------------------------------------------------------
 
 TEST_REPORT_DIR ?= $(PWD)
-TEST_ARGS += \
-	--junitxml=$(TEST_REPORT_DIR)/tests_report.xml
+
+ifeq ($(SIMPLE),1)
+export GEN=1
+export SLAVES=0
+export AOF=0
+export CLUSTER=0
+else
+export GEN ?= 1
+export SLAVES ?= 1
+export AOF ?= 1
+export CLUSTER ?= 0
+endif
 
 tests: $(TARGET)
-	@if ! command -v redis-server > /dev/null; then \
-		echo "Cannot find redis-server. Aborting." ;\
-		exit 1 ;\
-	fi
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
-ifeq ($(TEST),)
-	$(SHOW)set -e; \
-	cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python -m pytest  $(TEST_ARGS) -svv .
-else
-	cd ../tests; \
-	PYDEBUG=1 REDIS_VERBOSE=1 REDISTIMESERIES=$(TARGET) python -m pytest -k "${TEST}" -svv .
-endif
+	$(COVERAGE_RESET)
+	$(SHOW)\
+		MODULE=$(realpath $(TARGET)) \
+		CLUSTER=$(CLUSTER) \
+		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
+		VALGRIND=$(VALGRIND) \
+		$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif

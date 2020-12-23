@@ -38,7 +38,7 @@ Alternatively, just invoke the following:
 ```
 cd RedisTimeSeries
 git submodule update --init --recursive    
-./deps/readies/bin/getpy2
+./deps/readies/bin/getpy3
 ./system-setup.py
 ```
 Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
@@ -93,12 +93,11 @@ make run
 You can open ```redis-cli``` in another terminal to interact with it.
 
 ## Running tests
-There are several sets of unit tests:
-* C tests, located in ```src/tests```, run by ```make c_tests```.
-* C++ tests (enabled by GTest), located in ```src/cpptests```, run by ```make cpp_tests```.
-* Python tests (enabled by RLTest), located in ```src/pytests```, run by ```make pytest```.
+The module includes a basic set of unit tests and integration tests:
+* C unit tests, located in ```src/tests```, run by ```make unittests```.
+* Python integration tests (enabled by RLTest), located in ```tests/flow```, run by ```make test```.
 
-One can run all tests by invoking ```make test```.
+One can run all tests by invoking ```make unittests test```.
 A single test can be run using the ```TEST``` parameter, e.g. ```make test TEST=regex```.
 
 ## Debugging
