@@ -1229,7 +1229,6 @@ static int internalDel(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t start_ts,
                        api_timestamp_t end_ts) {
-
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
     SeriesIteratorDelRange(series, &iterator);
     SeriesIteratorClose(&iterator);

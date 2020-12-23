@@ -176,7 +176,7 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 }
 
 size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
-    CompressedChunk *oldChunk = (CompressedChunk *) chunk;
+    CompressedChunk *oldChunk = (CompressedChunk *)chunk;
     size_t newSize = oldChunk->size; // mem size
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
