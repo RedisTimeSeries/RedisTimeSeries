@@ -1,12 +1,23 @@
-import time
-
 import pytest
 import redis
 from RLTest import Env
-from test_helper_classes import _get_ts_info
+
+
+def test_ts_del_wrong():
+    with Env().getConnection() as r:
+        r.execute_command("ts.create", 'tester')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.DEL tester not_enough_args')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.DEL tester string -1')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.DEL tester 0 string')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.DEL nonexist 0 -1')
 
 
 def test_ts_del_uncompressed():
+    # total samples = 101
     sample_len = 101
     with Env().getConnection() as r:
         r.execute_command("ts.create", 'test_key', 'uncompressed')
@@ -22,6 +33,25 @@ def test_ts_del_uncompressed():
         r.execute_command('ts.del', 'test_key', 0, 100)
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         assert len(res) == 0
+
+
+def test_ts_del_uncompressed_in_range():
+    sample_len = 101
+    with Env().getConnection() as r:
+        r.execute_command("ts.create", 'test_key', 'uncompressed')
+
+        for i in range(sample_len):
+            assert i == r.execute_command("ts.add", 'test_key', i, '1')
+
+        res = r.execute_command('ts.range', 'test_key', 0, 100)
+        i = 0
+        for sample in res:
+            assert sample == [i, '1'.encode('ascii')]
+            i += 1
+        # delete 11 samples
+        r.execute_command('ts.del', 'test_key', 50, 60)
+        res = r.execute_command('ts.range', 'test_key', 0, 100)
+        assert len(res) == 90
 
 
 def test_ts_del_compressed():
