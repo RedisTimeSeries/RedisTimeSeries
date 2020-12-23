@@ -1254,11 +1254,6 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    long long count = -1;
-    if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
-
     int rv = internalDel(ctx, series, start_ts, end_ts);
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
