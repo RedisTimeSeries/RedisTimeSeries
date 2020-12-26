@@ -1225,20 +1225,11 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-static int internalDel(RedisModuleCtx *ctx,
-                       Series *series,
-                       api_timestamp_t start_ts,
-                       api_timestamp_t end_ts) {
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
-    SeriesIteratorDelRange(series, &iterator);
-    SeriesIteratorClose(&iterator);
-    return REDISMODULE_OK;
-}
 
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 4) {
+    if (argc != 4) {
         return RedisModule_WrongArity(ctx);
     }
 
@@ -1254,12 +1245,12 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    int rv = internalDel(ctx, series, start_ts, end_ts);
+    SeriesDelRange(series, start_ts, end_ts);
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
-    return rv;
+    return REDISMODULE_OK;
 }
 
 int NotifyCallback(RedisModuleCtx *original_ctx,

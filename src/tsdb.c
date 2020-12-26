@@ -60,14 +60,28 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
+// Encode timestamps as bigendian to allow correct lexical sorting
+static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
+    uint64_t e;
+    e = htonu64(timestamp);
+    memcpy(buf, &e, sizeof(e));
+}
+
 void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
     // if not causedByRetention, caused by ts.del
     if (causedByRetention && series->retentionTime == 0) {
         return;
     }
-
-    // start iterator from smallest key
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    RedisModuleDictIter *iter;
+    if (causedByRetention) {
+        // start iterator from smallest key
+        iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    } else {
+        // start iterator from smallest key compare to startTs
+        timestamp_t rax_key;
+        seriesEncodeTimestamp(&rax_key, startTs);
+        iter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    }
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
@@ -100,12 +114,6 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
     RedisModule_DictIteratorStop(iter);
 }
 
-// Encode timestamps as bigendian to allow correct lexical sorting
-static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
-    uint64_t e;
-    e = htonu64(timestamp);
-    memcpy(buf, &e, sizeof(e));
-}
 
 void freeLastDeletedSeries() {
     if (lastDeletedSeries == NULL) {
