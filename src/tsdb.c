@@ -114,7 +114,6 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
     RedisModule_DictIteratorStop(iter);
 }
 
-
 void freeLastDeletedSeries() {
     if (lastDeletedSeries == NULL) {
         return;
@@ -492,7 +491,7 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     return CR_OK;
 }
 
-ChunkResult SeriesDelRange(Series *series,  timestamp_t start_ts, timestamp_t end_ts) {
+ChunkResult SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
     SeriesTrim(series, false, start_ts, end_ts);
     return CR_OK;
 }
