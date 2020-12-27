@@ -81,6 +81,9 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
+      # - run:
+      #    name: Brew updte
+      #    run: brew update || true
       - ci_steps:
           platform: macos
 
