@@ -15,7 +15,7 @@ commands:
           command: make setup
       - run:
           name: Install Redis
-          command: python3 ./deps/readies/bin/getredis -v 6 --force
+          command: BREW_NO_UPDATE=1 python3 ./deps/readies/bin/getredis -v 6 --force
       - run:
           name: Build
           command: make build SHOW=1
