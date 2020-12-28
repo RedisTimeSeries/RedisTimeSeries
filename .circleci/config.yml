@@ -15,7 +15,7 @@ commands:
           command: make setup
       - run:
           name: Install Redis
-          command: BREW_NO_UPDATE=1 python3 ./deps/readies/bin/getredis -v 6 --force
+          command: python3 ./deps/readies/bin/getredis -v 6 --force
       - run:
           name: Build
           command: make build SHOW=1
@@ -81,15 +81,8 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
-      # - run:
-      #    name: Brew updte
-      #    run: brew update || true
-      #- ci_steps:
-      #    platform: macos
-      - checkout
-      - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
+      - ci_steps:
+          platform: macos
 
   build-multiarch-docker:
     machine:
