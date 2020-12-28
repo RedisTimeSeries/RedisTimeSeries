@@ -81,12 +81,11 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
-            circleci step halt
       # - run:
       #    name: Brew updte
       #    run: brew update || true
-      - ci_steps:
-          platform: macos
+      #- ci_steps:
+      #    platform: macos
 
   build-multiarch-docker:
     machine:
