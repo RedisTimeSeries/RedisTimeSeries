@@ -86,6 +86,10 @@ jobs:
       #    run: brew update || true
       #- ci_steps:
       #    platform: macos
+      - checkout
+      - run:
+          name: Pull Submodules
+          command: git submodule update --init --recursive
 
   build-multiarch-docker:
     machine:
