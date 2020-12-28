@@ -41,11 +41,6 @@ MK_CUSTOM_CLEAN=1
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
-ifeq ($(OS),macos)
-# pip installed packages like ramp reside here:
-# export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
-endif
-
 #----------------------------------------------------------------------------------------------  
 
 PREFIX ?= /usr/local
