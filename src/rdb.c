@@ -6,6 +6,7 @@
 #include "rdb.h"
 
 #include "consts.h"
+#include "endianconv.h"
 
 #include <string.h>
 #include <rmutil/alloc.h>
@@ -86,9 +87,15 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             }
         }
     } else {
+        Chunk_t *chunk = NULL;
+        // Free the default allocated chunk given LoadFromRDB will allocate a proper sized chunk
+        timestamp_t rax_key = htonu64(0);
+        chunk = (Chunk_t *)RedisModule_DictGetC(series->chunks, &rax_key, sizeof(rax_key), NULL);
+        if (chunk != NULL) {
+            series->funcs->FreeChunk(chunk);
+        }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         uint64_t numChunks = RedisModule_LoadUnsigned(io);
-        Chunk_t *chunk = NULL;
         for (int i = 0; i < numChunks; ++i) {
             series->funcs->LoadFromRDB(&chunk, io);
             dictOperator(

@@ -79,7 +79,7 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -Wl,--no-undefined
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -115,6 +115,7 @@ _SOURCES=\
 	generic_chunk.c \
 	gorilla.c \
 	indexer.c \
+	endianconv.c \
 	module.c \
 	parse_policies.c \
 	rdb.c \

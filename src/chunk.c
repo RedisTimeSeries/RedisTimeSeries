@@ -5,6 +5,7 @@
  */
 #include "chunk.h"
 
+#include <assert.h>
 #include "rmutil/alloc.h"
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
@@ -220,7 +221,8 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     uncompchunk->base_timestamp = RedisModule_LoadUnsigned(io);
     uncompchunk->num_samples = RedisModule_LoadUnsigned(io);
     uncompchunk->size = RedisModule_LoadUnsigned(io);
-
-    uncompchunk->samples = (Sample *)RedisModule_LoadStringBuffer(io, NULL);
+    size_t string_buffer_size;
+    uncompchunk->samples = (Sample *)RedisModule_LoadStringBuffer(io, &string_buffer_size);
+    assert(uncompchunk->size == string_buffer_size);
     *chunk = (Chunk_t *)uncompchunk;
 }
