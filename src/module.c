@@ -81,24 +81,6 @@ static int parseLabelsFromArgs(RedisModuleString **argv,
     return REDISMODULE_OK;
 }
 
-int SilentGetSeries(RedisModuleCtx *ctx,
-                    RedisModuleString *keyName,
-                    RedisModuleKey **key,
-                    Series **series,
-                    int mode) {
-    *key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(*key);
-        return FALSE;
-    }
-    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
-        RedisModule_CloseKey(*key);
-        return FALSE;
-    }
-    *series = RedisModule_ModuleTypeGetValue(*key);
-    return TRUE;
-}
-
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
               RedisModuleKey **key,
@@ -113,6 +95,24 @@ int GetSeries(RedisModuleCtx *ctx,
     if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
         RedisModule_CloseKey(*key);
         RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return FALSE;
+    }
+    *series = RedisModule_ModuleTypeGetValue(*key);
+    return TRUE;
+}
+
+int SilentGetSeries(RedisModuleCtx *ctx,
+                    RedisModuleString *keyName,
+                    RedisModuleKey **key,
+                    Series **series,
+                    int mode) {
+    *key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(*key);
+        return FALSE;
+    }
+    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
+        RedisModule_CloseKey(*key);
         return FALSE;
     }
     *series = RedisModule_ModuleTypeGetValue(*key);
