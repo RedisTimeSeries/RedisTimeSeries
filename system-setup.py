@@ -4,7 +4,9 @@ import sys
 import os
 import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
+ROOT = HERE = os.path.abspath(os.path.dirname(__file__))
+READIES = os.path.join(ROOT, "deps/readies")
+sys.path.insert(0, READIES)
 import paella
 
 #----------------------------------------------------------------------------------------------
@@ -32,7 +34,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("python3-devel libaec-devel")
             self.install("python36-psutil")
         else:
-            self.run("amazon-linux-extras install epel", output_on_error=True)
+            self.run("amazon-linux-extras install epel")
             self.install("python3-devel")
             self.pip_install("psutil")
 
@@ -45,8 +47,8 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("lcov")
         if not self.has_command("ramp"):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
+        self.pip_install("-r %s/paella/requirements.txt" % READIES)
         self.pip_install("-r tests/flow/requirements.txt")
-        self.pip_install("jinja2")
 
 #----------------------------------------------------------------------------------------------
 
