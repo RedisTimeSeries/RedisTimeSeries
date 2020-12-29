@@ -16,6 +16,10 @@ extern RedisModuleType *SeriesType;
 int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName,
                 CreateCtx *cCtx, Series **series, RedisModuleKey **key);
 
+// This method provides the same logic as GetSeries, without replying to the client in case of error
+// The caller method should check the result for TRUE/FALSE and update the client accordingly if required
+int SilentGetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **series, int mode);
+
 int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **series, int mode);
 
 #endif
