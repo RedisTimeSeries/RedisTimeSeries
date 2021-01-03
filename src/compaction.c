@@ -310,7 +310,9 @@ void MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
     size_t len = 1;
     context->maxValue = RedisModule_LoadDouble(io);
     context->minValue = RedisModule_LoadDouble(io);
-    context->isResetted = RedisModule_LoadStringBuffer(io, &len)[0];
+    char *sb = RedisModule_LoadStringBuffer(io, &len);
+    context->isResetted = sb[0];
+    free(sb);
 }
 
 void SumAppendValue(void *contextPtr, double value) {

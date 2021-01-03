@@ -2,6 +2,15 @@ from RLTest import Env
 from test_helper_classes import ALLOWED_ERROR, _insert_data, _get_ts_info
 
 
+
+def test_simple_dump_restore(self):
+    with Env().getConnection() as r:
+        r.execute_command('ts.create test_key UNCOMPRESSED')
+        r.execute_command('ts.add test_key', 1, 1)
+        dump = r.execute_command('dump test_key')
+        r.execute_command('del test_key')
+        r.execute_command('restore test_key 0', dump)
+
 def test_rdb():
     start_ts = 1511885909
     samples_count = 1500

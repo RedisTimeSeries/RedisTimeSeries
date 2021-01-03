@@ -65,7 +65,7 @@ def test_partial_madd():
 
         now = int(time.time() * 1000)
         res = r.execute_command("ts.madd", 'test_key1', "*", 10, 'test_key2', 2000, 20, 'test_key3', 3000, 30)
-        assert now <= res[0] and now + 2 >= res[0]
+        assert now <= res[0]
         assert 2000 == res[1]
         assert 3000 == res[2]
 

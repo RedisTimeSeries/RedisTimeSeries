@@ -5,6 +5,15 @@ commands:
     parameters:
       platform:
         type: string
+      getredis_params:
+        type: string
+        default: ""
+      build_params:
+        type: string
+        default: ""
+      test_params:
+        type: string
+        default: ""
     steps:
       - checkout
       - run:
@@ -15,20 +24,22 @@ commands:
           command: make setup
       - run:
           name: Install Redis
-          command: python3 ./deps/readies/bin/getredis -v 6 --force
+          command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
       - run:
           name: Build
-          command: make build SHOW=1
+          command: make build <<parameters.build_params>> SHOW=1
       - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            make unittests TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
           command: |
             mkdir -p ~/workspace/tests
-            make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+  package:
+    steps:
       - run:
           name: Package
           command: |
@@ -51,6 +62,16 @@ commands:
             aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
 jobs:
+  valgrind:
+    docker:
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
+    steps:
+      - ci_steps:
+          platform: debian
+          build_params: VALGRIND=1
+          test_params: VALGRIND=1 SIMPLE=1
+          getredis_params: --valgrind
+
   lint:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
@@ -71,6 +92,7 @@ jobs:
     steps:
       - ci_steps:
           platform: debian
+      - package
 
   build-macos:
     macos:
@@ -202,6 +224,8 @@ workflows:
     jobs:
       - lint:
           <<: *on-any-branch
+      - valgrind:
+          <<: *on-any-branch
       - build:
           <<: *on-any-branch
       - build-macos:
@@ -215,12 +239,14 @@ workflows:
           package: branch
           requires:
             - build
+            - valgrind
           <<: *on-master
       - deploy_package:
           name: deploy_release
           package: release
           requires:
             - build
+            - valgrind
           <<: *on-version-tags
       - release-automation:
           requires:
@@ -234,4 +260,5 @@ workflows:
           <<: *on-master
     jobs:
       - build-macos
+      - valgrind
       - nightly-automation

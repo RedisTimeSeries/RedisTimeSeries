@@ -22,6 +22,7 @@ def test_mrange_with_expire_cmd():
         assert r.execute_command("PING")
 
 def test_mrange_expire_issue549():
+    Env().skipOnDebugger()
     with Env().getConnection() as r:
         # Lower hz value to make it more likely that mrange triggers key expiration
         assert r.execute_command('config set hz 1') == b'OK'

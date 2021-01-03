@@ -195,7 +195,6 @@ tests: $(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
-	$(COVERAGE_RESET)
 	$(SHOW)\
 		MODULE=$(realpath $(TARGET)) \
 		CLUSTER=$(CLUSTER) \
@@ -236,7 +235,11 @@ cgdb: $(TARGET)
 
 VALGRIND_ARGS=\
 	--leak-check=full \
-	--show-leak-kinds=all \
+	--keep-debuginfo=yes \
+	--show-reachable=no \
+	--show-possibly-lost=no \
+	--track-origins=yes \
+	--suppressions=$(ROOT)/tests/redis_valgrind.sup \
 	-v redis-server
 
 valgrind: $(TARGET)
