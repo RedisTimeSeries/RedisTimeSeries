@@ -1,8 +1,25 @@
 import pytest
 import redis
+import time
 from RLTest import Env
 from test_helper_classes import _insert_data
 
+
+def test_mrange_with_expire_cmd():
+    with Env().getConnection() as r:
+        # Lower hz value to make it more likely that mrange triggers key expiration
+        assert r.execute_command('config set hz 1') == b'OK'
+        assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        assert r.execute_command("TS.ADD", "Z" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        current_ts = time.time()
+        assert r.execute_command("EXPIRE","X", 5)
+        assert r.execute_command("EXPIRE","Y", 6)
+        assert r.execute_command("EXPIRE","Z", 7)
+        while time.time() < (current_ts+10):
+            reply = r.execute_command('TS.mrange', '-', '+', 'FILTER', 'type=DELAYED')
+            assert(len(reply)>=0 and len(reply)<=3)
+        assert r.execute_command("PING")
 
 def test_mrange_expire_issue549():
     with Env().getConnection() as r:
