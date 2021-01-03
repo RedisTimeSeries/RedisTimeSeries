@@ -257,8 +257,7 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
 
 RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
                                      QueryPredicate *predicate,
-                                     RedisModuleDict *prevResults,
-                                     int createResultDict) {
+                                     RedisModuleDict *prevResults) {
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
     RedisModuleDict *currentLeaf;
 
@@ -269,7 +268,7 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
         // In the next iteration, when prevResults is no longer NULL, there is
         // no need to copy again. We can work on currentLeaf, since only the left dict is being
         // changed during intersection / difference.
-        if (createResultDict && prevResults == NULL) {
+        if (prevResults == NULL) {
             RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentLeaf, "^", NULL, 0);
             RedisModuleString *currentKey;
             while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
@@ -342,7 +341,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     for (int i = 0; i < predicate_count; i++) {
         if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS ||
             index_predicate[i].type == LIST_MATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result, 1);
+            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
             }
@@ -354,7 +353,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     for (int i = 0; i < predicate_count; i++) {
         if (index_predicate[i].type == NCONTAINS || index_predicate[i].type == NEQ ||
             index_predicate[i].type == LIST_NOTMATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result, 1);
+            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
             }
