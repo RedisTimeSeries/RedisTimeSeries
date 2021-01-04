@@ -117,16 +117,21 @@ _SOURCES=\
 
 _TEST_SOURCES=\
 	unittests.c \
+	endianconv.c
+
+_TEST_FILES=\
+	unittests.c \
 	unittests_parse_policies.c \
 	unittests_uncompressed_chunk.c \
 	unittests_compressed_chunk.c \
-	unittests_parse_duplicate_policy.c \
-	endianconv.c
+	unittests_parse_duplicate_policy.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
+HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
+TEST_FILES=$(addprefix $(SRCDIR)/,$(_TEST_FILES))
 TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
@@ -153,11 +158,13 @@ docker_lint:
 
 lint:
 	clang-format -Werror -n $(SOURCES)
-	clang-format -Werror -n $(TEST_SOURCES)
+	clang-format -Werror -n $(HEADERS)
+	clang-format -Werror -n $(TEST_FILES)
 
 format:
 	clang-format -i $(SOURCES)
-	clang-format -i $(TEST_SOURCES)
+	clang-format -i $(HEADERS)
+	clang-format -i $(TEST_FILES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
