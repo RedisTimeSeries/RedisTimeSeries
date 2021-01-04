@@ -312,9 +312,9 @@ static int parseCountArgument(RedisModuleCtx *ctx,
 }
 
 static int parseOffsetArgument(RedisModuleCtx *ctx,
-                              RedisModuleString **argv,
-                              int argc,
-                              long long *time_offset) {
+                               RedisModuleString **argv,
+                               int argc,
+                               long long *time_offset) {
     int offset = RMUtil_ArgIndex("OFFSET", argv, argc);
     if (offset > 0) {
         if (offset + 1 == argc) {
@@ -336,7 +336,6 @@ static int parseOffsetArgument(RedisModuleCtx *ctx,
     }
     return TSDB_OK;
 }
-
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -633,15 +632,8 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
-        ReplySeriesRange(ctx,
-                         series,
-                         start_ts,
-                         end_ts,
-                         aggObject,
-                         time_delta,
-                         count,
-                         time_offset,
-                         rev);
+        ReplySeriesRange(
+            ctx, series, start_ts, end_ts, aggObject, time_delta, count, time_offset, rev);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -755,7 +747,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
         timestamp_t init_ts = (rev == false)
                                   ? series->funcs->GetFirstTimestamp(iterator.currentChunk)
                                   : series->funcs->GetLastTimestamp(iterator.currentChunk);
-        
+
         last_agg_timestamp = init_ts - (init_ts % time_delta) + (1 - 2 * rev) * time_offset;
 
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
@@ -771,9 +763,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                         arraylen++;
                     }
                 }
-                last_agg_timestamp = sample.timestamp
-                                        - (sample.timestamp % time_delta)
-                                        + (1 - 2 * rev) * time_offset;
+                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta) +
+                                     (1 - 2 * rev) * time_offset;
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);
