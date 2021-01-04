@@ -26,7 +26,7 @@ MU_TEST(test_compressed_upsert) {
         CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
         mu_assert(chunk != NULL, "create compressed chunk");
         for (size_t i = 1; i <= total_data_points; i++) {
-            float value = minV + (float)rand() / (float)(RAND_MAX / maxV);
+            float value = minV + (float)rand() / ((float)RAND_MAX / maxV);
             Sample sample = { .timestamp = i, .value = value };
             total_upserts++;
             UpsertCtx uCtx = {
@@ -68,7 +68,7 @@ MU_TEST(test_compressed_fail_appendInteger) {
     mu_assert_int_eq(6, Compressed_GetFirstTimestamp(chunk));
     mu_assert_int_eq(10, Compressed_GetLastTimestamp(chunk));
     for (size_t i = 0; i < 10; i++) {
-        s2.value = minV + (float)rand() / (float)(RAND_MAX / maxV);
+        s2.value = minV + (float)rand() / ((float)RAND_MAX / maxV);
         Compressed_UpsertSample(&uCtx, &size, DP_LAST);
         // ensure we're not adding more datapoints and only overwritting previous ones
         mu_assert_int_eq(2, Compressed_ChunkNumOfSample(chunk));
@@ -86,7 +86,7 @@ MU_TEST(test_compressed_fail_appendInteger) {
     mu_assert_int_eq(10, Compressed_GetLastTimestamp(chunk2));
 
     for (size_t i = 1; i < 6; i++) {
-        Sample s3 = { .timestamp = i, .value = minV + (float)rand() / (float)(RAND_MAX / maxV) };
+        Sample s3 = { .timestamp = i, .value = minV + (float)rand() / ((float)RAND_MAX / maxV) };
         UpsertCtx uCtxS3 = {
             .inChunk = chunk,
             .sample = s3,
