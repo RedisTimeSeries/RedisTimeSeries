@@ -52,6 +52,13 @@ typedef struct Series
     DuplicatePolicy duplicatePolicy;
 } Series;
 
+typedef enum MultiSeriesReduceOp
+{
+    MultiSeriesReduceOp_Min,
+    MultiSeriesReduceOp_Max,
+    MultiSeriesReduceOp_Sum,
+} MultiSeriesReduceOp;
+
 typedef struct SeriesIterator
 {
     Series *series;
@@ -66,34 +73,64 @@ typedef struct SeriesIterator
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+
 void FreeSeries(void *value);
+
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
+
+int GetSeries(RedisModuleCtx *ctx,
+              RedisModuleString *keyName,
+              RedisModuleKey **key,
+              Series **series,
+              int mode);
+
+int SilentGetSeries(RedisModuleCtx *ctx,
+                    RedisModuleString *keyName,
+                    RedisModuleKey **key,
+                    Series **series,
+                    int mode);
+
 void FreeCompactionRule(void *value);
+
 size_t SeriesMemUsage(const void *value);
+
+int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op);
+
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
+
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override);
+
 int SeriesUpdateLastSample(Series *series);
+
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
+
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
+
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series,
                               RedisModuleString *destKeyStr,
                               int aggType,
                               uint64_t timeBucket);
+
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                       RedisModuleString *keyName,
                                       Series *series,
                                       Label *labels,
                                       size_t labelsCount);
+
 size_t SeriesGetNumSamples(const Series *series);
+
+char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
 
 // Iterator over the series
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
+
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 int SeriesCalcRange(Series *series,

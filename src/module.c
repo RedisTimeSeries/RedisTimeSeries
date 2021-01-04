@@ -13,7 +13,10 @@
 #include "compaction.h"
 #include "config.h"
 #include "indexer.h"
+#include "query_language.h"
 #include "rdb.h"
+#include "reply.h"
+#include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -31,284 +34,6 @@
 #endif
 
 RedisModuleType *SeriesType;
-
-static int ReplySeriesRange(RedisModuleCtx *ctx,
-                            Series *series,
-                            api_timestamp_t start_ts,
-                            api_timestamp_t end_ts,
-                            AggregationClass *aggObject,
-                            int64_t time_delta,
-                            long long maxResults,
-                            bool rev);
-
-static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
-static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
-
-static int parseLabelsFromArgs(RedisModuleString **argv,
-                               int argc,
-                               size_t *label_count,
-                               Label **labels) {
-    int pos = RMUtil_ArgIndex("LABELS", argv, argc);
-    int first_label_pos = pos + 1;
-    Label *labelsResult = NULL;
-    *label_count = 0;
-    if (pos < 0) {
-        *labels = NULL;
-        return REDISMODULE_OK;
-    }
-    *label_count = (size_t)(max(0, (argc - first_label_pos) / 2));
-    if (*label_count > 0) {
-        labelsResult = malloc(sizeof(Label) * (*label_count));
-        for (int i = 0; i < *label_count; i++) {
-            RedisModuleString *key = argv[first_label_pos + i * 2];
-            RedisModuleString *value = argv[first_label_pos + i * 2 + 1];
-
-            // Verify Label Key or Value are not empty strings
-            size_t keyLen, valueLen;
-            RedisModule_StringPtrLen(key, &keyLen);
-            RedisModule_StringPtrLen(value, &valueLen);
-            if (keyLen == 0 || valueLen == 0 ||
-                strpbrk(RedisModule_StringPtrLen(value, NULL), "(),")) {
-                FreeLabels(labelsResult, i); // need to release prior key values too
-                return REDISMODULE_ERR;
-            }
-
-            labelsResult[i].key = RedisModule_CreateStringFromString(NULL, key);
-            labelsResult[i].value = RedisModule_CreateStringFromString(NULL, value);
-        };
-    }
-    *labels = labelsResult;
-    return REDISMODULE_OK;
-}
-
-int GetSeries(RedisModuleCtx *ctx,
-              RedisModuleString *keyName,
-              RedisModuleKey **key,
-              Series **series,
-              int mode) {
-    *key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(*key);
-        RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
-        return FALSE;
-    }
-    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
-        RedisModule_CloseKey(*key);
-        RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return FALSE;
-    }
-    *series = RedisModule_ModuleTypeGetValue(*key);
-    return TRUE;
-}
-
-int SilentGetSeries(RedisModuleCtx *ctx,
-                    RedisModuleString *keyName,
-                    RedisModuleKey **key,
-                    Series **series,
-                    int mode) {
-    *key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(*key);
-        return FALSE;
-    }
-    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
-        RedisModule_CloseKey(*key);
-        return FALSE;
-    }
-    *series = RedisModule_ModuleTypeGetValue(*key);
-    return TRUE;
-}
-
-int ParseDuplicatePolicy(RedisModuleCtx *ctx,
-                         RedisModuleString **argv,
-                         int argc,
-                         const char *arg_prefix,
-                         DuplicatePolicy *policy) {
-    RedisModuleString *duplicationPolicyInput = NULL;
-    if (RMUtil_ArgIndex(arg_prefix, argv, argc) != -1) {
-        if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "s", &duplicationPolicyInput) !=
-            REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse DUPLICATE_POLICY");
-            return TSDB_ERROR;
-        }
-
-        DuplicatePolicy parsePolicy = RMStringLenDuplicationPolicyToEnum(duplicationPolicyInput);
-        if (parsePolicy == DP_INVALID) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Unknown DUPLICATE_POLICY");
-            return TSDB_ERROR;
-        }
-        *policy = parsePolicy;
-        return TSDB_OK;
-    }
-    return TSDB_OK;
-}
-
-static int parseCreateArgs(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int argc,
-                           CreateCtx *cCtx) {
-    cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
-    cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
-    cCtx->labelsCount = 0;
-    if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
-        return REDISMODULE_ERR;
-    }
-
-    if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 &&
-        RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &cCtx->retentionTime) !=
-            REDISMODULE_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
-    }
-
-    if (cCtx->retentionTime < 0) {
-        RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
-    }
-
-    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
-        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
-            REDISMODULE_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        return REDISMODULE_ERR;
-    }
-
-    if (cCtx->chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        return REDISMODULE_ERR;
-    }
-
-    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
-    }
-
-    cCtx->duplicatePolicy = DP_NONE;
-    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
-        TSDB_OK) {
-        return TSDB_ERROR;
-    }
-
-    return REDISMODULE_OK;
-}
-
-static int _parseAggregationArgs(RedisModuleCtx *ctx,
-                                 RedisModuleString **argv,
-                                 int argc,
-                                 api_timestamp_t *time_delta,
-                                 int *agg_type) {
-    RedisModuleString *aggTypeStr = NULL;
-    int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
-    if (offset > 0) {
-        long long temp_time_delta = 0;
-        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, &temp_time_delta) !=
-            REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse AGGREGATION");
-            return TSDB_ERROR;
-        }
-
-        if (!aggTypeStr) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-            return TSDB_ERROR;
-        }
-
-        *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
-
-        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-            return TSDB_ERROR;
-        }
-
-        if (temp_time_delta <= 0) {
-            RTS_ReplyGeneralError(ctx, "TSDB: timeBucket must be greater than zero");
-            return TSDB_ERROR;
-        } else {
-            *time_delta = (api_timestamp_t)temp_time_delta;
-        }
-
-        return TSDB_OK;
-    }
-
-    return TSDB_NOTEXISTS;
-}
-
-static int parseAggregationArgs(RedisModuleCtx *ctx,
-                                RedisModuleString **argv,
-                                int argc,
-                                api_timestamp_t *time_delta,
-                                AggregationClass **agg_object) {
-    int agg_type;
-    int result = _parseAggregationArgs(ctx, argv, argc, time_delta, &agg_type);
-    if (result == TSDB_OK) {
-        *agg_object = GetAggClass(agg_type);
-        if (*agg_object == NULL) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
-            return TSDB_ERROR;
-        }
-        return TSDB_OK;
-    } else {
-        return result;
-    }
-}
-
-static int parseRangeArguments(RedisModuleCtx *ctx,
-                               Series *series,
-                               int start_index,
-                               RedisModuleString **argv,
-                               api_timestamp_t *start_ts,
-                               api_timestamp_t *end_ts) {
-    size_t start_len;
-    const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
-    if (strcmp(start, "-") == 0) {
-        *start_ts = 0;
-    } else {
-        if (RedisModule_StringToLongLong(argv[start_index], (long long int *)start_ts) !=
-            REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: wrong fromTimestamp");
-            return REDISMODULE_ERR;
-        }
-    }
-
-    size_t end_len;
-    const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
-    if (strcmp(end, "+") == 0) {
-        *end_ts = series->lastTimestamp;
-    } else {
-        if (RedisModule_StringToLongLong(argv[start_index + 1], (long long int *)end_ts) !=
-            REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
-            return REDISMODULE_ERR;
-        }
-    }
-
-    return REDISMODULE_OK;
-}
-
-static int parseCountArgument(RedisModuleCtx *ctx,
-                              RedisModuleString **argv,
-                              int argc,
-                              long long *count) {
-    int offset = RMUtil_ArgIndex("COUNT", argv, argc);
-    if (offset > 0) {
-        if (offset + 1 == argc) {
-            RTS_ReplyGeneralError(ctx, "TSDB: COUNT argument is missing");
-            return TSDB_ERROR;
-        }
-        if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
-            int second_offset =
-                offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset) {
-                return TSDB_OK;
-            }
-            offset = second_offset;
-        }
-        if (RedisModule_StringToLongLong(argv[offset + 1], count) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse COUNT");
-            return TSDB_ERROR;
-        }
-    }
-    return TSDB_OK;
-}
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -416,77 +141,6 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
-    RedisModule_ReplyWithArray(ctx, series->labelsCount);
-    for (int i = 0; i < series->labelsCount; i++) {
-        RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithString(ctx, series->labels[i].key);
-        RedisModule_ReplyWithString(ctx, series->labels[i].value);
-    }
-}
-
-// double string presentation requires 15 digit integers +
-// '.' + "e+" or "e-" + 3 digits of exponent
-#define MAX_VAL_LEN 24
-static void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
-    RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
-    char buf[MAX_VAL_LEN];
-    snprintf(buf, MAX_VAL_LEN, "%.15g", value);
-    RedisModule_ReplyWithSimpleString(ctx, buf);
-}
-
-void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
-    if (SeriesGetNumSamples(series) == 0) {
-        RedisModule_ReplyWithArray(ctx, 0);
-    } else {
-        ReplyWithSample(ctx, series->lastTimestamp, series->lastValue);
-    }
-}
-
-int parseLabelListFromArgs(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int start,
-                           int query_count,
-                           QueryPredicate *queries) {
-    QueryPredicate *query = queries;
-    for (int i = start; i < start + query_count; i++) {
-        size_t _s;
-        const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
-        if (strstr(str2, "!=(") != NULL) { // order is important! Must be before "!=".
-            query->type = LIST_NOTMATCH;
-            if (parsePredicate(ctx, argv[i], query, "!=(") == TSDB_ERROR) {
-                return TSDB_ERROR;
-            }
-        } else if (strstr(str2, "!=") != NULL) {
-            query->type = NEQ;
-            if (parsePredicate(ctx, argv[i], query, "!=") == TSDB_ERROR) {
-                return TSDB_ERROR;
-            }
-            if (query->valueListCount == 0) {
-                query->type = CONTAINS;
-            }
-        } else if (strstr(str2, "=(") != NULL) { // order is important! Must be before "=".
-            query->type = LIST_MATCH;
-            if (parsePredicate(ctx, argv[i], query, "=(") == TSDB_ERROR) {
-                return TSDB_ERROR;
-            }
-        } else if (strstr(str2, "=") != NULL) {
-            query->type = EQ;
-            if (parsePredicate(ctx, argv[i], query, "=") == TSDB_ERROR) {
-                return TSDB_ERROR;
-            }
-            if (query->valueListCount == 0) {
-                query->type = NCONTAINS;
-            }
-        } else {
-            return TSDB_ERROR;
-        }
-        query++;
-    }
-    return TSDB_OK;
-}
-
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -525,6 +179,98 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+// multi-series groupby logic
+static int replyGroupedMultiRange(RedisModuleCtx *ctx,
+                                  TS_ResultSet *resultset,
+                                  MultiSeriesReduceOp reducerOp,
+                                  RedisModuleDict *result,
+                                  bool withlabels,
+                                  api_timestamp_t start_ts,
+                                  api_timestamp_t end_ts,
+                                  AggregationClass *aggObject,
+                                  int64_t time_delta,
+                                  long long count,
+                                  bool rev) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    Series *series;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const int status = GetSeries(ctx,
+                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                     &key,
+                                     &series,
+                                     REDISMODULE_READ);
+        if (!status) {
+            RedisModule_Log(
+                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current
+            // key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
+            continue;
+        }
+        addSerieToResultSet(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    // apply the range and per-serie aggregations
+    applyRangeToResultSet(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
+    // Apply the reducer
+    applyReducerToResultSet(resultset, reducerOp);
+
+    replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+
+    freeResultSet(resultset);
+    return REDISMODULE_OK;
+}
+
+// Previous multirange reply logic ( unchanged )
+static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
+                                    RedisModuleDict *result,
+                                    bool withlabels,
+                                    api_timestamp_t start_ts,
+                                    api_timestamp_t end_ts,
+                                    AggregationClass *aggObject,
+                                    int64_t time_delta,
+                                    long long count,
+                                    bool rev) {
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    long long replylen = 0;
+    Series *series;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
+        if (!status) {
+            RedisModule_Log(
+                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
+            continue;
+        }
+        ReplySeriesArrayPos(
+            ctx, series, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+        replylen++;
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
+
+    return REDISMODULE_OK;
+}
+
 int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
@@ -555,9 +301,15 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
+    const int withlabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
 
-    const size_t query_count = argc - 1 - filter_location;
-    const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
+    const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+
+    // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
+    // are only up to (GROUPBY pos) - 1.
+    const size_t last_filter_pos = groupby_location > 0 ? groupby_location - 1 : argc - 1;
+    const size_t query_count = last_filter_pos - filter_location;
+
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
         TSDB_ERROR) {
@@ -570,45 +322,41 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
+    RedisModuleDict *resultSeries = QueryIndex(ctx, queries, query_count);
 
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    if (groupby_location > 0) {
+        const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
+        // If we've detected a groupby but not a reduce
+        // or we've detected a groupby by the total args don't match
+        if (reduce_location < 0 || (argc - groupby_location != 4)) {
+            return RedisModule_WrongArity(ctx);
+        }
+        TS_ResultSet *resultset = createResultSet();
+        MultiSeriesReduceOp reducerOp;
+        const int reducer_parse = parseMultiSeriesReduceOp(
+            RedisModule_StringPtrLen(argv[reduce_location + 1], NULL), &reducerOp);
+        if (reducer_parse == 0) {
+            freeResultSet(resultset);
+            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+        }
 
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    Series *series;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const int status = SilentGetSeries(ctx,
-                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                           &key,
-                                           &series,
-                                           REDISMODULE_READ);
-        if (!status) {
-            RedisModule_Log(
-                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
-            // The iterator may have been invalidated, stop and restart from after the current key.
-            RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
-            continue;
-        }
-        RedisModule_ReplyWithArray(ctx, 3);
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        if (withlabels_location >= 0) {
-            ReplyWithSeriesLabels(ctx, series);
-        } else {
-            RedisModule_ReplyWithArray(ctx, 0);
-        }
-        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
-        replylen++;
-        RedisModule_CloseKey(key);
+        groupbyLabel(resultset, RedisModule_StringPtrLen(argv[groupby_location + 1], NULL));
+
+        return replyGroupedMultiRange(ctx,
+                                      resultset,
+                                      reducerOp,
+                                      resultSeries,
+                                      withlabels,
+                                      start_ts,
+                                      end_ts,
+                                      aggObject,
+                                      time_delta,
+                                      count,
+                                      rev);
+    } else {
+        return replyUngroupedMultiRange(
+            ctx, resultSeries, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetArrayLength(ctx, replylen);
-
-    return REDISMODULE_OK;
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -662,91 +410,6 @@ int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
-}
-
-int ReplySeriesRange(RedisModuleCtx *ctx,
-                     Series *series,
-                     api_timestamp_t start_ts,
-                     api_timestamp_t end_ts,
-                     AggregationClass *aggObject,
-                     int64_t time_delta,
-                     long long maxResults,
-                     bool rev) {
-    Sample sample;
-    void *context = NULL;
-    long long arraylen = 0;
-    timestamp_t last_agg_timestamp;
-
-    // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?)
-    if (series->retentionTime) {
-        start_ts = series->lastTimestamp > series->retentionTime
-                       ? max(start_ts, series->lastTimestamp - series->retentionTime)
-                       : start_ts;
-        // if new start_ts > end_ts, there are no results to return
-        if (start_ts > end_ts) {
-            return RedisModule_ReplyWithArray(ctx, 0);
-        }
-    }
-
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, rev);
-    if (iterator.series == NULL) {
-        return RedisModule_ReplyWithArray(ctx, 0);
-    }
-
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    if (aggObject == NULL) {
-        // No aggregation
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            ReplyWithSample(ctx, sample.timestamp, sample.value);
-            arraylen++;
-        }
-    } else {
-        bool firstSample = TRUE;
-        context = aggObject->createContext();
-        // setting the first timestamp of the aggregation
-        timestamp_t init_ts = (rev == false)
-                                  ? series->funcs->GetFirstTimestamp(iterator.currentChunk)
-                                  : series->funcs->GetLastTimestamp(iterator.currentChunk);
-        last_agg_timestamp = init_ts - (init_ts % time_delta);
-
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            if ((iterator.reverse == false &&
-                 sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
-                if (firstSample == FALSE) {
-                    double value;
-                    if (aggObject->finalize(context, &value) == TSDB_OK) {
-                        ReplyWithSample(ctx, last_agg_timestamp, value);
-                        aggObject->resetContext(context);
-                        arraylen++;
-                    }
-                }
-                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            }
-            firstSample = FALSE;
-            aggObject->appendValue(context, sample.value);
-        }
-    }
-    SeriesIteratorClose(&iterator);
-
-    if (aggObject != NULL) {
-        if (arraylen != maxResults) {
-            // reply last bucket of data
-            double value;
-            if (aggObject->finalize(context, &value) == TSDB_OK) {
-                ReplyWithSample(ctx, last_agg_timestamp, value);
-                aggObject->resetContext(context);
-                arraylen++;
-            }
-        }
-        aggObject->freeContext(context);
-    }
-
-    RedisModule_ReplySetArrayLength(ctx, arraylen);
-    return REDISMODULE_OK;
 }
 
 static void handleCompaction(RedisModuleCtx *ctx,

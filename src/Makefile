@@ -113,6 +113,9 @@ _SOURCES=\
 	module.c \
 	parse_policies.c \
 	rdb.c \
+	query_language.c \
+	reply.c \
+	resultset.c \
 	tsdb.c
 
 _TEST_SOURCES=\
