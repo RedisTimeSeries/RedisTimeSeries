@@ -1,7 +1,26 @@
 from RLTest import Env
+import pytest
+import redis
 
+def test_groupby_reduce_errors():
+    env = Env()
+    with env.getConnection() as r:
+        assert r.execute_command('TS.ADD s1 1 100 LABELS metric_family cpu metric_name user')
+        assert r.execute_command('TS.ADD s2 2 55 LABELS metric_family cpu metric_name user')
+        assert r.execute_command('TS.ADD s3 2 40 LABELS metric_family cpu metric_name system')
+        assert r.execute_command('TS.ADD s1 2 95')
 
-def test_multilabel_filter():
+        # test wrong arity
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange - + WITHLABELS FILTER metric_family=cpu GROUPBY')
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange - + WITHLABELS FILTER metric_family=cpu GROUPBY metric_name')
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange - + WITHLABELS FILTER metric_family=cpu GROUPBY metric_name abc abc')
+
+def test_groupby_reduce():
     env = Env()
     with env.getConnection() as r:
         assert r.execute_command('TS.ADD s1 1 100 LABELS metric_family cpu metric_name user')
@@ -39,3 +58,15 @@ def test_multilabel_filter():
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'55']])
+
+def test_groupby_reduce_empty():
+    env = Env()
+    with env.getConnection() as r:
+        assert r.execute_command('TS.ADD s1 1 100 LABELS metric_family cpu metric_name user')
+        assert r.execute_command('TS.ADD s2 2 55 LABELS metric_family cpu metric_name user')
+        assert r.execute_command('TS.ADD s3 2 40 LABELS metric_family cpu metric_name system')
+        assert r.execute_command('TS.ADD s1 2 95')
+
+        actual_result = r.execute_command(
+            'TS.mrange - + WITHLABELS FILTER metric_family=cpu GROUPBY labelX REDUCE max')
+        env.assertEqual(actual_result, [])

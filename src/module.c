@@ -198,11 +198,11 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status = GetSeries(ctx,
-                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                     &key,
-                                     &series,
-                                     REDISMODULE_READ);
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
         if (!status) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);

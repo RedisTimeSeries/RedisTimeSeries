@@ -301,18 +301,20 @@ int addSerieToResultSet(TS_ResultSet *r, Series *serie, const char *name) {
     // If we're grouping by name ( groupbylabel == NULL ) then the rax associated values are Series
     if (r->groupsType == GroupType_ResultSet) {
         char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey);
-        const size_t labelLen = strlen(labelValue);
-        int nokey;
-        TS_ResultSet *labelGroup =
-            (TS_ResultSet *)RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
-        if (nokey) {
-            labelGroup = createResultSet();
-            setLabelKey(labelGroup, r->labelkey);
-            setLabelValue(labelGroup, labelValue);
-            RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
+        if (labelValue != NULL) {
+            const size_t labelLen = strlen(labelValue);
+            int nokey;
+            TS_ResultSet *labelGroup = (TS_ResultSet *)RedisModule_DictGetC(
+                r->groups, (void *)labelValue, labelLen, &nokey);
+            if (nokey) {
+                labelGroup = createResultSet();
+                setLabelKey(labelGroup, r->labelkey);
+                setLabelValue(labelGroup, labelValue);
+                RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
+            }
+            free(labelValue);
+            result = addSerieToResultSet(labelGroup, serie, name);
         }
-        free(labelValue);
-        addSerieToResultSet(labelGroup, serie, name);
     } else {
         // If a serie with that name already exists we return
         int nokey;
@@ -320,6 +322,7 @@ int addSerieToResultSet(TS_ResultSet *r, Series *serie, const char *name) {
         if (nokey) {
             RedisModule_DictSetC(r->groups, (void *)name, namelen, serie);
         }
+        result = true;
     }
     return result;
 }
