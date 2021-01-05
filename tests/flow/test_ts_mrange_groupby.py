@@ -59,6 +59,12 @@ def test_groupby_reduce():
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'55']])
 
+        actual_result = r.execute_command(
+            'TS.mrange - + WITHLABELS COUNT 1 FILTER metric_family=cpu GROUPBY metric_name REDUCE min')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, [[1, b'100']])
+
 def test_groupby_reduce_empty():
     env = Env()
     with env.getConnection() as r:

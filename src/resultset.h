@@ -14,7 +14,7 @@ typedef struct TS_ResultSet TS_ResultSet;
 
 TS_ResultSet *createResultSet();
 
-int groupbyLabel(TS_ResultSet *r, char *label);
+int groupbyLabel(TS_ResultSet *r, const char *label);
 
 int setLabelKey(TS_ResultSet *r, const char *labelKey);
 

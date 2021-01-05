@@ -289,7 +289,7 @@ int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op) {
             break;
     }
     while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
-        const int rv = SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
+        SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
     }
     SeriesIteratorClose(&iterator);
     return 1;

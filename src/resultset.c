@@ -47,7 +47,7 @@ int setLabelKey(TS_ResultSet *r, const char *labelkey) {
     return true;
 }
 
-int groupbyLabel(TS_ResultSet *r, char *label) {
+int groupbyLabel(TS_ResultSet *r, const char *label) {
     r->groupsType = GroupType_ResultSet;
     r->labelkey = strdup(label);
     return true;
