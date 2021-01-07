@@ -190,6 +190,26 @@ def test_range_count():
         assert len(count_results) == math.ceil(samples_count / 3.0)
 
 
+def test_range_offset():
+    start_ts = 10
+    samples_count = 10
+    key = 'test_offset'
+
+    with Env().getConnection() as r:
+        r.execute_command('TS.CREATE', key)
+        for i in range(samples_count):
+            r.execute_command('TS.ADD', key, start_ts + i, i)
+        full_results = r.execute_command('TS.RANGE', key, 0, -1)
+        assert len(full_results) == samples_count
+        offset_results = r.execute_command('TS.RANGE', key, 0, -1, b'OFFSET', 5)
+        assert offset_results == [[i+5, v] for i, v in full_results]
+        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'OFFSET', 1, b'AGGREGATION', 'COUNT', 2)
+        actual_result = [[11, b'2'], [13, b'2'], [15, b'2'], [17, b'2'], [19, b'1']]
+        assert count_results == actual_result
+        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'AGGREGATION', 'COUNT', 2, b'OFFSET', 1)
+        assert count_results == actual_result
+
+
 def test_agg_min():
     with Env().getConnection() as r:
         agg_key = _insert_agg_data(r, 'tester', 'min')

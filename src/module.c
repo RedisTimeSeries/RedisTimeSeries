@@ -749,6 +749,9 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                                   : series->funcs->GetLastTimestamp(iterator.currentChunk);
 
         last_agg_timestamp = init_ts - (init_ts % time_delta) + (1 - 2 * rev) * time_offset;
+        if (rev == true &&
+            (init_ts - series->funcs->GetFirstTimestamp(iterator.currentChunk)) % time_delta == 0)
+            last_agg_timestamp = init_ts;
 
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                (maxResults == -1 || arraylen < maxResults)) {
