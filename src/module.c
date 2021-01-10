@@ -589,7 +589,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         if (!status) {
             RedisModule_Log(ctx,
                             "warning",
-                            "couldn't open key or key is not a Timeseries. key=%*s",
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
                             currentKeyLen,
                             currentKey);
             // The iterator may have been invalidated, stop and restart from after the current key.
@@ -1228,7 +1228,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (!status) {
             RedisModule_Log(ctx,
                             "warning",
-                            "couldn't open key or key is not a Timeseries. key=%*s",
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
                             currentKeyLen,
                             currentKey);
             continue;
