@@ -19,6 +19,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
@@ -748,16 +749,13 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                                   ? series->funcs->GetFirstTimestamp(iterator.currentChunk)
                                   : series->funcs->GetLastTimestamp(iterator.currentChunk);
 
-        last_agg_timestamp = init_ts - (init_ts % time_delta) + (1 - 2 * rev) * time_offset;
-        if (rev == true &&
-            (init_ts - series->funcs->GetFirstTimestamp(iterator.currentChunk)) % time_delta == 0)
-            last_agg_timestamp = init_ts;
-
+        last_agg_timestamp = init_ts - (init_ts % time_delta) + time_offset;
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                (maxResults == -1 || arraylen < maxResults)) {
             if ((iterator.reverse == false &&
-                 sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
+                 (sample.timestamp + time_offset) >= last_agg_timestamp + time_delta) ||
+                (iterator.reverse == true &&
+                 (sample.timestamp + time_offset) < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
                     double value;
                     if (aggObject->finalize(context, &value) == TSDB_OK) {
@@ -766,8 +764,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                         arraylen++;
                     }
                 }
-                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta) +
-                                     (1 - 2 * rev) * time_offset;
+                last_agg_timestamp =
+                    sample.timestamp - (sample.timestamp % time_delta) + time_offset;
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);

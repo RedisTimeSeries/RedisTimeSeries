@@ -60,8 +60,15 @@ def test_revrange():
         actual_results = r.execute_command('TS.RANGE', 'tester1', start_ts + 1, -1, 'OFFSET', (start_ts + 1) % 50,
                                            'AGGREGATION', 'sum', 50)
         # The revrange offset will be the 'inverse' of the range offset, ie: 50 - range_offset
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', start_ts + 1, -1, 'OFFSET', 50 - (start_ts + 1) % 50,
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', start_ts + 1, -1, 'OFFSET', (start_ts + 1) % 50,
                                                'AGGREGATION', 'sum', 50)
+        actual_results.reverse()
+        assert actual_results == actual_results_rev
+
+        actual_results = r.execute_command('TS.RANGE', 'tester1', start_ts + 1, start_ts+41, 'OFFSET', (start_ts + 1) % 5,
+                                           'AGGREGATION', 'sum', 5)
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', start_ts + 1, start_ts+41, 'OFFSET', (start_ts + 1) % 5,
+                                               'AGGREGATION', 'sum', 5)
         actual_results.reverse()
         assert actual_results == actual_results_rev
 
