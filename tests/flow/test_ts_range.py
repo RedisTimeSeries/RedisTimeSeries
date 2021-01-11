@@ -42,6 +42,10 @@ def test_range_query():
             assert r.execute_command('TS.RANGE tester 0 -1 aggregation count number')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE tester 0 -1 aggregation count')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE tester 0 -1 offset number')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE tester 0 -1 offset')
 
 
 def test_range_midrange():

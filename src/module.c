@@ -322,14 +322,6 @@ static int parseOffsetArgument(RedisModuleCtx *ctx,
             RTS_ReplyGeneralError(ctx, "TSDB: OFFSET argument is missing");
             return TSDB_ERROR;
         }
-        if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
-            int second_offset =
-                offset + 1 + RMUtil_ArgIndex("OFFSET", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset) {
-                return TSDB_OK;
-            }
-            offset = second_offset;
-        }
         if (RedisModule_StringToLongLong(argv[offset + 1], time_offset) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse OFFSET");
             return TSDB_ERROR;
