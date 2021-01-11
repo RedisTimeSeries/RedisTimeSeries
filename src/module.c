@@ -101,6 +101,24 @@ int GetSeries(RedisModuleCtx *ctx,
     return TRUE;
 }
 
+int SilentGetSeries(RedisModuleCtx *ctx,
+                    RedisModuleString *keyName,
+                    RedisModuleKey **key,
+                    Series **series,
+                    int mode) {
+    *key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(*key);
+        return FALSE;
+    }
+    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
+        RedisModule_CloseKey(*key);
+        return FALSE;
+    }
+    *series = RedisModule_ModuleTypeGetValue(*key);
+    return TRUE;
+}
+
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
@@ -563,14 +581,17 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     Series *series;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status = GetSeries(ctx,
-                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                     &key,
-                                     &series,
-                                     REDISMODULE_READ);
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
         if (!status) {
-            RedisModule_Log(
-                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            RedisModule_Log(ctx,
+                            "warning",
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
+                            currentKeyLen,
+                            currentKey);
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
@@ -1199,14 +1220,17 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status = GetSeries(ctx,
-                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                     &key,
-                                     &series,
-                                     REDISMODULE_READ);
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
         if (!status) {
-            RedisModule_Log(
-                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            RedisModule_Log(ctx,
+                            "warning",
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
+                            currentKeyLen,
+                            currentKey);
             continue;
         }
         RedisModule_ReplyWithArray(ctx, 3);

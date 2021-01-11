@@ -515,6 +515,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
             RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
+            RedisModule_FreeString(ctx, destKey);
             RedisModule_CloseKey(compactedKey);
             continue;
         }

@@ -257,19 +257,18 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
 
 RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
                                      QueryPredicate *predicate,
-                                     RedisModuleDict *prevResults,
-                                     int createResultDict) {
+                                     RedisModuleDict *prevResults) {
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
     RedisModuleDict *currentLeaf;
 
     currentLeaf = GetPredicateKeysDict(ctx, predicate);
 
     if (currentLeaf != NULL) {
-        // Copy everything to new dict only in case this is the first predicate (and there is more
-        // than one predicate). In the next iteration, when prevResults is no longer NULL, there is
+        // Copy everything to new dict only in case this is the first predicate.
+        // In the next iteration, when prevResults is no longer NULL, there is
         // no need to copy again. We can work on currentLeaf, since only the left dict is being
         // changed during intersection / difference.
-        if (createResultDict && prevResults == NULL) {
+        if (prevResults == NULL) {
             RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentLeaf, "^", NULL, 0);
             RedisModuleString *currentKey;
             while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
@@ -335,7 +334,6 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count) {
     RedisModuleDict *result = NULL;
-    int shouldCreateNewDict = (predicate_count > 1);
 
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
@@ -343,7 +341,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     for (int i = 0; i < predicate_count; i++) {
         if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS ||
             index_predicate[i].type == LIST_MATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result, shouldCreateNewDict);
+            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
             }
@@ -355,7 +353,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     for (int i = 0; i < predicate_count; i++) {
         if (index_predicate[i].type == NCONTAINS || index_predicate[i].type == NEQ ||
             index_predicate[i].type == LIST_NOTMATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result, shouldCreateNewDict);
+            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
             if (result == NULL) {
                 return RedisModule_CreateDict(ctx);
             }
