@@ -5,6 +5,15 @@ commands:
     parameters:
       platform:
         type: string
+      getredis_params:
+        type: string
+        default: ""
+      build_params:
+        type: string
+        default: ""
+      test_params:
+        type: string
+        default: ""
     steps:
       - checkout
       - run:
@@ -15,20 +24,22 @@ commands:
           command: make setup
       - run:
           name: Install Redis
-          command: python2 ./deps/readies/bin/getredis -v 6 --force
+          command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
       - run:
           name: Build
-          command: make build SHOW=1
+          command: make build <<parameters.build_params>> SHOW=1
       - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            make unittests TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
           command: |
             mkdir -p ~/workspace/tests
-            make test TEST_REPORT_DIR=$HOME/workspace/tests SHOW=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+  package:
+    steps:
       - run:
           name: Package
           command: |
@@ -51,6 +62,16 @@ commands:
             aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
 jobs:
+  valgrind:
+    docker:
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
+    steps:
+      - ci_steps:
+          platform: debian
+          build_params: VALGRIND=1
+          test_params: VALGRIND=1 SIMPLE=1
+          getredis_params: --valgrind
+
   lint:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
@@ -67,10 +88,11 @@ jobs:
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - ci_steps:
           platform: debian
+      - package
 
   build-macos:
     macos:
@@ -87,12 +109,15 @@ jobs:
   build-multiarch-docker:
     machine:
       enabled: true
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202010-01
     steps:
       - checkout
       - run:
           name: Checkout submodules
           command: git submodule update --init --recursive
+      - run:
+          name: Set up Python3
+          command: pyenv global 3.7.0
       - run:
           name: Setup Docker client experimental features
           command: |
@@ -108,7 +133,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - checkout
       - run:
@@ -130,7 +155,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - attach_workspace:
           at: ~/workspace
@@ -139,26 +164,24 @@ jobs:
       - store_artifacts:
           path: ~/workspace/packages/<<parameters.package>>
 
-  run_automation:
-    parameters:
-      module_version:
-        type: string
+  release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.1-x64-buster
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
       - checkout
       - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
-      - run:
-          name: Setup
-          command: |
-            apt-get -qq update
-            apt-get install -y ca-certificates curl jq
-            python -m pip install jinja2
+          name: Run QA Automation
+          command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
+
+  nightly-automation:
+    docker:
+      - image: redisfab/rmbuilder:6.0.9-x64-buster
+    steps:
+      - checkout
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION=<<parameters.module_version>> VERBOSE=1 ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+
 
 on-any-branch: &on-any-branch
   filters:
@@ -186,12 +209,22 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
+on-master-and-version-tags: &on-master-and-version-tags
+  filters:
+    branches:
+      only:
+        - master
+    tags:
+      only: /^v[0-9].*/
+
 
 workflows:
   version: 2
   build_and_package:
     jobs:
       - lint:
+          <<: *on-any-branch
+      - valgrind:
           <<: *on-any-branch
       - build:
           <<: *on-any-branch
@@ -206,21 +239,19 @@ workflows:
           package: branch
           requires:
             - build
+            - valgrind
           <<: *on-master
       - deploy_package:
           name: deploy_release
           package: release
           requires:
             - build
+            - valgrind
           <<: *on-version-tags
-      - run_automation:
-          module_version: $CIRCLE_BRANCH
-          requires:
-            - deploy_branch
-      - run_automation:
-          module_version: $CIRCLE_TAG
+      - release-automation:
           requires:
             - deploy_release
+          <<: *on-version-tags
 
   nightly:
     triggers:
@@ -229,3 +260,5 @@ workflows:
           <<: *on-master
     jobs:
       - build-macos
+      - valgrind
+      - nightly-automation

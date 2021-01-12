@@ -16,7 +16,7 @@ ARG REDIS_VER
 ADD ./ /build
 WORKDIR /build
 
-RUN ./deps/readies/bin/getpy2
+RUN ./deps/readies/bin/getpy3
 RUN ./system-setup.py
 RUN make fetch
 RUN make build

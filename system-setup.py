@@ -1,10 +1,12 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import sys
 import os
 import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "deps/readies"))
+ROOT = HERE = os.path.abspath(os.path.dirname(__file__))
+READIES = os.path.join(ROOT, "deps/readies")
+sys.path.insert(0, READIES)
 import paella
 
 #----------------------------------------------------------------------------------------------
@@ -22,24 +24,31 @@ class RedisTimeSeriesSetup(paella.Setup):
 
     def debian_compat(self):
         self.install("build-essential")
+        self.install("python3-psutil")
 
     def redhat_compat(self):
         self.group_install("'Development Tools'")
         self.install("redhat-lsb-core")
+        if not self.dist == "amzn":
+            self.install("epel-release")
+            self.install("python3-devel libaec-devel")
+            self.install("python36-psutil")
+        else:
+            self.run("amazon-linux-extras install epel")
+            self.install("python3-devel")
+            self.pip_install("psutil")
 
     def fedora(self):
         self.group_install("'Development Tools'")
-
-    def macos(self):
-        if sh('xcode-select -p') == '':
-            fatal("Xcode tools are not installed. Please run xcode-select --install.")
+        self.install("python3 python3-psutil python3-networkx")
 
     def common_last(self):
+        self.run("python3 -m pip uninstall -y RLTest || true")
         self.install("lcov")
         if not self.has_command("ramp"):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
-        self.pip_install("-r tests/requirements.txt")
-        self.pip_install("jinja2")
+        self.pip_install("-r %s/paella/requirements.txt" % READIES)
+        self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------
 

@@ -69,7 +69,7 @@ Or you can install required dependencies manually listed in [system-setup.py](ht
 If ```make``` is not yet available, the following commands are equivalent:
 
 ```
-./deps/readies/bin/getpy2
+./deps/readies/bin/getpy3
 ./system-setup.py
 ```
 
@@ -133,17 +133,45 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
 | redis-time-series | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [Github](https://github.com/averias/redis-time-series) |
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
+| redis-modules-sdk | Typescript | BSD-3-Clause | [Dani Tseitlin](https://github.com/danitseitlin) | [Github](https://github.com/danitseitlin/redis-modules-sdk) | 
 | redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
 | redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
 | redis-time-series | Ruby | MIT | [Matt Duszynski](https://github.com/dzunk) | [Github](https://github.com/dzunk/redis-time-series) |
 
 ## Tests
-Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
-```
-$ cd src
-$ pip install -r tests/requirements.txt # optional, use virtualenv
-$ make tests
-```
+
+The module includes a basic set of unit tests and integration tests.
+
+**Unit tests**
+
+To run all unit tests, follow these steps:
+
+    $ make unittests
+
+
+**Integration tests**
+
+
+Integration tests are based on [RLTest](https://github.com/RedisLabsModules/RLTest), and specific setup parameters can be provided
+to configure tests. By default the tests will be ran for all common commands, and with variation of persistency and replication.
+
+
+To run all integration tests in a Python virtualenv, follow these steps:
+
+    $ mkdir -p .env
+    $ virtualenv .env
+    $ source .env/bin/activate
+    $ pip install -r tests/flow/requirements.txt
+    $ make test
+
+To understand what test options are available simply run:
+
+    $ make help
+
+For example, to run the tests strictly desigined for TS.ADD command, follow these steps:
+
+    $ make test TEST=test_ts_add.py
+
 
 ## Documentation
 Read the docs at http://redistimeseries.io

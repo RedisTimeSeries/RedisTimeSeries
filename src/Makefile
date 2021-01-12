@@ -1,4 +1,6 @@
 ROOT=..
+MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
@@ -20,9 +22,14 @@ make deps          # build dependant modules
 make all           # build all libraries and packages
 
 make test          # run tests
-  TEST=name        # run test maching 'name'
+  TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
   COV=1            # perform coverage analysis
+  GEN=0|1          # run general tests on a standalone Redis topology
+  AOF=0|1          # run AOF persistency tests on a standalone Redis topology
+  SLAVES=0|1       # run replication tests on standalone Redis topology
+  CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
+  VALGRIND|VGD=1   # run specified tests with Valgrind
 
 make pack          # build packages (ramp & dependencies)
 endef
@@ -33,11 +40,6 @@ MK_CUSTOM_CLEAN=1
 
 BINDIR=$(BINROOT)/src
 SRCDIR=.
-
-ifeq ($(OS),macos)
-# pip installed packages like ramp reside here:
-export PATH:=$(PATH):$(HOME)/Library/Python/2.7/bin
-endif
 
 #----------------------------------------------------------------------------------------------  
 
@@ -82,6 +84,14 @@ ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
+ifneq ($(VGD),)
+VALGRIND=$(VGD)
+endif
+
+ifeq ($(VALGRIND),1)
+DEBUG ?= 1
+endif
+
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DVALGRIND
 LD_FLAGS += -g
@@ -107,16 +117,21 @@ _SOURCES=\
 
 _TEST_SOURCES=\
 	unittests.c \
+	endianconv.c
+
+_TEST_FILES=\
+	unittests.c \
 	unittests_parse_policies.c \
 	unittests_uncompressed_chunk.c \
 	unittests_compressed_chunk.c \
-	unittests_parse_duplicate_policy.c \
-	endianconv.c
+	unittests_parse_duplicate_policy.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
+HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
+TEST_FILES=$(addprefix $(SRCDIR)/,$(_TEST_FILES))
 TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
@@ -143,9 +158,13 @@ docker_lint:
 
 lint:
 	clang-format -Werror -n $(SOURCES)
+	clang-format -Werror -n $(HEADERS)
+	clang-format -Werror -n $(TEST_FILES)
 
 format:
 	clang-format -i $(SOURCES)
+	clang-format -i $(HEADERS)
+	clang-format -i $(TEST_FILES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
@@ -166,25 +185,29 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 #----------------------------------------------------------------------------------------------
 
 TEST_REPORT_DIR ?= $(PWD)
-TEST_ARGS += \
-	--junitxml=$(TEST_REPORT_DIR)/tests_report.xml
+
+ifeq ($(SIMPLE),1)
+export GEN=1
+export SLAVES=0
+export AOF=0
+export CLUSTER=0
+else
+export GEN ?= 1
+export SLAVES ?= 1
+export AOF ?= 1
+export CLUSTER ?= 0
+endif
 
 tests: $(TARGET)
-	@if ! command -v redis-server > /dev/null; then \
-		echo "Cannot find redis-server. Aborting." ;\
-		exit 1 ;\
-	fi
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
-ifeq ($(TEST),)
-	$(SHOW)set -e; \
-	cd ../tests; \
-	REDISTIMESERIES=$(TARGET) python -m pytest  $(TEST_ARGS) -svv .
-else
-	cd ../tests; \
-	PYDEBUG=1 REDIS_VERBOSE=1 REDISTIMESERIES=$(TARGET) python -m pytest -k "${TEST}" -svv .
-endif
+	$(SHOW)\
+		MODULE=$(realpath $(TARGET)) \
+		CLUSTER=$(CLUSTER) \
+		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
+		VALGRIND=$(VALGRIND) \
+		$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
@@ -219,7 +242,11 @@ cgdb: $(TARGET)
 
 VALGRIND_ARGS=\
 	--leak-check=full \
-	--show-leak-kinds=all \
+	--keep-debuginfo=yes \
+	--show-reachable=no \
+	--show-possibly-lost=no \
+	--track-origins=yes \
+	--suppressions=$(ROOT)/tests/redis_valgrind.sup \
 	-v redis-server
 
 valgrind: $(TARGET)
@@ -265,7 +292,7 @@ coverage:
 #   INTO: package destination directory (optinal)
 
 define ramp_pack # (1=tag, 2=subdir)
-$(SHOW) python -m RAMP.ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
+$(SHOW) python3 -m RAMP.ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
 $(SHOW). $(ROOT)/deps/readies/shibumi/functions; realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
 $(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
 $(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }; fi
