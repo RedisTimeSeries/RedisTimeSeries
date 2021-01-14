@@ -49,6 +49,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
         self.pip_install("-r %s/paella/requirements.txt" % READIES)
         self.pip_install("-r tests/flow/requirements.txt")
+        self.pip_install("git+https://github.com/RedisLabsModules/RLTest.git@master")
 
 #----------------------------------------------------------------------------------------------
 
