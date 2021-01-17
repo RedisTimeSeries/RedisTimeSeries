@@ -1,6 +1,29 @@
 version: 2.1
 
 commands:
+  abort_for_docs:
+    steps:
+      - run:
+          name: Avoid tests for docs
+          command: |
+            if [[ $CIRCLE_BRANCH == *_docs ]]; then
+              echo "Identifies as documents PR, no testing required"
+              circleci step halt
+            fi
+
+  early_return_for_forked_pull_requests:
+    description: >-
+      If this build is from a fork, stop executing the current job and return success.
+      This is useful to avoid steps that will fail due to missing credentials.
+    steps:
+      - run:
+          name: Early return if this build is from a forked PR
+          command: |
+            if [[ -n "$CIRCLE_PR_NUMBER" ]]; then
+              echo "Nothing to do for forked PRs, so marking this step successful"
+              circleci step halt
+            fi
+
   ci_steps:
     parameters:
       platform:
@@ -15,6 +38,7 @@ commands:
         type: string
         default: ""
     steps:
+      - abort_for_docs
       - checkout
       - run:
           name: Pull Submodules
@@ -38,12 +62,15 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+
   package:
     steps:
+      - abort_for_docs
       - run:
           name: Package
           command: |
             make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
+      - early_return_for_forked_pull_requests
       - persist_to_workspace:
           root: ~/workspace
           paths:
@@ -51,11 +78,14 @@ commands:
             - 'packages/branch/*.zip'
       - store_test_results:
           path: ~/workspace/tests
+
   deploy:
     parameters:
       from:
         type: string
     steps:
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - run:
           name: Deploy to S3
           command: >-
@@ -76,6 +106,7 @@ jobs:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
+      - abort_for_docs
       - checkout
       - run:
           name: Checkout submodules
@@ -111,6 +142,7 @@ jobs:
       enabled: true
       image: ubuntu-1604:202010-01
     steps:
+      - abort_for_docs
       - checkout
       - run:
           name: Checkout submodules
@@ -135,6 +167,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
+      - abort_for_docs
       - checkout
       - run:
           name: Pull Submodules
@@ -157,6 +190,8 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - attach_workspace:
           at: ~/workspace
       - deploy:
@@ -168,6 +203,8 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - checkout
       - run:
           name: Run QA Automation
@@ -177,6 +214,8 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
     steps:
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - checkout
       - run:
           name: Run QA Automation
