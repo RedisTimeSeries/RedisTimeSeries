@@ -16,15 +16,13 @@ class RedisTimeSeriesSetup(paella.Setup):
         paella.Setup.__init__(self, nop)
 
     def common_first(self):
-        self.setup_pip()
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
 
         self.install("git jq curl")
 
     def debian_compat(self):
-        self.install("build-essential")
-        self.install("python3-psutil")
+        self.run("%s/bin/getgcc" % READIES)
 
     def redhat_compat(self):
         self.group_install("'Development Tools'")
@@ -32,22 +30,17 @@ class RedisTimeSeriesSetup(paella.Setup):
         if not self.dist == "amzn":
             self.install("epel-release")
             self.install("python3-devel libaec-devel")
-            self.install("python36-psutil")
         else:
             self.run("amazon-linux-extras install epel")
             self.install("python3-devel")
-            self.pip_install("psutil")
 
     def fedora(self):
-        self.group_install("'Development Tools'")
-        self.install("python3 python3-psutil python3-networkx")
+        self.run("%s/bin/getgcc" % READIES)
+        self.install("python3-networkx")
 
     def common_last(self):
-        self.run("python3 -m pip uninstall -y RLTest || true")
         self.install("lcov")
-        if not self.has_command("ramp"):
-            self.pip_install("git+https://github.com/RedisLabs/RAMP@master")
-        self.pip_install("-r %s/paella/requirements.txt" % READIES)
+        self.run("python3 %s/bin/getrmpytools" % READIES) 
         self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------
