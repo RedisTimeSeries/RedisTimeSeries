@@ -112,6 +112,8 @@ _SOURCES=\
 	indexer.c \
 	module.c \
 	parse_policies.c \
+	query_language.c \
+	reply.c \
 	rdb.c \
 	query_language.c \
 	reply.c \
