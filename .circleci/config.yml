@@ -269,8 +269,8 @@ workflows:
           <<: *on-any-branch
       - build-macos:
           <<: *on-version-tags
-      - build-multiarch-docker:
-          <<: *on-version-tags
+#      - build-multiarch-docker:
+#          <<: *on-version-tags
       - coverage:
           <<: *on-any-branch
       - deploy_package:
