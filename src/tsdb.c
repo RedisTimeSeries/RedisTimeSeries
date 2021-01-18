@@ -18,6 +18,44 @@
 
 static Series *lastDeletedSeries = NULL;
 
+int GetSeries(RedisModuleCtx *ctx,
+              RedisModuleString *keyName,
+              RedisModuleKey **key,
+              Series **series,
+              int mode) {
+    *key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(*key);
+        RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+        return FALSE;
+    }
+    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
+        RedisModule_CloseKey(*key);
+        RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return FALSE;
+    }
+    *series = RedisModule_ModuleTypeGetValue(*key);
+    return TRUE;
+}
+
+int SilentGetSeries(RedisModuleCtx *ctx,
+                    RedisModuleString *keyName,
+                    RedisModuleKey **key,
+                    Series **series,
+                    int mode) {
+    *key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(*key);
+        return FALSE;
+    }
+    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
+        RedisModule_CloseKey(*key);
+        return FALSE;
+    }
+    *series = RedisModule_ModuleTypeGetValue(*key);
+    return TRUE;
+}
+
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
     timestamp_t rax_key = htonu64(ts);
     switch (op) {
