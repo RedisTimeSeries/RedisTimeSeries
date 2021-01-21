@@ -68,14 +68,14 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 ### TS.ADD
 
-Append (or create and append) a new sample to the series.
+Append, or create and append, a new sample to the series that has been created earlier with TS.CREATE. 
 
 ```sql
 TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
-* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
-* value - numeric data value of the sample (double)
+* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+* value - (double) numeric data value of the sample 
 
 These arguments are optional because they can be set by TS.CREATE:
 
