@@ -4,7 +4,7 @@
 
 ### TS.CREATE
 
-Create a new time-series.
+Create a new time-series. TS.CREATE must be called to initialize database before you can add any values with TS.ADD.
 
 ```sql
 TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
@@ -35,6 +35,10 @@ TS.CREATE complexity is O(1).
 ```sql
 TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
 ```
+
+#### Errors
+
+* If a key already exists you get a normal Redis error reply `TSDB: key already exists`. You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
 
 ## Delete
 
