@@ -87,10 +87,17 @@ def test_range_by_labels():
                                           'FILTER', 'generation=x')
         assert start_ts + 4==actual_result[0][2][0][0] 
 
-        # Note that we need to have the offset synchronized to the aggregation to allow for consistent offset values.
-        actual_result = r.execute_command('TS.mrange', start_ts+2, -1, 'COUNT', 1, 'OFFSET', (start_ts + 5) % 3,
-                                          'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts + 2, -1, 'COUNT', 2, 'AGGREGATION',
+                                          'COUNT', 3, 'OFFSET', start_ts + 2, 'FILTER', 'generation=x')
         assert start_ts + 2 == actual_result[0][2][0][0]
+        assert b'3' == actual_result[0][2][0][1]
+        assert (start_ts + 2 + 3) == actual_result[0][2][1][0] # Checking that the next value is offset too
+
+        # Negative values are valid too, albeit confusing. An offset of -1 means:
+        # 1511885909 + 2 - (1511885909 + 2 + 1) %3 == 1511885909; 1511885909 == start_ts
+        actual_result = r.execute_command('TS.mrange', start_ts + 2, -1, 'COUNT', 1, 'OFFSET', -1,
+                                          'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
+        assert start_ts == actual_result[0][2][0][0]
 
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3,

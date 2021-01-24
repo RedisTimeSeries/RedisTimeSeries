@@ -737,17 +737,15 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
         bool firstSample = TRUE;
         context = aggObject->createContext();
         // setting the first timestamp of the aggregation
-        timestamp_t init_ts = (rev == false)
-                                  ? series->funcs->GetFirstTimestamp(iterator.currentChunk)
-                                  : series->funcs->GetLastTimestamp(iterator.currentChunk);
+        timestamp_t init_ts =
+            (rev == false) ? start_ts : series->funcs->GetLastTimestamp(iterator.currentChunk);
 
-        last_agg_timestamp = init_ts - (init_ts % time_delta) + time_offset;
+        last_agg_timestamp = init_ts - ((init_ts - time_offset) % time_delta);
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                (maxResults == -1 || arraylen < maxResults)) {
             if ((iterator.reverse == false &&
-                 (sample.timestamp + time_offset) >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == true &&
-                 (sample.timestamp + time_offset) < last_agg_timestamp)) {
+                 sample.timestamp >= (last_agg_timestamp + time_delta)) ||
+                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
                 if (firstSample == FALSE) {
                     double value;
                     if (aggObject->finalize(context, &value) == TSDB_OK) {
@@ -757,7 +755,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                     }
                 }
                 last_agg_timestamp =
-                    sample.timestamp - (sample.timestamp % time_delta) + time_offset;
+                    sample.timestamp - ((sample.timestamp - time_offset) % time_delta);
             }
             firstSample = FALSE;
             aggObject->appendValue(context, sample.value);

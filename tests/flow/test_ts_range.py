@@ -207,10 +207,10 @@ def test_range_offset():
         assert len(full_results) == samples_count
         offset_results = r.execute_command('TS.RANGE', key, 0, -1, b'OFFSET', 5)
         assert offset_results == [[i+5, v] for i, v in full_results]
-        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'OFFSET', 1, b'AGGREGATION', 'COUNT', 2)
-        actual_result = [[11, b'1'], [13, b'2'], [15, b'2'], [17, b'2'], [19, b'2']]
+        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'OFFSET', start_ts + 1, b'AGGREGATION', 'COUNT', 2)
+        actual_result = [[11, b'2'], [13, b'2'], [15, b'2'], [17, b'2'], [19, b'1']]
         assert count_results == actual_result
-        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'AGGREGATION', 'COUNT', 2, b'OFFSET', 1)
+        count_results = r.execute_command('TS.RANGE', key, start_ts + 1, -1, b'AGGREGATION', 'COUNT', 2, b'OFFSET', start_ts + 1)
         assert count_results == actual_result
 
 
