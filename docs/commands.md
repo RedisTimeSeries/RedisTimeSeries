@@ -68,7 +68,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 ### TS.ADD
 
-Append, or create and append, a new sample to the series that has been created earlier with TS.CREATE. 
+Append a new sample to the series. If the series has not been created yet with `TS.CREATE` it will be automatically created. 
 
 ```sql
 TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
