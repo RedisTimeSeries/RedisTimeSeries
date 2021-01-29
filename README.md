@@ -131,12 +131,12 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [redistimeseries-py][redistimeseries-py-url] | Python | BSD-3 | [RedisLabs][redistimeseries-py-author] | [![redistimeseries-py-stars]][redistimeseries-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
-| [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [![redis-time-series-stars]][redis-time-series-url] |
-| [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [![redistimeseries-js-stars]][redistimeseries-js-url] |
-| [redis-modules-sdk][redis-modules-sdk-url] | Typescript | BSD-3-Clause | [Dani Tseitlin](https://github.com/danitseitlin) |[![redis-modules-sdk-stars]][redis-modules-sdk-url]| 
-| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [![redis_ts-stars]][redis_ts-url] |
-| [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [![redistimeseries-stars]][redistimeseries-url] |
-| [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski](https://github.com/dzunk) | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
+| [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] |
+| [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] |
+| [redis-modules-sdk][redis-modules-sdk-url] | Typescript | BSD-3-Clause | [Dani Tseitlin][redis-modules-sdk-author] |[![redis-modules-sdk-stars]][redis-modules-sdk-url]| 
+| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] |
+| [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] |
+| [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
 
 [JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
 [JRedisTimeSeries-author]: https://redislabs.com
