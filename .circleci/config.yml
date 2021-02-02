@@ -280,7 +280,7 @@ workflows:
       - deploy_package:
           name: deploy_branch
           package: branch
-          context: commmon
+          context: common
           requires:
             - build
             - valgrind
