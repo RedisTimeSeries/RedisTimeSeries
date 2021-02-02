@@ -4,7 +4,7 @@
 
 ### TS.CREATE
 
-Create a new time-series. TS.CREATE must be called to initialize database before you can add any values with TS.ADD.
+Create a new time-series. 
 
 ```sql
 TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
@@ -39,6 +39,10 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 #### Errors
 
 * If a key already exists you get a normal Redis error reply `TSDB: key already exists`. You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
+
+#### Notes
+
+`TS.ADD` can create new time-series in fly, when called on a time-series that does not exist.
 
 ## Delete
 
