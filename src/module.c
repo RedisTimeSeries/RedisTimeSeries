@@ -29,6 +29,8 @@
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
 
+#include "RedisGears/src/redisgears.h"
+
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
 #endif
@@ -1022,6 +1024,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
+
+    if(RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) != REDISMODULE_OK){
+        RedisModule_Log(ctx, "warning", "Failed initialize RedisGears API");
+        return REDISMODULE_ERR;
+    }
 
     return REDISMODULE_OK;
 }
