@@ -275,10 +275,12 @@ workflows:
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
+          context: common
           <<: *on-any-branch
       - deploy_package:
           name: deploy_branch
           package: branch
+          context: commmon
           requires:
             - build
             - valgrind
@@ -286,11 +288,13 @@ workflows:
       - deploy_package:
           name: deploy_release
           package: release
+          context: common
           requires:
             - build
             - valgrind
           <<: *on-version-tags
       - release-automation:
+          context: common
           requires:
             - deploy_release
           <<: *on-version-tags
