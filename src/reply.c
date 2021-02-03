@@ -7,6 +7,7 @@
 #include "reply.h"
 
 #include "redismodule.h"
+#include "series_iterator.h"
 #include "tsdb.h"
 
 #include "rmutil/alloc.h"
@@ -56,8 +57,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
         }
     }
 
-    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, rev);
-    if (iterator.series == NULL) {
+    SeriesIterator iterator;
+    if (SeriesQuery(series, &iterator, start_ts, end_ts, rev) != TSDB_OK) {
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 

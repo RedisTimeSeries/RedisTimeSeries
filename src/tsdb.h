@@ -59,19 +59,6 @@ typedef enum MultiSeriesReduceOp
     MultiSeriesReduceOp_Sum,
 } MultiSeriesReduceOp;
 
-typedef struct SeriesIterator
-{
-    Series *series;
-    RedisModuleDictIter *dictIter;
-    Chunk_t *currentChunk;
-    ChunkIter_t *chunkIterator;
-    ChunkIterFuncs chunkIteratorFuncs;
-    api_timestamp_t maxTimestamp;
-    api_timestamp_t minTimestamp;
-    bool reverse;
-    void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
-} SeriesIterator;
-
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 
 void FreeSeries(void *value);
@@ -126,13 +113,6 @@ size_t SeriesGetNumSamples(const Series *series);
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
 
-// Iterator over the series
-SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
-
-ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-
-void SeriesIteratorClose(SeriesIterator *iterator);
-
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
                     timestamp_t end_ts,
@@ -156,5 +136,7 @@ typedef enum
     DICT_OP_DEL = 2
 } DictOp;
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
+
+void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
 
 #endif /* TSDB_H */

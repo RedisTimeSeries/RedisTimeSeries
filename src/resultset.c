@@ -9,6 +9,7 @@
 #include "indexer.h"
 #include "redismodule.h"
 #include "reply.h"
+#include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
 
@@ -142,10 +143,11 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
         }
     }
 
-    SeriesIterator iterator = SeriesQuery(source, start_ts, end_ts, rev);
-    if (iterator.series == NULL) {
+    SeriesIterator iterator;
+    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev) != TSDB_OK) {
+        // todo: is this the right thing here?
         *dest = new;
-        return REDISMODULE_OK;
+        return REDISMODULE_ERR;
     }
 
     if (aggObject == NULL) {

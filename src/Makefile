@@ -116,7 +116,8 @@ _SOURCES=\
 	reply.c \
 	rdb.c \
 	resultset.c \
-	tsdb.c
+	tsdb.c \
+	series_iterator.c
 
 _TEST_SOURCES=\
 	unittests.c \
