@@ -28,7 +28,7 @@ struct TS_ResultSet
     char *labelvalue;
 };
 
-TS_ResultSet *createResultSet() {
+TS_ResultSet *ResultSet_Create() {
     TS_ResultSet *r = malloc(sizeof(TS_ResultSet));
     r->groups = RedisModule_CreateDict(NULL);
     r->groupsType = GroupType_Series;
@@ -37,38 +37,36 @@ TS_ResultSet *createResultSet() {
     return r;
 }
 
-int setLabelValue(TS_ResultSet *r, const char *label) {
+int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label) {
     r->labelvalue = strdup(label);
     return true;
 }
 
-int setLabelKey(TS_ResultSet *r, const char *labelkey) {
+int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelkey) {
     r->labelkey = strdup(labelkey);
     return true;
 }
 
-int groupbyLabel(TS_ResultSet *r, const char *label) {
+int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
     r->groupsType = GroupType_ResultSet;
     r->labelkey = strdup(label);
     return true;
 }
 
 int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
-    int result = 0;
-
     if (strncasecmp(reducerstr, "sum", 3) == 0) {
         *reducerOp = MultiSeriesReduceOp_Sum;
-        result = 1;
+        return TSDB_OK;
 
     } else if (strncasecmp(reducerstr, "max", 3) == 0) {
         *reducerOp = MultiSeriesReduceOp_Max;
-        result = 1;
+        return TSDB_OK;
 
     } else if (strncasecmp(reducerstr, "min", 3) == 0) {
         *reducerOp = MultiSeriesReduceOp_Min;
-        result = 1;
+        return TSDB_OK;
     }
-    return result;
+    return TSDB_ERROR;
 }
 
 Label *createReducedSeriesLabels(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
@@ -92,7 +90,7 @@ Label *createReducedSeriesLabels(TS_ResultSet *r, MultiSeriesReduceOp reducerOp)
     labels[0].key = RedisModule_CreateStringPrintf(NULL, "%s", r->labelkey);
     labels[0].value = RedisModule_CreateStringPrintf(NULL, "%s", r->labelvalue);
     labels[1].key = RedisModule_CreateStringPrintf(NULL, "__reducer__");
-    labels[1].value = RedisModule_CreateStringPrintf(NULL, reducer_str);
+    labels[1].value = RedisModule_CreateString(NULL, reducer_str, strlen(reducer_str));
     labels[2].key = RedisModule_CreateStringPrintf(NULL, "__source__");
     labels[2].value = RedisModule_CreateStringPrintf(NULL, "");
     return labels;
@@ -200,7 +198,7 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
     return REDISMODULE_OK;
 }
 
-int applyReducerToResultSet(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
+int ResultSet_ApplyReducer(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
     size_t currentKeyLen;
     char *currentKey;
     if (r->groupsType == GroupType_Series) {
@@ -248,20 +246,20 @@ int applyReducerToResultSet(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
         TS_ResultSet *innerResultSet;
         while (RedisModule_DictNextC(iter, NULL, (void **)&innerResultSet) != NULL) {
-            applyReducerToResultSet(innerResultSet, reducerOp);
+            ResultSet_ApplyReducer(innerResultSet, reducerOp);
         }
         RedisModule_DictIteratorStop(iter);
     }
-    return true;
+    return TSDB_OK;
 }
 
-int applyRangeToResultSet(TS_ResultSet *r,
-                          api_timestamp_t start_ts,
-                          api_timestamp_t end_ts,
-                          AggregationClass *aggObject,
-                          int64_t time_delta,
-                          long long maxResults,
-                          bool rev) {
+int ResultSet_ApplyRange(TS_ResultSet *r,
+                         api_timestamp_t start_ts,
+                         api_timestamp_t end_ts,
+                         AggregationClass *aggObject,
+                         int64_t time_delta,
+                         long long maxResults,
+                         bool rev) {
     size_t currentKeyLen;
     char *currentKey;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
@@ -269,7 +267,7 @@ int applyRangeToResultSet(TS_ResultSet *r,
         TS_ResultSet *innerResultSet;
         while ((currentKey = RedisModule_DictNextC(
                     iter, &currentKeyLen, (void **)&innerResultSet)) != NULL) {
-            applyRangeToResultSet(
+            ResultSet_ApplyRange(
                 innerResultSet, start_ts, end_ts, aggObject, time_delta, maxResults, rev);
         }
     } else {
@@ -291,10 +289,10 @@ int applyRangeToResultSet(TS_ResultSet *r,
         }
     }
     RedisModule_DictIteratorStop(iter);
-    return true;
+    return TSDB_OK;
 }
 
-int addSerieToResultSet(TS_ResultSet *r, Series *serie, const char *name) {
+int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
     const size_t namelen = strlen(name);
     int result = false;
     // If we're grouping by label then the rax associated values are TS_ResultSet
@@ -307,13 +305,13 @@ int addSerieToResultSet(TS_ResultSet *r, Series *serie, const char *name) {
             TS_ResultSet *labelGroup = (TS_ResultSet *)RedisModule_DictGetC(
                 r->groups, (void *)labelValue, labelLen, &nokey);
             if (nokey) {
-                labelGroup = createResultSet();
-                setLabelKey(labelGroup, r->labelkey);
-                setLabelValue(labelGroup, labelValue);
+                labelGroup = ResultSet_Create();
+                ResultSet_SetLabelKey(labelGroup, r->labelkey);
+                ResultSet_SetLabelValue(labelGroup, labelValue);
                 RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
             }
             free(labelValue);
-            result = addSerieToResultSet(labelGroup, serie, name);
+            result = ResultSet_AddSerie(labelGroup, serie, name);
         }
     } else {
         // If a serie with that name already exists we return
@@ -361,7 +359,7 @@ void replyResultSet(RedisModuleCtx *ctx,
     RedisModule_DictIteratorStop(iter);
 }
 
-void freeResultSet(TS_ResultSet *r) {
+void ResultSet_Free(TS_ResultSet *r) {
     if (r == NULL)
         return;
     if (r->groups) {
@@ -369,7 +367,7 @@ void freeResultSet(TS_ResultSet *r) {
         if (r->groupsType == GroupType_ResultSet) {
             TS_ResultSet *innerResultSet;
             while (RedisModule_DictNextC(iter, NULL, (void **)&innerResultSet) != NULL) {
-                freeResultSet(innerResultSet);
+                ResultSet_Free(innerResultSet);
             }
         } else {
             Series *s;

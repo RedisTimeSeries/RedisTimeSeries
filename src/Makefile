@@ -115,8 +115,6 @@ _SOURCES=\
 	query_language.c \
 	reply.c \
 	rdb.c \
-	query_language.c \
-	reply.c \
 	resultset.c \
 	tsdb.c
 

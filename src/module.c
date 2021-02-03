@@ -212,19 +212,19 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
-        addSerieToResultSet(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
+        ResultSet_AddSerie(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
 
     // apply the range and per-serie aggregations
-    applyRangeToResultSet(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
+    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
     // Apply the reducer
-    applyReducerToResultSet(resultset, reducerOp);
+    ResultSet_ApplyReducer(resultset, reducerOp);
 
     replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
 
-    freeResultSet(resultset);
+    ResultSet_Free(resultset);
     return REDISMODULE_OK;
 }
 
@@ -334,16 +334,15 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         if (reduce_location < 0 || (argc - groupby_location != 4)) {
             return RedisModule_WrongArity(ctx);
         }
-        TS_ResultSet *resultset = createResultSet();
         MultiSeriesReduceOp reducerOp;
-        const int reducer_parse = parseMultiSeriesReduceOp(
-            RedisModule_StringPtrLen(argv[reduce_location + 1], NULL), &reducerOp);
-        if (reducer_parse == 0) {
-            freeResultSet(resultset);
+        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
+                                     &reducerOp) != TSDB_OK) {
             return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
         }
 
-        groupbyLabel(resultset, RedisModule_StringPtrLen(argv[groupby_location + 1], NULL));
+        TS_ResultSet *resultset = ResultSet_Create();
+        ResultSet_GroupbyLabel(resultset,
+                               RedisModule_StringPtrLen(argv[groupby_location + 1], NULL));
 
         return replyGroupedMultiRange(ctx,
                                       resultset,
