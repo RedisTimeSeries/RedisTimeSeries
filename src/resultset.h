@@ -11,6 +11,7 @@
 
 /* Incomplete structures for compiler checks but opaque access. */
 typedef struct TS_ResultSet TS_ResultSet;
+typedef struct TS_GroupList TS_GroupList;
 
 TS_ResultSet *ResultSet_Create();
 
