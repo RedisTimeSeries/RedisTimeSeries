@@ -144,58 +144,18 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
     }
 
     SeriesIterator iterator;
-    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev, NULL, 0) != TSDB_OK) {
+    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev, aggObject, time_delta) != TSDB_OK) {
         // todo: is this the right thing here?
         *dest = new;
         return REDISMODULE_ERR;
     }
 
-    if (aggObject == NULL) {
-        // No aggregation
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            SeriesAddSample(new, sample.timestamp, sample.value);
-        }
-    } else {
-        bool firstSample = TRUE;
-        context = aggObject->createContext();
-        // setting the first timestamp of the aggregation
-        timestamp_t init_ts = (rev == false)
-                                  ? source->funcs->GetFirstTimestamp(iterator.currentChunk)
-                                  : source->funcs->GetLastTimestamp(iterator.currentChunk);
-        last_agg_timestamp = init_ts - (init_ts % time_delta);
-
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            if ((iterator.reverse == false &&
-                 sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
-                if (firstSample == FALSE) {
-                    double value;
-                    if (aggObject->finalize(context, &value) == TSDB_OK) {
-                        SeriesAddSample(new, last_agg_timestamp, value);
-                        aggObject->resetContext(context);
-                    }
-                }
-                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            }
-            firstSample = FALSE;
-            aggObject->appendValue(context, sample.value);
-        }
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+           (maxResults == -1 || arraylen < maxResults)) {
+        SeriesAddSample(new, sample.timestamp, sample.value);
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != NULL) {
-        if (arraylen != maxResults) {
-            // reply last bucket of data
-            double value;
-            if (aggObject->finalize(context, &value) == TSDB_OK) {
-                SeriesAddSample(new, last_agg_timestamp, value);
-                aggObject->resetContext(context);
-            }
-        }
-        aggObject->freeContext(context);
-    }
     *dest = new;
     return REDISMODULE_OK;
 }
