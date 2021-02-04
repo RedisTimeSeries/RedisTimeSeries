@@ -61,9 +61,8 @@ int SeriesQuery(Series *series,
         iter->currentChunk, SeriesChunkIteratorOptions(iter), &iter->chunkIteratorFuncs);
 
     if (aggregation) {
-        timestamp_t init_ts = (rev == false)
-                              ? series->funcs->GetFirstTimestamp(iter->currentChunk)
-                              : series->funcs->GetLastTimestamp(iter->currentChunk);
+        timestamp_t init_ts = (rev == false) ? series->funcs->GetFirstTimestamp(iter->currentChunk)
+                                             : series->funcs->GetLastTimestamp(iter->currentChunk);
         iter->aggregationLastTimestamp = init_ts - (init_ts % time_delta);
     }
     return TSDB_OK;
@@ -144,24 +143,29 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
 }
 
 ChunkResult SeriesIteratorGetNextAggregated(SeriesIterator *iterator, Sample *currentSample) {
-    Sample internalSample = {0};
+    Sample internalSample = { 0 };
     ChunkResult result = _seriesIteratorGetNext(iterator, &internalSample);
     bool hasSample = FALSE;
     while (result == CR_OK) {
         if ((iterator->reverse == FALSE &&
-                internalSample.timestamp >= iterator->aggregationLastTimestamp + iterator->aggregationTimeDelta) ||
-            (iterator->reverse == TRUE && internalSample.timestamp < iterator->aggregationLastTimestamp)) {
+             internalSample.timestamp >=
+                 iterator->aggregationLastTimestamp + iterator->aggregationTimeDelta) ||
+            (iterator->reverse == TRUE &&
+             internalSample.timestamp < iterator->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (iterator->aggregationIsFirstSample == FALSE) {
                 double value;
-                if (iterator->aggregation->finalize(iterator->aggregationContext, &value) == TSDB_OK) {
+                if (iterator->aggregation->finalize(iterator->aggregationContext, &value) ==
+                    TSDB_OK) {
                     currentSample->timestamp = iterator->aggregationLastTimestamp;
                     currentSample->value = value;
                     hasSample = TRUE;
                     iterator->aggregation->resetContext(iterator->aggregationContext);
                 }
             }
-            iterator->aggregationLastTimestamp = internalSample.timestamp - (internalSample.timestamp % iterator->aggregationTimeDelta);
+            iterator->aggregationLastTimestamp =
+                internalSample.timestamp -
+                (internalSample.timestamp % iterator->aggregationTimeDelta);
         }
         iterator->aggregationIsFirstSample = FALSE;
         iterator->aggregation->appendValue(iterator->aggregationContext, internalSample.value);
@@ -172,7 +176,7 @@ ChunkResult SeriesIteratorGetNextAggregated(SeriesIterator *iterator, Sample *cu
     }
 
     if (result == CR_END) {
-        if (iterator->aggregationIsFinalized || iterator->aggregationIsFirstSample ) {
+        if (iterator->aggregationIsFinalized || iterator->aggregationIsFirstSample) {
             return CR_END;
         } else {
             double value;
