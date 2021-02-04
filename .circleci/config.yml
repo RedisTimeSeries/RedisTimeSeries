@@ -307,4 +307,5 @@ workflows:
     jobs:
       - build-macos
       - valgrind
-      - nightly-automation
+      - nightly-automation:
+          context: common
