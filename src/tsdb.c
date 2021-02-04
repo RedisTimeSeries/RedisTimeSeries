@@ -277,7 +277,7 @@ int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op) {
     timestamp_t start_ts = getFirstValidTimestamp(source, &skipped);
     timestamp_t end_ts = source->lastTimestamp;
     SeriesIterator iterator;
-    SeriesQuery(source, &iterator, start_ts, end_ts, false);
+    SeriesQuery(source, &iterator, start_ts, end_ts, false, NULL, 0);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -588,7 +588,7 @@ int SeriesCalcRange(Series *series,
 
     Sample sample = { 0 };
     SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts, false) != TSDB_OK) {
+    if (SeriesQuery(series, &iterator, start_ts, end_ts, false, NULL, 0) != TSDB_OK) {
         return TSDB_ERROR;
     }
     void *context = aggObject->createContext();
@@ -626,7 +626,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     }
 
     SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, 0, series->lastTimestamp, FALSE) == TSDB_ERROR) {
+    if (SeriesQuery(series, &iterator, 0, series->lastTimestamp, FALSE, NULL, 0) == TSDB_ERROR) {
         return 0;
     }
     ChunkResult result = SeriesIteratorGetNext(&iterator, &sample);

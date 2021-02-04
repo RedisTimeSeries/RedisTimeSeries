@@ -19,13 +19,21 @@ typedef struct SeriesIterator
     api_timestamp_t minTimestamp;
     bool reverse;
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
+    AggregationClass *aggregation;
+    void *aggregationContext;
+    timestamp_t aggregationLastTimestamp;
+    int64_t aggregationTimeDelta;
+    bool aggregationIsFirstSample;
+    bool aggregationIsFinalized;
 } SeriesIterator;
 
 int SeriesQuery(Series *series,
                 SeriesIterator *iter,
                 timestamp_t start_ts,
                 timestamp_t end_ts,
-                bool rev);
+                bool rev,
+                AggregationClass *aggregation,
+                int64_t time_delta);
 
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 

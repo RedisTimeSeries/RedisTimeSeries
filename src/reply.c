@@ -41,9 +41,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                      long long maxResults,
                      bool rev) {
     Sample sample;
-    void *context = NULL;
     long long arraylen = 0;
-    timestamp_t last_agg_timestamp;
 
     // In case a retention is set shouldn't return chunks older than the retention
     // TODO: move to parseRangeArguments(?)
@@ -58,60 +56,17 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     }
 
     SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts, rev) != TSDB_OK) {
+    if (SeriesQuery(series, &iterator, start_ts, end_ts, rev, aggObject, time_delta) != TSDB_OK) {
         return RedisModule_ReplyWithArray(ctx, 0);
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    if (aggObject == NULL) {
-        // No aggregation
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            ReplyWithSample(ctx, sample.timestamp, sample.value);
-            arraylen++;
-        }
-    } else {
-        bool firstSample = TRUE;
-        context = aggObject->createContext();
-        // setting the first timestamp of the aggregation
-        timestamp_t init_ts = (rev == false)
-                                  ? series->funcs->GetFirstTimestamp(iterator.currentChunk)
-                                  : series->funcs->GetLastTimestamp(iterator.currentChunk);
-        last_agg_timestamp = init_ts - (init_ts % time_delta);
-
-        while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-               (maxResults == -1 || arraylen < maxResults)) {
-            if ((iterator.reverse == false &&
-                 sample.timestamp >= last_agg_timestamp + time_delta) ||
-                (iterator.reverse == true && sample.timestamp < last_agg_timestamp)) {
-                if (firstSample == FALSE) {
-                    double value;
-                    if (aggObject->finalize(context, &value) == TSDB_OK) {
-                        ReplyWithSample(ctx, last_agg_timestamp, value);
-                        aggObject->resetContext(context);
-                        arraylen++;
-                    }
-                }
-                last_agg_timestamp = sample.timestamp - (sample.timestamp % time_delta);
-            }
-            firstSample = FALSE;
-            aggObject->appendValue(context, sample.value);
-        }
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
+           (maxResults == -1 || arraylen < maxResults)) {
+        ReplyWithSample(ctx, sample.timestamp, sample.value);
+        arraylen++;
     }
     SeriesIteratorClose(&iterator);
-
-    if (aggObject != NULL) {
-        if (arraylen != maxResults) {
-            // reply last bucket of data
-            double value;
-            if (aggObject->finalize(context, &value) == TSDB_OK) {
-                ReplyWithSample(ctx, last_agg_timestamp, value);
-                aggObject->resetContext(context);
-                arraylen++;
-            }
-        }
-        aggObject->freeContext(context);
-    }
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;

@@ -144,7 +144,7 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
     }
 
     SeriesIterator iterator;
-    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev) != TSDB_OK) {
+    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev, NULL, 0) != TSDB_OK) {
         // todo: is this the right thing here?
         *dest = new;
         return REDISMODULE_ERR;

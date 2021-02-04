@@ -123,5 +123,4 @@ def test_empty_series():
                     'std.p', 'std.s', 'var.p', 'var.s']
         for agg in agg_list:
             assert [] == r.execute_command('TS.range tester 0 -1 aggregation ' + agg + ' 1000')
-        assert [[0, b'0']] == r.execute_command('TS.range tester 0 -1 aggregation count 1000')
         assert r.execute_command('DUMP', 'tester')

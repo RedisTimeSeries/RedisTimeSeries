@@ -20,14 +20,26 @@ int SeriesQuery(Series *series,
                 SeriesIterator *iter,
                 timestamp_t start_ts,
                 timestamp_t end_ts,
-                bool rev) {
+                bool rev,
+                AggregationClass *aggregation,
+                int64_t time_delta) {
     iter->series = series;
     iter->minTimestamp = start_ts;
     iter->maxTimestamp = end_ts;
     iter->reverse = rev;
+    iter->aggregation = NULL;
+    iter->aggregationContext = NULL;
+    iter->aggregationTimeDelta = time_delta;
+    iter->aggregationIsFirstSample = TRUE;
+    iter->aggregationIsFinalized = FALSE;
 
     timestamp_t rax_key;
     ChunkFuncs *funcs = series->funcs;
+
+    if (aggregation) {
+        iter->aggregation = aggregation;
+        iter->aggregationContext = iter->aggregation->createContext();
+    }
 
     if (iter->reverse == false) {
         iter->DictGetNext = RedisModule_DictNextC;
@@ -47,6 +59,13 @@ int SeriesQuery(Series *series,
 
     iter->chunkIterator = funcs->NewChunkIterator(
         iter->currentChunk, SeriesChunkIteratorOptions(iter), &iter->chunkIteratorFuncs);
+
+    if (aggregation) {
+        timestamp_t init_ts = (rev == false)
+                              ? series->funcs->GetFirstTimestamp(iter->currentChunk)
+                              : series->funcs->GetLastTimestamp(iter->currentChunk);
+        iter->aggregationLastTimestamp = init_ts - (init_ts % time_delta);
+    }
     return TSDB_OK;
 }
 
@@ -64,6 +83,11 @@ static ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
     iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
+
+    if (iterator->aggregationContext != NULL) {
+        iterator->aggregation->freeContext(iterator->aggregationContext);
+    }
+
     RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
@@ -74,7 +98,7 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
 
-    while (true) {
+    while (TRUE) {
         res = SeriesGetNext(iterator, currentSample);
         if (res == CR_END) { // Reached the end of the chunk
             if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
@@ -119,6 +143,55 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
     return CR_OK;
 }
 
+ChunkResult SeriesIteratorGetNextAggregated(SeriesIterator *iterator, Sample *currentSample) {
+    Sample internalSample = {0};
+    ChunkResult result = _seriesIteratorGetNext(iterator, &internalSample);
+    bool hasSample = FALSE;
+    while (result == CR_OK) {
+        if ((iterator->reverse == FALSE &&
+                internalSample.timestamp >= iterator->aggregationLastTimestamp + iterator->aggregationTimeDelta) ||
+            (iterator->reverse == TRUE && internalSample.timestamp < iterator->aggregationLastTimestamp)) {
+            // update the last timestamp before because its relevant for first sample and others
+            if (iterator->aggregationIsFirstSample == FALSE) {
+                double value;
+                if (iterator->aggregation->finalize(iterator->aggregationContext, &value) == TSDB_OK) {
+                    currentSample->timestamp = iterator->aggregationLastTimestamp;
+                    currentSample->value = value;
+                    hasSample = TRUE;
+                    iterator->aggregation->resetContext(iterator->aggregationContext);
+                }
+            }
+            iterator->aggregationLastTimestamp = internalSample.timestamp - (internalSample.timestamp % iterator->aggregationTimeDelta);
+        }
+        iterator->aggregationIsFirstSample = FALSE;
+        iterator->aggregation->appendValue(iterator->aggregationContext, internalSample.value);
+        if (hasSample) {
+            return CR_OK;
+        }
+        result = _seriesIteratorGetNext(iterator, &internalSample);
+    }
+
+    if (result == CR_END) {
+        if (iterator->aggregationIsFinalized || iterator->aggregationIsFirstSample ) {
+            return CR_END;
+        } else {
+            double value;
+            if (iterator->aggregation->finalize(iterator->aggregationContext, &value) == TSDB_OK) {
+                currentSample->timestamp = iterator->aggregationLastTimestamp;
+                currentSample->value = value;
+            }
+            iterator->aggregationIsFinalized = TRUE;
+            return CR_OK;
+        }
+    } else {
+        return CR_ERR;
+    }
+}
+
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
-    return _seriesIteratorGetNext(iterator, currentSample);
+    if (iterator->aggregation == NULL) {
+        return _seriesIteratorGetNext(iterator, currentSample);
+    } else {
+        return SeriesIteratorGetNextAggregated(iterator, currentSample);
+    }
 }
