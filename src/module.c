@@ -220,12 +220,13 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     }
     RedisModule_DictIteratorStop(iter);
 
-    // apply the range and per-serie aggregations
-    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
+    // apply the range and per-serie aggregations, do not apply max results to the raw data
+    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, -1, rev);
     // Apply the reducer
     ResultSet_ApplyReducer(resultset, reducerOp);
 
-    replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+    // Do not apply the aggregation on the resultset, do apply max results on the final result
+    replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, NULL, 0, count, rev);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
