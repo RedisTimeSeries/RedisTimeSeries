@@ -16,6 +16,7 @@
 #include "query_language.h"
 #include "rdb.h"
 #include "reply.h"
+#include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -178,6 +179,101 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+// multi-series groupby logic
+static int replyGroupedMultiRange(RedisModuleCtx *ctx,
+                                  TS_ResultSet *resultset,
+                                  MultiSeriesReduceOp reducerOp,
+                                  RedisModuleDict *result,
+                                  bool withlabels,
+                                  api_timestamp_t start_ts,
+                                  api_timestamp_t end_ts,
+                                  AggregationClass *aggObject,
+                                  int64_t time_delta,
+                                  long long count,
+                                  bool rev) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey = NULL;
+    size_t currentKeyLen;
+    Series *series = NULL;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
+        if (!status) {
+            RedisModule_Log(
+                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current
+            // key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
+            continue;
+        }
+        ResultSet_AddSerie(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    // apply the range and per-serie aggregations
+    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
+    // Apply the reducer
+    ResultSet_ApplyReducer(resultset, reducerOp);
+
+    replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+
+    ResultSet_Free(resultset);
+    return REDISMODULE_OK;
+}
+
+// Previous multirange reply logic ( unchanged )
+static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
+                                    RedisModuleDict *result,
+                                    bool withlabels,
+                                    api_timestamp_t start_ts,
+                                    api_timestamp_t end_ts,
+                                    AggregationClass *aggObject,
+                                    int64_t time_delta,
+                                    long long count,
+                                    bool rev) {
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    long long replylen = 0;
+    Series *series;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
+
+        if (!status) {
+            RedisModule_Log(ctx,
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
+                            currentKeyLen,
+                            currentKey);
+            // The iterator may have been invalidated, stop and restart from after the current key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
+            continue;
+        }
+        ReplySeriesArrayPos(
+            ctx, series, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+        replylen++;
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
+
+    return REDISMODULE_OK;
+}
+
 int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
@@ -208,9 +304,15 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
-
-    const size_t query_count = argc - 1 - filter_location;
     const int withlabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+
+    const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+
+    // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
+    // are only up to (GROUPBY pos) - 1.
+    const size_t last_filter_pos = groupby_location > 0 ? groupby_location - 1 : argc - 1;
+    const size_t query_count = last_filter_pos - filter_location;
+
     QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
     if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
         TSDB_ERROR) {
@@ -223,42 +325,40 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    RedisModuleDict *result = QueryIndex(ctx, queries, query_count);
+    RedisModuleDict *resultSeries = QueryIndex(ctx, queries, query_count);
 
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    Series *series;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const int status = SilentGetSeries(ctx,
-                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                           &key,
-                                           &series,
-                                           REDISMODULE_READ);
-        if (!status) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
-                            currentKey);
-            // The iterator may have been invalidated, stop and restart from after the current key.
-            RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
-            continue;
+    if (groupby_location > 0) {
+        const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
+        // If we've detected a groupby but not a reduce
+        // or we've detected a groupby by the total args don't match
+        if (reduce_location < 0 || (argc - groupby_location != 4)) {
+            return RedisModule_WrongArity(ctx);
         }
-        ReplySeriesArrayPos(
-            ctx, series, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
-        replylen++;
-        RedisModule_CloseKey(key);
-    }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetArrayLength(ctx, replylen);
+        MultiSeriesReduceOp reducerOp;
+        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
+                                     &reducerOp) != TSDB_OK) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+        }
 
-    return REDISMODULE_OK;
+        TS_ResultSet *resultset = ResultSet_Create();
+        ResultSet_GroupbyLabel(resultset,
+                               RedisModule_StringPtrLen(argv[groupby_location + 1], NULL));
+
+        return replyGroupedMultiRange(ctx,
+                                      resultset,
+                                      reducerOp,
+                                      resultSeries,
+                                      withlabels,
+                                      start_ts,
+                                      end_ts,
+                                      aggObject,
+                                      time_delta,
+                                      count,
+                                      rev);
+    } else {
+        return replyUngroupedMultiRange(
+            ctx, resultSeries, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+    }
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
