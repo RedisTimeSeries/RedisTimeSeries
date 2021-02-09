@@ -162,7 +162,7 @@ void GroupList_ApplyRange(TS_GroupList *g,
 
 int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
     if (g->list == NULL) {
-        g->list = (Series **)calloc(1, sizeof(Series *));
+        g->list = (Series **)malloc(sizeof(Series *));
     } else {
         g->list = (Series **)realloc(g->list, sizeof(Series *) * (g->count + 1));
     }

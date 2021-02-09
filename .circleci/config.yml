@@ -101,7 +101,7 @@ jobs:
     steps:
       - ci_steps:
           platform: debian
-          build_params: VALGRIND=1 -j 8
+          build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
 
