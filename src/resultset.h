@@ -11,39 +11,29 @@
 
 /* Incomplete structures for compiler checks but opaque access. */
 typedef struct TS_ResultSet TS_ResultSet;
+typedef struct TS_GroupList TS_GroupList;
 
-TS_ResultSet *createResultSet();
+TS_ResultSet *ResultSet_Create();
 
-int groupbyLabel(TS_ResultSet *r, const char *label);
+int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label);
 
-int setLabelKey(TS_ResultSet *r, const char *labelKey);
+int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 
-int setLabelValue(TS_ResultSet *r, const char *label);
+int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
-int applyReducerToResultSet(TS_ResultSet *r, MultiSeriesReduceOp reducerOp);
+int ResultSet_ApplyReducer(TS_ResultSet *r, MultiSeriesReduceOp reducerOp);
 
 int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp);
 
-Label *createReducedSeriesLabels(TS_ResultSet *r, MultiSeriesReduceOp reducerOp);
+int ResultSet_ApplyRange(TS_ResultSet *r,
+                         api_timestamp_t start_ts,
+                         api_timestamp_t end_ts,
+                         AggregationClass *aggObject,
+                         int64_t time_delta,
+                         long long maxResults,
+                         bool rev);
 
-int ApplySerieRangeIntoNewSerie(Series **dest,
-                                Series *source,
-                                api_timestamp_t start_ts,
-                                api_timestamp_t end_ts,
-                                AggregationClass *aggObject,
-                                int64_t time_delta,
-                                long long maxResults,
-                                bool rev);
-
-int applyRangeToResultSet(TS_ResultSet *r,
-                          api_timestamp_t start_ts,
-                          api_timestamp_t end_ts,
-                          AggregationClass *aggObject,
-                          int64_t time_delta,
-                          long long maxResults,
-                          bool rev);
-
-int addSerieToResultSet(TS_ResultSet *r, Series *serie, const char *name);
+int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name);
 
 void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
@@ -55,6 +45,6 @@ void replyResultSet(RedisModuleCtx *ctx,
                     long long maxResults,
                     bool rev);
 
-void freeResultSet(TS_ResultSet *r);
+void ResultSet_Free(TS_ResultSet *r);
 
 #endif // REDISTIMESERIES_RESULTSET_H
