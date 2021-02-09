@@ -56,6 +56,7 @@ valgrind_config() {
 		-q \
 		--leak-check=full \
 		--show-reachable=no \
+		--track-origins=yes \
 		--show-possibly-lost=no"
 
 	# To generate supressions and/or log to file

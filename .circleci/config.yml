@@ -59,7 +59,7 @@ commands:
             make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
-          no_output_timeout: 20m
+          no_output_timeout: 30m
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
@@ -97,10 +97,11 @@ jobs:
   valgrind:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-buster
+    resource_class: xlarge
     steps:
       - ci_steps:
           platform: debian
-          build_params: VALGRIND=1
+          build_params: VALGRIND=1 -j 8
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
 

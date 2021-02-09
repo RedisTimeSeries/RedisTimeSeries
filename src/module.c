@@ -192,9 +192,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   long long count,
                                   bool rev) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
+    char *currentKey = NULL;
     size_t currentKeyLen;
-    Series *series;
+    Series *series = NULL;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;

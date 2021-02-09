@@ -53,6 +53,8 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               bool rev);
 
 void FreeTempSeries(Series *s) {
+    if (!s)
+        return;
     RedisModule_FreeString(NULL, s->keyName);
     if (s->chunks) {
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(s->chunks, "^", NULL, 0);
@@ -70,7 +72,7 @@ void FreeTempSeries(Series *s) {
 }
 
 TS_GroupList *GroupList_Create() {
-    TS_GroupList *g = malloc(sizeof(TS_GroupList));
+    TS_GroupList *g = (TS_GroupList *)malloc(sizeof(TS_GroupList));
     g->count = 0;
     g->labelValue = NULL;
     g->list = NULL;
@@ -82,6 +84,8 @@ void GroupList_Free(TS_GroupList *groupList) {
         FreeTempSeries(groupList->list[i]);
     }
     free(groupList->labelValue);
+    if (groupList->list)
+        free(groupList->list);
     free(groupList);
 }
 
@@ -95,6 +99,8 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
                                 bool rev) {
     Sample sample;
     CreateCtx cCtx = { 0 };
+    cCtx.labels = NULL;
+    cCtx.labelsCount = 0;
 
     Series *new = NewSeries(RedisModule_CreateStringFromString(NULL, source->keyName), &cCtx);
     long long arraylen = 0;
@@ -156,9 +162,9 @@ void GroupList_ApplyRange(TS_GroupList *g,
 
 int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
     if (g->list == NULL) {
-        g->list = malloc(sizeof(Series *));
+        g->list = (Series **)calloc(1, sizeof(Series *));
     } else {
-        g->list = realloc(g->list, sizeof(Series *) * g->count + 1);
+        g->list = (Series **)realloc(g->list, sizeof(Series *) * (g->count + 1));
     }
     g->list[g->count] = serie;
     g->count++;
@@ -277,7 +283,7 @@ void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesRedu
         keyLen);
 
     at_pos++;
-    Series *source;
+    Series *source = NULL;
     for (int i = 1; i < group->count; i++) {
         source = group->list[i];
         MultiSerieReduce(reduced, source, reducerOp);
