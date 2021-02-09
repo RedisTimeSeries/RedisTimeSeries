@@ -83,7 +83,6 @@ int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override);
-
 int SeriesUpdateLastSample(Series *series);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
