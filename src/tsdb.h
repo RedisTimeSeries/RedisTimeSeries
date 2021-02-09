@@ -60,9 +60,7 @@ typedef enum MultiSeriesReduceOp
 } MultiSeriesReduceOp;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
-
 void FreeSeries(void *value);
-
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 
 int GetSeries(RedisModuleCtx *ctx,
@@ -78,37 +76,28 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     int mode);
 
 void FreeCompactionRule(void *value);
-
 size_t SeriesMemUsage(const void *value);
-
 int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op);
-
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
-
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override);
 
 int SeriesUpdateLastSample(Series *series);
-
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
-
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
-
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series,
                               RedisModuleString *destKeyStr,
                               int aggType,
                               uint64_t timeBucket);
-
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                       RedisModuleString *keyName,
                                       Series *series,
                                       Label *labels,
                                       size_t labelsCount);
-
 size_t SeriesGetNumSamples(const Series *series);
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
