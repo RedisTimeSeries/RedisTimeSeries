@@ -215,7 +215,7 @@ int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
             int second_offset =
                 offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset) {
+            if (offset == second_offset || second_offset + 1 >= argc) {
                 return TSDB_OK;
             }
             offset = second_offset;

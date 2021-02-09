@@ -52,21 +52,17 @@ typedef struct Series
     DuplicatePolicy duplicatePolicy;
 } Series;
 
-typedef struct SeriesIterator
+typedef enum MultiSeriesReduceOp
 {
-    Series *series;
-    RedisModuleDictIter *dictIter;
-    Chunk_t *currentChunk;
-    ChunkIter_t *chunkIterator;
-    ChunkIterFuncs chunkIteratorFuncs;
-    api_timestamp_t maxTimestamp;
-    api_timestamp_t minTimestamp;
-    bool reverse;
-    void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
-} SeriesIterator;
+    MultiSeriesReduceOp_Min,
+    MultiSeriesReduceOp_Max,
+    MultiSeriesReduceOp_Sum,
+} MultiSeriesReduceOp;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+
 void FreeSeries(void *value);
+
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 
 int GetSeries(RedisModuleCtx *ctx,
@@ -82,32 +78,40 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     int mode);
 
 void FreeCompactionRule(void *value);
+
 size_t SeriesMemUsage(const void *value);
+
+int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op);
+
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
+
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override);
+
 int SeriesUpdateLastSample(Series *series);
+
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
+
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
+
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(Series *series,
                               RedisModuleString *destKeyStr,
                               int aggType,
                               uint64_t timeBucket);
+
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                       RedisModuleString *keyName,
                                       Series *series,
                                       Label *labels,
                                       size_t labelsCount);
+
 size_t SeriesGetNumSamples(const Series *series);
 
-// Iterator over the series
-SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
-ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-void SeriesIteratorClose(SeriesIterator *iterator);
+char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
 
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
@@ -132,5 +136,7 @@ typedef enum
     DICT_OP_DEL = 2
 } DictOp;
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
+
+void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
 
 #endif /* TSDB_H */
