@@ -59,10 +59,11 @@ commands:
             make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
+          no_output_timeout: 20m
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-          no_output_timeout: 20m
+          
 
   package:
     steps:
