@@ -19,6 +19,7 @@
 #include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
+#include "gears_integration.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -929,6 +930,16 @@ int NotifyCallback(RedisModuleCtx *original_ctx,
     return REDISMODULE_OK;
 }
 
+void module_loaded(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (subevent != REDISMODULE_SUBEVENT_MODULE_LOADED) {
+        return;
+    }
+    RedisModuleModuleChange *moduleChange = (RedisModuleModuleChange*)data;
+    if (strcasecmp(moduleChange->module_name, "rg") == 0) {
+        register_rg(ctx);
+    }
+}
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1023,12 +1034,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    if (RedisModule_CreateCommand(ctx, "ts.mget_rg", TSDB_mget_RG, "readonly", 0, 0, 0) ==
+        REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
 
-    if(RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) != REDISMODULE_OK){
-        RedisModule_Log(ctx, "warning", "Failed initialize RedisGears API");
-        return REDISMODULE_ERR;
-    }
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ModuleChange, module_loaded);
 
     return REDISMODULE_OK;
 }

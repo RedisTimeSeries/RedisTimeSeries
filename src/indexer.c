@@ -43,7 +43,7 @@ int parsePredicate(RedisModuleCtx *ctx,
     char *iter_ptr;
     size_t _s;
     const char *labelRaw = RedisModule_StringPtrLen(label, &_s);
-    char *labelstr = RedisModule_PoolAlloc(ctx, _s + 1);
+    char *labelstr = malloc(_s + 1);
     labelstr[_s] = '\0';
     strncpy(labelstr, labelRaw, _s);
 
@@ -81,7 +81,7 @@ int parsePredicate(RedisModuleCtx *ctx,
             retQuery->valueListCount = filterCount + 1;
         }
         retQuery->valuesList =
-            RedisModule_PoolAlloc(ctx, retQuery->valueListCount * sizeof(RedisModuleString *));
+            calloc(retQuery->valueListCount, sizeof(RedisModuleString *));
 
         char *subToken = strtok_r(token, ",", &iter_ptr);
         for (int i = 0; i < retQuery->valueListCount; i++) {
@@ -93,7 +93,7 @@ int parsePredicate(RedisModuleCtx *ctx,
         }
     } else if (token != NULL) {
         retQuery->valueListCount = 1;
-        retQuery->valuesList = RedisModule_PoolAlloc(ctx, sizeof(RedisModuleString *));
+        retQuery->valuesList = malloc(sizeof(RedisModuleString *));
         retQuery->valuesList[0] = RedisModule_CreateString(ctx, token, strlen(token));
     } else {
         retQuery->valuesList = NULL;
