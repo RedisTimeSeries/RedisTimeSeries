@@ -62,6 +62,7 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+          no_output_timeout: 20m
 
   package:
     steps:
@@ -275,10 +276,12 @@ workflows:
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
+          context: common
           <<: *on-any-branch
       - deploy_package:
           name: deploy_branch
           package: branch
+          context: common
           requires:
             - build
             - valgrind
@@ -286,11 +289,13 @@ workflows:
       - deploy_package:
           name: deploy_release
           package: release
+          context: common
           requires:
             - build
             - valgrind
           <<: *on-version-tags
       - release-automation:
+          context: common
           requires:
             - deploy_release
           <<: *on-version-tags
@@ -303,4 +308,5 @@ workflows:
     jobs:
       - build-macos
       - valgrind
-      - nightly-automation
+      - nightly-automation:
+          context: common

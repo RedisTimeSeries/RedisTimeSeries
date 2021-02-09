@@ -4,7 +4,7 @@
 
 ### TS.CREATE
 
-Create a new time-series.
+Create a new time-series. 
 
 ```sql
 TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
@@ -35,6 +35,14 @@ TS.CREATE complexity is O(1).
 ```sql
 TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
 ```
+
+#### Errors
+
+* If a key already exists you get a normal Redis error reply `TSDB: key already exists`. You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
+
+#### Notes
+
+`TS.ADD` can create new time-series in fly, when called on a time-series that does not exist.
 
 ## Delete
 
@@ -68,14 +76,14 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 ### TS.ADD
 
-Append (or create and append) a new sample to the series.
+Append a new sample to the series. If the series has not been created yet with `TS.CREATE` it will be automatically created. 
 
 ```sql
 TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
-* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
-* value - numeric data value of the sample (double)
+* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+* value - (double) numeric data value of the sample 
 
 These arguments are optional because they can be set by TS.CREATE:
 
