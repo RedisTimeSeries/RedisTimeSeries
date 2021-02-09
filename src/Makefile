@@ -115,7 +115,8 @@ _SOURCES=\
 	query_language.c \
 	reply.c \
 	rdb.c \
-	tsdb.c
+	tsdb.c \
+	gears_integration.c
 
 _TEST_SOURCES=\
 	unittests.c \
