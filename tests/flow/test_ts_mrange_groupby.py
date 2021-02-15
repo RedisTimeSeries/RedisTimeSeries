@@ -45,6 +45,10 @@ def test_groupby_reduce():
         env.assertEqual(serie2_name, b'metric_name=user')
         env.assertEqual(serie2_labels[0][0], b'metric_name')
         env.assertEqual(serie2_labels[0][1], b'user')
+        env.assertEqual(serie2_labels[1][0], b'__reducer__')
+        env.assertEqual(serie2_labels[1][1], b'max')
+        env.assertEqual(serie2_labels[2][0], b'__source__')
+        env.assertEqual(serie2_labels[2][1], b's1,s2')
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'95']])
 
         actual_result = r.execute_command(
