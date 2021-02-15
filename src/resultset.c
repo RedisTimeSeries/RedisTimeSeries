@@ -267,8 +267,6 @@ int ResultSet_ApplyReducer(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
 
 void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesReduceOp reducerOp) {
     Label *labels = createReducedSeriesLabels(labelKey, group->labelValue, reducerOp);
-    const uint64_t total_series = group->count;
-    uint64_t at_pos = 0;
     const size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
     char *serie_name = malloc(serie_name_len);
     sprintf(serie_name, "%s=%s", labelKey, group->labelValue);
@@ -276,28 +274,19 @@ void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesRedu
     // Use the first serie as the initial data
     Series *reduced = group->list[0];
     size_t keyLen = 0;
-    RedisModule_StringAppendBuffer(
-        NULL,
-        labels[2].value,
-        (const char *)RedisModule_StringPtrLen(reduced->keyName, &keyLen),
-        keyLen);
+    const char *firstKeyname = (const char *)RedisModule_StringPtrLen(reduced->keyName, &keyLen);
+    RedisModule_StringAppendBuffer(NULL, labels[2].value, firstKeyname, keyLen);
 
-    at_pos++;
     Series *source = NULL;
     for (int i = 1; i < group->count; i++) {
         source = group->list[i];
         MultiSerieReduce(reduced, source, reducerOp);
-        if (at_pos > 0 && at_pos < total_series) {
-            RedisModule_StringAppendBuffer(NULL, labels[2].value, ",", 1);
-        }
-
+        RedisModule_StringAppendBuffer(NULL, labels[2].value, ",", 1);
         RedisModule_StringAppendBuffer(
             NULL, labels[2].value, RedisModule_StringPtrLen(source->keyName, &keyLen), keyLen);
-        at_pos++;
-
         FreeTempSeries(source);
-        group->count--;
     }
+    group->count = 1;
 
     FreeLabels(reduced->labels, reduced->labelsCount);
     RedisModule_FreeString(NULL, reduced->keyName);
