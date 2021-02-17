@@ -70,4 +70,3 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redis-time-series-rb-url]: https://github.com/dzunk/redis-time-series
 [redis-time-series-rb-author]: https://github.com/dzunk
 [redis-time-series-rb-stars]: https://img.shields.io/github/stars/dzunk/redis-time-series.svg?style=social&amp;label=Star&amp;maxAge=2592000
-
