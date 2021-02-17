@@ -17,6 +17,24 @@
 #ifndef REDISTIMESERIES_QUERY_LANGUAGE_H
 #define REDISTIMESERIES_QUERY_LANGUAGE_H
 
+typedef struct AggregationArgs {
+    api_timestamp_t timeDelta;
+    AggregationClass *aggregationClass;
+} AggregationArgs;
+
+typedef struct MRangeArgs {
+    api_timestamp_t startTimestamp;
+    api_timestamp_t endTimestamp;
+    AggregationArgs aggregationArgs;
+    bool withLabels;
+    long long count; // AKA limit
+    QueryPredicate *queryPredicates;
+    size_t queryPredicatesCount;
+    const char *groupByLabel;
+    MultiSeriesReduceOp gropuByReducerOp;
+    bool reverse;
+} MRangeArgs;
+
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
@@ -53,5 +71,7 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx,
                            int start,
                            int query_count,
                            QueryPredicate *queries);
+
+int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

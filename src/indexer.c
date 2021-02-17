@@ -365,3 +365,12 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     }
     return result;
 }
+
+void QueryPredicate_Free(QueryPredicate *predicate) {
+    for (int i=0; i < predicate->valueListCount; i++) {
+        RedisModule_FreeString(NULL, predicate->valuesList[i]);
+    }
+    free(predicate->key);
+    free(predicate->valuesList);
+    free(predicate);
+}

@@ -1,19 +1,25 @@
 
+#include <assert.h>
 #include "gears_integration.h"
 #include "indexer.h"
 #include "consts.h"
+#include "generic_chunk.h"
+#include "tsdb.h"
+#include <assert.h>
 
 #include "RedisModulesSDK/redismodule.h"
-#include "RedisGears/src/redisgears.h"
+#include "redisgears.h"
+#include "rmutil/alloc.h"
 #include "query_language.h"
 
 #define QueryPredicatesVersion 1
+#define SeriesRecordName "SeriesRecord"
 
-typedef struct QueryPredicates_Arg {
-    QueryPredicate *predicates;
-    size_t count;
-    bool withLabels;
-} QueryPredicates_Arg;
+static RecordType* SeriesRecordType = NULL;
+
+RecordType *GetSeriesRecordType() {
+    return SeriesRecordType;
+}
 
 static void QueryPredicates_ObjectFree(void* arg){
     QueryPredicates_Arg* predicate_list = arg;
@@ -49,6 +55,8 @@ static char* QueryPredicates_ToString(void *arg) {
     return strdup(out);
 }
 
+static void BWWriteRedisString(Gears_BufferWriter *bw, const RedisModuleString *arg);
+
 static int QueryPredicates_ArgSerialize(FlatExecutionPlan* fep, void* arg, Gears_BufferWriter* bw, char** err){
     QueryPredicates_Arg* predicate_list = arg;
     RedisGears_BWWriteLong(bw, predicate_list->count);
@@ -59,24 +67,34 @@ static int QueryPredicates_ArgSerialize(FlatExecutionPlan* fep, void* arg, Gears
         RedisGears_BWWriteLong(bw, predicate->type);
 
         // encode key
-        size_t len = 0;
-        const char *keyC = RedisModule_StringPtrLen(predicate->key, &len);
-        RedisGears_BWWriteBuffer(bw, keyC, len + 1);
+        BWWriteRedisString(bw, predicate->key);
 
         //encode values
         RedisGears_BWWriteLong(bw, predicate->valueListCount);
         for (int value_index=0; value_index < predicate->valueListCount; value_index++) {
-            size_t value_len = 0;
-            const char *value = RedisModule_StringPtrLen(predicate->valuesList[value_index], &value_len);
-            RedisGears_BWWriteBuffer(bw, value, value_len + 1);
+            BWWriteRedisString(bw, predicate->valuesList[value_index]);
         }
 
     }
     return REDISMODULE_OK;
 }
 
-static void* QueryPredicates_ArgDeserialize(FlatExecutionPlan* fep, Gears_BufferReader* br, int version, char** err){
-    QueryPredicates_Arg* predicates = RG_ALLOC(sizeof(*predicates));
+static void BWWriteRedisString(Gears_BufferWriter *bw, const RedisModuleString *arg) {
+    size_t value_len = 0;
+    const char *value = RedisModule_StringPtrLen(arg, &value_len);
+    RedisGears_BWWriteBuffer(bw, value, value_len + 1);
+}
+
+static RedisModuleString *BRReadRedisString(Gears_BufferReader *br) {
+    const char *temp = RedisGears_BRReadString(br);
+    size_t len = strlen(temp);
+    char *key_c = malloc(len);
+    memcpy(key_c, temp, len);
+    return RedisModule_CreateString(NULL, key_c, len);
+}
+
+static void* QueryPredicates_ArgDeserialize(FlatExecutionPlan* fep, Gears_BufferReader* br, int version, char** err) {
+    QueryPredicates_Arg* predicates = malloc(sizeof(*predicates));
     predicates->count = RedisGears_BRReadLong(br);
     predicates->withLabels = RedisGears_BRReadLong(br);
     predicates->predicates = calloc(predicates->count, sizeof(QueryPredicate));
@@ -86,17 +104,14 @@ static void* QueryPredicates_ArgDeserialize(FlatExecutionPlan* fep, Gears_Buffer
         predicate->type = RedisGears_BRReadLong(br);
 
         // decode key
-        char *key_c = RedisGears_BRReadString(br);
-        size_t len = strlen(key_c);
-        predicate->key = RedisModule_CreateString(NULL, key_c, len);
+        predicate->key = BRReadRedisString(br);
 
         // decode values
         predicate->valueListCount = RedisGears_BRReadLong(br);
         predicate->valuesList = calloc(predicate->valueListCount, sizeof(RedisModuleString*));
 
         for (int value_index=0; value_index < predicate->valueListCount; value_index++) {
-            char *key_c = RedisGears_BRReadString(br);
-            predicate->valuesList[value_index] = RedisModule_CreateString(NULL, key_c, strlen(key_c));
+            predicate->valuesList[value_index] = BRReadRedisString(br);
         }
     }
     return predicates;
@@ -135,6 +150,41 @@ Record* ListWithSeriesLastDatapoint(const Series *series) {
     } else {
         return ListWithSample(series->lastTimestamp, series->lastValue);
     }
+}
+
+Record* ShardSeriesMapper(ExecutionCtx* rctx, Record *data, void* arg) {
+    RedisModuleCtx *ctx = RedisGears_GetRedisModuleCtx(rctx);
+    QueryPredicates_Arg* predicates = arg;
+
+    RedisModuleDict *result = QueryIndex(ctx, predicates->predicates, predicates->count);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+
+    Series *series;
+    Record *series_list = RedisGears_ListRecordCreate(0);
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const int status = SilentGetSeries(ctx,
+                                           RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                           &key,
+                                           &series,
+                                           REDISMODULE_READ);
+        if (!status) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "couldn't open key or key is not a Timeseries. key=%.*s",
+                            currentKeyLen,
+                            currentKey);
+            continue;
+        }
+        RedisGears_ListRecordAdd(series_list, SeriesRecord_New(series));
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    return series_list;
 }
 
 Record* ShardMgetMapper(ExecutionCtx* rctx, Record *data, void* arg) {
@@ -197,63 +247,125 @@ int register_rg(RedisModuleCtx *ctx) {
                                                          QueryPredicates_ArgDeserialize,
                                                          QueryPredicates_ToString);
 
+    SeriesRecordType = RedisGears_RecordTypeCreate(SeriesRecordName,
+                                                   sizeof(SeriesRecord),
+                                                   SeriesRecord_SendReply,
+                                                   (RecordSerialize) SeriesRecord_Serialize,
+                                                   (RecordDeserialize) SeriesRecord_Deserialize,
+                                                   (RecordFree) SeriesRecord_ObjectFree
+                                );
+    RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
     return RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 }
 
-static void on_done(ExecutionPlan* ctx, void* privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    RedisGears_ReturnResultsAndErrors(ctx, rctx);
-    RedisModule_UnblockClient(bc, NULL);
-    RedisGears_DropExecution(ctx);
-    RedisModule_FreeThreadSafeContext(rctx);
+Record* SeriesRecord_New(Series *series) {
+    SeriesRecord *out = (SeriesRecord*)RedisGears_RecordCreate(SeriesRecordType);
+    out->keyName = RedisModule_CreateStringFromString(NULL, series->keyName);
+    if (series->options & SERIES_OPT_UNCOMPRESSED) {
+        out->chunkType = CHUNK_REGULAR;
+    } else {
+        out->chunkType = CHUNK_COMPRESSED;
+    }
+    out->funcs = series->funcs;
+    out->labelsCount = series->labelsCount;
+    out->labels = calloc(series->labelsCount, sizeof(Label));
+    for (int i = 0; i < series->labelsCount; i++) {
+        out->labels[i].key = RedisModule_CreateStringFromString(NULL, series->labels[i].key);
+        out->labels[i].value = RedisModule_CreateStringFromString(NULL, series->labels[i].value);
+    }
+
+    // clone chunks
+    out->chunks = calloc(RedisModule_DictSize(series->chunks), sizeof(Chunk_t *));
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    Chunk_t *chunk = NULL;
+    int index = 0;
+    while (RedisModule_DictNextC(iter, NULL, &chunk)) {
+        out->chunks[index] = out->funcs->CloneChunk(chunk);
+        index++;
+    }
+    out->chunkCount = index;
+    RedisModule_DictIteratorStop(iter);
+    return &out->base;
 }
 
-int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc < 3) {
-        return RedisModule_WrongArity(ctx);
+void SeriesRecord_ObjectFree(void *record) {
+    SeriesRecord *series = record;
+    for (int i=0; i < series->labelsCount; i++) {
+        RedisModule_FreeString(NULL, series->labels[i].key);
+        RedisModule_FreeString(NULL, series->labels[i].value);
+    }
+    free(series->labels);
+
+    for (int i=0; i < series->chunkCount; i++) {
+        series->funcs->FreeChunk(series->chunks[i]);
     }
 
-    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
-    if (filter_location == -1) {
-        return RedisModule_WrongArity(ctx);
-    }
-    size_t query_count = argc - 1 - filter_location;
-    const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
-    QueryPredicate *queries = calloc(query_count, sizeof(QueryPredicate));
-    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
-        TSDB_ERROR) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
-    }
+    free(series->chunks);
+    RedisModule_FreeString(NULL, series->keyName);
+}
 
-    if (CountPredicateType(queries, (size_t)query_count, EQ) +
-        CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
-        0) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+int SeriesRecord_Serialize(ExecutionCtx* ctx, Gears_BufferWriter* bw, Record* base) {
+    SeriesRecord *series = (SeriesRecord *) base;
+    RedisGears_BWWriteLong(bw, series->chunkType);
+    BWWriteRedisString(bw, series->keyName);
+    RedisGears_BWWriteLong(bw, series->labelsCount);
+    for (int i=0; i < series->labelsCount; i++) {
+        BWWriteRedisString(bw, series->labels[i].key);
+        BWWriteRedisString(bw, series->labels[i].value);
     }
 
-
-    char *err = NULL;
-    FlatExecutionPlan* rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, err);
+    RedisGears_BWWriteLong(bw, series->chunkCount);
+    for (int i=0; i < series->chunkCount; i++) {
+        series->funcs->GearsSerialize(series->chunks[i], bw);
     }
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
-    queryArg->count = query_count;
-    queryArg->predicates = queries;
-    queryArg->withLabels = (withlabels_location > 0);
-    RedisGears_Map(rg_ctx, "ShardMgetMapper", queryArg);
-
-    RGM_Collect(rg_ctx);
-    ExecutionPlan* ep = RGM_Run(rg_ctx, ExecutionModeAsync, NULL, NULL, NULL, &err);
-    if(!ep){
-        RedisGears_FreeFlatExecution(rg_ctx);
-        RedisModule_ReplyWithError(ctx, err);
-        return REDISMODULE_OK;
-    }
-
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
-    RedisGears_AddOnDoneCallback(ep, on_done, bc);
-    RedisGears_FreeFlatExecution(rg_ctx);
     return REDISMODULE_OK;
+}
+
+Record* SeriesRecord_Deserialize(ExecutionCtx* ctx, Gears_BufferReader* br) {
+    SeriesRecord* series = (SeriesRecord*)RedisGears_RecordCreate(SeriesRecordType);
+    series->chunkType = RedisGears_BRReadLong(br);
+    series->funcs = GetChunkClass(series->chunkType);
+    series->keyName = BRReadRedisString(br);
+    series->labelsCount = RedisGears_BRReadLong(br);
+    series->labels = calloc(series->labelsCount, sizeof(Label));
+    for (int i=0; i < series->labelsCount; i++) {
+        series->labels[i].key = BRReadRedisString(br);
+        series->labels[i].value = BRReadRedisString(br);
+    }
+
+    series->chunkCount = RedisGears_BRReadLong(br);
+    series->chunks = calloc(series->chunkCount, sizeof(Chunk_t *));
+    for (int i=0; i < series->chunkCount; i++) {
+        series->funcs->GearsDeserialize(&series->chunks[i], br);
+    }
+    return &series->base;
+}
+
+int SeriesRecord_SendReply(Record* record, RedisModuleCtx* rctx) {
+    SeriesRecord* series = (SeriesRecord*)record;
+    RedisModule_ReplyWithArray(rctx, 3);
+    RedisModule_ReplyWithString(rctx, series->keyName);
+    RedisModule_ReplyWithLongLong(rctx, series->chunkCount);
+    RedisModule_ReplyWithLongLong(rctx, series->labelsCount);
+    return REDISMODULE_OK;
+}
+
+Series* SeriesRecord_IntoSeries(SeriesRecord *record) {
+    CreateCtx createArgs = {0};
+    createArgs.isTemporary = true;
+    Series *s = NewSeries(RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
+    s->labelsCount = record->labelsCount;
+    s->labels = calloc(s->labelsCount, sizeof(Label));
+    for (int i=0; i<s->labelsCount; i++) {
+        s->labels[i].key = RedisModule_CreateStringFromString(NULL, record->labels[i].key);
+        s->labels[i].value = RedisModule_CreateStringFromString(NULL, record->labels[i].value);
+    }
+    s->funcs = record->funcs;
+    for(int chunk_index=0; chunk_index < record->chunkCount; chunk_index++) {
+        dictOperator(s->chunks,
+                     s->funcs->CloneChunk(record->chunks[chunk_index]),
+                     record->funcs->GetFirstTimestamp(record->chunks[chunk_index]),
+                     DICT_OP_SET);
+    }
+    return s;
 }
