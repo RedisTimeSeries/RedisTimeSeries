@@ -194,22 +194,6 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
     }
 }
 
-int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
-    if (strncasecmp(reducerstr, "sum", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Sum;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Max;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Min;
-        return TSDB_OK;
-    }
-    return TSDB_ERROR;
-}
-
 Label *createReducedSeriesLabels(char *labelKey, char *labelValue, MultiSeriesReduceOp reducerOp) {
     // Labels:
     // <label>=<groupbyvalue>
@@ -270,7 +254,7 @@ void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesRedu
     Label *labels = createReducedSeriesLabels(labelKey, group->labelValue, reducerOp);
     const size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
     char *serie_name = malloc(serie_name_len);
-    sprintf(serie_name, "%s=%s", labelKey, group->labelValue);
+    serie_name_len = sprintf(serie_name, "%s=%s", labelKey, group->labelValue);
 
     // Use the first serie as the initial data
     Series *reduced = group->list[0];
@@ -291,7 +275,7 @@ void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesRedu
 
     FreeLabels(reduced->labels, reduced->labelsCount);
     RedisModule_FreeString(NULL, reduced->keyName);
-    reduced->keyName = RedisModule_CreateStringPrintf(NULL, "%s", serie_name);
+    reduced->keyName = RedisModule_CreateString(NULL, serie_name, serie_name_len);
     reduced->labels = labels;
     reduced->labelsCount = 3;
 

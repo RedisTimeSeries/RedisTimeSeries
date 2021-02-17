@@ -119,7 +119,8 @@ _SOURCES=\
 	tsdb.c \
 	series_iterator.c \
 	fpconv.c \
-	gears_integration.c
+	gears_integration.c \
+	gears_commands.c
 
 _TEST_SOURCES=\
 	unittests.c \

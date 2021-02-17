@@ -3,6 +3,7 @@
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
+#include <limits.h>
 #include "query_language.h"
 
 #include "rmutil/alloc.h"
@@ -269,4 +270,110 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx,
         query++;
     }
     return TSDB_OK;
+}
+
+int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
+    if (strncasecmp(reducerstr, "sum", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Sum;
+        return TSDB_OK;
+
+    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Max;
+        return TSDB_OK;
+
+    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Min;
+        return TSDB_OK;
+    }
+    return TSDB_ERROR;
+}
+
+int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
+    if (argc < 4) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+
+    MRangeArgs args;
+    args.groupByLabel = NULL;
+    args.queryPredicatesCount = 0;
+    args.queryPredicates = NULL;
+    args.aggregationArgs.timeDelta = 0;
+    args.aggregationArgs.aggregationClass = NULL;
+
+    Series fake_series = { 0 };
+    fake_series.lastTimestamp = LLONG_MAX;
+    if (parseRangeArguments(ctx, &fake_series, 1, argv, &args.startTimestamp, &args.endTimestamp) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs.timeDelta, &args.aggregationArgs.aggregationClass);
+    if (aggregationResult == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        RTS_ReplyGeneralError(ctx, "TSDB: missing FILTER argument");
+        return REDISMODULE_ERR;
+    }
+
+    args.count = -1;
+    if (parseCountArgument(ctx, argv, argc, &args.count) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    args.withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+
+    const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+
+    // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
+    // are only up to (GROUPBY pos) - 1.
+    const size_t last_filter_pos = groupby_location > 0 ? groupby_location - 1 : argc - 1;
+    const size_t query_count = last_filter_pos - filter_location;
+
+    if (query_count == 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: missing labels for filter argument");
+        return REDISMODULE_ERR;
+    }
+
+    QueryPredicate *queries = calloc(query_count, sizeof(QueryPredicate));
+    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
+        TSDB_ERROR) {
+        free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+        return REDISMODULE_ERR;
+    }
+
+    if (CountPredicateType(queries, (size_t)query_count, EQ) +
+        CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
+        0) {
+        QueryPredicate_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+        return REDISMODULE_ERR;
+    }
+
+    args.queryPredicates = queries;
+    args.queryPredicatesCount = query_count;
+
+
+    if (groupby_location > 0) {
+        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
+
+        const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
+        // If we've detected a groupby but not a reduce
+        // or we've detected a groupby by the total args don't match
+        if (reduce_location < 0 || (argc - groupby_location != 4)) {
+            RedisModule_WrongArity(ctx);
+            free(queries);
+            return REDISMODULE_ERR;
+        }
+        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
+                                     &args.gropuByReducerOp) != TSDB_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+            free(queries);
+            return REDISMODULE_ERR;
+        }
+    }
+    *out = args;
+    return REDISMODULE_OK;
 }

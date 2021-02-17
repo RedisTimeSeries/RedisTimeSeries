@@ -20,6 +20,7 @@
 #include "tsdb.h"
 #include "version.h"
 #include "gears_integration.h"
+#include "gears_commands.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -185,15 +186,8 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 // multi-series groupby logic
 static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
-                                  MultiSeriesReduceOp reducerOp,
                                   RedisModuleDict *result,
-                                  bool withlabels,
-                                  api_timestamp_t start_ts,
-                                  api_timestamp_t end_ts,
-                                  AggregationClass *aggObject,
-                                  int64_t time_delta,
-                                  long long count,
-                                  bool rev) {
+                                  MRangeArgs args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey = NULL;
     size_t currentKeyLen;
@@ -221,12 +215,12 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     RedisModule_DictIteratorStop(iter);
 
     // apply the range and per-serie aggregations, do not apply max results to the raw data
-    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, -1, rev);
+    ResultSet_ApplyRange(resultset, args.startTimestamp, args.endTimestamp, args.aggregationArgs.aggregationClass, args.aggregationArgs.timeDelta, -1, args.reverse);
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, reducerOp);
+    ResultSet_ApplyReducer(resultset, args.gropuByReducerOp);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
-    replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, NULL, 0, count, rev);
+    replyResultSet(ctx, resultset, args.withLabels, args.startTimestamp, args.endTimestamp, NULL, 0, args.count, args.reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
@@ -235,13 +229,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 // Previous multirange reply logic ( unchanged )
 static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                                     RedisModuleDict *result,
-                                    bool withlabels,
-                                    api_timestamp_t start_ts,
-                                    api_timestamp_t end_ts,
-                                    AggregationClass *aggObject,
-                                    int64_t time_delta,
-                                    long long count,
-                                    bool rev) {
+                                    MRangeArgs args) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
@@ -268,7 +256,15 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
             continue;
         }
         ReplySeriesArrayPos(
-            ctx, series, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+            ctx,
+            series,
+            args.withLabels,
+            args.startTimestamp,
+            args.endTimestamp,
+            args.aggregationArgs.aggregationClass,
+            args.aggregationArgs.timeDelta,
+            args.count,
+            args.reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -281,87 +277,25 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
 int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 4) {
-        return RedisModule_WrongArity(ctx);
+    MRangeArgs args;
+    args.reverse = rev;
+    if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
+        return REDISMODULE_OK;
     }
 
-    api_timestamp_t start_ts, end_ts;
-    api_timestamp_t time_delta = 0;
-    Series fake_series = { 0 };
-    fake_series.lastTimestamp = LLONG_MAX;
-    if (parseRangeArguments(ctx, &fake_series, 1, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
+    RedisModuleDict *resultSeries = QueryIndex(ctx, args.queryPredicates, args.queryPredicatesCount);
 
-    AggregationClass *aggObject = NULL;
-    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
-    if (aggregationResult == TSDB_ERROR) {
-        return REDISMODULE_ERR;
-    }
-
-    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
-    if (filter_location == -1) {
-        return RedisModule_WrongArity(ctx);
-    }
-
-    long long count = -1;
-    if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
-    const int withlabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
-
-    const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
-
-    // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
-    // are only up to (GROUPBY pos) - 1.
-    const size_t last_filter_pos = groupby_location > 0 ? groupby_location - 1 : argc - 1;
-    const size_t query_count = last_filter_pos - filter_location;
-
-    QueryPredicate *queries = RedisModule_PoolAlloc(ctx, sizeof(QueryPredicate) * query_count);
-    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
-        TSDB_ERROR) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
-    }
-
-    if (CountPredicateType(queries, (size_t)query_count, EQ) +
-            CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
-        0) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
-    }
-
-    RedisModuleDict *resultSeries = QueryIndex(ctx, queries, query_count);
-
-    if (groupby_location > 0) {
-        const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
-        // If we've detected a groupby but not a reduce
-        // or we've detected a groupby by the total args don't match
-        if (reduce_location < 0 || (argc - groupby_location != 4)) {
-            return RedisModule_WrongArity(ctx);
-        }
-        MultiSeriesReduceOp reducerOp;
-        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
-                                     &reducerOp) != TSDB_OK) {
-            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
-        }
-
+    if (args.groupByLabel) {
         TS_ResultSet *resultset = ResultSet_Create();
-        ResultSet_GroupbyLabel(resultset,
-                               RedisModule_StringPtrLen(argv[groupby_location + 1], NULL));
+        ResultSet_GroupbyLabel(resultset, args.groupByLabel);
 
         return replyGroupedMultiRange(ctx,
                                       resultset,
-                                      reducerOp,
                                       resultSeries,
-                                      withlabels,
-                                      start_ts,
-                                      end_ts,
-                                      aggObject,
-                                      time_delta,
-                                      count,
-                                      rev);
+                                      args);
     } else {
         return replyUngroupedMultiRange(
-            ctx, resultSeries, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
+            ctx, resultSeries, args);
     }
 }
 
@@ -1015,7 +949,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.decrby", TSDB_incrby);
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterReadCmd(ctx, "ts.revrange", TSDB_revrange);
-    RMUtil_RegisterReadCmd(ctx, "ts.queryindex", TSDB_queryindex);
+
+    if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, 0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
 
@@ -1036,6 +973,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "ts.mget_rg", TSDB_mget_RG, "readonly", 0, 0, 0) ==
+        REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "ts.mrange_rg", TSDB_mrange_RG, "readonly", 0, 0, 0) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 

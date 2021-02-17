@@ -31,6 +31,7 @@ typedef struct CreateCtx
     Label *labels;
     int options;
     DuplicatePolicy duplicatePolicy;
+    bool isTemporary;
 } CreateCtx;
 
 typedef struct Series
@@ -50,6 +51,7 @@ typedef struct Series
     ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    bool isTemporary;
 } Series;
 
 typedef enum MultiSeriesReduceOp

@@ -86,6 +86,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->isTemporary = cCtx->isTemporary;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -198,8 +199,10 @@ void FreeSeries(void *value) {
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModule_AutoMemory(ctx);
-    RemoveIndexedMetric(
-        ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    if (!currentSeries->isTemporary) {
+        RemoveIndexedMetric(
+                ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
