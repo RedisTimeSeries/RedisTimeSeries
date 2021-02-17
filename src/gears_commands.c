@@ -1,10 +1,10 @@
 
 #include "gears_commands.h"
 
-#include "RedisGears/src/redisgears.h"
 #include "consts.h"
 #include "gears_integration.h"
 #include "query_language.h"
+#include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
 

@@ -1,8 +1,8 @@
 
-#include "RedisGears/src/redisgears.h"
 #include "RedisModulesSDK/redismodule.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "redisgears.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_GEARS_INTEGRATION_H

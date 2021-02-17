@@ -8,7 +8,6 @@
 
 #include "module.h"
 
-#include "RedisGears/src/redisgears.h"
 #include "RedisModulesSDK/redismodule.h"
 #include "common.h"
 #include "compaction.h"
@@ -18,6 +17,7 @@
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
+#include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
 #include "tsdb.h"
