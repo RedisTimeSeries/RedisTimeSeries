@@ -252,7 +252,7 @@ int ResultSet_ApplyReducer(TS_ResultSet *r, MultiSeriesReduceOp reducerOp) {
 
 void GroupList_ApplyReducer(TS_GroupList *group, char *labelKey, MultiSeriesReduceOp reducerOp) {
     Label *labels = createReducedSeriesLabels(labelKey, group->labelValue, reducerOp);
-    const size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
+    size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
     char *serie_name = malloc(serie_name_len);
     serie_name_len = sprintf(serie_name, "%s=%s", labelKey, group->labelValue);
 
