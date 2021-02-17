@@ -80,8 +80,7 @@ int parsePredicate(RedisModuleCtx *ctx,
         } else {
             retQuery->valueListCount = filterCount + 1;
         }
-        retQuery->valuesList =
-            calloc(retQuery->valueListCount, sizeof(RedisModuleString *));
+        retQuery->valuesList = calloc(retQuery->valueListCount, sizeof(RedisModuleString *));
 
         char *subToken = strtok_r(token, ",", &iter_ptr);
         for (int i = 0; i < retQuery->valueListCount; i++) {
@@ -367,7 +366,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate) {
-    for (int i=0; i < predicate->valueListCount; i++) {
+    for (int i = 0; i < predicate->valueListCount; i++) {
         RedisModule_FreeString(NULL, predicate->valuesList[i]);
     }
     free(predicate->key);

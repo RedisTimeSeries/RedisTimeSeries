@@ -8,10 +8,13 @@
 
 #include "module.h"
 
+#include "RedisGears/src/redisgears.h"
 #include "RedisModulesSDK/redismodule.h"
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
+#include "gears_commands.h"
+#include "gears_integration.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
@@ -19,8 +22,6 @@
 #include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
-#include "gears_integration.h"
-#include "gears_commands.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -30,8 +31,6 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
-
-#include "RedisGears/src/redisgears.h"
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
@@ -215,21 +214,33 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     RedisModule_DictIteratorStop(iter);
 
     // apply the range and per-serie aggregations, do not apply max results to the raw data
-    ResultSet_ApplyRange(resultset, args.startTimestamp, args.endTimestamp, args.aggregationArgs.aggregationClass, args.aggregationArgs.timeDelta, -1, args.reverse);
+    ResultSet_ApplyRange(resultset,
+                         args.startTimestamp,
+                         args.endTimestamp,
+                         args.aggregationArgs.aggregationClass,
+                         args.aggregationArgs.timeDelta,
+                         -1,
+                         args.reverse);
     // Apply the reducer
     ResultSet_ApplyReducer(resultset, args.gropuByReducerOp);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
-    replyResultSet(ctx, resultset, args.withLabels, args.startTimestamp, args.endTimestamp, NULL, 0, args.count, args.reverse);
+    replyResultSet(ctx,
+                   resultset,
+                   args.withLabels,
+                   args.startTimestamp,
+                   args.endTimestamp,
+                   NULL,
+                   0,
+                   args.count,
+                   args.reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
 }
 
 // Previous multirange reply logic ( unchanged )
-static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
-                                    RedisModuleDict *result,
-                                    MRangeArgs args) {
+static int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, MRangeArgs args) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
@@ -255,16 +266,15 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
-        ReplySeriesArrayPos(
-            ctx,
-            series,
-            args.withLabels,
-            args.startTimestamp,
-            args.endTimestamp,
-            args.aggregationArgs.aggregationClass,
-            args.aggregationArgs.timeDelta,
-            args.count,
-            args.reverse);
+        ReplySeriesArrayPos(ctx,
+                            series,
+                            args.withLabels,
+                            args.startTimestamp,
+                            args.endTimestamp,
+                            args.aggregationArgs.aggregationClass,
+                            args.aggregationArgs.timeDelta,
+                            args.count,
+                            args.reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -283,19 +293,16 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         return REDISMODULE_OK;
     }
 
-    RedisModuleDict *resultSeries = QueryIndex(ctx, args.queryPredicates, args.queryPredicatesCount);
+    RedisModuleDict *resultSeries =
+        QueryIndex(ctx, args.queryPredicates, args.queryPredicatesCount);
 
     if (args.groupByLabel) {
         TS_ResultSet *resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, args.groupByLabel);
 
-        return replyGroupedMultiRange(ctx,
-                                      resultset,
-                                      resultSeries,
-                                      args);
+        return replyGroupedMultiRange(ctx, resultset, resultSeries, args);
     } else {
-        return replyUngroupedMultiRange(
-            ctx, resultSeries, args);
+        return replyUngroupedMultiRange(ctx, resultSeries, args);
     }
 }
 
@@ -869,7 +876,7 @@ void module_loaded(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
     if (subevent != REDISMODULE_SUBEVENT_MODULE_LOADED) {
         return;
     }
-    RedisModuleModuleChange *moduleChange = (RedisModuleModuleChange*)data;
+    RedisModuleModuleChange *moduleChange = (RedisModuleModuleChange *)data;
     if (strcasecmp(moduleChange->module_name, "rg") == 0) {
         register_rg(ctx);
     }
@@ -950,7 +957,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
     RMUtil_RegisterReadCmd(ctx, "ts.revrange", TSDB_revrange);
 
-    if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, 0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);

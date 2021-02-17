@@ -5,8 +5,9 @@
  */
 #include "chunk.h"
 
-#include "rmutil/alloc.h"
 #include "gears_integration.h"
+
+#include "rmutil/alloc.h"
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
@@ -205,10 +206,10 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     return size;
 }
 
-typedef void (*SaveUnsignedFunc)(void*, uint64_t);
-typedef void (*SaveStringBufferFunc)(void*, const char *str, size_t len);
-typedef uint64_t (*ReadUnsignedFunc)(void*);
-typedef char *(*ReadStringBufferFunc)(void*, size_t *);
+typedef void (*SaveUnsignedFunc)(void *, uint64_t);
+typedef void (*SaveStringBufferFunc)(void *, const char *str, size_t len);
+typedef uint64_t (*ReadUnsignedFunc)(void *);
+typedef char *(*ReadStringBufferFunc)(void *, size_t *);
 
 static void Uncompressed_GenericSerialize(Chunk_t *chunk,
                                           void *ctx,
@@ -223,7 +224,10 @@ static void Uncompressed_GenericSerialize(Chunk_t *chunk,
     saveString(ctx, (char *)uncompchunk->samples, uncompchunk->size);
 }
 
-static void Uncompressed_Deserialize(Chunk_t **chunk, void *ctx, ReadUnsignedFunc readUnsigned, ReadStringBufferFunc readStringBuffer) {
+static void Uncompressed_Deserialize(Chunk_t **chunk,
+                                     void *ctx,
+                                     ReadUnsignedFunc readUnsigned,
+                                     ReadStringBufferFunc readStringBuffer) {
     Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
 
     uncompchunk->base_timestamp = readUnsigned(ctx);
@@ -237,22 +241,17 @@ static void Uncompressed_Deserialize(Chunk_t **chunk, void *ctx, ReadUnsignedFun
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Uncompressed_GenericSerialize(chunk,
                                   io,
-                                  (SaveUnsignedFunc) RedisModule_SaveUnsigned,
-                                  (SaveStringBufferFunc) RedisModule_SaveStringBuffer);
+                                  (SaveUnsignedFunc)RedisModule_SaveUnsigned,
+                                  (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     Uncompressed_Deserialize(chunk,
                              io,
-                             (ReadUnsignedFunc) RedisModule_LoadUnsigned,
-                             (ReadStringBufferFunc) RedisModule_LoadStringBuffer
-                             );
+                             (ReadUnsignedFunc)RedisModule_LoadUnsigned,
+                             (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
+void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
 
-}
-
-void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
-
-}
+void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {}

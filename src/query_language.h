@@ -17,12 +17,14 @@
 #ifndef REDISTIMESERIES_QUERY_LANGUAGE_H
 #define REDISTIMESERIES_QUERY_LANGUAGE_H
 
-typedef struct AggregationArgs {
+typedef struct AggregationArgs
+{
     api_timestamp_t timeDelta;
     AggregationClass *aggregationClass;
 } AggregationArgs;
 
-typedef struct MRangeArgs {
+typedef struct MRangeArgs
+{
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
     AggregationArgs aggregationArgs;

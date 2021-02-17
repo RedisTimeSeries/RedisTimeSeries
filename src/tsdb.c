@@ -201,7 +201,7 @@ void FreeSeries(void *value) {
     RedisModule_AutoMemory(ctx);
     if (!currentSeries->isTemporary) {
         RemoveIndexedMetric(
-                ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+            ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
     }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);

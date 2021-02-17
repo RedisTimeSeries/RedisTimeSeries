@@ -3,9 +3,9 @@
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
-#include <limits.h>
 #include "query_language.h"
 
+#include <limits.h>
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
@@ -303,11 +303,13 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     Series fake_series = { 0 };
     fake_series.lastTimestamp = LLONG_MAX;
-    if (parseRangeArguments(ctx, &fake_series, 1, argv, &args.startTimestamp, &args.endTimestamp) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, &fake_series, 1, argv, &args.startTimestamp, &args.endTimestamp) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs.timeDelta, &args.aggregationArgs.aggregationClass);
+    const int aggregationResult = parseAggregationArgs(
+        ctx, argv, argc, &args.aggregationArgs.timeDelta, &args.aggregationArgs.aggregationClass);
     if (aggregationResult == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
@@ -345,7 +347,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     if (CountPredicateType(queries, (size_t)query_count, EQ) +
-        CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
+            CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
         0) {
         QueryPredicate_Free(queries);
         RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
@@ -354,7 +356,6 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     args.queryPredicates = queries;
     args.queryPredicatesCount = query_count;
-
 
     if (groupby_location > 0) {
         args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);

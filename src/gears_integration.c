@@ -1,33 +1,33 @@
 
-#include <assert.h>
 #include "gears_integration.h"
-#include "indexer.h"
-#include "consts.h"
-#include "generic_chunk.h"
-#include "tsdb.h"
-#include <assert.h>
 
 #include "RedisModulesSDK/redismodule.h"
-#include "redisgears.h"
-#include "rmutil/alloc.h"
+#include "consts.h"
+#include "generic_chunk.h"
+#include "indexer.h"
 #include "query_language.h"
+#include "redisgears.h"
+#include "tsdb.h"
+
+#include <assert.h>
+#include "rmutil/alloc.h"
 
 #define QueryPredicatesVersion 1
 #define SeriesRecordName "SeriesRecord"
 
-static RecordType* SeriesRecordType = NULL;
+static RecordType *SeriesRecordType = NULL;
 
 RecordType *GetSeriesRecordType() {
     return SeriesRecordType;
 }
 
-static void QueryPredicates_ObjectFree(void* arg){
-    QueryPredicates_Arg* predicate_list = arg;
+static void QueryPredicates_ObjectFree(void *arg) {
+    QueryPredicates_Arg *predicate_list = arg;
 
-    for (int i=0; i < predicate_list->count; i++) {
+    for (int i = 0; i < predicate_list->count; i++) {
         QueryPredicate *predicate = predicate_list->predicates + i;
         RedisModule_FreeString(NULL, predicate->key);
-        for (int value_index=0; value_index < predicate->valueListCount; value_index++) {
+        for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
             RedisModule_FreeString(NULL, predicate->valuesList[value_index]);
         }
     }
@@ -36,19 +36,20 @@ static void QueryPredicates_ObjectFree(void* arg){
     free(predicate_list);
 }
 
-static void* QueryPredicates_Duplicate(void *arg) {
+static void *QueryPredicates_Duplicate(void *arg) {
     assert(FALSE);
 }
 
-static char* QueryPredicates_ToString(void *arg) {
-    QueryPredicates_Arg* predicate_list = arg;
+static char *QueryPredicates_ToString(void *arg) {
+    QueryPredicates_Arg *predicate_list = arg;
     char out[250];
     int index = 0;
     index += sprintf(out, "QueryPredicates: len: %lu; ", predicate_list->count);
-    for (int i=0; i < predicate_list->count; i++) {
+    for (int i = 0; i < predicate_list->count; i++) {
         QueryPredicate *predicate = predicate_list->predicates + i;
         size_t len;
-        index += sprintf(out +index, "'%s=%s' ",
+        index += sprintf(out + index,
+                         "'%s=%s' ",
                          RedisModule_StringPtrLen(predicate->key, &len),
                          RedisModule_StringPtrLen(predicate->valuesList[0], &len));
     }
@@ -57,11 +58,14 @@ static char* QueryPredicates_ToString(void *arg) {
 
 static void BWWriteRedisString(Gears_BufferWriter *bw, const RedisModuleString *arg);
 
-static int QueryPredicates_ArgSerialize(FlatExecutionPlan* fep, void* arg, Gears_BufferWriter* bw, char** err){
-    QueryPredicates_Arg* predicate_list = arg;
+static int QueryPredicates_ArgSerialize(FlatExecutionPlan *fep,
+                                        void *arg,
+                                        Gears_BufferWriter *bw,
+                                        char **err) {
+    QueryPredicates_Arg *predicate_list = arg;
     RedisGears_BWWriteLong(bw, predicate_list->count);
     RedisGears_BWWriteLong(bw, predicate_list->withLabels);
-    for (int i=0; i < predicate_list->count; i++) {
+    for (int i = 0; i < predicate_list->count; i++) {
         // encode type
         QueryPredicate *predicate = predicate_list->predicates + i;
         RedisGears_BWWriteLong(bw, predicate->type);
@@ -69,12 +73,11 @@ static int QueryPredicates_ArgSerialize(FlatExecutionPlan* fep, void* arg, Gears
         // encode key
         BWWriteRedisString(bw, predicate->key);
 
-        //encode values
+        // encode values
         RedisGears_BWWriteLong(bw, predicate->valueListCount);
-        for (int value_index=0; value_index < predicate->valueListCount; value_index++) {
+        for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
             BWWriteRedisString(bw, predicate->valuesList[value_index]);
         }
-
     }
     return REDISMODULE_OK;
 }
@@ -93,12 +96,15 @@ static RedisModuleString *BRReadRedisString(Gears_BufferReader *br) {
     return RedisModule_CreateString(NULL, key_c, len);
 }
 
-static void* QueryPredicates_ArgDeserialize(FlatExecutionPlan* fep, Gears_BufferReader* br, int version, char** err) {
-    QueryPredicates_Arg* predicates = malloc(sizeof(*predicates));
+static void *QueryPredicates_ArgDeserialize(FlatExecutionPlan *fep,
+                                            Gears_BufferReader *br,
+                                            int version,
+                                            char **err) {
+    QueryPredicates_Arg *predicates = malloc(sizeof(*predicates));
     predicates->count = RedisGears_BRReadLong(br);
     predicates->withLabels = RedisGears_BRReadLong(br);
     predicates->predicates = calloc(predicates->count, sizeof(QueryPredicate));
-    for (int i=0; i < predicates->count; i++) {
+    for (int i = 0; i < predicates->count; i++) {
         QueryPredicate *predicate = predicates->predicates + i;
         // decode type
         predicate->type = RedisGears_BRReadLong(br);
@@ -108,9 +114,9 @@ static void* QueryPredicates_ArgDeserialize(FlatExecutionPlan* fep, Gears_Buffer
 
         // decode values
         predicate->valueListCount = RedisGears_BRReadLong(br);
-        predicate->valuesList = calloc(predicate->valueListCount, sizeof(RedisModuleString*));
+        predicate->valuesList = calloc(predicate->valueListCount, sizeof(RedisModuleString *));
 
-        for (int value_index=0; value_index < predicate->valueListCount; value_index++) {
+        for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
             predicate->valuesList[value_index] = BRReadRedisString(br);
         }
     }
@@ -126,15 +132,17 @@ Record *ListSeriesLabels(const Series *series) {
     Record *r = RedisGears_ListRecordCreate(series->labelsCount);
     for (int i = 0; i < series->labelsCount; i++) {
         Record *internal_list = RedisGears_ListRecordCreate(series->labelsCount);
-        RedisGears_ListRecordAdd(internal_list, RedisGears_RedisStringRecordCreate(series->labels[i].key));
-        RedisGears_ListRecordAdd(internal_list, RedisGears_RedisStringRecordCreate(series->labels[i].value));
+        RedisGears_ListRecordAdd(internal_list,
+                                 RedisGears_RedisStringRecordCreate(series->labels[i].key));
+        RedisGears_ListRecordAdd(internal_list,
+                                 RedisGears_RedisStringRecordCreate(series->labels[i].value));
         RedisGears_ListRecordAdd(r, internal_list);
     }
     return r;
 }
 
 #define MAX_VAL_LEN 24
-Record* ListWithSample(u_int64_t timestamp, double value) {
+Record *ListWithSample(u_int64_t timestamp, double value) {
     Record *r = RedisGears_ListRecordCreate(2);
     RedisGears_ListRecordAdd(r, RedisGears_LongRecordCreate(timestamp));
     char buf[MAX_VAL_LEN];
@@ -143,8 +151,7 @@ Record* ListWithSample(u_int64_t timestamp, double value) {
     return r;
 }
 
-
-Record* ListWithSeriesLastDatapoint(const Series *series) {
+Record *ListWithSeriesLastDatapoint(const Series *series) {
     if (SeriesGetNumSamples(series) == 0) {
         return RedisGears_ListRecordCreate(0);
     } else {
@@ -152,9 +159,9 @@ Record* ListWithSeriesLastDatapoint(const Series *series) {
     }
 }
 
-Record* ShardSeriesMapper(ExecutionCtx* rctx, Record *data, void* arg) {
+Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
     RedisModuleCtx *ctx = RedisGears_GetRedisModuleCtx(rctx);
-    QueryPredicates_Arg* predicates = arg;
+    QueryPredicates_Arg *predicates = arg;
 
     RedisModuleDict *result = QueryIndex(ctx, predicates->predicates, predicates->count);
 
@@ -187,9 +194,9 @@ Record* ShardSeriesMapper(ExecutionCtx* rctx, Record *data, void* arg) {
     return series_list;
 }
 
-Record* ShardMgetMapper(ExecutionCtx* rctx, Record *data, void* arg) {
+Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
     RedisModuleCtx *ctx = RedisGears_GetRedisModuleCtx(rctx);
-    QueryPredicates_Arg* predicates = arg;
+    QueryPredicates_Arg *predicates = arg;
 
     RedisModuleDict *result = QueryIndex(ctx, predicates->predicates, predicates->count);
 
@@ -216,7 +223,8 @@ Record* ShardMgetMapper(ExecutionCtx* rctx, Record *data, void* arg) {
         }
 
         Record *r = RedisGears_ListRecordCreate(3);
-        RedisGears_ListRecordAdd(r, RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
+        RedisGears_ListRecordAdd(r,
+                                 RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
         if (predicates->withLabels) {
             RedisGears_ListRecordAdd(r, ListSeriesLabels(series));
         } else {
@@ -226,7 +234,8 @@ Record* ShardMgetMapper(ExecutionCtx* rctx, Record *data, void* arg) {
         RedisModule_CloseKey(key);
 
         RedisGears_ListRecordAdd(series_list, r);
-        RedisGears_ListRecordAdd(series_list, RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
+        RedisGears_ListRecordAdd(series_list,
+                                 RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
     }
     RedisModule_DictIteratorStop(iter);
 
@@ -234,12 +243,13 @@ Record* ShardMgetMapper(ExecutionCtx* rctx, Record *data, void* arg) {
 }
 
 int register_rg(RedisModuleCtx *ctx) {
-    if(RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) != REDISMODULE_OK){
+    if (RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) !=
+        REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed initialize RedisGears API");
         return REDISMODULE_ERR;
     }
 
-    ArgType* QueryPredicatesType = RedisGears_CreateType("QueryPredicatesType",
+    ArgType *QueryPredicatesType = RedisGears_CreateType("QueryPredicatesType",
                                                          QueryPredicatesVersion,
                                                          QueryPredicates_ObjectFree,
                                                          QueryPredicates_Duplicate,
@@ -250,16 +260,15 @@ int register_rg(RedisModuleCtx *ctx) {
     SeriesRecordType = RedisGears_RecordTypeCreate(SeriesRecordName,
                                                    sizeof(SeriesRecord),
                                                    SeriesRecord_SendReply,
-                                                   (RecordSerialize) SeriesRecord_Serialize,
-                                                   (RecordDeserialize) SeriesRecord_Deserialize,
-                                                   (RecordFree) SeriesRecord_ObjectFree
-                                );
+                                                   (RecordSerialize)SeriesRecord_Serialize,
+                                                   (RecordDeserialize)SeriesRecord_Deserialize,
+                                                   (RecordFree)SeriesRecord_ObjectFree);
     RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
     return RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 }
 
-Record* SeriesRecord_New(Series *series) {
-    SeriesRecord *out = (SeriesRecord*)RedisGears_RecordCreate(SeriesRecordType);
+Record *SeriesRecord_New(Series *series) {
+    SeriesRecord *out = (SeriesRecord *)RedisGears_RecordCreate(SeriesRecordType);
     out->keyName = RedisModule_CreateStringFromString(NULL, series->keyName);
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
         out->chunkType = CHUNK_REGULAR;
@@ -290,13 +299,13 @@ Record* SeriesRecord_New(Series *series) {
 
 void SeriesRecord_ObjectFree(void *record) {
     SeriesRecord *series = record;
-    for (int i=0; i < series->labelsCount; i++) {
+    for (int i = 0; i < series->labelsCount; i++) {
         RedisModule_FreeString(NULL, series->labels[i].key);
         RedisModule_FreeString(NULL, series->labels[i].value);
     }
     free(series->labels);
 
-    for (int i=0; i < series->chunkCount; i++) {
+    for (int i = 0; i < series->chunkCount; i++) {
         series->funcs->FreeChunk(series->chunks[i]);
     }
 
@@ -304,45 +313,45 @@ void SeriesRecord_ObjectFree(void *record) {
     RedisModule_FreeString(NULL, series->keyName);
 }
 
-int SeriesRecord_Serialize(ExecutionCtx* ctx, Gears_BufferWriter* bw, Record* base) {
-    SeriesRecord *series = (SeriesRecord *) base;
+int SeriesRecord_Serialize(ExecutionCtx *ctx, Gears_BufferWriter *bw, Record *base) {
+    SeriesRecord *series = (SeriesRecord *)base;
     RedisGears_BWWriteLong(bw, series->chunkType);
     BWWriteRedisString(bw, series->keyName);
     RedisGears_BWWriteLong(bw, series->labelsCount);
-    for (int i=0; i < series->labelsCount; i++) {
+    for (int i = 0; i < series->labelsCount; i++) {
         BWWriteRedisString(bw, series->labels[i].key);
         BWWriteRedisString(bw, series->labels[i].value);
     }
 
     RedisGears_BWWriteLong(bw, series->chunkCount);
-    for (int i=0; i < series->chunkCount; i++) {
+    for (int i = 0; i < series->chunkCount; i++) {
         series->funcs->GearsSerialize(series->chunks[i], bw);
     }
     return REDISMODULE_OK;
 }
 
-Record* SeriesRecord_Deserialize(ExecutionCtx* ctx, Gears_BufferReader* br) {
-    SeriesRecord* series = (SeriesRecord*)RedisGears_RecordCreate(SeriesRecordType);
+Record *SeriesRecord_Deserialize(ExecutionCtx *ctx, Gears_BufferReader *br) {
+    SeriesRecord *series = (SeriesRecord *)RedisGears_RecordCreate(SeriesRecordType);
     series->chunkType = RedisGears_BRReadLong(br);
     series->funcs = GetChunkClass(series->chunkType);
     series->keyName = BRReadRedisString(br);
     series->labelsCount = RedisGears_BRReadLong(br);
     series->labels = calloc(series->labelsCount, sizeof(Label));
-    for (int i=0; i < series->labelsCount; i++) {
+    for (int i = 0; i < series->labelsCount; i++) {
         series->labels[i].key = BRReadRedisString(br);
         series->labels[i].value = BRReadRedisString(br);
     }
 
     series->chunkCount = RedisGears_BRReadLong(br);
     series->chunks = calloc(series->chunkCount, sizeof(Chunk_t *));
-    for (int i=0; i < series->chunkCount; i++) {
+    for (int i = 0; i < series->chunkCount; i++) {
         series->funcs->GearsDeserialize(&series->chunks[i], br);
     }
     return &series->base;
 }
 
-int SeriesRecord_SendReply(Record* record, RedisModuleCtx* rctx) {
-    SeriesRecord* series = (SeriesRecord*)record;
+int SeriesRecord_SendReply(Record *record, RedisModuleCtx *rctx) {
+    SeriesRecord *series = (SeriesRecord *)record;
     RedisModule_ReplyWithArray(rctx, 3);
     RedisModule_ReplyWithString(rctx, series->keyName);
     RedisModule_ReplyWithLongLong(rctx, series->chunkCount);
@@ -350,18 +359,18 @@ int SeriesRecord_SendReply(Record* record, RedisModuleCtx* rctx) {
     return REDISMODULE_OK;
 }
 
-Series* SeriesRecord_IntoSeries(SeriesRecord *record) {
-    CreateCtx createArgs = {0};
+Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
+    CreateCtx createArgs = { 0 };
     createArgs.isTemporary = true;
     Series *s = NewSeries(RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
     s->labelsCount = record->labelsCount;
     s->labels = calloc(s->labelsCount, sizeof(Label));
-    for (int i=0; i<s->labelsCount; i++) {
+    for (int i = 0; i < s->labelsCount; i++) {
         s->labels[i].key = RedisModule_CreateStringFromString(NULL, record->labels[i].key);
         s->labels[i].value = RedisModule_CreateStringFromString(NULL, record->labels[i].value);
     }
     s->funcs = record->funcs;
-    for(int chunk_index=0; chunk_index < record->chunkCount; chunk_index++) {
+    for (int chunk_index = 0; chunk_index < record->chunkCount; chunk_index++) {
         dictOperator(s->chunks,
                      s->funcs->CloneChunk(record->chunks[chunk_index]),
                      record->funcs->GetFirstTimestamp(record->chunks[chunk_index]),
