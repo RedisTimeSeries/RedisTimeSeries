@@ -358,6 +358,11 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     args.queryPredicatesCount = query_count;
 
     if (groupby_location > 0) {
+        if (groupby_location + 1 >= argc) {
+            // GROUP BY without any argument
+            RedisModule_WrongArity(ctx);
+            return REDISMODULE_ERR;
+        }
         args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
 
         const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
