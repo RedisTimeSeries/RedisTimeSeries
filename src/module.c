@@ -288,10 +288,10 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     RedisModule_AutoMemory(ctx);
 
     MRangeArgs args;
-    args.reverse = rev;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_OK;
     }
+    args.reverse = rev;
 
     RedisModuleDict *resultSeries =
         QueryIndex(ctx, args.queryPredicates, args.queryPredicatesCount);
