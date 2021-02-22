@@ -34,13 +34,19 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.run("amazon-linux-extras install epel")
             self.install("python3-devel")
 
+    def arch_compat(self):
+        pass
+
     def fedora(self):
         self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
     def common_last(self):
-        self.install("lcov")
-        self.run("python3 %s/bin/getrmpytools" % READIES) 
+        if self.dist != "arch":
+            self.install("lcov")
+        else:
+            self.install("lcov-git", aur=True)
+        self.run("python3 %s/bin/getrmpytools" % READIES)
         self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------
