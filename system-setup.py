@@ -37,6 +37,9 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("epel-release")
             self.install("python3-devel libaec-devel")
 
+    def arch_compat(self):
+        pass
+
     def fedora(self):
         self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
@@ -44,6 +47,8 @@ class RedisTimeSeriesSetup(paella.Setup):
     def common_last(self):
         if self.dist == "centos" and self.ver == "8":
             self.install("https://pkgs.dyn.su/el8/base/x86_64/lcov-1.14-3.el8.noarch.rpm")
+        elif self.dist == "arch":
+            self.install("lcov-git", aur=True)
         else:
             self.install("lcov")
         self.run("python3 %s/bin/getrmpytools" % READIES)
