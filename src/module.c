@@ -159,9 +159,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, EQ) +
-            CountPredicateType(queries, LIST_MATCH) ==
-        0) {
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
         QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
@@ -308,7 +306,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         result = replyUngroupedMultiRange(ctx, resultSeries, args);
     }
 
-//    MRangeArgs_Free(&args);
+    //    MRangeArgs_Free(&args);
     return result;
 }
 
@@ -813,14 +811,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t query_count = argc - 1 - filter_location;
     const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
     int response = 0;
-    QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    QueryPredicateList *queries =
+        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
     if (response == TSDB_ERROR) {
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, EQ) +
-            CountPredicateType(queries, LIST_MATCH) ==
-        0) {
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
         QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }

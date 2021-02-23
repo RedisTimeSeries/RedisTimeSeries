@@ -230,14 +230,14 @@ int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 }
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int start,
-                           int query_count,
-                           int *response) {
+                                           RedisModuleString **argv,
+                                           int start,
+                                           int query_count,
+                                           int *response) {
     QueryPredicateList *queries = malloc(sizeof(QueryPredicateList));
     queries->count = query_count;
     queries->list = calloc(queries->count, sizeof(QueryPredicate));
-    memset(queries->list , 0, queries->count *sizeof(QueryPredicate));
+    memset(queries->list, 0, queries->count * sizeof(QueryPredicate));
     int current_index = 0;
     *response = TSDB_OK;
 
@@ -351,16 +351,15 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     int response;
-    QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    QueryPredicateList *queries =
+        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
     if (response == TSDB_ERROR) {
         QueryPredicateList_Free(queries);
         RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
         return REDISMODULE_ERR;
     }
 
-    if (CountPredicateType(queries, EQ) +
-            CountPredicateType(queries, LIST_MATCH) ==
-        0) {
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
         QueryPredicateList_Free(queries);
         RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
         return REDISMODULE_ERR;

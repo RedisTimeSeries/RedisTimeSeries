@@ -69,10 +69,10 @@ int parseRangeArguments(RedisModuleCtx *ctx,
 int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, long long *count);
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int start,
-                           int query_count,
-                           int *response);
+                                           RedisModuleString **argv,
+                                           int start,
+                                           int query_count,
+                                           int *response);
 
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out);
 void MRangeArgs_Free(MRangeArgs *args);

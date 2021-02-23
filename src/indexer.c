@@ -35,7 +35,7 @@ void FreeLabels(void *value, size_t labelsCount) {
     free(labels);
 }
 
-static int parseValueList(char *token, size_t *count, RedisModuleString*** values) {
+static int parseValueList(char *token, size_t *count, RedisModuleString ***values) {
     char *iter_ptr;
     if (token == NULL) {
         return TSDB_ERROR;
@@ -97,7 +97,7 @@ int parsePredicate(RedisModuleCtx *ctx,
     // Extract value
     token = strtok_r(NULL, separator, &iter_ptr);
     if (strstr(separator, "=(") != NULL) {
-        if (parseValueList(token, &retQuery->valueListCount, &retQuery->valuesList) == TSDB_ERROR ) {
+        if (parseValueList(token, &retQuery->valueListCount, &retQuery->valuesList) == TSDB_ERROR) {
             RedisModule_FreeString(NULL, retQuery->key);
             retQuery->key = NULL;
             return TSDB_ERROR;
@@ -378,7 +378,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
-    for (int predicate_index=0; predicate_index < count; predicate_index++) {
+    for (int predicate_index = 0; predicate_index < count; predicate_index++) {
         QueryPredicate *predicate = &predicate_list[predicate_index];
         if (predicate->valuesList != NULL) {
             for (int i = 0; i < predicate->valueListCount; i++) {
@@ -389,15 +389,14 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
         }
         free(predicate->key);
         free(predicate->valuesList);
-//        free(predicate);
+        //        free(predicate);
     }
 }
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
-    for (int i=0; i < list->count; i++) {
+    for (int i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);
     }
     free(list->list);
     free(list);
-
 }

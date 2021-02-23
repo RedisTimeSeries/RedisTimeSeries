@@ -96,17 +96,17 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t query_count = argc - 1 - filter_location;
     const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
     // TODO:
-//    QueryPredicate *queries = calloc(query_count, sizeof(QueryPredicate));
-//    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
-//        TSDB_ERROR) {
-//        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
-//    }
-//
-//    if (CountPredicateType(queries, (size_t)query_count, EQ) +
-//            CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
-//        0) {
-//        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
-//    }
+    //    QueryPredicate *queries = calloc(query_count, sizeof(QueryPredicate));
+    //    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
+    //        TSDB_ERROR) {
+    //        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+    //    }
+    //
+    //    if (CountPredicateType(queries, (size_t)query_count, EQ) +
+    //            CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
+    //        0) {
+    //        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+    //    }
 
     char *err = NULL;
     FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
@@ -115,7 +115,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
     queryArg->count = query_count;
-//    queryArg->predicates = queries;
+    //    queryArg->predicates = queries;
     queryArg->withLabels = (withlabels_location > 0);
     RedisGears_Map(rg_ctx, "ShardMgetMapper", queryArg);
 
