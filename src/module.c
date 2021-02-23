@@ -156,6 +156,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int response = 0;
     QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, 1, query_count, &response);
     if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
@@ -178,6 +179,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetArrayLength(ctx, replylen);
+    QueryPredicateList_Free(queries);
 
     return REDISMODULE_OK;
 }
@@ -857,6 +859,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     RedisModule_ReplySetArrayLength(ctx, replylen);
     RedisModule_DictIteratorStop(iter);
+    QueryPredicateList_Free(queries);
     return REDISMODULE_OK;
 }
 

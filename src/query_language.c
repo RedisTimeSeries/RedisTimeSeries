@@ -370,6 +370,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         if (groupby_location + 1 >= argc) {
             // GROUP BY without any argument
             RedisModule_WrongArity(ctx);
+            QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }
         args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
