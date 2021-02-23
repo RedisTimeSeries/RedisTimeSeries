@@ -35,14 +35,21 @@ typedef struct QueryPredicate
     PredicateType type;
     RedisModuleString *key;
     RedisModuleString **valuesList;
-    int valueListCount;
+    size_t valueListCount;
 } QueryPredicate;
+
+typedef struct QueryPredicateList
+{
+    QueryPredicate *list;
+    size_t count;
+} QueryPredicateList;
 
 int parsePredicate(RedisModuleCtx *ctx,
                    RedisModuleString *label,
                    QueryPredicate *retQuery,
                    const char *separator);
-void QueryPredicate_Free(QueryPredicate *predicate);
+void QueryPredicate_Free(QueryPredicate *predicate, size_t count);
+void QueryPredicateList_Free(QueryPredicateList *list);
 
 void IndexInit();
 void FreeLabels(void *value, size_t labelsCount);
@@ -58,5 +65,5 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count);
 
-int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type);
+int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif

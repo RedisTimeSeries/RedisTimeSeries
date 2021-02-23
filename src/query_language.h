@@ -68,12 +68,13 @@ int parseRangeArguments(RedisModuleCtx *ctx,
 
 int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, long long *count);
 
-int parseLabelListFromArgs(RedisModuleCtx *ctx,
+QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
                            RedisModuleString **argv,
                            int start,
                            int query_count,
-                           QueryPredicate *queries);
+                           int *response);
 
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out);
+void MRangeArgs_Free(MRangeArgs *args);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H
