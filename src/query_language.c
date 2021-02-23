@@ -308,7 +308,6 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     MRangeArgs args;
     args.groupByLabel = NULL;
-    args.queryPredicatesCount = 0;
     args.queryPredicates = NULL;
     args.aggregationArgs.timeDelta = 0;
     args.aggregationArgs.aggregationClass = NULL;
@@ -365,8 +364,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    args.queryPredicates = queries->list;
-    args.queryPredicatesCount = queries->count;
+    args.queryPredicates = queries;
 
     if (groupby_location > 0) {
         if (groupby_location + 1 >= argc) {
@@ -396,5 +394,5 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 }
 
 void MRangeArgs_Free(MRangeArgs *args) {
-    QueryPredicate_Free(args->queryPredicates, args->queryPredicatesCount);
+    QueryPredicateList_Free(args->queryPredicates);
 }

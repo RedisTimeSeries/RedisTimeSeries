@@ -83,7 +83,7 @@ int parsePredicate(RedisModuleCtx *ctx,
     char *iter_ptr;
     size_t _s;
     const char *labelRaw = RedisModule_StringPtrLen(label, &_s);
-    char *labelstr = malloc(_s + 1);
+    char labelstr[255];
     labelstr[_s] = '\0';
     strncpy(labelstr, labelRaw, _s);
 

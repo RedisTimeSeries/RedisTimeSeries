@@ -30,8 +30,7 @@ typedef struct MRangeArgs
     AggregationArgs aggregationArgs;
     bool withLabels;
     long long count; // AKA limit
-    QueryPredicate *queryPredicates;
-    size_t queryPredicatesCount;
+    QueryPredicateList *queryPredicates;
     const char *groupByLabel;
     MultiSeriesReduceOp gropuByReducerOp;
     bool reverse;

@@ -294,7 +294,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     args.reverse = rev;
 
     RedisModuleDict *resultSeries =
-        QueryIndex(ctx, args.queryPredicates, args.queryPredicatesCount);
+        QueryIndex(ctx, args.queryPredicates->list, args.queryPredicates->count);
 
     int result = REDISMODULE_OK;
     if (args.groupByLabel) {
@@ -306,7 +306,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         result = replyUngroupedMultiRange(ctx, resultSeries, args);
     }
 
-    //    MRangeArgs_Free(&args);
+    MRangeArgs_Free(&args);
     return result;
 }
 

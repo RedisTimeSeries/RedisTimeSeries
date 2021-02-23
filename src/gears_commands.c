@@ -146,8 +146,8 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithError(ctx, err);
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
-    queryArg->count = args.queryPredicatesCount;
-    queryArg->predicates = args.queryPredicates;
+    queryArg->count = args.queryPredicates->count;
+    queryArg->predicates = args.queryPredicates->list;
     queryArg->withLabels = args.withLabels;
     RedisGears_FlatMap(rg_ctx, "ShardSeriesMapper", queryArg);
     RGM_Collect(rg_ctx);
