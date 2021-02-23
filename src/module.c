@@ -816,6 +816,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     QueryPredicateList *queries =
         parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
     if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
