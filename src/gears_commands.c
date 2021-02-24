@@ -11,7 +11,19 @@
 #include "rmutil/alloc.h"
 
 static void mget_done(ExecutionPlan *gearsCtx, void *privateData) {
-    // TODO
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    long long len = RedisGears_GetRecordsLen(gearsCtx);
+    RedisModule_ReplyWithArray(rctx, len);
+    for (int i=0; i < len; i++) {
+        Record *r = RedisGears_GetRecord(gearsCtx, i);
+        RedisGears_RecordSendReply(r, rctx);
+    }
+
+    RedisModule_UnblockClient(bc, NULL);
+    RedisGears_DropExecution(gearsCtx);
+    RedisModule_FreeThreadSafeContext(rctx);
 }
 
 static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
@@ -95,18 +107,17 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     size_t query_count = argc - 1 - filter_location;
     const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
-    // TODO:
-    //    QueryPredicate *queries = calloc(query_count, sizeof(QueryPredicate));
-    //    if (parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, queries) ==
-    //        TSDB_ERROR) {
-    //        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
-    //    }
-    //
-    //    if (CountPredicateType(queries, (size_t)query_count, EQ) +
-    //            CountPredicateType(queries, (size_t)query_count, LIST_MATCH) ==
-    //        0) {
-    //        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
-    //    }
+    int response;
+    QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    if (response == TSDB_ERROR) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+    }
+
+    if (CountPredicateType(queries, EQ) +
+            CountPredicateType(queries,LIST_MATCH) ==
+        0) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+    }
 
     char *err = NULL;
     FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
@@ -114,10 +125,10 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithError(ctx, err);
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
-    queryArg->count = query_count;
-    //    queryArg->predicates = queries;
+    queryArg->count = queries->count;
+    queryArg->predicates = queries->list;
     queryArg->withLabels = (withlabels_location > 0);
-    RedisGears_Map(rg_ctx, "ShardMgetMapper", queryArg);
+    RedisGears_FlatMap(rg_ctx, "ShardMgetMapper", queryArg);
 
     RGM_Collect(rg_ctx);
 

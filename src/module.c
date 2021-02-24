@@ -313,6 +313,10 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (IsGearsLoaded()) {
+        return TSDB_mrange_RG(ctx, argv, argc);
+    }
+
     return TSDB_generic_mrange(ctx, argv, argc, false);
 }
 
@@ -800,6 +804,10 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (IsGearsLoaded()) {
+        return TSDB_mget_RG(ctx, argv, argc);
+    }
+
     RedisModule_AutoMemory(ctx);
 
     if (argc < 3) {
@@ -944,6 +952,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
+    // ignore errors from redis gears registration, this can fail if the module is not loaded.
+    register_rg(ctx);
+
     RedisModuleTypeMethods tm = { .version = REDISMODULE_TYPE_METHOD_VERSION,
                                   .rdb_load = series_rdb_load,
                                   .rdb_save = series_rdb_save,
@@ -985,14 +996,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, 0) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx, "ts.mget_rg", TSDB_mget_RG, "readonly", 0, 0, 0) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx, "ts.mrange_rg", TSDB_mrange_RG, "readonly", 0, 0, 0) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 

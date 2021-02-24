@@ -16,6 +16,7 @@
 #define SeriesRecordName "SeriesRecord"
 
 static RecordType *SeriesRecordType = NULL;
+static bool GearsLoaded = false;
 
 RecordType *GetSeriesRecordType() {
     return SeriesRecordType;
@@ -222,20 +223,18 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
             continue;
         }
 
-        Record *r = RedisGears_ListRecordCreate(3);
-        RedisGears_ListRecordAdd(r,
+        Record *key_record = RedisGears_ListRecordCreate(3);
+        RedisGears_ListRecordAdd(key_record,
                                  RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
         if (predicates->withLabels) {
-            RedisGears_ListRecordAdd(r, ListSeriesLabels(series));
+            RedisGears_ListRecordAdd(key_record, ListSeriesLabels(series));
         } else {
-            RedisGears_ListRecordAdd(r, RedisGears_ListRecordCreate(0));
+            RedisGears_ListRecordAdd(key_record, RedisGears_ListRecordCreate(0));
         }
-        RedisGears_ListRecordAdd(r, ListWithSeriesLastDatapoint(series));
+        RedisGears_ListRecordAdd(key_record, ListWithSeriesLastDatapoint(series));
         RedisModule_CloseKey(key);
 
-        RedisGears_ListRecordAdd(series_list, r);
-        RedisGears_ListRecordAdd(series_list,
-                                 RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
+        RedisGears_ListRecordAdd(series_list, key_record);
     }
     RedisModule_DictIteratorStop(iter);
 
@@ -263,8 +262,20 @@ int register_rg(RedisModuleCtx *ctx) {
                                                    (RecordSerialize)SeriesRecord_Serialize,
                                                    (RecordDeserialize)SeriesRecord_Deserialize,
                                                    (RecordFree)SeriesRecord_ObjectFree);
-    RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
-    return RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
+    if (RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    GearsLoaded = true;
+    return REDISMODULE_OK;
+}
+
+bool IsGearsLoaded() {
+    return GearsLoaded;
 }
 
 Record *SeriesRecord_New(Series *series) {

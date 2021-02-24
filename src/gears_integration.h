@@ -36,5 +36,6 @@ int SeriesRecord_SendReply(Record *record, RedisModuleCtx *rctx);
 Series *SeriesRecord_IntoSeries(SeriesRecord *record);
 
 int register_rg(RedisModuleCtx *ctx);
+bool IsGearsLoaded();
 
 #endif // REDIS_TIMESERIES_CLEAN_GEARS_INTEGRATION_H
