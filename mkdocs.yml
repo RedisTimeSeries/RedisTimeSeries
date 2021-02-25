@@ -45,5 +45,23 @@ markdown_extensions:
 
 plugins:
   - search
+  - modules-template:
+      modules:
+        - name: 'Search'
+          link: '/redisearch'
+
+        - name: 'Bloom'
+          link: '/redisbloom'
+
+        - name: 'Graph'
+          link: '/redisgraph'
+
+        - name: 'JSON'
+          link: '/redisjson'
+
+        - name: 'AI'
+          link: '/redisai'
+
+        - name: 'Gears'
+          link: '/redisgears'
   - versions-menu
-  
