@@ -4,11 +4,12 @@ version = "0.1.0"
 description = "Tests for redistimeseries"
 authors = ["Redis Labs <info@redislabs.com"]
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.dependencies]
 pytest = "==3.0.7"
 redis = "=>2.10.5"
 rmtest = "==0.7.0"
 ramp-packer = "*"
 
 [build-system]
-python_version = "2.7"
+requires = ["poetry-core>=1.1"]
+build-backend = ["poetry.core.masonry.api"]
