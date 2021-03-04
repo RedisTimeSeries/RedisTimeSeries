@@ -52,7 +52,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         else:
             self.install("lcov")
         self.run("python3 %s/bin/getrmpytools" % READIES)
-        self.pip_install("-r tests/flow/requirements.txt")
+        self.pip_install("poetry==1.1")
 
 #----------------------------------------------------------------------------------------------
 

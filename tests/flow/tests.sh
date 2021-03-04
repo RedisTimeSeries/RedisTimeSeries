@@ -81,6 +81,8 @@ run_tests() {
 		printf "Tests with $title:\n\n"
 	}
 	cd $ROOT/tests/flow
+    PVENV=`poetry env info|grep Python|grep -v Implementation|grep -v usr|cut -d ':' -f 2-2`
+    poetry env use $PVENV
 	$OP python3 -m RLTest --clear-logs --module $MODULE $TEST_ARGS
 }
 
