@@ -299,6 +299,9 @@ int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op) {
 
 static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
+    if (rule == NULL) {
+        return;
+    }
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
