@@ -145,11 +145,12 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse) {
     MRangeArgs args;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_OK;
     }
+    args.reverse = reverse;
 
     char *err = NULL;
     FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);

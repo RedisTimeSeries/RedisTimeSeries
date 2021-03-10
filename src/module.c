@@ -314,13 +314,16 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsGearsLoaded()) {
-        return TSDB_mrange_RG(ctx, argv, argc);
+        return TSDB_mrange_RG(ctx, argv, argc, false);
     }
 
     return TSDB_generic_mrange(ctx, argv, argc, false);
 }
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (IsGearsLoaded()) {
+        return TSDB_mrange_RG(ctx, argv, argc, true);
+    }
     return TSDB_generic_mrange(ctx, argv, argc, true);
 }
 
