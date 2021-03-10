@@ -98,9 +98,10 @@ int ApplySerieRangeIntoNewSerie(Series **dest,
                                 long long maxResults,
                                 bool rev) {
     Sample sample;
-    CreateCtx cCtx = { 0 };
-    cCtx.labels = NULL;
-    cCtx.labelsCount = 0;
+    CreateCtx cCtx = {
+        .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
+    };
+    cCtx.options |= SERIES_OPT_UNCOMPRESSED;
 
     Series *new = NewSeries(RedisModule_CreateStringFromString(NULL, source->keyName), &cCtx);
     long long arraylen = 0;
