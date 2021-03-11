@@ -223,6 +223,23 @@ unittests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
 	$(SHOW)$<
 
+
+BENCHMARK_ARGS = redisbench-admin run-local
+
+ifneq ($(REMOTE),)
+	BENCHMARK_ARGS = redisbench-admin run-remote 
+endif
+
+BENCHMARK_ARGS += --module_path $(realpath $(TARGET))
+ifneq ($(BENCHMARK),)
+	BENCHMARK_ARGS += --test $(BENCHMARK)
+endif
+
+
+benchmark: $(TARGET)
+	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
+
+
 #----------------------------------------------------------------------------------------------
 
 REDIS_ARGS=\
