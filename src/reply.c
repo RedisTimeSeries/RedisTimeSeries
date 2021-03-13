@@ -7,6 +7,7 @@
 #include "reply.h"
 
 #include "redismodule.h"
+#include "ryu.h"
 #include "series_iterator.h"
 #include "tsdb.h"
 
@@ -87,8 +88,9 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
-    char buf[MAX_VAL_LEN];
-    snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+    /* reserve space for null terminator */
+    char buf[MAX_VAL_LEN + 1];
+    d2s_buffered(value, &buf);
     RedisModule_ReplyWithSimpleString(ctx, buf);
 }
 

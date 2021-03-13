@@ -1,0 +1,22 @@
+diff --git a/ryu/Makefile b/ryu/Makefile
+index 1adc0e3..f757426 100644
+--- a/ryu/Makefile
++++ b/ryu/Makefile
+@@ -2,6 +2,8 @@
+ # the lib as a dependency in non-Bazel projects (e.g. CMake).
+ # Contributed by @gritzko. Supported on a best-effort basis.
+ 
++CFLAGS?= -fPIC -O3
++
+ SRC=d2fixed.c d2s.c f2s.c generic_128.c
+ 
+ OBJ = $(SRC:.c=.o)
+@@ -14,7 +16,7 @@ INCLUDES = -I..
+ 
+ default: $(ALIB)
+ 
+-.c.o:
++%.o: %.c
+ 	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
+ 
+ $(ALIB): $(OBJ)

@@ -50,6 +50,10 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 
 # set environment variable RM_INCLUDE_DIR to the location of redismodule.h
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
+LIBRYU_LIBDIR=$(ROOT)/deps/ryu
+LIBRYU_PATH=$(LIBRYU_LIBDIR)/ryu
+LIBRYU=$(LIBRYU_PATH)/libryu.a
+
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
 LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
 
@@ -62,6 +66,7 @@ CC=gcc
 
 CC_FLAGS = \
 	-I$(SDK_DIR) \
+	-I$(LIBRYU_PATH) \
 	-I$(ROOT)/deps \
 	-Wall \
 	-fPIC \
@@ -74,7 +79,7 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(LIBRYU_PATH) -lryu
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -144,7 +149,7 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs
+.PHONY: package tests unittests clean all install uninstall docker bindirs libryu
 
 all: bindirs $(TARGET)
 
@@ -155,6 +160,13 @@ rmutil:
 	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
 $(LIBRMUTIL): rmutil
+
+libryu:
+	@echo Building $@...
+	DIRNAME=$(realpath $(LIBRYU_LIBDIR)) $(ROOT)/deps/apply_patch.sh
+	$(SHOW)$(MAKE) -C ../deps/ryu/ryu libs
+
+$(LIBRYU): libryu
 
 docker_lint:
 	docker build -t llvm-toolset -f llvm.Dockerfile .
@@ -173,6 +185,7 @@ format:
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
+	-$(SHOW)$(MAKE) -C $(LIBRYU_PATH) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
 -include $(CC_DEPS)
@@ -181,7 +194,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBRYU)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
