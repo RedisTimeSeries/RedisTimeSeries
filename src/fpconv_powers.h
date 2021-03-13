@@ -6,6 +6,7 @@
  * [1] https://www.cs.tufts.edu/~nr/cs257/archive/florian-loitsch/printf.pdf
  * ----------------------------------------------------------------------------
  *
+ * Copyright (c) 2021, Redis Labs
  * Copyright (c) 2013-2019, night-shift <as.smljk at gmail dot com>
  * Copyright (c) 2009, Florian Loitsch < florian.loitsch at inria dot fr >
  * All rights reserved.
@@ -97,11 +98,19 @@ static Fp powers_ten[] = {
     { 12648080533535911531U, 1066 }
 };
 
+/**
+ *  Grisu needs a cache of precomputed powers-of-ten.
+ *  This function, given an exponent and an integer k
+ *  return the normalized floating-point approximation of the power of 10.
+ * @param exp
+ * @param k
+ * @return
+ */
 static Fp find_cachedpow10(int exp, int* k)
 {
     const double one_log_ten = 0.30102999566398114;
 
-    int approx = -(exp + npowers) * one_log_ten;
+    const int approx = -(exp + npowers) * one_log_ten;
     int idx = (approx - firstpower) / steppowers;
 
     while(1) {
