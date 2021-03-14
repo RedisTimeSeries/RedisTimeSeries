@@ -16,7 +16,7 @@ static void mget_done(ExecutionPlan *gearsCtx, void *privateData) {
 
     long long len = RedisGears_GetRecordsLen(gearsCtx);
     RedisModule_ReplyWithArray(rctx, len);
-    for (int i=0; i < len; i++) {
+    for (int i = 0; i < len; i++) {
         Record *r = RedisGears_GetRecord(gearsCtx, i);
         RedisGears_RecordSendReply(r, rctx);
     }
@@ -108,14 +108,13 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t query_count = argc - 1 - filter_location;
     const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
     int response;
-    QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    QueryPredicateList *queries =
+        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
     if (response == TSDB_ERROR) {
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
-    if (CountPredicateType(queries, EQ) +
-            CountPredicateType(queries,LIST_MATCH) ==
-        0) {
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
@@ -176,6 +175,33 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     data->bc = bc;
     data->args = args;
     RedisGears_AddOnDoneCallback(ep, mrange_done, data);
+    RedisGears_FreeFlatExecution(rg_ctx);
+    return REDISMODULE_OK;
+}
+
+int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
+    char *err = NULL;
+    FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, err);
+    }
+    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
+    queryArg->count = queries->count;
+    queryArg->predicates = queries->list;
+    queryArg->withLabels = false;
+    RedisGears_FlatMap(rg_ctx, "ShardQueryindexMapper", queryArg);
+
+    RGM_Collect(rg_ctx);
+
+    ExecutionPlan *ep = RGM_Run(rg_ctx, ExecutionModeAsync, NULL, NULL, NULL, &err);
+    if (!ep) {
+        RedisGears_FreeFlatExecution(rg_ctx);
+        RedisModule_ReplyWithError(ctx, err);
+        return REDISMODULE_OK;
+    }
+
+    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
+    RedisGears_AddOnDoneCallback(ep, mget_done, bc);
     RedisGears_FreeFlatExecution(rg_ctx);
     return REDISMODULE_OK;
 }

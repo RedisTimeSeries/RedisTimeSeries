@@ -241,6 +241,26 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
     return series_list;
 }
 
+Record *ShardQueryindexMapper(ExecutionCtx *rctx, Record *data, void *arg) {
+    RedisModuleCtx *ctx = RedisGears_GetRedisModuleCtx(rctx);
+    QueryPredicates_Arg *predicates = arg;
+
+    RedisModuleDict *result = QueryIndex(ctx, predicates->predicates, predicates->count);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+
+    Record *series_list = RedisGears_ListRecordCreate(0);
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisGears_ListRecordAdd(series_list,
+                                 RedisGears_StringRecordCreate(strdup(currentKey), currentKeyLen));
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    return series_list;
+}
+
 int register_rg(RedisModuleCtx *ctx) {
     if (RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) !=
         REDISMODULE_OK) {
@@ -262,11 +282,19 @@ int register_rg(RedisModuleCtx *ctx) {
                                                    (RecordSerialize)SeriesRecord_Serialize,
                                                    (RecordDeserialize)SeriesRecord_Deserialize,
                                                    (RecordFree)SeriesRecord_ObjectFree);
-    if (RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType) == REDISMODULE_ERR) {
+    if (RedisGears_RegisterMap("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType) ==
+        REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
-    if (RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType) == REDISMODULE_ERR) {
+    if (RedisGears_RegisterMap("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType) ==
+        REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisGears_RegisterMap("ShardQueryindexMapper",
+                               ShardQueryindexMapper,
+                               QueryPredicatesType) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
