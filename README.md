@@ -206,10 +206,10 @@ to configure tests. By default the tests will be ran for all common commands, an
 
 To run all integration tests in a Python virtualenv, follow these steps:
 
-    $ mkdir -p .env
-    $ virtualenv .env
-    $ source .env/bin/activate
-    $ pip install -r tests/flow/requirements.txt
+    $ pip install pypoetry
+    $ poetry install
+    $ poetry env list
+    $ poetry env use (something from the list)
     $ make test
 
 To understand what test options are available simply run:
