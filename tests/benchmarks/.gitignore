@@ -1,5 +1,6 @@
 *.json
 *.txt
 *.csv
-#datasets/*.rdb
+datasets/*.rdb
+*.rdb
 
