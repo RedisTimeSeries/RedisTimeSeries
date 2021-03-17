@@ -3,7 +3,7 @@ remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
 dbconfig:
-  - dataset: "datasets/scale-100-redistimeseries_data.rdb"
+  - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/functional/scale-100-redistimeseries_data.rdb"
 clientconfig:
   - tool: redis-benchmark
   - min-tool-version: "6.2.0"
