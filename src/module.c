@@ -542,6 +542,11 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         add(ctx, keyName, timestampStr, valueStr, NULL, -1);
     }
     RedisModule_ReplicateVerbatim(ctx);
+
+    for (int i = 1; i < argc; i += 3) {
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.madd", argv[i]);
+    }
+
     return REDISMODULE_OK;
 }
 
@@ -558,6 +563,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.add", keyName);
+
     return result;
 }
 
@@ -608,6 +616,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_Log(ctx, "verbose", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.create", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -655,6 +666,9 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.alter", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -698,6 +712,10 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -764,8 +782,13 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_RetainString(ctx, destKeyName);
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -826,6 +849,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.incrby", key);
+
     return rv;
 }
 
@@ -845,6 +871,9 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     ReplyWithSeriesLastDatapoint(ctx, series);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.get", argv[1]);
+
     return REDISMODULE_OK;
 }
 
