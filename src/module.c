@@ -850,7 +850,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby" , key);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby", key);
 
     return rv;
 }
