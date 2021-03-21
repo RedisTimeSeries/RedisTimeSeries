@@ -850,7 +850,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.incrby", key);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby" , key);
 
     return rv;
 }
@@ -871,8 +871,6 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     ReplyWithSeriesLastDatapoint(ctx, series);
     RedisModule_CloseKey(key);
-
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.get", argv[1]);
 
     return REDISMODULE_OK;
 }
