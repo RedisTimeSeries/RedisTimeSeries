@@ -713,8 +713,10 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:src", srcKeyName);
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:dest", destKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:dest", destKeyName);
 
     return REDISMODULE_OK;
 }
@@ -786,8 +788,10 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:src", srcKeyName);
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:dest", destKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:dest", destKeyName);
 
     return REDISMODULE_OK;
 }
@@ -850,7 +854,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby", key);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby", key);
 
     return rv;
 }
