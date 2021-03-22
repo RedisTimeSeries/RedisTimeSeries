@@ -17,9 +17,9 @@
 #include "rdb.h"
 #include "reply.h"
 #include "resultset.h"
+#include "series_iterator.h"
 #include "tsdb.h"
 #include "version.h"
-#include "series_iterator.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -845,8 +845,8 @@ int _tsdb_get_block_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     }
     api_timestamp_t *timestamp = RedisModule_GetBlockedClientPrivateData(ctx);
 
-    if(*timestamp < series->lastTimestamp) {
-    	ReplyWithSeriesLastDatapoint(ctx, series);
+    if (*timestamp < series->lastTimestamp) {
+        ReplyWithSeriesLastDatapoint(ctx, series);
     } else {
         RedisModule_ReplyWithNull(ctx);
     }
@@ -883,45 +883,58 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    if(timestamp_location == -1 && block_location == -1) {
-    	ReplyWithSeriesLastDatapoint(ctx, series);
+    if (timestamp_location == -1 && block_location == -1) {
+        ReplyWithSeriesLastDatapoint(ctx, series);
     } else {
-    	// Parse timestamp
+        // Parse timestamp
         api_timestamp_t timestamp = series->lastTimestamp;
-        if (timestamp_location != -1 && (RedisModule_StringToLongLong(argv[timestamp_location+1], (long long int *)&timestamp) !=
-                 REDISMODULE_OK)) { // TODO check for negative value
+        if (timestamp_location != -1 &&
+            (RedisModule_StringToLongLong(argv[timestamp_location + 1],
+                                          (long long int *)&timestamp) !=
+             REDISMODULE_OK)) { // TODO check for negative value
             return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing timestamp");
         }
 
         // In case a retention is set shouldn't return event older than the retention
         if (series->retentionTime) {
-        	timestamp = series->lastTimestamp > series->retentionTime
-                           ? max(timestamp, series->lastTimestamp - series->retentionTime)
-                           : timestamp;
+            timestamp = series->lastTimestamp > series->retentionTime
+                            ? max(timestamp, series->lastTimestamp - series->retentionTime)
+                            : timestamp;
         }
 
         // Looking for a sample with timestamp bigger than given timestamp
-        if(timestamp < series->lastTimestamp) {
-			SeriesIterator iterator;
-			// read next event right after `timestamp`
-			if (SeriesQuery(series, &iterator, timestamp + 1, series->lastTimestamp, false, NULL, 0) != TSDB_OK) {
-				return RedisModule_ReplyWithArray(ctx, 0);
-			}
-			Sample sample;
-			if (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
-				ReplyWithSample(ctx, sample.timestamp, sample.value);
-			} // TODO handle error
-			SeriesIteratorClose(&iterator);
-        } else if (block_location != -1){ // Blocking waiting for a sample
-			long long block_timeout;
-			if ((RedisModule_StringToLongLong(argv[block_location+1], &block_timeout) != REDISMODULE_OK) || block_timeout < 0) {
-				return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing block timeout");
-			}
-			api_timestamp_t *private_timestamp = RedisModule_Alloc(sizeof(api_timestamp_t));
-			*private_timestamp = timestamp;
-			RedisModule_BlockClientOnKeys(ctx, _tsdb_get_block_callback, _tsdb_get_timeout_callback, _tsdb_get_free_privdata_callback, block_timeout, &argv[1], 1, private_timestamp);
+        if (timestamp < series->lastTimestamp) {
+            SeriesIterator iterator;
+            // read next event right after `timestamp`
+            if (SeriesQuery(
+                    series, &iterator, timestamp + 1, series->lastTimestamp, false, NULL, 0) !=
+                TSDB_OK) {
+                return RedisModule_ReplyWithArray(ctx, 0);
+            }
+            Sample sample;
+            if (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+                ReplyWithSample(ctx, sample.timestamp, sample.value);
+            } // TODO handle error
+            SeriesIteratorClose(&iterator);
+        } else if (block_location != -1) { // Blocking waiting for a sample
+            long long block_timeout;
+            if ((RedisModule_StringToLongLong(argv[block_location + 1], &block_timeout) !=
+                 REDISMODULE_OK) ||
+                block_timeout < 0) {
+                return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing block timeout");
+            }
+            api_timestamp_t *private_timestamp = RedisModule_Alloc(sizeof(api_timestamp_t));
+            *private_timestamp = timestamp;
+            RedisModule_BlockClientOnKeys(ctx,
+                                          _tsdb_get_block_callback,
+                                          _tsdb_get_timeout_callback,
+                                          _tsdb_get_free_privdata_callback,
+                                          block_timeout,
+                                          &argv[1],
+                                          1,
+                                          private_timestamp);
         } else {
-        	RedisModule_ReplyWithNull(ctx);
+            RedisModule_ReplyWithNull(ctx);
         }
     }
     RedisModule_CloseKey(key);
