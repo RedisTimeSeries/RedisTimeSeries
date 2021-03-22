@@ -1,6 +1,7 @@
 
 ROOT=../..
 MK.pyver:=3
+SHOW ?= 1
 
 include $(ROOT)/deps/readies/mk/main
 
@@ -59,11 +60,11 @@ clean:
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
-	ar rcs $@ $^
+	$(SHOW)ar rcs $@ $^
 
 #----------------------------------------------------------------------------------------------
 

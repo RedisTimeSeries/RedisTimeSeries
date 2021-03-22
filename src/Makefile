@@ -1,8 +1,8 @@
 ROOT=..
 MK.pyver:=3
+SHOW ?= 1
 
 include $(ROOT)/deps/readies/mk/main
-
 #----------------------------------------------------------------------------------------------  
 
 define HELP
@@ -191,11 +191,11 @@ clean:
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
-	$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
