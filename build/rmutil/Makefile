@@ -1,7 +1,6 @@
 
 ROOT=../..
 MK.pyver:=3
-SHOW ?= 1
 
 include $(ROOT)/deps/readies/mk/main
 
@@ -69,11 +68,11 @@ $(TARGET): $(OBJECTS)
 #----------------------------------------------------------------------------------------------
 
 $(BINDIR)/test_vector: test_vector.o vector.o
-	$(CC) -Wall -o $@ $^ -lc -lpthread -O0
-	sh -c ./$@
+	$(SHOW)$(CC) -Wall -o $@ $^ -lc -lpthread -O0
+	$(SHOW)sh -c ./$@
 
 $(BINDIR)/test_periodic: test_periodic.o periodic.o
-	$(CC) -Wall -o $@ $^ -lc -lpthread -O0
-	sh -c ./$@
+	$(SHOW)$(CC) -Wall -o $@ $^ -lc -lpthread -O0
+	$(SHOW)sh -c ./$@
 	
 test: test_periodic test_vector
