@@ -848,7 +848,7 @@ int _tsdb_get_block_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     if (*timestamp < series->lastTimestamp) {
         ReplyWithSeriesLastDatapoint(ctx, series);
     } else {
-        RedisModule_ReplyWithNull(ctx);
+        RedisModule_ReplyWithArray(ctx, 0);
     }
 
     RedisModule_CloseKey(key);
@@ -858,7 +858,7 @@ int _tsdb_get_block_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int 
 int _tsdb_get_timeout_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
-    return RedisModule_ReplyWithNull(ctx);
+    return RedisModule_ReplyWithArray(ctx, 0);
 }
 
 void _tsdb_get_free_privdata_callback(RedisModuleCtx *ctx, void *privdata) {
@@ -934,7 +934,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                           1,
                                           private_timestamp);
         } else {
-            RedisModule_ReplyWithNull(ctx);
+            RedisModule_ReplyWithArray(ctx, 0);
         }
     }
     RedisModule_CloseKey(key);
