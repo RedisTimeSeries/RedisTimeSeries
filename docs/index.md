@@ -47,7 +47,7 @@ You can either get RedisTimeSeries setup in the cloud, in a Docker container or 
 
 RedisTimeSeries is available on all Redis Cloud managed services, including a completely free managed database up to 30MB.
 
-[Get started here](https://redislabs.com/redis-enterprise-cloud/pricing/)
+[Get started here](https://redislabs.com/redis-enterprise-cloud/try-free/)
 
 
 ### Docker
