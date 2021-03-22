@@ -888,11 +888,14 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else {
         // Parse timestamp
         api_timestamp_t timestamp = series->lastTimestamp;
-        if (timestamp_location != -1 &&
-            (RedisModule_StringToLongLong(argv[timestamp_location + 1],
-                                          (long long int *)&timestamp) !=
-             REDISMODULE_OK)) { // TODO check for negative value
-            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing timestamp");
+        if (timestamp_location != -1) {
+            long long tmp_timestamp;
+            if ((RedisModule_StringToLongLong(argv[timestamp_location + 1], &tmp_timestamp) !=
+                 REDISMODULE_OK) ||
+                tmp_timestamp < 0) {
+                return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing timestamp");
+            }
+            timestamp = (api_timestamp_t)tmp_timestamp;
         }
 
         // In case a retention is set shouldn't return event older than the retention
