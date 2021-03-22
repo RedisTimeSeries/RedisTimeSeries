@@ -1,3 +1,4 @@
+
 ROOT=..
 MK.pyver:=3
 
@@ -22,6 +23,8 @@ make fetch         # download and prepare dependant modules
 make build
   DEBUG=1          # build debug variant
   VARIANT=name     # use a build variant 'name'
+  PROFILE=1        # enable profiling compile flags (and debug symbols) for release type
+                   # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
 make clean         # remove binary files
@@ -100,12 +103,19 @@ ifeq ($(PROFILE),1)
 CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+endif
+
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DDEBUG
 LD_FLAGS += -g
+else ifeq ($(PROFILE),1)
+CC_FLAGS += -O2
 else
 CC_FLAGS += -O3
 endif
+
 
 CC_FLAGS += $(CC_FLAGS.coverage)
 LD_FLAGS += $(LD_FLAGS.coverage)
@@ -161,18 +171,18 @@ rmutil:
 $(LIBRMUTIL): rmutil
 
 docker_lint:
-	docker build -t llvm-toolset -f llvm.Dockerfile .
-	docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+	$(SHOW)docker build -t llvm-toolset -f llvm.Dockerfile .
+	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
 
 lint:
-	clang-format -Werror -n $(SOURCES)
-	clang-format -Werror -n $(HEADERS)
-	clang-format -Werror -n $(TEST_FILES)
+	$(SHOW)clang-format -Werror -n $(SOURCES)
+	$(SHOW)clang-format -Werror -n $(HEADERS)
+	$(SHOW)clang-format -Werror -n $(TEST_FILES)
 
 format:
-	clang-format -i $(SOURCES)
-	clang-format -i $(HEADERS)
-	clang-format -i $(TEST_FILES)
+	$(SHOW)clang-format -i $(SOURCES)
+	$(SHOW)clang-format -i $(HEADERS)
+	$(SHOW)clang-format -i $(TEST_FILES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
@@ -302,13 +312,12 @@ docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
 coverage:
-	DEBUG=1 COVERAGE=1 make tests
-	DEBUG=1 COVERAGE=1 make unittests
-	mkdir -p tmp/lcov
-	lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
-	lcov -l tmp/lcov/hiredis.info
-	genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
-
+	$(SHOW)DEBUG=1 COVERAGE=1 make tests
+	$(SHOW)DEBUG=1 COVERAGE=1 make unittests
+	$(SHOW)mkdir -p tmp/lcov
+	$(SHOW)lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
+	$(SHOW)lcov -l tmp/lcov/hiredis.info
+	$(SHOW)genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
 
 #----------------------------------------------------------------------------------------------
 
@@ -329,8 +338,8 @@ package: $(TARGET)
 		echo Cannot find redis-server. Aborting. ;\
 		exit 1 ;\
 	fi
-	$(call ramp_pack,latest,release)
-	$(call ramp_pack,{semantic_version},release)
+	$(SHOW)$(call ramp_pack,latest,release)
+	$(SHOW)$(call ramp_pack,{semantic_version},release)
 ifneq ($(BRANCH),)
-	$(call ramp_pack,$(BRANCH),branch)
+	$(SHOW)$(call ramp_pack,$(BRANCH),branch)
 endif
