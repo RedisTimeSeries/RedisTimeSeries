@@ -5,7 +5,6 @@ from RLTest import Env
 
 def test_get_timestamp():
     with Env().getConnection() as r:
-        assert r.execute_command("TS.GET", "X") == []
         assert r.execute_command("TS.ADD", "X" ,"2" ,"1.2")
         assert r.execute_command("TS.GET", "X") == [2,"1.2"]
         assert r.execute_command("TS.GET", "X", "TIMESTAMP", "0") == [2,"1.2"]
