@@ -12,6 +12,8 @@ make fetch         # download and prepare dependant modules
 make build
   DEBUG=1          # build debug variant
   VARIANT=name     # use a build variant 'name'
+  PROFILE=1        # enable profiling compile flags (and debug symbols) for release type.
+                   # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
 make clean         # remove binary files
@@ -92,12 +94,21 @@ ifeq ($(VALGRIND),1)
 DEBUG ?= 1
 endif
 
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+endif
+
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DVALGRIND
 LD_FLAGS += -g
 else
+ifeq ($(PROFILE),1)
+CC_FLAGS += -O2
+else
 CC_FLAGS += -O3
 endif
+endif
+
 
 CC_FLAGS += $(CC_FLAGS.coverage)
 LD_FLAGS += $(LD_FLAGS.coverage)
@@ -180,11 +191,11 @@ clean:
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(CC) $(CC_FLAGS) -c $< -o $@
 
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
 	@echo Linking $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
