@@ -12,6 +12,7 @@
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
+#include "fast_double_parser_c.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
@@ -490,7 +491,8 @@ static inline int add(RedisModuleCtx *ctx,
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
     api_timestamp_t timestamp;
-    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+    const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
+    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL))
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *)&timestamp) !=

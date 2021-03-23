@@ -55,6 +55,9 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
 LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
+FAST_DOUBLE_PARSER_LIBDIR=$(BINROOT)/fast_double_parser_c
+FAST_DOUBLE_PARSER_SRCDIR=$(SRCDIR)/fast_double_parser_c
+LIBFAST_DOUBLE_PARSER=$(FAST_DOUBLE_PARSER_LIBDIR)/libfast_double_parser_c.a
 
 #----------------------------------------------------------------------------------------------
 
@@ -66,6 +69,7 @@ CC=gcc
 CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-I$(ROOT)/deps \
+	-I$(SRCDIR)/fast_double_parser_c \
 	-Wall \
 	-fPIC \
 	-pedantic \
@@ -77,7 +81,7 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -167,6 +171,12 @@ rmutil:
 
 $(LIBRMUTIL): rmutil
 
+libfast_double_parser_c:
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(ROOT)/src/fast_double_parser_c
+
+$(LIBFAST_DOUBLE_PARSER): libfast_double_parser_c
+
 docker_lint:
 	$(SHOW)docker build -t llvm-toolset -f llvm.Dockerfile .
 	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
@@ -184,6 +194,7 @@ format:
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
+	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
 -include $(CC_DEPS)
@@ -192,7 +203,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
