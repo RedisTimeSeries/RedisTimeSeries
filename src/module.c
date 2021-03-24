@@ -485,7 +485,9 @@ static inline int add(RedisModuleCtx *ctx,
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
-        if (ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
+        //  overwride key and database configuration for DUPLICATE_POLICY
+        if (argv != NULL &&
+            ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
             return REDISMODULE_ERR;
         }
     }

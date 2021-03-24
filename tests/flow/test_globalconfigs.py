@@ -6,7 +6,7 @@ from test_helper_classes import TSInfo
 class testModuleLoadTimeArguments(object):
     def __init__(self):
         self.test_variations = [(True, 'CHUNK_SIZE_BYTES 2000'),
-                                (True, 'COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'),
+                                (True, 'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'),
                                 (True, 'DUPLICATE_POLICY MAX'),
                                 (True, 'RETENTION_POLICY 30')
                                 ]
@@ -46,8 +46,7 @@ def test_compressed():
 class testGlobalConfigTests():
 
     def __init__(self):
-        Env().skipOnCluster()
-        self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
+        self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')
 
     def test_autocreate(self):
         with self.env.getConnection() as r:
