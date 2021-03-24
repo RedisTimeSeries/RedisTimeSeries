@@ -40,7 +40,7 @@ You can use the following env variables to change how the cluster is setup
 #### Running RedisTimeSeries cluster with 15 main nodes and RedisGears
 
 ```
-NODES=15 ADDITIONAL_OPTIONS="--loadmodule  ../../bin/redistimeseries.so --loadmodule ../../../RedisGears/bin/linux-x64-release/redisgears.so" ./create-cluster start
+NODES=15 ADDITIONAL_OPTIONS=" --loadmodule ../../../RedisGears/bin/linux-x64-release/redisgears.so --loadmodule  ../../bin/redistimeseries.so " ./create-cluster start
 NODES=15 ./create-cluster create
 NODES=15 ./create-cluster call RG.REFRESHCLUSTER
 
