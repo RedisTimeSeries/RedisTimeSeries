@@ -426,33 +426,30 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * using `prevTS` and `prevDelta`.
  */
 static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
-    int64_t dd = 0;
     // control bit ‘0’
     // Read stored double delta value
     if (Bins_bitoff(bins, iter->idx++)) {
-        dd = 0;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
-        dd = bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
+        return iter->prevTS += iter->prevDelta;
+    }
+    if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        dd = bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
         iter->idx += CMPR_L2;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        dd = bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
         iter->idx += CMPR_L3;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        dd = bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
         iter->idx += CMPR_L4;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        dd = bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
         iter->idx += CMPR_L5;
     } else {
-        dd = readBits(bins, iter->idx, 64);
+        iter->prevDelta += readBits(bins, iter->idx, 64);
         iter->idx += 64;
     }
-
-    // Update iterator
-    iter->prevDelta += dd;
     return iter->prevTS += iter->prevDelta;
 }
 
