@@ -69,6 +69,9 @@ int GetSeries(RedisModuleCtx *ctx,
               Series **series,
               int mode);
 
+// This method provides the same logic as GetSeries, without replying to the client in case of error
+// The caller method should check the result for TRUE/FALSE and update the client accordingly if
+// required
 int SilentGetSeries(RedisModuleCtx *ctx,
                     RedisModuleString *keyName,
                     RedisModuleKey **key,
