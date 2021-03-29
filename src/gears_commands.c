@@ -90,6 +90,9 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         ResultSet_Free(resultset);
     }
 
+    MRangeArgs_Free(&data->args);
+    free(data);
+
     RedisModule_UnblockClient(bc, NULL);
     RedisGears_DropExecution(gearsCtx);
     RedisModule_FreeThreadSafeContext(rctx);
@@ -110,10 +113,12 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     QueryPredicateList *queries =
         parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
     if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
     }
 
     if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
+        QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
@@ -122,11 +127,12 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (err) {
         RedisModule_ReplyWithError(ctx, err);
     }
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
+    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queryArg->predicates = queries->list;
+    // moving ownership of queries to QueryPredicates_Arg
+    queryArg->predicates = queries;
     queryArg->withLabels = (withlabels_location > 0);
     RedisGears_FlatMap(rg_ctx, "ShardMgetMapper", queryArg);
 
@@ -157,11 +163,12 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     if (err) {
         RedisModule_ReplyWithError(ctx, err);
     }
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
+    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.startTimestamp;
     queryArg->endTimestamp = args.endTimestamp;
-    queryArg->predicates = args.queryPredicates->list;
+    args.queryPredicates->ref++;
+    queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     RedisGears_FlatMap(rg_ctx, "ShardSeriesMapper", queryArg);
     RGM_Collect(rg_ctx);
@@ -188,11 +195,12 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     if (err) {
         RedisModule_ReplyWithError(ctx, err);
     }
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
+    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queryArg->predicates = queries->list;
+    queries->ref++;
+    queryArg->predicates = queries;
     queryArg->withLabels = false;
     RedisGears_FlatMap(rg_ctx, "ShardQueryindexMapper", queryArg);
 

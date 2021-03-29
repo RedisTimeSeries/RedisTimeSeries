@@ -7,6 +7,7 @@
 
 #include "consts.h"
 
+#include <assert.h>
 #include <limits.h>
 #include <string.h>
 #include <rmutil/alloc.h>
@@ -182,6 +183,7 @@ void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
     RedisModuleString *currentKey;
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModule_DictSet(dest, currentKey, (void *)1);
+        RedisModule_FreeString(ctx, currentKey);
     }
     RedisModule_DictIteratorStop(iter);
 }
@@ -227,11 +229,14 @@ void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *ri
     RedisModule_DictIteratorStop(iter);
 }
 
-RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predicate) {
+RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx,
+                                      QueryPredicate *predicate,
+                                      bool *isCloned) {
     /*
      * Return the dictionary of all the keys that match the predicate.
      */
     RedisModuleDict *currentLeaf = NULL;
+    *isCloned = false;
     RedisModuleString *index_key;
     size_t _s;
     const char *key = RedisModule_StringPtrLen(predicate->key, &_s);
@@ -243,6 +248,7 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
         index_key = RedisModule_CreateStringPrintf(
             ctx, K_PREFIX, RedisModule_StringPtrLen(predicate->key, &_s));
         currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+        RedisModule_FreeString(ctx, index_key);
     } else { // one or more entries
         RedisModuleDict *singleEntryLeaf;
         int unioned_count = 0;
@@ -250,6 +256,7 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
             value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
             index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
             singleEntryLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+            RedisModule_FreeString(ctx, index_key);
             if (singleEntryLeaf != NULL) {
                 // if there's only 1 item left to fetch from the index we can just return it
                 if (unioned_count == 0 && predicate->valueListCount - i == 1) {
@@ -257,6 +264,7 @@ RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx, QueryPredicate *predi
                 }
                 if (currentLeaf == NULL) {
                     currentLeaf = RedisModule_CreateDict(ctx);
+                    *isCloned = true;
                 }
                 _union(ctx, currentLeaf, singleEntryLeaf);
                 unioned_count++;
@@ -271,8 +279,8 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
                                      RedisModuleDict *prevResults) {
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
     RedisModuleDict *currentLeaf;
-
-    currentLeaf = GetPredicateKeysDict(ctx, predicate);
+    bool isCloned;
+    currentLeaf = GetPredicateKeysDict(ctx, predicate, &isCloned);
 
     if (currentLeaf != NULL) {
         // Copy everything to new dict only in case this is the first predicate.
@@ -284,13 +292,16 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
             RedisModuleString *currentKey;
             while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
                 RedisModule_DictSet(localResult, currentKey, (void *)1);
+                RedisModule_FreeString(ctx, currentKey);
             }
             RedisModule_DictIteratorStop(iter);
         } else {
+            RedisModule_FreeDict(ctx, localResult);
             localResult = currentLeaf;
         }
     }
 
+    RedisModuleDict *result = NULL;
     if (prevResults != NULL) {
         if (predicate->type == EQ || predicate->type == CONTAINS) {
             _intersect(ctx, prevResults, localResult);
@@ -303,13 +314,21 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
         } else if (predicate->type == NEQ) {
             _difference(ctx, prevResults, localResult);
         }
-        return prevResults;
+        result = prevResults;
     } else if (predicate->type == EQ || predicate->type == CONTAINS ||
                predicate->type == LIST_MATCH) {
-        return localResult;
+        result = localResult;
     } else {
-        return prevResults; // always NULL
+        result = prevResults; // always NULL
     }
+
+    if (result != localResult && localResult != currentLeaf && localResult != NULL) {
+        RedisModule_FreeDict(ctx, localResult);
+    }
+    if (isCloned && currentLeaf != result) {
+        RedisModule_FreeDict(ctx, currentLeaf);
+    }
+    return result;
 }
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
@@ -323,13 +342,18 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
     if (predicate_count > 1) {
         int minIndex = 0;
         unsigned int minDictSize = UINT_MAX;
+        bool isCloned;
         for (int i = 0; i < predicate_count; i++) {
-            RedisModuleDict *currentPredicateKeys = GetPredicateKeysDict(ctx, &index_predicate[i]);
+            RedisModuleDict *currentPredicateKeys =
+                GetPredicateKeysDict(ctx, &index_predicate[i], &isCloned);
             int currentDictSize =
                 (currentPredicateKeys != NULL) ? RedisModule_DictSize(currentPredicateKeys) : 0;
             if (currentDictSize < minDictSize) {
                 minIndex = i;
                 minDictSize = currentDictSize;
+            }
+            if (currentPredicateKeys != NULL && isCloned) {
+                RedisModule_FreeDict(ctx, currentPredicateKeys);
             }
         }
 
@@ -389,11 +413,16 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
         }
         free(predicate->key);
         free(predicate->valuesList);
-        //        free(predicate);
     }
 }
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
+    if (list->ref > 1) {
+        list->ref--;
+        return;
+    }
+    assert(list->ref == 1);
+
     for (int i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);
     }
