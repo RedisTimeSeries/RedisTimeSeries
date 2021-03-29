@@ -192,7 +192,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
                             currentKey);
             continue;
         }
-        RedisGears_ListRecordAdd(series_list, SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
+        RedisGears_ListRecordAdd(
+            series_list,
+            SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
@@ -333,8 +335,7 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     Chunk_t *chunk = NULL;
     int index = 0;
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
-        if (series->funcs->GetLastTimestamp(chunk) > startTimestamp)
-        {
+        if (series->funcs->GetLastTimestamp(chunk) > startTimestamp) {
             if (series->funcs->GetFirstTimestamp(chunk) > endTimestamp) {
                 break;
             }
