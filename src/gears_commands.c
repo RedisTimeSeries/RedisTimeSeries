@@ -45,7 +45,6 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_record = RedisGears_GetRecord(gearsCtx, i);
         if (raw_record->type != GetSeriesRecordType()) {
-            RedisModule_ReplyWithSimpleString(rctx, "bla");
             continue;
         }
         Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
