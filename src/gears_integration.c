@@ -66,6 +66,8 @@ static int QueryPredicates_ArgSerialize(FlatExecutionPlan *fep,
     QueryPredicates_Arg *predicate_list = arg;
     RedisGears_BWWriteLong(bw, predicate_list->count);
     RedisGears_BWWriteLong(bw, predicate_list->withLabels);
+    RedisGears_BWWriteLong(bw, predicate_list->startTimestamp);
+    RedisGears_BWWriteLong(bw, predicate_list->endTimestamp);
     for (int i = 0; i < predicate_list->count; i++) {
         // encode type
         QueryPredicate *predicate = predicate_list->predicates + i;
@@ -104,6 +106,9 @@ static void *QueryPredicates_ArgDeserialize(FlatExecutionPlan *fep,
     QueryPredicates_Arg *predicates = malloc(sizeof(*predicates));
     predicates->count = RedisGears_BRReadLong(br);
     predicates->withLabels = RedisGears_BRReadLong(br);
+    predicates->startTimestamp = RedisGears_BRReadLong(br);
+    predicates->endTimestamp = RedisGears_BRReadLong(br);
+
     predicates->predicates = calloc(predicates->count, sizeof(QueryPredicate));
     for (int i = 0; i < predicates->count; i++) {
         QueryPredicate *predicate = predicates->predicates + i;
@@ -187,7 +192,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
                             currentKey);
             continue;
         }
-        RedisGears_ListRecordAdd(series_list, SeriesRecord_New(series));
+        RedisGears_ListRecordAdd(series_list, SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
@@ -306,7 +311,7 @@ bool IsGearsLoaded() {
     return GearsLoaded;
 }
 
-Record *SeriesRecord_New(Series *series) {
+Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t endTimestamp) {
     SeriesRecord *out = (SeriesRecord *)RedisGears_RecordCreate(SeriesRecordType);
     out->keyName = RedisModule_CreateStringFromString(NULL, series->keyName);
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
@@ -328,8 +333,15 @@ Record *SeriesRecord_New(Series *series) {
     Chunk_t *chunk = NULL;
     int index = 0;
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
-        out->chunks[index] = out->funcs->CloneChunk(chunk);
-        index++;
+        if (series->funcs->GetLastTimestamp(chunk) > startTimestamp)
+        {
+            if (series->funcs->GetFirstTimestamp(chunk) > endTimestamp) {
+                break;
+            }
+
+            out->chunks[index] = out->funcs->CloneChunk(chunk);
+            index++;
+        }
     }
     out->chunkCount = index;
     RedisModule_DictIteratorStop(iter);

@@ -11,6 +11,8 @@
 typedef struct QueryPredicates_Arg
 {
     QueryPredicate *predicates;
+    timestamp_t startTimestamp;
+    timestamp_t endTimestamp;
     size_t count;
     bool withLabels;
 } QueryPredicates_Arg;
@@ -28,7 +30,7 @@ typedef struct SeriesRecord
 } SeriesRecord;
 
 RecordType *GetSeriesRecordType();
-Record *SeriesRecord_New(Series *series);
+Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t endTimestamp);
 void SeriesRecord_ObjectFree(void *series);
 int SeriesRecord_Serialize(ExecutionCtx *ctx, Gears_BufferWriter *bw, Record *base);
 Record *SeriesRecord_Deserialize(ExecutionCtx *ctx, Gears_BufferReader *br);

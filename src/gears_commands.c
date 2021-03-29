@@ -125,6 +125,8 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
     queryArg->count = queries->count;
+    queryArg->startTimestamp = 0;
+    queryArg->endTimestamp = 0;
     queryArg->predicates = queries->list;
     queryArg->withLabels = (withlabels_location > 0);
     RedisGears_FlatMap(rg_ctx, "ShardMgetMapper", queryArg);
@@ -158,6 +160,8 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
     queryArg->count = args.queryPredicates->count;
+    queryArg->startTimestamp = args.startTimestamp;
+    queryArg->endTimestamp = args.endTimestamp;
     queryArg->predicates = args.queryPredicates->list;
     queryArg->withLabels = args.withLabels;
     RedisGears_FlatMap(rg_ctx, "ShardSeriesMapper", queryArg);
@@ -187,6 +191,8 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicate));
     queryArg->count = queries->count;
+    queryArg->startTimestamp = 0;
+    queryArg->endTimestamp = 0;
     queryArg->predicates = queries->list;
     queryArg->withLabels = false;
     RedisGears_FlatMap(rg_ctx, "ShardQueryindexMapper", queryArg);
