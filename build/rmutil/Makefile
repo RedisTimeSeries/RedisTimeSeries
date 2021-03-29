@@ -12,14 +12,26 @@ SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 CC=gcc
 
 CC_FLAGS=\
-	-g \
-	-O3 \
 	-I$(SRCDIR)/.. \
 	-Wall \
 	-fPIC \
 	-Wno-unused-function \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d)
+
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+endif
+
+ifeq ($(DEBUG),1)
+CC_FLAGS += -g -ggdb -O0
+else
+ifeq ($(PROFILE),1)
+CC_FLAGS += -O2
+else
+CC_FLAGS += -O3
+endif
+endif
 
 _SOURCES=util.c strings.c sds.c vector.c alloc.c periodic.c
 
@@ -56,11 +68,11 @@ $(TARGET): $(OBJECTS)
 #----------------------------------------------------------------------------------------------
 
 $(BINDIR)/test_vector: test_vector.o vector.o
-	$(CC) -Wall -o $@ $^ -lc -lpthread -O0
-	sh -c ./$@
+	$(SHOW)$(CC) -Wall -o $@ $^ -lc -lpthread -O0
+	$(SHOW)sh -c ./$@
 
 $(BINDIR)/test_periodic: test_periodic.o periodic.o
-	$(CC) -Wall -o $@ $^ -lc -lpthread -O0
-	sh -c ./$@
+	$(SHOW)$(CC) -Wall -o $@ $^ -lc -lpthread -O0
+	$(SHOW)sh -c ./$@
 	
 test: test_periodic test_vector
