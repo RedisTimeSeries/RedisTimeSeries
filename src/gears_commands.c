@@ -66,15 +66,15 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
     }
 
     if (data->args.groupByLabel) {
-        ResultSet_ApplyRange(resultset,
-                             data->args.startTimestamp,
-                             data->args.endTimestamp,
-                             data->args.aggregationArgs.aggregationClass,
-                             data->args.aggregationArgs.timeDelta,
-                             -1,
-                             false);
         // Apply the reducer
-        ResultSet_ApplyReducer(resultset, data->args.gropuByReducerOp);
+        ResultSet_ApplyReducer(resultset,
+                               data->args.startTimestamp,
+                               data->args.endTimestamp,
+                               data->args.aggregationArgs.aggregationClass,
+                               data->args.aggregationArgs.timeDelta,
+                               -1,
+                               false,
+                               data->args.gropuByReducerOp);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         replyResultSet(rctx,

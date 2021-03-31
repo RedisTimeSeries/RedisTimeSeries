@@ -11,6 +11,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | Project | Language | License | Author | Stars |
 | ------- | -------- | ------- | ------ | --- |
 | [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [RedisLabs][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
+| [NRedisTimeSeries][NRedisTimeSeries-url] | C# | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [RedisLabs][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
 | [redistimeseries-py][redistimeseries-py-url] | Python | BSD-3 | [RedisLabs][redistimeseries-py-author] | [![redistimeseries-py-stars]][redistimeseries-py-url] |
@@ -26,6 +27,11 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
 [JRedisTimeSeries-author]: https://redislabs.com
 [JRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/JRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[NRedisTimeSeries-url]: https://github.com/RedisTimeSeries/NRedisTimeSeries
+[NRedisTimeSeries-author]: https://redislabs.com
+[NRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/NRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
 
 [redis-modules-java-url]: https://github.com/dengliming/redis-modules-java
 [redis-modules-java-author]: https://github.com/dengliming

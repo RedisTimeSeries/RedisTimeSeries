@@ -144,7 +144,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
+void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -224,16 +224,12 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     }
     RedisModule_DictIteratorStop(iter);
 
-    // apply the range and per-serie aggregations, do not apply max results to the raw data
-    ResultSet_ApplyRange(resultset,
-                         args.startTimestamp,
-                         args.endTimestamp,
-                         args.aggregationArgs.aggregationClass,
-                         args.aggregationArgs.timeDelta,
-                         -1,
-                         args.reverse);
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, args.gropuByReducerOp);
+    ResultSet_ApplyReducer(
+            resultset, args.startTimestamp,
+            args.endTimestamp,
+            args.aggregationArgs.aggregationClass,
+            args.aggregationArgs.timeDelta, args.count, args.reverse, args.gropuByReducerOp);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     replyResultSet(ctx,
@@ -456,18 +452,23 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
-    api_timestamp_t timestamp;
+
     if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
-    if ((RedisModule_StringToLongLong(timestampStr, (long long int *)&timestamp) !=
-         REDISMODULE_OK)) {
+    long long timestampValue;
+    if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
         if (RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t)RedisModule_Milliseconds();
+            timestampValue = RedisModule_Milliseconds();
         else
             return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
     }
+
+    if (timestampValue < 0) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+    }
+    api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;

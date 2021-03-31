@@ -279,13 +279,17 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op) {
+int MultiSerieReduce(Series *dest,
+                     Series *source,
+                     MultiSeriesReduceOp op,
+                     timestamp_t startTimestamp,
+                     timestamp_t endTimestamp,
+                     AggregationClass *agg,
+                     int64_t time_delta,
+                     bool rev) {
     Sample sample;
-    long long skipped;
-    timestamp_t start_ts = getFirstValidTimestamp(source, &skipped);
-    timestamp_t end_ts = source->lastTimestamp;
     SeriesIterator iterator;
-    SeriesQuery(source, &iterator, start_ts, end_ts, false, NULL, 0);
+    SeriesQuery(source, &iterator, startTimestamp, endTimestamp, rev, agg, time_delta);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
