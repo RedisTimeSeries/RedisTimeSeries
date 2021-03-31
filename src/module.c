@@ -225,11 +225,14 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     RedisModule_DictIteratorStop(iter);
 
     // Apply the reducer
-    ResultSet_ApplyReducer(
-            resultset, args.startTimestamp,
-            args.endTimestamp,
-            args.aggregationArgs.aggregationClass,
-            args.aggregationArgs.timeDelta, args.count, args.reverse, args.gropuByReducerOp);
+    ResultSet_ApplyReducer(resultset,
+                           args.startTimestamp,
+                           args.endTimestamp,
+                           args.aggregationArgs.aggregationClass,
+                           args.aggregationArgs.timeDelta,
+                           args.count,
+                           args.reverse,
+                           args.gropuByReducerOp);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     replyResultSet(ctx,
