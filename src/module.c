@@ -216,11 +216,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
-
-    // apply the range and per-serie aggregations
-    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, reducerOp);
+    ResultSet_ApplyReducer(
+        resultset, start_ts, end_ts, aggObject, time_delta, count, rev, reducerOp);
 
     replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
 
