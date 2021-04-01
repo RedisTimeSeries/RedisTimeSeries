@@ -232,7 +232,7 @@ static bool Bin_InRange(int64_t x, u_int8_t nbits) {
 }
 
 static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit >> 6] & BIT(localbit(bit)));
+    return !(bins[bit / BINW] & BIT(localbit(bit)));
 }
 
 static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
@@ -261,11 +261,12 @@ static inline binary_t readBits(const binary_t *bins,
     const localbit_t lbit = localbit(start_pos);
     const localbit_t available = BINW - lbit;
     if (available >= dataLen) {
-        return LSB(bins[start_pos >> 6] >> lbit, dataLen);
+        return LSB(bins[start_pos / BINW] >> lbit, dataLen);
+    } else {
+        binary_t bin = LSB(bins[start_pos / BINW] >> lbit, available);
+        bin |= LSB(bins[(start_pos / BINW) + 1], dataLen - available) << available;
+        return bin;
     }
-    binary_t bin = LSB(bins[start_pos >> 6] >> lbit, available);
-    bin |= LSB(bins[(start_pos >> 6) + 1], dataLen - available) << available;
-    return bin;
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
@@ -430,8 +431,7 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
     // Read stored double delta value
     if (Bins_bitoff(bins, iter->idx++)) {
         return iter->prevTS += iter->prevDelta;
-    }
-    if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
     } else if (Bins_bitoff(bins, iter->idx++)) {
@@ -515,11 +515,11 @@ ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestam
     if (__builtin_expect(iter->count == 0, 0)) {
         *timestamp = iter->chunk->baseTimestamp;
         *value = iter->chunk->baseValue.d;
-        iter->count++;
-        return CR_OK;
+
+    } else {
+        *timestamp = readInteger(iter, iter->chunk->data);
+        *value = readFloat(iter, iter->chunk->data);
     }
-    *timestamp = readInteger(iter, iter->chunk->data);
-    *value = readFloat(iter, iter->chunk->data);
     iter->count++;
     return CR_OK;
 }

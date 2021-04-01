@@ -118,8 +118,7 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
                 if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
-            }
-            if (res == CR_ERR) {
+            } else if (res == CR_ERR) {
                 return CR_ERR;
             }
             // check timestamp is within range
@@ -147,8 +146,7 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
                 if (SeriesGetPrevious(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
-            }
-            if (res == CR_ERR) {
+            } else if (res == CR_ERR) {
                 return CR_ERR;
             }
             // reverse range handling
