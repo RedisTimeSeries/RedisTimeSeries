@@ -14,6 +14,7 @@
 #include "config.h"
 #include "gears_commands.h"
 #include "gears_integration.h"
+#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
@@ -455,8 +456,8 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
-
-    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+    const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
+    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL))
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
     long long timestampValue;

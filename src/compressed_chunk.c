@@ -235,8 +235,9 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
     iter->prevDelta = 0;
 
     iter->prevValue.d = compressedChunk->baseValue.d;
-    iter->prevLeading = 32;
-    iter->prevTrailing = 32;
+    iter->leading = 32;
+    iter->trailing = 32;
+    iter->blocksize = 0;
 
     return (ChunkIter_t *)iter;
 }

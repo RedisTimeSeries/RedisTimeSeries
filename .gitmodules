@@ -4,3 +4,7 @@
 [submodule "deps/readies"]
 	path = deps/readies
 	url = https://github.com/RedisLabsModules/readies.git
+[submodule "deps/fast_double_parser"]
+	path = deps/fast_double_parser
+	url = https://github.com/lemire/fast_double_parser.git
+
