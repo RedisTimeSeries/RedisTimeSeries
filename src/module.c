@@ -216,11 +216,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
-
-    // apply the range and per-serie aggregations
-    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, reducerOp);
+    ResultSet_ApplyReducer(
+        resultset, start_ts, end_ts, aggObject, time_delta, count, rev, reducerOp);
 
     replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
 
@@ -489,18 +487,23 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
-    api_timestamp_t timestamp;
+
     if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
-    if ((RedisModule_StringToLongLong(timestampStr, (long long int *)&timestamp) !=
-         REDISMODULE_OK)) {
+    long long timestampValue;
+    if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
         if (RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t)RedisModule_Milliseconds();
+            timestampValue = RedisModule_Milliseconds();
         else
             return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
     }
+
+    if (timestampValue < 0) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+    }
+    api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;
