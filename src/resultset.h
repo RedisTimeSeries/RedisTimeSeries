@@ -21,17 +21,16 @@ int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 
 int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
-int ResultSet_ApplyReducer(TS_ResultSet *r, MultiSeriesReduceOp reducerOp);
+int ResultSet_ApplyReducer(TS_ResultSet *r,
+                           api_timestamp_t start_ts,
+                           api_timestamp_t end_ts,
+                           AggregationClass *aggObject,
+                           int64_t time_delta,
+                           long long maxResults,
+                           bool rev,
+                           MultiSeriesReduceOp reducerOp);
 
 int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp);
-
-int ResultSet_ApplyRange(TS_ResultSet *r,
-                         api_timestamp_t start_ts,
-                         api_timestamp_t end_ts,
-                         AggregationClass *aggObject,
-                         int64_t time_delta,
-                         long long maxResults,
-                         bool rev);
 
 int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name);
 
