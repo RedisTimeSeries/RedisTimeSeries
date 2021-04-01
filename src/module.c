@@ -12,7 +12,7 @@
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
-#include "fast_double_parser_c.h"
+#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"

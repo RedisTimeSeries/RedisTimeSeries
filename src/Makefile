@@ -69,7 +69,6 @@ CC=gcc
 CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-I$(ROOT)/deps \
-	-I$(SRCDIR)/fast_double_parser_c \
 	-Wall \
 	-fPIC \
 	-pedantic \
