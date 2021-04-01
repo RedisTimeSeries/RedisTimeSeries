@@ -83,7 +83,7 @@ TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE 
 ```
 
 * timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
-* value - (double) numeric data value of the sample 
+* value - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 These arguments are optional because they can be set by TS.CREATE:
 
@@ -129,7 +129,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 ```
 
 * timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
-* value - numeric data value of the sample (double)
+* value - numeric data value of the sample (double). We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 #### Examples
 ```sql
