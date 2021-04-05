@@ -223,6 +223,7 @@ else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
+export CLUSTER ?= 0
 export GEARS ?= 0
 endif
 
