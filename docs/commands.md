@@ -79,7 +79,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append a new sample to the series. If the series has not been created yet with `TS.CREATE` it will be automatically created. 
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
 * timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
@@ -92,7 +92,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
- * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
+ * DUPLICATE_POLICY - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
