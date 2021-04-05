@@ -78,6 +78,7 @@ def test_partial_madd():
 
 
 def test_extensive_ts_madd():
+    Env().skipOnCluster()
     with Env(decodeResponses=True).getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
