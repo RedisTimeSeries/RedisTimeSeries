@@ -206,6 +206,28 @@ jobs:
       - store_artifacts:
           path: coverage
           destination: coverage
+      - restore_cache:
+          keys:
+            # when lock file changes, use increasingly general patterns to restore cache
+            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ .Branch }}
+            - gears-
+      - run:
+          name: build gears
+          no_output_timeout: 30m
+          command: |
+            cd tests/flow
+            ./get_gears.sh
+      - save_cache:
+          paths:
+            - /tmp/gears
+          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+      - run:
+          name: Test with Gears
+          command: |
+            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-debug/redisgears.so make test \
+              COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy_package:
     parameters:

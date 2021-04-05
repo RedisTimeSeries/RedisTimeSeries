@@ -218,11 +218,12 @@ export GEN=1
 export SLAVES=0
 export AOF=0
 export CLUSTER=0
+export GEARS=0
 else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
-export CLUSTER ?= 0
+export GEARS ?= 0
 endif
 
 tests: $(TARGET)
@@ -234,6 +235,7 @@ endif
 		CLUSTER=$(CLUSTER) \
 		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
 		VALGRIND=$(VALGRIND) \
+		GEARS=$(GEARS) \
 		$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
