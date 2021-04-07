@@ -850,7 +850,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     double result = series->lastValue;
     RMUtil_StringToLower(argv[0]);
-    if (RMUtil_StringEqualsC(argv[0], "ts.incrby")) {
+    bool isIncr = RMUtil_StringEqualsC(argv[0], "ts.incrby");
+    if (isIncr) {
         result += incrby;
     } else {
         result -= incrby;
@@ -861,7 +862,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(key);
 
     RedisModule_NotifyKeyspaceEvent(
-        ctx, REDISMODULE_NOTIFY_GENERIC, incrby ? "ts.incrby" : "ts.decrby", key);
+        ctx, REDISMODULE_NOTIFY_GENERIC, isIncr ? "ts.incrby" : "ts.decrby", argv[1]);
 
     return rv;
 }
