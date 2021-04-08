@@ -13,4 +13,4 @@ STEM=$(REPO)/redistimeseries
 ART_DIR=$(ROOT)/artifacts
 ART_INT_DIR=/var/opt/redislabs/artifacts
 
-include $(MK)/docker
+include $(MK)/docker.native
