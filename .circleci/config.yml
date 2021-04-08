@@ -24,6 +24,49 @@ commands:
               circleci step halt
             fi
 
+  setup-executor:
+    steps:
+      - run:
+          name: Setup executor
+          command: |
+            apt-get -qq update
+            apt-get -q install -y git openssh-client curl ca-certificates make tar gzip
+            bash <(curl -fsSL https://get.docker.com)
+      - setup_remote_docker:
+          docker_layer_caching: true
+
+  setup-automation:
+    steps:
+      - run:
+          name: Setup automation
+          command: |
+            git submodule update --init deps/readies
+            ./deps/readies/bin/getpy3
+
+  checkout-all:
+    steps:
+      - checkout
+      - run:
+          name: Checkout submodules
+          command: git submodule update --init --recursive
+
+  persist-artifacts:
+    steps:
+      - persist_to_workspace:
+          root: bin/
+          paths:
+            - artifacts/snapshots/*.zip
+            - artifacts/snapshots/*.tgz
+            - artifacts/snapshots/*.tar
+            - artifacts/*.zip
+            - artifacts/*.tgz
+            - artifacts/*.tar
+      - run:
+          name: Cleanup test log dir
+          command: rm -f tests/pytest/logs/*.rdb
+      - store_artifacts:
+          path: tests/pytest/logs
+  
   ci_steps:
     parameters:
       platform:
@@ -39,16 +82,15 @@ commands:
         default: ""
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Install prerequisites
           command: make setup
       - run:
           name: Install Redis
-          command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
+          command: |
+            python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
+            redis-server --version
       - run:
           name: Build
           command: make build <<parameters.build_params>> SHOW=1
@@ -63,7 +105,6 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-          
 
   package:
     steps:
@@ -81,6 +122,29 @@ commands:
       - store_test_results:
           path: ~/workspace/tests
 
+  platforms-build-steps:
+    parameters:
+      platform:
+        type: string
+    steps:
+      - abort_for_docs
+      - setup-executor
+      - checkout-all
+      - setup-automation
+      - run:
+          name: Build for platform
+          command: |
+            cd build/platforms
+            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
+      - early_return_for_forked_pull_requests
+      - run:
+          name: Build for platform (publish)
+          command: |
+            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+            cd build/platforms
+            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+      - persist-artifacts
+
   deploy:
     parameters:
       from:
@@ -96,8 +160,7 @@ commands:
 jobs:
   valgrind:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
-    resource_class: xlarge
+      - image: redisfab/rmbuilder:6.2.1-x64-buster
     steps:
       - ci_steps:
           platform: debian
@@ -127,6 +190,27 @@ jobs:
       - ci_steps:
           platform: debian
       - package
+
+  platforms-build:
+    parameters:
+      platform:
+        type: string
+    docker:
+      - image: debian:buster
+    steps:
+      - platforms-build-steps:
+          platform: <<parameters.platform>>
+
+  arm-build:
+    parameters:
+      platform:
+        type: string
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    steps:
+      - platforms-build-steps:
+          platform: <<parameters.platform>>
 
   build-macos:
     macos:
@@ -209,9 +293,7 @@ jobs:
       - abort_for_docs
       - early_return_for_forked_pull_requests
       - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - setup-automation
       - run:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
@@ -223,6 +305,7 @@ jobs:
       - abort_for_docs
       - early_return_for_forked_pull_requests
       - checkout
+      - setup-automation
       - run:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
@@ -246,6 +329,28 @@ on-master: &on-master
   filters:
     branches:
       only: master
+    tags:
+      ignore: /.*/
+
+on-integ-branch: &on-integ-branch
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
+
+not-on-integ-branch: &not-on-integ-branch
+  filters:
+    branches:
+      ignore:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
 
 on-version-tags: &on-version-tags
   filters:
@@ -254,11 +359,13 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-master-and-version-tags: &on-master-and-version-tags
+on-integ-and-version-tags: &on-integ-and-version-tags
   filters:
     branches:
       only:
         - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
     tags:
       only: /^v[0-9].*/
 
@@ -273,8 +380,18 @@ workflows:
           <<: *on-any-branch
       - build:
           <<: *on-any-branch
-      - build-macos:
-          <<: *on-version-tags
+      - platforms-build:
+          <<: *on-any-branch
+          context: common
+          matrix:
+            parameters:
+              platform: [focal, bionic, xenial, centos7]
+      - arm-build:
+          <<: *on-any-branch
+          context: common
+          matrix:
+            parameters:
+              platform: [focal, bionic, xenial, centos7]
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
@@ -306,7 +423,9 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * *"
-          <<: *on-master
+          filters:
+            branches:
+              only: master
     jobs:
       - build-macos
       - valgrind
