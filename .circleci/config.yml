@@ -134,14 +134,14 @@ commands:
       - run:
           name: Build for platform
           command: |
-            cd build/platforms
+            cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
       - early_return_for_forked_pull_requests
       - run:
           name: Build for platform (publish)
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/platforms
+            cd build/docker
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
 
@@ -154,9 +154,12 @@ commands:
       - checkout-all
       - setup-automation
       - run:
+          name: Install Docker
+          command: bash <(curl -fsSL https://get.docker.com)
+      - run:
           name: Build for platform
           command: |
-            cd build/platforms
+            cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
       - early_return_for_forked_pull_requests
       - run:
