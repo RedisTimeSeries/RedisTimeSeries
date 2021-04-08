@@ -145,6 +145,28 @@ commands:
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
 
+  arm-platforms-build-steps:
+    parameters:
+      platform:
+        type: string
+    steps:
+      - abort_for_docs
+      - checkout-all
+      - setup-automation
+      - run:
+          name: Build for platform
+          command: |
+            cd build/platforms
+            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
+      - early_return_for_forked_pull_requests
+      - run:
+          name: Build for platform (publish)
+          command: |
+            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
+            cd build/platforms
+            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+      - persist-artifacts
+
   deploy:
     parameters:
       from:
@@ -201,7 +223,7 @@ jobs:
       - platforms-build-steps:
           platform: <<parameters.platform>>
 
-  arm-build:
+  arm-platforms-build:
     parameters:
       platform:
         type: string
@@ -209,7 +231,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.medium
     steps:
-      - platforms-build-steps:
+      - arm-platforms-build-steps:
           platform: <<parameters.platform>>
 
   build-macos:
@@ -386,12 +408,12 @@ workflows:
           matrix:
             parameters:
               platform: [focal, bionic, xenial, centos7]
-      - arm-build:
+      - arm-platforms-build:
           <<: *on-any-branch
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic, xenial, centos7]
+              platform: [bionic]
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
