@@ -83,7 +83,7 @@ commands:
     steps:
       - abort_for_docs
       - checkout-all
-	  - setup-automation
+      - setup-automation
       - run:
           name: Install prerequisites
           command: make setup
