@@ -38,12 +38,13 @@ RUN make build
 ARG PACK
 ARG TEST
 
+RUN mkdir -p bin/artifacts
 RUN set -e ;\
-    mkdir -p bin/artifacts ;\
     if [ "$PACK" = "1" ]; then bash -l -c "make pack"; fi
-RUN if [ "$TEST" = "1" ]; then \
+RUN RUN set -e ;\
+    if [ "$TEST" = "1" ]; then \
         bash -l -c "TEST= make test" ;\
-        tar -C /build/pytest/logs/ -czf /build/artifacts/pytest-logs-${ARCH}-${OSNICK}.tgz . ;\
+        tar -C /build/pytest/logs/ -czf /build/bin/artifacts/pytest-logs-${ARCH}-${OSNICK}.tgz . ;\
     fi
 
 #----------------------------------------------------------------------------------------------

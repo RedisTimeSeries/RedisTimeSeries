@@ -402,7 +402,8 @@ workflows:
       - lint:
           <<: *on-any-branch
       - valgrind:
-          <<: *on-any-branch
+          #@@ <<: *on-any-branch
+          <<: *never
       - build:
           <<: *on-any-branch
       - platforms-build:
@@ -418,7 +419,7 @@ workflows:
             parameters:
               platform: [bionic]
       - build-multiarch-docker:
-          <<: *on-version-tags
+          <<: *never
       - coverage:
           context: common
           <<: *on-any-branch
@@ -429,7 +430,7 @@ workflows:
           requires:
             - build
             - valgrind
-          <<: *on-master
+          <<: *on-integ-branch
       - deploy_package:
           name: deploy_release
           package: release
