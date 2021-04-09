@@ -46,7 +46,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("python3-networkx")
 
     def common_last(self):
-        if ! self.has_command("lcov"):
+        if not self.has_command("lcov"):
             self.install("lcov")
         self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r tests/flow/requirements.txt")
