@@ -23,12 +23,12 @@ class RedisTimeSeriesSetup(paella.Setup):
 
     def debian_compat(self):
         self.run("%s/bin/enable-utf8" % READIES)
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run("%s/bin/getgcc" % READIES)
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
         self.run("%s/bin/getepel" % READIES)
-        self.run("%s/bin/getgcc" % READIES)
+        self.run("%s/bin/getgcc --modern" % READIES)
 
         if self.dist == "amzn":
             self.run("amazon-linux-extras install epel")

@@ -44,7 +44,8 @@ RUN set -e ;\
 RUN RUN set -e ;\
     if [ "$TEST" = "1" ]; then \
         bash -l -c "TEST= make test" ;\
-        tar -C /build/pytest/logs/ -czf /build/bin/artifacts/pytest-logs-${ARCH}-${OSNICK}.tgz . ;\
+		rm -f /build/tests/flow/logs/*.rdb ;\
+        tar -C /build/tests/flow/logs/ -czf /build/bin/artifacts/tests-flow-logs-${ARCH}-${OSNICK}.tgz . ;\
     fi
 
 #----------------------------------------------------------------------------------------------

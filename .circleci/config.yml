@@ -63,9 +63,9 @@ commands:
             - artifacts/*.tar
       - run:
           name: Cleanup test log dir
-          command: rm -f tests/pytest/logs/*.rdb
+          command: rm -f tests/flow/logs/*.rdb
       - store_artifacts:
-          path: tests/pytest/logs
+          path: tests/flow/logs
   
   ci_steps:
     parameters:
@@ -83,6 +83,7 @@ commands:
     steps:
       - abort_for_docs
       - checkout-all
+	  - setup-automation
       - run:
           name: Install prerequisites
           command: make setup
