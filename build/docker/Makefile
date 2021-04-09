@@ -10,7 +10,7 @@ OSNICK ?= buster
 REPO=redisfab
 STEM=$(REPO)/redistimeseries
 
-ART_DIR=$(ROOT)/artifacts
+ART_DIR=$(ROOT)/bin/artifacts
 ART_INT_DIR=/var/opt/redislabs/artifacts
 
 include $(MK)/docker.native
