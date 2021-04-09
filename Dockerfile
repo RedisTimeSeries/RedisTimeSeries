@@ -32,8 +32,8 @@ ADD . /build
 
 RUN ./deps/readies/bin/getpy3
 RUN ./system-setup.py
-RUN make fetch
-RUN make build
+RUN bash -l -c "make fetch"
+RUN bash -l -c "make build"
 
 ARG PACK
 ARG TEST
