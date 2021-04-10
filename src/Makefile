@@ -258,10 +258,10 @@ run_dev: $(TARGET)
 	$(SHOW)redis-server --loadmodule $(realpath $(TARGET)) $(REDIS_ARGS) --dir /tmp
 
 gdb: $(TARGET)
-	$(SHOW)gdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
+	$(SHOW)gdb --args `command -v redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 cgdb: $(TARGET)
-	$(SHOW)cgdb --args `which redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
+	$(SHOW)cgdb --args `command -v redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 #----------------------------------------------------------------------------------------------
 
@@ -311,25 +311,6 @@ coverage:
 
 #----------------------------------------------------------------------------------------------
 
-# arguments:
-#   BRANCH: specifies branch names to serve as an exta package tag
-#   INTO: package destination directory (optinal)
-
-define ramp_pack # (1=tag, 2=subdir)
-$(SHOW) python3 -m RAMP.ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
-$(SHOW). $(ROOT)/deps/readies/shibumi/functions; realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
-$(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
-$(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }; fi
-endef
-
 package: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)if ! command -v redis-server > /dev/null; then \
-		echo Cannot find redis-server. Aborting. ;\
-		exit 1 ;\
-	fi
-	$(SHOW)$(call ramp_pack,latest,release)
-	$(SHOW)$(call ramp_pack,{semantic_version},release)
-ifneq ($(BRANCH),)
-	$(SHOW)$(call ramp_pack,$(BRANCH),branch)
-endif
+	$(SHOW)./sbin/pack.sh

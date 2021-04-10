@@ -67,7 +67,7 @@ commands:
       - store_artifacts:
           path: tests/flow/logs
   
-  ci_steps:
+  build_steps:
     parameters:
       platform:
         type: string
@@ -96,6 +96,9 @@ commands:
           name: Build
           command: make build <<parameters.build_params>> SHOW=1
       - run:
+          name: Pack
+          command: make pack SHOW=1
+      - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
@@ -106,22 +109,6 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-
-  package:
-    steps:
-      - abort_for_docs
-      - run:
-          name: Package
-          command: |
-            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
-      - early_return_for_forked_pull_requests
-      - persist_to_workspace:
-          root: ~/workspace
-          paths:
-            - 'packages/release/*.zip'
-            - 'packages/branch/*.zip'
-      - store_test_results:
-          path: ~/workspace/tests
 
   platforms-build-steps:
     parameters:
@@ -147,7 +134,7 @@ commands:
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
 
-  arm-platforms-build-steps:
+  vm-platforms-build-steps:
     parameters:
       platform:
         type: string
@@ -173,24 +160,14 @@ commands:
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
 
-  deploy:
-    parameters:
-      from:
-        type: string
-    steps:
-      - abort_for_docs
-      - early_return_for_forked_pull_requests
-      - run:
-          name: Deploy to S3
-          command: >-
-            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
+#----------------------------------------------------------------------------------------------------------------------------------
 
 jobs:
   valgrind:
     docker:
       - image: redisfab/rmbuilder:6.2.1-x64-buster
     steps:
-      - ci_steps:
+      - build_steps:
           platform: debian
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
@@ -201,23 +178,20 @@ jobs:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
+      - setup-automation
       - run:
           name: lint
           command: |
             make setup
-            make -C src lint
+            make lint
 
   build:
     docker:
       - image: redisfab/rmbuilder:6.2.1-x64-buster
     steps:
-      - ci_steps:
+      - build_steps:
           platform: debian
-      - package
 
   platforms-build:
     parameters:
@@ -237,7 +211,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.medium
     steps:
-      - arm-platforms-build-steps:
+      - vm-platforms-build-steps:
           platform: <<parameters.platform>>
 
   build-macos:
@@ -249,7 +223,7 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
-      - ci_steps:
+      - build_steps:
           platform: macos
 
   build-multiarch-docker:
@@ -258,10 +232,7 @@ jobs:
       image: ubuntu-1604:202010-01
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Set up Python3
           command: pyenv global 3.7.0
@@ -298,21 +269,31 @@ jobs:
           path: coverage
           destination: coverage
 
-  deploy_package:
+  deploy-artifacts:
     parameters:
-      package:
+      location:
         type: string
+        default: ""
     docker:
       - image: redisfab/rmbuilder:6.2.1-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
       - attach_workspace:
-          at: ~/workspace
-      - deploy:
-          from: ~/workspace/packages/<<parameters.package>>
-      - store_artifacts:
-          path: ~/workspace/packages/<<parameters.package>>
+          at: workspace
+      - run:
+          name: Deploy to S3
+          command: |
+            cd "workspace/artifacts/<<parameters.location>>"
+            du -ah --apparent-size *
+            if [[ -z <<parameters.location>> ]]; then
+                path="/"
+            else
+                path="<<parameters.location>>/"
+            fi
+            for f in `ls *.zip *.tgz`; do
+              aws s3 cp $f s3://redismodules/$PACKAGE_NAME/$path --acl public-read
+            done
 
   release-automation:
     docker:
@@ -324,7 +305,7 @@ jobs:
       - setup-automation
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_TAG" VERBOSE=1 TEST=release ./tests/qa/run
 
   nightly-automation:
     docker:
@@ -336,8 +317,9 @@ jobs:
       - setup-automation
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_BRANCH" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
 
+#----------------------------------------------------------------------------------------------------------------------------------
 
 on-any-branch: &on-any-branch
   filters:
@@ -397,10 +379,11 @@ on-integ-and-version-tags: &on-integ-and-version-tags
     tags:
       only: /^v[0-9].*/
 
+#----------------------------------------------------------------------------------------------------------------------------------
 
 workflows:
   version: 2
-  build_and_package:
+  default-flow:
     jobs:
       - lint:
           <<: *on-any-branch
@@ -414,34 +397,33 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic, xenial, centos7, centos8]
+              platform: [hirsute, focal, bionic, xenial, centos7, centos8]
       - arm-platforms-build:
           <<: *on-any-branch
           context: common
           matrix:
             parameters:
-              platform: [bionic]
+              platform: [focal, bionic]
       - build-multiarch-docker:
           <<: *never
       - coverage:
           context: common
           <<: *on-any-branch
-      - deploy_package:
-          name: deploy_branch
-          package: branch
+      - deploy-artifacts:
+          name: deploy_snapshot
+          location: snapshots
           context: common
-          requires:
-            - build
-            - valgrind
           <<: *on-integ-branch
-      - deploy_package:
-          name: deploy_release
-          package: release
-          context: common
           requires:
-            - build
-            - valgrind
+            - platforms-build
+            - arm-platforms-build
+      - deploy-artifacts:
+          name: deploy_release
+          context: common
           <<: *on-version-tags
+          requires:
+            - platforms-build
+            - arm-platforms-build
       - release-automation:
           context: common
           requires:
