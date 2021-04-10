@@ -313,4 +313,4 @@ coverage:
 
 package: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)./sbin/pack.sh
+	$(SHOW)$(ROOT)/sbin/pack.sh
