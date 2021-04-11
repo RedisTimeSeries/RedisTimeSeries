@@ -20,9 +20,9 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("setuptools --upgrade")
 
         self.install("git jq curl")
+        self.run("%s/bin/enable-utf8" % READIES)
 
     def debian_compat(self):
-        self.run("%s/bin/enable-utf8" % READIES)
         self.run("%s/bin/getgcc" % READIES)
 
     def redhat_compat(self):
@@ -33,7 +33,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         if self.dist == "amzn":
             self.run("amazon-linux-extras install epel")
             self.install("python3-devel")
-        elif self.dist == "centos" and self.ver == "8":
+        elif self.dist == "centos" and self.os_version[0] == 8:
             self.install("https://pkgs.dyn.su/el8/base/x86_64/lcov-1.14-3.el8.noarch.rpm")
         else:
             self.install("python3-devel libaec-devel")

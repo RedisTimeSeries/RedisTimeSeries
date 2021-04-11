@@ -397,7 +397,7 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [hirsute, focal, bionic, xenial, centos7, centos8]
+              platform: [focal, bionic, xenial, centos7, centos8]
       - arm-platforms-build:
           <<: *on-any-branch
           context: common
