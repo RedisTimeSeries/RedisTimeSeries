@@ -96,17 +96,8 @@ ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
-<<<<<<< HEAD
-ifneq ($(VGD),)
-VALGRIND=$(VGD)
-endif
-
-ifeq ($(VALGRIND),1)
-DEBUG ?= 1
-=======
 ifeq ($(PROFILE),1)
 CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
->>>>>>> ac9bd44 (Gears, Valgrind, and two smoking barrels (#693))
 endif
 
 ifeq ($(DEBUG),1)
@@ -235,6 +226,23 @@ $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 unittests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
 	$(SHOW)$<
+
+
+BENCHMARK_ARGS = redisbench-admin run-local
+
+ifneq ($(REMOTE),)
+	BENCHMARK_ARGS = redisbench-admin run-remote 
+endif
+
+BENCHMARK_ARGS += --module_path $(realpath $(TARGET))
+ifneq ($(BENCHMARK),)
+	BENCHMARK_ARGS += --test $(BENCHMARK)
+endif
+
+
+benchmark: $(TARGET)
+	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
+
 
 #----------------------------------------------------------------------------------------------
 
