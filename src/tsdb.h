@@ -31,6 +31,7 @@ typedef struct CreateCtx
     Label *labels;
     int options;
     DuplicatePolicy duplicatePolicy;
+    bool isTemporary;
 } CreateCtx;
 
 typedef struct Series
@@ -50,6 +51,7 @@ typedef struct Series
     ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    bool isTemporary;
 } Series;
 
 typedef enum MultiSeriesReduceOp
@@ -69,6 +71,9 @@ int GetSeries(RedisModuleCtx *ctx,
               Series **series,
               int mode);
 
+// This method provides the same logic as GetSeries, without replying to the client in case of error
+// The caller method should check the result for TRUE/FALSE and update the client accordingly if
+// required
 int SilentGetSeries(RedisModuleCtx *ctx,
                     RedisModuleString *keyName,
                     RedisModuleKey **key,
@@ -77,7 +82,14 @@ int SilentGetSeries(RedisModuleCtx *ctx,
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
-int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op);
+int MultiSerieReduce(Series *dest,
+                     Series *source,
+                     MultiSeriesReduceOp op,
+                     timestamp_t start_ts,
+                     timestamp_t end_ts,
+                     AggregationClass *agg,
+                     int64_t time_delta,
+                     bool rev);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,

@@ -12,6 +12,7 @@
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
+#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
@@ -216,11 +217,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
-
-    // apply the range and per-serie aggregations
-    ResultSet_ApplyRange(resultset, start_ts, end_ts, aggObject, time_delta, count, rev);
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, reducerOp);
+    ResultSet_ApplyReducer(
+        resultset, start_ts, end_ts, aggObject, time_delta, count, rev, reducerOp);
 
     replyResultSet(ctx, resultset, withlabels, start_ts, end_ts, aggObject, time_delta, count, rev);
 
@@ -489,18 +488,23 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
-    api_timestamp_t timestamp;
-    if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
+    const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
+    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL))
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
 
-    if ((RedisModule_StringToLongLong(timestampStr, (long long int *)&timestamp) !=
-         REDISMODULE_OK)) {
+    long long timestampValue;
+    if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
         if (RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t)RedisModule_Milliseconds();
+            timestampValue = RedisModule_Milliseconds();
         else
             return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
     }
+
+    if (timestampValue < 0) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+    }
+    api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;
@@ -518,7 +522,9 @@ static inline int add(RedisModuleCtx *ctx,
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
-        if (ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
+        //  overwride key and database configuration for DUPLICATE_POLICY
+        if (argv != NULL &&
+            ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
             return REDISMODULE_ERR;
         }
     }
