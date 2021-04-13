@@ -83,4 +83,6 @@ def test_mget_cmd():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.MGET', 'filter', 'k+1')
         with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.MGET', 'retlif', 'k!=5')

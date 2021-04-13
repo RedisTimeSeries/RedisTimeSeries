@@ -89,54 +89,6 @@ void GroupList_Free(TS_GroupList *groupList) {
     free(groupList);
 }
 
-int ApplySerieRangeIntoNewSerie(Series **dest,
-                                Series *source,
-                                api_timestamp_t start_ts,
-                                api_timestamp_t end_ts,
-                                AggregationClass *aggObject,
-                                int64_t time_delta,
-                                long long maxResults,
-                                bool rev) {
-    Sample sample;
-    CreateCtx cCtx = {
-        .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
-    };
-    cCtx.options |= SERIES_OPT_UNCOMPRESSED;
-    cCtx.isTemporary = true;
-
-    Series *new = NewSeries(RedisModule_CreateStringFromString(NULL, source->keyName), &cCtx);
-    long long arraylen = 0;
-
-    // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?)
-    if (source->retentionTime) {
-        start_ts = source->lastTimestamp > source->retentionTime
-                       ? max(start_ts, source->lastTimestamp - source->retentionTime)
-                       : start_ts;
-        // if new start_ts > end_ts, there are no results to return
-        if (start_ts > end_ts) {
-            *dest = new;
-            return REDISMODULE_OK;
-        }
-    }
-
-    SeriesIterator iterator;
-    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev, aggObject, time_delta) != TSDB_OK) {
-        // todo: is this the right thing here?
-        *dest = new;
-        return REDISMODULE_ERR;
-    }
-
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-           (maxResults == -1 || arraylen < maxResults)) {
-        SeriesAddSample(new, sample.timestamp, sample.value);
-    }
-    SeriesIteratorClose(&iterator);
-
-    *dest = new;
-    return REDISMODULE_OK;
-}
-
 int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
     if (g->list == NULL) {
         g->list = (Series **)malloc(sizeof(Series *));

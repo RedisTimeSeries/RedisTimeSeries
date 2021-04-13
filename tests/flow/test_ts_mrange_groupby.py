@@ -20,6 +20,9 @@ def test_groupby_reduce_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc')
 
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla')
+
 def test_groupby_reduce():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:

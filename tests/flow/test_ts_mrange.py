@@ -103,6 +103,8 @@ def test_range_by_labels():
             assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation!=x')
 
         # issue 414
         with pytest.raises(redis.ResponseError) as excinfo:
