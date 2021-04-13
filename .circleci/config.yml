@@ -63,7 +63,28 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-          
+      - restore_cache:
+          keys:
+            # when lock file changes, use increasingly general patterns to restore cache
+            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ .Branch }}
+            - gears-
+      - run:
+          name: build gears
+          no_output_timeout: 30m
+          command: |
+            cd tests/flow
+            ./get_gears.sh
+      - save_cache:
+          paths:
+            - /tmp/gears
+          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+      - run:
+          name: Run flow with gears
+          no_output_timeout: 30m
+          command: |
+            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
+              TEST_REPORT_DIR=$HOME/workspace/tests  GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1
 
   package:
     steps:
@@ -241,6 +262,28 @@ jobs:
       - store_artifacts:
           path: coverage
           destination: coverage
+      - restore_cache:
+          keys:
+            # when lock file changes, use increasingly general patterns to restore cache
+            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ .Branch }}
+            - gears-
+      - run:
+          name: build gears
+          no_output_timeout: 30m
+          command: |
+            cd tests/flow
+            ./get_gears.sh
+      - save_cache:
+          paths:
+            - /tmp/gears
+          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+      - run:
+          name: Test with Gears
+          command: |
+            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
+              COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy_package:
     parameters:

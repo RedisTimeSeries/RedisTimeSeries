@@ -8,6 +8,7 @@
 #define GENERIC__CHUNK_H
 
 #include "consts.h"
+#include "redisgears.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -33,7 +34,7 @@ typedef void ChunkIter_t;
 // "temporary" uncompressed chunk.
 #define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
-typedef enum
+typedef enum CHUNK_TYPES_T
 {
     CHUNK_REGULAR,
     CHUNK_COMPRESSED
@@ -56,6 +57,7 @@ typedef struct ChunkFuncs
 {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void (*FreeChunk)(Chunk_t *chunk);
+    Chunk_t *(*CloneChunk)(Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
@@ -72,6 +74,8 @@ typedef struct ChunkFuncs
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
     void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
+    void (*GearsSerialize)(Chunk_t *chunk, Gears_BufferWriter *bw);
+    void (*GearsDeserialize)(Chunk_t **chunk, Gears_BufferReader *br);
 } ChunkFuncs;
 
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample);

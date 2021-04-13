@@ -202,7 +202,7 @@ void FreeSeries(void *value) {
     if (!currentSeries->isTemporary) {
         RemoveIndexedMetric(
             ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
-    };
+    }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
