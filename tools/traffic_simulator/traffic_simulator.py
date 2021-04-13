@@ -5,9 +5,29 @@ import multiprocessing
 import sys
 
 
+def send_pipeline(redis_client, cmds):
+    def _exec():
+        pipe = redis_client.pipeline()
+        for cmd in cmds:
+            pipe.execute_command(*cmd)
+        pipe.execute()
+
+    i = 0
+    while i < 10:
+        try:
+            i += 1
+            _exec()
+            break
+        except Exception:
+            continue
+    else:
+        print("Exhausted pipeline executions retry")
+
+
 def worker_func(args):
     host, port, start_ts, tsrange, pipeline_size, key_index, key_format, check_only = args
-    redis_client = redis.Redis(host, port, decode_responses=True)
+    redis_client = redis.Redis(host, port, decode_responses=True, retry_on_timeout=True, socket_connect_timeout=30,
+                               socket_timeout=30)
     if check_only:
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
@@ -48,7 +68,8 @@ def create_compacted_key(redis, i, source, agg, bucket):
 @click.option('--check-only', type=click.BOOL, default=False, help='test if all keys are correcly exists in the database')
 def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, with_compaction, start_timestamp,
         key_format, check_only):
-    r = redis.Redis(host, port, decode_responses=True)
+    print("Connecting to the DB")
+    r = redis.Redis(host, port, decode_responses=True, socket_connect_timeout=30)
     print("from %s to %s" % (start_timestamp, start_timestamp + samples))
 
     if create_keys and not check_only:
@@ -69,7 +90,7 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
     e = time.time()
     insert_time = e - s
 
-    if(check_only):
+    if check_only:
         for r in result:
             if r == -1:
                 print("# failed!!! not all items exists in the database")
