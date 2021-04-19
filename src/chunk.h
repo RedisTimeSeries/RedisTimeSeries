@@ -1,23 +1,26 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
 #ifndef CHUNK_H
 #define CHUNK_H
 
 #include "consts.h"
 #include "generic_chunk.h"
+
 #include <sys/types.h>
 
-typedef struct Chunk {
+typedef struct Chunk
+{
     timestamp_t base_timestamp;
     Sample *samples;
     unsigned int num_samples;
     size_t size;
 } Chunk;
 
-typedef struct ChunkIterator {
+typedef struct ChunkIterator
+{
     Chunk *chunk;
     int currentIndex;
     timestamp_t lastTimestamp;
@@ -58,7 +61,9 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, int options, ChunkIterFuncs* retChunkIterClass);
+ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+                                           int options,
+                                           ChunkIterFuncs *retChunkIterClass);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
@@ -66,5 +71,9 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+
+// Gears
+void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
+void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br);
 
 #endif

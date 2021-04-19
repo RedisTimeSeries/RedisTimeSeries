@@ -1,0 +1,50 @@
+create-cluster is a small script used to easily start a big number of Redis
+instances configured to run in cluster mode.
+
+The tool can also be used just to easily create a number of instances in a
+Redis Cluster in order to experiment a bit with the system.
+
+## USAGE
+---
+
+To create a cluster, follow these steps:
+
+1. Edit create-cluster and change the start / end port, depending on the
+number of instances you want to create.
+2. Use "./create-cluster start" in order to run the instances.
+3. Use "./create-cluster create" in order to execute redis-cli --cluster create, so that
+an actual Redis cluster will be created. (If you're accessing your setup via a local container, ensure that the CLUSTER_HOST value is changed to your local IP)
+4. Now you are ready to play with the cluster. AOF files and logs for each instances are created in the current directory.
+5. Use "./create-cluster call <CMD...>" in order to Call a command (up to 7 arguments) on all nodes.
+
+In order to stop a cluster:
+
+1. Use "./create-cluster stop" to stop all the instances. After you stopped the instances you can use "./create-cluster start" to restart them if you change your mind.
+2. Use "./create-cluster clean" to remove all the AOF / log files to restart with a clean environment.
+
+Use the command "./create-cluster help" to get the full list of features.
+
+----
+### Varying the cluster topology
+
+You can use the following env variables to change how the cluster is setup
+- `CLUSTER_HOST`: change the announced host. Default: "127.0.0.1"
+- `NODES`: change the number of main nodes in the cluster topology. Default: 3
+- `PORT`: change the start port to incrementally associate to the nodes. Default: 30000
+- `REPLICAS`: change the number of replicas per main node. Default 0
+- `ADDITIONAL_OPTIONS`: Pass additional options to each redis-server start arguments. Default "". You can use "ADDITIONAL_OPTIONS=" --loadmodule redistimeseries.so " to load the module. 
+
+
+### Example
+
+#### Running RedisTimeSeries cluster with 15 main nodes and RedisGears
+
+```
+NODES=15 ADDITIONAL_OPTIONS=" --loadmodule ../../../RedisGears/bin/linux-x64-release/redisgears.so --loadmodule  ../../bin/redistimeseries.so " ./create-cluster start
+NODES=15 ./create-cluster create
+NODES=15 ./create-cluster call RG.REFRESHCLUSTER
+
+# stop the servers
+NODES=15 ./create-cluster stop
+NODES=15 ./create-cluster clean
+```

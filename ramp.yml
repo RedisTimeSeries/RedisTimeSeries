@@ -19,4 +19,4 @@ capabilities:
     - hash_policy
     - clustering
     - reshard_rebalance
-    - flash 
+    - intershard_tls

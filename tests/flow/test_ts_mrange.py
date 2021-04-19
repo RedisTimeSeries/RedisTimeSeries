@@ -1,25 +1,43 @@
 import pytest
 import redis
-from RLTest import Env
+import time
+from utils import Env, set_hertz
 from test_helper_classes import _insert_data
 
+def test_mrange_with_expire_cmd():
+    env = Env()
+    set_hertz(env)
+
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        assert r.execute_command("TS.ADD", "Z" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        current_ts = time.time()
+        assert r.execute_command("EXPIRE","X", 5)
+        assert r.execute_command("EXPIRE","Y", 6)
+        assert r.execute_command("EXPIRE","Z", 7)
+        while time.time() < (current_ts+10):
+            reply = r.execute_command('TS.mrange', '-', '+', 'FILTER', 'type=DELAYED')
+            assert(len(reply)>=0 and len(reply)<=3)
+        assert r.execute_command("PING")
 
 def test_mrange_expire_issue549():
-    with Env().getConnection() as r:
-        # Lower hz value to make it more likely that mrange triggers key expiration
-        assert r.execute_command('config set hz 1') == b'OK'
-        assert r.execute_command('ts.add k1 1 10 LABELS l 1') == 1
-        assert r.execute_command('ts.add k2 2 20 LABELS l 1') == 2
-        assert r.execute_command('expire k1 1') == 1
-        for i in range(0, 50000):
-            assert r.execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
+    Env().skipOnDebugger()
+    env = Env()
+    set_hertz(env)
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('ts.add', 'k1', 1, 10, 'LABELS', 'l', '1') == 1
+        assert r.execute_command('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1') == 2
+        assert r.execute_command('expire', 'k1', '1') == 1
+        for i in range(0, 5000):
+            assert env.getConnection().execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
 
 
 def test_range_by_labels():
     start_ts = 1511885909
     samples_count = 50
 
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
@@ -30,6 +48,7 @@ def test_range_by_labels():
         expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
         assert [[b'tester1', [], expected_result]] == actual_result
+
         expected_result.reverse()
         actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
         assert [[b'tester1', [], expected_result]] == actual_result
@@ -44,13 +63,13 @@ def test_range_by_labels():
                            [b'tester2', [], build_expected(15, 5)],
                            [b'tester3', [], build_expected(25, 5)],
                            ]
-        assert expected_result == actual_result
-        assert expected_result[1:] == r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
+        assert sorted(expected_result) == sorted(actual_result)
+        assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                         'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
-                                                        'class!=middle')
+                                                        'class!=middle'), key=lambda x:x[0])
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
                                           'LAST', 5, 'FILTER', 'generation=x')
-        assert expected_result[0][2][:3] == actual_result[0][2]
+        assert expected_result[0][2][:3] == sorted(actual_result, key=lambda x:x[0])[0][2]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5,
                                           'FILTER', 'generation=x')
         assert [[1511885905, b'1']] == actual_result[0][2][:1]
@@ -75,15 +94,17 @@ def test_range_by_labels():
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER',
                                      'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange - + FILTER')  # missing args
+            assert r.execute_command('TS.mrange', '-', '+' ,'FILTER')  # missing args
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange - + RETLIF')  # no filter word
+            assert r.execute_command('TS.mrange', '-', '+', 'RETLIF')  # no filter word
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation!=x')
 
         # issue 414
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -96,7 +117,7 @@ def test_mrange_withlabels():
     start_ts = 1511885909
     samples_count = 50
 
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
@@ -118,7 +139,7 @@ def test_mrange_withlabels():
 
 
 def test_multilabel_filter():
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
@@ -127,17 +148,15 @@ def test_multilabel_filter():
         assert r.execute_command('TS.ADD', 'tester2', 0, 2) == 0
         assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
 
-        actual_result = r.execute_command('TS.mrange', 0, -1, 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert actual_result[0][0] == b'tester1'
-        assert actual_result[1][0] == b'tester2'
+        actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
+        assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
 
         actual_result = r.execute_command('TS.mrange', 0, -1, 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
                                           'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert actual_result[0][0] == b'tester1'
-        assert actual_result[1][0] == b'tester2'
+        assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
