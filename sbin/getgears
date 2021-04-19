@@ -78,12 +78,18 @@ if [[ -z $GEARS_PATH ]]; then
 	if [[ ! -f $F_GEARS_MOD ]]; then
 		echo "Downloading RedisGears ..."
 		$OP wget -q -P $WORK_DIR $GEARS_S3_URL/$GEARS_MOD
+		echo "Done."
+	else
+		echo "Found RedisGears at $F_GEARS_MOD"
 	fi
 
 	F_GEARS_DEPS="$WORK_DIR/$GEARS_DEPS"
 	if [[ ! -f $F_GEARS_DEPS ]]; then
-		echo "Downloading RedisGears deps ..."
+		echo "Downloading RedisGears dependencies ..."
 		$OP wget -q -P $WORK_DIR $GEARS_S3_URL/$GEARS_DEPS
+		echo "Done."
+	else
+		echo "Found RedisGears dependencies at $F_GEARS_DEPS"
 	fi
 else
 	F_GEARS_MOD="${GEARS_PATH}/artifacts/snapshot/${GEARS_MOD}"
