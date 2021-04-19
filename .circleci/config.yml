@@ -275,8 +275,7 @@ jobs:
       - run:
           name: Test with Gears
           command: |
-            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
-              COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            make test COV=1 GEARS=1 CLUSTER=1 SHOW=1
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy_package:

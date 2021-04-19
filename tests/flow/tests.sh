@@ -82,7 +82,7 @@ valgrind_config() {
 run_tests() {
 	local title="$1"
 	if [[ -n $title ]]; then
-		$READEIS/bin/sep -0
+		$READIES/bin/sep -0
 		printf "Tests with $title:\n\n"
 	fi
 
