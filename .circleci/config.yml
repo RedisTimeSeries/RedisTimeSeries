@@ -73,12 +73,12 @@ commands:
           paths:
             - ./bin/linux-buster-x64/RedisGears
             - ./bin/linux-bionic-x64/RedisGears
-          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
 
   package:
     steps:
@@ -259,19 +259,14 @@ jobs:
       - restore_cache:
           keys:
             # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
             - gears-{{ arch }}-{{ .Branch }}
             - gears-{{ arch }}-
-      - run:
-          name: build gears
-          no_output_timeout: 30m
-          command: |
-            cd tests/flow
-            ./get_gears.sh
       - save_cache:
           paths:
-            - /tmp/gears
-          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - ./bin/linux-buster-x64/RedisGears
+            - ./bin/linux-bionic-x64/RedisGears
+          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
       - run:
           name: Test with Gears
           command: |

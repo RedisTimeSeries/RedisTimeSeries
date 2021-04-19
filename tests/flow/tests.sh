@@ -38,7 +38,7 @@ help() {
 #----------------------------------------------------------------------------------------------
 
 setup_redis_server() {
-	if [[ $VG == 1 ]]; then
+	if [[ $VALGRIND == 1 ]]; then
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
 		if ! is_command $REDIS_SERVER; then
 			echo Building Redis for Valgrind ...
