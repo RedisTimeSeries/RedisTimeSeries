@@ -75,10 +75,10 @@ commands:
           command: |
             cd tests/flow
             ./get_gears.sh
-      - save_cache:
-          paths:
-            - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+#      - save_cache:
+#          paths:
+#            - /tmp/gears
+#          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
@@ -186,7 +186,7 @@ jobs:
       - ci_steps:
           platform: debian
       - package
-  
+
   performance_ci_automation:
     docker:
       - image: redisfab/rmbuilder:6.0.9-x64-bionic
@@ -202,7 +202,7 @@ jobs:
             make setup
       - run:
           name: Build
-          command: make build 
+          command: make build
       - benchmark-automation
 
   build-macos:
@@ -262,29 +262,29 @@ jobs:
       - store_artifacts:
           path: coverage
           destination: coverage
-      - restore_cache:
-          keys:
-            # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-{{ .Branch }}
-            - gears-
-      - run:
-          name: build gears
-          no_output_timeout: 30m
-          command: |
-            cd tests/flow
-            ./get_gears.sh
-      - save_cache:
-          paths:
-            - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-      - run:
-          name: Test with Gears
-          command: |
-            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
-              COV=1 GEARS=1 CLUSTER=1 SHOW=1
-            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
-
+#      - restore_cache:
+#          keys:
+#            # when lock file changes, use increasingly general patterns to restore cache
+#            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+#            - gears-{{ .Branch }}
+#            - gears-
+#      - run:
+#          name: build gears
+#          no_output_timeout: 30m
+#          command: |
+#            cd tests/flow
+#            ./get_gears.sh
+#      - save_cache:
+#          paths:
+#            - /tmp/gears
+#          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+#      - run:
+#          name: Test with Gears
+#          command: |
+#            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
+#              COV=1 GEARS=1 CLUSTER=1 SHOW=1
+#            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+#
   deploy_package:
     parameters:
       package:
