@@ -100,13 +100,6 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
-// Encode timestamps as bigendian to allow correct lexical sorting
-static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
-    uint64_t e;
-    e = htonu64(timestamp);
-    memcpy(buf, &e, sizeof(e));
-}
-
 void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
     // if not causedByRetention, caused by ts.del
     if (causedByRetention && series->retentionTime == 0) {
