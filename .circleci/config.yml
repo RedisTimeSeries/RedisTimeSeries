@@ -66,9 +66,9 @@ commands:
       - restore_cache:
           keys:
             # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-{{ .Branch }}
-            - gears-
+            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ arch }}-{{ .Branch }}
+            - gears-{{ arch }}-
       - run:
           name: build gears
           no_output_timeout: 30m
@@ -78,7 +78,7 @@ commands:
       - save_cache:
           paths:
             - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
@@ -265,9 +265,9 @@ jobs:
       - restore_cache:
           keys:
             # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-{{ .Branch }}
-            - gears-
+            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+            - gears-{{ arch }}-{{ .Branch }}
+            - gears-{{ arch }}-
       - run:
           name: build gears
           no_output_timeout: 30m
@@ -277,7 +277,7 @@ jobs:
       - save_cache:
           paths:
             - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
+          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
       - run:
           name: Test with Gears
           command: |
