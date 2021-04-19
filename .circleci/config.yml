@@ -68,7 +68,7 @@ commands:
             # when lock file changes, use increasingly general patterns to restore cache
             - gears-<<parameters.platform>>-{{ checksum "tests/flow/get_gears.sh" }}
             - gears-{{ .branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-<<paramters.platform>>-{{ .branch }}
+            - gears-<<parameters.platform>>-{{ .branch }}
             - gears-{{ .branch }}
             - gears-<<parameters.platform>>
             - gears-
