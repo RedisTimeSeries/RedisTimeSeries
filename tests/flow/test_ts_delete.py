@@ -4,7 +4,7 @@ from RLTest import Env
 
 
 def test_ts_del_wrong():
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'tester')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.DEL tester not_enough_args')
@@ -19,7 +19,7 @@ def test_ts_del_wrong():
 def test_ts_del_uncompressed():
     # total samples = 101
     sample_len = 101
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key', 'uncompressed')
 
         for i in range(sample_len):
@@ -37,7 +37,7 @@ def test_ts_del_uncompressed():
 
 def test_ts_del_uncompressed_in_range():
     sample_len = 101
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key', 'uncompressed')
 
         for i in range(sample_len):
@@ -56,7 +56,7 @@ def test_ts_del_uncompressed_in_range():
 
 def test_ts_del_compressed():
     sample_len = 101
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key')
 
         for i in range(sample_len):
@@ -74,7 +74,7 @@ def test_ts_del_compressed():
 
 def test_ts_del_compressed_multi_chunk():
     sample_len = 1001
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key')
 
         for i in range(sample_len):
@@ -92,7 +92,7 @@ def test_ts_del_compressed_multi_chunk():
 
 def test_ts_del_compressed_out_range():
     sample_len = 101
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key')
 
         for i in range(sample_len):
