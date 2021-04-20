@@ -1,19 +1,4 @@
-import pytest
-import redis
 from RLTest import Env
-
-
-def test_ts_del_wrong():
-    with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'tester')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DEL tester not_enough_args')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DEL tester string -1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DEL tester 0 string')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DEL nonexist 0 -1')
 
 
 def test_ts_del_uncompressed():
