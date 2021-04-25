@@ -3,9 +3,9 @@ exporter:
   redistimeseries:
     timemetric: "$.StartTime"
     metrics:
-      - "$.Totals.overallQuantiles.all queries.q0"
-      - "$.Totals.overallQuantiles.all queries.q50"
-      - "$.Totals.overallQuantiles.all queries.q95"
-      - "$.Totals.overallQuantiles.all queries.q99"
-      - "$.Totals.overallQuantiles.all queries.q100"
-      - "$.Totals.overallQueryRates.all queries"
+      - "$.Totals.overallQuantiles.all_queries.q0"
+      - "$.Totals.overallQuantiles.all_queries.q50"
+      - "$.Totals.overallQuantiles.all_queries.q95"
+      - "$.Totals.overallQuantiles.all_queries.q99"
+      - "$.Totals.overallQuantiles.all_queries.q100"
+      - "$.Totals.overallQueryRates.all_queries"
