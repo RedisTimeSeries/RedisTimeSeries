@@ -133,7 +133,7 @@ MODULE=${MODULE:-$1}
 	exit 1
 }
 
-[[ $VG == 1 ]] && VALGRIND == 1
+[[ $VG == 1 ]] && VALGRIND=1
 if [[ $VALGRIND == 1 ]]; then
 	valgrind_config
 fi

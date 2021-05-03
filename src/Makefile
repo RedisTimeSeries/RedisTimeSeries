@@ -2,6 +2,16 @@
 ROOT=..
 MK.pyver:=3
 
+ifeq ($(VG),1)
+override VALGRIND:=1
+export VALGRIND
+endif
+
+ifeq ($(VALGRIND),1)
+override DEBUG:=1
+export DEBUG
+endif
+
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
@@ -90,14 +100,6 @@ endif
 
 ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
-endif
-
-ifneq ($(VG),)
-VALGRIND=$(VG)
-endif
-
-ifeq ($(VALGRIND),1)
-DEBUG ?= 1
 endif
 
 ifeq ($(PROFILE),1)
@@ -229,7 +231,7 @@ export CLUSTER ?= 0
 export GEARS ?= 0
 endif
 
-tests: $(TARGET)
+tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
