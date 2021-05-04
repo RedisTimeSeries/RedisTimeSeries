@@ -23,13 +23,19 @@ typedef struct AggregationArgs
     AggregationClass *aggregationClass;
 } AggregationArgs;
 
-typedef struct MRangeArgs
+typedef struct RangeArgs
 {
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
-    AggregationArgs aggregationArgs;
-    bool withLabels;
     long long count; // AKA limit
+    AggregationArgs aggregationArgs;
+
+} RangeArgs;
+
+typedef struct MRangeArgs
+{
+    RangeArgs rangeArgs;
+    bool withLabels;
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
     MultiSeriesReduceOp gropuByReducerOp;
@@ -55,17 +61,15 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
-                         api_timestamp_t *time_delta,
-                         AggregationClass **agg_object);
+                         AggregationArgs *out);
 
 int parseRangeArguments(RedisModuleCtx *ctx,
                         Series *series,
                         int start_index,
                         RedisModuleString **argv,
-                        api_timestamp_t *start_ts,
-                        api_timestamp_t *end_ts);
+                        int argc,
+                        RangeArgs *out);
 
-int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, long long *count);
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
                                            RedisModuleString **argv,

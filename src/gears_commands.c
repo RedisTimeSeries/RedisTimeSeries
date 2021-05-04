@@ -57,11 +57,11 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
             ReplySeriesArrayPos(rctx,
                                 s,
                                 data->args.withLabels,
-                                data->args.startTimestamp,
-                                data->args.endTimestamp,
-                                data->args.aggregationArgs.aggregationClass,
-                                data->args.aggregationArgs.timeDelta,
-                                data->args.count,
+                                data->args.rangeArgs.startTimestamp,
+                                data->args.rangeArgs.endTimestamp,
+                                data->args.rangeArgs.aggregationArgs.aggregationClass,
+                                data->args.rangeArgs.aggregationArgs.timeDelta,
+                                data->args.rangeArgs.count,
                                 data->args.reverse);
         }
     }
@@ -69,10 +69,10 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         ResultSet_ApplyReducer(resultset,
-                               data->args.startTimestamp,
-                               data->args.endTimestamp,
-                               data->args.aggregationArgs.aggregationClass,
-                               data->args.aggregationArgs.timeDelta,
+                               data->args.rangeArgs.startTimestamp,
+                               data->args.rangeArgs.endTimestamp,
+                               data->args.rangeArgs.aggregationArgs.aggregationClass,
+                               data->args.rangeArgs.aggregationArgs.timeDelta,
                                -1,
                                false,
                                data->args.gropuByReducerOp);
@@ -81,11 +81,11 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         replyResultSet(rctx,
                        resultset,
                        data->args.withLabels,
-                       data->args.startTimestamp,
-                       data->args.endTimestamp,
+                       data->args.rangeArgs.startTimestamp,
+                       data->args.rangeArgs.endTimestamp,
                        NULL,
                        0,
-                       data->args.count,
+                       data->args.rangeArgs.count,
                        data->args.reverse);
 
         ResultSet_Free(resultset);
@@ -168,8 +168,8 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->count = args.queryPredicates->count;
-    queryArg->startTimestamp = args.startTimestamp;
-    queryArg->endTimestamp = args.endTimestamp;
+    queryArg->startTimestamp = args.rangeArgs.startTimestamp;
+    queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     args.queryPredicates->ref++;
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;

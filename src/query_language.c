@@ -157,34 +157,40 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
-                         api_timestamp_t *time_delta,
-                         AggregationClass **agg_object) {
+                         AggregationArgs *out) {
     int agg_type;
-    int result = _parseAggregationArgs(ctx, argv, argc, time_delta, &agg_type);
+    AggregationArgs aggregationArgs = {0};
+    int result = _parseAggregationArgs(ctx, argv, argc, &aggregationArgs.timeDelta, &agg_type);
     if (result == TSDB_OK) {
-        *agg_object = GetAggClass(agg_type);
-        if (*agg_object == NULL) {
+        aggregationArgs.aggregationClass = GetAggClass(agg_type);
+        if (aggregationArgs.aggregationClass == NULL) {
             RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
             return TSDB_ERROR;
         }
+        *out = aggregationArgs;
         return TSDB_OK;
     } else {
         return result;
     }
 }
 
+
 int parseRangeArguments(RedisModuleCtx *ctx,
                         Series *series,
                         int start_index,
                         RedisModuleString **argv,
-                        api_timestamp_t *start_ts,
-                        api_timestamp_t *end_ts) {
+                        int argc,
+                        RangeArgs *out) {
+    RangeArgs args = {0};
+    args.aggregationArgs.timeDelta = 0;
+    args.aggregationArgs.aggregationClass = NULL;
+
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
     if (strcmp(start, "-") == 0) {
-        *start_ts = 0;
+        args.startTimestamp = 0;
     } else {
-        if (RedisModule_StringToLongLong(argv[start_index], (long long int *)start_ts) !=
+        if (RedisModule_StringToLongLong(argv[start_index], (long long int *)&args.startTimestamp) !=
             REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: wrong fromTimestamp");
             return REDISMODULE_ERR;
@@ -194,14 +200,27 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     size_t end_len;
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
-        *end_ts = series->lastTimestamp;
+        args.endTimestamp = series->lastTimestamp;
     } else {
-        if (RedisModule_StringToLongLong(argv[start_index + 1], (long long int *)end_ts) !=
+        if (RedisModule_StringToLongLong(argv[start_index + 1], (long long int *)&args.endTimestamp) !=
             REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
             return REDISMODULE_ERR;
         }
     }
+
+
+    args.count = -1;
+    if (parseCountArgument(ctx, argv, argc, &args.count) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs);
+    if (aggregationResult == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    *out = args;
 
     return REDISMODULE_OK;
 }
@@ -310,19 +329,11 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     MRangeArgs args;
     args.groupByLabel = NULL;
     args.queryPredicates = NULL;
-    args.aggregationArgs.timeDelta = 0;
-    args.aggregationArgs.aggregationClass = NULL;
 
     Series fake_series = { 0 };
     fake_series.lastTimestamp = LLONG_MAX;
-    if (parseRangeArguments(ctx, &fake_series, 1, argv, &args.startTimestamp, &args.endTimestamp) !=
+    if (parseRangeArguments(ctx, &fake_series, 1, argv, argc, &args.rangeArgs) !=
         REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
-
-    const int aggregationResult = parseAggregationArgs(
-        ctx, argv, argc, &args.aggregationArgs.timeDelta, &args.aggregationArgs.aggregationClass);
-    if (aggregationResult == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 
@@ -332,10 +343,6 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    args.count = -1;
-    if (parseCountArgument(ctx, argv, argc, &args.count) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
     args.withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
