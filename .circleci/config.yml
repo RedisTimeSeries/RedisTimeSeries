@@ -63,17 +63,6 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-      - restore_cache:
-          keys:
-            # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
-            - gears-{{ arch }}-{{ .Branch }}
-            - gears-{{ arch }}-
-      - save_cache:
-          paths:
-            - ./bin/linux-buster-x64/RedisGears
-            - ./bin/linux-bionic-x64/RedisGears
-          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
@@ -149,7 +138,7 @@ commands:
 jobs:
   valgrind:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     resource_class: xlarge
     steps:
       - ci_steps:
@@ -175,7 +164,7 @@ jobs:
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - ci_steps:
           platform: debian
@@ -183,7 +172,7 @@ jobs:
   
   performance_ci_automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-bionic
+      - image: redisfab/rmbuilder:6.2.3-x64-bionic
     steps:
       - early_return_for_forked_pull_requests
       - checkout
@@ -201,7 +190,7 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 11.3.0
+      xcode: 11.6.0
     steps:
       - run:
           name: Set up workspace
@@ -239,7 +228,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - checkout
@@ -256,17 +245,6 @@ jobs:
       - store_artifacts:
           path: coverage
           destination: coverage
-      - restore_cache:
-          keys:
-            # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
-            - gears-{{ arch }}-{{ .Branch }}
-            - gears-{{ arch }}-
-      - save_cache:
-          paths:
-            - ./bin/linux-buster-x64/RedisGears
-            - ./bin/linux-bionic-x64/RedisGears
-          key: gears-{{ arch }}-{{ .Branch }}-{{ checksum "sbin/getgears" }}
       - run:
           name: Test with Gears
           command: |
@@ -278,7 +256,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
@@ -291,7 +269,7 @@ jobs:
 
   release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
@@ -305,7 +283,7 @@ jobs:
 
   nightly-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests

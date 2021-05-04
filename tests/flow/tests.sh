@@ -154,7 +154,7 @@ GEARS_BRANCH=${GEARS_BRANCH:-master}
 if [[ -n $GEARS && $GEARS != 0 ]]; then
 	platform=`$READIES/bin/platform -t`
 	if [[ -n $GEARS_PATH ]]; then
-		GEARS_ARGS="--module $REJSON_PATH"
+		GEARS_ARGS="--module $GEARS_PATH"
 		GEARS_MODULE="$GEARS_PATH"
 	else
 		GEARS_MODULE="$ROOT/bin/$platform/RedisGears/redisgears.so"
