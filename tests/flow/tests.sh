@@ -8,6 +8,8 @@ ROOT=$(cd $HERE/../.. && pwd)
 READIES=$ROOT/deps/readies 
 . $READIES/shibumi/functions
 
+VALGRIND_REDIS_VER=6.2.1
+
 #----------------------------------------------------------------------------------------------
 
 help() {
@@ -42,7 +44,7 @@ setup_redis_server() {
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
 		if ! is_command $REDIS_SERVER; then
 			echo Building Redis for Valgrind ...
-			$READIES/bin/getredis -v 6.2.1 --valgrind --suffix vg
+			$READIES/bin/getredis -v $VALGRIND_REDIS_VER --valgrind --suffix vg
 		fi
 	else
 		REDIS_SERVER=${REDIS_SERVER:-redis-server}
