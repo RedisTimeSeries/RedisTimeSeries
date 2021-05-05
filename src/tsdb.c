@@ -159,7 +159,6 @@ void freeLastDeletedSeries() {
 void CleanLastDeletedSeries(RedisModuleString *key) {
     if (lastDeletedSeries != NULL &&
         RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
-
         RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
         RedisModule_AutoMemory(ctx);
 
@@ -194,15 +193,13 @@ void CleanLastDeletedSeries(RedisModuleString *key) {
     freeLastDeletedSeries();
 }
 
-void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key){
-    // keep in global variable for RenameSeriesTo() and increase recount  
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
+    // keep in global variable for RenameSeriesTo() and increase recount
     renameFromKey = RedisModule_HoldString(NULL, key);
 }
 
-
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
-
-    // Try to open the series 
+    // Try to open the series
     Series *series;
     RedisModuleKey *key = NULL;
     const int status = SilentGetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ);
@@ -211,10 +208,11 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     }
 
     // A destination key was renamed
-    if(series->srcKey) {
+    if (series->srcKey) {
         Series *srcSeries;
         RedisModuleKey *srcKey;
-        const int status = SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
+        const int status =
+            SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
         if (!status) {
             const char *srcKeyName = RedisModule_StringPtrLen(series->srcKey, NULL);
             RedisModule_Log(
@@ -225,11 +223,10 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         // Find the rule in the source key and rename the its destKey
         CompactionRule *rule = srcSeries->rules;
         while (rule) {
-
             const char *xxx = RedisModule_StringPtrLen(renameFromKey, NULL);
             const char *yyy = RedisModule_StringPtrLen(rule->destKey, NULL);
 
-            if(RedisModule_StringCompare(renameFromKey, rule->destKey) == 0){
+            if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
                 RedisModule_FreeString(NULL, rule->destKey);
                 rule->destKey = RedisModule_HoldString(NULL, keyTo);
                 break; // Only one src can point back to destKey
@@ -237,19 +234,22 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
             rule = rule->nextRule;
         }
         RedisModule_CloseKey(srcKey);
-    } 
-    
+    }
+
     // A source key was renamed need to rename the srcKey on all the destKeys
     if (series->rules) {
         CompactionRule *rule = series->rules;
         Series *destSeries;
         RedisModuleKey *destKey;
         while (rule) {
-            const int status = SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+            const int status =
+                SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
             if (!status) {
                 const char *destKeyName = RedisModule_StringPtrLen(rule->destKey, NULL);
-                RedisModule_Log(
-                    ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", destKeyName);
+                RedisModule_Log(ctx,
+                                "warning",
+                                "couldn't open key or key is not a Timeseries. key=%s",
+                                destKeyName);
             }
 
             // rename the srcKey in the destKey
@@ -261,12 +261,12 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         }
     }
 
-    cleanup:
-        if (key) {
-            RedisModule_CloseKey(key);
-        }
-        RedisModule_FreeString(NULL, renameFromKey);
-        renameFromKey = NULL;
+cleanup:
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(NULL, renameFromKey);
+    renameFromKey = NULL;
 }
 
 // Releases Series and all its compaction rules

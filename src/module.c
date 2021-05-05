@@ -891,12 +891,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *ctx,
-                   int type,
-                   const char *event,
-                   RedisModuleString *key) {
-
-
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") == 0) {
         CleanLastDeletedSeries(key);
     }
@@ -908,7 +903,6 @@ int NotifyCallback(RedisModuleCtx *ctx,
     if (strcasecmp(event, "rename_to") == 0) {
         RenameSeriesTo(ctx, key);
     }
-
 
     return REDISMODULE_OK;
 }
