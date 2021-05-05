@@ -25,6 +25,9 @@ Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
+    #ifdef DEBUG
+    memset(chunk->data, 0, chunk->size);
+    #endif
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
     return chunk;
