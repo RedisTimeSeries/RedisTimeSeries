@@ -4,7 +4,7 @@ MK.pyver:=3
 
 include $(ROOT)/deps/readies/mk/main
 
-# OSNICK=buster|stretch|bionic|xenial|centos7
+# OSNICK=buster|stretch|foacl|bionic|xenial|centos8|centos7
 OSNICK ?= buster
 
 REPO=redisfab
