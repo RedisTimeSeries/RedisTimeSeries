@@ -330,6 +330,14 @@ on-integ-and-version-tags: &on-integ-and-version-tags
     tags:
       only: /^v[0-9].*/
 
+on-integ-branch: &on-integ-branch
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+    tags:
+      ignore: /.*/
 
 workflows:
   version: 2
@@ -337,10 +345,17 @@ workflows:
     jobs:
       - lint:
           <<: *on-any-branch
-      - valgrind:
-          <<: *on-any-branch
       - build:
-          <<: *on-any-branch
+          <<: *on-any-branch         
+      - valgrind:
+          requires:
+            - build
+          <<: *on-integ-branch
+      - performance_ci_automation:
+          context: common
+          requires:
+            - build          
+          <<: *on-integ-branch
       - build-macos:
           <<: *on-version-tags
 #      - build-multiarch-docker:
