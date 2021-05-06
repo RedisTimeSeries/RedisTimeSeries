@@ -335,9 +335,10 @@ workflows:
       - build:
           <<: *on-any-branch         
       - valgrind:
-          requires:
-            - build
-          <<: *on-integ-branch
+          #requires:
+          #  - build
+          #<<: *on-integ-branch
+          <<: *on-any-branch         
       - performance_ci_automation:
           context: common
           requires:
