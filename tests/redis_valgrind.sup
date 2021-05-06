@@ -111,84 +111,84 @@
 
 # --- redis-server 6.2.1 issue
 
-{
-   <RM_SaveString_supression>
-   Memcheck:Param
-   write(buf)
-   fun:__libc_write
-   fun:write
-   fun:_IO_file_write@@GLIBC_2.2.5
-   fun:new_do_write
-   fun:_IO_new_do_write
-   fun:_IO_do_write@@GLIBC_2.2.5
-   fun:_IO_new_file_xsputn
-   fun:_IO_file_xsputn@@GLIBC_2.2.5
-   fun:rioFileWrite
-   fun:rioWrite
-   fun:rdbWriteRaw
-   fun:rdbSaveRawString
-   fun:rdbSaveStringObject
-   fun:RM_SaveString
-}
-
-{
-   <RM_SaveStringBuffer_supression>
-   Memcheck:Param
-   write(buf)
-   fun:write
-   fun:_IO_file_write@@GLIBC_2.2.5
-   fun:new_do_write
-   fun:_IO_do_write@@GLIBC_2.2.5
-   fun:_IO_file_xsputn@@GLIBC_2.2.5
-   fun:fwrite
-   fun:rioFileWrite
-   fun:rioWrite
-   fun:rdbWriteRaw
-   fun:rdbSaveLzfBlob
-   fun:rdbSaveLzfStringObject
-   fun:rdbSaveRawString
-   fun:RM_SaveStringBuffer
-}
-
-{
-   <rdbSave_supression>
-   Memcheck:Param
-   write(buf)
-   fun:write
-   fun:_IO_file_write@@GLIBC_2.2.5
-   fun:new_do_write
-   fun:_IO_do_write@@GLIBC_2.2.5
-   fun:_IO_file_sync@@GLIBC_2.2.5
-   fun:fflush
-   fun:rdbSave
-   fun:prepareForShutdown
-   fun:serverCron
-   fun:processTimeEvents
-   fun:aeProcessEvents
-   fun:aeMain
-   fun:main
-}
-
-{
-   <rdbSaveRawString_supression>
-   Memcheck:Param
-   write(buf)
-   fun:__libc_write
-   fun:write
-   fun:_IO_file_write@@GLIBC_2.2.5
-   fun:new_do_write
-   fun:_IO_new_do_write
-   fun:_IO_do_write@@GLIBC_2.2.5
-   fun:_IO_new_file_xsputn
-   fun:_IO_file_xsputn@@GLIBC_2.2.5
-   fun:fwrite
-   fun:rioFileWrite
-   fun:rioWrite
-   fun:rdbWriteRaw
-   fun:rdbSaveLzfBlob
-   fun:rdbSaveLzfStringObject
-   fun:rdbSaveRawString
-}
+# {
+#    <RM_SaveString_supression>
+#    Memcheck:Param
+#    write(buf)
+#    fun:__libc_write
+#    fun:write
+#    fun:_IO_file_write@@GLIBC_2.2.5
+#    fun:new_do_write
+#    fun:_IO_new_do_write
+#    fun:_IO_do_write@@GLIBC_2.2.5
+#    fun:_IO_new_file_xsputn
+#    fun:_IO_file_xsputn@@GLIBC_2.2.5
+#    fun:rioFileWrite
+#    fun:rioWrite
+#    fun:rdbWriteRaw
+#    fun:rdbSaveRawString
+#    fun:rdbSaveStringObject
+#    fun:RM_SaveString
+# }
+# 
+# {
+#    <RM_SaveStringBuffer_supression>
+#    Memcheck:Param
+#    write(buf)
+#    fun:write
+#    fun:_IO_file_write@@GLIBC_2.2.5
+#    fun:new_do_write
+#    fun:_IO_do_write@@GLIBC_2.2.5
+#    fun:_IO_file_xsputn@@GLIBC_2.2.5
+#    fun:fwrite
+#    fun:rioFileWrite
+#    fun:rioWrite
+#    fun:rdbWriteRaw
+#    fun:rdbSaveLzfBlob
+#    fun:rdbSaveLzfStringObject
+#    fun:rdbSaveRawString
+#    fun:RM_SaveStringBuffer
+# }
+# 
+# {
+#    <rdbSave_supression>
+#    Memcheck:Param
+#    write(buf)
+#    fun:write
+#    fun:_IO_file_write@@GLIBC_2.2.5
+#    fun:new_do_write
+#    fun:_IO_do_write@@GLIBC_2.2.5
+#    fun:_IO_file_sync@@GLIBC_2.2.5
+#    fun:fflush
+#    fun:rdbSave
+#    fun:prepareForShutdown
+#    fun:serverCron
+#    fun:processTimeEvents
+#    fun:aeProcessEvents
+#    fun:aeMain
+#    fun:main
+# }
+# 
+# {
+#    <rdbSaveRawString_supression>
+#    Memcheck:Param
+#    write(buf)
+#    fun:__libc_write
+#    fun:write
+#    fun:_IO_file_write@@GLIBC_2.2.5
+#    fun:new_do_write
+#    fun:_IO_new_do_write
+#    fun:_IO_do_write@@GLIBC_2.2.5
+#    fun:_IO_new_file_xsputn
+#    fun:_IO_file_xsputn@@GLIBC_2.2.5
+#    fun:fwrite
+#    fun:rioFileWrite
+#    fun:rioWrite
+#    fun:rdbWriteRaw
+#    fun:rdbSaveLzfBlob
+#    fun:rdbSaveLzfStringObject
+#    fun:rdbSaveRawString
+# }
 
 # --- redis-server 6.2.1 issue
 
