@@ -208,6 +208,10 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         goto cleanup;
     }
 
+    // Reindex key by the new name
+    RemoveIndexedMetric(ctx, renameFromKey, series->labels, series->labelsCount);
+    IndexMetric(ctx, keyTo, series->labels, series->labelsCount);
+
     // A destination key was renamed
     if (series->srcKey) {
         Series *srcSeries;

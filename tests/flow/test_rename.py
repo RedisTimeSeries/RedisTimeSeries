@@ -47,3 +47,17 @@ def test_rename_dst(env):
         env.assertEqual(aInfo.rules[0][0], b'b1{2}')
         env.assertEqual(aInfo.rules[1][0], b'c1{2}')
         env.assertEqual(aInfo.rules[2][0], b'd{2}')
+
+
+def test_rename_indexed(env):
+
+    with env.getClusterConnectionIfNeeded() as r:
+        
+        assert r.execute_command('TS.ADD', 'a{3}', 100, 200, 'LABELS', 'sensor_id', '2', 'area_id', '32')
+        env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a{3}', [], [100, b'200']]])
+
+        env.assertTrue(r.execute_command('RENAME', 'a{3}', 'a1{3}'))
+
+        env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a1{3}', [], [100, b'200']]])
+
+
