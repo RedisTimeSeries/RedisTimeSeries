@@ -301,6 +301,28 @@ on-master: &on-master
   filters:
     branches:
       only: master
+    tags:
+      ignore: /.*/
+
+on-integ-branch: &on-integ-branch
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
+
+not-on-integ-branch: &not-on-integ-branch
+  filters:
+    branches:
+      ignore:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
 
 on-version-tags: &on-version-tags
   filters:
@@ -309,22 +331,16 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-master-and-version-tags: &on-master-and-version-tags
-  filters:
-    branches:
-      only:
-        - master
-    tags:
-      only: /^v[0-9].*/
-
-on-integ-branch: &on-integ-branch
+on-integ-and-version-tags: &on-integ-and-version-tags
   filters:
     branches:
       only:
         - master
         - /^\d+\.\d+.*$/
+        - /^feature-.*$/
     tags:
-      ignore: /.*/
+      only: /^v[0-9].*/
+
 
 workflows:
   version: 2
@@ -335,10 +351,9 @@ workflows:
       - build:
           <<: *on-any-branch         
       - valgrind:
-          #requires:
-          #  - build
-          #<<: *on-integ-branch
-          <<: *on-any-branch         
+          requires:
+            - build
+          <<: *on-integ-branch
       - performance_ci_automation:
           context: common
           requires:
@@ -377,11 +392,13 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * 0,3"
-          <<: *on-master
+          filters:
+            branches:
+              only:
+                - master
+                - /^feature-.*$/
     jobs:
       - build-macos
       - valgrind
       - performance_ci_automation:
-          context: common
-      - nightly-automation:
           context: common
