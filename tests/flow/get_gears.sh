@@ -11,9 +11,9 @@ cd /tmp/gears
 
 git clone https://github.com/RedisGears/RedisGears.git
 cd RedisGears
-make get_deps
 git submodule init
 git submodule update
+make get_deps
 
 make setup
 make fetch
