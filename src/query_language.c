@@ -5,6 +5,7 @@
  */
 #include "query_language.h"
 
+#include <limits.h>
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
@@ -215,7 +216,7 @@ int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
             int second_offset =
                 offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset) {
+            if (offset == second_offset || second_offset + 1 >= argc) {
                 return TSDB_OK;
             }
             offset = second_offset;
@@ -228,24 +229,34 @@ int parseCountArgument(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     return TSDB_OK;
 }
 
-int parseLabelListFromArgs(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int start,
-                           int query_count,
-                           QueryPredicate *queries) {
-    QueryPredicate *query = queries;
+QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
+                                           RedisModuleString **argv,
+                                           int start,
+                                           int query_count,
+                                           int *response) {
+    QueryPredicateList *queries = malloc(sizeof(QueryPredicateList));
+    queries->count = query_count;
+    queries->ref = 1;
+    queries->list = calloc(queries->count, sizeof(QueryPredicate));
+    memset(queries->list, 0, queries->count * sizeof(QueryPredicate));
+    int current_index = 0;
+    *response = TSDB_OK;
+
     for (int i = start; i < start + query_count; i++) {
         size_t _s;
+        QueryPredicate *query = &queries->list[current_index];
         const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
         if (strstr(str2, "!=(") != NULL) { // order is important! Must be before "!=".
             query->type = LIST_NOTMATCH;
             if (parsePredicate(ctx, argv[i], query, "!=(") == TSDB_ERROR) {
-                return TSDB_ERROR;
+                *response = TSDB_ERROR;
+                break;
             }
         } else if (strstr(str2, "!=") != NULL) {
             query->type = NEQ;
             if (parsePredicate(ctx, argv[i], query, "!=") == TSDB_ERROR) {
-                return TSDB_ERROR;
+                *response = TSDB_ERROR;
+                break;
             }
             if (query->valueListCount == 0) {
                 query->type = CONTAINS;
@@ -253,20 +264,137 @@ int parseLabelListFromArgs(RedisModuleCtx *ctx,
         } else if (strstr(str2, "=(") != NULL) { // order is important! Must be before "=".
             query->type = LIST_MATCH;
             if (parsePredicate(ctx, argv[i], query, "=(") == TSDB_ERROR) {
-                return TSDB_ERROR;
+                *response = TSDB_ERROR;
+                break;
             }
         } else if (strstr(str2, "=") != NULL) {
             query->type = EQ;
             if (parsePredicate(ctx, argv[i], query, "=") == TSDB_ERROR) {
-                return TSDB_ERROR;
+                *response = TSDB_ERROR;
+                break;
             }
             if (query->valueListCount == 0) {
                 query->type = NCONTAINS;
             }
         } else {
-            return TSDB_ERROR;
+            *response = TSDB_ERROR;
+            break;
         }
-        query++;
+        current_index++;
     }
-    return TSDB_OK;
+    return queries;
+}
+
+int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
+    if (strncasecmp(reducerstr, "sum", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Sum;
+        return TSDB_OK;
+
+    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Max;
+        return TSDB_OK;
+
+    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
+        *reducerOp = MultiSeriesReduceOp_Min;
+        return TSDB_OK;
+    }
+    return TSDB_ERROR;
+}
+
+int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
+    if (argc < 4) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+
+    MRangeArgs args;
+    args.groupByLabel = NULL;
+    args.queryPredicates = NULL;
+    args.aggregationArgs.timeDelta = 0;
+    args.aggregationArgs.aggregationClass = NULL;
+
+    Series fake_series = { 0 };
+    fake_series.lastTimestamp = LLONG_MAX;
+    if (parseRangeArguments(ctx, &fake_series, 1, argv, &args.startTimestamp, &args.endTimestamp) !=
+        REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    const int aggregationResult = parseAggregationArgs(
+        ctx, argv, argc, &args.aggregationArgs.timeDelta, &args.aggregationArgs.aggregationClass);
+    if (aggregationResult == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        RTS_ReplyGeneralError(ctx, "TSDB: missing FILTER argument");
+        return REDISMODULE_ERR;
+    }
+
+    args.count = -1;
+    if (parseCountArgument(ctx, argv, argc, &args.count) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+    args.withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+
+    const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+
+    // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
+    // are only up to (GROUPBY pos) - 1.
+    const size_t last_filter_pos = groupby_location > 0 ? groupby_location - 1 : argc - 1;
+    const size_t query_count = last_filter_pos - filter_location;
+
+    if (query_count == 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: missing labels for filter argument");
+        return REDISMODULE_ERR;
+    }
+
+    int response;
+    QueryPredicateList *queries =
+        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+        return REDISMODULE_ERR;
+    }
+
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+        return REDISMODULE_ERR;
+    }
+
+    args.queryPredicates = queries;
+
+    if (groupby_location > 0) {
+        if (groupby_location + 1 >= argc) {
+            // GROUP BY without any argument
+            RedisModule_WrongArity(ctx);
+            QueryPredicateList_Free(queries);
+            return REDISMODULE_ERR;
+        }
+        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
+
+        const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
+        // If we've detected a groupby but not a reduce
+        // or we've detected a groupby by the total args don't match
+        if (reduce_location < 0 || (argc - groupby_location != 4)) {
+            RedisModule_WrongArity(ctx);
+            QueryPredicateList_Free(queries);
+            return REDISMODULE_ERR;
+        }
+        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
+                                     &args.gropuByReducerOp) != TSDB_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+            QueryPredicateList_Free(queries);
+            return REDISMODULE_ERR;
+        }
+    }
+    *out = args;
+    return REDISMODULE_OK;
+}
+
+void MRangeArgs_Free(MRangeArgs *args) {
+    QueryPredicateList_Free(args->queryPredicates);
 }

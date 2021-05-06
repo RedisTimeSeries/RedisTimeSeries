@@ -1,3 +1,4 @@
+
 ROOT=..
 MK.pyver:=3
 
@@ -12,6 +13,8 @@ make fetch         # download and prepare dependant modules
 make build
   DEBUG=1          # build debug variant
   VARIANT=name     # use a build variant 'name'
+  PROFILE=1        # enable profiling compile flags (and debug symbols) for release type
+                   # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
 make clean         # remove binary files
@@ -52,6 +55,9 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
 LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
+FAST_DOUBLE_PARSER_LIBDIR=$(BINROOT)/fast_double_parser_c
+FAST_DOUBLE_PARSER_SRCDIR=$(SRCDIR)/fast_double_parser_c
+LIBFAST_DOUBLE_PARSER=$(FAST_DOUBLE_PARSER_LIBDIR)/libfast_double_parser_c.a
 
 #----------------------------------------------------------------------------------------------
 
@@ -74,7 +80,7 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -92,12 +98,19 @@ ifeq ($(VALGRIND),1)
 DEBUG ?= 1
 endif
 
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+endif
+
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DVALGRIND
 LD_FLAGS += -g
+else ifeq ($(PROFILE),1)
+CC_FLAGS += -O2
 else
 CC_FLAGS += -O3
 endif
+
 
 CC_FLAGS += $(CC_FLAGS.coverage)
 LD_FLAGS += $(LD_FLAGS.coverage)
@@ -118,7 +131,9 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
-	fpconv.c
+	fpconv.c \
+	gears_integration.c \
+	gears_commands.c
 
 _TEST_SOURCES=\
 	unittests.c \
@@ -157,23 +172,30 @@ rmutil:
 
 $(LIBRMUTIL): rmutil
 
+libfast_double_parser_c:
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(ROOT)/src/fast_double_parser_c
+
+$(LIBFAST_DOUBLE_PARSER): libfast_double_parser_c
+
 docker_lint:
-	docker build -t llvm-toolset -f llvm.Dockerfile .
-	docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+	$(SHOW)docker build -t llvm-toolset -f llvm.Dockerfile .
+	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
 
 lint:
-	clang-format -Werror -n $(SOURCES)
-	clang-format -Werror -n $(HEADERS)
-	clang-format -Werror -n $(TEST_FILES)
+	$(SHOW)clang-format -Werror -n $(SOURCES)
+	$(SHOW)clang-format -Werror -n $(HEADERS)
+	$(SHOW)clang-format -Werror -n $(TEST_FILES)
 
 format:
-	clang-format -i $(SOURCES)
-	clang-format -i $(HEADERS)
-	clang-format -i $(TEST_FILES)
+	$(SHOW)clang-format -i $(SOURCES)
+	$(SHOW)clang-format -i $(HEADERS)
+	$(SHOW)clang-format -i $(TEST_FILES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
+	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
 -include $(CC_DEPS)
@@ -182,7 +204,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
@@ -196,11 +218,13 @@ export GEN=1
 export SLAVES=0
 export AOF=0
 export CLUSTER=0
+export GEARS=0
 else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
 export CLUSTER ?= 0
+export GEARS ?= 0
 endif
 
 tests: $(TARGET)
@@ -212,6 +236,7 @@ endif
 		CLUSTER=$(CLUSTER) \
 		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
 		VALGRIND=$(VALGRIND) \
+		GEARS=$(GEARS) \
 		$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
@@ -223,6 +248,23 @@ $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 unittests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
 	$(SHOW)$<
+
+
+BENCHMARK_ARGS = redisbench-admin run-local
+
+ifneq ($(REMOTE),)
+	BENCHMARK_ARGS = redisbench-admin run-remote 
+endif
+
+BENCHMARK_ARGS += --module_path $(realpath $(TARGET))
+ifneq ($(BENCHMARK),)
+	BENCHMARK_ARGS += --test $(BENCHMARK)
+endif
+
+
+benchmark: $(TARGET)
+	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
+
 
 #----------------------------------------------------------------------------------------------
 
@@ -282,13 +324,12 @@ docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
 coverage:
-	DEBUG=1 COVERAGE=1 make tests
-	DEBUG=1 COVERAGE=1 make unittests
-	mkdir -p tmp/lcov
-	lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
-	lcov -l tmp/lcov/hiredis.info
-	genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
-
+	$(SHOW)DEBUG=1 COVERAGE=1 make tests
+	$(SHOW)DEBUG=1 COVERAGE=1 make unittests
+	$(SHOW)mkdir -p tmp/lcov
+	$(SHOW)lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
+	$(SHOW)lcov -l tmp/lcov/hiredis.info
+	$(SHOW)genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
 
 #----------------------------------------------------------------------------------------------
 
@@ -309,8 +350,8 @@ package: $(TARGET)
 		echo Cannot find redis-server. Aborting. ;\
 		exit 1 ;\
 	fi
-	$(call ramp_pack,latest,release)
-	$(call ramp_pack,{semantic_version},release)
+	$(SHOW)$(call ramp_pack,latest,release)
+	$(SHOW)$(call ramp_pack,{semantic_version},release)
 ifneq ($(BRANCH),)
-	$(call ramp_pack,$(BRANCH),branch)
+	$(SHOW)$(call ramp_pack,$(BRANCH),branch)
 endif

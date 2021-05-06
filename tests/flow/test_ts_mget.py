@@ -1,12 +1,12 @@
 import pytest
 import redis
 import time 
-from RLTest import Env
+from utils import Env, set_hertz
 
 def test_mget_with_expire_cmd():
-    with Env().getConnection() as r:
+    set_hertz(Env())
+    with Env().getClusterConnectionIfNeeded() as r:
         # Lower hz value to make it more likely that mget triggers key expiration
-        assert r.execute_command('config set hz 1') == b'OK'
         assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
         assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
         assert r.execute_command("TS.ADD", "Z" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
@@ -28,7 +28,7 @@ def test_mget_cmd():
     values = [100, 200, 300]
     kvlabels = []
 
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         # test for empty series
         assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
         assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
@@ -39,7 +39,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
-        assert expected_result == actual_result
+        assert sorted(expected_result) == sorted(actual_result)
 
         # test for series with data
         for i in range(num_of_keys):
@@ -56,7 +56,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
-        assert expected_result == actual_result
+        assert sorted(expected_result) == sorted(actual_result)
 
         # expect to received time-series k3 with labels
         expected_result_withlabels = [
@@ -73,14 +73,16 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
-        assert expected_result_withlabels == actual_result
+        assert sorted(expected_result_withlabels) == sorted(actual_result)
 
         # negative test
         assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
         assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET filter')
+            assert r.execute_command('TS.MGET', 'filter')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET filter k+1')
+            assert r.execute_command('TS.MGET', 'filter', 'k+1')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET retlif k!=5')
+            assert r.execute_command('TS.MGET', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'retlif', 'k!=5')

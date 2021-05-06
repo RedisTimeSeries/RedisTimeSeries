@@ -27,6 +27,11 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [JRedisTimeSeries-author]: https://redislabs.com
 [JRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/JRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
+[NRedisTimeSeries-url]: https://github.com/RedisTimeSeries/NRedisTimeSeries
+[NRedisTimeSeries-author]: https://redislabs.com
+[NRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/NRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+
 [redis-modules-java-url]: https://github.com/dengliming/redis-modules-java
 [redis-modules-java-author]: https://github.com/dengliming
 [redis-modules-java-stars]: https://img.shields.io/github/stars/dengliming/redis-modules-java.svg?style=social&amp;label=Star&amp;maxAge=2592000

@@ -86,6 +86,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->isTemporary = cCtx->isTemporary;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -198,16 +199,23 @@ void FreeSeries(void *value) {
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModule_AutoMemory(ctx);
-    RemoveIndexedMetric(
-        ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    if (!currentSeries->isTemporary) {
+        RemoveIndexedMetric(
+            ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
     RedisModule_FreeThreadSafeContext(ctx);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
 
-    freeLastDeletedSeries();
-    lastDeletedSeries = currentSeries;
+    if (currentSeries->isTemporary) {
+        RedisModule_FreeString(NULL, currentSeries->keyName);
+        free(currentSeries);
+    } else {
+        freeLastDeletedSeries();
+        lastDeletedSeries = currentSeries;
+    }
 }
 
 void FreeCompactionRule(void *value) {
@@ -271,13 +279,17 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op) {
+int MultiSerieReduce(Series *dest,
+                     Series *source,
+                     MultiSeriesReduceOp op,
+                     timestamp_t startTimestamp,
+                     timestamp_t endTimestamp,
+                     AggregationClass *agg,
+                     int64_t time_delta,
+                     bool rev) {
     Sample sample;
-    long long skipped;
-    timestamp_t start_ts = getFirstValidTimestamp(source, &skipped);
-    timestamp_t end_ts = source->lastTimestamp;
     SeriesIterator iterator;
-    SeriesQuery(source, &iterator, start_ts, end_ts, false, NULL, 0);
+    SeriesQuery(source, &iterator, startTimestamp, endTimestamp, rev, agg, time_delta);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
