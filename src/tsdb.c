@@ -195,7 +195,8 @@ void CleanLastDeletedSeries(RedisModuleString *key) {
 
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
     // keep in global variable for RenameSeriesTo() and increase recount
-    renameFromKey = RedisModule_HoldString(NULL, key);
+    RedisModule_RetainString(NULL, key);
+    renameFromKey = key;
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
@@ -228,7 +229,8 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
 
             if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
                 RedisModule_FreeString(NULL, rule->destKey);
-                rule->destKey = RedisModule_HoldString(NULL, keyTo);
+                RedisModule_RetainString(NULL, keyTo);
+                rule->destKey = keyTo;
                 break; // Only one src can point back to destKey
             }
             rule = rule->nextRule;
