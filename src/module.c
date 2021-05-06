@@ -550,7 +550,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
 
     for (int i = 1; i < argc; i += 3) {
-        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.madd", argv[i]);
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.madd", argv[i]);
     }
 
     return REDISMODULE_OK;
@@ -570,7 +570,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     RedisModule_ReplicateVerbatim(ctx);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.add", keyName);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
 
     return result;
 }
@@ -623,7 +623,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.create", keyName);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.create", keyName);
 
     return REDISMODULE_OK;
 }
@@ -673,7 +673,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 
-    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_GENERIC, "ts.alter", keyName);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.alter", keyName);
 
     return REDISMODULE_OK;
 }
@@ -720,9 +720,9 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(destKey);
 
     RedisModule_NotifyKeyspaceEvent(
-        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:src", srcKeyName);
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:src", srcKeyName);
     RedisModule_NotifyKeyspaceEvent(
-        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.deleterule:dest", destKeyName);
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:dest", destKeyName);
 
     return REDISMODULE_OK;
 }
@@ -795,9 +795,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_CloseKey(destKey);
 
     RedisModule_NotifyKeyspaceEvent(
-        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:src", srcKeyName);
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:src", srcKeyName);
     RedisModule_NotifyKeyspaceEvent(
-        ctx, REDISMODULE_NOTIFY_GENERIC, "ts.createrule:dest", destKeyName);
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:dest", destKeyName);
 
     return REDISMODULE_OK;
 }
@@ -1060,7 +1060,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
+    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_MODULE, NotifyCallback);
 
     return REDISMODULE_OK;
 }

@@ -72,7 +72,7 @@ def test_keyspace_rules():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
 
         # TODO test update to the dest key
-        # assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
-        # assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
+        # assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
+        # assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
 
         
