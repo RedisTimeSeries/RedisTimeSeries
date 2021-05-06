@@ -317,6 +317,14 @@ on-master-and-version-tags: &on-master-and-version-tags
     tags:
       only: /^v[0-9].*/
 
+on-integ-branch: &on-integ-branch
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+    tags:
+      ignore: /.*/
 
 workflows:
   version: 2
@@ -324,13 +332,17 @@ workflows:
     jobs:
       - lint:
           <<: *on-any-branch
-      - valgrind:
-          <<: *on-any-branch
       - build:
-          <<: *on-any-branch
+          <<: *on-any-branch         
+      - valgrind:
+          requires:
+            - build
+          <<: *on-integ-branch
       - performance_ci_automation:
           context: common
-          <<: *on-any-branch
+          requires:
+            - build          
+          <<: *on-integ-branch
       - build-macos:
           <<: *on-version-tags
       - build-multiarch-docker:
@@ -363,7 +375,7 @@ workflows:
   nightly:
     triggers:
       - schedule:
-          cron: "20 17 * * *"
+          cron: "20 17 * * 0,3"
           <<: *on-master
     jobs:
       - build-macos
