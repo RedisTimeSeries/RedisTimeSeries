@@ -101,7 +101,7 @@ CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0 -DVALGRIND
+CC_FLAGS += -g -ggdb -O0 -DDEBUG
 LD_FLAGS += -g
 else
 CC_FLAGS += -O3
