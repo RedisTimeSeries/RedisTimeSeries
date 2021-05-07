@@ -531,6 +531,7 @@ void MODULE_API_FUNC(RedisGears_AddConfigHooks)(BeforeConfigSet before, AfterCon
 #define REDISMODULE_MODULE_INIT_FUNCTION(ctx, name) \
         if(RedisModule_GetApi("RedisModule_" #name, &RedisModule_ ## name) != REDISMODULE_OK){ \
             RedisModule_Log(ctx, "warning", "could not initialize RedisModule_" #name "\r\n");\
+            return REDISMODULE_ERR; \
         }
 
 static int RedisGears_InitializeRedisModuleApi(RedisModuleCtx* ctx){
