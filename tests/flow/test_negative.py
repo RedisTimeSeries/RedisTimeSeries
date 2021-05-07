@@ -50,8 +50,11 @@ def test_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE foo 0 -1')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.ALTER foo')
-
+            assert r.execute_command('TS.ALTER', 'foo')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.INCRBY', 'foo', '1', 'timestamp', '5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.DECRBY', 'foo', '1', 'timestamp', '5')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.ADD values timestamp 5')  # string
         with pytest.raises(redis.ResponseError) as excinfo:

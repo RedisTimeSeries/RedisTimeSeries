@@ -1130,6 +1130,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         CreateTsKey(ctx, keyName, &cCtx, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
+    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+        return RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
     series = RedisModule_ModuleTypeGetValue(key);
