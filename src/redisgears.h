@@ -9,13 +9,17 @@
 #define SRC_REDISGEARG_H_
 
 #include <stdbool.h>
+#include <limits.h>
 #include "redismodule.h"
-//#include "./utils/arr_rm_alloc.h"
 
 #if defined(__GNUC__) && (__GNUC__ >= 7)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Wunused-function"
+#elif defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpedantic"
+#pragma clang diagnostic ignored "-Wunused-function"
 #endif
 
 #define ID_LEN REDISMODULE_NODE_ID_LEN + sizeof(long long) + 1 // the +1 is for the \0
@@ -976,6 +980,8 @@ static int RedisGears_Initialize(RedisModuleCtx* ctx, const char* name, int vers
 
 #if defined(__GNUC__) && (__GNUC__ >= 7)
 #pragma GCC diagnostic pop
+#elif defined(__clang__)
+#pragma clang diagnostic pop
 #endif
 
 #define RedisGears_InitAsGearPlugin(ctx, pluginName, version) RedisGears_Initialize(ctx, pluginName, version, true)
