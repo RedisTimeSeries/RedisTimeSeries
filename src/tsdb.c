@@ -228,9 +228,6 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         // Find the rule in the source key and rename the its destKey
         CompactionRule *rule = srcSeries->rules;
         while (rule) {
-            const char *xxx = RedisModule_StringPtrLen(renameFromKey, NULL);
-            const char *yyy = RedisModule_StringPtrLen(rule->destKey, NULL);
-
             if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
                 RedisModule_FreeString(NULL, rule->destKey);
                 RedisModule_RetainString(NULL, keyTo);
