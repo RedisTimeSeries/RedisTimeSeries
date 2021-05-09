@@ -1,6 +1,7 @@
 from test_helper_classes import TSInfo
 
-def test_rename_src(env):
+def test_rename_src():
+    env = Env()
     with env.getClusterConnectionIfNeeded() as r:
 
         assert r.execute_command('TS.CREATE', 'a1{1}')
@@ -22,8 +23,9 @@ def test_rename_src(env):
         env.assertEqual(bInfo.rules, [])
 
 
-def test_rename_dst(env):
+def test_rename_dst():
 
+    env = Env()
     with env.getClusterConnectionIfNeeded() as r:
 
         assert r.execute_command('TS.CREATE', 'a{2}')
@@ -49,8 +51,9 @@ def test_rename_dst(env):
         env.assertEqual(aInfo.rules[2][0], b'd{2}')
 
 
-def test_rename_indexed(env):
+def test_rename_indexed():
 
+    env = Env()
     with env.getClusterConnectionIfNeeded() as r:
         
         assert r.execute_command('TS.ADD', 'a{3}', 100, 200, 'LABELS', 'sensor_id', '2', 'area_id', '32')
