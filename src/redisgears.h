@@ -9,8 +9,18 @@
 #define SRC_REDISGEARG_H_
 
 #include <stdbool.h>
+#include <limits.h>
 #include "redismodule.h"
-//#include "./utils/arr_rm_alloc.h"
+
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#elif defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpedantic"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
 
 #define ID_LEN REDISMODULE_NODE_ID_LEN + sizeof(long long) + 1 // the +1 is for the \0
 #define STR_ID_LEN  REDISMODULE_NODE_ID_LEN + 13
@@ -525,6 +535,7 @@ void MODULE_API_FUNC(RedisGears_AddConfigHooks)(BeforeConfigSet before, AfterCon
 #define REDISMODULE_MODULE_INIT_FUNCTION(ctx, name) \
         if(RedisModule_GetApi("RedisModule_" #name, &RedisModule_ ## name) != REDISMODULE_OK){ \
             RedisModule_Log(ctx, "warning", "could not initialize RedisModule_" #name "\r\n");\
+            return REDISMODULE_ERR; \
         }
 
 static int RedisGears_InitializeRedisModuleApi(RedisModuleCtx* ctx){
@@ -966,6 +977,12 @@ static int RedisGears_Initialize(RedisModuleCtx* ctx, const char* name, int vers
 
     return REDISMODULE_OK;
 }
+
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#elif defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 #define RedisGears_InitAsGearPlugin(ctx, pluginName, version) RedisGears_Initialize(ctx, pluginName, version, true)
 #define RedisGears_InitAsRedisModule(ctx, pluginName, version) RedisGears_Initialize(ctx, pluginName, version, false)
