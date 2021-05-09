@@ -12,7 +12,6 @@
 #include <rmutil/alloc.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
-
   if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
