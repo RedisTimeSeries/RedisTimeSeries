@@ -256,7 +256,8 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
             } else {
                 // rename the srcKey in the destKey
                 RedisModule_FreeString(NULL, destSeries->srcKey);
-                destSeries->srcKey = RedisModule_RetainString(NULL, keyTo);
+                RedisModule_RetainString(NULL, keyTo);
+                destSeries->srcKey = keyTo;
 
                 RedisModule_CloseKey(destKey);
             }
