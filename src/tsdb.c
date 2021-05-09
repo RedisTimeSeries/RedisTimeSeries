@@ -228,9 +228,6 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         // Find the rule in the source key and rename the its destKey
         CompactionRule *rule = srcSeries->rules;
         while (rule) {
-            const char *xxx = RedisModule_StringPtrLen(renameFromKey, NULL);
-            const char *yyy = RedisModule_StringPtrLen(rule->destKey, NULL);
-
             if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
                 RedisModule_FreeString(NULL, rule->destKey);
                 RedisModule_RetainString(NULL, keyTo);
@@ -256,13 +253,14 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
                                 "warning",
                                 "couldn't open key or key is not a Timeseries. key=%s",
                                 destKeyName);
+            } else {
+                // rename the srcKey in the destKey
+                RedisModule_FreeString(NULL, destSeries->srcKey);
+                RedisModule_RetainString(NULL, keyTo);
+                destSeries->srcKey = keyTo;
+
+                RedisModule_CloseKey(destKey);
             }
-
-            // rename the srcKey in the destKey
-            RedisModule_FreeString(NULL, destSeries->srcKey);
-            destSeries->srcKey = RedisModule_HoldString(NULL, keyTo);
-
-            RedisModule_CloseKey(destKey);
             rule = rule->nextRule;
         }
     }
