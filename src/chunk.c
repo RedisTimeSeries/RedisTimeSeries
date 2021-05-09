@@ -14,6 +14,9 @@ Chunk_t *Uncompressed_NewChunk(size_t size) {
     newChunk->num_samples = 0;
     newChunk->size = size;
     newChunk->samples = (Sample *)malloc(size);
+#ifdef DEBUG
+    memset(newChunk->samples, 0, size);
+#endif
 
     return newChunk;
 }
