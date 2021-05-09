@@ -917,18 +917,18 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *original_ctx,
-                   int type,
-                   const char *event,
-                   RedisModuleString *key) {
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModule_AutoMemory(ctx);
-
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") == 0) {
-        CleanLastDeletedSeries(ctx, key);
+        CleanLastDeletedSeries(key);
     }
 
-    RedisModule_FreeThreadSafeContext(ctx);
+    if (strcasecmp(event, "rename_from") == 0) {
+        RenameSeriesFrom(ctx, key);
+    }
+
+    if (strcasecmp(event, "rename_to") == 0) {
+        RenameSeriesTo(ctx, key);
+    }
 
     return REDISMODULE_OK;
 }
