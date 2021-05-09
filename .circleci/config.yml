@@ -24,6 +24,13 @@ commands:
               circleci step halt
             fi
 
+  checkout-all:
+    steps:
+      - checkout
+      - run:
+          name: Checkout submodules
+          command: git submodule update --init --recursive
+
   ci_steps:
     parameters:
       platform:
@@ -39,10 +46,7 @@ commands:
         default: ""
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Install prerequisites
           command: make setup
@@ -63,28 +67,11 @@ commands:
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
-      - restore_cache:
-          keys:
-            # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-{{ .Branch }}
-            - gears-
-      - run:
-          name: build gears
-          no_output_timeout: 30m
-          command: |
-            cd tests/flow
-            ./get_gears.sh
-      - save_cache:
-          paths:
-            - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
-              TEST_REPORT_DIR=$HOME/workspace/tests  GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
 
   package:
     steps:
@@ -133,29 +120,31 @@ commands:
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
       - run:
           name: Run CI benchmarks on aws
+          timeout: 60m
+          no_output_timeout: 20m
           command: |
-              cd ./tests/benchmarks
-              export AWS_ACCESS_KEY_ID=$PERFORMANCE_EC2_ACCESS_KEY
-              export AWS_SECRET_ACCESS_KEY=$PERFORMANCE_EC2_SECRET_KEY
-              export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
-              export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
+            cd ./tests/benchmarks
+            export AWS_ACCESS_KEY_ID=$PERFORMANCE_EC2_ACCESS_KEY
+            export AWS_SECRET_ACCESS_KEY=$PERFORMANCE_EC2_SECRET_KEY
+            export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
+            export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
 
-              redisbench-admin run-remote \
-                --terraform_bin_path /workspace/terraform \
-                --module_path << parameters.module_path >> \
-                --github_actor << parameters.github_actor >> \
-                --github_repo $CIRCLE_PROJECT_REPONAME \
-                --github_org $CIRCLE_PROJECT_USERNAME \
-                --github_sha $CIRCLE_SHA1 \
-                --github_branch $CIRCLE_BRANCH \
-                --upload_results_s3 \
-                --triggering_env circleci \
-                --push_results_redistimeseries
+            redisbench-admin run-remote \
+              --terraform_bin_path /workspace/terraform \
+              --module_path << parameters.module_path >> \
+              --github_actor << parameters.github_actor >> \
+              --github_repo $CIRCLE_PROJECT_REPONAME \
+              --github_org $CIRCLE_PROJECT_USERNAME \
+              --github_sha $CIRCLE_SHA1 \
+              --github_branch $CIRCLE_BRANCH \
+              --upload_results_s3 \
+              --triggering_env circleci \
+              --push_results_redistimeseries
 
 jobs:
   valgrind:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     resource_class: xlarge
     steps:
       - ci_steps:
@@ -169,10 +158,7 @@ jobs:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: lint
           command: |
@@ -181,7 +167,7 @@ jobs:
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - ci_steps:
           platform: debian
@@ -189,17 +175,13 @@ jobs:
   
   performance_ci_automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-bionic
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - early_return_for_forked_pull_requests
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Setup
-          command: |
-            make setup
+          command: make setup
       - run:
           name: Build
           command: make build 
@@ -207,7 +189,7 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 11.3.0
+      xcode: 11.6.0
     steps:
       - run:
           name: Set up workspace
@@ -223,10 +205,7 @@ jobs:
       image: ubuntu-1604:202010-01
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Set up Python3
           command: pyenv global 3.7.0
@@ -245,13 +224,10 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
-      - checkout
-      - run:
-          name: Pull Submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Build & Test
           command: |
@@ -262,27 +238,10 @@ jobs:
       - store_artifacts:
           path: coverage
           destination: coverage
-      - restore_cache:
-          keys:
-            # when lock file changes, use increasingly general patterns to restore cache
-            - gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
-            - gears-{{ .Branch }}
-            - gears-
-      - run:
-          name: build gears
-          no_output_timeout: 30m
-          command: |
-            cd tests/flow
-            ./get_gears.sh
-      - save_cache:
-          paths:
-            - /tmp/gears
-          key: gears-{{ .Branch }}-{{ checksum "tests/flow/get_gears.sh" }}
       - run:
           name: Test with Gears
           command: |
-            GEARS_LOCATION=/tmp/gears/RedisGears/bin/linux-x64-release/redisgears.so make test \
-              COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            make test COV=1 GEARS=1 CLUSTER=1 SHOW=1
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy_package:
@@ -290,7 +249,7 @@ jobs:
       package:
         type: string
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
@@ -303,25 +262,22 @@ jobs:
 
   release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
-      - checkout
-      - run:
-          name: Checkout submodules
-          command: git submodule update --init --recursive
+      - checkout-all
       - run:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
 
   nightly-automation:
     docker:
-      - image: redisfab/rmbuilder:6.0.9-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
       - abort_for_docs
       - early_return_for_forked_pull_requests
-      - checkout
+      - checkout-all
       - run:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
@@ -345,6 +301,28 @@ on-master: &on-master
   filters:
     branches:
       only: master
+    tags:
+      ignore: /.*/
+
+on-integ-branch: &on-integ-branch
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
+
+not-on-integ-branch: &not-on-integ-branch
+  filters:
+    branches:
+      ignore:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+    tags:
+      ignore: /.*/
 
 on-version-tags: &on-version-tags
   filters:
@@ -353,11 +331,13 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-master-and-version-tags: &on-master-and-version-tags
+on-integ-and-version-tags: &on-integ-and-version-tags
   filters:
     branches:
       only:
         - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
     tags:
       only: /^v[0-9].*/
 
@@ -368,13 +348,17 @@ workflows:
     jobs:
       - lint:
           <<: *on-any-branch
-      - valgrind:
-          <<: *on-any-branch
       - build:
-          <<: *on-any-branch
+          <<: *on-any-branch         
+      - valgrind:
+          requires:
+            - build
+          <<: *on-integ-branch
       - performance_ci_automation:
           context: common
-          <<: *on-any-branch
+          requires:
+            - build          
+          <<: *on-integ-branch
       - build-macos:
           <<: *on-version-tags
       - build-multiarch-docker:
@@ -407,12 +391,14 @@ workflows:
   nightly:
     triggers:
       - schedule:
-          cron: "20 17 * * *"
-          <<: *on-master
+          cron: "20 17 * * 0,3"
+          filters:
+            branches:
+              only:
+                - master
+                - /^feature-.*$/
     jobs:
       - build-macos
       - valgrind
       - performance_ci_automation:
-          context: common
-      - nightly-automation:
           context: common
