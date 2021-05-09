@@ -251,7 +251,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 }
 
 // Previous multirange reply logic ( unchanged )
-static int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
+static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
+                                    RedisModuleDict *result,
+                                    const MRangeArgs *args) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
