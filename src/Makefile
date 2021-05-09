@@ -1,6 +1,16 @@
 ROOT=..
 MK.pyver:=3
 
+ifeq ($(VG),1)
+override VALGRIND:=1
+export VALGRIND
+endif
+
+ifeq ($(VALGRIND),1)
+override DEBUG:=1
+export DEBUG
+endif
+
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
@@ -24,12 +34,14 @@ make all           # build all libraries and packages
 make test          # run tests
   TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
-  COV=1            # perform coverage analysis
   GEN=0|1          # run general tests on a standalone Redis topology
   AOF=0|1          # run AOF persistency tests on a standalone Redis topology
   SLAVES=0|1       # run replication tests on standalone Redis topology
   CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
-  VALGRIND|VGD=1   # run specified tests with Valgrind
+  GEARS=0|1        # also load RedisGears
+  GEARS_PATH=path  # RedisGears module path
+  COV=1            # perform coverage analysis
+  VALGRIND|VG=1    # run specified tests with Valgrind
 
 make pack          # build packages (ramp & dependencies)
 endef
@@ -84,12 +96,17 @@ ifeq ($(OS),macos)
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
+<<<<<<< HEAD
 ifneq ($(VGD),)
 VALGRIND=$(VGD)
 endif
 
 ifeq ($(VALGRIND),1)
 DEBUG ?= 1
+=======
+ifeq ($(PROFILE),1)
+CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+>>>>>>> ac9bd44 (Gears, Valgrind, and two smoking barrels (#693))
 endif
 
 ifeq ($(DEBUG),1)
@@ -198,7 +215,7 @@ export AOF ?= 1
 export CLUSTER ?= 0
 endif
 
-tests: $(TARGET)
+tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
