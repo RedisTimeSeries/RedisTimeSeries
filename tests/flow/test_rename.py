@@ -1,4 +1,5 @@
 from test_helper_classes import TSInfo
+from RLTest import Env
 
 def test_rename_src():
     env = Env()
