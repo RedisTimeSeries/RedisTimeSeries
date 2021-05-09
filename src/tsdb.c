@@ -256,13 +256,13 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
                                 "warning",
                                 "couldn't open key or key is not a Timeseries. key=%s",
                                 destKeyName);
+            } else {
+                // rename the srcKey in the destKey
+                RedisModule_FreeString(NULL, destSeries->srcKey);
+                destSeries->srcKey = RedisModule_RetainString(NULL, keyTo);
+
+                RedisModule_CloseKey(destKey);
             }
-
-            // rename the srcKey in the destKey
-            RedisModule_FreeString(NULL, destSeries->srcKey);
-            destSeries->srcKey = RedisModule_HoldString(NULL, keyTo);
-
-            RedisModule_CloseKey(destKey);
             rule = rule->nextRule;
         }
     }
