@@ -63,7 +63,9 @@ typedef enum MultiSeriesReduceOp
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
+void CleanLastDeletedSeries(RedisModuleString *key);
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,

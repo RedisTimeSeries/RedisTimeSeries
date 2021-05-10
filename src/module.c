@@ -198,7 +198,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
                                   RedisModuleDict *result,
-                                  MRangeArgs args) {
+                                  const MRangeArgs *args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey = NULL;
     size_t currentKeyLen;
@@ -227,31 +227,33 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     // Apply the reducer
     ResultSet_ApplyReducer(resultset,
-                           args.startTimestamp,
-                           args.endTimestamp,
-                           args.aggregationArgs.aggregationClass,
-                           args.aggregationArgs.timeDelta,
-                           args.count,
-                           args.reverse,
-                           args.gropuByReducerOp);
+                           args->startTimestamp,
+                           args->endTimestamp,
+                           args->aggregationArgs.aggregationClass,
+                           args->aggregationArgs.timeDelta,
+                           args->count,
+                           args->reverse,
+                           args->gropuByReducerOp);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     replyResultSet(ctx,
                    resultset,
-                   args.withLabels,
-                   args.startTimestamp,
-                   args.endTimestamp,
+                   args->withLabels,
+                   args->startTimestamp,
+                   args->endTimestamp,
                    NULL,
                    0,
-                   args.count,
-                   args.reverse);
+                   args->count,
+                   args->reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
 }
 
 // Previous multirange reply logic ( unchanged )
-static int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, MRangeArgs args) {
+static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
+                                    RedisModuleDict *result,
+                                    const MRangeArgs *args) {
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
@@ -279,13 +281,13 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result
         }
         ReplySeriesArrayPos(ctx,
                             series,
-                            args.withLabels,
-                            args.startTimestamp,
-                            args.endTimestamp,
-                            args.aggregationArgs.aggregationClass,
-                            args.aggregationArgs.timeDelta,
-                            args.count,
-                            args.reverse);
+                            args->withLabels,
+                            args->startTimestamp,
+                            args->endTimestamp,
+                            args->aggregationArgs.aggregationClass,
+                            args->aggregationArgs.timeDelta,
+                            args->count,
+                            args->reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -312,9 +314,9 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         TS_ResultSet *resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, args.groupByLabel);
 
-        result = replyGroupedMultiRange(ctx, resultset, resultSeries, args);
+        result = replyGroupedMultiRange(ctx, resultset, resultSeries, &args);
     } else {
-        result = replyUngroupedMultiRange(ctx, resultSeries, args);
+        result = replyUngroupedMultiRange(ctx, resultSeries, &args);
     }
 
     MRangeArgs_Free(&args);
@@ -920,18 +922,18 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int NotifyCallback(RedisModuleCtx *original_ctx,
-                   int type,
-                   const char *event,
-                   RedisModuleString *key) {
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModule_AutoMemory(ctx);
-
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") == 0) {
-        CleanLastDeletedSeries(ctx, key);
+        CleanLastDeletedSeries(key);
     }
 
-    RedisModule_FreeThreadSafeContext(ctx);
+    if (strcasecmp(event, "rename_from") == 0) {
+        RenameSeriesFrom(ctx, key);
+    }
+
+    if (strcasecmp(event, "rename_to") == 0) {
+        RenameSeriesTo(ctx, key);
+    }
 
     return REDISMODULE_OK;
 }
