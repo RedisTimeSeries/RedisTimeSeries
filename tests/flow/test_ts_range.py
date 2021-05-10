@@ -282,3 +282,17 @@ def test_issue358():
         range_res = r.execute_command('ts.range', 'issue358', 1582848000, -1)[0][1]
         get_res = r.execute_command('ts.get', 'issue358')[1]
         assert range_res == get_res
+
+def test_filter_by_value():
+    start_ts = 1511885909
+    samples_count = 1500
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
+                                 'brown', 'color', 'pink')
+        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+
+        res = r.execute_command('ts.range', 'tester', start_ts, -1, "FILTER_BY_VALUE", 40, 52)
+
+        assert len(res) == 13
+        assert  [int(sample[1]) for sample in res] == list(range(40, 53))
+

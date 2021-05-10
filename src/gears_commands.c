@@ -54,39 +54,24 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         if (data->args.groupByLabel) {
             ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
         } else {
-            ReplySeriesArrayPos(rctx,
-                                s,
-                                data->args.withLabels,
-                                data->args.rangeArgs.startTimestamp,
-                                data->args.rangeArgs.endTimestamp,
-                                data->args.rangeArgs.aggregationArgs.aggregationClass,
-                                data->args.rangeArgs.aggregationArgs.timeDelta,
-                                data->args.rangeArgs.count,
-                                data->args.reverse);
+            ReplySeriesArrayPos(
+                rctx, s, data->args.withLabels, &data->args.rangeArgs, data->args.reverse);
         }
     }
 
     if (data->args.groupByLabel) {
         // Apply the reducer
-        ResultSet_ApplyReducer(resultset,
-                               data->args.rangeArgs.startTimestamp,
-                               data->args.rangeArgs.endTimestamp,
-                               data->args.rangeArgs.aggregationArgs.aggregationClass,
-                               data->args.rangeArgs.aggregationArgs.timeDelta,
-                               -1,
-                               false,
-                               data->args.gropuByReducerOp);
+        RangeArgs args = data->args.rangeArgs;
+        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
-        replyResultSet(rctx,
-                       resultset,
-                       data->args.withLabels,
-                       data->args.rangeArgs.startTimestamp,
-                       data->args.rangeArgs.endTimestamp,
-                       NULL,
-                       0,
-                       data->args.rangeArgs.count,
-                       data->args.reverse);
+        RangeArgs minimizedArgs = data->args.rangeArgs;
+        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByValueArgs.hasValue = false;
+        //        minimizedArgs.filterByValueArgs.hasValue = false;
+
+        replyResultSet(rctx, resultset, data->args.withLabels, &minimizedArgs, data->args.reverse);
 
         ResultSet_Free(resultset);
     }
