@@ -146,7 +146,10 @@ int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
     return true;
 }
 
-int ResultSet_ApplyReducer(TS_ResultSet *r, RangeArgs *args, MultiSeriesReduceOp reducerOp, bool reverse) {
+int ResultSet_ApplyReducer(TS_ResultSet *r,
+                           RangeArgs *args,
+                           MultiSeriesReduceOp reducerOp,
+                           bool reverse) {
     // ^ seek the smallest element of the radix tree.
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     TS_GroupList *groupList;

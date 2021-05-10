@@ -366,7 +366,11 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op, RangeArgs *args, bool reverse) {
+int MultiSerieReduce(Series *dest,
+                     Series *source,
+                     MultiSeriesReduceOp op,
+                     RangeArgs *args,
+                     bool reverse) {
     Sample sample;
     AbstractIterator *iterator = SeriesQuery(source, args, reverse);
     DuplicatePolicy dp = DP_INVALID;
