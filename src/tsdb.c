@@ -18,6 +18,7 @@
 #include "rmutil/strings.h"
 
 static Series *lastDeletedSeries = NULL;
+static RedisModuleString *renameFromKey = NULL;
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
@@ -155,9 +156,12 @@ void freeLastDeletedSeries() {
     lastDeletedSeries = NULL;
 }
 
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key) {
+void CleanLastDeletedSeries(RedisModuleString *key) {
     if (lastDeletedSeries != NULL &&
         RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
+        RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+        RedisModule_AutoMemory(ctx);
+
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
             RedisModuleKey *seriesKey;
@@ -183,8 +187,90 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key) {
                 RedisModule_CloseKey(seriesKey);
             }
         }
+
+        RedisModule_FreeThreadSafeContext(ctx);
     }
     freeLastDeletedSeries();
+}
+
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
+    // keep in global variable for RenameSeriesTo() and increase recount
+    RedisModule_RetainString(NULL, key);
+    renameFromKey = key;
+}
+
+void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
+    // Try to open the series
+    Series *series;
+    RedisModuleKey *key = NULL;
+    const int status = SilentGetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ);
+    if (!status) { // Not a timeseries key
+        goto cleanup;
+    }
+
+    // Reindex key by the new name
+    RemoveIndexedMetric(ctx, renameFromKey, series->labels, series->labelsCount);
+    IndexMetric(ctx, keyTo, series->labels, series->labelsCount);
+
+    // A destination key was renamed
+    if (series->srcKey) {
+        Series *srcSeries;
+        RedisModuleKey *srcKey;
+        const int status =
+            SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
+        if (!status) {
+            const char *srcKeyName = RedisModule_StringPtrLen(series->srcKey, NULL);
+            RedisModule_Log(
+                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", srcKeyName);
+            goto cleanup;
+        }
+
+        // Find the rule in the source key and rename the its destKey
+        CompactionRule *rule = srcSeries->rules;
+        while (rule) {
+            if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
+                RedisModule_FreeString(NULL, rule->destKey);
+                RedisModule_RetainString(NULL, keyTo);
+                rule->destKey = keyTo;
+                break; // Only one src can point back to destKey
+            }
+            rule = rule->nextRule;
+        }
+        RedisModule_CloseKey(srcKey);
+    }
+
+    // A source key was renamed need to rename the srcKey on all the destKeys
+    if (series->rules) {
+        CompactionRule *rule = series->rules;
+        Series *destSeries;
+        RedisModuleKey *destKey;
+        while (rule) {
+            const int status =
+                SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+            if (!status) {
+                const char *destKeyName = RedisModule_StringPtrLen(rule->destKey, NULL);
+                RedisModule_Log(ctx,
+                                "warning",
+                                "couldn't open key or key is not a Timeseries. key=%s",
+                                destKeyName);
+            } else {
+                // rename the srcKey in the destKey
+                RedisModule_FreeString(NULL, destSeries->srcKey);
+                RedisModule_RetainString(NULL, keyTo);
+                destSeries->srcKey = keyTo;
+
+                RedisModule_CloseKey(destKey);
+            }
+            rule = rule->nextRule;
+        }
+    }
+
+cleanup:
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(NULL, renameFromKey);
+    renameFromKey = NULL;
 }
 
 // Releases Series and all its compaction rules
@@ -202,7 +288,7 @@ void FreeSeries(void *value) {
     if (!currentSeries->isTemporary) {
         RemoveIndexedMetric(
             ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
-    };
+    }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 

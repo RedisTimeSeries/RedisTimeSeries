@@ -2,7 +2,7 @@ import random
 
 import pytest
 import redis
-from RLTest import Env
+from utils import Env
 from test_helper_classes import _fill_data
 
 
@@ -11,12 +11,12 @@ class testDuplicationPolicyTests():
         self.env = Env(moduleArgs='DUPLICATE_POLICY BLOCK')
 
     def test_ts_add_unknow_duplicate_policy(self):
-        with self.env.getConnection() as r:
+        with self.env.getClusterConnectionIfNeeded() as r:
             with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", "---------------")
 
     def test_precendence_key(self):
-        with self.env.getConnection() as r:
+        with self.env.getClusterConnectionIfNeeded() as r:
             key = 'tester'
             key_no_dup = 'tester_no_dup'
             r.execute_command('TS.CREATE', key, 'DUPLICATE_POLICY', 'LAST')
@@ -60,7 +60,7 @@ class testDuplicationPolicyTests():
             'SUM': lambda x, y: x + y
         }
 
-        with self.env.getConnection() as r:
+        with self.env.getClusterConnectionIfNeeded() as r:
             key = 'tester'
 
             for chunk_type in ['', 'UNCOMPRESSED']:
