@@ -31,6 +31,14 @@ commands:
           name: Checkout submodules
           command: git submodule update --init --recursive
 
+  install-prerequisites:
+    steps:
+      - run:
+          name: Install prerequisites
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
+
   ci_steps:
     parameters:
       platform:
@@ -47,9 +55,7 @@ commands:
     steps:
       - abort_for_docs
       - checkout-all
-      - run:
-          name: Install prerequisites
-          command: make setup
+      - install-prerequisites
       - run:
           name: Install Redis
           command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
@@ -159,11 +165,10 @@ jobs:
     steps:
       - abort_for_docs
       - checkout-all
+      - install-prerequisites
       - run:
           name: lint
-          command: |
-            make setup
-            make -C src lint
+          command: make lint
 
   build:
     docker:
@@ -179,9 +184,7 @@ jobs:
     steps:
       - early_return_for_forked_pull_requests
       - checkout-all
-      - run:
-          name: Setup
-          command: make setup
+      - install-prerequisites
       - run:
           name: Build
           command: make build 
@@ -228,10 +231,10 @@ jobs:
     steps:
       - abort_for_docs
       - checkout-all
+      - install-prerequisites
       - run:
           name: Build & Test
           command: |
-            make setup
             make build COV=1 SHOW=1
             make test COV=1
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
