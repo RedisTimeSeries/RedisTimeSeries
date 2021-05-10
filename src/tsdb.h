@@ -67,7 +67,25 @@ typedef struct SeriesIterator
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
+void CleanLastDeletedSeries(RedisModuleString *key);
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
+
+int GetSeries(RedisModuleCtx *ctx,
+              RedisModuleString *keyName,
+              RedisModuleKey **key,
+              Series **series,
+              int mode);
+
+// This method provides the same logic as GetSeries, without replying to the client in case of error
+// The caller method should check the result for TRUE/FALSE and update the client accordingly if
+// required
+int SilentGetSeries(RedisModuleCtx *ctx,
+                    RedisModuleString *keyName,
+                    RedisModuleKey **key,
+                    Series **series,
+                    int mode);
+
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);

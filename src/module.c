@@ -1259,7 +1259,15 @@ int NotifyCallback(RedisModuleCtx *original_ctx,
     RedisModule_AutoMemory(ctx);
 
     if (strcasecmp(event, "del") == 0) {
-        CleanLastDeletedSeries(ctx, key);
+        CleanLastDeletedSeries(key);
+    }
+
+    if (strcasecmp(event, "rename_from") == 0) {
+        RenameSeriesFrom(ctx, key);
+    }
+
+    if (strcasecmp(event, "rename_to") == 0) {
+        RenameSeriesTo(ctx, key);
     }
 
     RedisModule_FreeThreadSafeContext(ctx);
