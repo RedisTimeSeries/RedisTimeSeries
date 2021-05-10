@@ -61,23 +61,23 @@ commands:
           command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
       - run:
           name: Build
-          command: bash -l -c make build <<parameters.build_params>> SHOW=1
+          command: make build <<parameters.build_params>> SHOW=1
       - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
           no_output_timeout: 30m
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            bash -l -c make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
 
   package:
     steps:
@@ -85,7 +85,7 @@ commands:
       - run:
           name: Package
           command: |
-            bash -l -c make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
+            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
       - early_return_for_forked_pull_requests
       - persist_to_workspace:
           root: ~/workspace
@@ -168,7 +168,7 @@ jobs:
       - install-prerequisites
       - run:
           name: lint
-          command: bash -l -c make lint
+          command: make lint
 
   build:
     docker:
@@ -187,7 +187,7 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c make build 
+          command: make build 
       - benchmark-automation
 
   build-macos:
@@ -221,8 +221,8 @@ jobs:
           name: Build
           command: |
             sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            bash -l -c make -C build/docker build
-            sudo bash -l -c make -C build/docker publish
+            make -C build/docker build
+            sudo make -C build/docker publish
           no_output_timeout: 20m
 
   coverage:
@@ -235,8 +235,8 @@ jobs:
       - run:
           name: Build & Test
           command: |
-            bash -l -c make build COV=1 SHOW=1
-            bash -l -c make test COV=1
+            make build COV=1 SHOW=1
+            make test COV=1
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
       - store_artifacts:
           path: coverage
@@ -244,7 +244,7 @@ jobs:
       - run:
           name: Test with Gears
           command: |
-            bash -l -c make test COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            make test COV=1 GEARS=1 CLUSTER=1 SHOW=1
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy_package:
