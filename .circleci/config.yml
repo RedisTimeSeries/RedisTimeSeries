@@ -363,7 +363,8 @@ workflows:
             - build          
           <<: *on-integ-branch
       - build-macos:
-          <<: *on-version-tags
+          #@@<<: *on-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
