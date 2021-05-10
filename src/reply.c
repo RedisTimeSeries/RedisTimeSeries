@@ -30,7 +30,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool rev) {
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool reverse) {
     Sample sample;
     long long arraylen = 0;
 
@@ -47,9 +47,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool 
         }
     }
 
-    args->rev = rev;
-
-    AbstractIterator *iter = SeriesQuery(series, args);
+    AbstractIterator *iter = SeriesQuery(series, args, reverse);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while (iter->GetNext(iter, &sample) == CR_OK && (args->count == -1 || arraylen < args->count)) {

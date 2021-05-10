@@ -62,14 +62,13 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
-        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp);
+        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp, data->args.reverse);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
         minimizedArgs.aggregationArgs.aggregationClass = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByValueArgs.hasValue = false;
-        //        minimizedArgs.filterByValueArgs.hasValue = false;
 
         replyResultSet(rctx, resultset, data->args.withLabels, &minimizedArgs, data->args.reverse);
 

@@ -366,9 +366,9 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op, RangeArgs *args) {
+int MultiSerieReduce(Series *dest, Series *source, MultiSeriesReduceOp op, RangeArgs *args, bool reverse) {
     Sample sample;
-    AbstractIterator *iterator = SeriesQuery(source, args);
+    AbstractIterator *iterator = SeriesQuery(source, args, reverse);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -730,15 +730,15 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     return sample.timestamp;
 }
 
-AbstractIterator *SeriesQuery(Series *series, RangeArgs *args) {
+AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
     AbstractIterator *chain =
-        SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, args->rev);
+        SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
 
     if (args->aggregationArgs.aggregationClass != NULL) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
-                                                            args->rev);
+                                                            reverse);
     }
 
     if (args->filterByValueArgs.hasValue) {

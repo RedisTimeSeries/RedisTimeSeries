@@ -37,7 +37,6 @@ typedef struct RangeArgs
     long long count; // AKA limit
     AggregationArgs aggregationArgs;
     FilterByValueArgs filterByValueArgs;
-    bool rev;
 } RangeArgs;
 
 typedef enum MultiSeriesReduceOp
