@@ -63,6 +63,7 @@ commands:
             make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
+          no_output_timeout: 30m
           command: |
             mkdir -p ~/workspace/tests
             make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
@@ -143,7 +144,7 @@ jobs:
     steps:
       - ci_steps:
           platform: debian
-          build_params: VALGRIND=1
+          build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
 
@@ -330,14 +331,6 @@ on-integ-and-version-tags: &on-integ-and-version-tags
     tags:
       only: /^v[0-9].*/
 
-on-integ-branch: &on-integ-branch
-  filters:
-    branches:
-      only:
-        - master
-        - /^\d+\.\d+.*$/
-    tags:
-      ignore: /.*/
 
 workflows:
   version: 2
