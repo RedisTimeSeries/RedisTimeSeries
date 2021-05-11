@@ -23,5 +23,4 @@ Each benchmark requires a benchmark definition yaml file to present on the curre
 CI benchmarks are triggered on:
 - nightly
 - pushes to branches named `master`
-- PRs tagged with the `run-perf` label
 - version tags
