@@ -405,6 +405,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
         double aggVal;
         if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+            RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
@@ -518,7 +519,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
 
     for (int i = 1; i < argc; i += 3) {
-        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.madd", argv[i]);
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
     }
 
     return REDISMODULE_OK;

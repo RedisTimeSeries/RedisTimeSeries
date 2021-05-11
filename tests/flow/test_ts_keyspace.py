@@ -25,9 +25,9 @@ def test_keyspace():
 
         # Test MADD generate events for each key updated 
         r.execute_command("ts.madd", 'tester', "*", 10, 'test_key2', 2000, 20)
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.madd')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.madd')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'test_key2')
 
         # Test INCRBY generate event on key
@@ -60,7 +60,7 @@ def test_keyspace_rules():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
 
-        r.execute_command('TS.CREATERULE', 'tester_src', 'tester_dest', 'AGGREGATION', 'MAX', 1000)
+        r.execute_command('TS.CREATERULE', 'tester_src', 'tester_dest', 'AGGREGATION', 'MAX', 1)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:src')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
 
@@ -71,8 +71,19 @@ def test_keyspace_rules():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
 
-        # TODO test update to the dest key
-        # assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        # assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        r.execute_command('ts.add', 'tester_src', 101, 1.1)
 
+        # First getting the event from the dest on the previous window 
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+
+        r.execute_command('ts.incrby', 'tester_src', 3)
         
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.incrby')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
