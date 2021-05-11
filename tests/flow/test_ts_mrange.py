@@ -116,8 +116,9 @@ def test_range_by_labels():
 def test_range_filterby():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
@@ -137,7 +138,8 @@ def test_range_filterby():
                            [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(samples_count)]],
                            [b'tester3', [], []],
                            ]
-        assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x') == expected_result
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        env.assertEqual(sorted(actual_result), sorted(expected_result))
 
 def test_mrange_withlabels():
     start_ts = 1511885909
