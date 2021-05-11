@@ -407,7 +407,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
         double aggVal;
         if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
-            RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
