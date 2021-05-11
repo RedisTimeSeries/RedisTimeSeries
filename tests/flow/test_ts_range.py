@@ -42,7 +42,16 @@ def test_range_query():
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count', 'number')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count')
-
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', 'FILTER_BY_VALUE')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 'FILTER_BY_TS')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
 
 def test_range_midrange():
     samples_count = 5000
@@ -283,16 +292,25 @@ def test_issue358():
         get_res = r.execute_command('ts.get', 'issue358')[1]
         assert range_res == get_res
 
-def test_filter_by_value():
+def test_filter_by():
     start_ts = 1511885909
     samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
         _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-        res = r.execute_command('ts.range', 'tester', start_ts, -1, "FILTER_BY_VALUE", 40, 52)
+        res = r.execute_command('ts.range', 'tester', start_ts, -1, 'FILTER_BY_VALUE', 40, 52)
 
         assert len(res) == 13
         assert  [int(sample[1]) for sample in res] == list(range(40, 53))
 
+        res = r.execute_command('ts.range', 'tester', start_ts, -1,
+                          'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1025, start_ts+1029)
+        env.assertEqual(res, [[start_ts+1021, b'1021'], [start_ts+1022, b'1022'], [start_ts+1025, b'1025'], [start_ts+1029, b'1029']])
+
+        res = r.execute_command('ts.range', 'tester', start_ts, -1,
+                                'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
+                                'FILTER_BY_VALUE', 1022, 1025)
+        env.assertEqual(res, [[start_ts+1022, b'1022'], [start_ts+1023, b'1023'], [start_ts+1025, b'1025']])

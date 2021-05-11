@@ -30,6 +30,13 @@ typedef struct FilterByValueArgs
     double max;
 } FilterByValueArgs;
 
+typedef struct FilterByTSArgs
+{
+    bool hasValue;
+    size_t count;
+    timestamp_t values[250];
+} FilterByTSArgs;
+
 typedef struct RangeArgs
 {
     api_timestamp_t startTimestamp;
@@ -37,6 +44,7 @@ typedef struct RangeArgs
     long long count; // AKA limit
     AggregationArgs aggregationArgs;
     FilterByValueArgs filterByValueArgs;
+    FilterByTSArgs filterByTSArgs;
 } RangeArgs;
 
 typedef enum MultiSeriesReduceOp

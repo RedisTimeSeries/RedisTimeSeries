@@ -206,7 +206,7 @@ static int parseFilterByValueArgument(RedisModuleCtx *ctx,
                                       FilterByValueArgs *args) {
     int offset = RMUtil_ArgIndex("FILTER_BY_VALUE", argv, argc);
     if (offset > 0) {
-        if (offset + 2 == argc) {
+        if (offset + 2 >= argc) {
             RTS_ReplyGeneralError(ctx, "TSDB: FILTER_BY_VALUE one or more arguments are missing");
             return TSDB_ERROR;
         }
@@ -225,6 +225,37 @@ static int parseFilterByValueArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+
+static int parseFilterByTimestamp(RedisModuleCtx *ctx,
+                                  RedisModuleString **argv,
+                                  int argc,
+                                  FilterByTSArgs *args) {
+    int offset = RMUtil_ArgIndex("FILTER_BY_TS", argv, argc);
+    size_t index = 0;
+    if (offset > 0) {
+        if (offset + 1 == argc) {
+            RTS_ReplyGeneralError(ctx, "TSDB: FILTER_BY_TS one or more arguments are missing");
+            return TSDB_ERROR;
+        }
+
+        while (offset + 1 < argc && index < 250) {
+            timestamp_t val;
+            if (RedisModule_StringToLongLong(argv[offset + 1], &val) == REDISMODULE_OK) {
+                args->values[index] = val;
+                index++;
+                offset++;
+            } else {
+                // TODO check if the token is a keywork in our query lang or raise an error
+                break;
+            }
+        }
+
+        args->hasValue = (index > 0);
+        args->count = index;
+    }
+    return TSDB_OK;
+}
+
 int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
@@ -235,6 +266,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     args.aggregationArgs.timeDelta = 0;
     args.aggregationArgs.aggregationClass = NULL;
     args.filterByValueArgs.hasValue = false;
+    args.filterByTSArgs.hasValue = false;
 
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
@@ -272,6 +304,11 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
+
+    if (parseFilterByTimestamp(ctx, argv, argc, &args.filterByTSArgs) == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
 
     *out = args;
 

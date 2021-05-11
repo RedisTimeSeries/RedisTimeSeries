@@ -738,15 +738,15 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
     AbstractIterator *chain =
         SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
 
+    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
+        chain = (AbstractIterator *)SeriesFilterIterator_New(chain, args->filterByValueArgs, args->filterByTSArgs);
+    }
+
     if (args->aggregationArgs.aggregationClass != NULL) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
                                                             reverse);
-    }
-
-    if (args->filterByValueArgs.hasValue) {
-        chain = (AbstractIterator *)SeriesFilterIterator_New(chain, args->filterByValueArgs);
     }
 
     return chain;

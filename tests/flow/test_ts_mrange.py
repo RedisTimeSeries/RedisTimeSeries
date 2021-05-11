@@ -113,7 +113,7 @@ def test_range_by_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
 
-def test_range_filterby():
+def test_mrange_filterby():
     start_ts = 1511885909
     samples_count = 50
     env = Env()
@@ -139,6 +139,13 @@ def test_range_filterby():
                            [b'tester3', [], []],
                            ]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        env.assertEqual(sorted(actual_result), sorted(expected_result))
+
+        expected_result = [[b'tester1', [], []],
+                           [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(9, 12)]],
+                           [b'tester3', [], []],
+                           ]
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
 
 def test_mrange_withlabels():

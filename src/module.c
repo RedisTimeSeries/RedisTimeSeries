@@ -233,6 +233,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     RangeArgs minimizedArgs = args->rangeArgs;
     minimizedArgs.aggregationArgs.aggregationClass = NULL;
     minimizedArgs.aggregationArgs.timeDelta = 0;
+    minimizedArgs.filterByTSArgs.hasValue = false;
+    minimizedArgs.filterByValueArgs.hasValue = false;
 
     replyResultSet(ctx, resultset, args->withLabels, &minimizedArgs, args->reverse);
 
