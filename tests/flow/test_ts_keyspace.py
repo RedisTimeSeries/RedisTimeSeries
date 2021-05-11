@@ -43,7 +43,7 @@ def test_keyspace():
 def test_keyspace_create_rules():
     sample_len = 1024
     env = Env()
-    with env.getConnection() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('config', 'set', 'notify-keyspace-events', 'KEA')
 
         pubsub = r.pubsub()
@@ -78,7 +78,7 @@ def test_keyspace_create_rules():
 def test_keyspace_rules_send():
     sample_len = 1024
     env = Env()
-    with env.getConnection() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('config', 'set', 'notify-keyspace-events', 'KEA')
 
         pubsub = r.pubsub()
