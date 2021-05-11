@@ -40,7 +40,42 @@ def test_keyspace():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.decrby')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
 
-def test_keyspace_rules():
+def test_keyspace_create_rules():
+    sample_len = 1024
+    env = Env()
+    with env.getConnection() as r:
+        r.execute_command('config', 'set', 'notify-keyspace-events', 'KEA')
+
+        pubsub = r.pubsub()
+        pubsub.psubscribe('__key*')
+       
+        time.sleep(1)
+        env.assertEqual('psubscribe', pubsub.get_message()['type']) 
+
+        r.execute_command('TS.CREATE', 'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+
+        r.execute_command('TS.CREATE', 'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+
+        r.execute_command('TS.CREATERULE', 'tester_src', 'tester_dest', 'AGGREGATION', 'COUNT', 10)
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+
+        r.execute_command('TS.DELETERULE', 'tester_src', 'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.deleterule:src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.deleterule:dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+
+
+def test_keyspace_rules_send():
     sample_len = 1024
     env = Env()
     with env.getConnection() as r:
@@ -81,7 +116,7 @@ def test_keyspace_rules():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
 
         r.execute_command('ts.incrby', 'tester_src', 3)
-        
+
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
 
