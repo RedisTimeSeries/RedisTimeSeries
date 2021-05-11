@@ -94,7 +94,6 @@ run_tests() {
 --module $MODULE
 --module-args '$MODARGS'
 $RLTEST_ARGS
-$GEARS_ARGS
 $VALGRIND_ARGS
 
 EOF

@@ -41,8 +41,6 @@ make test          # run tests
   AOF=0|1          # run AOF persistency tests on a standalone Redis topology
   SLAVES=0|1       # run replication tests on standalone Redis topology
   CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
-  GEARS=0|1        # also load RedisGears
-  GEARS_PATH=path  # RedisGears module path
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
 
