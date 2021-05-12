@@ -10,7 +10,7 @@ def assert_msg(env, msg, expected_type, expected_data):
 def test_keyspace():
     sample_len = 1024
     env = Env()
-    with env.getConnection() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('config', 'set', 'notify-keyspace-events', 'KEA')
 
         pubsub = r.pubsub()
@@ -19,26 +19,26 @@ def test_keyspace():
         time.sleep(1)
         env.assertEqual('psubscribe', pubsub.get_message()['type']) 
 
-        r.execute_command('ts.add', 'tester', 100, 1.1)
+        r.execute_command('ts.add', 'tester{2}', 100, 1.1)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
 
         # Test MADD generate events for each key updated 
-        r.execute_command("ts.madd", 'tester', "*", 10, 'test_key2', 2000, 20)
+        r.execute_command("ts.madd", 'tester{2}', "*", 10, 'test_key2{2}', 2000, 20)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'test_key2')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'test_key2{2}')
 
         # Test INCRBY generate event on key
-        r.execute_command("ts.INCRBY", 'tester', "100")
+        r.execute_command("ts.INCRBY", 'tester{2}', "100")
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.incrby')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
 
         # Test DECRBY generate event on key
-        r.execute_command("ts.DECRBY", 'tester', "13")
+        r.execute_command("ts.DECRBY", 'tester{2}', "13")
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.decrby')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
 
 def test_keyspace_create_rules():
     sample_len = 1024
@@ -52,27 +52,27 @@ def test_keyspace_create_rules():
         time.sleep(1)
         env.assertEqual('psubscribe', pubsub.get_message()['type']) 
 
-        r.execute_command('TS.CREATE', 'tester_src')
+        r.execute_command('TS.CREATE', 'tester_src{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
-        r.execute_command('TS.CREATE', 'tester_dest')
+        r.execute_command('TS.CREATE', 'tester_dest{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
-        r.execute_command('TS.CREATERULE', 'tester_src', 'tester_dest', 'AGGREGATION', 'COUNT', 10)
+        r.execute_command('TS.CREATERULE', 'tester_src{2}', 'tester_dest{2}', 'AGGREGATION', 'COUNT', 10)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:src')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
-        r.execute_command('TS.DELETERULE', 'tester_src', 'tester_dest')
+        r.execute_command('TS.DELETERULE', 'tester_src{2}', 'tester_dest{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.deleterule:src')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.deleterule:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
 
 def test_keyspace_rules_send():
@@ -87,38 +87,38 @@ def test_keyspace_rules_send():
         time.sleep(1)
         env.assertEqual('psubscribe', pubsub.get_message()['type']) 
 
-        r.execute_command('TS.CREATE', 'tester_src')
+        r.execute_command('TS.CREATE', 'tester_src{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
-        r.execute_command('TS.CREATE', 'tester_dest')
+        r.execute_command('TS.CREATE', 'tester_dest{2}')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.create')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
-        r.execute_command('TS.CREATERULE', 'tester_src', 'tester_dest', 'AGGREGATION', 'MAX', 1)
+        r.execute_command('TS.CREATERULE', 'tester_src{2}', 'tester_dest{2}', 'AGGREGATION', 'MAX', 1)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:src')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.createrule:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
-        r.execute_command('ts.add', 'tester_src', 100, 1.1)
+        r.execute_command('ts.add', 'tester_src{2}', 100, 1.1)
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
-        r.execute_command('ts.add', 'tester_src', 101, 1.1)
+        r.execute_command('ts.add', 'tester_src{2}', 101, 1.1)
 
         # First getting the event from the dest on the previous window 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
-        r.execute_command('ts.incrby', 'tester_src', 3)
+        r.execute_command('ts.incrby', 'tester_src{2}', 3)
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.incrby')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
