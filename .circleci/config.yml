@@ -342,11 +342,11 @@ workflows:
           requires:
             - build
           <<: *on-integ-and-version-tags
-      - performance_ci_automation:
-          context: common
-          requires:
-            - build
-          <<: *on-integ-and-version-tags
+#      - performance_ci_automation:
+#          context: common
+#          requires:
+#            - build
+#          <<: *on-integ-and-version-tags
       - build-macos:
           <<: *on-integ-and-version-tags
 #      - build-multiarch-docker:
