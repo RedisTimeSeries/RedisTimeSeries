@@ -335,20 +335,20 @@ workflows:
   build_and_package:
     jobs:
       - lint:
-          <<: *on-any-branch
+          <<: *not-on-integ-branch
       - build:
-          <<: *on-any-branch         
+          <<: *on-any-branch
       - valgrind:
           requires:
             - build
-          <<: *on-integ-branch
+          <<: *on-integ-and-version-tags
       - performance_ci_automation:
           context: common
           requires:
             - build
-          <<: *on-integ-branch
+          <<: *on-integ-and-version-tags
       - build-macos:
-          <<: *on-version-tags
+          <<: *on-integ-and-version-tags
 #      - build-multiarch-docker:
 #          <<: *on-version-tags
       - coverage:
@@ -360,14 +360,16 @@ workflows:
           context: common
           requires:
             - build
+            - build-macos
             - valgrind
-          <<: *on-master
+          <<: *on-integ-branch
       - deploy_package:
           name: deploy_release
           package: release
           context: common
           requires:
             - build
+            - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
@@ -379,6 +381,18 @@ workflows:
   nightly:
     triggers:
       - schedule:
+          cron: "20 17 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - performance_ci_automation:
+          context: common
+
+  nightly-twice-a-week:
+    triggers:
+      - schedule:
           cron: "20 17 * * 0,3"
           filters:
             branches:
@@ -388,15 +402,3 @@ workflows:
     jobs:
       - build-macos
       - valgrind
-
-  nightly_performance:
-    triggers:
-      - schedule:
-          cron: "20 17 * * *"
-          filters:
-            branches:
-              only:
-                - master
-    jobs:
-      - performance_ci_automation:
-          context: common
