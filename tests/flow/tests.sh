@@ -3,48 +3,53 @@
 [[ $VERBOSE == 1 ]] && set -x
 [[ $IGNERR == 1 ]] || set -e
 
-error() {
-	echo "There are errors:"
-	gawk 'NR>L-4 && NR<L+4 { printf "%-5d%4s%s\n",NR,(NR==L?">>> ":""),$0 }' L=$1 $0
-	exit 1
-}
-
-[[ -z $_Dbg_DEBUGGER_LEVEL ]] && trap 'error $LINENO' ERR
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-. $HERE/../../deps/readies/shibumi/functions
+ROOT=$(cd $HERE/../.. && pwd)
+READIES=$ROOT/deps/readies 
+. $READIES/shibumi/functions
 
-export ROOT=$(realpath $HERE/../..)
+VALGRIND_REDIS_VER=6.2.1
 
 #----------------------------------------------------------------------------------------------
 
 help() {
 	cat <<-END
-		Run Python tests.
+		Run flow tests.
 
 		[ARGVARS...] tests.sh [--help|help] [<module-so-path>]
 
 		Argument variables:
-		VERBOSE=1     Print commands
-		IGNERR=1      Do not abort on error
+		GEN=0|1             General tests
+		AOF=0|1             Tests with --test-aof
+		SLAVES=0|1          Tests with --test-slaves
+		CLUSTER=0|1         Tests with --env oss-cluster
 
-		GEN=0|1         General tests
-		AOF=0|1         Tests with --test-aof
-		SLAVES=0|1      Tests with --test-slaves
-		CLUSTER=0|1     Tests with --env oss-cluster
+        REDIS_SERVER=path   Location of redis-server
 
-		TEST=test        Run specific test (e.g. test.py:test_name)
-		VALGRIND|VGD=1   Run with Valgrind
-		CALLGRIND|CGD=1  Run with Callgrind
+		TEST=test           Run specific test (e.g. test.py:test_name)
+		VALGRIND|VG=1       Run with Valgrind
+
+		VERBOSE=1           Print commands
+		IGNERR=1            Do not abort on error
 
 	END
 }
 
 #----------------------------------------------------------------------------------------------
 
-check_redis_server() {
-	if ! command -v redis-server >/dev/null; then
-		echo "Cannot find redis-server. Aborting."
+setup_redis_server() {
+	if [[ $VALGRIND == 1 ]]; then
+		REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
+		if ! is_command $REDIS_SERVER; then
+			echo Building Redis for Valgrind ...
+			$READIES/bin/getredis -v $VALGRIND_REDIS_VER --valgrind --suffix vg
+		fi
+	else
+		REDIS_SERVER=${REDIS_SERVER:-redis-server}
+	fi
+
+	if ! is_command $REDIS_SERVER; then
+		echo "Cannot find $REDIS_SERVER. Aborting."
 		exit 1
 	fi
 }
@@ -63,7 +68,7 @@ valgrind_config() {
 
 	VALGRIND_SUPRESSIONS=$ROOT/tests/redis_valgrind.sup
 
-	TEST_ARGS+="\
+	VALGRIND_ARGS+="\
 		--no-output-catch \
 		--use-valgrind \
 		--vg-verbose \
@@ -75,12 +80,31 @@ valgrind_config() {
 
 run_tests() {
 	local title="$1"
-	[[ ! -z $title ]] && {
-		$ROOT/deps/readies/bin/sep -0
+	if [[ -n $title ]]; then
+		$READIES/bin/sep -0
 		printf "Tests with $title:\n\n"
-	}
+	fi
+
+	config=$(mktemp "${TMPDIR:-/tmp}/rltest.XXXXXXX")
+	rm -f $config
+	cat << EOF > $config
+
+--clear-logs
+--oss-redis-path=$REDIS_SERVER
+--module $MODULE
+--module-args '$MODARGS'
+$RLTEST_ARGS
+$VALGRIND_ARGS
+
+EOF
+
 	cd $ROOT/tests/flow
-	$OP python3 -m RLTest --clear-logs --module $MODULE $TEST_ARGS
+	if [[ $VERBOSE == 1 ]]; then
+		echo "RLTest configuration:"
+		cat $config
+	fi
+	$OP python3 -m RLTest @$config
+	[[ $KEEP != 1 ]] && rm -f $config
 }
 
 #----------------------------------------------------------------------------------------------
@@ -98,7 +122,7 @@ CLUSTER=${CLUSTER:-1}
 GDB=${GDB:-0}
 
 OP=""
-[[ $NOP == 1 ]] && OP="echo"
+[[ $NOP == 1 ]] && OP=echo
 
 MODULE=${MODULE:-$1}
 [[ -z $MODULE || ! -f $MODULE ]] && {
@@ -106,25 +130,28 @@ MODULE=${MODULE:-$1}
 	exit 1
 }
 
-[[ $VALGRIND == 1 || $VGD == 1 ]] && valgrind_config
-
-if [[ ! -z $TEST ]]; then
-	TEST_ARGS+=" --test $TEST -s"
-	export PYDEBUG=${PYDEBUG:-1}
+[[ $VG == 1 ]] && VALGRIND=1
+if [[ $VALGRIND == 1 ]]; then
+	valgrind_config
 fi
 
-[[ $VERBOSE == 1 ]] && TEST_ARGS+=" -v"
-[[ $GDB == 1 ]] && TEST_ARGS+=" -i --verbose"
+if [[ -n $TEST ]]; then
+	RLTEST_ARGS+=" --test $TEST -s"
+	export BB=${BB:-1}
+fi
+
+[[ $VERBOSE == 1 ]] && RLTEST_ARGS+=" -v"
+[[ $GDB == 1 ]] && RLTEST_ARGS+=" -i --verbose"
 
 #----------------------------------------------------------------------------------------------
 
 cd $ROOT/tests/flow
 
-check_redis_server
+setup_redis_server
 
 [[ $GEN == 1 ]] && run_tests
-[[ $CLUSTER == 1 ]] && TEST_ARGS+=" --env oss-cluster --shards-count 1" run_tests "--env oss-cluster"
-[[ $SLAVES == 1 ]] && TEST_ARGS+=" --use-slaves" run_tests "--use-slaves"
-[[ $AOF == 1 ]] && TEST_ARGS+=" --use-aof" run_tests "--use-aof"
+[[ $CLUSTER == 1 ]] && RLTEST_ARGS+=" --env oss-cluster --shards-count 2" run_tests "oss-cluster"
+[[ $SLAVES == 1 ]] && RLTEST_ARGS+=" --use-slaves" run_tests "with slaves"
+[[ $AOF == 1 ]] && RLTEST_ARGS+=" --use-aof" run_tests "with AOF"
 
 exit 0

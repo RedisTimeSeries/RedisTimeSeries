@@ -27,20 +27,31 @@ class RedisTimeSeriesSetup(paella.Setup):
     def redhat_compat(self):
         self.group_install("'Development Tools'")
         self.install("redhat-lsb-core")
-        if not self.dist == "amzn":
-            self.install("epel-release")
-            self.install("python3-devel libaec-devel")
-        else:
+        if self.dist == "amzn":
             self.run("amazon-linux-extras install epel")
             self.install("python3-devel")
+        elif self.dist == "centos" and self.ver == "8":
+            self.install("epel-release dnf-plugins-core")
+            self.run("yum config-manager --set-enabled powertools")
+        else:
+            self.install("epel-release")
+            self.install("python3-devel libaec-devel")
+
+    def arch_compat(self):
+        pass
 
     def fedora(self):
         self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
     def common_last(self):
-        self.install("lcov")
-        self.run("python3 %s/bin/getrmpytools" % READIES) 
+        if self.dist == "centos" and self.ver == "8":
+            self.install("https://pkgs.dyn.su/el8/base/x86_64/lcov-1.14-3.el8.noarch.rpm")
+        elif self.dist == "arch":
+            self.install("lcov-git", aur=True)
+        else:
+            self.install("lcov")
+        self.run("python3 %s/bin/getrmpytools" % READIES)
         self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------

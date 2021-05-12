@@ -48,5 +48,11 @@ unittests:
 pack:
 	@$(MAKE) -C src package
 
+run:
+	@$(MAKE) -C src run
+
+benchmark:
+	@$(MAKE) -C src benchmark
+
 # deploy:
 #	@make -C src deploy

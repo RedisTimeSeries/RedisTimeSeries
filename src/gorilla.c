@@ -447,7 +447,9 @@ static double readFloat(Compressed_Iterator *iter) {
         binary_t leading = readBits(iter->chunk->data, &iter->idx, DOUBLE_LEADING);
         binary_t blocksize =
             readBits(iter->chunk->data, &iter->idx, DOUBLE_BLOCK_SIZE) + DOUBLE_BLOCK_ADJUST;
+#ifdef DEBUG
         assert(leading + blocksize <= BINW);
+#endif
         binary_t trailing = BINW - leading - blocksize;
         xorValue = readBits(iter->chunk->data, &iter->idx, blocksize) << trailing;
         iter->prevLeading = leading;
