@@ -13,8 +13,7 @@ static bool check_sample_value(Sample sample, FilterByValueArgs byValueArgs) {
         return true;
     }
 
-    if (sample.value >= byValueArgs.min &&
-            sample.value <= byValueArgs.max) {
+    if (sample.value >= byValueArgs.min && sample.value <= byValueArgs.max) {
         return true;
     } else {
         return false;
@@ -26,7 +25,7 @@ static bool check_sample_timestamp(Sample sample, FilterByTSArgs byTsArgs) {
         return true;
     }
 
-    for (int i=0; i < byTsArgs.count; i++) {
+    for (int i = 0; i < byTsArgs.count; i++) {
         if (sample.timestamp == byTsArgs.values[i]) {
             return true;
         }
@@ -42,7 +41,8 @@ ChunkResult SeriesFilterIterator_GetNext(struct AbstractIterator *base, Sample *
         cr = self->base.input->GetNext(self->base.input, &sample);
 
         if (cr == CR_OK) {
-            if (check_sample_value(sample, self->byValueArgs) && check_sample_timestamp(sample, self->ByTsArgs)) {
+            if (check_sample_value(sample, self->byValueArgs) &&
+                check_sample_timestamp(sample, self->ByTsArgs)) {
                 *currentSample = sample;
                 return cr;
             }
@@ -53,7 +53,9 @@ ChunkResult SeriesFilterIterator_GetNext(struct AbstractIterator *base, Sample *
     }
 }
 
-SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input, FilterByValueArgs byValue, FilterByTSArgs ByTsArgs) {
+SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
+                                               FilterByValueArgs byValue,
+                                               FilterByTSArgs ByTsArgs) {
     SeriesFilterIterator *newIter = malloc(sizeof(SeriesFilterIterator));
     newIter->base.input = input;
     newIter->base.GetNext = SeriesFilterIterator_GetNext;

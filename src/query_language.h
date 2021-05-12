@@ -30,11 +30,13 @@ typedef struct FilterByValueArgs
     double max;
 } FilterByValueArgs;
 
+#define MAX_TS_VALUES_FILTER 128
+
 typedef struct FilterByTSArgs
 {
     bool hasValue;
     size_t count;
-    timestamp_t values[250];
+    timestamp_t values[MAX_TS_VALUES_FILTER];
 } FilterByTSArgs;
 
 typedef struct RangeArgs

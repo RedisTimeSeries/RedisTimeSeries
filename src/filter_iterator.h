@@ -17,7 +17,9 @@ typedef struct SeriesFilterIterator
     FilterByTSArgs ByTsArgs;
 } SeriesFilterIterator;
 
-SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input, FilterByValueArgs byValue, FilterByTSArgs ByTsArgs);
+SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
+                                               FilterByValueArgs byValue,
+                                               FilterByTSArgs ByTsArgs);
 
 ChunkResult SeriesFilterIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample);
 

@@ -739,7 +739,8 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
         SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
 
     if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
-        chain = (AbstractIterator *)SeriesFilterIterator_New(chain, args->filterByValueArgs, args->filterByTSArgs);
+        chain = (AbstractIterator *)SeriesFilterIterator_New(
+            chain, args->filterByValueArgs, args->filterByTSArgs);
     }
 
     if (args->aggregationArgs.aggregationClass != NULL) {

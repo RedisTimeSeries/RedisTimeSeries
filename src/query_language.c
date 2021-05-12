@@ -225,7 +225,6 @@ static int parseFilterByValueArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
-
 static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                                   RedisModuleString **argv,
                                   int argc,
@@ -238,7 +237,7 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        while (offset + 1 < argc && index < 250) {
+        while (offset + 1 < argc && index < MAX_TS_VALUES_FILTER) {
             timestamp_t val;
             if (RedisModule_StringToLongLong(argv[offset + 1], &val) == REDISMODULE_OK) {
                 args->values[index] = val;
@@ -308,7 +307,6 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     if (parseFilterByTimestamp(ctx, argv, argc, &args.filterByTSArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
-
 
     *out = args;
 
