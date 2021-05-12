@@ -370,7 +370,7 @@ workflows:
           context: common
           requires:
             - build
-            - build-macos
+            # - build-macos
             - valgrind
           <<: *on-integ-branch
       - deploy_package:
@@ -379,7 +379,7 @@ workflows:
           context: common
           requires:
             - build
-            - build-macos
+            # - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
