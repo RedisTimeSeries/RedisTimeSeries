@@ -113,8 +113,7 @@ commands:
       - run:
           name: Install remote benchmark tool dependencies
           command: |
-            mkdir -p /workspace
-            TF_EXE_FILE_NAME=/workspace/terraform ./tests/benchmarks/remote/install_deps.sh
+            VERSION=0.14.8 ./deps/readies/bin/getterraform
       - run:
           name: Install remote benchmark python dependencies
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
@@ -130,7 +129,6 @@ commands:
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
 
             redisbench-admin run-remote \
-              --terraform_bin_path /workspace/terraform \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
@@ -347,20 +345,20 @@ workflows:
   build_and_package:
     jobs:
       - lint:
-          <<: *on-any-branch
+          <<: *not-on-integ-branch
       - build:
-          <<: *on-any-branch         
+          <<: *on-any-branch
       - valgrind:
           requires:
             - build
-          <<: *on-integ-branch
+          <<: *on-integ-and-version-tags
       - performance_ci_automation:
           context: common
           requires:
-            - build          
-          <<: *on-integ-branch
+            - build
+          <<: *on-integ-and-version-tags
       - build-macos:
-          <<: *on-version-tags
+          <<: *on-integ-and-version-tags
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
@@ -372,14 +370,16 @@ workflows:
           context: common
           requires:
             - build
+            # - build-macos
             - valgrind
-          <<: *on-master
+          <<: *on-integ-branch
       - deploy_package:
           name: deploy_release
           package: release
           context: common
           requires:
             - build
+            # - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
@@ -391,6 +391,18 @@ workflows:
   nightly:
     triggers:
       - schedule:
+          cron: "20 17 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - performance_ci_automation:
+          context: common
+
+  nightly-twice-a-week:
+    triggers:
+      - schedule:
           cron: "20 17 * * 0,3"
           filters:
             branches:
@@ -400,5 +412,3 @@ workflows:
     jobs:
       - build-macos
       - valgrind
-      - performance_ci_automation:
-          context: common
