@@ -33,25 +33,28 @@ GEARS_BASE_DIR="$ROOT/bin/$($READIES/bin/platform -t)"
 if [[ ! -z "$GEARS_PATH" ]]; then
 	platform="$($READIES/bin/platform -t)"
 else
-	if [[ "$os" != "linux" || "$arch" != "x64" ]]; then
-		eprint "Cannot match binary artifacts - build RedisGears and set GEARS_PATH"
-		exit 1
-	fi
-
 	dist="$($READIES/bin/platform --dist)"
 	nick="$($READIES/bin/platform --osnick)"
 
-	if [[ $dist == "ubuntu" ]]; then
-		if [[ $nick != "bionic" && $nick != "xenial" && $nick != "trusty" ]]; then
-			nick="bionic"
-		fi
-	elif [[ $dist == debian ]]; then
-		nick=bionic
-	elif [[ $dist == centos || $dist == redhat || $dist == fedora ]]; then
-		nick=centos7
-	elif [[ ! -z "$GEARS_OSNICK" ]]; then
-		nick=$GEARS_OSNICK
+	BUILD_GEARS=""
+	if [[ "$os" != "linux" || "$arch" != "x64" ]]; then
+		BUILD_GEARS=1
 	else
+		if [[ $dist == "ubuntu" ]]; then
+			if [[ $nick != "bionic" && $nick != "xenial" && $nick != "trusty" ]]; then
+				nick="bionic"
+			fi
+		elif [[ $dist == debian ]]; then
+			nick=bionic
+		elif [[ $dist == centos || $dist == redhat || $dist == fedora ]]; then
+			nick=centos7
+		elif [[ ! -z "$GEARS_OSNICK" ]]; then
+			nick=$GEARS_OSNICK
+		else
+			BUILD_GEARS=1
+		fi
+	fi
+	if [[ $BUILD_GEARS == 1 ]]; then
 		echo "Cannot match binary artifacts; build RedisGears"
 		mkdir -p $GEARS_BASE_DIR
 		git clone --recursive https://github.com/RedisGears/RedisGears.git
@@ -63,6 +66,7 @@ else
 			exit 0
 		fi
 	fi
+
 	platform="${os}-${nick}-${arch}"
 fi
 
