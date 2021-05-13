@@ -49,7 +49,9 @@ commands:
       - checkout-all
       - run:
           name: Install prerequisites
-          command: make setup
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
       - run:
           name: Install Redis
           command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>

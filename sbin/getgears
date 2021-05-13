@@ -28,6 +28,7 @@ OP=""
 
 os="$($READIES/bin/platform --os)"
 arch="$($READIES/bin/platform --arch)"
+GEARS_BASE_DIR="$ROOT/bin/$($READIES/bin/platform -t)"
 
 if [[ ! -z "$GEARS_PATH" ]]; then
 	platform="$($READIES/bin/platform -t)"
@@ -51,8 +52,16 @@ else
 	elif [[ ! -z "$GEARS_OSNICK" ]]; then
 		nick=$GEARS_OSNICK
 	else
-		eprint "Cannot match binary artifacts - build RedisGears and set GEARS_PATH"
-		exit 1
+		echo "Cannot match binary artifacts; build RedisGears"
+		mkdir -p $GEARS_BASE_DIR
+		git clone --recursive https://github.com/RedisGears/RedisGears.git
+		cd RedisGears
+		if ! make setup get_deps build; then
+			eprint "Build failed; build RedisGears and set GEARS_PATH"
+			exit 1
+		else
+			exit 0
+		fi
 	fi
 	platform="${os}-${nick}-${arch}"
 fi
@@ -61,7 +70,7 @@ GEARS_S3_URL="http://redismodules.s3.amazonaws.com/redisgears/snapshots"
 GEARS_MOD="redisgears.${platform}.master.zip"
 GEARS_DEPS="redisgears-python.${platform}.master.tgz"
 
-FINAL_WORK_DIR="$ROOT/bin/$($READIES/bin/platform -t)/RedisGears"
+FINAL_WORK_DIR="$GEARS_BASE_DIR/RedisGears"
 
 if [[ -d $FINAL_WORK_DIR && -f $FINAL_WORK_DIR/redisgears.so ]]; then
 	echo "RedisGears is in ${FINAL_WORK_DIR}"
