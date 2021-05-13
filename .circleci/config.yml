@@ -360,7 +360,8 @@ workflows:
             - build
           <<: *on-integ-and-version-tags
       - build-macos:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
