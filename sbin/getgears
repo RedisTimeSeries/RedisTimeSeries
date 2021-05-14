@@ -48,7 +48,7 @@ download_gears() {
 build_gears() {
 	$OP cd $ROOT/deps
 	if [[ ! -d RedisGears ]]; then
-		runn git clone --recursive https://github.com/RedisGears/RedisGears.git
+		runn git clone -q --recursive https://github.com/RedisGears/RedisGears.git
 	fi
 	$OP cd RedisGears
 	if [[ ! -f artifacts/snapshot/redisgears.${platform}.master.zip ]]; then
