@@ -16,7 +16,8 @@ if [[ "$1" == "--help" || "$1" == "help" || "$HELP" == "1" ]]; then
 		Argument variables:
 		GEARS_OSNICK=nick   Get binaries for give osnick
 		GEARS_PATH=dir      Get binaries from given Gears repo
-		GEARS_BUILD=0|1     Build RedisGears
+		BUILD=0|1           Build RedisGears (rather than download)
+		SETUP=1|0           Before building, setup system
 		NOP=1               No operation
 		HELP=1              Show help
 
@@ -51,7 +52,10 @@ build_gears() {
 	fi
 	$OP cd RedisGears
 	if [[ ! -f artifacts/snapshot/redisgears.${platform}.master.zip ]]; then
-		runn make setup get_deps all
+		if [[ $SETUP != 0 ]]; then
+			runn make setup get_deps
+		fi
+		runn make all PACKAGE_NAME=redisgears
 	fi
 	export GEARS_PATH=$ROOT/deps/RedisGears
 		
@@ -75,11 +79,11 @@ else
 	dist="$($READIES/bin/platform --dist)"
 	nick="$($READIES/bin/platform --osnick)"
 
-	GEARS_BUILD=${GEARS_BUILD:-0}
-	if [[ $GEARS_BUILD != 1 ]]; then
+	BUILD=${BUILD:-0}
+	if [[ $BUILD != 1 ]]; then
 		if [[ "$os" != "linux" || "$arch" != "x64" ]]; then
 			echo "Cannot match binary artifacts; build RedisGears"
-			GEARS_BUILD=1
+			BUILD=1
 		else
 			if [[ $dist == "ubuntu" ]]; then
 				if [[ $nick != "bionic" && $nick != "xenial" && $nick != "trusty" ]]; then
@@ -93,14 +97,14 @@ else
 				nick=$GEARS_OSNICK
 			else
 				echo "Cannot match binary artifacts; build RedisGears"
-				GEARS_BUILD=1
+				BUILD=1
 			fi
 		fi
 	fi
 
 	platform="${os}-${nick}-${arch}"
 
-	if [[ $GEARS_BUILD == 1 ]]; then
+	if [[ $BUILD == 1 ]]; then
 		if ! build_gears; then
 			eprint "Build failed; build RedisGears and set GEARS_PATH"
 			exit 1

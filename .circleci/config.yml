@@ -73,7 +73,7 @@ commands:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2
 
   package:
     steps:
