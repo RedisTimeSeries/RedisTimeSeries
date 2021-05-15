@@ -75,7 +75,7 @@ commands:
           command: |
             make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2
       - store_artifacts:
-          path: pytest/logs
+          path: tests/flow/logs
 
   package:
     steps:
