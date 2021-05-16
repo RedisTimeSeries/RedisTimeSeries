@@ -362,8 +362,7 @@ workflows:
             - build
           <<: *on-integ-and-version-tags
       - build-macos:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - build-multiarch-docker:
           <<: *on-version-tags
       - coverage:
@@ -375,7 +374,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-integ-branch
       - deploy_package:
@@ -384,7 +383,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
