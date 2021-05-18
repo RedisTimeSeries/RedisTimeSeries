@@ -1,13 +1,21 @@
 version: 2.1
 
 commands:
-  abort_for_docs:
+
+  early_returns:
     steps:
       - run:
-          name: Avoid tests for docs
+          name: Early return if this is a docs build
           command: |
-            if [[ $CIRCLE_BRANCH == *_docs ]]; then
-              echo "Identifies as documents PR, no testing required"
+            if [[ $CIRCLE_BRANCH == *docs ]]; then
+              echo "Identifies as documents PR, no testing required."
+              circleci step halt
+            fi
+      - run:
+          name: Early return if this branch should ignore CI
+          command: |
+            if [[ $CIRCLE_BRANCH == *noci ]]; then
+              echo "Identifies as actively ignoring CI, no testing required."
               circleci step halt
             fi
 
@@ -45,11 +53,13 @@ commands:
         type: string
         default: ""
     steps:
-      - abort_for_docs
+      - early_returns
       - checkout-all
       - run:
           name: Install prerequisites
-          command: make setup
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
       - run:
           name: Install Redis
           command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
@@ -71,11 +81,13 @@ commands:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2
+      - store_artifacts:
+          path: tests/flow/logs
 
   package:
     steps:
-      - abort_for_docs
+      - early_returns
       - run:
           name: Package
           command: |
@@ -94,7 +106,7 @@ commands:
       from:
         type: string
     steps:
-      - abort_for_docs
+      - early_returns
       - early_return_for_forked_pull_requests
       - run:
           name: Deploy to S3
@@ -155,7 +167,7 @@ jobs:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
-      - abort_for_docs
+      - early_returns
       - checkout-all
       - run:
           name: lint
@@ -170,7 +182,7 @@ jobs:
       - ci_steps:
           platform: debian
       - package
-  
+
   performance_ci_automation:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
@@ -182,7 +194,7 @@ jobs:
           command: make setup
       - run:
           name: Build
-          command: make build 
+          command: make build
       - benchmark-automation
 
   build-macos:
@@ -202,7 +214,7 @@ jobs:
       enabled: true
       image: ubuntu-1604:202010-01
     steps:
-      - abort_for_docs
+      - early_returns
       - checkout-all
       - run:
           name: Set up Python3
@@ -224,7 +236,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - abort_for_docs
+      - early_returns
       - checkout-all
       - run:
           name: Build & Test
@@ -249,7 +261,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - abort_for_docs
+      - early_returns
       - early_return_for_forked_pull_requests
       - attach_workspace:
           at: ~/workspace
@@ -262,7 +274,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - abort_for_docs
+      - early_returns
       - early_return_for_forked_pull_requests
       - checkout-all
       - run:
@@ -273,7 +285,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - abort_for_docs
+      - early_returns
       - early_return_for_forked_pull_requests
       - checkout-all
       - run:
@@ -370,7 +382,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-integ-branch
       - deploy_package:
@@ -379,7 +391,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
