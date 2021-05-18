@@ -57,7 +57,9 @@ commands:
       - checkout-all
       - run:
           name: Install prerequisites
-          command: make setup
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
       - run:
           name: Install Redis
           command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
@@ -79,7 +81,9 @@ commands:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1
+            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2
+      - store_artifacts:
+          path: tests/flow/logs
 
   package:
     steps:
@@ -378,7 +382,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-integ-branch
       - deploy_package:
@@ -387,7 +391,7 @@ workflows:
           context: common
           requires:
             - build
-            # - build-macos
+            - build-macos
             - valgrind
           <<: *on-version-tags
       - release-automation:
