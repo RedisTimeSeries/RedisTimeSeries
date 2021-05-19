@@ -357,7 +357,7 @@ workflows:
   build_and_package:
     jobs:
       - lint:
-          <<: *not-on-integ-branch
+          <<: *on-any-branch
       - build:
           <<: *on-any-branch
       - valgrind:
