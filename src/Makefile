@@ -47,6 +47,10 @@ make test          # run tests
   VALGRIND|VG=1    # run specified tests with Valgrind
 
 make pack          # build packages (ramp & dependencies)
+
+make benchmarks        # run all benchmarks
+  BENCHMARK=filename   # run benchmark specified by 'filename'
+  BENCH_ARGS="..."     # redisbench_admin  extra arguments
 endef
 
 #----------------------------------------------------------------------------------------------  
@@ -266,6 +270,9 @@ ifneq ($(BENCHMARK),)
 	BENCHMARK_ARGS += --test $(BENCHMARK)
 endif
 
+ifneq ($(BENCH_ARGS),)
+	BENCHMARK_ARGS += $(BENCH_ARGS)
+endif
 
 benchmark: $(TARGET)
 	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
