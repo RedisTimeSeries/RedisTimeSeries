@@ -83,7 +83,7 @@ run_test() {
 	if [[ $rc == 0 && $status == success ]]; then
 		id=$(results .data[0])
 		echo "Tests running on $MODULE_VERSION for RS $RS_VERSION"
-		echo "Results: https://qa-automation-center.redislabs.com/ui#dashboard/flow/$id"
+		echo "Results: https://opereto.qa.redislabs.com/ui#dashboard/flow/$id"
 		return 0
 	else
 		err=$(results .message)
