@@ -407,6 +407,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
         double aggVal;
         if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
@@ -518,6 +520,11 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         add(ctx, keyName, timestampStr, valueStr, NULL, -1);
     }
     RedisModule_ReplicateVerbatim(ctx);
+
+    for (int i = 1; i < argc; i += 3) {
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
+    }
+
     return REDISMODULE_OK;
 }
 
@@ -534,6 +541,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
+
     return result;
 }
 
@@ -584,6 +594,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_Log(ctx, "verbose", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.create", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -631,6 +644,9 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.alter", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -674,6 +690,12 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -740,8 +762,15 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_RetainString(ctx, destKeyName);
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -795,7 +824,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     double result = series->lastValue;
     RMUtil_StringToLower(argv[0]);
-    if (RMUtil_StringEqualsC(argv[0], "ts.incrby")) {
+    bool isIncr = RMUtil_StringEqualsC(argv[0], "ts.incrby");
+    if (isIncr) {
         result += incrby;
     } else {
         result -= incrby;
@@ -804,6 +834,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, isIncr ? "ts.incrby" : "ts.decrby", argv[1]);
+
     return rv;
 }
 
@@ -823,6 +857,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     ReplyWithSeriesLastDatapoint(ctx, series);
     RedisModule_CloseKey(key);
+
     return REDISMODULE_OK;
 }
 

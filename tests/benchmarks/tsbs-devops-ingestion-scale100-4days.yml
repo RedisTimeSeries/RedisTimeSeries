@@ -1,0 +1,16 @@
+name: "tsbs-devops-ingestion-scale100-4days"
+remote:
+  - type: oss-standalone
+  - setup: redistimeseries-m5
+clientconfig:
+  - tool: tsbs_load_redistimeseries
+  - parameters:
+    - workers: 64
+    - reporting-period: 1s
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+exporter:
+  redistimeseries:
+    timemetric: "$.StartTime"
+    metrics:
+      - "$.Totals.metricRate"
+      - "$.Totals.rowRate"
