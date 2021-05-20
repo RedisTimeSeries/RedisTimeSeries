@@ -26,6 +26,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->base.Close = SeriesIteratorClose;
     iter->base.GetNext = SeriesIteratorGetNext;
     iter->base.input = NULL;
+    iter->currentChunk = NULL;
+    iter->chunkIterator = NULL;
 
     iter->series = series;
     iter->minTimestamp = start_ts;
@@ -51,8 +53,10 @@ AbstractIterator *SeriesIterator_New(Series *series,
         iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk);
     }
 
-    iter->chunkIterator = funcs->NewChunkIterator(
-        iter->currentChunk, SeriesChunkIteratorOptions(iter), &iter->chunkIteratorFuncs);
+    if (iter->currentChunk != NULL) {
+        iter->chunkIterator = funcs->NewChunkIterator(
+            iter->currentChunk, SeriesChunkIteratorOptions(iter), &iter->chunkIteratorFuncs);
+    }
 
     return (AbstractIterator *)iter;
 }
@@ -69,7 +73,9 @@ static inline ChunkResult SeriesGetPrevious(SeriesIterator *iter, Sample *sample
 
 void SeriesIteratorClose(AbstractIterator *iterator) {
     SeriesIterator *self = (SeriesIterator *)iterator;
-    self->chunkIteratorFuncs.Free(self->chunkIterator);
+    if (self->chunkIterator != NULL) {
+        self->chunkIteratorFuncs.Free(self->chunkIterator);
+    }
 
     RedisModule_DictIteratorStop(self->dictIter);
     free(iterator);
@@ -153,5 +159,8 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
 
 ChunkResult SeriesIteratorGetNext(AbstractIterator *iterator, Sample *currentSample) {
     SeriesIterator *self = (SeriesIterator *)iterator;
+    if (self->chunkIterator == NULL) {
+        return CR_END;
+    }
     return _seriesIteratorGetNext(self, currentSample);
 }

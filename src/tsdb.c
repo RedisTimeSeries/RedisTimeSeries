@@ -96,9 +96,15 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
-    dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
-    newSeries->lastChunk = newChunk;
+
+    if (!cCtx->skipChunkCreation) {
+        Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
+        dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
+        newSeries->lastChunk = newChunk;
+    } else {
+        newSeries->lastChunk = NULL;
+    }
+
     return newSeries;
 }
 
