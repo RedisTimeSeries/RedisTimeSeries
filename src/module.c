@@ -225,26 +225,18 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     }
     RedisModule_DictIteratorStop(iter);
 
+    // todo: this is duplicated in resultset.c
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset,
-                           args->startTimestamp,
-                           args->endTimestamp,
-                           args->aggregationArgs.aggregationClass,
-                           args->aggregationArgs.timeDelta,
-                           args->count,
-                           args->reverse,
-                           args->gropuByReducerOp);
+    ResultSet_ApplyReducer(resultset, &args->rangeArgs, args->gropuByReducerOp, args->reverse);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
-    replyResultSet(ctx,
-                   resultset,
-                   args->withLabels,
-                   args->startTimestamp,
-                   args->endTimestamp,
-                   NULL,
-                   0,
-                   args->count,
-                   args->reverse);
+    RangeArgs minimizedArgs = args->rangeArgs;
+    minimizedArgs.aggregationArgs.aggregationClass = NULL;
+    minimizedArgs.aggregationArgs.timeDelta = 0;
+    minimizedArgs.filterByTSArgs.hasValue = false;
+    minimizedArgs.filterByValueArgs.hasValue = false;
+
+    replyResultSet(ctx, resultset, args->withLabels, &minimizedArgs, args->reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
@@ -279,15 +271,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
-        ReplySeriesArrayPos(ctx,
-                            series,
-                            args->withLabels,
-                            args->startTimestamp,
-                            args->endTimestamp,
-                            args->aggregationArgs.aggregationClass,
-                            args->aggregationArgs.timeDelta,
-                            args->count,
-                            args->reverse);
+        ReplySeriesArrayPos(ctx, series, args->withLabels, &args->rangeArgs, args->reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -352,24 +336,13 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    api_timestamp_t start_ts, end_ts;
-    api_timestamp_t time_delta = 0;
-    if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+    RangeArgs rangeArgs = { 0 };
+    if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    long long count = -1;
-    if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
-
-    AggregationClass *aggObject = NULL;
-    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
-    if (aggregationResult == TSDB_ERROR) {
-        return REDISMODULE_ERR;
-    }
-
-    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+    ReplySeriesRange(ctx, series, &rangeArgs, rev);
 
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;

@@ -23,38 +23,46 @@ Country = 4
 Latitude = 5
 Longitude = 6
 
+def read_from_disk():
+    with open('GlobalLandTemperaturesByMajorCity.csv') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        _ = next(reader)  # skip the column
+        for row in reader:
+            yield row
+
+def parse_timestamp(ts):
+    date_time_obj = datetime.strptime(ts, '%Y-%m-%d')
+    return calendar.timegm(date_time_obj.timetuple()) * 1000
 
 def load_into_redis(redis_conn):
-    with open('GlobalLandTemperaturesByMajorCity.csv') as csvfile:
-        spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        _ = next(spamreader)  # skip the column
+    r = redis_conn.pipeline()
+    count = 0
+    for row in read_from_disk():
+        timestamp = parse_timestamp(row[0])
+        if timestamp < 0:
+            continue
 
-        r = redis_conn.pipeline()
-        count = 0
-        for row in spamreader:
-            date_time_obj = datetime.strptime(row[0], '%Y-%m-%d')
-            timestamp = calendar.timegm(date_time_obj.timetuple())
-            if timestamp < 0:
-                continue
+        if count > PIPELINE_SIZE:
+            r.execute()
+            count = 0
+            r = redis_conn.pipeline()
 
-            if count > PIPELINE_SIZE:
-                r.execute()
-                count = 0
-                r = redis_conn.pipeline()
-
-            city = row[City]
-            country = row[Country].replace("(", "[").replace(")", "]")
-            if row[AverageTemperature]:
-                r.execute_command('TS.ADD', '{}:{}'.format('AverageTemperature', city),
-                                  timestamp, row[AverageTemperature],
-                                  'LABELS', 'city', city, 'country', country,
-                                  "latitude", row[Latitude], 'longitude', row[Longitude])
-            if row[AverageTemperatureUncertainty]:
-                r.execute_command('TS.ADD', '{}:{}'.format('AverageTemperatureUncertainty', city),
-                                  timestamp, row[AverageTemperatureUncertainty],
-                                  'LABELS', 'city', city, 'country', country,
-                                  "latitude", row[Latitude], 'longitude', row[Longitude])
-            count += 1
+        city = row[City]
+        country = row[Country].replace("(", "[").replace(")", "]")
+        if row[AverageTemperature]:
+            r.execute_command('TS.ADD', '{}:{}'.format('AverageTemperature', city),
+                              timestamp, row[AverageTemperature],
+                              'LABELS',
+                              'metric', 'temperature',
+                              'city', city,
+                              'country', country,
+                              "latitude", row[Latitude], 'longitude', row[Longitude])
+        if row[AverageTemperatureUncertainty]:
+            r.execute_command('TS.ADD', '{}:{}'.format('AverageTemperatureUncertainty', city),
+                              timestamp, row[AverageTemperatureUncertainty],
+                              'LABELS', 'city', city, 'country', country,
+                              "latitude", row[Latitude], 'longitude', row[Longitude])
+        count += 1
 
         r.execute()
 

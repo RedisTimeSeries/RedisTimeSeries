@@ -4,6 +4,7 @@
  * This file is available under the Redis Labs Source Available License Agreement
  */
 #include "consts.h"
+#include "query_language.h"
 #include "tsdb.h"
 
 #ifndef REDISTIMESERIES_RESULTSET_H
@@ -22,13 +23,9 @@ int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
-                           api_timestamp_t start_ts,
-                           api_timestamp_t end_ts,
-                           AggregationClass *aggObject,
-                           int64_t time_delta,
-                           long long maxResults,
-                           bool rev,
-                           MultiSeriesReduceOp reducerOp);
+                           RangeArgs *args,
+                           MultiSeriesReduceOp reducerOp,
+                           bool reverse);
 
 int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp);
 
@@ -37,13 +34,15 @@ int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name);
 void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
                     bool withlabels,
-                    api_timestamp_t start_ts,
-                    api_timestamp_t end_ts,
-                    AggregationClass *aggObject,
-                    int64_t time_delta,
-                    long long maxResults,
+                    RangeArgs *args,
                     bool rev);
 
 void ResultSet_Free(TS_ResultSet *r);
+
+int MultiSerieReduce(Series *dest,
+                     Series *source,
+                     MultiSeriesReduceOp op,
+                     RangeArgs *args,
+                     bool reverse);
 
 #endif // REDISTIMESERIES_RESULTSET_H

@@ -8,6 +8,7 @@
 #include "config.h"
 #include "consts.h"
 #include "endianconv.h"
+#include "filter_iterator.h"
 #include "indexer.h"
 #include "module.h"
 #include "series_iterator.h"
@@ -95,9 +96,15 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
-    dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
-    newSeries->lastChunk = newChunk;
+
+    if (!cCtx->skipChunkCreation) {
+        Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
+        dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
+        newSeries->lastChunk = newChunk;
+    } else {
+        newSeries->lastChunk = NULL;
+    }
+
     return newSeries;
 }
 
@@ -385,14 +392,10 @@ size_t SeriesGetNumSamples(const Series *series) {
 int MultiSerieReduce(Series *dest,
                      Series *source,
                      MultiSeriesReduceOp op,
-                     timestamp_t startTimestamp,
-                     timestamp_t endTimestamp,
-                     AggregationClass *agg,
-                     int64_t time_delta,
-                     bool rev) {
+                     RangeArgs *args,
+                     bool reverse) {
     Sample sample;
-    SeriesIterator iterator;
-    SeriesQuery(source, &iterator, startTimestamp, endTimestamp, rev, agg, time_delta);
+    AbstractIterator *iterator = SeriesQuery(source, args, reverse);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -405,10 +408,10 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
         SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
     }
-    SeriesIteratorClose(&iterator);
+    iterator->Close(iterator);
     return 1;
 }
 
@@ -710,16 +713,13 @@ int SeriesCalcRange(Series *series,
     AggregationClass *aggObject = rule->aggClass;
 
     Sample sample = { 0 };
-    SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts, false, NULL, 0) != TSDB_OK) {
-        return TSDB_ERROR;
-    }
+    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
 
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+    while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
     }
-    SeriesIteratorClose(&iterator);
+    SeriesIteratorClose(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
@@ -748,18 +748,35 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, 0, series->lastTimestamp, FALSE, NULL, 0) == TSDB_ERROR) {
-        return 0;
-    }
-    ChunkResult result = SeriesIteratorGetNext(&iterator, &sample);
+    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false);
+
+    ChunkResult result = SeriesIteratorGetNext(iterator, &sample);
 
     while (result == CR_OK && sample.timestamp < minTimestamp) {
-        result = SeriesIteratorGetNext(&iterator, &sample);
+        result = SeriesIteratorGetNext(iterator, &sample);
         ++i;
     }
 
     *skipped = i;
-    SeriesIteratorClose(&iterator);
+    SeriesIteratorClose(iterator);
     return sample.timestamp;
+}
+
+AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
+    AbstractIterator *chain =
+        SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
+
+    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
+        chain = (AbstractIterator *)SeriesFilterIterator_New(
+            chain, args->filterByValueArgs, args->filterByTSArgs);
+    }
+
+    if (args->aggregationArgs.aggregationClass != NULL) {
+        chain = (AbstractIterator *)AggregationIterator_New(chain,
+                                                            args->aggregationArgs.aggregationClass,
+                                                            args->aggregationArgs.timeDelta,
+                                                            reverse);
+    }
+
+    return chain;
 }
