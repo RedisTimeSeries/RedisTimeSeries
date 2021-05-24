@@ -2,7 +2,7 @@ import os
 
 from RLTest import Env
 from create_test_rdb_file import load_into_redis
-
+from test_helper_classes import _get_ts_info
 
 def normalize_info(data):
     info = {}
@@ -55,3 +55,19 @@ def testRDBCompatibility():
         for key in OLD_KEYS:
             assert r.execute_command('ts.range', key, "-", "+") == TSRANGE_RESULTS[key]
             assert normalize_info(r.execute_command('ts.info', key)) == TSINFO_RESULTS[key]
+
+def test_533_dump_rules():
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'ts1')
+        r.execute_command('TS.CREATE', 'ts2')
+        r.execute_command('TS.CREATERULE', 'ts1', 'ts2', 'AGGREGATION', 'avg', 60000)
+
+        assert _get_ts_info(r, 'ts2').sourceKey == b'ts1'
+        assert len(_get_ts_info(r, 'ts1').rules) == 1
+
+        data = r.execute_command('DUMP', 'ts1')
+        r.execute_command('DEL', 'ts1')
+        r.execute_command('restore', 'ts1', 0, data)
+
+        assert len(_get_ts_info(r, 'ts1').rules) == 1
+        assert _get_ts_info(r, 'ts2').sourceKey == b'ts1'

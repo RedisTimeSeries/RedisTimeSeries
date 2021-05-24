@@ -206,6 +206,34 @@ void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
     renameFromKey = key;
 }
 
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
+    Series *series;
+    RedisModuleKey *key = NULL;
+    SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ);
+
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        RedisModuleKey *destKey = NULL;
+        Series *destSeries;
+        const int status =
+            SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+        if (status != TRUE) {
+            continue;
+        }
+
+        RedisModule_RetainString(ctx, keyname);
+        destSeries->srcKey = keyname;
+        if (destKey) {
+            RedisModule_CloseKey(destKey);
+        }
+        rule = rule->nextRule;
+    }
+
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+}
+
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     // Try to open the series
     Series *series;
@@ -628,7 +656,6 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
-    ;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;

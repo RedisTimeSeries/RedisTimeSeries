@@ -908,6 +908,10 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         CleanLastDeletedSeries(key);
     }
 
+    if (strcasecmp(event, "restore") == 0) {
+        RestoreKey(ctx, key);
+    }
+
     if (strcasecmp(event, "rename_from") == 0) {
         RenameSeriesFrom(ctx, key);
     }
