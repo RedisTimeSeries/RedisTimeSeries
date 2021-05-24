@@ -36,6 +36,7 @@ def test_mrange_expire_issue549():
 def test_range_by_labels():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
 
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -63,7 +64,7 @@ def test_range_by_labels():
                            [b'tester2', [], build_expected(15, 5)],
                            [b'tester3', [], build_expected(25, 5)],
                            ]
-        assert sorted(expected_result) == sorted(actual_result)
+        env.assertEqual(sorted(expected_result), sorted(actual_result))
         assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                         'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
                                                         'class!=middle'), key=lambda x:x[0])
@@ -112,6 +113,40 @@ def test_range_by_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
 
+def test_mrange_filterby():
+    start_ts = 1511885909
+    samples_count = 50
+    env = Env()
+
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+        assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+        assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+        _insert_data(r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(r, 'tester3', start_ts, samples_count, 25)
+
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", 1 ,'FILTER', 'name=bob')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", "a" ,'FILTER', 'name=bob')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 1, "a" ,'FILTER', 'name=bob')
+
+        expected_result = [[b'tester1', [], []],
+                           [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(samples_count)]],
+                           [b'tester3', [], []],
+                           ]
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        env.assertEqual(sorted(actual_result), sorted(expected_result))
+
+        expected_result = [[b'tester1', [], []],
+                           [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(9, 12)]],
+                           [b'tester3', [], []],
+                           ]
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        env.assertEqual(sorted(actual_result), sorted(expected_result))
 
 def test_mrange_withlabels():
     start_ts = 1511885909

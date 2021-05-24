@@ -226,26 +226,18 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     }
     RedisModule_DictIteratorStop(iter);
 
+    // todo: this is duplicated in resultset.c
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset,
-                           args->startTimestamp,
-                           args->endTimestamp,
-                           args->aggregationArgs.aggregationClass,
-                           args->aggregationArgs.timeDelta,
-                           args->count,
-                           args->reverse,
-                           args->gropuByReducerOp);
+    ResultSet_ApplyReducer(resultset, &args->rangeArgs, args->gropuByReducerOp, args->reverse);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
-    replyResultSet(ctx,
-                   resultset,
-                   args->withLabels,
-                   args->startTimestamp,
-                   args->endTimestamp,
-                   NULL,
-                   0,
-                   args->count,
-                   args->reverse);
+    RangeArgs minimizedArgs = args->rangeArgs;
+    minimizedArgs.aggregationArgs.aggregationClass = NULL;
+    minimizedArgs.aggregationArgs.timeDelta = 0;
+    minimizedArgs.filterByTSArgs.hasValue = false;
+    minimizedArgs.filterByValueArgs.hasValue = false;
+
+    replyResultSet(ctx, resultset, args->withLabels, &minimizedArgs, args->reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
@@ -280,15 +272,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
-        ReplySeriesArrayPos(ctx,
-                            series,
-                            args->withLabels,
-                            args->startTimestamp,
-                            args->endTimestamp,
-                            args->aggregationArgs.aggregationClass,
-                            args->aggregationArgs.timeDelta,
-                            args->count,
-                            args->reverse);
+        ReplySeriesArrayPos(ctx, series, args->withLabels, &args->rangeArgs, args->reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -353,24 +337,13 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    api_timestamp_t start_ts, end_ts;
-    api_timestamp_t time_delta = 0;
-    if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+    RangeArgs rangeArgs = { 0 };
+    if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    long long count = -1;
-    if (parseCountArgument(ctx, argv, argc, &count) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
-    }
-
-    AggregationClass *aggObject = NULL;
-    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
-    if (aggregationResult == TSDB_ERROR) {
-        return REDISMODULE_ERR;
-    }
-
-    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+    ReplySeriesRange(ctx, series, &rangeArgs, rev);
 
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
@@ -408,6 +381,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
         double aggVal;
         if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
             SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
@@ -520,6 +495,11 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         add(ctx, keyName, timestampStr, valueStr, NULL, -1);
     }
     RedisModule_ReplicateVerbatim(ctx);
+
+    for (int i = 1; i < argc; i += 3) {
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
+    }
+
     return REDISMODULE_OK;
 }
 
@@ -536,6 +516,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
+
     return result;
 }
 
@@ -586,6 +569,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_Log(ctx, "verbose", "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.create", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -633,6 +619,9 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.alter", keyName);
+
     return REDISMODULE_OK;
 }
 
@@ -676,6 +665,12 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.deleterule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -742,8 +737,15 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_RetainString(ctx, destKeyName);
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
+
     RedisModule_CloseKey(srcKey);
     RedisModule_CloseKey(destKey);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:src", srcKeyName);
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_MODULE, "ts.createrule:dest", destKeyName);
+
     return REDISMODULE_OK;
 }
 
@@ -797,7 +799,8 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     double result = series->lastValue;
     RMUtil_StringToLower(argv[0]);
-    if (RMUtil_StringEqualsC(argv[0], "ts.incrby")) {
+    bool isIncr = RMUtil_StringEqualsC(argv[0], "ts.incrby");
+    if (isIncr) {
         result += incrby;
     } else {
         result -= incrby;
@@ -806,6 +809,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
+
+    RedisModule_NotifyKeyspaceEvent(
+        ctx, REDISMODULE_NOTIFY_GENERIC, isIncr ? "ts.incrby" : "ts.decrby", argv[1]);
+
     return rv;
 }
 
@@ -919,6 +926,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
     }
     RedisModule_CloseKey(key);
+
     return REDISMODULE_OK;
 }
 

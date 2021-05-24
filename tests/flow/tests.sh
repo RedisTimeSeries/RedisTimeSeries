@@ -6,9 +6,9 @@
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ROOT=$(cd $HERE/../.. && pwd)
 READIES=$ROOT/deps/readies 
-. $READIES/shibumi/functions
+. $READIES/shibumi/defs
 
-VALGRIND_REDIS_VER=6.2.1
+VALGRIND_REDIS_VER=6.2
 
 #----------------------------------------------------------------------------------------------
 
@@ -159,7 +159,7 @@ if [[ -n $GEARS && $GEARS != 0 ]]; then
 	else
 		GEARS_MODULE="$ROOT/bin/$platform/RedisGears/redisgears.so"
 		if [[ ! -f $GEARS_MODULE || $GEARS == get ]]; then
-			BRANCH=$GEARS_BRANCH $OP $ROOT/sbin/getgears
+			runn BRANCH=$GEARS_BRANCH $OP $ROOT/sbin/getgears
 		fi
 		GEARS_ARGS="--module $GEARS_MODULE"
 	fi

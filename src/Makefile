@@ -47,6 +47,10 @@ make test          # run tests
   VALGRIND|VG=1    # run specified tests with Valgrind
 
 make pack          # build packages (ramp & dependencies)
+
+make benchmarks        # run all benchmarks
+  BENCHMARK=filename   # run benchmark specified by 'filename'
+  BENCH_ARGS="..."     # redisbench_admin  extra arguments
 endef
 
 #----------------------------------------------------------------------------------------------  
@@ -135,6 +139,7 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
+	filter_iterator.c \
 	fpconv.c \
 	gears_integration.c \
 	gears_commands.c
@@ -260,11 +265,15 @@ ifneq ($(REMOTE),)
 	BENCHMARK_ARGS = redisbench-admin run-remote 
 endif
 
-BENCHMARK_ARGS += --module_path $(realpath $(TARGET))
+BENCHMARK_ARGS += --module_path $(realpath $(TARGET)) \
+				  --required-module timeseries
 ifneq ($(BENCHMARK),)
 	BENCHMARK_ARGS += --test $(BENCHMARK)
 endif
 
+ifneq ($(BENCH_ARGS),)
+	BENCHMARK_ARGS += $(BENCH_ARGS)
+endif
 
 benchmark: $(TARGET)
 	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src

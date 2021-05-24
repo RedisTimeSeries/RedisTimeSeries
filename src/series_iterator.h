@@ -3,6 +3,8 @@
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
+#include "abstract_iterator.h"
+#include "query_language.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H
@@ -10,6 +12,7 @@
 
 typedef struct SeriesIterator
 {
+    AbstractIterator base;
     Series *series;
     RedisModuleDictIter *dictIter;
     Chunk_t *currentChunk;
@@ -19,24 +22,15 @@ typedef struct SeriesIterator
     api_timestamp_t minTimestamp;
     bool reverse;
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
-    AggregationClass *aggregation;
-    void *aggregationContext;
-    timestamp_t aggregationLastTimestamp;
-    int64_t aggregationTimeDelta;
-    bool aggregationIsFirstSample;
-    bool aggregationIsFinalized;
 } SeriesIterator;
 
-int SeriesQuery(Series *series,
-                SeriesIterator *iter,
-                timestamp_t start_ts,
-                timestamp_t end_ts,
-                bool rev,
-                AggregationClass *aggregation,
-                int64_t time_delta);
+struct AbstractIterator *SeriesIterator_New(Series *series,
+                                            timestamp_t start_ts,
+                                            timestamp_t end_ts,
+                                            bool rev);
 
-ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
+ChunkResult SeriesIteratorGetNext(AbstractIterator *iterator, Sample *currentSample);
 
-void SeriesIteratorClose(SeriesIterator *iterator);
+void SeriesIteratorClose(AbstractIterator *iterator);
 
 #endif // REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H
