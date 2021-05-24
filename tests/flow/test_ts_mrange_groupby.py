@@ -1,6 +1,9 @@
+from collections import defaultdict
+
 from utils import Env
 import pytest
 import redis
+import create_test_rdb_file
 
 def test_groupby_reduce_errors():
     env = Env()
@@ -118,3 +121,44 @@ def test_groupby_reduce_multiple_groups():
         env.assertEqual(serie2_labels[1][1], b'max')
         env.assertEqual(serie2_labels[2][0], b'__source__')
         env.assertEqual(serie2_labels[2][1], b's3')
+
+def truncate_month(date):
+    return "-".join(date.split("-")[0:2])
+
+def test_filterby():
+    env = Env()
+    high_temps = defaultdict(lambda : defaultdict(lambda: 0))
+    specific_days = defaultdict(lambda : defaultdict(lambda: 0))
+    days = [1335830400000, 1338508800000]
+    for row in create_test_rdb_file.read_from_disk():
+        timestamp = create_test_rdb_file.parse_timestamp(row[0])
+        country = row[create_test_rdb_file.Country].replace('(', '[').replace(')', ']')
+        if timestamp in days:
+            specific_days[country][timestamp] += 1
+
+        if row[1] and float(row[1]) >= 30:
+            if timestamp > 0:
+                high_temps[country][timestamp] += 1
+
+    with env.getClusterConnectionIfNeeded() as r:
+        create_test_rdb_file.load_into_redis(r)
+
+        def assert_results(results, expected_results):
+            for row in results:
+                country = row[1][0][1].decode()
+                points = dict([(point[0], int(point[1])) for point in row[2]])
+                for k in points:
+                    env.assertEqual(points[k], expected_results[country][k], message="timestamp {} not equal".format(k))
+                env.assertEqual(points, expected_results[country], message="country {} not eq".format(country))
+
+        results = r.execute_command("TS.MRANGE", "-", "+",
+                          "withlabels", "FILTER_BY_VALUE", 30, 100,
+                          "AGGREGATION", "count", 3600000,
+                          "filter", "metric=temperature", "groupby", "country", "reduce", "sum")
+        assert_results(results, high_temps)
+
+        results = r.execute_command("TS.MRANGE", "-", "+",
+                                    "withlabels", "FILTER_BY_TS", 1335830400000, 1338508800000,
+                                    "AGGREGATION", "count", 3600000,
+                                    "filter", "metric=temperature", "groupby", "country", "reduce", "sum")
+        assert_results(results, specific_days)

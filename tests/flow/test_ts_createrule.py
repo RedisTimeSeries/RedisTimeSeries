@@ -283,7 +283,8 @@ def test_downsampling_rules(self):
 
 
 def test_backfill_downsampling(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
         key = 'tester{a}'
         type_list = ['', 'uncompressed']
         for chunk_type in type_list:
@@ -314,8 +315,7 @@ def test_backfill_downsampling(self):
                 r.execute_command('TS.ADD', key, 1075, 50) == 1075
                 expected_result = r.execute_command('TS.RANGE', key, 10, 1070, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1070)
-                assert expected_result == actual_result
-
+                env.assertEqual(expected_result, actual_result)
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
 

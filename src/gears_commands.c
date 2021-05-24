@@ -54,39 +54,23 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         if (data->args.groupByLabel) {
             ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
         } else {
-            ReplySeriesArrayPos(rctx,
-                                s,
-                                data->args.withLabels,
-                                data->args.startTimestamp,
-                                data->args.endTimestamp,
-                                data->args.aggregationArgs.aggregationClass,
-                                data->args.aggregationArgs.timeDelta,
-                                data->args.count,
-                                data->args.reverse);
+            ReplySeriesArrayPos(
+                rctx, s, data->args.withLabels, &data->args.rangeArgs, data->args.reverse);
         }
     }
 
     if (data->args.groupByLabel) {
         // Apply the reducer
-        ResultSet_ApplyReducer(resultset,
-                               data->args.startTimestamp,
-                               data->args.endTimestamp,
-                               data->args.aggregationArgs.aggregationClass,
-                               data->args.aggregationArgs.timeDelta,
-                               -1,
-                               false,
-                               data->args.gropuByReducerOp);
+        RangeArgs args = data->args.rangeArgs;
+        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp, data->args.reverse);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
-        replyResultSet(rctx,
-                       resultset,
-                       data->args.withLabels,
-                       data->args.startTimestamp,
-                       data->args.endTimestamp,
-                       NULL,
-                       0,
-                       data->args.count,
-                       data->args.reverse);
+        RangeArgs minimizedArgs = data->args.rangeArgs;
+        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByValueArgs.hasValue = false;
+
+        replyResultSet(rctx, resultset, data->args.withLabels, &minimizedArgs, data->args.reverse);
 
         ResultSet_Free(resultset);
     }
@@ -168,8 +152,8 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->count = args.queryPredicates->count;
-    queryArg->startTimestamp = args.startTimestamp;
-    queryArg->endTimestamp = args.endTimestamp;
+    queryArg->startTimestamp = args.rangeArgs.startTimestamp;
+    queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     args.queryPredicates->ref++;
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;

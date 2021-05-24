@@ -416,6 +416,7 @@ int SeriesRecord_SendReply(Record *record, RedisModuleCtx *rctx) {
 Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     CreateCtx createArgs = { 0 };
     createArgs.isTemporary = true;
+    createArgs.skipChunkCreation = true;
     Series *s = NewSeries(RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
     s->labelsCount = record->labelsCount;
     s->labels = calloc(s->labelsCount, sizeof(Label));
@@ -424,6 +425,7 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
         s->labels[i].value = RedisModule_CreateStringFromString(NULL, record->labels[i].value);
     }
     s->funcs = record->funcs;
+
     for (int chunk_index = 0; chunk_index < record->chunkCount; chunk_index++) {
         dictOperator(s->chunks,
                      s->funcs->CloneChunk(record->chunks[chunk_index]),

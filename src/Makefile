@@ -139,6 +139,7 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
+	filter_iterator.c \
 	fpconv.c \
 	gears_integration.c \
 	gears_commands.c
