@@ -218,7 +218,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         RedisModuleKey *destKey = NULL;
         Series *destSeries;
         const int status =
-                SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+            SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
         if (status == TRUE) {
             RedisModule_RetainString(ctx, keyname);
             destSeries->srcKey = keyname;
