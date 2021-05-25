@@ -222,16 +222,12 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         if (status == TRUE) {
             RedisModule_RetainString(ctx, keyname);
             destSeries->srcKey = keyname;
-            if (destKey) {
-                RedisModule_CloseKey(destKey);
-            }
+            RedisModule_CloseKey(destKey);
         }
         rule = rule->nextRule;
     }
 
-    if (key) {
-        RedisModule_CloseKey(key);
-    }
+    RedisModule_CloseKey(key);
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
