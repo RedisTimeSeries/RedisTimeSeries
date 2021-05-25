@@ -228,7 +228,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         if (destKey) {
             RedisModule_CloseKey(destKey);
         }
-        next:
+next:
         rule = rule->nextRule;
     }
 
