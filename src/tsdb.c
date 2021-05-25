@@ -220,7 +220,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         const int status =
             SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
         if (status != TRUE) {
-            continue;
+            goto next;
         }
 
         RedisModule_RetainString(ctx, keyname);
@@ -228,6 +228,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         if (destKey) {
             RedisModule_CloseKey(destKey);
         }
+        next:
         rule = rule->nextRule;
     }
 
