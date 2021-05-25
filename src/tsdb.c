@@ -209,7 +209,9 @@ void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
-    SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ);
+    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TRUE) {
+        return;
+    }
 
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
