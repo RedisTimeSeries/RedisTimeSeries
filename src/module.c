@@ -917,12 +917,12 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    api_timestamp_t start_ts, end_ts;
-    if (parseRangeArguments(ctx, series, 2, argv, &start_ts, &end_ts) != REDISMODULE_OK) {
+    RangeArgs args = {0};
+    if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    SeriesDelRange(series, start_ts, end_ts);
+    SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
