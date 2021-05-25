@@ -917,7 +917,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    RangeArgs args = {0};
+    RangeArgs args = { 0 };
     if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
