@@ -50,6 +50,7 @@ void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleString *key);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
