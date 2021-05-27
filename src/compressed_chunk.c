@@ -187,6 +187,30 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     return size;
 }
 
+size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
+    CompressedChunk *oldChunk = (CompressedChunk *)chunk;
+    size_t newSize = oldChunk->size; // mem size
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    size_t i = 0;
+    size_t deleted_count = 0;
+    Sample iterSample;
+    int numSamples = oldChunk->count; // sample size
+    for (; i < numSamples; ++i) {
+        Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        if (iterSample.timestamp >= startTs && iterSample.timestamp <= endTs) {
+            // in delete range, skip adding to the new chunk
+            deleted_count++;
+            continue;
+        }
+        ensureAddSample(newChunk, &iterSample);
+    }
+    swapChunks(newChunk, oldChunk);
+    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunk(newChunk);
+    return deleted_count;
+}
+
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
     uint64_t numSamples = compressedChunk->count;
