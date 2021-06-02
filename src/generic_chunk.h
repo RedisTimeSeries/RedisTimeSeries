@@ -60,6 +60,7 @@ typedef struct ChunkFuncs
     Chunk_t *(*CloneChunk)(Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
+    size_t (*DelRange)(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 

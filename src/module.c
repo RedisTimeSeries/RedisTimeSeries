@@ -999,9 +999,40 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc != 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    Series *series;
+    RedisModuleKey *key;
+    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    if (!status) {
+        return REDISMODULE_ERR;
+    }
+
+    RangeArgs args = { 0 };
+    if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
+
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_CloseKey(key);
+    return REDISMODULE_OK;
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") == 0) {
         CleanLastDeletedSeries(key);
+    }
+
+    if (strcasecmp(event, "restore") == 0) {
+        RestoreKey(ctx, key);
     }
 
     if (strcasecmp(event, "rename_from") == 0) {
@@ -1109,6 +1140,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
     RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
+    RMUtil_RegisterWriteCmd(ctx, "ts.del", TSDB_delete);
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR)

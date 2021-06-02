@@ -130,3 +130,21 @@ def test_empty_series():
         for agg in agg_list:
             assert [] == r.execute_command('TS.range', 'tester', 0, -1, 'aggregation', agg, 1000)
         assert r.execute_command('DUMP', 'tester')
+
+def test_533_dump_rules():
+    with Env().getClusterConnectionIfNeeded() as r:
+        key1 = 'ts1{a}'
+        key2 = 'ts2{a}'
+        r.execute_command('TS.CREATE', key1)
+        r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
+
+        assert _get_ts_info(r, key2).sourceKey.decode() == key1
+        assert len(_get_ts_info(r, key1).rules) == 1
+
+        data = r.execute_command('DUMP', key1)
+        r.execute_command('DEL', key1)
+        r.execute_command('restore', key1, 0, data)
+
+        assert len(_get_ts_info(r, key1).rules) == 1
+        assert _get_ts_info(r, key2).sourceKey.decode() == key1

@@ -50,6 +50,7 @@ void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleString *key);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
@@ -93,6 +94,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 size_t SeriesGetNumSamples(const Series *series);
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
+int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts);
 
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,

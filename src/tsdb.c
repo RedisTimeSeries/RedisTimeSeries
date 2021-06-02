@@ -108,13 +108,21 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
-void SeriesTrim(Series *series) {
-    if (series->retentionTime == 0) {
+void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
+    // if not causedByRetention, caused by ts.del
+    if (causedByRetention && series->retentionTime == 0) {
         return;
     }
-
-    // start iterator from smallest key
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    RedisModuleDictIter *iter;
+    if (causedByRetention) {
+        // start iterator from smallest key
+        iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    } else {
+        // start iterator from smallest key compare to startTs
+        timestamp_t rax_key;
+        seriesEncodeTimestamp(&rax_key, startTs);
+        iter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    }
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
@@ -123,7 +131,13 @@ void SeriesTrim(Series *series) {
                                    : 0;
 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
+        bool retentionCondition =
+            causedByRetention && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
+        bool ts_delCondition = !causedByRetention &&
+                               (series->funcs->GetFirstTimestamp(currentChunk) >= startTs &&
+                                series->funcs->GetLastTimestamp(currentChunk) <= endTs) &&
+                               currentChunk != series->lastChunk;
+        if (retentionCondition || ts_delCondition) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict,
             // go to first element that is bigger than current key
@@ -132,6 +146,9 @@ void SeriesTrim(Series *series) {
             series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
+            if (!causedByRetention) {
+                series->totalSamples -= series->funcs->DelRange(currentChunk, startTs, endTs);
+            }
             break;
         }
     }
@@ -204,6 +221,30 @@ void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
     // keep in global variable for RenameSeriesTo() and increase recount
     RedisModule_RetainString(NULL, key);
     renameFromKey = key;
+}
+
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
+    Series *series;
+    RedisModuleKey *key = NULL;
+    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TRUE) {
+        return;
+    }
+
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        RedisModuleKey *destKey = NULL;
+        Series *destSeries;
+        const int status =
+            SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+        if (status == TRUE) {
+            RedisModule_RetainString(ctx, keyname);
+            destSeries->srcKey = keyname;
+            RedisModule_CloseKey(destKey);
+        }
+        rule = rule->nextRule;
+    }
+
+    RedisModule_CloseKey(key);
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
@@ -534,7 +575,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        SeriesTrim(series);
+        SeriesTrim(series, true, 0, 0);
 
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
@@ -544,6 +585,11 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     series->lastTimestamp = timestamp;
     series->lastValue = value;
     series->totalSamples++;
+    return TSDB_OK;
+}
+
+int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
+    SeriesTrim(series, false, start_ts, end_ts);
     return TSDB_OK;
 }
 
@@ -628,7 +674,6 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
-    ;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;
