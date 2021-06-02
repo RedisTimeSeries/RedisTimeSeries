@@ -892,11 +892,17 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         // Looking for a sample with timestamp bigger than given timestamp
         if (timestamp < series->lastTimestamp) {
-            SeriesIterator iterator;
             // read next event right after `timestamp`
-            if (SeriesQuery(
-                    series, &iterator, timestamp + 1, series->lastTimestamp, false, NULL, 0) !=
-                TSDB_OK) {
+            RangeArgs args = { 
+                .startTimestamp = timestamp + 1,
+                .endTimestamp = series->lastTimestamp,                             
+                .count = -1,               
+                .aggregationArgs = NULL,
+                .filterByValueArgs = NULL,
+                .filterByTSArgs = NULL
+            };
+            SeriesIterator* iterator = SeriesQuery(series, &args, false);
+            if( iterator == NULL) {
                 return RedisModule_ReplyWithArray(ctx, 0);
             }
             Sample sample;
