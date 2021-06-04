@@ -1,4 +1,4 @@
-# BUILD redisfab/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
+# BUILD redislabs/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
 
 ARG REDIS_VER=6.0.9
 
