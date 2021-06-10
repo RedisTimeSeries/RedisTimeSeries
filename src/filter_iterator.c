@@ -125,8 +125,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     void *aggregationContext = self->aggregationContext;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     while (result == CR_OK) {
-        if ((is_reserved == FALSE &&
-             internalSample.timestamp >= contextScope) ||
+        if ((is_reserved == FALSE && internalSample.timestamp >= contextScope) ||
             (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (self->aggregationIsFirstSample == FALSE) {
