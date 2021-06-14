@@ -157,13 +157,15 @@ static void upsertChunk(Chunk *chunk, size_t idx, u_int64_t ts, double value) {
         chunk->samples_ts = realloc(chunk->samples_ts, new_ts_size);
         chunk->samples_values = realloc(chunk->samples_values, new_values_size);
     }
-    for (size_t i = chunk->num_samples; i > idx; i--) {
-        chunk->samples_ts[i] = chunk->samples_ts[i - 1];
+    if (idx < chunk->num_samples) { // sample is not last
+        memmove(&chunk->samples_ts[idx + 1],
+                &chunk->samples_ts[idx],
+                (chunk->num_samples - idx) * sizeof(u_int64_t));
+        memmove(&chunk->samples_values[idx + 1],
+                &chunk->samples_values[idx],
+                (chunk->num_samples - idx) * sizeof(double));
     }
     chunk->samples_ts[idx] = ts;
-    for (size_t i = chunk->num_samples; i > idx; i--) {
-        chunk->samples_values[i] = chunk->samples_values[i - 1];
-    }
     chunk->samples_values[idx] = value;
     chunk->num_samples++;
 }
