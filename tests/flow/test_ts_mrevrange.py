@@ -1,11 +1,11 @@
-from RLTest import Env
+from utils import Env
 from test_helper_classes import _insert_data
 
 
 def test_mrevrange():
     start_ts = 1511885909
     samples_count = 50
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
@@ -20,6 +20,7 @@ def test_mrevrange():
 
         actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'COUNT', '5', 'FILTER',
                                           'generation=x')
+        actual_result.sort(key=lambda x:x[0])
         assert actual_result == [[b'tester1', [],
                                   [[1511885958, b'5'], [1511885957, b'5'], [1511885956, b'5'], [1511885955, b'5'],
                                    [1511885954, b'5']]],

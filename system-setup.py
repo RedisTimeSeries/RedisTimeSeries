@@ -20,29 +20,23 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("setuptools --upgrade")
 
         self.install("git jq curl")
-
-    def debian_compat(self):
         self.run("%s/bin/getgcc" % READIES)
 
+    def debian_compat(self):
+        pass
+
     def redhat_compat(self):
-        self.group_install("'Development Tools'")
         self.install("redhat-lsb-core")
-        if self.dist == "amzn":
-            self.run("amazon-linux-extras install epel")
-            self.install("python3-devel")
-        elif self.dist == "centos" and self.ver == "8":
-            self.install("epel-release dnf-plugins-core")
-            self.run("yum config-manager --set-enabled powertools")
-        else:
-            self.install("epel-release")
-            self.install("python3-devel libaec-devel")
+        self.run("%s/bin/getepel" % READIES)
 
     def arch_compat(self):
         pass
 
     def fedora(self):
-        self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
+
+    def macos(self):
+        self.install_gnu_utils()
 
     def common_last(self):
         if self.dist == "centos" and self.ver == "8":
@@ -51,7 +45,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov-git", aur=True)
         else:
             self.install("lcov")
-        self.run("python3 %s/bin/getrmpytools" % READIES)
+        self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------

@@ -8,102 +8,104 @@ from RLTest import Env
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
     _get_ts_info, _insert_agg_data
 
+key_name = 'tester{abc}'
+agg_key_name = '{}_agg_max_10'.format(key_name)
 
 def test_compaction_rules(self):
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name, 'CHUNK_SIZE', '360')
+        assert r.execute_command('TS.CREATE', agg_key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', -10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', -10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 0)
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 0)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 10)
 
         start_ts = 1488823384
         samples_count = 1500
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
+        _insert_data(r, key_name, start_ts, samples_count, 5)
         last_ts = start_ts + samples_count + 10
-        r.execute_command('TS.ADD', 'tester', last_ts, 5)
+        r.execute_command('TS.ADD', key_name, last_ts, 5)
 
-        actual_result = r.execute_command('TS.RANGE', 'tester_agg_max_10', start_ts, start_ts + samples_count)
+        actual_result = r.execute_command('TS.RANGE', agg_key_name, start_ts, start_ts + samples_count)
 
         assert len(actual_result) == samples_count / 10
 
-        info = _get_ts_info(r, 'tester')
-        assert info.rules == [[b'tester_agg_max_10', 10, b'AVG']]
+        info = _get_ts_info(r, key_name)
+        assert info.rules == [[agg_key_name.encode('ascii'), 10, b'AVG']]
 
 
 def test_create_compaction_rule_with_wrong_aggregation():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
+        assert r.execute_command('TS.CREATE', agg_key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAXX', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAXX', 10)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MA', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MA', 10)
 
 
 def test_create_compaction_rule_without_dest_series():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_twice():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_override_dest():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', 'tester2')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester2', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', 'tester2', agg_key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_from_target():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', 'tester2')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'MAX', 10)
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester_agg_max_10', 'tester2', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', agg_key_name, 'tester2', 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_own():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester', 'tester', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', key_name, key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_and_del_dest_series():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'AVG', 10)
-        assert r.delete('tester_agg_max_10')
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name)
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'AVG', 10)
+        assert r.delete(agg_key_name)
 
         start_ts = 1488823384
         samples_count = 1500
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
+        _insert_data(r, key_name, start_ts, samples_count, 5)
 
 
 def test_std_var_func():
-    with Env().getConnection() as r:
-        raw_key = 'raw'
-        std_key = 'std_key'
-        var_key = 'var_key'
+    with Env().getClusterConnectionIfNeeded() as r:
+        raw_key = 'raw{abc}'
+        std_key = 'std_key{abc}'
+        var_key = 'var_key{abc}'
 
         random_numbers = 100
         random.seed(0)
@@ -126,27 +128,27 @@ def test_std_var_func():
 
 
 def test_delete_key():
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', '360')
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 10)
-        assert r.delete('tester_agg_max_10')
-        assert _get_ts_info(r, 'tester').rules == []
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name, 'CHUNK_SIZE', '360')
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 10)
+        assert r.delete(agg_key_name)
+        assert _get_ts_info(r, key_name).rules == []
 
-        assert r.execute_command('TS.CREATE', 'tester_agg_max_10')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 11)
-        assert r.delete('tester')
-        assert _get_ts_info(r, 'tester_agg_max_10').sourceKey == None
+        assert r.execute_command('TS.CREATE', agg_key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 11)
+        assert r.delete(key_name)
+        assert _get_ts_info(r, agg_key_name).sourceKey == None
 
-        assert r.execute_command('TS.CREATE', 'tester')
-        assert r.execute_command('TS.CREATERULE', 'tester', 'tester_agg_max_10', 'AGGREGATION', 'avg', 12)
-        assert _get_ts_info(r, 'tester').rules == [[b'tester_agg_max_10', 12, b'AVG']]
+        assert r.execute_command('TS.CREATE', key_name)
+        assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 12)
+        assert _get_ts_info(r, key_name).rules == [[agg_key_name.encode('ascii'), 12, b'AVG']]
 
 
 def test_downsampling_current():
-    with Env().getConnection() as r:
-        key = 'src'
-        agg_key = 'dest'
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'src{a}'
+        agg_key = 'dest{a}'
         type_list = ['', 'uncompressed']
         agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                     'var.s']  # more
@@ -195,8 +197,8 @@ def test_downsampling_current():
 
 
 def test_downsampling_extensive():
-    with Env().getConnection() as r:
-        key = 'tester'
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'tester{abc}'
         fromTS = 10
         toTS = 10000
         type_list = ['', 'uncompressed']
@@ -240,39 +242,40 @@ def test_downsampling_rules(self):
     1000sec (series should be empty since there are not enough samples)
     Insert some data and check that the length, the values and the info of the downsample series are as expected.
     """
-    with Env().getConnection() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'tester{abc}'
+        assert r.execute_command('TS.CREATE', key)
         rules = ['avg', 'sum', 'count', 'max', 'min']
         resolutions = [1, 3, 10, 1000]
         for rule in rules:
             for resolution in resolutions:
-                assert r.execute_command('TS.CREATE', 'tester_{}_{}'.format(rule, resolution))
-                assert r.execute_command('TS.CREATERULE', 'tester', 'tester_{}_{}'.format(rule, resolution),
-                                         'AGGREGATION', rule, resolution)
+                agg_key = '{}_{}_{}'.format(key, rule, resolution)
+                assert r.execute_command('TS.CREATE', agg_key)
+                assert r.execute_command('TS.CREATERULE', key, agg_key, 'AGGREGATION', rule, resolution)
 
         start_ts = 0
         samples_count = 501
         end_ts = start_ts + samples_count
         values = list(range(samples_count))
-        _insert_data(r, 'tester', start_ts, samples_count, values)
-        r.execute_command('TS.ADD', 'tester', 3000, 7.77)
+        _insert_data(r, key, start_ts, samples_count, values)
+        r.execute_command('TS.ADD', key, 3000, 7.77)
 
         for rule in rules:
             for resolution in resolutions:
-                actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
+                actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution),
                                                   start_ts, end_ts)
                 assert len(actual_result) == math.ceil(samples_count / float(resolution))
                 expected_result = calc_rule(rule, values, resolution)
                 assert _get_series_value(actual_result) == expected_result
                 # last time stamp should be the beginning of the last bucket
-                assert _get_ts_info(r, 'tester_{}_{}'.format(rule, resolution)).last_time_stamp == \
+                assert _get_ts_info(r, '{}_{}_{}'.format(key, rule, resolution)).last_time_stamp == \
                        (samples_count - 1) - (samples_count - 1) % resolution
 
         # test for results after empty buckets
-        r.execute_command('TS.ADD', 'tester', 6000, 0)
+        r.execute_command('TS.ADD', key, 6000, 0)
         for rule in rules:
             for resolution in resolutions:
-                actual_result = r.execute_command('TS.RANGE', 'tester_{}_{}'.format(rule, resolution),
+                actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution),
                                                   3000, 6000)
                 assert len(actual_result) == 1
                 assert _get_series_value(actual_result) == [7.77] or \
@@ -280,8 +283,9 @@ def test_downsampling_rules(self):
 
 
 def test_backfill_downsampling(self):
-    with Env().getConnection() as r:
-        key = 'tester'
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        key = 'tester{a}'
         type_list = ['', 'uncompressed']
         for chunk_type in type_list:
             agg_list = ['sum', 'min', 'max', 'count', 'first', 'last']  # more
@@ -311,14 +315,14 @@ def test_backfill_downsampling(self):
                 r.execute_command('TS.ADD', key, 1075, 50) == 1075
                 expected_result = r.execute_command('TS.RANGE', key, 10, 1070, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1070)
-                assert expected_result == actual_result
-
+                env.assertEqual(expected_result, actual_result)
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
 
 
 def test_rule_timebucket_64bit(self):
-    with Env().getConnection() as r:
+    Env().skipOnCluster()
+    with Env().getClusterConnectionIfNeeded() as r:
         BELOW_32BIT_LIMIT = 2147483647
         ABOVE_32BIT_LIMIT = 2147483648
         r.execute_command("ts.create", 'test_key', 'RETENTION', ABOVE_32BIT_LIMIT)

@@ -5,7 +5,7 @@ from RLTest import Env
 
 def test_madd():
     sample_len = 1024
-
+    Env().skipOnCluster()
     with Env().getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
@@ -39,7 +39,7 @@ def test_ooo_madd():
     sample_len = 100
     start_ts = 1600204334000
 
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key1')
         last_sample = None
         samples = []
@@ -58,6 +58,7 @@ def test_ooo_madd():
 
 
 def test_partial_madd():
+    Env().skipOnCluster()
     with Env().getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
@@ -74,3 +75,26 @@ def test_partial_madd():
         assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
         assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
         assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+
+
+def test_extensive_ts_madd():
+    Env().skipOnCluster()
+    with Env(decodeResponses=True).getConnection() as r:
+        r.execute_command("ts.create", 'test_key1')
+        r.execute_command("ts.create", 'test_key2')
+        pos = 1
+        lines = []
+        float_lines = []
+        with open("lemire_canada.txt","r") as file:
+            lines = file.readlines()
+        for line in lines:
+            float_v = float(line.strip())
+            res = r.execute_command("ts.madd", 'test_key1', pos, float_v, 'test_key2', pos, float_v)
+            assert res == [pos,pos]
+            pos=pos+1
+            float_lines.append(float_v)
+        returned_floats = r.execute_command('ts.range', 'test_key1', "-", "+")
+        assert len(returned_floats) == len(float_lines)
+        for pos,datapoint in enumerate(returned_floats,start=1):
+            assert pos == datapoint[0]
+            assert float_lines[pos-1] == float(datapoint[1])

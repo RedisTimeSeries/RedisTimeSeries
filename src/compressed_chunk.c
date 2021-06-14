@@ -25,6 +25,9 @@ Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
+#ifdef DEBUG
+    memset(chunk->data, 0, chunk->size);
+#endif
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
     return chunk;
@@ -35,6 +38,15 @@ void Compressed_FreeChunk(Chunk_t *chunk) {
     free(cmpChunk->data);
     cmpChunk->data = NULL;
     free(chunk);
+}
+
+Chunk_t *Compressed_CloneChunk(Chunk_t *chunk) {
+    CompressedChunk *oldChunk = chunk;
+    CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
+    memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
+    newChunk->data = malloc(newChunk->size);
+    memcpy(newChunk->data, oldChunk->data, oldChunk->size);
+    return newChunk;
 }
 
 static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
@@ -175,6 +187,30 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
     return size;
 }
 
+size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
+    CompressedChunk *oldChunk = (CompressedChunk *)chunk;
+    size_t newSize = oldChunk->size; // mem size
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    size_t i = 0;
+    size_t deleted_count = 0;
+    Sample iterSample;
+    int numSamples = oldChunk->count; // sample size
+    for (; i < numSamples; ++i) {
+        Compressed_ChunkIteratorGetNext(iter, &iterSample);
+        if (iterSample.timestamp >= startTs && iterSample.timestamp <= endTs) {
+            // in delete range, skip adding to the new chunk
+            deleted_count++;
+            continue;
+        }
+        ensureAddSample(newChunk, &iterSample);
+    }
+    swapChunks(newChunk, oldChunk);
+    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunk(newChunk);
+    return deleted_count;
+}
+
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
     uint64_t numSamples = compressedChunk->count;
@@ -226,8 +262,9 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
     iter->prevDelta = 0;
 
     iter->prevValue.d = compressedChunk->baseValue.d;
-    iter->prevLeading = 32;
-    iter->prevTrailing = 32;
+    iter->leading = 32;
+    iter->trailing = 32;
+    iter->blocksize = 0;
 
     return (ChunkIter_t *)iter;
 }
@@ -240,36 +277,87 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
     free(iter);
 }
 
-void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+typedef void (*SaveUnsignedFunc)(void *, uint64_t);
+typedef void (*SaveStringBufferFunc)(void *, const char *str, size_t len);
+typedef uint64_t (*ReadUnsignedFunc)(void *);
+typedef char *(*ReadStringBufferFunc)(void *, size_t *);
+
+static void Compressed_Serialize(Chunk_t *chunk,
+                                 void *ctx,
+                                 SaveUnsignedFunc saveUnsigned,
+                                 SaveStringBufferFunc saveStringBuffer) {
     CompressedChunk *compchunk = chunk;
 
-    RedisModule_SaveUnsigned(io, compchunk->size);
-    RedisModule_SaveUnsigned(io, compchunk->count);
-    RedisModule_SaveUnsigned(io, compchunk->idx);
-    RedisModule_SaveUnsigned(io, compchunk->baseValue.u);
-    RedisModule_SaveUnsigned(io, compchunk->baseTimestamp);
-    RedisModule_SaveUnsigned(io, compchunk->prevTimestamp);
-    RedisModule_SaveSigned(io, compchunk->prevTimestampDelta);
-    RedisModule_SaveUnsigned(io, compchunk->prevValue.u);
-    RedisModule_SaveUnsigned(io, compchunk->prevLeading);
-    RedisModule_SaveUnsigned(io, compchunk->prevTrailing);
-    RedisModule_SaveStringBuffer(io, (char *)compchunk->data, compchunk->size);
+    saveUnsigned(ctx, compchunk->size);
+    saveUnsigned(ctx, compchunk->count);
+    saveUnsigned(ctx, compchunk->idx);
+    saveUnsigned(ctx, compchunk->baseValue.u);
+    saveUnsigned(ctx, compchunk->baseTimestamp);
+    saveUnsigned(ctx, compchunk->prevTimestamp);
+    saveUnsigned(ctx, compchunk->prevTimestampDelta);
+    saveUnsigned(ctx, compchunk->prevValue.u);
+    saveUnsigned(ctx, compchunk->prevLeading);
+    saveUnsigned(ctx, compchunk->prevTrailing);
+    saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
+}
+
+static void Compressed_Deserialize(Chunk_t **chunk,
+                                   void *ctx,
+                                   ReadUnsignedFunc readUnsigned,
+                                   ReadStringBufferFunc readStringBuffer) {
+    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+
+    compchunk->size = readUnsigned(ctx);
+    compchunk->count = readUnsigned(ctx);
+    compchunk->idx = readUnsigned(ctx);
+    compchunk->baseValue.u = readUnsigned(ctx);
+    compchunk->baseTimestamp = readUnsigned(ctx);
+    compchunk->prevTimestamp = readUnsigned(ctx);
+    compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx);
+    compchunk->prevValue.u = readUnsigned(ctx);
+    compchunk->prevLeading = readUnsigned(ctx);
+    compchunk->prevTrailing = readUnsigned(ctx);
+
+    size_t len;
+    compchunk->data = (uint64_t *)readStringBuffer(ctx, &len);
+    *chunk = (Chunk_t *)compchunk;
+}
+
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+    Compressed_Serialize(chunk,
+                         io,
+                         (SaveUnsignedFunc)RedisModule_SaveUnsigned,
+                         (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+    Compressed_Deserialize(chunk,
+                           io,
+                           (ReadUnsignedFunc)RedisModule_LoadUnsigned,
+                           (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+}
 
-    compchunk->size = RedisModule_LoadUnsigned(io);
-    compchunk->count = RedisModule_LoadUnsigned(io);
-    compchunk->idx = RedisModule_LoadUnsigned(io);
-    compchunk->baseValue.u = RedisModule_LoadUnsigned(io);
-    compchunk->baseTimestamp = RedisModule_LoadUnsigned(io);
-    compchunk->prevTimestamp = RedisModule_LoadUnsigned(io);
-    compchunk->prevTimestampDelta = RedisModule_LoadSigned(io);
-    compchunk->prevValue.u = RedisModule_LoadUnsigned(io);
-    compchunk->prevLeading = RedisModule_LoadUnsigned(io);
-    compchunk->prevTrailing = RedisModule_LoadUnsigned(io);
+void Compressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
+    Compressed_Serialize(chunk,
+                         bw,
+                         (SaveUnsignedFunc)RedisGears_BWWriteLong,
+                         (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+}
 
-    compchunk->data = (uint64_t *)RedisModule_LoadStringBuffer(io, NULL);
-    *chunk = (Chunk_t *)compchunk;
+static char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
+    size_t size = 0;
+    const char *temp = RedisGears_BRReadBuffer(br, &size);
+    char *ret = malloc(size);
+    memcpy(ret, temp, size);
+    if (len != NULL) {
+        *len = size;
+    }
+    return ret;
+}
+
+void Compressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {
+    Compressed_Deserialize(chunk,
+                           br,
+                           (ReadUnsignedFunc)RedisGears_BRReadLong,
+                           (ReadStringBufferFunc)ownedBufferFromGears);
 }

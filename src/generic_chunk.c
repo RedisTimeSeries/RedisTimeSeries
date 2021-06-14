@@ -13,6 +13,7 @@ static ChunkFuncs regChunk = {
 
     .AddSample = Uncompressed_AddSample,
     .UpsertSample = Uncompressed_UpsertSample,
+    .DelRange = Uncompressed_DelRange,
 
     .NewChunkIterator = Uncompressed_NewChunkIterator,
 
@@ -23,6 +24,8 @@ static ChunkFuncs regChunk = {
 
     .SaveToRDB = Uncompressed_SaveToRDB,
     .LoadFromRDB = Uncompressed_LoadFromRDB,
+    .GearsSerialize = Uncompressed_GearsSerialize,
+    .GearsDeserialize = Uncompressed_GearsDeserialize,
 };
 
 ChunkIterFuncs uncompressedChunkIteratorClass = {
@@ -34,10 +37,12 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
 static ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
+    .CloneChunk = Compressed_CloneChunk,
     .SplitChunk = Compressed_SplitChunk,
 
     .AddSample = Compressed_AddSample,
     .UpsertSample = Compressed_UpsertSample,
+    .DelRange = Compressed_DelRange,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
 
@@ -48,6 +53,8 @@ static ChunkFuncs comprChunk = {
 
     .SaveToRDB = Compressed_SaveToRDB,
     .LoadFromRDB = Compressed_LoadFromRDB,
+    .GearsSerialize = Compressed_GearsSerialize,
+    .GearsDeserialize = Compressed_GearsDeserialize,
 };
 
 static ChunkIterFuncs compressedChunkIteratorClass = {

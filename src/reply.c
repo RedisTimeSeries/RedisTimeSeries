@@ -6,6 +6,8 @@
 
 #include "reply.h"
 
+#include "fpconv.h"
+#include "query_language.h"
 #include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
@@ -15,11 +17,7 @@
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
                         bool withlabels,
-                        api_timestamp_t start_ts,
-                        api_timestamp_t end_ts,
-                        AggregationClass *aggObject,
-                        int64_t time_delta,
-                        long long maxResults,
+                        RangeArgs *args,
                         bool rev) {
     RedisModule_ReplyWithArray(ctx, 3);
     RedisModule_ReplyWithString(ctx, s->keyName);
@@ -28,45 +26,35 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     } else {
         RedisModule_ReplyWithArray(ctx, 0);
     }
-    ReplySeriesRange(ctx, s, start_ts, end_ts, aggObject, time_delta, maxResults, rev);
+    ReplySeriesRange(ctx, s, args, rev);
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx,
-                     Series *series,
-                     api_timestamp_t start_ts,
-                     api_timestamp_t end_ts,
-                     AggregationClass *aggObject,
-                     int64_t time_delta,
-                     long long maxResults,
-                     bool rev) {
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool reverse) {
     Sample sample;
     long long arraylen = 0;
 
     // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?)
+    // TODO: move to parseRangeArguments(?) or to iterator
     if (series->retentionTime) {
-        start_ts = series->lastTimestamp > series->retentionTime
-                       ? max(start_ts, series->lastTimestamp - series->retentionTime)
-                       : start_ts;
+        args->startTimestamp =
+            series->lastTimestamp > series->retentionTime
+                ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
+                : args->startTimestamp;
         // if new start_ts > end_ts, there are no results to return
-        if (start_ts > end_ts) {
+        if (args->startTimestamp > args->endTimestamp) {
             return RedisModule_ReplyWithArray(ctx, 0);
         }
     }
 
-    SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts, rev, aggObject, time_delta) != TSDB_OK) {
-        return RedisModule_ReplyWithArray(ctx, 0);
-    }
+    AbstractIterator *iter = SeriesQuery(series, args, reverse);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-           (maxResults == -1 || arraylen < maxResults)) {
+    while (iter->GetNext(iter, &sample) == CR_OK && (args->count == -1 || arraylen < args->count)) {
         ReplyWithSample(ctx, sample.timestamp, sample.value);
         arraylen++;
     }
-    SeriesIteratorClose(&iterator);
+    iter->Close(iter);
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
@@ -87,8 +75,9 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
-    char buf[MAX_VAL_LEN];
-    snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+    char buf[MAX_VAL_LEN + 1];
+    int str_len = fpconv_dtoa(value, buf);
+    buf[str_len] = '\0';
     RedisModule_ReplyWithSimpleString(ctx, buf);
 }
 

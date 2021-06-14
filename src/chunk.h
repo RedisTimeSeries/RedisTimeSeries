@@ -54,6 +54,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
  * @return
  */
 ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
+size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
@@ -71,5 +72,9 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+
+// Gears
+void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
+void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br);
 
 #endif

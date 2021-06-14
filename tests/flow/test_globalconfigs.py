@@ -6,12 +6,13 @@ from test_helper_classes import TSInfo
 class testModuleLoadTimeArguments(object):
     def __init__(self):
         self.test_variations = [(True, 'CHUNK_SIZE_BYTES 2000'),
-                                (True, 'COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'),
+                                (True, 'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'),
                                 (True, 'DUPLICATE_POLICY MAX'),
                                 (True, 'RETENTION_POLICY 30')
                                 ]
 
     def test(self):
+        Env().skipOnCluster()
         for variation in self.test_variations:
             should_ok = variation[0]
             if should_ok:
@@ -25,6 +26,7 @@ class testModuleLoadTimeArguments(object):
 
 
 def test_uncompressed():
+    Env().skipOnCluster()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -33,6 +35,7 @@ def test_uncompressed():
 
 
 def test_compressed():
+    Env().skipOnCluster()
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -43,7 +46,8 @@ def test_compressed():
 class testGlobalConfigTests():
 
     def __init__(self):
-        self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
+        Env().skipOnCluster()
+        self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')
 
     def test_autocreate(self):
         with self.env.getConnection() as r:
