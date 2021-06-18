@@ -67,6 +67,8 @@ elif [[ $OSNICK == trusty ]]; then
 	OSNICK=ubuntu14.04
 elif [[ $OSNICK == centos7 ]]; then
 	OSNICK=rhel7
+elif [[ $OSNICK == centos8 ]]; then
+	OSNICK=rhel8
 fi
 
 export PRODUCT=redistimeseries
