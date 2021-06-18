@@ -6,10 +6,12 @@
 #ifndef TSDB_H
 #define TSDB_H
 
+#include "abstract_iterator.h"
 #include "compaction.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "query_language.h"
 #include "redismodule.h"
 
 typedef struct CompactionRule
@@ -22,17 +24,6 @@ typedef struct CompactionRule
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket;
 } CompactionRule;
-
-typedef struct CreateCtx
-{
-    long long retentionTime;
-    long long chunkSizeBytes;
-    size_t labelsCount;
-    Label *labels;
-    int options;
-    DuplicatePolicy duplicatePolicy;
-    bool isTemporary;
-} CreateCtx;
 
 typedef struct Series
 {
@@ -54,16 +45,12 @@ typedef struct Series
     bool isTemporary;
 } Series;
 
-typedef enum MultiSeriesReduceOp
-{
-    MultiSeriesReduceOp_Min,
-    MultiSeriesReduceOp_Max,
-    MultiSeriesReduceOp_Sum,
-} MultiSeriesReduceOp;
-
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
+void CleanLastDeletedSeries(RedisModuleString *key);
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
@@ -80,22 +67,17 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     Series **series,
                     int mode);
 
+AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reserve);
+
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
-int MultiSerieReduce(Series *dest,
-                     Series *source,
-                     MultiSeriesReduceOp op,
-                     timestamp_t start_ts,
-                     timestamp_t end_ts,
-                     AggregationClass *agg,
-                     int64_t time_delta,
-                     bool rev);
+
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override);
-int SeriesUpdateLastSample(Series *series);
+
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
@@ -112,6 +94,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 size_t SeriesGetNumSamples(const Series *series);
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
+int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts);
 
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,

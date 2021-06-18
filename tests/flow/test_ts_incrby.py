@@ -2,11 +2,11 @@ import time
 
 import pytest
 import redis
-from RLTest import Env
+from utils import Env
 
 
 def test_incrby():
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
 
         start_incr_time = int(time.time() * 1000)
@@ -28,7 +28,7 @@ def test_incrby():
 
 
 def test_incrby_with_timestamp():
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
 
         for i in range(20):
@@ -47,7 +47,7 @@ def test_incrby_with_timestamp():
 
 
 def test_incrby_with_update_latest():
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
         for i in range(1, 21):
             assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i

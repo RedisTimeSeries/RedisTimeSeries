@@ -93,7 +93,9 @@ commands:
       - setup-automation
       - run:
           name: Install prerequisites
-          command: make setup
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
       - run:
           name: Install Redis
           command: |
@@ -129,9 +131,9 @@ commands:
       platform:
         type: string
     steps:
-      - abort_for_docs
+      - early_returns
       - setup-executor
-      - checkout-all
+      - checkout
       - setup-automation
       - run:
           name: Build for platform
@@ -153,8 +155,8 @@ commands:
       platform:
         type: string
     steps:
-      - abort_for_docs
-      - checkout-all
+      - early_returns
+      - checkout
       - setup-automation
       - run:
           name: Install Docker
@@ -173,6 +175,8 @@ commands:
             cd build/docker
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
+
+#----------------------------------------------------------------------------------------------------------------------------------
 
   benchmark-automation:
     parameters:
@@ -211,8 +215,6 @@ commands:
               --upload_results_s3 \
               --triggering_env circleci \
               --push_results_redistimeseries
-
-#----------------------------------------------------------------------------------------------------------------------------------
 
 jobs:
   valgrind:
@@ -344,9 +346,9 @@ jobs:
         type: string
         default: ""
     docker:
-      - image: redisfab/rmbuilder:6.2.1-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - abort_for_docs
+      - early_returns
       - early_return_for_forked_pull_requests
       - attach_workspace:
           at: workspace
@@ -459,6 +461,8 @@ workflows:
       - build:
           <<: *on-any-branch
       - valgrind:
+          requires:
+            - build
           <<: *on-integ-and-version-tags
       - platforms-build:
           <<: *on-any-branch
@@ -472,6 +476,9 @@ workflows:
           matrix:
             parameters:
               platform: [focal, bionic]
+          <<: *on-any-branch
+      - build-macos:
+          <<: *on-integ-and-version-tags
       - build-multiarch-docker:
           <<: *never
       - coverage:

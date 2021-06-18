@@ -1,6 +1,6 @@
 # BUILD redisfab/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
 
-ARG REDIS_VER=6.2.1
+ARG REDIS_VER=6.2.3
 
 # OSNICK=focal|bionic|xenial|stretch|buster
 ARG OSNICK=buster

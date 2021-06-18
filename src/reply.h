@@ -5,6 +5,7 @@
  */
 
 #include "generic_chunk.h"
+#include "query_language.h"
 #include "redismodule.h"
 #include "tsdb.h"
 
@@ -14,21 +15,10 @@
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *series,
                         bool withlabels,
-                        api_timestamp_t start_ts,
-                        api_timestamp_t end_ts,
-                        AggregationClass *aggObject,
-                        int64_t time_delta,
-                        long long maxResults,
+                        RangeArgs *args,
                         bool rev);
 
-int ReplySeriesRange(RedisModuleCtx *ctx,
-                     Series *series,
-                     api_timestamp_t start_ts,
-                     api_timestamp_t end_ts,
-                     AggregationClass *aggObject,
-                     int64_t time_delta,
-                     long long maxResults,
-                     bool rev);
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool rev);
 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 

@@ -493,7 +493,7 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
         iter->blocksize = readBits(data, iter->idx, DOUBLE_BLOCK_SIZE) + DOUBLE_BLOCK_ADJUST;
         iter->idx += DOUBLE_BLOCK_SIZE;
 #ifdef DEBUG
-        assert(leading + blocksize <= BINW);
+        assert(iter->leading + iter->blocksize <= BINW);
 #endif
         iter->trailing = BINW - iter->leading - iter->blocksize;
         xorValue = readBits(data, iter->idx, iter->blocksize) << iter->trailing;

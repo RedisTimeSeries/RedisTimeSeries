@@ -34,23 +34,15 @@ void GroupList_Free(TS_GroupList *g);
 
 void GroupList_ApplyReducer(TS_GroupList *group,
                             char *labelKey,
-                            timestamp_t ts,
-                            timestamp_t ts1,
-                            AggregationClass *pClass,
-                            int64_t delta,
-                            long long results,
-                            bool rev,
-                            MultiSeriesReduceOp reducerOp);
+                            RangeArgs *args,
+                            MultiSeriesReduceOp reducerOp,
+                            bool reverse);
 
 void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               TS_GroupList *group,
                               bool withlabels,
-                              u_int64_t start_ts,
-                              u_int64_t end_ts,
-                              AggregationClass *aggregation,
-                              int64_t delta,
-                              long long maxResults,
-                              bool rev);
+                              RangeArgs *args,
+                              bool reverse);
 
 void FreeTempSeries(Series *s) {
     if (!s)
@@ -89,53 +81,6 @@ void GroupList_Free(TS_GroupList *groupList) {
     free(groupList);
 }
 
-int ApplySerieRangeIntoNewSerie(Series **dest,
-                                Series *source,
-                                api_timestamp_t start_ts,
-                                api_timestamp_t end_ts,
-                                AggregationClass *aggObject,
-                                int64_t time_delta,
-                                long long maxResults,
-                                bool rev) {
-    Sample sample;
-    CreateCtx cCtx = {
-        .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
-    };
-    cCtx.options |= SERIES_OPT_UNCOMPRESSED;
-
-    Series *new = NewSeries(RedisModule_CreateStringFromString(NULL, source->keyName), &cCtx);
-    long long arraylen = 0;
-
-    // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?)
-    if (source->retentionTime) {
-        start_ts = source->lastTimestamp > source->retentionTime
-                       ? max(start_ts, source->lastTimestamp - source->retentionTime)
-                       : start_ts;
-        // if new start_ts > end_ts, there are no results to return
-        if (start_ts > end_ts) {
-            *dest = new;
-            return REDISMODULE_OK;
-        }
-    }
-
-    SeriesIterator iterator;
-    if (SeriesQuery(source, &iterator, start_ts, end_ts, rev, aggObject, time_delta) != TSDB_OK) {
-        // todo: is this the right thing here?
-        *dest = new;
-        return REDISMODULE_ERR;
-    }
-
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
-           (maxResults == -1 || arraylen < maxResults)) {
-        SeriesAddSample(new, sample.timestamp, sample.value);
-    }
-    SeriesIteratorClose(&iterator);
-
-    *dest = new;
-    return REDISMODULE_OK;
-}
-
 int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
     if (g->list == NULL) {
         g->list = (Series **)malloc(sizeof(Series *));
@@ -150,39 +95,11 @@ int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
 void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               TS_GroupList *group,
                               bool withlabels,
-                              u_int64_t start_ts,
-                              u_int64_t end_ts,
-                              AggregationClass *aggregation,
-                              int64_t timeDelta,
-                              long long maxResults,
+                              RangeArgs *args,
                               bool rev) {
     for (int i = 0; i < group->count; i++) {
-        ReplySeriesArrayPos(ctx,
-                            group->list[i],
-                            withlabels,
-                            start_ts,
-                            end_ts,
-                            aggregation,
-                            timeDelta,
-                            maxResults,
-                            rev);
+        ReplySeriesArrayPos(ctx, group->list[i], withlabels, args, rev);
     }
-}
-
-int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
-    if (strncasecmp(reducerstr, "sum", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Sum;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Max;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Min;
-        return TSDB_OK;
-    }
-    return TSDB_ERROR;
 }
 
 Label *createReducedSeriesLabels(char *labelKey, char *labelValue, MultiSeriesReduceOp reducerOp) {
@@ -230,26 +147,14 @@ int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
 }
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
-                           api_timestamp_t start_ts,
-                           api_timestamp_t end_ts,
-                           AggregationClass *aggObject,
-                           int64_t time_delta,
-                           long long maxResults,
-                           bool rev,
-                           MultiSeriesReduceOp reducerOp) {
+                           RangeArgs *args,
+                           MultiSeriesReduceOp reducerOp,
+                           bool reverse) {
     // ^ seek the smallest element of the radix tree.
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     TS_GroupList *groupList;
     while (RedisModule_DictNextC(iter, NULL, (void **)&groupList) != NULL) {
-        GroupList_ApplyReducer(groupList,
-                               r->labelkey,
-                               start_ts,
-                               end_ts,
-                               aggObject,
-                               time_delta,
-                               maxResults,
-                               rev,
-                               reducerOp);
+        GroupList_ApplyReducer(groupList, r->labelkey, args, reducerOp, reverse);
     }
     RedisModule_DictIteratorStop(iter);
 
@@ -257,13 +162,9 @@ int ResultSet_ApplyReducer(TS_ResultSet *r,
 }
 void GroupList_ApplyReducer(TS_GroupList *group,
                             char *labelKey,
-                            timestamp_t startTimestamp,
-                            timestamp_t endTimestamp,
-                            AggregationClass *aggregation,
-                            int64_t timeDelta,
-                            long long maxResults,
-                            bool rev,
-                            MultiSeriesReduceOp reducerOp) {
+                            RangeArgs *args,
+                            MultiSeriesReduceOp reducerOp,
+                            bool reverse) {
     Label *labels = createReducedSeriesLabels(labelKey, group->labelValue, reducerOp);
     size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
     char *serie_name = malloc(serie_name_len);
@@ -281,8 +182,7 @@ void GroupList_ApplyReducer(TS_GroupList *group,
     Series *source = NULL;
     for (int i = 0; i < group->count; i++) {
         source = group->list[i];
-        MultiSerieReduce(
-            reduced, source, reducerOp, startTimestamp, endTimestamp, aggregation, timeDelta, rev);
+        MultiSerieReduce(reduced, source, reducerOp, args, reverse);
 
         size_t keyLen = 0;
         const char *keyname = RedisModule_StringPtrLen(source->keyName, &keyLen);
@@ -327,26 +227,14 @@ int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
 void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
                     bool withlabels,
-                    api_timestamp_t start_ts,
-                    api_timestamp_t end_ts,
-                    AggregationClass *aggObject,
-                    int64_t time_delta,
-                    long long maxResults,
+                    RangeArgs *args,
                     bool rev) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
 
     RedisModule_ReplyWithArray(ctx, RedisModule_DictSize(r->groups));
     TS_GroupList *innerGroupList;
     while (RedisModule_DictNextC(iter, NULL, (void **)&innerGroupList) != NULL) {
-        GroupList_ReplyResultSet(ctx,
-                                 innerGroupList,
-                                 withlabels,
-                                 start_ts,
-                                 end_ts,
-                                 aggObject,
-                                 time_delta,
-                                 maxResults,
-                                 rev);
+        GroupList_ReplyResultSet(ctx, innerGroupList, withlabels, args, rev);
     }
 
     RedisModule_DictIteratorStop(iter);

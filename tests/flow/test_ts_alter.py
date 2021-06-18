@@ -1,6 +1,6 @@
 import pytest
 import redis
-from RLTest import Env
+from utils import Env
 from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _insert_data
 
 
@@ -10,7 +10,7 @@ def test_alter_cmd():
     end_ts = start_ts + samples_count
     key = 'tester'
 
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
                                  'LABELS', 'name', 'brown', 'color', 'pink')
         _insert_data(r, key, start_ts, samples_count, 5)
@@ -50,7 +50,7 @@ def test_alter_cmd():
 
 
 def test_alter_key(self):
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         key = 'tester'
         r.execute_command('TS.CREATE', key)
         date_ranges = _fill_data(r, key)

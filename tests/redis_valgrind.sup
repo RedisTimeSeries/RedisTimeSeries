@@ -37,7 +37,6 @@
    fun:rioWrite
 }
 
-
 {
    <redis_dumpCommand_supression>
    Memcheck:Value8
@@ -149,4 +148,21 @@
    fun:vsnprintf
    fun:RM_LogRaw
    fun:RM_Log
+}
+
+{
+    <gears_superssions>
+    Memcheck:Leak
+    fun:malloc
+    fun:ztrymalloc_usable
+    fun:zmalloc
+    fun:RM_Alloc
+    fun:LockHandler_Acquire
+    fun:Cluster_MsgArrive
+    fun:event_persist_closure
+    fun:event_process_active_single_queue
+    fun:event_process_active
+    fun:event_base_loop
+    fun:Cluster_MessageThreadMain
+    fun:start_thread
 }

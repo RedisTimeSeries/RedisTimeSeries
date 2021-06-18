@@ -8,6 +8,7 @@
 #include "config.h"
 #include "consts.h"
 #include "endianconv.h"
+#include "filter_iterator.h"
 #include "indexer.h"
 #include "module.h"
 #include "series_iterator.h"
@@ -18,6 +19,7 @@
 #include "rmutil/strings.h"
 
 static Series *lastDeletedSeries = NULL;
+static RedisModuleString *renameFromKey = NULL;
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
@@ -94,19 +96,33 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
-    Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
-    dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
-    newSeries->lastChunk = newChunk;
+
+    if (!cCtx->skipChunkCreation) {
+        Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
+        dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
+        newSeries->lastChunk = newChunk;
+    } else {
+        newSeries->lastChunk = NULL;
+    }
+
     return newSeries;
 }
 
-void SeriesTrim(Series *series) {
-    if (series->retentionTime == 0) {
+void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
+    // if not causedByRetention, caused by ts.del
+    if (causedByRetention && series->retentionTime == 0) {
         return;
     }
-
-    // start iterator from smallest key
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    RedisModuleDictIter *iter;
+    if (causedByRetention) {
+        // start iterator from smallest key
+        iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    } else {
+        // start iterator from smallest key compare to startTs
+        timestamp_t rax_key;
+        seriesEncodeTimestamp(&rax_key, startTs);
+        iter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    }
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
@@ -115,7 +131,13 @@ void SeriesTrim(Series *series) {
                                    : 0;
 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
-        if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
+        bool retentionCondition =
+            causedByRetention && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
+        bool ts_delCondition = !causedByRetention &&
+                               (series->funcs->GetFirstTimestamp(currentChunk) >= startTs &&
+                                series->funcs->GetLastTimestamp(currentChunk) <= endTs) &&
+                               currentChunk != series->lastChunk;
+        if (retentionCondition || ts_delCondition) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
             // reseek iterator since we modified the dict,
             // go to first element that is bigger than current key
@@ -124,6 +146,9 @@ void SeriesTrim(Series *series) {
             series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
+            if (!causedByRetention) {
+                series->totalSamples -= series->funcs->DelRange(currentChunk, startTs, endTs);
+            }
             break;
         }
     }
@@ -155,9 +180,12 @@ void freeLastDeletedSeries() {
     lastDeletedSeries = NULL;
 }
 
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key) {
+void CleanLastDeletedSeries(RedisModuleString *key) {
     if (lastDeletedSeries != NULL &&
         RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
+        RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+        RedisModule_AutoMemory(ctx);
+
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
             RedisModuleKey *seriesKey;
@@ -183,8 +211,114 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key) {
                 RedisModule_CloseKey(seriesKey);
             }
         }
+
+        RedisModule_FreeThreadSafeContext(ctx);
     }
     freeLastDeletedSeries();
+}
+
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
+    // keep in global variable for RenameSeriesTo() and increase recount
+    RedisModule_RetainString(NULL, key);
+    renameFromKey = key;
+}
+
+void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
+    Series *series;
+    RedisModuleKey *key = NULL;
+    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TRUE) {
+        return;
+    }
+
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        RedisModuleKey *destKey = NULL;
+        Series *destSeries;
+        const int status =
+            SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+        if (status == TRUE) {
+            RedisModule_RetainString(ctx, keyname);
+            destSeries->srcKey = keyname;
+            RedisModule_CloseKey(destKey);
+        }
+        rule = rule->nextRule;
+    }
+
+    RedisModule_CloseKey(key);
+}
+
+void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
+    // Try to open the series
+    Series *series;
+    RedisModuleKey *key = NULL;
+    const int status = SilentGetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ);
+    if (!status) { // Not a timeseries key
+        goto cleanup;
+    }
+
+    // Reindex key by the new name
+    RemoveIndexedMetric(ctx, renameFromKey, series->labels, series->labelsCount);
+    IndexMetric(ctx, keyTo, series->labels, series->labelsCount);
+
+    // A destination key was renamed
+    if (series->srcKey) {
+        Series *srcSeries;
+        RedisModuleKey *srcKey;
+        const int status =
+            SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
+        if (!status) {
+            const char *srcKeyName = RedisModule_StringPtrLen(series->srcKey, NULL);
+            RedisModule_Log(
+                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", srcKeyName);
+            goto cleanup;
+        }
+
+        // Find the rule in the source key and rename the its destKey
+        CompactionRule *rule = srcSeries->rules;
+        while (rule) {
+            if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
+                RedisModule_FreeString(NULL, rule->destKey);
+                RedisModule_RetainString(NULL, keyTo);
+                rule->destKey = keyTo;
+                break; // Only one src can point back to destKey
+            }
+            rule = rule->nextRule;
+        }
+        RedisModule_CloseKey(srcKey);
+    }
+
+    // A source key was renamed need to rename the srcKey on all the destKeys
+    if (series->rules) {
+        CompactionRule *rule = series->rules;
+        Series *destSeries;
+        RedisModuleKey *destKey;
+        while (rule) {
+            const int status =
+                SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
+            if (!status) {
+                const char *destKeyName = RedisModule_StringPtrLen(rule->destKey, NULL);
+                RedisModule_Log(ctx,
+                                "warning",
+                                "couldn't open key or key is not a Timeseries. key=%s",
+                                destKeyName);
+            } else {
+                // rename the srcKey in the destKey
+                RedisModule_FreeString(NULL, destSeries->srcKey);
+                RedisModule_RetainString(NULL, keyTo);
+                destSeries->srcKey = keyTo;
+
+                RedisModule_CloseKey(destKey);
+            }
+            rule = rule->nextRule;
+        }
+    }
+
+cleanup:
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(NULL, renameFromKey);
+    renameFromKey = NULL;
 }
 
 // Releases Series and all its compaction rules
@@ -202,7 +336,7 @@ void FreeSeries(void *value) {
     if (!currentSeries->isTemporary) {
         RemoveIndexedMetric(
             ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
-    };
+    }
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
@@ -282,14 +416,10 @@ size_t SeriesGetNumSamples(const Series *series) {
 int MultiSerieReduce(Series *dest,
                      Series *source,
                      MultiSeriesReduceOp op,
-                     timestamp_t startTimestamp,
-                     timestamp_t endTimestamp,
-                     AggregationClass *agg,
-                     int64_t time_delta,
-                     bool rev) {
+                     RangeArgs *args,
+                     bool reverse) {
     Sample sample;
-    SeriesIterator iterator;
-    SeriesQuery(source, &iterator, startTimestamp, endTimestamp, rev, agg, time_delta);
+    AbstractIterator *iterator = SeriesQuery(source, args, reverse);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -302,10 +432,10 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
         SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
     }
-    SeriesIteratorClose(&iterator);
+    iterator->Close(iterator);
     return 1;
 }
 
@@ -445,7 +575,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        SeriesTrim(series);
+        SeriesTrim(series, true, 0, 0);
 
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
@@ -455,6 +585,11 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     series->lastTimestamp = timestamp;
     series->lastValue = value;
     series->totalSamples++;
+    return TSDB_OK;
+}
+
+int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
+    SeriesTrim(series, false, start_ts, end_ts);
     return TSDB_OK;
 }
 
@@ -539,7 +674,6 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
-    ;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;
@@ -602,16 +736,13 @@ int SeriesCalcRange(Series *series,
     AggregationClass *aggObject = rule->aggClass;
 
     Sample sample = { 0 };
-    SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, start_ts, end_ts, false, NULL, 0) != TSDB_OK) {
-        return TSDB_ERROR;
-    }
+    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
 
-    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+    while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
     }
-    SeriesIteratorClose(&iterator);
+    SeriesIteratorClose(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
@@ -640,18 +771,35 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    SeriesIterator iterator;
-    if (SeriesQuery(series, &iterator, 0, series->lastTimestamp, FALSE, NULL, 0) == TSDB_ERROR) {
-        return 0;
-    }
-    ChunkResult result = SeriesIteratorGetNext(&iterator, &sample);
+    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false);
+
+    ChunkResult result = SeriesIteratorGetNext(iterator, &sample);
 
     while (result == CR_OK && sample.timestamp < minTimestamp) {
-        result = SeriesIteratorGetNext(&iterator, &sample);
+        result = SeriesIteratorGetNext(iterator, &sample);
         ++i;
     }
 
     *skipped = i;
-    SeriesIteratorClose(&iterator);
+    SeriesIteratorClose(iterator);
     return sample.timestamp;
+}
+
+AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
+    AbstractIterator *chain =
+        SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
+
+    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
+        chain = (AbstractIterator *)SeriesFilterIterator_New(
+            chain, args->filterByValueArgs, args->filterByTSArgs);
+    }
+
+    if (args->aggregationArgs.aggregationClass != NULL) {
+        chain = (AbstractIterator *)AggregationIterator_New(chain,
+                                                            args->aggregationArgs.aggregationClass,
+                                                            args->aggregationArgs.timeDelta,
+                                                            reverse);
+    }
+
+    return chain;
 }
