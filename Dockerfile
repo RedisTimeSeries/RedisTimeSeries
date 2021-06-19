@@ -44,8 +44,9 @@ RUN set -e ;\
 RUN RUN set -e ;\
     if [ "$TEST" = "1" ]; then \
         bash -l -c "TEST= make test" ;\
-		rm -f /build/tests/flow/logs/*.rdb ;\
-        tar -C /build/tests/flow/logs/ -czf /build/bin/artifacts/tests-flow-logs-${ARCH}-${OSNICK}.tgz . ;\
+		cd /build/tests/flow/logs ;\
+        rm -f *.aof *.rdb ;\
+        tar -czf /build/bin/artifacts/tests-flow-logs-${ARCH}-${OSNICK}.tgz . ;\
     fi
 
 #----------------------------------------------------------------------------------------------
