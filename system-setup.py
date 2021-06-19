@@ -22,15 +22,13 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("git jq curl")
 
         self.run("%s/bin/enable-utf8" % READIES)
-        self.run("%s/bin/getgcc" % READIES)
 
     def debian_compat(self):
-        pass
+        self.run("%s/bin/getgcc" % READIES)
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
-        self.run("%s/bin/getepel" % READIES)
-        # self.run("%s/bin/getgcc --modern" % READIES)
+        self.run("%s/bin/getgcc --modern" % READIES)
 
         if self.dist == "amzn":
             self.run("amazon-linux-extras install epel")
@@ -44,6 +42,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("lcov-git", aur=True)
 
     def fedora(self):
+        self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
     def macos(self):
