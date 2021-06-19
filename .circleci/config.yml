@@ -126,7 +126,7 @@ commands:
       - store_artifacts:
           path: tests/flow/logs
 
-  platforms-build-steps:
+  build-platforms-steps:
     parameters:
       platform:
         type: string
@@ -150,7 +150,7 @@ commands:
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
 
-  vm-platforms-build-steps:
+  vm-build-platforms-steps:
     parameters:
       platform:
         type: string
@@ -248,17 +248,17 @@ jobs:
       - build_steps:
           platform: debian
 
-  platforms-build:
+  build-platforms:
     parameters:
       platform:
         type: string
     docker:
       - image: debian:buster
     steps:
-      - platforms-build-steps:
+      - build-platforms-steps:
           platform: <<parameters.platform>>
 
-  arm-platforms-build:
+  build-arm-platforms:
     parameters:
       platform:
         type: string
@@ -266,7 +266,7 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.medium
     steps:
-      - vm-platforms-build-steps:
+      - vm-build-platforms-steps:
           platform: <<parameters.platform>>
 
   performance_ci_automation:
@@ -363,7 +363,7 @@ jobs:
                 path="<<parameters.location>>/"
             fi
             for f in `ls *.zip *.tgz`; do
-              aws s3 cp $f s3://redismodules/$PACKAGE_NAME/$path --acl public-read
+              echo aws s3 cp $f s3://redismodules/$PACKAGE_NAME/$path --acl public-read
             done
 
   release-automation:
@@ -464,13 +464,13 @@ workflows:
           requires:
             - build
           <<: *on-integ-and-version-tags
-      - platforms-build:
+      - build-platforms:
           <<: *on-any-branch
           context: common
           matrix:
             parameters:
               platform: [focal, bionic, xenial, centos7, centos8]
-      - arm-platforms-build:
+      - build-arm-platforms:
           <<: *on-any-branch
           context: common
           matrix:
@@ -478,7 +478,8 @@ workflows:
               platform: [focal, bionic]
           <<: *on-any-branch
       - build-macos:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *never
       - coverage:
@@ -493,17 +494,19 @@ workflows:
           name: deploy_snapshot
           location: snapshots
           context: common
-          <<: *on-integ-branch
+          #@@<<: *on-integ-branch
+          <<: *on-any-branch
           requires:
-            - platforms-build
-            - arm-platforms-build
+            - build-platforms
+            - build-arm-platforms
+            - build-macos
       - deploy-artifacts:
           name: deploy_release
           context: common
           <<: *on-version-tags
           requires:
-            - platforms-build
-            - arm-platforms-build
+            - build-platforms
+            - build-arm-platforms
       - release-automation:
           context: common
           requires:
