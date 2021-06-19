@@ -70,7 +70,9 @@ commands:
             - artifacts/*.tar
       - run:
           name: Cleanup test log dir
-          command: rm -f tests/flow/logs/*.rdb
+          command: |
+            cd tests/flow/logs
+            rm -f *.aof *.rdb
       - store_artifacts:
           path: tests/flow/logs
   
@@ -467,22 +469,19 @@ workflows:
             - build
           <<: *on-integ-and-version-tags
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
               platform: [focal, bionic, xenial, centos7, centos8]
       - build-arm-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
               platform: [focal, bionic]
       - build-macos:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - build-multiarch-docker:
           <<: *never
       - coverage:
@@ -494,17 +493,16 @@ workflows:
             - build
           <<: *on-integ-and-version-tags
       - deploy-artifacts:
-          name: deploy_snapshot
+          name: deploy-snapshot
           location: snapshots
           context: common
-          #@@<<: *on-integ-branch
-          <<: *on-any-branch
+          <<: *on-integ-branch
           requires:
             - build-platforms
             - build-arm-platforms
             - build-macos
       - deploy-artifacts:
-          name: deploy_release
+          name: deploy-release
           context: common
           <<: *on-version-tags
           requires:
@@ -513,7 +511,7 @@ workflows:
       - release-automation:
           context: common
           requires:
-            - deploy_release
+            - deploy-release
           <<: *on-version-tags
 
   nightly:
