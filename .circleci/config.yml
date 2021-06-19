@@ -1,7 +1,7 @@
 version: 2.1
 
 commands:
-  early_returns:
+  early-returns:
     steps:
       - run:
           name: Early return if this is a docs build
@@ -18,7 +18,7 @@ commands:
               circleci step halt
             fi
 
-  early_return_for_forked_pull_requests:
+  early-return-for-forked-pull-requests:
     description: >-
       If this build is from a fork, stop executing the current job and return success.
       This is useful to avoid steps that will fail due to missing credentials.
@@ -74,7 +74,7 @@ commands:
       - store_artifacts:
           path: tests/flow/logs
   
-  build_steps:
+  build-steps:
     parameters:
       platform:
         type: string
@@ -88,7 +88,7 @@ commands:
         type: string
         default: ""
     steps:
-      - early_returns
+      - early-returns
       - checkout-all
       - setup-automation
       - run:
@@ -131,7 +131,7 @@ commands:
       platform:
         type: string
     steps:
-      - early_returns
+      - early-returns
       - setup-executor
       - checkout
       - setup-automation
@@ -141,7 +141,7 @@ commands:
             cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
           no_output_timeout: 30m
-      - early_return_for_forked_pull_requests
+      - early-return-for-forked-pull-requests
       - run:
           name: Build for platform (publish)
           command: |
@@ -155,7 +155,7 @@ commands:
       platform:
         type: string
     steps:
-      - early_returns
+      - early-returns
       - checkout
       - setup-automation
       - run:
@@ -167,7 +167,7 @@ commands:
             cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
           no_output_timeout: 30m
-      - early_return_for_forked_pull_requests
+      - early-return-for-forked-pull-requests
       - run:
           name: Build for platform (publish)
           command: |
@@ -175,8 +175,6 @@ commands:
             cd build/docker
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
-
-#----------------------------------------------------------------------------------------------------------------------------------
 
   benchmark-automation:
     parameters:
@@ -216,13 +214,15 @@ commands:
               --triggering_env circleci \
               --push_results_redistimeseries
 
+#----------------------------------------------------------------------------------------------------------------------------------
+
 jobs:
   valgrind:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     resource_class: xlarge
     steps:
-      - build_steps:
+      - build-steps:
           platform: debian
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
@@ -232,7 +232,7 @@ jobs:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
-      - early_returns
+      - early-returns
       - checkout-all
       - setup-automation
       - run:
@@ -245,8 +245,9 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - build_steps:
+      - build-steps:
           platform: debian
+      - persist-artifacts
 
   build-platforms:
     parameters:
@@ -269,20 +270,6 @@ jobs:
       - vm-build-platforms-steps:
           platform: <<parameters.platform>>
 
-  performance_ci_automation:
-    docker:
-      - image: redisfab/rmbuilder:6.2.3-x64-buster
-    steps:
-      - early_return_for_forked_pull_requests
-      - checkout-all
-      - run:
-          name: Setup
-          command: make setup
-      - run:
-          name: Build
-          command: make build
-      - benchmark-automation
-
   build-macos:
     macos:
       xcode: 11.6.0
@@ -292,15 +279,16 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
-      - build_steps:
+      - build-steps:
           platform: macos
+      - persist-artifacts
 
   build-multiarch-docker:
     machine:
       enabled: true
       image: ubuntu-1604:202010-01
     steps:
-      - early_returns
+      - early-returns
       - checkout-all
       - run:
           name: Set up Python3
@@ -322,7 +310,7 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early_returns
+      - early-returns
       - checkout-all
       - run:
           name: Build & Test
@@ -348,8 +336,8 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early_returns
-      - early_return_for_forked_pull_requests
+      - early-returns
+      - early-return-for-forked-pull-requests
       - attach_workspace:
           at: workspace
       - run:
@@ -370,8 +358,8 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early_returns
-      - early_return_for_forked_pull_requests
+      - early-returns
+      - early-return-for-forked-pull-requests
       - checkout
       - setup-automation
       - run:
@@ -382,13 +370,27 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early_returns
-      - early_return_for_forked_pull_requests
+      - early-returns
+      - early-return-for-forked-pull-requests
       - checkout
       - setup-automation
       - run:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_BRANCH" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+
+  performance-ci-automation:
+    docker:
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - run:
+          name: Setup
+          command: make setup
+      - run:
+          name: Build
+          command: make build
+      - benchmark-automation
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -465,18 +467,19 @@ workflows:
             - build
           <<: *on-integ-and-version-tags
       - build-platforms:
+          #@@<<: *on-integ-and-version-tags
           <<: *on-any-branch
           context: common
           matrix:
             parameters:
               platform: [focal, bionic, xenial, centos7, centos8]
       - build-arm-platforms:
+          #@@<<: *on-integ-and-version-tags
           <<: *on-any-branch
           context: common
           matrix:
             parameters:
               platform: [focal, bionic]
-          <<: *on-any-branch
       - build-macos:
           #@@<<: *on-integ-and-version-tags
           <<: *on-any-branch
@@ -485,7 +488,7 @@ workflows:
       - coverage:
           context: common
           <<: *on-any-branch
-      - performance_ci_automation:
+      - performance-ci-automation:
           context: common
           requires:
             - build
@@ -521,7 +524,7 @@ workflows:
             branches:
               only: master
     jobs:
-      - performance_ci_automation:
+      - performance-ci-automation:
           context: common
 
   nightly-twice-a-week:
