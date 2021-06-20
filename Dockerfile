@@ -1,8 +1,8 @@
 # BUILD redisfab/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
 
-ARG REDIS_VER=6.2.3
+ARG REDIS_VER=6.2.4
 
-# OSNICK=focal|bionic|xenial|stretch|buster
+# OSNICK=focal|bionic|xenial|stretch|buster|centos8|centos7
 ARG OSNICK=buster
 
 # OS=debian:buster-slim|debian:stretch-slim|ubuntu:bionic
@@ -22,26 +22,26 @@ ARG OSNICK
 ARG OS
 ARG ARCH
 ARG REDIS_VER
+ARG PACK
+ARG TEST
 
-RUN echo "Building for ${OSNICK} (${OS}) for ${ARCH}"
+RUN echo "Building for ${OSNICK} (${OS}) for ${ARCH} [with Redis ${REDIS_VER}]"
 
 WORKDIR /build
 COPY --from=redis /usr/local/ /usr/local/
 
 ADD . /build
 
+RUN ./deps/readies/bin/getupdates
 RUN ./deps/readies/bin/getpy3
 RUN ./system-setup.py
 RUN bash -l -c "make fetch"
 RUN bash -l -c "make build"
 
-ARG PACK
-ARG TEST
-
 RUN mkdir -p bin/artifacts
 RUN set -e ;\
     if [ "$PACK" = "1" ]; then bash -l -c "make pack"; fi
-RUN RUN set -e ;\
+RUN set -e ;\
     if [ "$TEST" = "1" ]; then \
         bash -l -c "TEST= make test" ;\
 		cd /build/tests/flow/logs ;\
