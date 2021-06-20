@@ -115,7 +115,7 @@ commands:
     steps:
       - early-returns
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
           getredis_params: <<parameters.getredis_params>>
       - run:
           name: Build
