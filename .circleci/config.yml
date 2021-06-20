@@ -50,6 +50,25 @@ commands:
             git submodule update --init deps/readies
             ./deps/readies/bin/getpy3
 
+  install-prerequisites:
+    parameters:
+      redis_version:
+        type: string
+        default: "6"
+      getredis_params:
+        type: string
+        default: ""
+    steps:
+      - setup-automation
+      - run:
+          name: System setup
+          command: ./system-setup.py
+      - run:
+          name: Install Redis
+          command: |
+            bash -l -c "python3 ./deps/readies/bin/getredis -v <<parameters.redis_version>> --force <<parameters.getredis_params>>"
+            redis-server --version
+
   checkout-all:
     steps:
       - checkout
@@ -57,8 +76,19 @@ commands:
           name: Checkout submodules
           command: git submodule update --init --recursive
 
+  save-tests-logs:
+    steps:
+      - run:
+          name: Cleanup test log dir
+          command: |
+            cd tests/flow/logs
+            rm -f *.aof *.rdb
+      - store_artifacts:
+          path: tests/flow/logs
+
   persist-artifacts:
     steps:
+      - early-return-for-forked-pull-requests
       - persist_to_workspace:
           root: bin/
           paths:
@@ -68,14 +98,7 @@ commands:
             - artifacts/*.zip
             - artifacts/*.tgz
             - artifacts/*.tar
-      - run:
-          name: Cleanup test log dir
-          command: |
-            cd tests/flow/logs
-            rm -f *.aof *.rdb
-      - store_artifacts:
-          path: tests/flow/logs
-  
+
   build-steps:
     parameters:
       platform:
@@ -92,41 +115,32 @@ commands:
     steps:
       - early-returns
       - checkout-all
-      - setup-automation
-      - run:
-          name: Install prerequisites
-          command: |
-            ./deps/readies/bin/getpy3
-            ./system-setup.py
-      - run:
-          name: Install Redis
-          command: |
-            python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
-            redis-server --version
+      - install-prerequisites
+          getredis_params: <<parameters.getredis_params>>
       - run:
           name: Build
-          command: make build <<parameters.build_params>> SHOW=1
+          command: bash -l -c "make build <<parameters.build_params>> SHOW=1"
       - run:
           name: Pack
-          command: make pack SHOW=1
+          command: bash -l -c "make pack SHOW=1"
       - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+            bash -l -c "make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
       - run:
           name: Flow Test
           no_output_timeout: 30m
           command: |
+            python3 -m RLTest --version
             mkdir -p ~/workspace/tests
-            make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
+            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2
-      - store_artifacts:
-          path: tests/flow/logs
+            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
+      - save-tests-logs
 
   build-platforms-steps:
     parameters:
@@ -151,6 +165,7 @@ commands:
             cd build/docker
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
+      - save-tests-logs
 
   vm-build-platforms-steps:
     parameters:
@@ -177,6 +192,7 @@ commands:
             cd build/docker
             make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
+      - save-tests-logs
 
   benchmark-automation:
     parameters:
@@ -236,12 +252,10 @@ jobs:
     steps:
       - early-returns
       - checkout-all
-      - setup-automation
+      - install-prerequisites
       - run:
           name: lint
-          command: |
-            make setup
-            make lint
+          command: bash -l -c "make lint"
 
   build:
     docker:
@@ -314,12 +328,12 @@ jobs:
     steps:
       - early-returns
       - checkout-all
+      - install-prerequisites
       - run:
           name: Build & Test
           command: |
-            make setup
-            make build COV=1 SHOW=1
-            make test COV=1
+            bash -l -c "make build COV=1 SHOW=1"
+            bash -l -c "make test COV=1"
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
       - store_artifacts:
           path: coverage
@@ -327,7 +341,7 @@ jobs:
       - run:
           name: Test with Gears
           command: |
-            make test COV=1 GEARS=1 CLUSTER=1 SHOW=1
+            bash -l -c "make test COV=1 GEARS=1 CLUSTER=1 SHOW=1"
             bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
 
   deploy-artifacts:
@@ -386,12 +400,10 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - run:
-          name: Setup
-          command: make setup
+      - install-prerequisites
       - run:
           name: Build
-          command: make build
+          command: bash -l -c "make build"
       - benchmark-automation
 
 #----------------------------------------------------------------------------------------------------------------------------------
