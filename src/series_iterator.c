@@ -91,13 +91,14 @@ static inline void resetChunkIterator(SeriesIterator *iterator,
 
 // Fills sample from chunk. If all samples were extracted from the chunk, we
 // move to the next chunk.
-ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
+static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
     const uint64_t itt_max_ts = iterator->maxTimestamp;
     const uint64_t itt_min_ts = iterator->minTimestamp;
     const int not_reverse = !iterator->reverse;
+    timestamp_t timestamp = 0;
     if (not_reverse) {
         while (TRUE) {
             res = SeriesGetNext(iterator, currentSample);
@@ -116,11 +117,12 @@ ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSamp
             }
             // check timestamp is within range
             // forward range handling
-            if (currentSample->timestamp < itt_min_ts) {
+            timestamp = currentSample->timestamp;
+            if (timestamp < itt_min_ts) {
                 // didn't reach the starting point of the requested range
                 continue;
             }
-            if (currentSample->timestamp > itt_max_ts) {
+            if (timestamp > itt_max_ts) {
                 // reached the end of the requested range
                 return CR_END;
             }
