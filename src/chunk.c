@@ -6,9 +6,6 @@
 #include "chunk.h"
 
 #include "gears_integration.h"
-#ifdef DEBUG
-#include <assert.h>
-#endif
 #include "rmutil/alloc.h"
 
 struct Chunk
@@ -52,9 +49,6 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
     const size_t newChunkNumSamples = curChunk->num_samples / 2;
     const size_t currentChunkNumSamples = curChunk->num_samples - newChunkNumSamples;
-#ifdef DEBUG
-    assert(newChunkNumSamples + currentChunkNumSamples == curChunk->num_samples);
-#endif
 
     // create chunk and copy samples
     Chunk *newChunk = Uncompressed_NewChunk(newChunkNumSamples * SAMPLE_SIZE);
@@ -69,9 +63,6 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     const size_t old_values_size = (currentChunkNumSamples * sizeof(double));
     curChunk->num_samples = currentChunkNumSamples;
     curChunk->size = currentChunkNumSamples * SAMPLE_SIZE;
-#ifdef DEBUG
-    assert(curChunk->size == (old_values_size + old_ts_size));
-#endif
     curChunk->samples_ts = realloc(curChunk->samples_ts, old_ts_size);
     curChunk->samples_values = realloc(curChunk->samples_values, old_values_size);
     return newChunk;
@@ -342,9 +333,6 @@ static void Uncompressed_Deserialize(Chunk_t **chunk,
 
     size_t loadsize;
     Sample *old_samples_array = (Sample *)readStringBuffer(ctx, &loadsize);
-#ifdef DEBUG
-    assert(loadsize == uncompchunk->size);
-#endif
     for (size_t i = 0; i < uncompchunk->num_samples; i++) {
         uncompchunk->samples_ts[i] = old_samples_array[i].timestamp;
         uncompchunk->samples_values[i] = old_samples_array[i].value;
