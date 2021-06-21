@@ -6,6 +6,7 @@
 #include "chunk.h"
 
 #include "gears_integration.h"
+
 #include "rmutil/alloc.h"
 
 struct Chunk
@@ -69,7 +70,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
 }
 
 static int IsChunkFull(Chunk *chunk) {
-    return chunk->num_samples == (chunk->size / SAMPLE_SIZE);
+    return chunk->num_samples == chunk->size / SAMPLE_SIZE;
 }
 
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
