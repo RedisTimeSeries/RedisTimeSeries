@@ -211,8 +211,6 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
 
 size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     Chunk *regChunk = (Chunk *)chunk;
-    size_t del_start = 0;
-    const size_t num_samples = regChunk->num_samples;
     const u_int64_t *timestamps = regChunk->samples_ts;
     const double *values = regChunk->samples_values;
 
