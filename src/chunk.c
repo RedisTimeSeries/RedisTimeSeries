@@ -222,30 +222,30 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     size_t del_start = 0;
     const size_t num_samples = regChunk->num_samples;
     const u_int64_t *timestamps = regChunk->samples_ts;
-    for (del_start = 0; del_start < num_samples; del_start++) {
-        if (timestamps[del_start] >= startTs) {
-            break;
-        }
-    }
-    size_t del_end = del_start;
-    for (del_end = del_start; del_end < num_samples; del_end++) {
-        if (timestamps[del_end] > endTs) {
-            break;
-        }
-    }
-    const size_t deleted_count = del_end - del_start + 1;
-    const size_t new_count = num_samples - deleted_count;
-    if (deleted_count > 1) {
-        memmove(regChunk->samples_values + del_start,
-                regChunk->samples_values + del_end + 1,
-                sizeof(double) * (num_samples - del_end));
-        memmove(regChunk->samples_ts + del_start,
-                regChunk->samples_ts + del_end + 1,
-                sizeof(uint64_t) * (num_samples - del_end));
-        regChunk->num_samples = new_count;
-        regChunk->base_timestamp = regChunk->samples_ts[0];
-    }
+    const double *values = regChunk->samples_values;
 
+    // create two new arrays and copy samples that don't match the delete range
+    // TODO: use memove that should be much faster
+    const size_t array_size = regChunk->size / 2;
+    u_int64_t *new_samples_ts = (u_int64_t *)malloc(array_size);
+    double *new_samples_values = (double *)malloc(array_size);
+    size_t i = 0;
+    size_t new_count = 0;
+    for (; i < regChunk->num_samples; ++i) {
+        if (timestamps[i] >= startTs && timestamps[i] <= endTs) {
+            continue;
+        }
+        new_count++;
+        new_samples_ts[new_count] = timestamps[i];
+        new_samples_values[new_count] = values[i];
+    }
+    size_t deleted_count = regChunk->num_samples - new_count;
+    free(regChunk->samples_ts);
+    free(regChunk->samples_values);
+    regChunk->samples_ts = new_samples_ts;
+    regChunk->samples_values = new_samples_values;
+    regChunk->num_samples = new_count;
+    regChunk->base_timestamp = new_samples_ts[0];
     return deleted_count;
 }
 
