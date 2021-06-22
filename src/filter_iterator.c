@@ -91,7 +91,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     return iter;
 }
 
-bool finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
+static bool finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
     bool hasSample = false;
     double value;
     if (self->aggregation->finalize(self->aggregationContext, &value) == TSDB_OK) {
@@ -107,33 +107,41 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     AggregationIterator *self = (AggregationIterator *)iter;
 
     Sample internalSample = { 0 };
-    ChunkResult result = iter->input->GetNext(iter->input, &internalSample);
+    AbstractIterator *input = iter->input;
+    ChunkResult (*getNextInput)(struct AbstractIterator *, Sample *) = input->GetNext;
+    ChunkResult result = getNextInput(input, &internalSample);
 
+    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    bool is_reserved = self->reverse;
     if (result == CR_OK && !self->initilized) {
         timestamp_t init_ts = internalSample.timestamp;
-        self->aggregationLastTimestamp = init_ts - (init_ts % self->aggregationTimeDelta);
+        self->aggregationLastTimestamp = init_ts - (init_ts % aggregationTimeDelta);
         self->initilized = true;
     }
 
     bool hasSample = FALSE;
+    AggregationClass *aggregation = self->aggregation;
+    void (*appendValue)(void *, double) = aggregation->appendValue;
+    void *aggregationContext = self->aggregationContext;
+    u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     while (result == CR_OK) {
-        if ((self->reverse == FALSE &&
-             internalSample.timestamp >=
-                 self->aggregationLastTimestamp + self->aggregationTimeDelta) ||
-            (self->reverse == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
+        if ((is_reserved == FALSE && internalSample.timestamp >= contextScope) ||
+            (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (self->aggregationIsFirstSample == FALSE) {
                 hasSample = finalizeBucket(currentSample, self);
             }
             self->aggregationLastTimestamp =
-                internalSample.timestamp - (internalSample.timestamp % self->aggregationTimeDelta);
+                internalSample.timestamp - (internalSample.timestamp % aggregationTimeDelta);
+            contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
         }
         self->aggregationIsFirstSample = FALSE;
-        self->aggregation->appendValue(self->aggregationContext, internalSample.value);
+
+        appendValue(aggregationContext, internalSample.value);
         if (hasSample) {
             return CR_OK;
         }
-        result = self->base.input->GetNext(self->base.input, &internalSample);
+        result = getNextInput(input, &internalSample);
     }
 
     if (result == CR_END) {
@@ -141,7 +149,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             return CR_END;
         } else {
             double value;
-            if (self->aggregation->finalize(self->aggregationContext, &value) == TSDB_OK) {
+            if (aggregation->finalize(aggregationContext, &value) == TSDB_OK) {
                 currentSample->timestamp = self->aggregationLastTimestamp;
                 currentSample->value = value;
             }
