@@ -56,10 +56,13 @@ typedef enum MultiSeriesReduceOp
     MultiSeriesReduceOp_Sum,
 } MultiSeriesReduceOp;
 
+#define LIMIT_LABELS_SIZE 50
 typedef struct MRangeArgs
 {
     RangeArgs rangeArgs;
     bool withLabels;
+    ushort numLimitLabels;
+    RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
     MultiSeriesReduceOp gropuByReducerOp;
@@ -93,6 +96,13 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           int argc,
                           api_timestamp_t *time_delta,
                           int *agg_type);
+
+int parseLabelQuery(RedisModuleCtx *ctx,
+                    RedisModuleString **argv,
+                    int argc,
+                    bool *withLabels,
+                    RedisModuleString **limitLabels,
+                    ushort *limitLabelsSize);
 
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,

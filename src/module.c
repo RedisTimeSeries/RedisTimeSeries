@@ -236,7 +236,13 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     minimizedArgs.filterByTSArgs.hasValue = false;
     minimizedArgs.filterByValueArgs.hasValue = false;
 
-    replyResultSet(ctx, resultset, args->withLabels, &minimizedArgs, args->reverse);
+    replyResultSet(ctx,
+                   resultset,
+                   args->withLabels,
+                   args->limitLabels,
+                   args->numLimitLabels,
+                   &minimizedArgs,
+                   args->reverse);
 
     ResultSet_Free(resultset);
     return REDISMODULE_OK;
@@ -271,7 +277,13 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
-        ReplySeriesArrayPos(ctx, series, args->withLabels, &args->rangeArgs, args->reverse);
+        ReplySeriesArrayPos(ctx,
+                            series,
+                            args->withLabels,
+                            args->limitLabels,
+                            args->numLimitLabels,
+                            &args->rangeArgs,
+                            args->reverse);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -850,7 +862,12 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
     size_t query_count = argc - 1 - filter_location;
-    const int withlabels_location = RMUtil_ArgIndex("WITHLABELS", argv, argc);
+
+    bool withLabels = false;
+    RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
+    ushort limitLabelsSize = 0;
+    parseLabelQuery(ctx, argv, argc, &withLabels, limitLabels, &limitLabelsSize);
+
     int response = 0;
     QueryPredicateList *queries =
         parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
@@ -888,8 +905,10 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        if (withlabels_location >= 0) {
+        if (withLabels) {
             ReplyWithSeriesLabels(ctx, series);
+        } else if (limitLabelsSize > 0) {
+            ReplyWithSeriesLabelsWithLimit(ctx, series, limitLabels, limitLabelsSize);
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }

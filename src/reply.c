@@ -17,12 +17,16 @@
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
                         bool withlabels,
+                        RedisModuleString *limitLabels[],
+                        ushort limitLabelsSize,
                         RangeArgs *args,
                         bool rev) {
     RedisModule_ReplyWithArray(ctx, 3);
     RedisModule_ReplyWithString(ctx, s->keyName);
     if (withlabels) {
         ReplyWithSeriesLabels(ctx, s);
+    } else if (limitLabelsSize > 0) {
+        ReplyWithSeriesLabelsWithLimit(ctx, s, limitLabels, limitLabelsSize);
     } else {
         RedisModule_ReplyWithArray(ctx, 0);
     }
@@ -58,6 +62,34 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool 
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
+}
+
+bool static filterKey(RedisModuleString *key,
+                      RedisModuleString *limitLabels[],
+                      ushort limitLabelsSize) {
+    for (int i = 0; i < limitLabelsSize; ++i) {
+        if (RedisModule_StringCompare(key, limitLabels[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
+                                    const Series *series,
+                                    RedisModuleString *limitLabels[],
+                                    ushort limitLabelsSize) {
+    long count = 0;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    for (int i = 0; i < series->labelsCount; i++) {
+        if (filterKey(series->labels[i].key, limitLabels, limitLabelsSize)) {
+            count++;
+            RedisModule_ReplyWithArray(ctx, 2);
+            RedisModule_ReplyWithString(ctx, series->labels[i].key);
+            RedisModule_ReplyWithString(ctx, series->labels[i].value);
+        }
+    }
+    RedisModule_ReplySetArrayLength(ctx, count);
 }
 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {

@@ -10,6 +10,12 @@
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
 
+#define QUERY_TOKEN_SIZE 9
+static const char *QUERY_TOKENS[] = {
+    "WITHLABELS", "AGGREGATION",     "LIMIT",        "GROUPBY", "REDUCE",
+    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
+};
+
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
@@ -385,6 +391,49 @@ int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reduce
     return TSDB_ERROR;
 }
 
+int parseLabelQuery(RedisModuleCtx *ctx,
+                    RedisModuleString **argv,
+                    int argc,
+                    bool *withLabels,
+                    RedisModuleString **limitLabels,
+                    ushort *limitLabelsSize) {
+    *withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+    const int limit_location = RMUtil_ArgIndex("SELECTED_LABELS", argv, argc);
+    if (limit_location > 0 && *withLabels) {
+        RTS_ReplyGeneralError(ctx, "TSDB: cannot accept WITHLABELS and SELECT_LABELS together");
+        return REDISMODULE_ERR;
+    }
+
+    if (limit_location > 0) {
+        size_t count = 0;
+        for (int i = limit_location + 1; i < argc; i++) {
+            size_t len;
+            const char *c_str = RedisModule_StringPtrLen(argv[i], &len);
+            bool found = false;
+            for (int j = 0; j < QUERY_TOKEN_SIZE; ++j) {
+                if (strcasecmp(QUERY_TOKENS[j], c_str) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                break;
+            }
+            if (count >= LIMIT_LABELS_SIZE) {
+                RTS_ReplyGeneralError(ctx, "TSDB: reached max size for SELECT_LABELS");
+                return REDISMODULE_ERR;
+            }
+            limitLabels[count] = argv[i];
+            count++;
+        }
+        if (count == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: SELECT_LABELS should have at least 1 parameter");
+            return REDISMODULE_ERR;
+        }
+        *limitLabelsSize = count;
+    }
+}
+
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
     if (argc < 4) {
         RedisModule_WrongArity(ctx);
@@ -394,6 +443,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     MRangeArgs args;
     args.groupByLabel = NULL;
     args.queryPredicates = NULL;
+    args.numLimitLabels = 0;
 
     if (parseRangeArguments(ctx, 1, argv, argc, LLONG_MAX, &args.rangeArgs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -405,7 +455,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    args.withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+    parseLabelQuery(ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels);
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 

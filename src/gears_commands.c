@@ -54,8 +54,13 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         if (data->args.groupByLabel) {
             ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
         } else {
-            ReplySeriesArrayPos(
-                rctx, s, data->args.withLabels, &data->args.rangeArgs, data->args.reverse);
+            ReplySeriesArrayPos(rctx,
+                                s,
+                                data->args.withLabels,
+                                data->args.limitLabels,
+                                data->args.numLimitLabels,
+                                &data->args.rangeArgs,
+                                data->args.reverse);
         }
     }
 
@@ -70,7 +75,13 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByValueArgs.hasValue = false;
 
-        replyResultSet(rctx, resultset, data->args.withLabels, &minimizedArgs, data->args.reverse);
+        replyResultSet(rctx,
+                       resultset,
+                       data->args.withLabels,
+                       data->args.limitLabels,
+                       data->args.numLimitLabels,
+                       &minimizedArgs,
+                       data->args.reverse);
 
         ResultSet_Free(resultset);
     }
