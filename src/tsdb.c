@@ -39,7 +39,7 @@ int GetSeries(RedisModuleCtx *ctx,
     }
     *key = new_key;
     *series = RedisModule_ModuleTypeGetValue(new_key);
-    
+
     return TRUE;
 }
 
@@ -48,7 +48,6 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     RedisModuleKey **key,
                     Series **series,
                     int mode) {
-
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
     if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(new_key);
