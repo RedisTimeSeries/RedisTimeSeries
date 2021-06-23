@@ -396,7 +396,7 @@ int parseLabelQuery(RedisModuleCtx *ctx,
                     int argc,
                     bool *withLabels,
                     RedisModuleString **limitLabels,
-                    ushort *limitLabelsSize) {
+                    unsigned short *limitLabelsSize) {
     *withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
     const int limit_location = RMUtil_ArgIndex("SELECTED_LABELS", argv, argc);
     if (limit_location > 0 && *withLabels) {

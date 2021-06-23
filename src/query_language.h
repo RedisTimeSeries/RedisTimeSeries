@@ -61,7 +61,7 @@ typedef struct MRangeArgs
 {
     RangeArgs rangeArgs;
     bool withLabels;
-    ushort numLimitLabels;
+    unsigned short numLimitLabels;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
@@ -102,7 +102,7 @@ int parseLabelQuery(RedisModuleCtx *ctx,
                     int argc,
                     bool *withLabels,
                     RedisModuleString **limitLabels,
-                    ushort *limitLabelsSize);
+                    unsigned short *limitLabelsSize);
 
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
