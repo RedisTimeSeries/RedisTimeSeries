@@ -866,10 +866,11 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     bool withLabels = false;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     ushort limitLabelsSize = 0;
-    if (parseLabelQuery(ctx, argv, argc, &withLabels, limitLabels, &limitLabelsSize) == REDISMODULE_ERR){
+    if (parseLabelQuery(ctx, argv, argc, &withLabels, limitLabels, &limitLabelsSize) ==
+        REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
-    const char ** limitLabelsStr = calloc(limitLabelsSize, sizeof(char *));
+    const char **limitLabelsStr = calloc(limitLabelsSize, sizeof(char *));
     for (int i = 0; i < limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(limitLabels[i], NULL);
     }

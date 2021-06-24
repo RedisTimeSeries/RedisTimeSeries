@@ -85,13 +85,12 @@ void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
     }
     ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, limitLabelsSize);
     free(limitLabelsStr);
-
 }
 
 void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
-                                    const Series *series,
-                                    char **limitLabels,
-                                    ushort limitLabelsSize) {
+                                     const Series *series,
+                                     char **limitLabels,
+                                     ushort limitLabelsSize) {
     long count = 0;
     RedisModule_ReplyWithArray(ctx, limitLabelsSize);
     for (int i = 0; i < limitLabelsSize; i++) {

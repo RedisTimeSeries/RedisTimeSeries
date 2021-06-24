@@ -28,9 +28,9 @@ void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     RedisModuleString **limitLabels,
                                     ushort limitLabelsSize);
 void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
-                                       const Series *series,
-                                       char **limitLabels,
-                                       ushort limitLabelsSize);
+                                     const Series *series,
+                                     char **limitLabels,
+                                     ushort limitLabelsSize);
 
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value);
 
