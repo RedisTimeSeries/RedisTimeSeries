@@ -35,7 +35,7 @@ def test_range_query():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'nonexist', 0 -1)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, '', '')
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1, '', 'aggregation')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'count', 'number')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -44,6 +44,8 @@ def test_range_query():
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count', 'number')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', '')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'not_aggregation_function')
         with pytest.raises(redis.ResponseError) as excinfo:
