@@ -104,3 +104,11 @@ class testGlobalConfigTests():
 
             r.execute_command('DEL', 'tester')
             r.execute_command('DEL', 'tester_agg')
+
+
+def test_negative_configuration():
+    Env().skipOnCluster()
+    
+    env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
