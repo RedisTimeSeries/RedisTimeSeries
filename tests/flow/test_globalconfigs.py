@@ -27,7 +27,7 @@ class testModuleLoadTimeArguments(object):
 
 def test_uncompressed():
     Env().skipOnCluster()
-    env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED COMPACTION_POLICY max:1s:1m')
+    env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -36,7 +36,7 @@ def test_uncompressed():
 
 def test_compressed():
     Env().skipOnCluster()
-    env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -108,7 +108,18 @@ class testGlobalConfigTests():
 
 def test_negative_configuration():
     Env().skipOnCluster()
-    
-    env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY')
-    with env.getConnection() as r:
-        r.execute_command('FLUSHALL')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE; CHUNK_SIZE_BYTES 100')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY NOT_A_REAL_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; RETENTION_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; CHUNK_SIZE_BYTES')
