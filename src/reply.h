@@ -25,8 +25,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     const Series *series,
-                                    RedisModuleString *limitLabels[],
+                                    RedisModuleString **limitLabels,
                                     ushort limitLabelsSize);
+void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
+                                       const Series *series,
+                                       char **limitLabels,
+                                       ushort limitLabelsSize);
 
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value);
 

@@ -866,7 +866,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     bool withLabels = false;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     ushort limitLabelsSize = 0;
-    parseLabelQuery(ctx, argv, argc, &withLabels, limitLabels, &limitLabelsSize);
+    if (parseLabelQuery(ctx, argv, argc, &withLabels, limitLabels, &limitLabelsSize) == REDISMODULE_ERR){
+        return REDISMODULE_ERR;
+    }
+    const char ** limitLabelsStr = calloc(limitLabelsSize, sizeof(char *));
+    for (int i = 0; i < limitLabelsSize; i++) {
+        limitLabelsStr[i] = RedisModule_StringPtrLen(limitLabels[i], NULL);
+    }
 
     int response = 0;
     QueryPredicateList *queries =
@@ -908,7 +914,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (withLabels) {
             ReplyWithSeriesLabels(ctx, series);
         } else if (limitLabelsSize > 0) {
-            ReplyWithSeriesLabelsWithLimit(ctx, series, limitLabels, limitLabelsSize);
+            ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, limitLabelsSize);
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
@@ -919,6 +925,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplySetArrayLength(ctx, replylen);
     RedisModule_DictIteratorStop(iter);
     QueryPredicateList_Free(queries);
+    free(limitLabelsStr);
     return REDISMODULE_OK;
 }
 

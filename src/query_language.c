@@ -432,6 +432,7 @@ int parseLabelQuery(RedisModuleCtx *ctx,
         }
         *limitLabelsSize = count;
     }
+    return REDISMODULE_OK;
 }
 
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
