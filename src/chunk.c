@@ -177,15 +177,14 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
     size_t sample_pos = 0;
     u_int64_t sample_ts = 0;
     bool found = false;
-    for (; sample_pos < numSamples; ++sample_pos) {
-        sample_ts = ts_array[sample_pos];
-        if (ts == sample_ts) {
-            found = true;
-        }
-        if (ts <= sample_ts) {
-            break;
-        }
-    }
+
+    // find the number of elements in the array that are less than the timestamp you search for
+    for (int i = 0; i < numSamples; i++)
+        sample_pos += (ts_array[i] < ts);
+
+    // check if timestamp right after is the one we're searching for
+    if (sample_pos < numSamples && ts_array[sample_pos] == ts)
+        found = true;
 
     // update value in case timestamp exists
     if (found == true) {
