@@ -225,9 +225,9 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
         if (timestamps[i] >= startTs && timestamps[i] <= endTs) {
             continue;
         }
-        new_count++;
         new_samples_ts[new_count] = timestamps[i];
         new_samples_values[new_count] = values[i];
+        new_count++;
     }
     size_t deleted_count = regChunk->num_samples - new_count;
     free(regChunk->samples_ts);
