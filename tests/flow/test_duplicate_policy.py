@@ -13,6 +13,9 @@ class testDuplicationPolicyTests():
     def test_ts_add_unknow_duplicate_policy(self):
         with self.env.getClusterConnectionIfNeeded() as r:
             with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY")
+
+            with pytest.raises(redis.ResponseError) as excinfo:
                 assert r.execute_command('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", "---------------")
 
     def test_precendence_key(self):

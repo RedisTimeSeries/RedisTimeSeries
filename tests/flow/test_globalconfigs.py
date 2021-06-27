@@ -42,6 +42,17 @@ def test_compressed():
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
 
+def test_compressed_debug():
+    Env().skipOnCluster()
+    
+    env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.ADD', 't1', '1', 1.0)
+        r.execute_command('TS.ADD', 't1', '3000', 1.0)
+        r.execute_command('TS.ADD', 't1', '5000', 1.0)
+
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
 
 class testGlobalConfigTests():
 
