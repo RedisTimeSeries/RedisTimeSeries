@@ -64,7 +64,6 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
-        import pdb;pdb.set_trace()
         assert expected_result_withlabels == actual_result
 
         # expect to received time-series k1 and k2 with labels
