@@ -86,18 +86,20 @@ int GetSeries(RedisModuleCtx *ctx,
               RedisModuleKey **key,
               Series **series,
               int mode) {
-    *key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(*key);
+    RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(new_key);
         RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
         return FALSE;
     }
-    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
-        RedisModule_CloseKey(*key);
+    if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
+        RedisModule_CloseKey(new_key);
         RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
         return FALSE;
     }
-    *series = RedisModule_ModuleTypeGetValue(*key);
+    *key = new_key;
+    *series = RedisModule_ModuleTypeGetValue(new_key);
+
     return TRUE;
 }
 
@@ -106,16 +108,17 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     RedisModuleKey **key,
                     Series **series,
                     int mode) {
-    *key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(*key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(*key);
+    RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
+    if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_CloseKey(new_key);
         return FALSE;
     }
-    if (RedisModule_ModuleTypeGetType(*key) != SeriesType) {
-        RedisModule_CloseKey(*key);
+    if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
+        RedisModule_CloseKey(new_key);
         return FALSE;
     }
-    *series = RedisModule_ModuleTypeGetValue(*key);
+    *key = new_key;
+    *series = RedisModule_ModuleTypeGetValue(new_key);
     return TRUE;
 }
 
