@@ -188,10 +188,8 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
 
     // update value in case timestamp exists
     if (found == true) {
-        Sample tempS;
-        tempS.timestamp = ts;
-        tempS.value = regChunk->samples_values[sample_pos];
-        ChunkResult cr = handleDuplicateSample(duplicatePolicy, tempS, &(uCtx->sample));
+        ChunkResult cr = handleDuplicateSample(
+            duplicatePolicy, regChunk->samples_values[sample_pos], &(uCtx->sample.value));
         if (cr != CR_OK) {
             return CR_ERR;
         }
