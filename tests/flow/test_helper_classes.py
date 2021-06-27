@@ -168,6 +168,7 @@ class TSInfo(object):
     first_time_stamp = None
     chunk_size_bytes = None
     chunk_type = None
+    chunks = None
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
@@ -182,6 +183,7 @@ class TSInfo(object):
         if b'firstTimestamp' in response: self.first_time_stamp = response[b'firstTimestamp']
         if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
         if b'chunkType' in response: self.chunk_type = response[b'chunkType']
+        if b'Chunks' in response: self.chunks = response[b'Chunks']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
@@ -194,4 +196,5 @@ class TSInfo(object):
                self.retention_msecs == other.retention_msecs and \
                self.last_time_stamp == other.last_time_stamp and \
                self.first_time_stamp == other.first_time_stamp and \
-               self.chunk_size_bytes == other.chunk_size_bytes
+               self.chunk_size_bytes == other.chunk_size_bytes and \
+               self.chunks == other.chunks
