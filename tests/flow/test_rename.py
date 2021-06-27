@@ -65,3 +65,22 @@ def test_rename_indexed():
         env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a1{3}', [], [100, b'200']]])
 
 
+
+def test_rename_none_ts():
+
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        
+        assert r.execute_command('TS.CREATE', 'a{4}')
+        assert r.execute_command('SET', 'key1{4}', 'val1')
+        assert r.execute_command('SET', 'key2{4}', 'val2')
+
+        env.assertTrue(r.execute_command('RENAME', 'key1{4}', 'key3{4}'))
+        env.assertTrue(r.execute_command('RENAME', 'key2{4}', 'key1{4}'))
+
+        assert r.execute_command('SET', 'key1{4}', 'val3')
+        assert r.execute_command('SET', 'key3{4}', 'val4')
+
+        aInfo = TSInfo(r.execute_command('TS.INFO', 'a{4}'))
+        env.assertEqual(aInfo.sourceKey, None)
+        env.assertEqual(aInfo.rules, [])
