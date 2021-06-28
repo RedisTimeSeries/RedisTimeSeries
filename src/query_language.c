@@ -435,6 +435,61 @@ int parseLabelQuery(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
+int parseFilter(RedisModuleCtx *ctx,
+                RedisModuleString **argv,
+                int argc,
+                int filter_location,
+                int query_count,
+                QueryPredicateList **out) {
+    int response;
+    QueryPredicateList *queries = NULL;
+
+    queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+        return REDISMODULE_ERR;
+    }
+
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+        return REDISMODULE_ERR;
+    }
+    *out = queries;
+    return REDISMODULE_OK;
+}
+
+int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out) {
+    MGetArgs args = { 0 };
+    if (argc < 3) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+
+    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+    size_t query_count = argc - 1 - filter_location;
+
+    if (parseLabelQuery(
+            ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
+        REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    QueryPredicateList *queries;
+    if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    args.queryPredicates = queries;
+    *out = args;
+    return REDISMODULE_OK;
+}
+
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
     if (argc < 4) {
         RedisModule_WrongArity(ctx);
@@ -470,21 +525,10 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    int response;
-    QueryPredicateList *queries =
-        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
-    if (response == TSDB_ERROR) {
-        QueryPredicateList_Free(queries);
-        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+    QueryPredicateList *queries = NULL;
+    if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
-
-    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
-        QueryPredicateList_Free(queries);
-        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
-        return REDISMODULE_ERR;
-    }
-
     args.queryPredicates = queries;
 
     if (groupby_location > 0) {
@@ -516,5 +560,9 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 }
 
 void MRangeArgs_Free(MRangeArgs *args) {
+    QueryPredicateList_Free(args->queryPredicates);
+}
+
+void MGetArgs_Free(MGetArgs *args) {
     QueryPredicateList_Free(args->queryPredicates);
 }

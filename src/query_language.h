@@ -69,6 +69,14 @@ typedef struct MRangeArgs
     bool reverse;
 } MRangeArgs;
 
+typedef struct MGetArgs
+{
+    bool withLabels;
+    unsigned short numLimitLabels;
+    RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
+    QueryPredicateList *queryPredicates;
+} MGetArgs;
+
 typedef struct CreateCtx
 {
     long long retentionTime;
@@ -124,5 +132,8 @@ QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
 
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out);
 void MRangeArgs_Free(MRangeArgs *args);
+
+int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
+void MGetArgs_Free(MGetArgs *args);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H
