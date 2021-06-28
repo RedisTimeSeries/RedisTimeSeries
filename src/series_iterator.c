@@ -81,14 +81,6 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
     free(iterator);
 }
 
-static inline void resetChunkIterator(SeriesIterator *iterator,
-                                      const ChunkFuncs *funcs,
-                                      void *currentChunk) {
-    iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
-    iterator->chunkIterator = funcs->NewChunkIterator(
-        currentChunk, SeriesChunkIteratorOptions(iterator), &iterator->chunkIteratorFuncs);
-}
-
 // Fills sample from chunk. If all samples were extracted from the chunk, we
 // move to the next chunk.
 static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
@@ -108,7 +100,10 @@ static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sampl
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
                 }
-                resetChunkIterator(iterator, funcs, currentChunk);
+                funcs->ResetChunkIterator(iterator->chunkIterator,
+                                          currentChunk,
+                                          SeriesChunkIteratorOptions(iterator),
+                                          &iterator->chunkIteratorFuncs);
                 if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
@@ -137,7 +132,10 @@ static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sampl
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
                 }
-                resetChunkIterator(iterator, funcs, currentChunk);
+                funcs->ResetChunkIterator(iterator->chunkIterator,
+                                          currentChunk,
+                                          SeriesChunkIteratorOptions(iterator),
+                                          &iterator->chunkIteratorFuncs);
                 if (SeriesGetPrevious(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
