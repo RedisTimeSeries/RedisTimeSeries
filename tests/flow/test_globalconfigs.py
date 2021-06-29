@@ -27,7 +27,7 @@ class testModuleLoadTimeArguments(object):
 
 def test_uncompressed():
     Env().skipOnCluster()
-    env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED COMPACTION_POLICY max:1s:1m')
+    env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -36,12 +36,23 @@ def test_uncompressed():
 
 def test_compressed():
     Env().skipOnCluster()
-    env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
 
+def test_compressed_debug():
+    Env().skipOnCluster()
+    
+    env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.ADD', 't1', '1', 1.0)
+        r.execute_command('TS.ADD', 't1', '3000', 1.0)
+        r.execute_command('TS.ADD', 't1', '5000', 1.0)
+
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
 
 class testGlobalConfigTests():
 
@@ -104,3 +115,22 @@ class testGlobalConfigTests():
 
             r.execute_command('DEL', 'tester')
             r.execute_command('DEL', 'tester_agg')
+
+
+def test_negative_configuration():
+    Env().skipOnCluster()
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE; CHUNK_SIZE_BYTES 100')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY NOT_A_REAL_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; RETENTION_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; CHUNK_SIZE_BYTES')

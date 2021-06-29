@@ -246,6 +246,7 @@ TS.REVRANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_V
 - toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional parameters:
+
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples.
@@ -298,6 +299,7 @@ TS.MREVRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALU
 * filter - [See Filtering](#filtering)
 
 Optional parameters:
+
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples per time-series.
