@@ -62,6 +62,10 @@ typedef enum DuplicatePolicy {
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
 
+#define SERIES_OPT_COMPRESSED_GORILLA 0x2
+
+#define SERIES_OPT_COMPRESSED_TURBOGORILLA 0x4
+
 /* Chunk enum */
 typedef enum {
   CR_OK = 0,    // RM_OK

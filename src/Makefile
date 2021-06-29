@@ -74,6 +74,8 @@ LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
 FAST_DOUBLE_PARSER_LIBDIR=$(BINROOT)/fast_double_parser_c
 FAST_DOUBLE_PARSER_SRCDIR=$(SRCDIR)/fast_double_parser_c
 LIBFAST_DOUBLE_PARSER=$(FAST_DOUBLE_PARSER_LIBDIR)/libfast_double_parser_c.a
+LIBIC_SRCDIR=$(ROOT)/deps/TurboPFor-Integer-Compression
+LIBIC=$(LIBIC_SRCDIR)/libic.a
 
 #----------------------------------------------------------------------------------------------
 
@@ -96,7 +98,9 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++
+LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil \
+	-L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ \
+	-L$(LIBIC_SRCDIR) -lic
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -181,6 +185,12 @@ rmutil:
 
 $(LIBRMUTIL): rmutil
 
+libic.a:
+	@echo Building $@...
+	$(SHOW)$(MAKE) -C $(LIBIC_SRCDIR) libic.a -j
+
+$(LIBIC): libic.a
+
 libfast_double_parser_c:
 	@echo Building $@...
 	$(SHOW)$(MAKE) -C $(ROOT)/src/fast_double_parser_c
@@ -213,7 +223,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER) $(LIBIC)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))

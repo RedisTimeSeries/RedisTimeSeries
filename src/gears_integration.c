@@ -321,8 +321,13 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
         out->chunkType = CHUNK_REGULAR;
     } else {
-        out->chunkType = CHUNK_COMPRESSED;
+        if (series->options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
+            out->chunkType = CHUNK_COMPRESSED_TURBOGORILLA;
+        } else {
+            out->chunkType = CHUNK_COMPRESSED;
+        }
     }
+
     out->funcs = series->funcs;
     out->labelsCount = series->labelsCount;
     out->labels = calloc(series->labelsCount, sizeof(Label));

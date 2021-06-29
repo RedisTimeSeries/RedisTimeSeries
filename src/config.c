@@ -97,8 +97,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         chunk_type_cstr = RedisModule_StringPtrLen(chunk_type, &len);
 
         if (strncmp(chunk_type_cstr, "compressed", len) == 0) {
-            TSGlobalConfig.options =
-                0; // since we don't have any other options ATM its safe to use 0
+            TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
         } else if (strncmp(chunk_type_cstr, "uncompressed", len) == 0) {
             TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
         } else {
