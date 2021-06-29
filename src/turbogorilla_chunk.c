@@ -1,0 +1,280 @@
+/*
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
+#include "turbogorilla_chunk.h"
+
+#include "gears_integration.h"
+
+#include "rmutil/alloc.h"
+
+Chunk_t *TurboGorilla_NewChunk(size_t size) {
+    TurboGorilla_Chunk *newChunk = (TurboGorilla_Chunk *)malloc(sizeof(TurboGorilla_Chunk));
+    newChunk->num_samples = 0;
+    newChunk->size = size;
+    newChunk->samples = (Sample *)malloc(size);
+#ifdef DEBUG
+    memset(newChunk->samples, 0, size);
+#endif
+
+    return newChunk;
+}
+
+void TurboGorilla_FreeChunk(Chunk_t *chunk) {
+    free(((TurboGorilla_Chunk *)chunk)->samples);
+    free(chunk);
+}
+
+/**
+ * TODO: describe me
+ * @param chunk
+ * @return
+ */
+Chunk_t *TurboGorilla_SplitChunk(Chunk_t *chunk) {
+    TurboGorilla_Chunk *curChunk = (TurboGorilla_Chunk *)chunk;
+    size_t split = curChunk->num_samples / 2;
+    size_t curNumSamples = curChunk->num_samples - split;
+
+    // create chunk and copy samples
+    TurboGorilla_Chunk *newChunk = TurboGorilla_NewChunk(split * SAMPLE_SIZE);
+    for (size_t i = 0; i < split; ++i) {
+        Sample *sample = &curChunk->samples[curNumSamples + i];
+        TurboGorilla_AddSample(newChunk, sample);
+    }
+
+    // update current chunk
+    curChunk->num_samples = curNumSamples;
+    curChunk->size = curNumSamples * SAMPLE_SIZE;
+    curChunk->samples = realloc(curChunk->samples, curChunk->size);
+
+    return newChunk;
+}
+
+static int IsChunkFull(TurboGorilla_Chunk *chunk) {
+    return chunk->num_samples == chunk->size / SAMPLE_SIZE;
+}
+
+u_int64_t TurboGorilla_NumOfSample(Chunk_t *chunk) {
+    return ((TurboGorilla_Chunk *)chunk)->num_samples;
+}
+
+static Sample *ChunkGetSample(TurboGorilla_Chunk *chunk, int index) {
+    return &chunk->samples[index];
+}
+
+timestamp_t TurboGorilla_GetLastTimestamp(Chunk_t *chunk) {
+    if (((TurboGorilla_Chunk *)chunk)->num_samples == 0) {
+        return -1;
+    }
+    return ChunkGetSample(chunk, ((TurboGorilla_Chunk *)chunk)->num_samples - 1)->timestamp;
+}
+
+timestamp_t TurboGorilla_GetFirstTimestamp(Chunk_t *chunk) {
+    if (((TurboGorilla_Chunk *)chunk)->num_samples == 0) {
+        return -1;
+    }
+    return ChunkGetSample(chunk, 0)->timestamp;
+}
+
+ChunkResult TurboGorilla_AddSample(Chunk_t *chunk, Sample *sample) {
+    TurboGorilla_Chunk *regChunk = (TurboGorilla_Chunk *)chunk;
+    if (IsChunkFull(regChunk)) {
+        return CR_END;
+    }
+
+    if (TurboGorilla_NumOfSample(regChunk) == 0) {
+        // initialize base_timestamp
+        regChunk->base_timestamp = sample->timestamp;
+    }
+
+    regChunk->samples[regChunk->num_samples] = *sample;
+    regChunk->num_samples++;
+
+    return CR_OK;
+}
+
+/**
+ * TODO: describe me
+ * @param chunk
+ * @param idx
+ * @param sample
+ */
+static void upsertChunk(TurboGorilla_Chunk *chunk, size_t idx, Sample *sample) {
+    if (chunk->num_samples == chunk->size / SAMPLE_SIZE) {
+        chunk->size += sizeof(Sample);
+        chunk->samples = realloc(chunk->samples, chunk->size);
+    }
+    if (idx < chunk->num_samples) { // sample is not last
+        memmove(&chunk->samples[idx + 1],
+                &chunk->samples[idx],
+                (chunk->num_samples - idx) * sizeof(Sample));
+    }
+    chunk->samples[idx] = *sample;
+    chunk->num_samples++;
+}
+
+/**
+ * TODO: describe me
+ * @param uCtx
+ * @param size
+ * @return
+ */
+ChunkResult TurboGorilla_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
+    *size = 0;
+    TurboGorilla_Chunk *regChunk = (TurboGorilla_Chunk *)uCtx->inChunk;
+    timestamp_t ts = uCtx->sample.timestamp;
+    short numSamples = regChunk->num_samples;
+    // find sample location
+    size_t i = 0;
+    Sample *sample = NULL;
+    for (; i < numSamples; ++i) {
+        sample = ChunkGetSample(regChunk, i);
+        if (ts <= sample->timestamp) {
+            break;
+        }
+    }
+    // update value in case timestamp exists
+    if (sample != NULL && ts == sample->timestamp) {
+        ChunkResult cr = handleDuplicateSample(duplicatePolicy, *sample, &uCtx->sample);
+        if (cr != CR_OK) {
+            return CR_ERR;
+        }
+        regChunk->samples[i].value = uCtx->sample.value;
+        return CR_OK;
+    }
+
+    if (i == 0) {
+        regChunk->base_timestamp = ts;
+    }
+
+    upsertChunk(regChunk, i, &uCtx->sample);
+    *size = 1;
+    return CR_OK;
+}
+
+size_t TurboGorilla_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
+    TurboGorilla_Chunk *regChunk = (TurboGorilla_Chunk *)chunk;
+    Sample *newSamples = (Sample *)malloc(regChunk->size);
+    size_t i = 0;
+    size_t new_count = 0;
+    for (; i < regChunk->num_samples; ++i) {
+        if (regChunk->samples[i].timestamp >= startTs && regChunk->samples[i].timestamp <= endTs) {
+            continue;
+        }
+        newSamples[new_count++] = regChunk->samples[i];
+    }
+    size_t deleted_count = regChunk->num_samples - new_count;
+    free(regChunk->samples);
+    regChunk->samples = newSamples;
+    regChunk->num_samples = new_count;
+    regChunk->base_timestamp = newSamples[0].timestamp;
+    return deleted_count;
+}
+
+ChunkIter_t *TurboGorilla_NewChunkIterator(Chunk_t *chunk,
+                                           int options,
+                                           ChunkIterFuncs *retChunkIterClass) {
+    TurboGorilla_ChunkIterator *iter =
+        (TurboGorilla_ChunkIterator *)calloc(1, sizeof(TurboGorilla_ChunkIterator));
+    iter->chunk = chunk;
+    iter->options = options;
+    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
+        iter->currentIndex = iter->chunk->num_samples - 1;
+    } else { // iterate from first to last
+        iter->currentIndex = 0;
+    }
+
+    if (retChunkIterClass != NULL) {
+        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
+    }
+
+    return (ChunkIter_t *)iter;
+}
+
+ChunkResult TurboGorilla_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
+    TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
+    if (iter->currentIndex < iter->chunk->num_samples) {
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
+        iter->currentIndex++;
+        return CR_OK;
+    } else {
+        return CR_END;
+    }
+}
+
+ChunkResult TurboGorilla_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
+    TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
+    if (iter->currentIndex >= 0) {
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
+        iter->currentIndex--;
+        return CR_OK;
+    } else {
+        return CR_END;
+    }
+}
+
+void TurboGorilla_FreeChunkIterator(ChunkIter_t *iterator) {
+    TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
+    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
+        TurboGorilla_FreeChunk(iter->chunk);
+    }
+    free(iter);
+}
+
+size_t TurboGorilla_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
+    TurboGorilla_Chunk *uncompChunk = chunk;
+    size_t size = uncompChunk->size;
+    size += includeStruct ? sizeof(*uncompChunk) : 0;
+    return size;
+}
+
+typedef void (*SaveUnsignedFunc)(void *, uint64_t);
+typedef void (*SaveStringBufferFunc)(void *, const char *str, size_t len);
+typedef uint64_t (*ReadUnsignedFunc)(void *);
+typedef char *(*ReadStringBufferFunc)(void *, size_t *);
+
+static void TurboGorilla_GenericSerialize(Chunk_t *chunk,
+                                          void *ctx,
+                                          SaveUnsignedFunc saveUnsigned,
+                                          SaveStringBufferFunc saveString) {
+    TurboGorilla_Chunk *uncompchunk = chunk;
+
+    saveUnsigned(ctx, uncompchunk->base_timestamp);
+    saveUnsigned(ctx, uncompchunk->num_samples);
+    saveUnsigned(ctx, uncompchunk->size);
+
+    saveString(ctx, (char *)uncompchunk->samples, uncompchunk->size);
+}
+
+static void TurboGorilla_Deserialize(Chunk_t **chunk,
+                                     void *ctx,
+                                     ReadUnsignedFunc readUnsigned,
+                                     ReadStringBufferFunc readStringBuffer) {
+    TurboGorilla_Chunk *uncompchunk = (TurboGorilla_Chunk *)malloc(sizeof(*uncompchunk));
+
+    uncompchunk->base_timestamp = readUnsigned(ctx);
+    uncompchunk->num_samples = readUnsigned(ctx);
+    uncompchunk->size = readUnsigned(ctx);
+    size_t string_buffer_size;
+    uncompchunk->samples = (Sample *)readStringBuffer(ctx, &string_buffer_size);
+    *chunk = (Chunk_t *)uncompchunk;
+}
+
+void TurboGorilla_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+    TurboGorilla_GenericSerialize(chunk,
+                                  io,
+                                  (SaveUnsignedFunc)RedisModule_SaveUnsigned,
+                                  (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
+}
+
+void TurboGorilla_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    TurboGorilla_Deserialize(chunk,
+                             io,
+                             (ReadUnsignedFunc)RedisModule_LoadUnsigned,
+                             (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+}
+
+void TurboGorilla_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
+
+void TurboGorilla_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {}

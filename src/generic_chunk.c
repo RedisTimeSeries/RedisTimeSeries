@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "compressed_chunk.h"
+#include "turbogorilla_chunk.h"
 
 #include <ctype.h>
 #include "rmutil/alloc.h"
@@ -57,9 +58,41 @@ static ChunkFuncs comprChunk = {
     .GearsDeserialize = Compressed_GearsDeserialize,
 };
 
+
 static ChunkIterFuncs compressedChunkIteratorClass = {
     .Free = Compressed_FreeChunkIterator,
     .GetNext = Compressed_ChunkIteratorGetNext,
+    /*** Reverse iteration is on temporary decompressed chunk ***/
+    .GetPrev = NULL,
+};
+
+static ChunkFuncs TurboGorilla_ChunkFuncs = {
+    .NewChunk = TurboGorilla_NewChunk,
+    .FreeChunk = TurboGorilla_FreeChunk,
+    .CloneChunk = NULL,
+    .SplitChunk = TurboGorilla_SplitChunk,
+
+    .AddSample = TurboGorilla_AddSample,
+    .UpsertSample = TurboGorilla_UpsertSample,
+    .DelRange = TurboGorilla_DelRange,
+
+    .NewChunkIterator = TurboGorilla_NewChunkIterator,
+
+    .GetChunkSize = TurboGorilla_GetChunkSize,
+    .GetNumOfSample = NULL,
+    .GetLastTimestamp = TurboGorilla_GetLastTimestamp,
+    .GetFirstTimestamp = TurboGorilla_GetFirstTimestamp,
+
+    .SaveToRDB = TurboGorilla_SaveToRDB,
+    .LoadFromRDB = TurboGorilla_LoadFromRDB,
+    .GearsSerialize = TurboGorilla_GearsSerialize,
+    .GearsDeserialize = TurboGorilla_GearsDeserialize,
+};
+
+
+static ChunkIterFuncs TurboGorilla_ChunkIterFuncs = {
+    .Free = TurboGorilla_FreeChunkIterator,
+    .GetNext = TurboGorilla_ChunkIteratorGetNext,
     /*** Reverse iteration is on temporary decompressed chunk ***/
     .GetPrev = NULL,
 };
@@ -97,6 +130,8 @@ ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
             return &regChunk;
         case CHUNK_COMPRESSED:
             return &comprChunk;
+        case CHUNK_COMPRESSED_TURBOGORILLA:
+            return &TurboGorilla_ChunkFuncs;
     }
     return NULL;
 }
@@ -107,6 +142,8 @@ ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType) {
             return &uncompressedChunkIteratorClass;
         case CHUNK_COMPRESSED:
             return &compressedChunkIteratorClass;
+        case CHUNK_COMPRESSED_TURBOGORILLA:
+            return &TurboGorilla_ChunkIterFuncs;
     }
     return NULL;
 }
