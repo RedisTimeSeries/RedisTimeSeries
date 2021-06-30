@@ -12,30 +12,16 @@
 #include <sys/types.h>
 
 #define TURBOGORILLA_UNCOMPRESSED_SIZE sizeof(uint64_t) + sizeof(double)
-typedef struct TurboGorilla_Chunk
-{
-    timestamp_t start_timestamp;
-    timestamp_t end_timestamp;
-    size_t num_samples; // number of samples
-    size_t size;        // size of buffer in bytes
-    size_t buffer_in_use;
-    uint64_t *buffer_timestamps;
-    double *buffer_values;
-    size_t timestamps_cpos;
-    size_t values_cpos;
-    unsigned char *timestamps;
-    unsigned char *values;
-} TurboGorilla_Chunk;
+
+typedef struct TurboGorilla_Chunk TurboGorilla_Chunk;
 
 typedef struct TurboGorilla_ChunkIterator
 {
-    size_t currentIndex;
-    timestamp_t lastTimestamp;
-    double lastValue;
-    int options;
-    uint64_t *timestamps;
-    double *values;
     TurboGorilla_Chunk *chunk;
+    int currentIndex;
+    timestamp_t lastTimestamp;
+    int lastValue;
+    int options;
 } TurboGorilla_ChunkIterator;
 
 Chunk_t *TurboGorilla_NewChunk(size_t sampleCount);
@@ -48,6 +34,8 @@ void TurboGorilla_FreeChunk(Chunk_t *chunk);
  */
 Chunk_t *TurboGorilla_SplitChunk(Chunk_t *chunk);
 size_t TurboGorilla_GetChunkSize(Chunk_t *chunk, bool includeStruct);
+
+ChunkResult TurboGorilla_AddSampleOptimized(Chunk_t *chunk, u_int64_t timestamp, double value);
 
 /**
  * TODO: describe me

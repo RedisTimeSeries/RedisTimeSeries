@@ -68,7 +68,6 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
 static ChunkFuncs TurboGorilla_ChunkFuncs = {
     .NewChunk = TurboGorilla_NewChunk,
     .FreeChunk = TurboGorilla_FreeChunk,
-    .CloneChunk = NULL,
     .SplitChunk = TurboGorilla_SplitChunk,
 
     .AddSample = TurboGorilla_AddSample,
@@ -78,7 +77,7 @@ static ChunkFuncs TurboGorilla_ChunkFuncs = {
     .NewChunkIterator = TurboGorilla_NewChunkIterator,
 
     .GetChunkSize = TurboGorilla_GetChunkSize,
-    .GetNumOfSample = NULL,
+    .GetNumOfSample = TurboGorilla_NumOfSample,
     .GetLastTimestamp = TurboGorilla_GetLastTimestamp,
     .GetFirstTimestamp = TurboGorilla_GetFirstTimestamp,
 
@@ -91,8 +90,7 @@ static ChunkFuncs TurboGorilla_ChunkFuncs = {
 static ChunkIterFuncs TurboGorilla_ChunkIterFuncs = {
     .Free = TurboGorilla_FreeChunkIterator,
     .GetNext = TurboGorilla_ChunkIteratorGetNext,
-    /*** Reverse iteration is on temporary decompressed chunk ***/
-    .GetPrev = NULL,
+    .GetPrev = TurboGorilla_ChunkIteratorGetPrev,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
