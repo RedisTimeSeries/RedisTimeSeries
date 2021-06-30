@@ -665,7 +665,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
-            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+            .options = TSGlobalConfig.options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);

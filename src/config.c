@@ -25,6 +25,7 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
     TSGlobalConfig.options = 0;
+    TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
         RedisModuleString *policy;
@@ -42,7 +43,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        RedisModule_Log(ctx, "verbose", "loaded default compaction policy: %s\n\r", policy_cstr);
+        RedisModule_Log(ctx, "notice", "loaded default compaction policy: %s", policy_cstr);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
@@ -53,10 +54,8 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        RedisModule_Log(ctx,
-                        "verbose",
-                        "loaded default retention policy: %lld \n",
-                        TSGlobalConfig.retentionPolicy);
+        RedisModule_Log(
+            ctx, "notice", "loaded default retention policy: %lld", TSGlobalConfig.retentionPolicy);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
@@ -72,8 +71,8 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
     }
     RedisModule_Log(ctx,
-                    "verbose",
-                    "loaded default CHUNK_SIZE_BYTES policy: %lld \n",
+                    "notice",
+                    "loaded default CHUNK_SIZE_BYTES policy: %lld",
                     TSGlobalConfig.chunkSizeBytes);
 
     TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
@@ -82,8 +81,8 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
-                    "verbose",
-                    "loaded server DUPLICATE_POLICY: %s \n",
+                    "notice",
+                    "loaded server DUPLICATE_POLICY: %s",
                     DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
 
     if (argc > 1 && RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0) {
@@ -98,14 +97,18 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         if (strncmp(chunk_type_cstr, "compressed", len) == 0) {
             TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
+        } else if (strncmp(chunk_type_cstr, "compressed-turbogorilla", len) == 0) {
+            TSGlobalConfig.options &= ~SERIES_OPT_COMPRESSED_GORILLA;
+            TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
         } else if (strncmp(chunk_type_cstr, "uncompressed", len) == 0) {
+            TSGlobalConfig.options &= ~SERIES_OPT_COMPRESSED_GORILLA;
             TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
         } else {
-            RedisModule_Log(ctx, "error", "unknown chunk type: %s \n", chunk_type_cstr);
+            RedisModule_Log(ctx, "error", "unknown chunk type: %s", chunk_type_cstr);
             return TSDB_ERROR;
         }
 
-        RedisModule_Log(ctx, "verbose", "loaded default chunk type: %s \n", chunk_type_cstr);
+        RedisModule_Log(ctx, "notice", "loaded default chunk type: %s", chunk_type_cstr);
     }
     return TSDB_OK;
 }

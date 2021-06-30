@@ -72,6 +72,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx->labelsCount = 0;
+    cCtx->options |= TSGlobalConfig.options;
     if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
         return REDISMODULE_ERR;
@@ -103,6 +104,10 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
 
     if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
         cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    }
+
+    if (RMUtil_ArgIndex("COMPRESSED_TURBO", argv, argc) > 0) {
+        cCtx->options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
     }
 
     cCtx->duplicatePolicy = DP_NONE;

@@ -81,7 +81,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
         RedisModule_ReplyWithSimpleString(ctx, "uncompressed");
     } else {
-        RedisModule_ReplyWithSimpleString(ctx, "compressed");
+        if (series->options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
+            RedisModule_ReplyWithSimpleString(ctx, "compressed-turbogorilla");
+        } else {
+            RedisModule_ReplyWithSimpleString(ctx, "compressed");
+        }
     };
     RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
     if (series->duplicatePolicy != DP_NONE) {

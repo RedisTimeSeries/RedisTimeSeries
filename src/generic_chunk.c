@@ -58,7 +58,6 @@ static ChunkFuncs comprChunk = {
     .GearsDeserialize = Compressed_GearsDeserialize,
 };
 
-
 static ChunkIterFuncs compressedChunkIteratorClass = {
     .Free = Compressed_FreeChunkIterator,
     .GetNext = Compressed_ChunkIteratorGetNext,
@@ -88,7 +87,6 @@ static ChunkFuncs TurboGorilla_ChunkFuncs = {
     .GearsSerialize = TurboGorilla_GearsSerialize,
     .GearsDeserialize = TurboGorilla_GearsDeserialize,
 };
-
 
 static ChunkIterFuncs TurboGorilla_ChunkIterFuncs = {
     .Free = TurboGorilla_FreeChunkIterator,

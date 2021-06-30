@@ -87,6 +87,7 @@ CC=gcc
 CC_FLAGS = \
 	-I$(SDK_DIR) \
 	-I$(ROOT)/deps \
+	-I$(LIBIC_SRCDIR) \
 	-Wall \
 	-fPIC \
 	-pedantic \
