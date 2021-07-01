@@ -48,12 +48,14 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         if (RMUtil_ParseArgsAfter("COMPACTION_POLICY", argv, argc, "s", &policy) !=
             REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
         policy_cstr = RedisModule_StringPtrLen(policy, &len);
         if (ParseCompactionPolicy(policy_cstr,
                                   &TSGlobalConfig.compactionRules,
                                   &TSGlobalConfig.compactionRulesCount) != TRUE) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
 
@@ -65,6 +67,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (RMUtil_ParseArgsAfter(
                 "RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) !=
             REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after RETENTION_POLICY");
             return TSDB_ERROR;
         }
 
@@ -79,6 +82,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (RMUtil_ParseArgsAfter(
                 "CHUNK_SIZE_BYTES", argv, argc, "l", &TSGlobalConfig.chunkSizeBytes) !=
             REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
             return TSDB_ERROR;
         }
     } else {
@@ -92,6 +96,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
     if (ParseDuplicatePolicy(
             ctx, argv, argc, DUPLICATE_POLICY_ARG, &TSGlobalConfig.duplicatePolicy) != TSDB_OK) {
+        RedisModule_Log(ctx, "warning", "Unable to parse argument after DUPLICATE_POLICY");
         return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
@@ -104,6 +109,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         size_t len;
         const char *chunk_type_cstr;
         if (RMUtil_ParseArgsAfter("CHUNK_TYPE", argv, argc, "s", &chunk_type) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_TYPE");
             return TSDB_ERROR;
         }
         RMUtil_StringToLower(chunk_type);
@@ -120,7 +126,8 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
         } else {
-            RedisModule_Log(ctx, "error", "unknown chunk type: %s", chunk_type_cstr);
+            printf("ERR\n");
+            RedisModule_Log(ctx, "warning", "unknown chunk type: %s\n", chunk_type_cstr);
             return TSDB_ERROR;
         }
     }

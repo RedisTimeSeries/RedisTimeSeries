@@ -94,11 +94,14 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->isTemporary = cCtx->isTemporary;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
+        newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
         if (newSeries->options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
+            newSeries->options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
             newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED_TURBOGORILLA);
         } else {
+            newSeries->options |= SERIES_OPT_COMPRESSED_GORILLA;
             newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
         }
     }

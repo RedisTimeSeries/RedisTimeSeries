@@ -136,7 +136,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
     }
     // update value in case timestamp exists
     if (sample != NULL && ts == sample->timestamp) {
-        ChunkResult cr = handleDuplicateSample(duplicatePolicy, sample->value, &uCtx->sample);
+        ChunkResult cr = handleDuplicateSample(duplicatePolicy, sample->value, &uCtx->sample.value);
         if (cr != CR_OK) {
             return CR_ERR;
         }

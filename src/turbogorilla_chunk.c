@@ -33,9 +33,7 @@ void _TG_alloc_buffer(size_t size, TurboGorilla_Chunk *newChunk);
 void _TG_alloc_compressed(size_t size, TurboGorilla_Chunk *newChunk);
 void _TG_free_buffer(const TurboGorilla_Chunk *g_chunk);
 void _TG_free_compressed(const TurboGorilla_Chunk *g_chunk);
-
 static void _TG_expand_buffer(TurboGorilla_Chunk *chunk, size_t a);
-
 static void _TG_shift_on_index(const TurboGorilla_Chunk *chunk, size_t idx);
 
 Chunk_t *TurboGorilla_NewChunk(size_t size) {
@@ -47,8 +45,8 @@ Chunk_t *TurboGorilla_NewChunk(size_t size) {
     _TG_alloc_buffer(size, newChunk);
     newChunk->buffer_in_use = true;
 #ifdef DEBUG
-    memset(newChunk->buffer_ts, 0, array_size);
-    memset(newChunk->buffer_values, 0, array_size);
+    memset(newChunk->buffer_ts, 0, size / 2);
+    memset(newChunk->buffer_values, 0, size / 2);
 #endif
 
     return newChunk;
