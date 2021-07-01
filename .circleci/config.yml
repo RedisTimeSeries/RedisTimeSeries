@@ -1,24 +1,17 @@
 version: 2.1
 
 commands:
-  early-returns:
+  abort_for_docs:
     steps:
       - run:
-          name: Early return if this is a docs build
+          name: Avoid tests for docs
           command: |
-            if [[ $CIRCLE_BRANCH == *docs ]]; then
-              echo "Identifies as documents PR, no testing required."
-              circleci step halt
-            fi
-      - run:
-          name: Early return if this branch should ignore CI
-          command: |
-            if [[ $CIRCLE_BRANCH == *noci ]]; then
-              echo "Identifies as actively ignoring CI, no testing required."
+            if [[ $CIRCLE_BRANCH == *_docs ]]; then
+              echo "Identifies as documents PR, no testing required"
               circleci step halt
             fi
 
-  early-return-for-forked-pull-requests:
+  early_return_for_forked_pull_requests:
     description: >-
       If this build is from a fork, stop executing the current job and return success.
       This is useful to avoid steps that will fail due to missing credentials.
@@ -31,18 +24,6 @@ commands:
               circleci step halt
             fi
 
-  setup-executor:
-    steps:
-      - run:
-          name: Setup executor
-          command: |
-            apt-get -qq update
-            apt-get -q install -y git openssh-client curl ca-certificates make tar gzip
-            bash <(curl -fsSL https://get.docker.com)
-      - setup_remote_docker:
-          version: 20.10.2
-          docker_layer_caching: true
-
   checkout-all:
     steps:
       - checkout
@@ -50,59 +31,7 @@ commands:
           name: Checkout submodules
           command: git submodule update --init --recursive
 
-  setup-automation:
-    steps:
-      - run:
-          name: Setup automation
-          command: |
-            git submodule update --init deps/readies
-            ./deps/readies/bin/getpy3
-
-  install-prerequisites:
-    parameters:
-      redis_version:
-        type: string
-        default: "6"
-      getredis_params:
-        type: string
-        default: ""
-    steps:
-      - setup-automation
-      - run:
-          name: System setup
-          command: ./system-setup.py
-      - run:
-          name: Install Redis
-          command: |
-            bash -l -c "python3 ./deps/readies/bin/getredis -v <<parameters.redis_version>> --force <<parameters.getredis_params>>"
-            redis-server --version
-
-  save-tests-logs:
-    steps:
-      - run:
-          name: Cleanup test log dir
-          command: |
-            if [[ -d tests/flow/logs ]]; then
-              cd tests/flow/logs
-              rm -f *.aof *.rdb
-            fi
-      - store_artifacts:
-          path: tests/flow/logs
-
-  persist-artifacts:
-    steps:
-      - early-return-for-forked-pull-requests
-      - persist_to_workspace:
-          root: bin/
-          paths:
-            - artifacts/snapshots/*.zip
-            - artifacts/snapshots/*.tgz
-            - artifacts/snapshots/*.tar
-            - artifacts/*.zip
-            - artifacts/*.tgz
-            - artifacts/*.tar
-
-  build-steps:
+  ci_steps:
     parameters:
       platform:
         type: string
@@ -116,94 +45,58 @@ commands:
         type: string
         default: ""
     steps:
-      - early-returns
+      - abort_for_docs
       - checkout-all
-      - install-prerequisites:
-          getredis_params: <<parameters.getredis_params>>
+      - run:
+          name: Install prerequisites
+          command: |
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
+      - run:
+          name: Install Redis
+          command: python3 ./deps/readies/bin/getredis -v 6 --force <<parameters.getredis_params>>
       - run:
           name: Build
-          command: bash -l -c "make build <<parameters.build_params>> SHOW=1"
-      - run:
-          name: Pack
-          command: bash -l -c "make pack SHOW=1"
+          command: make build <<parameters.build_params>> SHOW=1
       - run:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c "make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
+            make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow Test
           no_output_timeout: 30m
           command: |
-            python3 -m RLTest --version
             mkdir -p ~/workspace/tests
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
-      - run:
-          name: Run flow with gears
-          no_output_timeout: 30m
-          command: |
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
-      - save-tests-logs
+            make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1
 
-  build-platforms-steps:
+  package:
+    steps:
+      - abort_for_docs
+      - run:
+          name: Package
+          command: |
+            make pack BRANCH="${CIRCLE_BRANCH//[^A-Za-z0-9._-]/_}" INTO=$HOME/workspace/packages SHOW=1
+      - early_return_for_forked_pull_requests
+      - persist_to_workspace:
+          root: ~/workspace
+          paths:
+            - 'packages/release/*.zip'
+            - 'packages/branch/*.zip'
+      - store_test_results:
+          path: ~/workspace/tests
+
+  deploy:
     parameters:
-      platform:
+      from:
         type: string
     steps:
-      - early-returns
-      - setup-executor
-      - checkout
-      - setup-automation
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - run:
-          name: Build for platform
-          command: |
-            ROOT=$PWD
-            cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
-            cd $ROOT
-            mkdir -p tests/flow/logs
-            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
-          no_output_timeout: 30m
-      - early-return-for-forked-pull-requests
-      - run:
-          name: Build for platform (publish)
-          command: |
-            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
-      - persist-artifacts
-      - save-tests-logs
-
-  vm-build-platforms-steps:
-    parameters:
-      platform:
-        type: string
-    steps:
-      - early-returns
-      - checkout
-      - setup-automation
-      - run:
-          name: Install Docker
-          command: bash <(curl -fsSL https://get.docker.com)
-      - run:
-          name: Build for platform
-          command: |
-            ROOT=$PWD
-            cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1
-            cd $ROOT
-            mkdir -p tests/flow/logs
-            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
-          no_output_timeout: 30m
-      - early-return-for-forked-pull-requests
-      - run:
-          name: Build for platform (publish)
-          command: |
-            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
-      - persist-artifacts
-      - save-tests-logs
+          name: Deploy to S3
+          command: >-
+            aws s3 cp <<parameters.from>>/ s3://redismodules/$PACKAGE_NAME/ --acl public-read --recursive --exclude "*" --include "*.zip"
 
   benchmark-automation:
     parameters:
@@ -243,15 +136,13 @@ commands:
               --triggering_env circleci \
               --push_results_redistimeseries
 
-#----------------------------------------------------------------------------------------------------------------------------------
-
 jobs:
   valgrind:
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     resource_class: xlarge
     steps:
-      - build-steps:
+      - ci_steps:
           platform: debian
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
@@ -261,41 +152,35 @@ jobs:
     docker:
       - image: redislabsmodules/llvm-toolset:latest
     steps:
-      - early-returns
+      - abort_for_docs
       - checkout-all
-      - install-prerequisites
       - run:
           name: lint
-          command: bash -l -c "make lint"
+          command: |
+            make setup
+            make -C src lint
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - build-steps:
+      - ci_steps:
           platform: debian
-      - persist-artifacts
+      - package
 
-  build-platforms:
-    parameters:
-      platform:
-        type: string
+  performance_ci_automation:
     docker:
-      - image: debian:buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - build-platforms-steps:
-          platform: <<parameters.platform>>
-
-  build-arm-platforms:
-    parameters:
-      platform:
-        type: string
-    machine:
-      image: ubuntu-2004:202101-01
-    resource_class: arm.medium
-    steps:
-      - vm-build-platforms-steps:
-          platform: <<parameters.platform>>
+      - early_return_for_forked_pull_requests
+      - checkout-all
+      - run:
+          name: Setup
+          command: make setup
+      - run:
+          name: Build
+          command: make build
+      - benchmark-automation
 
   build-macos:
     macos:
@@ -306,16 +191,15 @@ jobs:
           command: |
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
-      - build-steps:
+      - ci_steps:
           platform: macos
-      - persist-artifacts
 
   build-multiarch-docker:
     machine:
       enabled: true
       image: ubuntu-1604:202010-01
     steps:
-      - early-returns
+      - abort_for_docs
       - checkout-all
       - run:
           name: Set up Python3
@@ -335,89 +219,59 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early-returns
+      - abort_for_docs
       - checkout-all
-      - install-prerequisites
       - run:
           name: Build & Test
           command: |
-            bash -l -c "make build COV=1 SHOW=1"
-            bash -l -c "make test COV=1"
-            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-action/master/codecov) -f bin/linux-x64-debug-cov/cov.info
+            make setup
+            make build COV=1 SHOW=1
+            make test COV=1
+            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
       - store_artifacts:
           path: coverage
           destination: coverage
-      - run:
-          name: Test with Gears
-          command: |
-            bash -l -c "make test COV=1 GEARS=1 CLUSTER=1 SHOW=1"
-            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-action/master/codecov) -f bin/linux-x64-debug-cov/cov.info
 
-  deploy-artifacts:
+  deploy_package:
     parameters:
-      location:
+      package:
         type: string
-        default: ""
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early-returns
-      - early-return-for-forked-pull-requests
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
       - attach_workspace:
-          at: workspace
-      - run:
-          name: Deploy to S3
-          command: |
-            cd "workspace/artifacts/<<parameters.location>>"
-            du -ah --apparent-size *
-            if [[ -z <<parameters.location>> ]]; then
-                path="/"
-            else
-                path="<<parameters.location>>/"
-            fi
-            for f in `ls *.zip *.tgz`; do
-              aws s3 cp $f s3://redismodules/$PACKAGE_NAME/$path --acl public-read
-            done
+          at: ~/workspace
+      - deploy:
+          from: ~/workspace/packages/<<parameters.package>>
+      - store_artifacts:
+          path: ~/workspace/packages/<<parameters.package>>
 
   release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early-returns
-      - early-return-for-forked-pull-requests
-      - checkout
-      - setup-automation
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
+      - checkout-all
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION="$CIRCLE_TAG" VERBOSE=1 TEST=release ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_TAG" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=release ./tests/qa/run
 
   nightly-automation:
     docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
+      - image: redisfab/rmbuilder:6.2.3-x64-buster
     steps:
-      - early-returns
-      - early-return-for-forked-pull-requests
-      - checkout
-      - setup-automation
+      - abort_for_docs
+      - early_return_for_forked_pull_requests
+      - checkout-all
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION="$CIRCLE_BRANCH" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
+          command: MODULE_VERSION="$CIRCLE_BRANCH" EMAIL="$QA_EMAIL" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
 
-  performance-ci-automation:
-    docker:
-      - image: redisfab/rmbuilder:6.2.4-x64-buster
-    steps:
-      - early-return-for-forked-pull-requests
-      - checkout-all
-      - install-prerequisites
-      - run:
-          name: Build
-          command: bash -l -c "make build"
-      - benchmark-automation
-
-#----------------------------------------------------------------------------------------------------------------------------------
 
 on-any-branch: &on-any-branch
   filters:
@@ -477,65 +331,53 @@ on-integ-and-version-tags: &on-integ-and-version-tags
     tags:
       only: /^v[0-9].*/
 
-#----------------------------------------------------------------------------------------------------------------------------------
 
 workflows:
   version: 2
-  default-flow:
+  build_and_package:
     jobs:
       - lint:
-          <<: *on-any-branch
+          <<: *not-on-integ-branch
       - build:
           <<: *on-any-branch
       - valgrind:
           requires:
             - build
           <<: *on-integ-and-version-tags
-      - build-platforms:
-          <<: *on-integ-and-version-tags
-          context: common
-          matrix:
-            parameters:
-              platform: [focal, bionic, xenial, centos7, centos8]
-      - build-arm-platforms:
-          <<: *on-integ-and-version-tags
-          context: common
-          matrix:
-            parameters:
-              platform: [focal, bionic]
+#      - performance_ci_automation:
+#          context: common
+#          requires:
+#            - build
+#          <<: *on-integ-and-version-tags
       - build-macos:
           <<: *on-integ-and-version-tags
-      - build-multiarch-docker:
-          <<: *never
+#      - build-multiarch-docker:
+#          <<: *on-version-tags
       - coverage:
           context: common
           <<: *on-any-branch
-      - performance-ci-automation:
+      - deploy_package:
+          name: deploy_branch
+          package: branch
           context: common
           requires:
             - build
-          <<: *on-integ-and-version-tags
-      - deploy-artifacts:
-          name: deploy-snapshot
-          location: snapshots
-          context: common
+            # - build-macos
+            - valgrind
           <<: *on-integ-branch
-          requires:
-            - build-platforms
-            - build-arm-platforms
-            - build-macos
-      - deploy-artifacts:
-          name: deploy-release
+      - deploy_package:
+          name: deploy_release
+          package: release
           context: common
-          <<: *on-version-tags
           requires:
-            - build-platforms
-            - build-arm-platforms
-            - build-macos
+            - build
+            # - build-macos
+            - valgrind
+          <<: *on-version-tags
       - release-automation:
           context: common
           requires:
-            - deploy-release
+            - deploy_release
           <<: *on-version-tags
 
   nightly:
@@ -544,9 +386,10 @@ workflows:
           cron: "20 17 * * *"
           filters:
             branches:
-              only: master
+              only:
+                - master
     jobs:
-      - performance-ci-automation:
+      - performance_ci_automation:
           context: common
 
   nightly-twice-a-week:
