@@ -22,10 +22,24 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          const char *arg_prefix,
                          DuplicatePolicy *policy);
 
+const char *ChunkTypeToString(int options) {
+    if (options & SERIES_OPT_UNCOMPRESSED) {
+        return UNCOMPRESSED_ARG_STR;
+    }
+    if (options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
+        return COMPRESSED_TURBO_GORILLA_ARG_STR;
+    }
+    if (options & SERIES_OPT_COMPRESSED_GORILLA) {
+        return COMPRESSED_GORILLA_ARG_STR_OLD;
+    }
+    return "invalid";
+}
+
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
     TSGlobalConfig.options = 0;
-    TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
+    // default chuck type
+    TSGlobalConfig.options |= SERIES_OPT_DEFAULT_COMPRESSION;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
         RedisModuleString *policy;
@@ -95,21 +109,23 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RMUtil_StringToLower(chunk_type);
         chunk_type_cstr = RedisModule_StringPtrLen(chunk_type, &len);
 
-        if (strncmp(chunk_type_cstr, "compressed", len) == 0) {
+        if (strncmp(chunk_type_cstr, COMPRESSED_GORILLA_ARG_STR, len) == 0 ||
+            strncmp(chunk_type_cstr, COMPRESSED_GORILLA_ARG_STR_OLD, len) == 0) {
+            TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
-        } else if (strncmp(chunk_type_cstr, "compressed-turbogorilla", len) == 0) {
-            TSGlobalConfig.options &= ~SERIES_OPT_COMPRESSED_GORILLA;
+        } else if (strncmp(chunk_type_cstr, COMPRESSED_TURBO_GORILLA_ARG_STR, len) == 0) {
+            TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
-        } else if (strncmp(chunk_type_cstr, "uncompressed", len) == 0) {
-            TSGlobalConfig.options &= ~SERIES_OPT_COMPRESSED_GORILLA;
+        } else if (strncmp(chunk_type_cstr, UNCOMPRESSED_ARG_STR, len) == 0) {
+            TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
         } else {
             RedisModule_Log(ctx, "error", "unknown chunk type: %s", chunk_type_cstr);
             return TSDB_ERROR;
         }
-
-        RedisModule_Log(ctx, "notice", "loaded default chunk type: %s", chunk_type_cstr);
     }
+    RedisModule_Log(
+        ctx, "notice", "Setting default chunk type: %s", ChunkTypeToString(TSGlobalConfig.options));
     return TSDB_OK;
 }
 

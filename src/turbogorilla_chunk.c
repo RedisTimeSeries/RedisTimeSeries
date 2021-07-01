@@ -88,7 +88,8 @@ Chunk_t *TurboGorilla_SplitChunk(Chunk_t *chunk) {
     const size_t currentChunkNumSamples = curChunk->num_samples - newChunkNumSamples;
 
     // create chunk and copy samples
-    TurboGorilla_Chunk *newChunk = TurboGorilla_NewChunk(newChunkNumSamples * SAMPLE_SIZE);
+    TurboGorilla_Chunk *newChunk =
+        TurboGorilla_NewChunk(newChunkNumSamples * TURBOGORILLA_SAMPLE_SIZE);
     for (size_t i = 0; i < newChunkNumSamples; i++) {
         const u_int64_t ts = curChunk->buffer_ts[currentChunkNumSamples + i];
         const double v = curChunk->buffer_values[currentChunkNumSamples + i];
@@ -99,14 +100,14 @@ Chunk_t *TurboGorilla_SplitChunk(Chunk_t *chunk) {
     const size_t old_ts_size = (currentChunkNumSamples * sizeof(u_int64_t));
     const size_t old_values_size = (currentChunkNumSamples * sizeof(double));
     curChunk->num_samples = currentChunkNumSamples;
-    curChunk->size = currentChunkNumSamples * SAMPLE_SIZE;
+    curChunk->size = currentChunkNumSamples * TURBOGORILLA_SAMPLE_SIZE;
     curChunk->buffer_ts = realloc(curChunk->buffer_ts, old_ts_size);
     curChunk->buffer_values = realloc(curChunk->buffer_values, old_values_size);
     return newChunk;
 }
 
 static int IsChunkFull(TurboGorilla_Chunk *chunk) {
-    return chunk->num_samples == chunk->size / SAMPLE_SIZE;
+    return chunk->num_samples == chunk->size / TURBOGORILLA_SAMPLE_SIZE;
 }
 
 u_int64_t TurboGorilla_NumOfSample(Chunk_t *chunk) {
@@ -221,7 +222,7 @@ ChunkResult TurboGorilla_AddSample(Chunk_t *chunk, Sample *sample) {
  */
 static void upsertChunk(TurboGorilla_Chunk *chunk, size_t idx, u_int64_t ts, double value) {
     if (IsChunkFull(chunk)) {
-        _TG_expand_buffer(chunk, SAMPLE_SIZE);
+        _TG_expand_buffer(chunk, TURBOGORILLA_SAMPLE_SIZE);
     }
     if (idx < chunk->num_samples) { // sample is not last
         _TG_shift_on_index(chunk, idx);

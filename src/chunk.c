@@ -9,63 +9,45 @@
 
 #include "rmutil/alloc.h"
 
-struct Chunk
-{
-    timestamp_t base_timestamp;
-    unsigned int num_samples;
-    size_t size;
-    u_int64_t *samples_ts;
-    double *samples_values;
-};
-
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;
     newChunk->size = size;
-    const size_t array_size = size / 2;
-    newChunk->samples_ts = (u_int64_t *)malloc(array_size);
-    newChunk->samples_values = (double *)malloc(array_size);
+    newChunk->samples = (Sample *)malloc(size);
 #ifdef DEBUG
-    memset(newChunk->samples_ts, 0, array_size);
-    memset(newChunk->samples_values, 0, array_size);
+    memset(newChunk->samples, 0, size);
 #endif
 
     return newChunk;
 }
 
 void Uncompressed_FreeChunk(Chunk_t *chunk) {
-    Chunk *curChunk = (Chunk *)chunk;
-    free(curChunk->samples_ts);
-    free(curChunk->samples_values);
-    free(curChunk);
+    free(((Chunk *)chunk)->samples);
+    free(chunk);
 }
 
 /**
- * Split the chunk in half, returning a new chunk with the right-side of the current chunk
- * The input chunk is trimmed to retain the left-most part
+ * TODO: describe me
  * @param chunk
- * @return new chunk with the right-most splited in half samples
+ * @return
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
-    const size_t newChunkNumSamples = curChunk->num_samples / 2;
-    const size_t currentChunkNumSamples = curChunk->num_samples - newChunkNumSamples;
+    size_t split = curChunk->num_samples / 2;
+    size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(newChunkNumSamples * SAMPLE_SIZE);
-    for (size_t i = 0; i < newChunkNumSamples; i++) {
-        const u_int64_t ts = curChunk->samples_ts[currentChunkNumSamples + i];
-        const double v = curChunk->samples_values[currentChunkNumSamples + i];
-        Uncompressed_AddSampleOptimized(newChunk, ts, v);
+    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
+    for (size_t i = 0; i < split; ++i) {
+        Sample *sample = &curChunk->samples[curNumSamples + i];
+        Uncompressed_AddSample(newChunk, sample);
     }
 
     // update current chunk
-    const size_t old_ts_size = (currentChunkNumSamples * sizeof(u_int64_t));
-    const size_t old_values_size = (currentChunkNumSamples * sizeof(double));
-    curChunk->num_samples = currentChunkNumSamples;
-    curChunk->size = currentChunkNumSamples * SAMPLE_SIZE;
-    curChunk->samples_ts = realloc(curChunk->samples_ts, old_ts_size);
-    curChunk->samples_values = realloc(curChunk->samples_values, old_values_size);
+    curChunk->num_samples = curNumSamples;
+    curChunk->size = curNumSamples * SAMPLE_SIZE;
+    curChunk->samples = realloc(curChunk->samples, curChunk->size);
+
     return newChunk;
 }
 
@@ -77,88 +59,58 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
     return ((Chunk *)chunk)->num_samples;
 }
 
+static Sample *ChunkGetSample(Chunk *chunk, int index) {
+    return &chunk->samples[index];
+}
+
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
-    Chunk *uChunk = (Chunk *)chunk;
-    if (uChunk->num_samples == 0) {
+    if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
-    return uChunk->samples_ts[uChunk->num_samples - 1];
+    return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
 }
 
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
-    Chunk *uChunk = (Chunk *)chunk;
-    if (uChunk->num_samples == 0) {
+    if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
-    return uChunk->samples_ts[0];
+    return ChunkGetSample(chunk, 0)->timestamp;
 }
 
-int Uncompressed_GetSampleValueAtPos(Chunk_t *chunk, size_t pos, double *value) {
-    int result = CR_ERR;
-    Chunk *uChunk = (Chunk *)chunk;
-    if (uChunk->num_samples > pos) {
-        *value = uChunk->samples_values[pos];
-        result = CR_OK;
-    }
-
-    return result;
-}
-int Uncompressed_GetSampleTimestampAtPos(Chunk_t *chunk, size_t pos, u_int64_t *timestamp) {
-    int result = CR_ERR;
-    Chunk *uChunk = (Chunk *)chunk;
-    if (uChunk->num_samples > pos) {
-        *timestamp = uChunk->samples_ts[pos];
-        result = CR_OK;
-    }
-    return result;
-}
-
-ChunkResult Uncompressed_AddSampleOptimized(Chunk_t *chunk, u_int64_t timestamp, double value) {
+ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     Chunk *regChunk = (Chunk *)chunk;
     if (IsChunkFull(regChunk)) {
         return CR_END;
     }
 
-    if (regChunk->num_samples == 0) {
+    if (Uncompressed_NumOfSample(regChunk) == 0) {
         // initialize base_timestamp
-        regChunk->base_timestamp = timestamp;
+        regChunk->base_timestamp = sample->timestamp;
     }
-    const size_t pos = regChunk->num_samples;
-    regChunk->samples_ts[pos] = timestamp;
-    regChunk->samples_values[pos] = value;
+
+    regChunk->samples[regChunk->num_samples] = *sample;
     regChunk->num_samples++;
+
     return CR_OK;
 }
 
-ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
-    return Uncompressed_AddSampleOptimized(chunk, sample->timestamp, sample->value);
-}
-
 /**
- * upsertChunk will insert the sample in the chunk no matter the position of insertion.
- * In the case of the chunk being at max capacity we allocate space for one more sample
+ * TODO: describe me
  * @param chunk
  * @param idx
  * @param sample
  */
-static void upsertChunk(Chunk *chunk, size_t idx, u_int64_t ts, double value) {
-    if (IsChunkFull(chunk)) {
-        chunk->size += SAMPLE_SIZE;
-        const size_t new_ts_size = chunk->size / 2 + sizeof(u_int64_t);
-        const size_t new_values_size = chunk->size / 2 + sizeof(double);
-        chunk->samples_ts = realloc(chunk->samples_ts, new_ts_size);
-        chunk->samples_values = realloc(chunk->samples_values, new_values_size);
+static void upsertChunk(Chunk *chunk, size_t idx, Sample *sample) {
+    if (chunk->num_samples == chunk->size / SAMPLE_SIZE) {
+        chunk->size += sizeof(Sample);
+        chunk->samples = realloc(chunk->samples, chunk->size);
     }
     if (idx < chunk->num_samples) { // sample is not last
-        memmove(&chunk->samples_ts[idx + 1],
-                &chunk->samples_ts[idx],
-                (chunk->num_samples - idx) * sizeof(u_int64_t));
-        memmove(&chunk->samples_values[idx + 1],
-                &chunk->samples_values[idx],
-                (chunk->num_samples - idx) * sizeof(double));
+        memmove(&chunk->samples[idx + 1],
+                &chunk->samples[idx],
+                (chunk->num_samples - idx) * sizeof(Sample));
     }
-    chunk->samples_ts[idx] = ts;
-    chunk->samples_values[idx] = value;
+    chunk->samples[idx] = *sample;
     chunk->num_samples++;
 }
 
@@ -171,68 +123,52 @@ static void upsertChunk(Chunk *chunk, size_t idx, u_int64_t ts, double value) {
 ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
     *size = 0;
     Chunk *regChunk = (Chunk *)uCtx->inChunk;
-    const u_int64_t ts = uCtx->sample.timestamp;
-    const u_int64_t *ts_array = regChunk->samples_ts;
-    const size_t numSamples = regChunk->num_samples;
-    size_t sample_pos = 0;
-    u_int64_t sample_ts = 0;
-    bool found = false;
-
-    // find the number of elements in the array that are less than the timestamp you search for
-    for (int i = 0; i < numSamples; i++)
-        sample_pos += (ts_array[i] < ts);
-
-    // check if timestamp right after is the one we're searching for
-    if (sample_pos < numSamples && ts_array[sample_pos] == ts)
-        found = true;
-
+    timestamp_t ts = uCtx->sample.timestamp;
+    short numSamples = regChunk->num_samples;
+    // find sample location
+    size_t i = 0;
+    Sample *sample = NULL;
+    for (; i < numSamples; ++i) {
+        sample = ChunkGetSample(regChunk, i);
+        if (ts <= sample->timestamp) {
+            break;
+        }
+    }
     // update value in case timestamp exists
-    if (found == true) {
-        ChunkResult cr = handleDuplicateSample(
-            duplicatePolicy, regChunk->samples_values[sample_pos], &(uCtx->sample.value));
+    if (sample != NULL && ts == sample->timestamp) {
+        ChunkResult cr = handleDuplicateSample(duplicatePolicy, sample->value, &uCtx->sample);
         if (cr != CR_OK) {
             return CR_ERR;
         }
-        regChunk->samples_values[sample_pos] = uCtx->sample.value;
+        regChunk->samples[i].value = uCtx->sample.value;
         return CR_OK;
     }
 
-    if (sample_pos == 0) {
+    if (i == 0) {
         regChunk->base_timestamp = ts;
     }
 
-    upsertChunk(regChunk, sample_pos, ts, uCtx->sample.value);
+    upsertChunk(regChunk, i, &uCtx->sample);
     *size = 1;
     return CR_OK;
 }
 
 size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     Chunk *regChunk = (Chunk *)chunk;
-    const u_int64_t *timestamps = regChunk->samples_ts;
-    const double *values = regChunk->samples_values;
-
-    // create two new arrays and copy samples that don't match the delete range
-    // TODO: use memove that should be much faster
-    const size_t array_size = regChunk->size / 2;
-    u_int64_t *new_samples_ts = (u_int64_t *)malloc(array_size);
-    double *new_samples_values = (double *)malloc(array_size);
+    Sample *newSamples = (Sample *)malloc(regChunk->size);
     size_t i = 0;
     size_t new_count = 0;
     for (; i < regChunk->num_samples; ++i) {
-        if (timestamps[i] >= startTs && timestamps[i] <= endTs) {
+        if (regChunk->samples[i].timestamp >= startTs && regChunk->samples[i].timestamp <= endTs) {
             continue;
         }
-        new_samples_ts[new_count] = timestamps[i];
-        new_samples_values[new_count] = values[i];
-        new_count++;
+        newSamples[new_count++] = regChunk->samples[i];
     }
     size_t deleted_count = regChunk->num_samples - new_count;
-    free(regChunk->samples_ts);
-    free(regChunk->samples_values);
-    regChunk->samples_ts = new_samples_ts;
-    regChunk->samples_values = new_samples_values;
+    free(regChunk->samples);
+    regChunk->samples = newSamples;
     regChunk->num_samples = new_count;
-    regChunk->base_timestamp = new_samples_ts[0];
+    regChunk->base_timestamp = newSamples[0].timestamp;
     return deleted_count;
 }
 
@@ -258,8 +194,7 @@ ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
     if (iter->currentIndex < iter->chunk->num_samples) {
-        sample->value = iter->chunk->samples_values[iter->currentIndex];
-        sample->timestamp = iter->chunk->samples_ts[iter->currentIndex];
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
         iter->currentIndex++;
         return CR_OK;
     } else {
@@ -270,8 +205,7 @@ ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sam
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
     if (iter->currentIndex >= 0) {
-        sample->value = iter->chunk->samples_values[iter->currentIndex];
-        sample->timestamp = iter->chunk->samples_ts[iter->currentIndex];
+        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
         iter->currentIndex--;
         return CR_OK;
     } else {
@@ -308,31 +242,21 @@ static void Uncompressed_GenericSerialize(Chunk_t *chunk,
     saveUnsigned(ctx, uncompchunk->base_timestamp);
     saveUnsigned(ctx, uncompchunk->num_samples);
     saveUnsigned(ctx, uncompchunk->size);
-    Sample *old_samples_array = (Sample *)malloc(uncompchunk->size * sizeof(Sample));
-    for (size_t i = 0; i < uncompchunk->num_samples; i++) {
-        old_samples_array[i].timestamp = uncompchunk->samples_ts[i];
-        old_samples_array[i].value = uncompchunk->samples_values[i];
-    }
-    saveString(ctx, (char *)old_samples_array, uncompchunk->size);
+
+    saveString(ctx, (char *)uncompchunk->samples, uncompchunk->size);
 }
 
 static void Uncompressed_Deserialize(Chunk_t **chunk,
                                      void *ctx,
                                      ReadUnsignedFunc readUnsigned,
                                      ReadStringBufferFunc readStringBuffer) {
-    const timestamp_t base_timestamp = readUnsigned(ctx);
-    const unsigned int num_samples = readUnsigned(ctx);
-    const size_t size = readUnsigned(ctx);
-    Chunk *uncompchunk = Uncompressed_NewChunk(size);
-    uncompchunk->base_timestamp = base_timestamp;
-    uncompchunk->num_samples = num_samples;
+    Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
 
-    size_t loadsize;
-    Sample *old_samples_array = (Sample *)readStringBuffer(ctx, &loadsize);
-    for (size_t i = 0; i < uncompchunk->num_samples; i++) {
-        uncompchunk->samples_ts[i] = old_samples_array[i].timestamp;
-        uncompchunk->samples_values[i] = old_samples_array[i].value;
-    }
+    uncompchunk->base_timestamp = readUnsigned(ctx);
+    uncompchunk->num_samples = readUnsigned(ctx);
+    uncompchunk->size = readUnsigned(ctx);
+    size_t string_buffer_size;
+    uncompchunk->samples = (Sample *)readStringBuffer(ctx, &string_buffer_size);
     *chunk = (Chunk_t *)uncompchunk;
 }
 

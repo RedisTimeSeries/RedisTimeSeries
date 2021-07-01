@@ -11,8 +11,13 @@
 
 #include <sys/types.h>
 
-/* Incomplete structures for compiler checks but opaque access. */
-typedef struct Chunk Chunk;
+typedef struct Chunk
+{
+    timestamp_t base_timestamp;
+    Sample *samples;
+    unsigned int num_samples;
+    size_t size;
+} Chunk;
 
 typedef struct ChunkIterator
 {
@@ -27,16 +32,12 @@ Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
- * Split the chunk in half, returning a new chunk with the right-side of the current chunk
- * The input chunk is trimmed to retain the left-most part
+ * TODO: describe me
  * @param chunk
- * @return new chunk with the right-most splited in half samples
+ * @return
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
-
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
-
-ChunkResult Uncompressed_AddSampleOptimized(Chunk_t *chunk, u_int64_t timestamp, double value);
 
 /**
  * TODO: describe me
@@ -59,8 +60,6 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
 u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
-int Uncompressed_GetSampleValueAtPos(Chunk_t *chunk, size_t pos, double *value);
-int Uncompressed_GetSampleTimestampAtPos(Chunk_t *chunk, size_t pos, u_int64_t *timestamp);
 
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
                                            int options,

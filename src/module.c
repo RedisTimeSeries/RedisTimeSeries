@@ -78,15 +78,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
     RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
     RedisModule_ReplyWithSimpleString(ctx, "chunkType");
-    if (series->options & SERIES_OPT_UNCOMPRESSED) {
-        RedisModule_ReplyWithSimpleString(ctx, "uncompressed");
-    } else {
-        if (series->options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
-            RedisModule_ReplyWithSimpleString(ctx, "compressed-turbogorilla");
-        } else {
-            RedisModule_ReplyWithSimpleString(ctx, "compressed");
-        }
-    };
+    RedisModule_ReplyWithSimpleString(ctx, ChunkTypeToString(series->options));
     RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
     if (series->duplicatePolicy != DP_NONE) {
         RedisModule_ReplyWithSimpleString(ctx, DuplicatePolicyToString(series->duplicatePolicy));
