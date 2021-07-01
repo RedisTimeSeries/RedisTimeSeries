@@ -9,4 +9,4 @@
 	url = https://github.com/lemire/fast_double_parser.git
 [submodule "deps/TurboPFor-Integer-Compression"]
 	path = deps/TurboPFor-Integer-Compression
-	url = https://github.com/powturbo/TurboPFor-Integer-Compression.git
+	url = https://github.com/filipecosta90/TurboPFor-Integer-Compression.git

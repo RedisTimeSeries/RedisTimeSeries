@@ -189,7 +189,7 @@ $(LIBRMUTIL): rmutil
 
 libic.a:
 	@echo Building $@...
-	$(SHOW)$(MAKE) -C $(LIBIC_SRCDIR) libic.a -j
+	$(SHOW)$(MAKE) -C $(LIBIC_SRCDIR) libic.a STATIC=1 -j
 
 $(LIBIC): libic.a
 
@@ -218,6 +218,9 @@ clean:
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
+ifeq ($(ALL),1)
+	-$(SHOW)$(MAKE) -C $(LIBIC_SRCDIR) clean
+endif
 
 -include $(CC_DEPS)
 
