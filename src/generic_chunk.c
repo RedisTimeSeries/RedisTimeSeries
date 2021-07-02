@@ -17,6 +17,7 @@ static ChunkFuncs regChunk = {
     .DelRange = Uncompressed_DelRange,
 
     .NewChunkIterator = Uncompressed_NewChunkIterator,
+    .ResetChunkIterator = Uncompressed_ResetChunkIterator,
 
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
@@ -46,6 +47,7 @@ static ChunkFuncs comprChunk = {
     .DelRange = Compressed_DelRange,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
+    .ResetChunkIterator = Compressed_ResetChunkIterator,
 
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,

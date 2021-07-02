@@ -28,6 +28,10 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
                                          int options,
                                          ChunkIterFuncs *retChunkIterClass);
+void Compressed_ResetChunkIterator(ChunkIter_t *iterator,
+                                   Chunk_t *chunk,
+                                   int options,
+                                   ChunkIterFuncs *retChunkIterClass);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
