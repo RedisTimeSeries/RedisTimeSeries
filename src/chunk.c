@@ -172,19 +172,13 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     return deleted_count;
 }
 
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator,
-                                     Chunk_t *chunk,
-                                     int options,
-                                     ChunkIterFuncs *retChunkIterClass) {
+void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
     iter->chunk = chunk;
-    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
+    if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
     } else { // iterate from first to last
         iter->currentIndex = 0;
-    }
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
     }
 }
 
@@ -193,7 +187,10 @@ ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
                                            ChunkIterFuncs *retChunkIterClass) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->options = options;
-    Uncompressed_ResetChunkIterator(iter, chunk, options, retChunkIterClass);
+    if (retChunkIterClass != NULL) {
+        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
+    }
+    Uncompressed_ResetChunkIterator(iter, chunk);
     return (ChunkIter_t *)iter;
 }
 

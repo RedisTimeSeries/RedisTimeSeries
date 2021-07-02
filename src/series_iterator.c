@@ -100,10 +100,7 @@ static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sampl
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
                 }
-                funcs->ResetChunkIterator(iterator->chunkIterator,
-                                          currentChunk,
-                                          SeriesChunkIteratorOptions(iterator),
-                                          &iterator->chunkIteratorFuncs);
+                iterator->chunkIteratorFuncs.Reset(iterator->chunkIterator, currentChunk);
                 if (SeriesGetNext(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
@@ -132,10 +129,11 @@ static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sampl
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
                 }
-                funcs->ResetChunkIterator(iterator->chunkIterator,
-                                          currentChunk,
-                                          SeriesChunkIteratorOptions(iterator),
-                                          &iterator->chunkIteratorFuncs);
+                iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
+                iterator->chunkIterator =
+                    funcs->NewChunkIterator(currentChunk,
+                                            SeriesChunkIteratorOptions(iterator),
+                                            &iterator->chunkIteratorFuncs);
                 if (SeriesGetPrevious(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }

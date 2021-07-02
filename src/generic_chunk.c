@@ -16,7 +16,6 @@ static ChunkFuncs regChunk = {
     .DelRange = Uncompressed_DelRange,
 
     .NewChunkIterator = Uncompressed_NewChunkIterator,
-    .ResetChunkIterator = Uncompressed_ResetChunkIterator,
 
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
@@ -33,6 +32,7 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
     .Free = Uncompressed_FreeChunkIterator,
     .GetNext = Uncompressed_ChunkIteratorGetNext,
     .GetPrev = Uncompressed_ChunkIteratorGetPrev,
+    .Reset = Uncompressed_ResetChunkIterator,
 };
 
 static ChunkFuncs comprChunk = {
@@ -46,7 +46,6 @@ static ChunkFuncs comprChunk = {
     .DelRange = Compressed_DelRange,
 
     .NewChunkIterator = Compressed_NewChunkIterator,
-    .ResetChunkIterator = Compressed_ResetChunkIterator,
 
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,
@@ -64,6 +63,7 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .GetNext = Compressed_ChunkIteratorGetNext,
     /*** Reverse iteration is on temporary decompressed chunk ***/
     .GetPrev = NULL,
+    .Reset = Compressed_ResetChunkIterator,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
