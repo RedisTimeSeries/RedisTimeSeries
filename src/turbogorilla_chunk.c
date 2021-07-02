@@ -360,26 +360,22 @@ ChunkIter_t *TurboGorilla_NewChunkIterator(Chunk_t *chunk,
         (TurboGorilla_ChunkIterator *)calloc(1, sizeof(TurboGorilla_ChunkIterator));
     TurboGorilla_Chunk *compressedChunk = (TurboGorilla_Chunk *)chunk;
     _TG_alloc_buffer(compressedChunk->size, &(iter->decompressed_ts), &(iter->decompressed_values));
-    TurboGorilla_ResetChunkIterator(iter, chunk, options, retChunkIterClass);
+    iter->options = options;
+    if (retChunkIterClass != NULL) {
+        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED_TURBOGORILLA);
+    }
+    TurboGorilla_ResetChunkIterator(iter, chunk);
     return (ChunkIter_t *)iter;
 }
 
-void TurboGorilla_ResetChunkIterator(ChunkIter_t *iterator,
-                                     Chunk_t *chunk,
-                                     int options,
-                                     ChunkIterFuncs *retChunkIterClass) {
+void TurboGorilla_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     TurboGorilla_Chunk *compressedChunk = (TurboGorilla_Chunk *)chunk;
     TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
     iter->chunk = compressedChunk;
-    iter->options = options;
-    if (options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
+    if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = compressedChunk->num_samples - 1;
     } else { // iterate from first to last
         iter->currentIndex = 0;
-    }
-
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED_TURBOGORILLA);
     }
     if (compressedChunk->num_samples > 0) {
         if (compressedChunk->buffer_in_use == false) {
