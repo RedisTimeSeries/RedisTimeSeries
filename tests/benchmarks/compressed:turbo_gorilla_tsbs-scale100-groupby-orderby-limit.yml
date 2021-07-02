@@ -1,4 +1,4 @@
-name: "tsbs-scale100_groupby-orderby-limit"
+name: "compressed:turbo_gorilla__tsbs-scale100_groupby-orderby-limit"
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

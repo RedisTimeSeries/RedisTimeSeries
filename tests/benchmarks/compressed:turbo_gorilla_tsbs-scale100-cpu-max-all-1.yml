@@ -1,4 +1,4 @@
-name: "tsbs-scale100_cpu-max-all-1"
+name: "compressed:turbo_gorilla__tsbs-scale100_cpu-max-all-1"
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

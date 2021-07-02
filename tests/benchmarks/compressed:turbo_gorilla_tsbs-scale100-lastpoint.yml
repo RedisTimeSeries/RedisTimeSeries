@@ -1,4 +1,4 @@
-name: "tsbs-scale100_lastpoint"
+name: "compressed:turbo_gorilla__tsbs-scale100_lastpoint"
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

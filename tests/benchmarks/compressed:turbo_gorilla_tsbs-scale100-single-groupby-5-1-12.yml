@@ -1,4 +1,4 @@
-name: "tsbs-scale100_single-groupby-5-1-12"
+name: "compressed:turbo_gorilla__tsbs-scale100_single-groupby-5-1-12"
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
