@@ -9,6 +9,23 @@
 
 #include "rmutil/alloc.h"
 
+struct Chunk
+{
+    timestamp_t base_timestamp;
+    Sample *samples;
+    unsigned int num_samples;
+    size_t size;
+};
+
+struct ChunkIterator
+{
+    Chunk *chunk;
+    int currentIndex;
+    timestamp_t lastTimestamp;
+    int lastValue;
+    int options;
+};
+
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->num_samples = 0;

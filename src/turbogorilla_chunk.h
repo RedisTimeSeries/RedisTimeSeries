@@ -15,14 +15,7 @@
 
 typedef struct TurboGorilla_Chunk TurboGorilla_Chunk;
 
-typedef struct TurboGorilla_ChunkIterator
-{
-    TurboGorilla_Chunk *chunk;
-    int currentIndex;
-    timestamp_t lastTimestamp;
-    int lastValue;
-    int options;
-} TurboGorilla_ChunkIterator;
+typedef struct TurboGorilla_ChunkIterator TurboGorilla_ChunkIterator;
 
 Chunk_t *TurboGorilla_NewChunk(size_t sampleCount);
 void TurboGorilla_FreeChunk(Chunk_t *chunk);
@@ -62,6 +55,10 @@ timestamp_t TurboGorilla_GetFirstTimestamp(Chunk_t *chunk);
 ChunkIter_t *TurboGorilla_NewChunkIterator(Chunk_t *chunk,
                                            int options,
                                            ChunkIterFuncs *retChunkIterClass);
+void TurboGorilla_ResetChunkIterator(ChunkIter_t *iterator,
+                                     Chunk_t *chunk,
+                                     int options,
+                                     ChunkIterFuncs *retChunkIterClass);
 ChunkResult TurboGorilla_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult TurboGorilla_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void TurboGorilla_FreeChunkIterator(ChunkIter_t *iter);

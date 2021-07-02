@@ -77,6 +77,7 @@ static ChunkFuncs TurboGorilla_ChunkFuncs = {
     .DelRange = TurboGorilla_DelRange,
 
     .NewChunkIterator = TurboGorilla_NewChunkIterator,
+    .ResetChunkIterator = TurboGorilla_ResetChunkIterator,
 
     .GetChunkSize = TurboGorilla_GetChunkSize,
     .GetNumOfSample = TurboGorilla_NumOfSample,

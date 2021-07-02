@@ -419,10 +419,10 @@ static int internalAdd(RedisModuleCtx *ctx,
         }
         // handle compaction rules
         CompactionRule *rule = series->rules;
-        // while (rule != NULL) {
-        //     handleCompaction(ctx, series, rule, timestamp, value);
-        //     rule = rule->nextRule;
-        // }
+        while (rule != NULL) {
+            handleCompaction(ctx, series, rule, timestamp, value);
+            rule = rule->nextRule;
+        }
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     return REDISMODULE_OK;
@@ -436,7 +436,7 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     double value;
     u_int64_t timestamp;
-    if (_add_parse_ts_value(ctx, timestampStr, valueStr, &timestamp, &value) != REDISMODULE_OK)
+    if (_add_parse_ts_value(ctx, timestampStr, valueStr, &timestamp, &value) != TRUE)
         return REDISMODULE_ERR;
 
     Series *series = NULL;
@@ -535,9 +535,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
+    const RedisModuleString *keyName = argv[1];
+    const RedisModuleString *timestampStr = argv[2];
+    const RedisModuleString *valueStr = argv[3];
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     RedisModule_ReplicateVerbatim(ctx);

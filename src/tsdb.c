@@ -64,9 +64,7 @@ int SilentGetSeries(RedisModuleCtx *ctx,
 }
 
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
-    // timestamp_t rax_key = htonu64(ts);
-    timestamp_t rax_key;
-    seriesEncodeTimestamp(&rax_key, ts);
+    timestamp_t rax_key = htonu64(ts);
     switch (op) {
         case DICT_OP_SET:
             return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
@@ -587,7 +585,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        // SeriesTrim(series, true, 0, 0);
+        SeriesTrim(series, true, 0, 0);
         assert(series->chunkSizeBytes == 4096);
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         ret = series->funcs->AddSample(newChunk, &sample);
