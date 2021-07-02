@@ -5,6 +5,7 @@
  */
 #include "rdb.h"
 
+#include "assert.h"
 #include "consts.h"
 #include "endianconv.h"
 
@@ -94,12 +95,14 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         if (chunk != NULL) {
             series->funcs->FreeChunk(chunk);
         }
-        dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+        int res = dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+        assert(res == REDISMODULE_OK);
         uint64_t numChunks = RedisModule_LoadUnsigned(io);
         for (int i = 0; i < numChunks; ++i) {
             series->funcs->LoadFromRDB(&chunk, io);
-            dictOperator(
+            res = dictOperator(
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
+            assert(res == REDISMODULE_OK);
         }
         series->totalSamples = totalSamples;
         series->srcKey = srcKey;

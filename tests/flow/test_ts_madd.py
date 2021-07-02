@@ -1,8 +1,8 @@
 import time
 
 from RLTest import Env
-
-CHUNK_TYPES = ["","COMPRESSED","COMPRESSED:GORILLA","UNCOMPRESSED"]
+#
+CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA","UNCOMPRESSED"]
 def test_madd():
     sample_len = 1024
     Env().skipOnCluster()
@@ -105,4 +105,4 @@ def test_extensive_ts_madd():
                 assert pos == datapoint[0]
                 assert float_lines[pos-1] == float(datapoint[1])
             r.execute_command("FLUSHALL")
-            # assert r.execute_command('PING') == "PONG"
+            assert r.execute_command('PING') == True

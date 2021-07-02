@@ -5,6 +5,7 @@
  */
 #include "tsdb.h"
 
+#include "assert.h"
 #include "config.h"
 #include "consts.h"
 #include "endianconv.h"
@@ -63,7 +64,9 @@ int SilentGetSeries(RedisModuleCtx *ctx,
 }
 
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
-    timestamp_t rax_key = htonu64(ts);
+    // timestamp_t rax_key = htonu64(ts);
+    timestamp_t rax_key;
+    seriesEncodeTimestamp(&rax_key, ts);
     switch (op) {
         case DICT_OP_SET:
             return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
@@ -584,11 +587,15 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        SeriesTrim(series, true, 0, 0);
-
+        // SeriesTrim(series, true, 0, 0);
+        assert(series->chunkSizeBytes == 4096);
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
-        dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
         ret = series->funcs->AddSample(newChunk, &sample);
+        assert(ret == CR_OK);
+        assert(newChunk != NULL);
+        assert(series->funcs->GetChunkSize(newChunk, 0) == 4096);
+        int res = dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
+        assert(res == REDISMODULE_OK);
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
