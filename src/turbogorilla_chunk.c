@@ -57,7 +57,6 @@ void reset(void *chunk,
            TurboGorilla_ChunkIterator *iter);
 
 Chunk_t *TurboGorilla_NewChunk(size_t size) {
-    assert(size == 4096);
     TurboGorilla_Chunk *newChunk = (TurboGorilla_Chunk *)malloc(sizeof(TurboGorilla_Chunk));
     newChunk->num_samples = 0;
     newChunk->size = size;
@@ -448,7 +447,6 @@ static void TurboGorilla_GenericSerialize(Chunk_t *chunk,
         saveUnsigned(ctx, uncompchunk->end_ts);
         saveUnsigned(ctx, uncompchunk->num_samples);
         saveUnsigned(ctx, uncompchunk->buffer_in_use);
-        assert(uncompchunk->size == 4096);
         if (uncompchunk->buffer_in_use) {
             _TG_alloc_compressed(uncompchunk->size, uncompchunk);
             _TG_compress_from_buffer(uncompchunk);
@@ -466,7 +464,6 @@ static void TurboGorilla_Deserialize(Chunk_t **chunk,
                                      ReadUnsignedFunc readUnsigned,
                                      ReadStringBufferFunc readStringBuffer) {
     const size_t size = readUnsigned(ctx);
-    assert(size == 4096);
     TurboGorilla_Chunk *uncompchunk = TurboGorilla_NewChunk(size);
     uncompchunk->start_ts = readUnsigned(ctx);
     uncompchunk->end_ts = readUnsigned(ctx);

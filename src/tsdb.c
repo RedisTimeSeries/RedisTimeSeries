@@ -586,14 +586,16 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series, true, 0, 0);
-        assert(series->chunkSizeBytes == 4096);
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         ret = series->funcs->AddSample(newChunk, &sample);
+#ifdef DEBUG
         assert(ret == CR_OK);
         assert(newChunk != NULL);
-        assert(series->funcs->GetChunkSize(newChunk, 0) == 4096);
+#endif
         int res = dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
+#ifdef DEBUG
         assert(res == REDISMODULE_OK);
+#endif
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
@@ -668,12 +670,17 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount + 1].value =
             RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
+        int rules_options = TSGlobalConfig.options;
+        rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+        rules_options &= SERIES_OPT_UNCOMPRESSED;
+
+        TSGlobalConfig.options &= SERIES_OPT_DEFAULT_COMPRESSION;
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
-            .options = TSGlobalConfig.options,
+            .options = rules_options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);

@@ -65,13 +65,17 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);
+#ifdef DEBUG
+        assert(res == CR_OK);
+#endif
     }
 }
 
 static void trimChunk(CompressedChunk *chunk) {
     int excess = (chunk->size * BIT - chunk->idx) / BIT;
-
+#ifdef DEBUG
     assert(excess >= 0); // else we have written beyond allocated memory
+#endif
 
     if (excess > 1) {
         size_t newSize = chunk->size - excess + 1;
