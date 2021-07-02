@@ -41,8 +41,8 @@ struct TurboGorilla_ChunkIterator
 };
 
 void _TG_decompress_to_buffer(TurboGorilla_Chunk *g_chunk,
-                              uint64_t **buffer_ts,
-                              double **buffer_values);
+                              uint64_t *buffer_ts,
+                              double *buffer_values);
 void _TG_compress_from_buffer(TurboGorilla_Chunk *regChunk);
 void _TG_alloc_buffer(size_t size, uint64_t **buffer_ts, double **buffer_values);
 void _TG_alloc_compressed(size_t size, TurboGorilla_Chunk *newChunk);
@@ -174,8 +174,8 @@ ChunkResult TurboGorilla_AddSampleOptimized(Chunk_t *chunk, u_int64_t timestamp,
 // TurboGorilla : Improved gorilla style + RLE (bit/io)
 // Decompress from TurboGorilla to SoA
 void _TG_decompress_to_buffer(TurboGorilla_Chunk *g_chunk,
-                              uint64_t **buffer_ts,
-                              double **buffer_values) {
+                              uint64_t *buffer_ts,
+                              double *buffer_values) {
     /* decoding functions are of the form:
      * void decode(char *out, size_t n, unsigned *in, unsigned start);
      *    - in : pointer to input buffer
@@ -183,8 +183,8 @@ void _TG_decompress_to_buffer(TurboGorilla_Chunk *g_chunk,
      *    - out : output array
      *    - start : previous value. Only for integrated delta encoding functions
      */
-    fpgdec64(g_chunk->compressed_ts, g_chunk->num_samples, *buffer_ts, 0);
-    fpgdec64(g_chunk->compressed_values, g_chunk->num_samples, *buffer_values, 0);
+    fpgdec64(g_chunk->compressed_ts, g_chunk->num_samples, buffer_ts, 0);
+    fpgdec64(g_chunk->compressed_values, g_chunk->num_samples, buffer_values, 0);
 }
 
 void _TG_compress_from_buffer(TurboGorilla_Chunk *g_chunk) {
@@ -266,7 +266,7 @@ ChunkResult TurboGorilla_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
     const bool was_compressed = regChunk->buffer_in_use == false;
     if (was_compressed) {
         _TG_alloc_buffer(regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
-        _TG_decompress_to_buffer(regChunk, &(regChunk->buffer_ts), &(regChunk->buffer_values));
+        _TG_decompress_to_buffer(regChunk, regChunk->buffer_ts, regChunk->buffer_values);
     }
     const u_int64_t *ts_array = regChunk->buffer_ts;
     const size_t numSamples = regChunk->num_samples;
@@ -318,7 +318,7 @@ size_t TurboGorilla_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     const bool was_compressed = regChunk->buffer_in_use == false;
     if (was_compressed) {
         _TG_alloc_buffer(regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
-        _TG_decompress_to_buffer(regChunk, &(regChunk->buffer_ts), &(regChunk->buffer_values));
+        _TG_decompress_to_buffer(regChunk, regChunk->buffer_ts, regChunk->buffer_values);
     }
     const u_int64_t *timestamps = regChunk->buffer_ts;
     const double *values = regChunk->buffer_values;
@@ -379,7 +379,7 @@ void TurboGorilla_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     if (compressedChunk->num_samples > 0) {
         if (compressedChunk->buffer_in_use == false) {
             _TG_decompress_to_buffer(
-                compressedChunk, &(iter->decompressed_ts), &(iter->decompressed_values));
+                compressedChunk, iter->decompressed_ts, iter->decompressed_values);
         } else {
             memcpy(iter->decompressed_ts,
                    compressedChunk->buffer_ts,
@@ -394,8 +394,8 @@ void TurboGorilla_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
 ChunkResult TurboGorilla_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
     TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
     if (iter->currentIndex < iter->chunk->num_samples) {
-        sample->value = iter->chunk->buffer_values[iter->currentIndex];
-        sample->timestamp = iter->chunk->buffer_ts[iter->currentIndex];
+        sample->value = iter->decompressed_values[iter->currentIndex];
+        sample->timestamp = iter->decompressed_ts[iter->currentIndex];
         iter->currentIndex++;
         return CR_OK;
     } else {
@@ -406,8 +406,8 @@ ChunkResult TurboGorilla_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sam
 ChunkResult TurboGorilla_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
     TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
     if (iter->currentIndex >= 0 && iter->chunk->num_samples > 0) {
-        sample->value = iter->chunk->buffer_values[iter->currentIndex];
-        sample->timestamp = iter->chunk->buffer_ts[iter->currentIndex];
+        sample->value = iter->decompressed_values[iter->currentIndex];
+        sample->timestamp = iter->decompressed_ts[iter->currentIndex];
         iter->currentIndex--;
         return CR_OK;
     } else {
@@ -478,7 +478,7 @@ static void TurboGorilla_Deserialize(Chunk_t **chunk,
             _TG_alloc_buffer(
                 uncompchunk->size, &(uncompchunk->buffer_ts), &(uncompchunk->buffer_values));
             _TG_decompress_to_buffer(
-                uncompchunk, &(uncompchunk->buffer_ts), &(uncompchunk->buffer_values));
+                uncompchunk, uncompchunk->buffer_ts, uncompchunk->buffer_values);
             _TG_free_compressed(uncompchunk);
         }
     }

@@ -112,3 +112,28 @@ def test_chunk_types():
             assert expected_result == r.execute_command('TS.range', 'monkey', 0, -1)
             r.execute_command('flushall')
             assert r.execute_command('ping') == True
+
+
+def test_extensive_ts_add():
+    Env().skipOnCluster()
+    for CHUNK_TYPE in CHUNK_TYPES:
+        with Env(decodeResponses=True).getConnection() as r:
+            r.execute_command("ts.create", 'test_key1', CHUNK_TYPE)
+            pos = 1
+            lines = []
+            float_lines = []
+            with open("lemire_canada.txt","r") as file:
+                lines = file.readlines()
+            for line in lines:
+                float_v = float(line.strip())
+                res = r.execute_command("ts.add", 'test_key1', pos, float_v)
+                assert res == pos
+                pos=pos+1
+                float_lines.append(float_v)
+            returned_floats = r.execute_command('ts.range', 'test_key1', "-", "+")
+            assert len(returned_floats) == len(float_lines)
+            for pos,datapoint in enumerate(returned_floats,start=1):
+                assert pos == datapoint[0]
+                assert float_lines[pos-1] == float(datapoint[1])
+            r.execute_command("FLUSHALL")
+            assert r.execute_command('PING') == True
