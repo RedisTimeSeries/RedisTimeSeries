@@ -410,7 +410,7 @@ ChunkResult TurboGorilla_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sam
 
 ChunkResult TurboGorilla_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
     TurboGorilla_ChunkIterator *iter = (TurboGorilla_ChunkIterator *)iterator;
-    if (iter->currentIndex >= 0) {
+    if (iter->currentIndex >= 0 && iter->chunk->num_samples > 0) {
         sample->value = iter->chunk->buffer_values[iter->currentIndex];
         sample->timestamp = iter->chunk->buffer_ts[iter->currentIndex];
         iter->currentIndex--;
