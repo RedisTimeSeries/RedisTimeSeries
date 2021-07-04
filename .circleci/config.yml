@@ -345,7 +345,7 @@ jobs:
           command: |
             bash -l -c "make build COV=1 SHOW=1"
             bash -l -c "make test COV=1"
-            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-action/master/codecov) -f bin/linux-x64-debug-cov/cov.info
       - store_artifacts:
           path: coverage
           destination: coverage
@@ -353,7 +353,7 @@ jobs:
           name: Test with Gears
           command: |
             bash -l -c "make test COV=1 GEARS=1 CLUSTER=1 SHOW=1"
-            bash <(curl -s https://codecov.io/bash) -f bin/linux-x64-debug-cov/cov.info
+            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-action/master/codecov) -f bin/linux-x64-debug-cov/cov.info
 
   deploy-artifacts:
     parameters:
