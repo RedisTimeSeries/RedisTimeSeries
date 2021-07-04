@@ -94,6 +94,27 @@ timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
     return ChunkGetSample(chunk, 0)->timestamp;
 }
 
+int Uncompressed_GetSampleValueAtPos(Chunk_t *chunk, size_t pos, double *value) {
+    int result = CR_ERR;
+    Chunk *uChunk = (Chunk *)chunk;
+    if (uChunk->num_samples > pos) {
+        *value = uChunk->samples[pos].value;
+        result = CR_OK;
+    }
+
+    return result;
+}
+
+int Uncompressed_GetSampleTimestampAtPos(Chunk_t *chunk, size_t pos, u_int64_t *timestamp) {
+    int result = CR_ERR;
+    Chunk *uChunk = (Chunk *)chunk;
+    if (uChunk->num_samples > pos) {
+        *timestamp = uChunk->samples[pos].timestamp;
+        result = CR_OK;
+    }
+    return result;
+}
+
 ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample) {
     Chunk *regChunk = (Chunk *)chunk;
     if (IsChunkFull(regChunk)) {
