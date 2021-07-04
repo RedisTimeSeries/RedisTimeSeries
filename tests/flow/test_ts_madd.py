@@ -2,7 +2,7 @@ import time
 
 from RLTest import Env
 #
-CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA","UNCOMPRESSED"]
+CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA"]
 def test_madd():
     sample_len = 1024
     Env().skipOnCluster()
@@ -86,8 +86,8 @@ def test_extensive_ts_madd():
     Env().skipOnCluster()
     for CHUNK_TYPE in CHUNK_TYPES:
         with Env(decodeResponses=True).getConnection() as r:
-            r.execute_command("ts.create", 'test_key1',CHUNK_TYPE)
-            r.execute_command("ts.create", 'test_key2',CHUNK_TYPE)
+            r.execute_command("ts.create", 'test_key1', CHUNK_TYPE)
+            r.execute_command("ts.create", 'test_key2', CHUNK_TYPE)
             pos = 1
             lines = []
             float_lines = []

@@ -12,6 +12,9 @@
 #include "fp.h"
 #include "gears_integration.h"
 
+// Overflow guard size
+#define FP_USIZE 64
+
 #include "rmutil/alloc.h"
 
 struct TurboGorilla_Chunk
@@ -124,7 +127,7 @@ Chunk_t *TurboGorilla_SplitChunk(Chunk_t *chunk) {
 }
 
 static int TurboGorilla_IsChunkFull(TurboGorilla_Chunk *chunk) {
-    return chunk->num_samples >= (chunk->size / TURBOGORILLA_SAMPLE_SIZE);
+    return chunk->num_samples >= ((chunk->size / TURBOGORILLA_SAMPLE_SIZE) - FP_USIZE);
 }
 
 u_int64_t TurboGorilla_NumOfSample(Chunk_t *chunk) {
@@ -198,8 +201,14 @@ void _TG_compress_from_buffer(TurboGorilla_Chunk *g_chunk) {
      */
     g_chunk->compressed_ts_size =
         fpgenc64(g_chunk->buffer_ts, g_chunk->num_samples, g_chunk->compressed_ts, 0);
+#ifdef DEBUG
+    assert(g_chunk->compressed_ts_size <= (g_chunk->size / 2));
+#endif
     g_chunk->compressed_values_size =
         fpgenc64(g_chunk->buffer_values, g_chunk->num_samples, g_chunk->compressed_values, 0);
+#ifdef DEBUG
+    assert(g_chunk->compressed_values_size <= (g_chunk->size / 2));
+#endif
 }
 
 void _TG_free_compressed(const TurboGorilla_Chunk *g_chunk) {
