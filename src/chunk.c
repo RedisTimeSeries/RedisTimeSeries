@@ -194,6 +194,8 @@ void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     iter->chunk = chunk;
     if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
+    } else { // iterate from first to last
+        iter->currentIndex = 0;
     }
 }
 

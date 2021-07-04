@@ -5,7 +5,7 @@ import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info
 
-CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA"]
+CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA", "UNCOMPRESSED"]
 
 def test_issue_504():
     with Env().getClusterConnectionIfNeeded() as r:

@@ -111,7 +111,7 @@ def test_trim():
             untrimmed_info = _get_ts_info(r, 'dont_trim_me')
             assert 2 == trimmed_info.chunk_count
             assert samples == untrimmed_info.total_samples
-            last_uncompressed_chunk_samples = 2000 % 64
+            last_uncompressed_chunk_samples = 11
             # extra test for uncompressed
             if mode == "UNCOMPRESSED":
                 assert last_uncompressed_chunk_samples == trimmed_info.total_samples

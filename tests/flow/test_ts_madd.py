@@ -2,7 +2,7 @@ import time
 
 from RLTest import Env
 #
-CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA"]
+CHUNK_TYPES = ["COMPRESSED:TURBO_GORILLA","","COMPRESSED","COMPRESSED:GORILLA", "UNCOMPRESSED"]
 def test_madd():
     sample_len = 1024
     Env().skipOnCluster()

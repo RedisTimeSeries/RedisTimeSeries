@@ -10,7 +10,7 @@ def normalize_info(data):
         info[data[i]] = data[i + 1]
     info.pop(b'memoryUsage')
     info.pop(b'chunkSize')
-    # info.pop(b'chunkType')
+    info.pop(b'chunkType')
     return info
 
 
