@@ -501,8 +501,6 @@ static int _add_parse_ts_value(const RedisModuleCtx *ctx,
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // RedisModule_AutoMemory(ctx);
-
     if (argc < 4 || (argc - 1) % 3 != 0) {
         return RedisModule_WrongArity(ctx);
     }
@@ -511,9 +509,9 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     for (int i = 1; i < argc; i += 3) {
         RedisModuleKey *key;
         Series *serie;
-        const RedisModuleString *keyName = argv[i];
-        const RedisModuleString *timestampStr = argv[i + 1];
-        const RedisModuleString *valueStr = argv[i + 2];
+        RedisModuleString *keyName = argv[i];
+        RedisModuleString *timestampStr = argv[i + 1];
+        RedisModuleString *valueStr = argv[i + 2];
         double value;
         u_int64_t timestamp;
         if (_add_parse_ts_value(ctx, timestampStr, valueStr, &timestamp, &value) != TRUE)
@@ -521,10 +519,14 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (GetSeries(ctx, keyName, &key, &serie, REDISMODULE_READ | REDISMODULE_WRITE) != TRUE)
             continue;
         internalAdd(ctx, serie, timestamp, value, DP_NONE);
-        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
         RedisModule_CloseKey(key);
     }
     RedisModule_ReplicateVerbatim(ctx);
+
+    for (int i = 1; i < argc; i += 3) {
+        RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
+    }
+
     return REDISMODULE_OK;
 }
 
@@ -776,8 +778,6 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 TS.INCRBY ts_key NUMBER [TIMESTAMP timestamp]
 */
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // RedisModule_AutoMemory(ctx);
-
     if (argc < 3) {
         return RedisModule_WrongArity(ctx);
     }
