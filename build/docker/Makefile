@@ -1,9 +1,9 @@
-# Feel free to change these
-PRODUCT=RedisTimeSeries
+REDIS_VERSION=6.2.4
+PRODUCT=redistimeseries
 DOCKER_ORG=redislabs
-REDIS_VERSION=6.2.3
-DOCKER_OPTS=  # set, to pass custom options to docker, but remember to quote them
-OSNICK ?= bionic
-DOCKER_SOURCES="" # set to pass multiple directories as docker sources
 
-include $(MK)/docker.native
+OSNICK ?= buster
+
+ROOT=../../
+READIES=${ROOT}/deps/readies
+include ${READIES}/mk/docker.rules
