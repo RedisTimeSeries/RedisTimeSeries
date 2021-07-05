@@ -1,6 +1,5 @@
 REDIS_VERSION=6.2.4
 PRODUCT=redistimeseries
-DOCKER_ORG=redislabs
 
 OSNICK ?= buster
 
