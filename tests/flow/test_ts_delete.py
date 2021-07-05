@@ -95,5 +95,3 @@ def test_ts_del_out_range():
             r.execute_command('ts.del', 'test_key', 0, 10000+100)
             res = r.execute_command('ts.range', 'test_key', 0 + 100, sample_len + 100 - 1)
             assert len(res) == 0
-            r.flushall()
-            assert r.execute_command("ping") == True
