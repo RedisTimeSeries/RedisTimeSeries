@@ -19,6 +19,7 @@ CPU_METRICS = [
 ]
 
 CHUNK_TYPES = [
+    "COMPRESSED:TURBO_GORILLA",
     "COMPRESSED",
     "",
     "COMPRESSED:GORILLA",
@@ -95,7 +96,6 @@ def test_mrange_cpu_max_all_1():
                 )
         shard_conn = e.getConnection()
         for _ in range(max_repetitions):
-            print(shard_conn.keys())
             host_id = random.randint(1, total_hosts)
             res = shard_conn.execute_command(
                 "TS.MRANGE - + WITHLABELS AGGREGATION MAX 3600000 FILTER measurement=cpu hostname=host_{}".format(
@@ -103,4 +103,3 @@ def test_mrange_cpu_max_all_1():
                 )
             )
             e.assertEqual(len(res), 10)
-            assert e.checkExitCode() == True

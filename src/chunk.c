@@ -43,6 +43,14 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+Chunk_t *Uncompressed_CloneChunk(Chunk_t *chunk) {
+    Chunk *oldChunk = (Chunk *)chunk;
+    Chunk *newChunk = Uncompressed_NewChunk(oldChunk->size);
+    newChunk->num_samples = oldChunk->num_samples;
+    memcpy(newChunk->samples, oldChunk->samples, oldChunk->num_samples * sizeof(Sample));
+    return newChunk;
+}
+
 /**
  * TODO: describe me
  * @param chunk

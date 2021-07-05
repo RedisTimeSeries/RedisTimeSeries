@@ -96,6 +96,33 @@ void TurboGorilla_FreeChunk(Chunk_t *chunk) {
     free(curChunk);
 }
 
+Chunk_t *TurboGorilla_CloneChunk(Chunk_t *chunk) {
+    TurboGorilla_Chunk *curChunk = (TurboGorilla_Chunk *)chunk;
+    TurboGorilla_Chunk *newChunk = TurboGorilla_NewChunk(curChunk->size);
+    if (curChunk->buffer_in_use) {
+        memcpy(newChunk->buffer_ts, curChunk->buffer_ts, curChunk->num_samples * sizeof(uint64_t));
+        memcpy(newChunk->buffer_values,
+               curChunk->buffer_values,
+               curChunk->num_samples * sizeof(double));
+
+    } else {
+        _TG_free_buffer(newChunk);
+        _TG_alloc_compressed(curChunk->size, newChunk);
+        memcpy(newChunk->compressed_ts, curChunk->compressed_ts, curChunk->compressed_ts_size);
+        memcpy(newChunk->compressed_values,
+               curChunk->compressed_values,
+               curChunk->compressed_values_size);
+    }
+    newChunk->num_samples = curChunk->num_samples;
+    newChunk->size = curChunk->size;
+    newChunk->start_ts = curChunk->start_ts;
+    newChunk->end_ts = curChunk->end_ts;
+    newChunk->buffer_in_use = curChunk->buffer_in_use;
+    newChunk->compressed_values_size = curChunk->compressed_values_size;
+    newChunk->compressed_ts_size = curChunk->compressed_ts_size;
+    return newChunk;
+}
+
 /**
  * Split the chunk in half, returning a new chunk with the right-side of the current chunk
  * The input chunk is trimmed to retain the left-most part

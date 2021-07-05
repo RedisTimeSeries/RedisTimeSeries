@@ -17,7 +17,7 @@ typedef struct ChunkIterator ChunkIterator;
 
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
-
+Chunk_t *Uncompressed_CloneChunk(Chunk_t *chunk);
 /**
  * TODO: describe me
  * @param chunk

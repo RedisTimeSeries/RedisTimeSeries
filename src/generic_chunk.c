@@ -10,6 +10,7 @@
 static ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
+    .CloneChunk = Uncompressed_CloneChunk,
     .SplitChunk = Uncompressed_SplitChunk,
 
     .AddSample = Uncompressed_AddSample,
@@ -70,6 +71,7 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
 static ChunkFuncs TurboGorilla_ChunkFuncs = {
     .NewChunk = TurboGorilla_NewChunk,
     .FreeChunk = TurboGorilla_FreeChunk,
+    .CloneChunk = TurboGorilla_CloneChunk,
     .SplitChunk = TurboGorilla_SplitChunk,
 
     .AddSample = TurboGorilla_AddSample,

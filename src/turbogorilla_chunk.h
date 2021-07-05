@@ -19,6 +19,7 @@ typedef struct TurboGorilla_ChunkIterator TurboGorilla_ChunkIterator;
 
 Chunk_t *TurboGorilla_NewChunk(size_t sampleCount);
 void TurboGorilla_FreeChunk(Chunk_t *chunk);
+Chunk_t *TurboGorilla_CloneChunk(Chunk_t *chunk);
 
 /**
  * TODO: describe me
