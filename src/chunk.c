@@ -315,6 +315,16 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
                              (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
+void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
+    Uncompressed_GenericSerialize(chunk,
+                                  bw,
+                                  (SaveUnsignedFunc)RedisGears_BWWriteLong,
+                                  (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+}
 
-void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {}
+void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
+    Uncompressed_Deserialize(chunk,
+                             br,
+                             (ReadUnsignedFunc)RedisGears_BRReadLong,
+                             (ReadStringBufferFunc)ownedBufferFromGears);
+}

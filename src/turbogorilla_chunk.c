@@ -508,6 +508,16 @@ void TurboGorilla_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
                              (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void TurboGorilla_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
+void TurboGorilla_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
+    TurboGorilla_GenericSerialize(chunk,
+                                  bw,
+                                  (SaveUnsignedFunc)RedisGears_BWWriteLong,
+                                  (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+}
 
-void TurboGorilla_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {}
+void TurboGorilla_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
+    TurboGorilla_Deserialize(chunk,
+                             br,
+                             (ReadUnsignedFunc)RedisGears_BRReadLong,
+                             (ReadStringBufferFunc)ownedBufferFromGears);
+}

@@ -83,7 +83,8 @@ def test_valid_timestamp():
 
 def test_chunk_types():
     for CHUNK_TYPE in CHUNK_TYPES:
-        with Env().getClusterConnectionIfNeeded() as r:
+        e = Env()
+        with e.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.create', 'monkey', CHUNK_TYPE)
             r.execute_command('ts.add', 'monkey', '0', '1')
             r.execute_command('ts.add', 'monkey', '1', '1')
@@ -110,14 +111,14 @@ def test_chunk_types():
                             [100002, b'1'], [100004, b'1'], [1000000, b'1'], [1000001, b'1'],
                             [10000011000001, b'1'], [10000011000002, b'1']]
             assert expected_result == r.execute_command('TS.range', 'monkey', 0, -1)
-            r.execute_command('flushall')
-            assert r.execute_command('ping') == True
+        e.flush()
 
 
 def test_extensive_ts_add():
-    Env().skipOnCluster()
     for CHUNK_TYPE in CHUNK_TYPES:
-        with Env(decodeResponses=True).getConnection() as r:
+        e = Env(decodeResponses=True)
+        e.flush()
+        with e.getClusterConnectionIfNeeded() as r:
             r.execute_command("ts.create", 'test_key1', CHUNK_TYPE)
             pos = 1
             lines = []
@@ -135,5 +136,3 @@ def test_extensive_ts_add():
             for pos,datapoint in enumerate(returned_floats,start=1):
                 assert pos == datapoint[0]
                 assert float_lines[pos-1] == float(datapoint[1])
-            r.execute_command("FLUSHALL")
-            assert r.execute_command('PING') == True

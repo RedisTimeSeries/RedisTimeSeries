@@ -439,3 +439,14 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     }
     return s;
 }
+
+char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
+    size_t size = 0;
+    const char *temp = RedisGears_BRReadBuffer(br, &size);
+    char *ret = malloc(size);
+    memcpy(ret, temp, size);
+    if (len != NULL) {
+        *len = size;
+    }
+    return ret;
+}

@@ -79,7 +79,9 @@ def test_ts_del_compressed_multi_chunk():
 def test_ts_del_out_range():
     sample_len = 10000
     for CHUNK_TYPE in CHUNK_TYPES:
-        with Env().getClusterConnectionIfNeeded() as r:
+        e = Env()
+        e.flush()
+        with e.getClusterConnectionIfNeeded() as r:
             r.execute_command("ts.create", 'test_key', CHUNK_TYPE)
 
             for i in range(sample_len):

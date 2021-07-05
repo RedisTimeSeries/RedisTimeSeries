@@ -7,6 +7,7 @@
 #include "compressed_chunk.h"
 
 #include "chunk.h"
+#include "gears_integration.h"
 #include "generic_chunk.h"
 
 #include <assert.h> // assert
@@ -349,17 +350,6 @@ void Compressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
                          bw,
                          (SaveUnsignedFunc)RedisGears_BWWriteLong,
                          (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
-}
-
-static char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
-    size_t size = 0;
-    const char *temp = RedisGears_BRReadBuffer(br, &size);
-    char *ret = malloc(size);
-    memcpy(ret, temp, size);
-    if (len != NULL) {
-        *len = size;
-    }
-    return ret;
 }
 
 void Compressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {
