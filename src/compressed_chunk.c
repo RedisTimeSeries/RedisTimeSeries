@@ -63,9 +63,7 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
         chunk->size += CHUNK_RESIZE_STEP;
         chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
-        // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
-        assert(res == CR_OK);
 #ifdef DEBUG
         assert(res == CR_OK);
 #endif
@@ -356,5 +354,5 @@ void Compressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {
     Compressed_Deserialize(chunk,
                            br,
                            (ReadUnsignedFunc)RedisGears_BRReadLong,
-                           (ReadStringBufferFunc)ownedBufferFromGears);
+                           (ReadStringBufferFunc)RedisGears_BRReadBuffer);
 }

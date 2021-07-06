@@ -19,8 +19,8 @@ CPU_METRICS = [
 ]
 
 CHUNK_TYPES = [
-    "COMPRESSED:TURBO_GORILLA",
     "COMPRESSED",
+    "COMPRESSED:TURBO_GORILLA",
     "",
     "COMPRESSED:GORILLA",
     "UNCOMPRESSED",
@@ -61,7 +61,7 @@ def create_tsbs_host_series(r, host_id, chunk_type):
             "measurement",
             "cpu",
             "fieldname",
-            cpu_metric_name,
+            "usage_{}".format(cpu_metric_name),
         ]
         assert r.execute_command(*create_cmd)
 
@@ -80,6 +80,8 @@ def populate_tsbs_host_serie(r, host_id, datapoints_per_serie, start_ts, delta):
 
 
 def test_mrange_cpu_max_all_1():
+    first_chunktype_replies = []
+    first_chunktype_hostids = []
     total_hosts = 5
     datapoints_per_serie = 4320
     start_ts = 1451606400000
@@ -95,11 +97,48 @@ def test_mrange_cpu_max_all_1():
                     r, host_id, datapoints_per_serie, start_ts, delta
                 )
         shard_conn = e.getConnection()
-        for _ in range(max_repetitions):
-            host_id = random.randint(1, total_hosts)
+        for pos in range(max_repetitions):
+            if CHUNK_TYPE == CHUNK_TYPES[0]:
+                host_id = random.randint(1, total_hosts)
+                first_chunktype_hostids.append(host_id)
+            else:
+                host_id = first_chunktype_hostids[pos]
+
             res = shard_conn.execute_command(
                 "TS.MRANGE - + WITHLABELS AGGREGATION MAX 3600000 FILTER measurement=cpu hostname=host_{}".format(
                     host_id
                 )
             )
             e.assertEqual(len(res), 10)
+            if CHUNK_TYPE == CHUNK_TYPES[0]:
+                first_chunktype_replies.append(res)
+            else:
+                e.assertEqual(len(res), len(first_chunktype_replies[pos]))
+
+
+def test_mrange_cpu_double_groupby_5():
+    first_chunktype_replies = []
+    total_hosts = 5
+    datapoints_per_serie = 4320
+    start_ts = 1451606400000
+    delta = 10000
+    max_repetitions = 100
+    for CHUNK_TYPE in CHUNK_TYPES:
+        e = Env()
+        e.flush()
+        with e.getClusterConnectionIfNeeded() as r:
+            for host_id in range(1, total_hosts + 1):
+                create_tsbs_host_series(r, host_id, CHUNK_TYPE)
+                populate_tsbs_host_serie(
+                    r, host_id, datapoints_per_serie, start_ts, delta
+                )
+        shard_conn = e.getConnection()
+        for pos in range(max_repetitions):
+            res = shard_conn.execute_command(
+                "TS.MRANGE - + WITHLABELS AGGREGATION AVG 3600000 FILTER measurement=cpu fieldname=(usage_user,usage_system,usage_idle,usage_nice,usage_iowait) GROUPBY hostname REDUCE max"
+            )
+            e.assertEqual(len(res), total_hosts)
+            if CHUNK_TYPE == CHUNK_TYPES[0]:
+                first_chunktype_replies.append(res)
+            else:
+                e.assertEqual(len(res), len(first_chunktype_replies[pos]))

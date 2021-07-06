@@ -546,5 +546,5 @@ void TurboGorilla_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
     TurboGorilla_Deserialize(chunk,
                              br,
                              (ReadUnsignedFunc)RedisGears_BRReadLong,
-                             (ReadStringBufferFunc)ownedBufferFromGears);
+                             (ReadStringBufferFunc)RedisGears_BRReadBuffer);
 }
