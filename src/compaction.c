@@ -14,13 +14,11 @@
 typedef struct MinContext
 {
     double value;
-    char isResetted;
 } MinContext;
 
 typedef struct MaxContext
 {
     double value;
-    char isResetted;
 } MaxContext;
 
 typedef struct RangeContext
@@ -256,16 +254,11 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
 void *MinCreateContext() {
     MinContext *context = (MinContext *)malloc(sizeof(MinContext));
     context->value = DBL_MAX;
-    context->isResetted = TRUE;
     return context;
 }
 
 void MinAppendValue(void *contextPtr, double value) {
     MinContext *context = (MinContext *)contextPtr;
-    if (context->isResetted) {
-        context->isResetted = FALSE;
-        context->value = value;
-    }
     if (value < context->value) {
         context->value = value;
     }
@@ -273,9 +266,6 @@ void MinAppendValue(void *contextPtr, double value) {
 
 int MinFinalize(void *contextPtr, double *value) {
     MinContext *context = (MinContext *)contextPtr;
-    if (context->isResetted == TRUE) {
-        return TSDB_ERROR;
-    }
     *value = context->value;
     return TSDB_OK;
 }
@@ -288,31 +278,21 @@ void MinReset(void *contextPtr) {
 void MinWriteContext(void *contextPtr, RedisModuleIO *io) {
     MinContext *context = (MinContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
-    RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
 void MinReadContext(void *contextPtr, RedisModuleIO *io) {
     MinContext *context = (MinContext *)contextPtr;
-    size_t len = 1;
     context->value = RedisModule_LoadDouble(io);
-    char *sb = RedisModule_LoadStringBuffer(io, &len);
-    context->isResetted = sb[0];
-    free(sb);
 }
 
 void *MaxCreateContext() {
     MaxContext *context = (MaxContext *)malloc(sizeof(MinContext));
     context->value = DBL_MIN;
-    context->isResetted = TRUE;
     return context;
 }
 
 void MaxAppendValue(void *contextPtr, double value) {
     MaxContext *context = (MaxContext *)contextPtr;
-    if (context->isResetted) {
-        context->isResetted = FALSE;
-        context->value = value;
-    }
     if (value > context->value) {
         context->value = value;
     }
@@ -320,9 +300,6 @@ void MaxAppendValue(void *contextPtr, double value) {
 
 int MaxFinalize(void *contextPtr, double *value) {
     MaxContext *context = (MaxContext *)contextPtr;
-    if (context->isResetted == TRUE) {
-        return TSDB_ERROR;
-    }
     *value = context->value;
     return TSDB_OK;
 }
@@ -335,16 +312,11 @@ void MaxReset(void *contextPtr) {
 void MaxWriteContext(void *contextPtr, RedisModuleIO *io) {
     MaxContext *context = (MaxContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
-    RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
 void MaxReadContext(void *contextPtr, RedisModuleIO *io) {
     MaxContext *context = (MaxContext *)contextPtr;
-    size_t len = 1;
     context->value = RedisModule_LoadDouble(io);
-    char *sb = RedisModule_LoadStringBuffer(io, &len);
-    context->isResetted = sb[0];
-    free(sb);
 }
 
 void SumAppendValue(void *contextPtr, double value) {
