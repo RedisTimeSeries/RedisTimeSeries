@@ -445,21 +445,21 @@ void RangeReadContext(void *contextPtr, RedisModuleIO *io) {
     free(sb);
 }
 
-static AggregationClass aggMax = { .createContext = MinCreateContext,
-                                   .appendValue = MinAppendValue,
-                                   .freeContext = rm_free,
-                                   .finalize = MinFinalize,
-                                   .writeContext = MinWriteContext,
-                                   .readContext = MinReadContext,
-                                   .resetContext = MinReset };
-
-static AggregationClass aggMin = { .createContext = MaxCreateContext,
+static AggregationClass aggMax = { .createContext = MaxCreateContext,
                                    .appendValue = MaxAppendValue,
                                    .freeContext = rm_free,
                                    .finalize = MaxFinalize,
                                    .writeContext = MaxWriteContext,
                                    .readContext = MaxReadContext,
                                    .resetContext = MaxReset };
+
+static AggregationClass aggMin = { .createContext = MinCreateContext,
+                                   .appendValue = MinAppendValue,
+                                   .freeContext = rm_free,
+                                   .finalize = MinFinalize,
+                                   .writeContext = MinWriteContext,
+                                   .readContext = MinReadContext,
+                                   .resetContext = MinReset };
 
 static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .appendValue = SumAppendValue,
