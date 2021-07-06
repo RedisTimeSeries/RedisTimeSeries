@@ -334,5 +334,5 @@ void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
     Uncompressed_Deserialize(chunk,
                              br,
                              (ReadUnsignedFunc)RedisGears_BRReadLong,
-                             (ReadStringBufferFunc)RedisGears_BRReadBuffer);
+                             (ReadStringBufferFunc)ownedBufferFromGears);
 }
