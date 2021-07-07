@@ -77,20 +77,20 @@ static int parseValueList(char *token, size_t *count, RedisModuleString ***value
 }
 
 int parsePredicate(RedisModuleCtx *ctx,
-                   RedisModuleString *label,
+                   const char *label_value_pair,
+                   size_t label_value_pair_size,
                    QueryPredicate *retQuery,
                    const char *separator) {
     char *token;
     char *iter_ptr;
-    size_t _s;
-    const char *labelRaw = RedisModule_StringPtrLen(label, &_s);
-    char labelstr[255];
-    labelstr[_s] = '\0';
-    strncpy(labelstr, labelRaw, _s);
+    char *labelstr = malloc((label_value_pair_size + 1) * sizeof(char));
+    labelstr[label_value_pair_size] = '\0';
+    strncpy(labelstr, label_value_pair, label_value_pair_size);
 
     // Extract key
     token = strtok_r(labelstr, separator, &iter_ptr);
     if (token == NULL) {
+        free(labelstr);
         return TSDB_ERROR;
     }
     retQuery->key = RedisModule_CreateString(NULL, token, strlen(token));
@@ -101,6 +101,7 @@ int parsePredicate(RedisModuleCtx *ctx,
         if (parseValueList(token, &retQuery->valueListCount, &retQuery->valuesList) == TSDB_ERROR) {
             RedisModule_FreeString(NULL, retQuery->key);
             retQuery->key = NULL;
+            free(labelstr);
             return TSDB_ERROR;
         }
     } else if (token != NULL) {
@@ -111,6 +112,7 @@ int parsePredicate(RedisModuleCtx *ctx,
         retQuery->valuesList = NULL;
         retQuery->valueListCount = 0;
     }
+    free(labelstr);
     return TSDB_OK;
 }
 

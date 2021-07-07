@@ -129,7 +129,6 @@ static inline ChunkResult _seriesIteratorGetNext(SeriesIterator *iterator, Sampl
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
                 }
-                // iterator->chunkIteratorFuncs.Reset(iterator->chunkIterator, currentChunk);
                 iterator->chunkIteratorFuncs.Free(iterator->chunkIterator);
                 iterator->chunkIterator =
                     funcs->NewChunkIterator(currentChunk,
