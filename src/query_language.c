@@ -333,36 +333,50 @@ QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
     *response = TSDB_OK;
 
     for (int i = start; i < start + query_count; i++) {
-        size_t _s;
+        size_t label_value_pair_size;
         QueryPredicate *query = &queries->list[current_index];
-        const char *str2 = RedisModule_StringPtrLen(argv[i], &_s);
-        if (strstr(str2, "!=(") != NULL) { // order is important! Must be before "!=".
+        const char *label_value_pair = RedisModule_StringPtrLen(argv[i], &label_value_pair_size);
+        // l!=(v1,v2,...) key with label l that doesn't equal any of the values in the list
+        // Note: order is important! Must be before "!=".
+        if (strstr(label_value_pair, "!=(") != NULL) {
             query->type = LIST_NOTMATCH;
-            if (parsePredicate(ctx, argv[i], query, "!=(") == TSDB_ERROR) {
+            if (parsePredicate(ctx, label_value_pair, label_value_pair_size, query, "!=(") ==
+                TSDB_ERROR) {
                 *response = TSDB_ERROR;
                 break;
             }
-        } else if (strstr(str2, "!=") != NULL) {
+            // l!= key has label l
+        } else if (strstr(label_value_pair, "!=") != NULL) {
             query->type = NEQ;
-            if (parsePredicate(ctx, argv[i], query, "!=") == TSDB_ERROR) {
+            if (parsePredicate(ctx, label_value_pair, label_value_pair_size, query, "!=") ==
+                TSDB_ERROR) {
                 *response = TSDB_ERROR;
                 break;
             }
             if (query->valueListCount == 0) {
                 query->type = CONTAINS;
             }
-        } else if (strstr(str2, "=(") != NULL) { // order is important! Must be before "=".
+            // l=(v1,v2,...) key with label l that equals one of the values in the list
+            // Note: order is important! Must be before "=".
+        } else if (strstr(label_value_pair, "=(") != NULL) {
             query->type = LIST_MATCH;
-            if (parsePredicate(ctx, argv[i], query, "=(") == TSDB_ERROR) {
+            if (parsePredicate(ctx, label_value_pair, label_value_pair_size, query, "=(") ==
+                TSDB_ERROR) {
                 *response = TSDB_ERROR;
                 break;
             }
-        } else if (strstr(str2, "=") != NULL) {
+            // When we reach this check, it's due to:
+            // option 1) l=v label equals value
+            // option 2) l= key does not have the label l
+        } else if (strstr(label_value_pair, "=") != NULL) {
             query->type = EQ;
-            if (parsePredicate(ctx, argv[i], query, "=") == TSDB_ERROR) {
+            // option 1) l=v label equals value
+            if (parsePredicate(ctx, label_value_pair, label_value_pair_size, query, "=") ==
+                TSDB_ERROR) {
                 *response = TSDB_ERROR;
                 break;
             }
+            // option 2) l= key does not have the label l
             if (query->valueListCount == 0) {
                 query->type = NCONTAINS;
             }
