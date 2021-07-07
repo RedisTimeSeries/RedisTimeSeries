@@ -234,6 +234,22 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
+void Compressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
+    CompressedChunk *compressedChunk = chunk;
+    Compressed_Iterator *iter = (Compressed_Iterator *)iterator;
+    iter->chunk = compressedChunk;
+    iter->idx = 0;
+    iter->count = 0;
+
+    iter->prevDelta = 0;
+    iter->prevTS = compressedChunk->baseTimestamp;
+    iter->prevValue.d = compressedChunk->baseValue.d;
+    iter->leading = 32;
+    iter->trailing = 32;
+    iter->blocksize = 0;
+    iterator = (ChunkIter_t *)iter;
+}
+
 ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
                                          int options,
                                          ChunkIterFuncs *retChunkIterClass) {
@@ -246,26 +262,11 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
         return Uncompressed_NewChunkIterator(
             uncompressedChunk, uncompressed_options, retChunkIterClass);
     }
-
+    Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
+    Compressed_ResetChunkIterator(iter, compressedChunk);
     if (retChunkIterClass != NULL) {
         *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);
-        ;
     }
-
-    Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
-
-    iter->chunk = compressedChunk;
-    iter->idx = 0;
-    iter->count = 0;
-
-    iter->prevTS = compressedChunk->baseTimestamp;
-    iter->prevDelta = 0;
-
-    iter->prevValue.d = compressedChunk->baseValue.d;
-    iter->leading = 32;
-    iter->trailing = 32;
-    iter->blocksize = 0;
-
     return (ChunkIter_t *)iter;
 }
 

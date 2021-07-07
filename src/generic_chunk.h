@@ -51,6 +51,7 @@ typedef struct ChunkIterFuncs
     void (*Free)(ChunkIter_t *iter);
     ChunkResult (*GetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult (*GetPrev)(ChunkIter_t *iter, Sample *sample);
+    void (*Reset)(ChunkIter_t *iter, Chunk_t *chunk);
 } ChunkIterFuncs;
 
 typedef struct ChunkFuncs
