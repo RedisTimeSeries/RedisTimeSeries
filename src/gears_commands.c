@@ -188,6 +188,8 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queries->ref++;
     queryArg->predicates = queries;
     queryArg->withLabels = false;
+    queryArg->limitLabelsSize = 0;
+    queryArg->limitLabels = NULL;
     RedisGears_FlatMap(rg_ctx, "ShardQueryindexMapper", queryArg);
 
     RGM_Collect(rg_ctx);
