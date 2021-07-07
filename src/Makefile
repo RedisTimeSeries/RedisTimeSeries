@@ -135,7 +135,7 @@ _SOURCES=\
 	config.c \
 	generic_chunk.c \
 	gorilla.c \
-	turbogorilla_chunk.c \
+	gorilla_v2_chunk.c \
 	indexer.c \
 	module.c \
 	parse_policies.c \

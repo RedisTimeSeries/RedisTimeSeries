@@ -112,7 +112,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         cCtx->options |= SERIES_OPT_COMPRESSED_GORILLA;
     }
 
-    if (RMUtil_ArgIndex(COMPRESSED_TURBO_GORILLA_ARG_STR, argv, argc) > 0) {
+    if (RMUtil_ArgIndex(COMPRESSED_GORILLA_V2_ARG_STR, argv, argc) > 0) {
         cCtx->options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
         cCtx->options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
     }

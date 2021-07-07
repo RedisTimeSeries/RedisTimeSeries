@@ -2,7 +2,7 @@
 
 #include "chunk.h"
 #include "compressed_chunk.h"
-#include "turbogorilla_chunk.h"
+#include "gorilla_v2_chunk.h"
 
 #include <ctype.h>
 #include "rmutil/alloc.h"
@@ -68,34 +68,34 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .Reset = Compressed_ResetChunkIterator,
 };
 
-static ChunkFuncs TurboGorilla_ChunkFuncs = {
-    .NewChunk = TurboGorilla_NewChunk,
-    .FreeChunk = TurboGorilla_FreeChunk,
-    .CloneChunk = TurboGorilla_CloneChunk,
-    .SplitChunk = TurboGorilla_SplitChunk,
+static ChunkFuncs Gorilla_v2_ChunkFuncs = {
+    .NewChunk = Gorilla_v2_NewChunk,
+    .FreeChunk = Gorilla_v2_FreeChunk,
+    .CloneChunk = Gorilla_v2_CloneChunk,
+    .SplitChunk = Gorilla_v2_SplitChunk,
 
-    .AddSample = TurboGorilla_AddSample,
-    .UpsertSample = TurboGorilla_UpsertSample,
-    .DelRange = TurboGorilla_DelRange,
+    .AddSample = Gorilla_v2_AddSample,
+    .UpsertSample = Gorilla_v2_UpsertSample,
+    .DelRange = Gorilla_v2_DelRange,
 
-    .NewChunkIterator = TurboGorilla_NewChunkIterator,
+    .NewChunkIterator = Gorilla_v2_NewChunkIterator,
 
-    .GetChunkSize = TurboGorilla_GetChunkSize,
-    .GetNumOfSample = TurboGorilla_NumOfSample,
-    .GetLastTimestamp = TurboGorilla_GetLastTimestamp,
-    .GetFirstTimestamp = TurboGorilla_GetFirstTimestamp,
+    .GetChunkSize = Gorilla_v2_GetChunkSize,
+    .GetNumOfSample = Gorilla_v2_NumOfSample,
+    .GetLastTimestamp = Gorilla_v2_GetLastTimestamp,
+    .GetFirstTimestamp = Gorilla_v2_GetFirstTimestamp,
 
-    .SaveToRDB = TurboGorilla_SaveToRDB,
-    .LoadFromRDB = TurboGorilla_LoadFromRDB,
-    .GearsSerialize = TurboGorilla_GearsSerialize,
-    .GearsDeserialize = TurboGorilla_GearsDeserialize,
+    .SaveToRDB = Gorilla_v2_SaveToRDB,
+    .LoadFromRDB = Gorilla_v2_LoadFromRDB,
+    .GearsSerialize = Gorilla_v2_GearsSerialize,
+    .GearsDeserialize = Gorilla_v2_GearsDeserialize,
 };
 
-static ChunkIterFuncs TurboGorilla_ChunkIterFuncs = {
-    .Free = TurboGorilla_FreeChunkIterator,
-    .GetNext = TurboGorilla_ChunkIteratorGetNext,
-    .GetPrev = TurboGorilla_ChunkIteratorGetPrev,
-    .Reset = TurboGorilla_ResetChunkIterator,
+static ChunkIterFuncs Gorilla_v2_ChunkIterFuncs = {
+    .Free = Gorilla_v2_FreeChunkIterator,
+    .GetNext = Gorilla_v2_ChunkIteratorGetNext,
+    .GetPrev = Gorilla_v2_ChunkIteratorGetPrev,
+    .Reset = Gorilla_v2_ResetChunkIterator,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
@@ -134,7 +134,7 @@ ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
         case CHUNK_COMPRESSED:
             return &comprChunk;
         case CHUNK_COMPRESSED_TURBOGORILLA:
-            return &TurboGorilla_ChunkFuncs;
+            return &Gorilla_v2_ChunkFuncs;
     }
     return NULL;
 }
@@ -146,7 +146,7 @@ ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType) {
         case CHUNK_COMPRESSED:
             return &compressedChunkIteratorClass;
         case CHUNK_COMPRESSED_TURBOGORILLA:
-            return &TurboGorilla_ChunkIterFuncs;
+            return &Gorilla_v2_ChunkIterFuncs;
     }
     return NULL;
 }

@@ -27,7 +27,7 @@ const char *ChunkTypeToString(int options) {
         return UNCOMPRESSED_ARG_STR;
     }
     if (options & SERIES_OPT_COMPRESSED_TURBOGORILLA) {
-        return COMPRESSED_TURBO_GORILLA_ARG_STR;
+        return COMPRESSED_GORILLA_V2_ARG_STR;
     }
     if (options & SERIES_OPT_COMPRESSED_GORILLA) {
         return COMPRESSED_GORILLA_ARG_STR_OLD;
@@ -119,7 +119,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             strncmp(chunk_type_cstr, COMPRESSED_GORILLA_ARG_STR_OLD, len) == 0) {
             TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
-        } else if (strncmp(chunk_type_cstr, COMPRESSED_TURBO_GORILLA_ARG_STR, len) == 0) {
+        } else if (strncmp(chunk_type_cstr, COMPRESSED_GORILLA_V2_ARG_STR, len) == 0) {
             TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_TURBOGORILLA;
         } else if (strncmp(chunk_type_cstr, UNCOMPRESSED_ARG_STR, len) == 0) {
