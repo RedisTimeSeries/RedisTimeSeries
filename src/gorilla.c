@@ -217,12 +217,10 @@ static bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
-static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
-}
+#define CHECK_BIT(var, pos) (((var) >> (pos)) & 1)
 
-static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
-    return !Bins_bitoff(bins, bit);
+static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
+    return !CHECK_BIT(bins[bit / BINW], localbit(bit));
 }
 
 // Append `dataLen` bits from `data` into `bins` at bit position `bit`
