@@ -106,6 +106,9 @@
 #define LeadingZeros64(x) __builtin_clzll(x)
 #define TrailingZeros64(x) __builtin_ctzll(x)
 
+#define likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+
 // Define compression steps for integer compression
 // 1 bit used for positive/negative sign. Rest give 10^i. (4,7,10,14)
 #define CMPR_L1 5
@@ -213,7 +216,7 @@ static inline u_int8_t localbit(const globalbit_t bit) {
 // return `true` if `x` is in [-(2^(n-1)), 2^(n-1)-1]
 // e.g. for n=6, range is [-32, 31]
 
-static bool Bin_InRange(int64_t x, u_int8_t nbits) {
+static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
@@ -255,41 +258,20 @@ static inline binary_t readBits(const binary_t *bins,
     }
 }
 
-static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx;
-    return size <= available;
+static inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
+    return size <= ((chunk->size * 8) - chunk->idx);
 }
 
 /***************************** APPEND ********************************/
-static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
-#ifdef DEBUG
-    assert(timestamp >= chunk->prevTimestamp);
-#endif
+
+static ChunkResult _nonzero_ddelta_appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
     timestamp_t curDelta = timestamp - chunk->prevTimestamp;
 
     union64bits doubleDelta;
     doubleDelta.i = curDelta - chunk->prevTimestampDelta;
-    /*
-     * Before any insertion the code `CHECKSPACE` ensures there is enough space to
-     * encode timestamp and one additional bit which the minimum to encode the value.
-     * This is why we have `+ 1` in `CHECKSPACE`.
-     *
-     * If doubleDelta == 0, 1 bit of value 0 is inserted.
-     *
-     * Else, `Bin_InRange` checks for the minimal number of bits required to represent
-     * `doubleDelta`, the delta of deltas between current and previous timestamps.
-     * Then two values are being inserted.
-       * The first value is, encoding for the lowest number of bits for which
-         `Bin_InRange` returns `true`.
-       * The second value is a compressed representation of the value with the `length`
-         encoded by the first value. Compression is done using `int2bin`.
-     */
     binary_t *bins = chunk->data;
     globalbit_t *bit = &chunk->idx;
-    if (doubleDelta.i == 0) {
-        CHECKSPACE(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
-        appendBits(bins, bit, 0x00, 1);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L1)) {
+    if (Bin_InRange(doubleDelta.i, CMPR_L1)) {
         CHECKSPACE(chunk, 2 + CMPR_L1 + 1);
         appendBits(bins, bit, 0x01, 2);
         appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L1), CMPR_L1);
@@ -313,6 +295,41 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
         CHECKSPACE(chunk, 6 + 64 + 1);
         appendBits(bins, bit, 0x3f, 6);
         appendBits(bins, bit, doubleDelta.u, 64);
+    }
+    chunk->prevTimestampDelta = curDelta;
+    chunk->prevTimestamp = timestamp;
+    return CR_OK;
+}
+
+static inline ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
+#ifdef DEBUG
+    assert(timestamp >= chunk->prevTimestamp);
+#endif
+    timestamp_t curDelta = timestamp - chunk->prevTimestamp;
+    union64bits doubleDelta;
+    doubleDelta.i = curDelta - chunk->prevTimestampDelta;
+    /*
+     * Before any insertion the code `CHECKSPACE` ensures there is enough space to
+     * encode timestamp and one additional bit which the minimum to encode the value.
+     * This is why we have `+ 1` in `CHECKSPACE`.
+     *
+     * If doubleDelta == 0, 1 bit of value 0 is inserted.
+     *
+     * Else, `Bin_InRange` checks for the minimal number of bits required to represent
+     * `doubleDelta`, the delta of deltas between current and previous timestamps.
+     * Then two values are being inserted.
+       * The first value is, encoding for the lowest number of bits for which
+         `Bin_InRange` returns `true`.
+       * The second value is a compressed representation of the value with the `length`
+         encoded by the first value. Compression is done using `int2bin`.
+     */
+    CHECKSPACE(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
+    binary_t *bins = chunk->data;
+    globalbit_t *bit = &chunk->idx;
+    if (likely(doubleDelta.i == 0)) {
+        appendBits(bins, bit, 0x00, 1);
+    } else {
+        _nonzero_ddelta_appendInteger(chunk, timestamp);
     }
     chunk->prevTimestampDelta = curDelta;
     chunk->prevTimestamp = timestamp;
@@ -405,19 +422,9 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
 }
 
 /********************************** READ *********************************/
-/*
- * This function decodes timestamps inserted by appendInteger.
- *
- * It checks for an OFF bit to decode the doubleDelta with the right size,
- * then decodes the value back to an int64 and calculate the original value
- * using `prevTS` and `prevDelta`.
- */
-static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
-    // control bit ‘0’
-    // Read stored double delta value
+
+static u_int64_t _nonzero_ddelta_readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
     if (Bins_bitoff(bins, iter->idx++)) {
-        return iter->prevTS += iter->prevDelta;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
     } else if (Bins_bitoff(bins, iter->idx++)) {
@@ -437,6 +444,25 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
         iter->idx += 64;
     }
     return iter->prevTS += iter->prevDelta;
+}
+
+/*
+ * This function decodes timestamps inserted by appendInteger.
+ *
+ * It checks for an OFF bit to decode the doubleDelta with the right size,
+ * then decodes the value back to an int64 and calculate the original value
+ * using `prevTS` and `prevDelta`.
+ */
+static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
+    // control bit ‘0’
+    // Read stored double delta value
+    // Note: we've reduced readInteger cyclomatic complexity for the case of ddelta equal to 0
+    //       this benefits equaly spaced timestamps at the expense of an extra function call
+    //       for the other scenarios
+    if (likely(Bins_bitoff(bins, iter->idx++))) {
+        return iter->prevTS += iter->prevDelta;
+    }
+    return _nonzero_ddelta_readInteger(iter, bins);
 }
 
 /*
@@ -498,10 +524,9 @@ ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestam
     if (iter->count >= iter->chunk->count)
         return CR_END;
     // First sample
-    if (__builtin_expect(iter->count == 0, 0)) {
+    if (unlikely(iter->count == 0)) {
         *timestamp = iter->chunk->baseTimestamp;
         *value = iter->chunk->baseValue.d;
-
     } else {
         *timestamp = readInteger(iter, iter->chunk->data);
         *value = readFloat(iter, iter->chunk->data);
