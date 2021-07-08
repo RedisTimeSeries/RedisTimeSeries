@@ -58,15 +58,15 @@ ARG ARCH
 ARG REDIS_VER
 ARG PACK
 
-ENV LIBDIR /usr/lib/redis/modules
+ARG LIBDIR=/usr/lib/redis/modules
 WORKDIR /data
-RUN mkdir -p "$LIBDIR"
+RUN mkdir -p ${LIBDIR}
 
 RUN mkdir -p /var/opt/redislabs/artifacts
 RUN chown -R redis:redis /var/opt/redislabs
 COPY --from=builder /build/bin/artifacts/ /var/opt/redislabs/artifacts
 
-COPY --from=builder /build/bin/redistimeseries.so "$LIBDIR"
+COPY --from=builder /build/bin/redistimeseries.so ${LIBDIR}
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
