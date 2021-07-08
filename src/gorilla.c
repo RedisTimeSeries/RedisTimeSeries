@@ -498,7 +498,7 @@ ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestam
     if (iter->count >= iter->chunk->count)
         return CR_END;
     // First sample
-    if (__builtin_expect(iter->count == 0, 0)) {
+    if (unlikely(iter->count == 0)) {
         *timestamp = iter->chunk->baseTimestamp;
         *value = iter->chunk->baseValue.d;
 
