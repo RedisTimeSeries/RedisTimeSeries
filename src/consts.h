@@ -83,7 +83,7 @@ typedef enum {
 #define UNCOMPRESSED_ARG_STR "uncompressed"
 #define COMPRESSED_GORILLA_ARG_STR_OLD "compressed"
 #define COMPRESSED_GORILLA_ARG_STR "compressed:gorilla"
-#define COMPRESSED_GORILLA_V2_ARG_STR "compressed:turbo_gorilla"
+#define COMPRESSED_GORILLA_V2_ARG_STR "compressed:gorilla_v2"
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 

@@ -44,8 +44,8 @@ struct Gorilla_v2_ChunkIterator
 };
 
 void _gorilla_v2_decompress_to_buffer(Gorilla_v2_Chunk *g_chunk,
-                              uint64_t *buffer_ts,
-                              double *buffer_values);
+                                      uint64_t *buffer_ts,
+                                      double *buffer_values);
 void _gorilla_v2_compress_from_buffer(Gorilla_v2_Chunk *regChunk);
 void _gorilla_v2_alloc_buffer(size_t size, uint64_t **buffer_ts, double **buffer_values);
 void _gorilla_v2_alloc_compressed(size_t size, Gorilla_v2_Chunk *newChunk);
@@ -135,8 +135,7 @@ Chunk_t *Gorilla_v2_SplitChunk(Chunk_t *chunk) {
     const size_t currentChunkNumSamples = curChunk->num_samples - newChunkNumSamples;
 
     // create chunk and copy samples
-    Gorilla_v2_Chunk *newChunk =
-        Gorilla_v2_NewChunk(newChunkNumSamples * TURBOGORILLA_SAMPLE_SIZE);
+    Gorilla_v2_Chunk *newChunk = Gorilla_v2_NewChunk(newChunkNumSamples * TURBOGORILLA_SAMPLE_SIZE);
     for (size_t i = 0; i < newChunkNumSamples; i++) {
         const u_int64_t ts = curChunk->buffer_ts[currentChunkNumSamples + i];
         const double v = curChunk->buffer_values[currentChunkNumSamples + i];
@@ -204,8 +203,8 @@ ChunkResult Gorilla_v2_AddSampleOptimized(Chunk_t *chunk, u_int64_t timestamp, d
 // Gorilla_v2 : Improved gorilla style + RLE (bit/io)
 // Decompress from Gorilla_v2 to SoA
 void _gorilla_v2_decompress_to_buffer(Gorilla_v2_Chunk *g_chunk,
-                              uint64_t *buffer_ts,
-                              double *buffer_values) {
+                                      uint64_t *buffer_ts,
+                                      double *buffer_values) {
     /* decoding functions are of the form:
      * void decode(char *out, size_t n, unsigned *in, unsigned start);
      *    - in : pointer to input buffer
@@ -213,21 +212,92 @@ void _gorilla_v2_decompress_to_buffer(Gorilla_v2_Chunk *g_chunk,
      *    - out : output array
      *    - start : previous value. Only for integrated delta encoding functions
      */
-    fpgdec64(g_chunk->compressed_ts, g_chunk->num_samples, buffer_ts, 0);
+    _ddelta_dec64(g_chunk->compressed_ts, g_chunk->num_samples, buffer_ts);
     fpgdec64(g_chunk->compressed_values, g_chunk->num_samples, buffer_values, 0);
+}
+
+/**
+ * Encode in delta of delta format
+ * @param in input array
+ * @param n number of elements
+ * @param out pointer to output buffer
+ * @return number of bytes used for enconding in output array
+ */
+size_t _ddelta_enc64(uint64_t *in, size_t n, unsigned char *out) {
+    if (!n)
+        return 0;
+    out = in;
+    out[0] = in[0];
+    printf("_ddelta_enc64\nIN:\n");
+    for (size_t i = 0; i < n; i++) {
+        printf("\t pos %d: %d\n",i,in[i]);
+    }
+    for (size_t i = 0; i < n; i++) {
+        out[i] = in[i];
+    }
+    // calculate deltas
+    for (size_t i = 1; i < n; i++) {
+        out[i] -= in[i - 1];
+    }
+    // // calculate delta of the deltas
+    // for (size_t i = 2; i < n; i++) {
+    //     out[i] -= out[i - 1];
+    // }
+    printf("\nOUT:\n");
+    for (size_t i = 0; i < n; i++) {
+        printf("\t pos %d: %d\n",i,out[i]);
+    }
+    printf("enconded size: %d\n",n * sizeof(uint64_t));
+    return n * sizeof(uint64_t);
+}
+
+/**
+ * Decode from delta of delta format
+ * @param in pointer to input buffer
+ * @param n number of elements
+ * @param out output array
+ * @return tbd
+ */
+size_t _ddelta_dec64(unsigned char *in, size_t n, uint64_t *out) {
+    if (!n)
+        return 0;
+    uint64_t *tmp = (uint64_t *)in;
+    for (size_t i = 0; i < n; i++) {
+        out[i] = tmp[i];
+    }
+    printf("_ddelta_dec64\nIN:\n");
+    for (size_t i = 0; i < n; i++) {
+        printf("\t pos %d: %d\n",i,tmp[i]);
+    }
+    if (n<2){
+        return 0;        
+    }
+    out[1] = tmp[1];
+    //  prefix sum of delta of deltas
+    // for (size_t i = 2; i < n; i++) {
+    //     out[i] += tmp[i - 1];
+    // }
+    // //  prefix sum of deltas
+    for (size_t i = 1; i < n; i++) {
+        out[i] += tmp[i - 1];
+    }
+    printf("\nOUT:\n");
+    for (size_t i = 0; i < n; i++) {
+        printf("\t pos %d: %d\n",i,out[i]);
+    }
+    return 0;
 }
 
 void _gorilla_v2_compress_from_buffer(Gorilla_v2_Chunk *g_chunk) {
     /* encoding functions are of the form:
-     * size_t compressed_size = encode( unsigned *in, size_t n, char *out, unsigned start);
+     * size_t compressed_size = encode( unsigned *in, size_t n, char *out);
      *    - compressed_size : number of bytes written into compressed output buffer out
      *    - in : input array
      *    - n : number of elements
      *    - out : pointer to output buffer
-     *    - start : previous value. Only for integrated delta encoding functions
      */
     g_chunk->compressed_ts_size =
-        fpgenc64(g_chunk->buffer_ts, g_chunk->num_samples, g_chunk->compressed_ts, 0);
+        _ddelta_enc64(g_chunk->buffer_ts, g_chunk->num_samples, g_chunk->compressed_ts);
 #ifdef DEBUG
     assert(g_chunk->compressed_ts_size <= (g_chunk->size / 2));
 #endif
@@ -301,7 +371,8 @@ ChunkResult Gorilla_v2_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
     // If we're using the compressed version, decompress it
     const bool was_compressed = regChunk->buffer_in_use == false;
     if (was_compressed) {
-        _gorilla_v2_alloc_buffer(regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
+        _gorilla_v2_alloc_buffer(
+            regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
         _gorilla_v2_decompress_to_buffer(regChunk, regChunk->buffer_ts, regChunk->buffer_values);
     }
     const u_int64_t *ts_array = regChunk->buffer_ts;
@@ -353,7 +424,8 @@ size_t Gorilla_v2_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     Gorilla_v2_Chunk *regChunk = (Gorilla_v2_Chunk *)chunk;
     const bool was_compressed = regChunk->buffer_in_use == false;
     if (was_compressed) {
-        _gorilla_v2_alloc_buffer(regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
+        _gorilla_v2_alloc_buffer(
+            regChunk->size, &(regChunk->buffer_ts), &(regChunk->buffer_values));
         _gorilla_v2_decompress_to_buffer(regChunk, regChunk->buffer_ts, regChunk->buffer_values);
     }
     const u_int64_t *timestamps = regChunk->buffer_ts;
@@ -389,12 +461,13 @@ size_t Gorilla_v2_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 }
 
 ChunkIter_t *Gorilla_v2_NewChunkIterator(Chunk_t *chunk,
-                                           int options,
-                                           ChunkIterFuncs *retChunkIterClass) {
+                                         int options,
+                                         ChunkIterFuncs *retChunkIterClass) {
     Gorilla_v2_ChunkIterator *iter =
         (Gorilla_v2_ChunkIterator *)calloc(1, sizeof(Gorilla_v2_ChunkIterator));
     Gorilla_v2_Chunk *compressedChunk = (Gorilla_v2_Chunk *)chunk;
-    _gorilla_v2_alloc_buffer(compressedChunk->size, &(iter->decompressed_ts), &(iter->decompressed_values));
+    _gorilla_v2_alloc_buffer(
+        compressedChunk->size, &(iter->decompressed_ts), &(iter->decompressed_values));
     iter->options = options;
     if (retChunkIterClass != NULL) {
         *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED_TURBOGORILLA);
@@ -473,9 +546,9 @@ typedef uint64_t (*ReadUnsignedFunc)(void *);
 typedef char *(*ReadStringBufferFunc)(void *, size_t *);
 
 static void Gorilla_v2_GenericSerialize(Chunk_t *chunk,
-                                          void *ctx,
-                                          SaveUnsignedFunc saveUnsigned,
-                                          SaveStringBufferFunc saveString) {
+                                        void *ctx,
+                                        SaveUnsignedFunc saveUnsigned,
+                                        SaveStringBufferFunc saveString) {
     Gorilla_v2_Chunk *g_chunk = (Gorilla_v2_Chunk *)chunk;
     if (g_chunk) {
         saveUnsigned(ctx, g_chunk->size);
@@ -489,16 +562,15 @@ static void Gorilla_v2_GenericSerialize(Chunk_t *chunk,
         }
         if (g_chunk->num_samples > 0) {
             saveString(ctx, (char *)g_chunk->compressed_ts, g_chunk->compressed_ts_size);
-            saveString(
-                ctx, (char *)g_chunk->compressed_values, g_chunk->compressed_values_size);
+            saveString(ctx, (char *)g_chunk->compressed_values, g_chunk->compressed_values_size);
         }
     }
 }
 
 static void Gorilla_v2_Deserialize(Chunk_t **chunk,
-                                     void *ctx,
-                                     ReadUnsignedFunc readUnsigned,
-                                     ReadStringBufferFunc readStringBuffer) {
+                                   void *ctx,
+                                   ReadUnsignedFunc readUnsigned,
+                                   ReadStringBufferFunc readStringBuffer) {
     const size_t size = readUnsigned(ctx);
     Gorilla_v2_Chunk *g_chunk = Gorilla_v2_NewChunk(size);
     g_chunk->start_ts = readUnsigned(ctx);
@@ -506,15 +578,13 @@ static void Gorilla_v2_Deserialize(Chunk_t **chunk,
     g_chunk->num_samples = readUnsigned(ctx);
     g_chunk->buffer_in_use = readUnsigned(ctx);
     if (g_chunk->num_samples > 0) {
-        g_chunk->compressed_ts =
-            (uint64_t *)readStringBuffer(ctx, &g_chunk->compressed_ts_size);
+        g_chunk->compressed_ts = (uint64_t *)readStringBuffer(ctx, &g_chunk->compressed_ts_size);
         g_chunk->compressed_values =
             (double *)readStringBuffer(ctx, &g_chunk->compressed_values_size);
         if (g_chunk->buffer_in_use) {
             _gorilla_v2_alloc_buffer(
                 g_chunk->size, &(g_chunk->buffer_ts), &(g_chunk->buffer_values));
-            _gorilla_v2_decompress_to_buffer(
-                g_chunk, g_chunk->buffer_ts, g_chunk->buffer_values);
+            _gorilla_v2_decompress_to_buffer(g_chunk, g_chunk->buffer_ts, g_chunk->buffer_values);
             _gorilla_v2_free_compressed(g_chunk);
         }
     }
@@ -523,28 +593,28 @@ static void Gorilla_v2_Deserialize(Chunk_t **chunk,
 
 void Gorilla_v2_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Gorilla_v2_GenericSerialize(chunk,
-                                  io,
-                                  (SaveUnsignedFunc)RedisModule_SaveUnsigned,
-                                  (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
+                                io,
+                                (SaveUnsignedFunc)RedisModule_SaveUnsigned,
+                                (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
 void Gorilla_v2_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     Gorilla_v2_Deserialize(chunk,
-                             io,
-                             (ReadUnsignedFunc)RedisModule_LoadUnsigned,
-                             (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+                           io,
+                           (ReadUnsignedFunc)RedisModule_LoadUnsigned,
+                           (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
 void Gorilla_v2_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
     Gorilla_v2_GenericSerialize(chunk,
-                                  bw,
-                                  (SaveUnsignedFunc)RedisGears_BWWriteLong,
-                                  (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+                                bw,
+                                (SaveUnsignedFunc)RedisGears_BWWriteLong,
+                                (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
 }
 
 void Gorilla_v2_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br) {
     Gorilla_v2_Deserialize(chunk,
-                             br,
-                             (ReadUnsignedFunc)RedisGears_BRReadLong,
-                             (ReadStringBufferFunc)ownedBufferFromGears);
+                           br,
+                           (ReadUnsignedFunc)RedisGears_BRReadLong,
+                           (ReadStringBufferFunc)ownedBufferFromGears);
 }

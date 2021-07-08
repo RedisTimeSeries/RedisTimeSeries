@@ -54,8 +54,8 @@ timestamp_t Gorilla_v2_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Gorilla_v2_GetFirstTimestamp(Chunk_t *chunk);
 
 ChunkIter_t *Gorilla_v2_NewChunkIterator(Chunk_t *chunk,
-                                           int options,
-                                           ChunkIterFuncs *retChunkIterClass);
+                                         int options,
+                                         ChunkIterFuncs *retChunkIterClass);
 void Gorilla_v2_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk);
 ChunkResult Gorilla_v2_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Gorilla_v2_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
@@ -69,4 +69,7 @@ void Gorilla_v2_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 void Gorilla_v2_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
 void Gorilla_v2_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br);
 
+//----------- delta of delta encoding ------------------
+size_t _ddelta_enc64(uint64_t *in, size_t n, unsigned char *out);
+size_t _ddelta_dec64(unsigned char *in, size_t n, uint64_t *out);
 #endif
