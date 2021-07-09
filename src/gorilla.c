@@ -491,11 +491,11 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
 }
 
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *sample) {
+    Compressed_Iterator *iter = (Compressed_Iterator *)abstractIter;
 #ifdef DEBUG
     assert(iter);
     assert(iter->chunk);
 #endif
-    Compressed_Iterator *iter = (Compressed_Iterator *)abstractIter;
     if (unlikely(iter->count >= iter->chunk->count))
         return CR_END;
     // First sample
