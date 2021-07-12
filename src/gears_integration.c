@@ -175,6 +175,7 @@ Record *ListSeriesLabelsWithLimit(const Series *series,
             Record *internal_list = RedisGears_ListRecordCreate(series->labelsCount);
             RedisGears_ListRecordAdd(internal_list,
                                      RedisGears_RedisStringRecordCreate(rLimitLabels[i]));
+            RedisGears_ListRecordAdd(internal_list, RedisGears_GetNullRecord());
             RedisGears_ListRecordAdd(r, internal_list);
         }
     }
