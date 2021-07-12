@@ -163,9 +163,9 @@ Record *ListSeriesLabelsWithLimit(const Series *series,
             if (strcasecmp(key, limitLabels[i]) == 0) {
                 Record *internal_list = RedisGears_ListRecordCreate(series->labelsCount);
                 RedisGears_ListRecordAdd(internal_list,
-                                         RedisGears_RedisStringRecordCreate(series->labels[i].key));
+                                         RedisGears_RedisStringRecordCreate(series->labels[j].key));
                 RedisGears_ListRecordAdd(
-                    internal_list, RedisGears_RedisStringRecordCreate(series->labels[i].value));
+                    internal_list, RedisGears_RedisStringRecordCreate(series->labels[j].value));
                 RedisGears_ListRecordAdd(r, internal_list);
                 found = true;
                 break;
