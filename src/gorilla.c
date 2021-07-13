@@ -139,32 +139,18 @@ static uint64_t bitmask[] = {
     (1ULL << 45) - 1, (1ULL << 46) - 1, (1ULL << 47) - 1, (1ULL << 48) - 1, (1ULL << 49) - 1,
     (1ULL << 50) - 1, (1ULL << 51) - 1, (1ULL << 52) - 1, (1ULL << 53) - 1, (1ULL << 54) - 1,
     (1ULL << 55) - 1, (1ULL << 56) - 1, (1ULL << 57) - 1, (1ULL << 58) - 1, (1ULL << 59) - 1,
-    (1ULL << 60) - 1, (1ULL << 61) - 1, (1ULL << 62) - 1, (1ULL << 63) - 1,
+    (1ULL << 60) - 1, (1ULL << 61) - 1, (1ULL << 62) - 1, (1ULL << 63) - 1, (0ULL - 1)
 
 };
 
 // 2^bit
 static inline u_int64_t BIT(u_int64_t bit) {
-    if (__builtin_expect(bit > 63, 0)) {
-        return 0ULL;
-    }
     return bittt[bit];
-}
-
-// the LSB `bits` turned on
-static inline u_int64_t MASK(u_int64_t bits) {
-    if (__builtin_expect(bits > 63, 0)) {
-        return 0ULL - 1;
-    }
-    return bitmask[bits];
 }
 
 // Logic to check Least Significant Bit (LSB) of a number
 // Clear most significant bits from position `bits`
 static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
-    if (__builtin_expect(bits > 63, 0)) {
-        return x & (0ULL - 1);
-    }
     return x & bitmask[bits];
 }
 
@@ -504,21 +490,21 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
     return iter->prevValue.d = rv.d;
 }
 
-ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, timestamp_t *timestamp, double *value) {
+ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *sample) {
+    Compressed_Iterator *iter = (Compressed_Iterator *)abstractIter;
 #ifdef DEBUG
     assert(iter);
     assert(iter->chunk);
 #endif
-    if (iter->count >= iter->chunk->count)
+    if (unlikely(iter->count >= iter->chunk->count))
         return CR_END;
     // First sample
-    if (__builtin_expect(iter->count == 0, 0)) {
-        *timestamp = iter->chunk->baseTimestamp;
-        *value = iter->chunk->baseValue.d;
-
+    if (unlikely(iter->count == 0)) {
+        sample->timestamp = iter->chunk->baseTimestamp;
+        sample->value = iter->chunk->baseValue.d;
     } else {
-        *timestamp = readInteger(iter, iter->chunk->data);
-        *value = readFloat(iter, iter->chunk->data);
+        sample->timestamp = readInteger(iter, iter->chunk->data);
+        sample->value = readFloat(iter, iter->chunk->data);
     }
     iter->count++;
     return CR_OK;

@@ -32,6 +32,7 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
     .Free = Uncompressed_FreeChunkIterator,
     .GetNext = Uncompressed_ChunkIteratorGetNext,
     .GetPrev = Uncompressed_ChunkIteratorGetPrev,
+    .Reset = Uncompressed_ResetChunkIterator,
 };
 
 static ChunkFuncs comprChunk = {
@@ -62,6 +63,7 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .GetNext = Compressed_ChunkIteratorGetNext,
     /*** Reverse iteration is on temporary decompressed chunk ***/
     .GetPrev = NULL,
+    .Reset = Compressed_ResetChunkIterator,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
