@@ -28,14 +28,14 @@ def test_mget_cmd():
     values = [100, 200, 300]
     kvlabels = []
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
         # test for empty series
         assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
         assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
         # expect to received time-series k1 and k2
         expected_result = [
-            [b"key4_empty", [], []],
-            [b"key5_empty", [], []]
+            ["key4_empty", [], []],
+            ["key5_empty", [], []]
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
@@ -43,16 +43,16 @@ def test_mget_cmd():
 
         # test for series with data
         for i in range(num_of_keys):
-            assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1')
-            kvlabels.append([labels[i].encode('ascii'), '1'.encode('ascii')])
+            assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1', 'metric', 'cpu')
+            kvlabels.append([[labels[i], '1'], ['metric', 'cpu']])
 
             assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
             assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
 
         # expect to received time-series k1 and k2
         expected_result = [
-            [keys[0].encode('ascii'), [], [time_stamp, str(values[0]).encode('ascii')]],
-            [keys[1].encode('ascii'), [], [time_stamp, str(values[1]).encode('ascii')]]
+            [keys[0], [], [time_stamp, str(values[0])]],
+            [keys[1], [], [time_stamp, str(values[1])]]
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
@@ -60,7 +60,7 @@ def test_mget_cmd():
 
         # expect to received time-series k3 with labels
         expected_result_withlabels = [
-            [keys[2].encode('ascii'), [kvlabels[2]], [time_stamp, str(values[2]).encode('ascii')]]
+            [keys[2], kvlabels[2], [time_stamp, str(values[2])]]
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
@@ -68,11 +68,21 @@ def test_mget_cmd():
 
         # expect to received time-series k1 and k2 with labels
         expected_result_withlabels = [
-            [keys[0].encode('ascii'), [kvlabels[0]], [time_stamp, str(values[0]).encode('ascii')]],
-            [keys[1].encode('ascii'), [kvlabels[1]], [time_stamp, str(values[1]).encode('ascii')]]
+            [keys[0], kvlabels[0], [time_stamp, str(values[0])]],
+            [keys[1], kvlabels[1], [time_stamp, str(values[1])]]
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
+        assert sorted(expected_result_withlabels) == sorted(actual_result)
+
+        # expect to recieve only some labels
+        expected_labels = [["metric", "cpu"], ["new_label", None]]
+        expected_result_withlabels = [
+            [keys[0], expected_labels, [time_stamp, str(values[0])]],
+            [keys[1], expected_labels, [time_stamp, str(values[1])]]
+        ]
+
+        actual_result = r.execute_command('TS.MGET', 'SELECTED_LABELS', 'metric', "new_label",'FILTER', 'a=1')
         assert sorted(expected_result_withlabels) == sorted(actual_result)
 
         # negative test
@@ -86,3 +96,26 @@ def test_mget_cmd():
             assert r.execute_command('TS.MGET', 'filter', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.MGET', 'retlif', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MGET', 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
+
+def test_large_key_value_pairs():
+     with Env().getClusterConnectionIfNeeded() as r:
+        number_series = 100
+        for i in range(0,number_series):
+            assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
+
+        kv_label1 = 'baseAsset=(13830,10249,16019,10135,17049,10777,10138,11036,11292,15778,11043,10025,11436,12207,13359,10807,12216,11833,10170,10811,12864,12738,10053,11334,12487,12619,12364,13266,11219,15827,12374,11223,10071,12249,11097,14430,13282,16226,13667,11365,12261,12646,12650,12397,12785,13941,10231,16254,12159,15103)'
+        kv_label2 = 'counterAsset=(840)'
+        kv_label3 = 'source=(1000)'
+        kv_label4 = 'dataType=(PRICE_TICK)'
+        kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
+        for kv_label in kv_labels:
+            res = r.execute_command('TS.MGET', 'FILTER', kv_label1)
+            assert len(res) == number_series
