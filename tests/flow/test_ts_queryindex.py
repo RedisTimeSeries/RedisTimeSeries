@@ -39,3 +39,18 @@ def test_label_index():
             assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(ab')
         with pytest.raises(redis.ResponseError):
             assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
+
+def test_large_key_value_pairs():
+     with Env().getClusterConnectionIfNeeded() as r:
+        number_series = 100
+        for i in range(0,number_series):
+            assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
+
+        kv_label1 = 'baseAsset=(13830,10249,16019,10135,17049,10777,10138,11036,11292,15778,11043,10025,11436,12207,13359,10807,12216,11833,10170,10811,12864,12738,10053,11334,12487,12619,12364,13266,11219,15827,12374,11223,10071,12249,11097,14430,13282,16226,13667,11365,12261,12646,12650,12397,12785,13941,10231,16254,12159,15103)'
+        kv_label2 = 'counterAsset=(840)'
+        kv_label3 = 'source=(1000)'
+        kv_label4 = 'dataType=(PRICE_TICK)'
+        kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
+        for kv_label in kv_labels:
+            res = r.execute_command('TS.QUERYINDEX', kv_label1)
+            assert len(res) == number_series

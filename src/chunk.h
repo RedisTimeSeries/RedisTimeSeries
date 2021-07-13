@@ -64,6 +64,7 @@ timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
                                            int options,
                                            ChunkIterFuncs *retChunkIterClass);
+void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);

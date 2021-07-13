@@ -46,7 +46,8 @@ typedef struct QueryPredicateList
 } QueryPredicateList;
 
 int parsePredicate(RedisModuleCtx *ctx,
-                   RedisModuleString *label,
+                   const char *label_value_pair,
+                   size_t label_value_pair_size,
                    QueryPredicate *retQuery,
                    const char *separator);
 void QueryPredicate_Free(QueryPredicate *predicate, size_t count);
