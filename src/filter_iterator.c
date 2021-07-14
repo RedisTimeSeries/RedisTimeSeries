@@ -26,6 +26,9 @@ static bool check_sample_timestamp(Sample sample, FilterByTSArgs byTsArgs) {
     }
 
     for (int i = 0; i < byTsArgs.count; i++) {
+        if (byTsArgs.values[i] > sample.timestamp) {
+            return false;
+        }
         if (sample.timestamp == byTsArgs.values[i]) {
             return true;
         }
