@@ -214,7 +214,7 @@ def test_multilabel_filter():
         assert actual_result[0][0] == b'tester2'
 
 def test_large_key_value_pairs():
-     with Env().getClusterConnectionIfNeeded() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         number_series = 100
         for i in range(0,number_series):
             assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
@@ -227,3 +227,70 @@ def test_large_key_value_pairs():
         for kv_label in kv_labels:
             res = r.execute_command('TS.MRANGE', '-', '+', 'FILTER', kv_label1)
             assert len(res) == number_series
+
+def ensure_replies_series_match(env,series_array_1, series_array_2):
+    for ts in series_array_1:
+        ts_name = ts[0]
+        ts_labels =ts[1]
+        ts_values =ts[2]
+        for comparison_ts in series_array_2:
+            comparison_ts_name = comparison_ts[0]
+            comparison_ts_labels =comparison_ts[1]
+            comparison_ts_values =comparison_ts[2]
+            if ts_name == comparison_ts_name:
+                env.assertEqual(ts_labels,comparison_ts_labels)
+                env.assertEqual(ts_values,comparison_ts_values)
+
+def test_non_local_data():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
+
+def test_non_local_filtered_data():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 2 FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
+
+def test_non_local_filtered_labels():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu', '')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 2 SELECTED_LABELS metric FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
