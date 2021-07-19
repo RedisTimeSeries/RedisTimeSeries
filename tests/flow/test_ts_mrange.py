@@ -271,8 +271,17 @@ def test_non_local_filtered_data():
     # ensure that initiating the query on different shards always replies with the same series
     for shard in range(0, env.shardsCount):
         shard_conn = env.getConnection(shard)
-        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 2 FILTER metric=cpu')
+        # send undordered timestamps to test for sorting
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 11 5 25 55 101 18 9 1900 2 FILTER metric=cpu')
         env.assertEqual(len(actual_result),2)
+
+        # ensure reply is properly filtered by TS
+        for serie in actual_result:
+            serie_ts = serie[2]
+            # ensure only timestamp 2 is present on reply
+            env.assertEqual(len(serie_ts),1)
+            env.assertEqual(serie_ts[0][0],2)
+
         for previous_result in previous_results:
             ensure_replies_series_match(env,previous_result,actual_result)
         previous_results.append(actual_result)
