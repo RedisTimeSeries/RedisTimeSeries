@@ -58,7 +58,7 @@ ARG ARCH
 ARG REDIS_VER
 ARG PACK
 
-ENV LIBDIR /usr/lib/redis/modules
+ENV LIBDIR /usr/lib/redis/modules/
 WORKDIR /data
 RUN mkdir -p "$LIBDIR"
 
@@ -70,3 +70,4 @@ COPY --from=builder /build/bin/redistimeseries.so "$LIBDIR"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
+
