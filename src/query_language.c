@@ -216,25 +216,26 @@ static int parseAlignmentArgs(RedisModuleCtx *ctx,
     if (align_location > 0) {
         if (align_location + 1 >= argc) {
             RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
         }
 
         char *aligment = RedisModule_StringPtrLen(argv[align_location + 1], NULL);
         if (strcasecmp(aligment, "start") == 0 || strcasecmp(aligment, "-") == 0) {
             *alignment = StartAlignment;
-            return REDISMODULE_OK;
+            return TSDB_OK;
         } else if (strcasecmp(aligment, "end") == 0 || strcasecmp(aligment, "+") == 0) {
             *alignment = EndAlignment;
-            return REDISMODULE_OK;
+            return TSDB_OK;
         } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) ==
-                   REDISMODULE_OK) {
+                   TSDB_OK) {
             *alignment = TimestampAlignment;
-            return REDISMODULE_OK;
+            return TSDB_OK;
         } else {
             RTS_ReplyGeneralError(ctx, "TSDB: unknown ALIGN parameter");
-            return REDISMODULE_ERR;
+            return TSDB_ERROR;
         }
     }
-    return REDISMODULE_OK;
+    return TSDB_OK;
 }
 
 static int parseFilterByValueArgument(RedisModuleCtx *ctx,
