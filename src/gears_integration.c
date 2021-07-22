@@ -26,6 +26,9 @@ static void QueryPredicates_ObjectFree(void *arg) {
     QueryPredicates_Arg *predicate_list = arg;
 
     QueryPredicateList_Free(predicate_list->predicates);
+    for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
+        RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
+    }
     free(predicate_list->limitLabels);
     free(predicate_list);
 }
