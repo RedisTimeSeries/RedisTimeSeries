@@ -226,8 +226,7 @@ static int parseAlignmentArgs(RedisModuleCtx *ctx,
         } else if (strcasecmp(aligment, "end") == 0 || strcasecmp(aligment, "+") == 0) {
             *alignment = EndAlignment;
             return TSDB_OK;
-        } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) ==
-                   TSDB_OK) {
+        } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) == TSDB_OK) {
             *alignment = TimestampAlignment;
             return TSDB_OK;
         } else {
