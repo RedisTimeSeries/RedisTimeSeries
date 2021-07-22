@@ -66,3 +66,11 @@ def test_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             labels = ["abc"] * 51
             assert r.execute_command('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2' 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2' 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2' 'FILTER', 'metric=cpu')

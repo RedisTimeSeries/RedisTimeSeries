@@ -30,6 +30,7 @@ typedef struct AggregationIterator
     AbstractIterator base;
     AggregationClass *aggregation;
     int64_t aggregationTimeDelta;
+    timestamp_t timestampAlignment;
     void *aggregationContext;
     timestamp_t aggregationLastTimestamp;
     bool aggregationIsFirstSample;
@@ -41,6 +42,7 @@ typedef struct AggregationIterator
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
+                                             timestamp_t timestampAlignment,
                                              bool reverse);
 ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
