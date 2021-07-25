@@ -905,23 +905,21 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         // Looking for a sample with timestamp bigger than given timestamp
         if (timestamp < series->lastTimestamp) {
             // read next event right after `timestamp`
-            RangeArgs args = { 
-                .startTimestamp = timestamp + 1,
-                .endTimestamp = series->lastTimestamp,                             
-                .count = -1,               
-                .aggregationArgs = NULL,
-                .filterByValueArgs = NULL,
-                .filterByTSArgs = NULL
-            };
-            SeriesIterator* iterator = SeriesQuery(series, &args, false);
-            if( iterator == NULL) {
+            RangeArgs args = { .startTimestamp = timestamp + 1,
+                               .endTimestamp = series->lastTimestamp,
+                               .count = -1,
+                               .aggregationArgs = NULL,
+                               .filterByValueArgs = NULL,
+                               .filterByTSArgs = NULL };
+            SeriesIterator *iterator = SeriesQuery(series, &args, false);
+            if (iterator == NULL) {
                 return RedisModule_ReplyWithArray(ctx, 0);
             }
             Sample sample;
-            if (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+            if (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
                 ReplyWithSample(ctx, sample.timestamp, sample.value);
             } // TODO handle error
-            SeriesIteratorClose(&iterator);
+            SeriesIteratorClose(iterator);
         } else if (block_location != -1) { // Blocking waiting for a sample
             long long block_timeout;
             if ((RedisModule_StringToLongLong(argv[block_location + 1], &block_timeout) !=
