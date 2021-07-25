@@ -5,7 +5,7 @@ import _thread
 from RLTest import Env
 
 def test_get_timestamp(self):
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         
         self.assertTrue(r.execute_command("TS.CREATE", "X"))
         self.assertEqual(r.execute_command("TS.GET", "X"), [])
@@ -25,7 +25,7 @@ def test_get_timestamp(self):
         self.assertEqual(r.execute_command("TS.GET", "X", "TIMESTAMP", "3"), [])
         
 def test_bad_timestamp(self):
-    with Env().getConnection() as r:
+    with Env().getClusterConnectionIfNeeded() as r:
         
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("TS.GET", "bad_x", "TIMESTAMP", "0")        
@@ -45,7 +45,7 @@ def async_add(r, key, event_time, event_value, block=1):
     r.execute_command("TS.ADD", key, event_time, event_value)
 
 def test_block(self):
-    with Env().getConnection() as r:        
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("TS.CREATE", "blocked_key")        
         self.assertEqual([], r.execute_command("TS.GET", "blocked_key", "BLOCK", "1"))        
        
@@ -68,7 +68,7 @@ def test_block(self):
 
 
 def test_block_timestamp(self):
-    with Env().getConnection() as r:        
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("TS.CREATE", "blocked_ts_key")        
         r.execute_command("TS.ADD", "blocked_ts_key", 201, 22.2)
         r.execute_command("TS.ADD", "blocked_ts_key", 202, 39.1)
