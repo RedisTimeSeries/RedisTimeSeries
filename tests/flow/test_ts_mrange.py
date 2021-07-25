@@ -113,6 +113,17 @@ def test_range_by_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
 
+        # test SELECTED_LABELS
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
+
+
 def test_mrange_filterby():
     start_ts = 1511885909
     samples_count = 50
@@ -165,6 +176,12 @@ def test_mrange_withlabels():
                                           'name=bob')
         assert [[b'tester1', [[b'name', b'bob'], [b'class', b'middle'], [b'generation', b'x']],
                  expected_result]] == actual_result
+
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER',
+                                          'name=bob')
+        assert [[b'tester1', [[b'name', b'bob'], [b'generation', b'x']],
+                 expected_result]] == actual_result
+
         actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
                                           'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
         # assert the labels length is 3 (name,class,generation) for each of the returned time-series
@@ -195,3 +212,94 @@ def test_multilabel_filter():
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
+
+def test_large_key_value_pairs():
+    with Env().getClusterConnectionIfNeeded() as r:
+        number_series = 100
+        for i in range(0,number_series):
+            assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
+
+        kv_label1 = 'baseAsset=(13830,10249,16019,10135,17049,10777,10138,11036,11292,15778,11043,10025,11436,12207,13359,10807,12216,11833,10170,10811,12864,12738,10053,11334,12487,12619,12364,13266,11219,15827,12374,11223,10071,12249,11097,14430,13282,16226,13667,11365,12261,12646,12650,12397,12785,13941,10231,16254,12159,15103)'
+        kv_label2 = 'counterAsset=(840)'
+        kv_label3 = 'source=(1000)'
+        kv_label4 = 'dataType=(PRICE_TICK)'
+        kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
+        for kv_label in kv_labels:
+            res = r.execute_command('TS.MRANGE', '-', '+', 'FILTER', kv_label1)
+            assert len(res) == number_series
+
+def ensure_replies_series_match(env,series_array_1, series_array_2):
+    for ts in series_array_1:
+        ts_name = ts[0]
+        ts_labels =ts[1]
+        ts_values =ts[2]
+        for comparison_ts in series_array_2:
+            comparison_ts_name = comparison_ts[0]
+            comparison_ts_labels =comparison_ts[1]
+            comparison_ts_values =comparison_ts[2]
+            if ts_name == comparison_ts_name:
+                env.assertEqual(ts_labels,comparison_ts_labels)
+                env.assertEqual(ts_values,comparison_ts_values)
+
+def test_non_local_data():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
+
+def test_non_local_filtered_data():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        # send undordered timestamps to test for sorting
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 11 5 25 55 101 18 9 1900 2 FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+
+        # ensure reply is properly filtered by TS
+        for serie in actual_result:
+            serie_ts = serie[2]
+            # ensure only timestamp 2 is present on reply
+            env.assertEqual(len(serie_ts),1)
+            env.assertEqual(serie_ts[0][0],2)
+
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
+
+def test_non_local_filtered_labels():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu', '')
+        r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+    previous_results = []
+    # ensure that initiating the query on different shards always replies with the same series
+    for shard in range(0, env.shardsCount):
+        shard_conn = env.getConnection(shard)
+        actual_result = shard_conn.execute_command('TS.MRANGE - + FILTER_BY_TS 2 SELECTED_LABELS metric FILTER metric=cpu')
+        env.assertEqual(len(actual_result),2)
+        for previous_result in previous_results:
+            ensure_replies_series_match(env,previous_result,actual_result)
+        previous_results.append(actual_result)
