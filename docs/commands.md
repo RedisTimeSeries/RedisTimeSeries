@@ -48,8 +48,57 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 ### DEL
 
-A series can be deleted using redis `DEL` command. Timeout can be set for a series using
-redis `EXPIRE` command.
+A series can be deleted using redis [`DEL`](https://redis.io/commands/del) command.
+
+Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands/expire) command.
+
+
+```sql
+DEL key [key2 ...]
+```
+
+* key - Key name for timeseries
+
+#### Complexity
+
+DEL complexity is O(N) where N is the number of keys that will be removed.
+
+#### Delete Serie Example
+
+```sql
+DEL temperature:2:32
+```
+
+#### Expire in 60 seconds Example
+
+```sql
+EXPIRE temperature:2:32 60
+```
+
+### TS.DEL
+
+
+Delete samples between two timestamps for a given key.
+
+The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
+
+```sql
+TS.DEL key fromTimestamp toTimestamp
+```
+
+* key - Key name for timeseries
+- fromTimestamp - Start timestamp for the range deletion.
+- toTimestamp - End timestamp for the range deletion.
+
+#### Complexity
+
+TS.DEL complexity is O(N) where N is the number of data points that will be removed.
+
+#### Delete range of data points example
+
+```sql
+TS.DEL temperature:2:32 1548149180000 1548149183000
+```
 
 ## Update
 
