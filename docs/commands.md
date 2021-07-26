@@ -78,9 +78,9 @@ EXPIRE temperature:2:32 60
 ### TS.DEL
 
 
-Delete samples between a start and end delete timestamps for a given key.
+Delete samples between two timestamps for a given key.
 
-The given timestamp interval is closed (inclusive), meaning start and end samples will also be deleted.
+The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
 
 ```sql
 TS.DEL key fromTimestamp toTimestamp
