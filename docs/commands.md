@@ -290,8 +290,23 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 Query a range across multiple time-series by filters in forward or reverse directions.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
-TS.MREVRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp
+          [FILTER_BY_TS TS1 TS2 ..]
+          [FILTER_BY_VALUE min max]
+          [COUNT count]
+          [WITHLABELS | SELECTED_LABELS label1 ..]
+          [AGGREGATION aggregationType timeBucket]
+          FILTER filter..
+          [GROUPBY <label> REDUCE <reducer>]
+
+TS.MREVRANGE fromTimestamp toTimestamp
+          [FILTER_BY_TS TS1 TS2 ..]
+          [FILTER_BY_VALUE min max]
+          [COUNT count]
+          [WITHLABELS | SELECTED_LABELS label1 ..]
+          [AGGREGATION aggregationType timeBucket]
+          FILTER filter..
+          [GROUPBY <label> REDUCE <reducer>]
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -302,11 +317,22 @@ Optional parameters:
 
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
-* COUNT - Maximum number of returned samples per time-series.
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
+* COUNT - Maximum number of returned samples per time series.
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandatory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
     * timeBucket - Time bucket for aggregation in milliseconds.
+* GROUPBY - Aggregate results across different time series, grouped by the provided label name.
+
+  When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+    * label - label name to group series by.
+    * reducer - Reducer type used to aggregate series that share the same label value. Available reducers: sum, min, max.
+
+   * **Note:** The resulting series will contain 3 labels with the following label array structure:
+       - `<label>=<groupbyvalue>` : containing the label name and label value.
+       - `__reducer__=<reducer>` : containing the used reducer.
+       - `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
 
 #### Return Value
 
@@ -399,6 +425,89 @@ The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, w
          2) "28"
       7) 1) (integer) 1548149210000
          2) "20"
+```
+
+##### Query time series with metric=cpu, group them by metric_name reduce max
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1 90 labels metric cpu metric_name system
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 2 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 2 99 labels metric cpu metric_name user
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER metric=cpu GROUPBY metric_name REDUCE max
+1) 1) "metric_name=system"
+   2) 1) 1) "metric_name"
+         2) "system"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "ts1"
+   3) 1) 1) (integer) 1
+         2) 90
+      2) 1) (integer) 2
+         2) 45
+2) 1) "metric_name=user"
+   2) 1) 1) "metric_name"
+         2) "user"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "ts2"
+   3) 1) 1) (integer) 2
+         2) 99
+```
+
+##### Query time series with metric=cpu, filter values larger or equal to 90.0 and smaller or equal to 100.0
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1 90 labels metric cpu metric_name system
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 2 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 2 99 labels metric cpu metric_name user
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + FILTER_BY_VALUE 90 100 WITHLABELS FILTER metric=cpu
+1) 1) "ts1"
+   2) 1) 1) "metric"
+         2) "cpu"
+      2) 1) "metric_name"
+         2) "system"
+   3) 1) 1) (integer) 1
+         2) 90
+2) 1) "ts2"
+   2) 1) 1) "metric"
+         2) "cpu"
+      2) 1) "metric_name"
+         2) "user"
+   3) 1) 1) (integer) 2
+         2) 99
+```
+
+
+##### Query time series with metric=cpu, but only reply the team label
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1 90 labels metric cpu metric_name system team NY
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 2 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 2 99 labels metric cpu metric_name user team SF
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + SELECTED_LABELS team FILTER metric=cpu
+1) 1) "ts1"
+   2) 1) 1) "team"
+         2) "NY"
+   3) 1) 1) (integer) 1
+         2) 90
+      2) 1) (integer) 2
+         2) 45
+2) 1) "ts2"
+   2) 1) 1) "team"
+         2) "SF"
+   3) 1) 1) (integer) 2
+         2) 99
 ```
 
 ### TS.GET
