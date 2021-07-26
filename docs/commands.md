@@ -54,7 +54,7 @@ Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands
 
 
 ```sql
-DEL key
+DEL key [key2 ...]
 ```
 
 * key - Key name for timeseries
@@ -77,9 +77,10 @@ EXPIRE temperature:2:32 60
 
 ### TS.DEL
 
-Delete data points for a given timeseries and interval range in the form of start and end delete timestamps.
 
-The given timestamp interval is closed (inclusive), meaning start and end data points will also be deleted.
+Delete samples between a start and end delete timestamps for a given key.
+
+The given timestamp interval is closed (inclusive), meaning start and end samples will also be deleted.
 
 ```sql
 TS.DEL key fromTimestamp toTimestamp
@@ -91,9 +92,7 @@ TS.DEL key fromTimestamp toTimestamp
 
 #### Complexity
 
-TS.DEL complexity is O(n).
-
-n = Number of data points that are in the requested range
+TS.DEL complexity is O(N) where N is the number of data points that will be removed.
 
 #### Delete range of data points example
 
