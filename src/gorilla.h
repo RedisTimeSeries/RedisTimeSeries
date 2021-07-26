@@ -34,7 +34,8 @@ typedef struct CompressedChunk
     union64bits baseValue;
     u_int64_t baseTimestamp;
 
-    u_int64_t *data;
+    u_int64_t *c_ts;
+    u_int64_t *c_values;
 
     u_int64_t prevTimestamp;
     int64_t prevTimestampDelta;
