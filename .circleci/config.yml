@@ -372,7 +372,7 @@ workflows:
           context: common
           requires:
             - build
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - build-macos:
           <<: *on-integ-and-version-tags
 #      - build-multiarch-docker:
