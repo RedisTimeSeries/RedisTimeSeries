@@ -31,6 +31,33 @@ commands:
           name: Checkout submodules
           command: git submodule update --init --recursive
 
+  setup-automation:
+    steps:
+      - run:
+          name: Setup automation
+          command: |
+            git submodule update --init deps/readies
+            ./deps/readies/bin/getpy3
+
+  install-prerequisites:
+    parameters:
+      redis_version:
+        type: string
+        default: "6"
+      getredis_params:
+        type: string
+        default: ""
+    steps:
+      - setup-automation
+      - run:
+          name: System setup
+          command: ./system-setup.py
+      - run:
+          name: Install Redis
+          command: |
+            bash -l -c "python3 ./deps/readies/bin/getredis -v <<parameters.redis_version>> --force <<parameters.getredis_params>>"
+            redis-server --version
+
   ci_steps:
     parameters:
       platform:
@@ -124,7 +151,6 @@ commands:
             export AWS_SECRET_ACCESS_KEY=$PERFORMANCE_EC2_SECRET_KEY
             export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
-
             redisbench-admin run-remote \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
@@ -168,15 +194,13 @@ jobs:
           platform: debian
       - package
 
-  performance_ci_automation:
+  performance-ci-automation:
     docker:
-      - image: redisfab/rmbuilder:6.2.3-x64-buster
+      - image: redisfab/rmbuilder:6.2.4-x64-buster
     steps:
       - early_return_for_forked_pull_requests
       - checkout-all
-      - run:
-          name: Setup
-          command: make setup
+      - install-prerequisites
       - run:
           name: Build
           command: make build
@@ -344,11 +368,11 @@ workflows:
           requires:
             - build
           <<: *on-integ-and-version-tags
-#      - performance_ci_automation:
-#          context: common
-#          requires:
-#            - build
-#          <<: *on-integ-and-version-tags
+      - performance-ci-automation:
+          context: common
+          requires:
+            - build
+          <<: *on-integ-and-version-tags
       - build-macos:
           <<: *on-integ-and-version-tags
 #      - build-multiarch-docker:
@@ -389,7 +413,7 @@ workflows:
               only:
                 - master
     jobs:
-      - performance_ci_automation:
+      - performance-ci-automation:
           context: common
 
   nightly-twice-a-week:
