@@ -25,6 +25,23 @@ class testModuleLoadTimeArguments(object):
                     assert Env(testName="Test load time args: {}".format(variation[1]), moduleArgs=variation[1])
 
 
+def test_encoding_uncompressed():
+    Env().skipOnCluster()
+    env = Env(moduleArgs='ENCODING UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.ADD', 't1', '1', 1.0)
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'uncompressed'
+
+
+def test_encoding_compressed():
+    Env().skipOnCluster()
+    env = Env(moduleArgs='ENCODING compressed; COMPACTION_POLICY max:1s:1m')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.ADD', 't1', '1', 1.0)
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
+
 def test_uncompressed():
     Env().skipOnCluster()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
@@ -119,6 +136,12 @@ class testGlobalConfigTests():
 
 def test_negative_configuration():
     Env().skipOnCluster()
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='ENCODING; CHUNK_SIZE_BYTES 100')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='ENCODING abc; CHUNK_SIZE_BYTES 100')
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE; CHUNK_SIZE_BYTES 100')

@@ -107,6 +107,8 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          const char *arg_prefix,
                          DuplicatePolicy *policy);
 
+int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options);
+
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx);
 
 int _parseAggregationArgs(RedisModuleCtx *ctx,

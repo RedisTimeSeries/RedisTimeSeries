@@ -78,11 +78,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
     RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
     RedisModule_ReplyWithSimpleString(ctx, "chunkType");
-    if (series->options & SERIES_OPT_UNCOMPRESSED) {
-        RedisModule_ReplyWithSimpleString(ctx, "uncompressed");
-    } else {
-        RedisModule_ReplyWithSimpleString(ctx, "compressed");
-    };
+    RedisModule_ReplyWithSimpleString(ctx, ChunkTypeToString(series->options));
     RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
     if (series->duplicatePolicy != DP_NONE) {
         RedisModule_ReplyWithSimpleString(ctx, DuplicatePolicyToString(series->duplicatePolicy));
@@ -1014,6 +1010,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
+        RedisModule_Log(
+            ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
         return REDISMODULE_ERR;
     }
 

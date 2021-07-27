@@ -3,7 +3,7 @@ import time
 import pytest
 import redis
 from RLTest import Env
-from test_helper_classes import _get_ts_info
+from test_helper_classes import _get_ts_info, TSInfo
 
 
 def test_issue_504():
@@ -56,6 +56,17 @@ def test_add_create_key():
         info = _get_ts_info(r, 'tester2')
         assert info.total_samples == 1
         assert info.labels == {b'location': b'earth', b'name': b'blabla2'}
+
+def test_ts_add_encoding():
+    for ENCODING in ['compressed','uncompressed']:
+        e = Env()
+        e.flush()
+        with e.getClusterConnectionIfNeeded() as r:
+            r.execute_command('ts.add', 't1', '*', '5.0', 'ENCODING', ENCODING)
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING.encode())
+            # backwards compatible check
+            r.execute_command('ts.add', 't1_bc', '*', '5.0', ENCODING)
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING.encode())
 
 
 def test_valid_labels():
