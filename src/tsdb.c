@@ -811,7 +811,11 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
             timestampAlignment = max(args->startTimestamp, getFirstValidTimestamp(series, NULL));
             break;
         case EndAlignment:
-            timestampAlignment = args->endTimestamp;
+            if (args->endTimestamp != LLONG_MAX) {
+                timestampAlignment = args->endTimestamp;
+            } else {
+                timestampAlignment = series->lastTimestamp;
+            }
             break;
         case TimestampAlignment:
             timestampAlignment = args->timestampAlignment;
