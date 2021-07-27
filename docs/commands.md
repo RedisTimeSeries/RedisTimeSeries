@@ -286,8 +286,8 @@ Note: Whenever filters need to be provided, a minimum of one `l=v` filter must b
 Query a range in forward or reverse directions.
 
 ```sql
-TS.RANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket]
-TS.REVRANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket]
+TS.RANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN value] [AGGREGATION aggregationType timeBucket]
+TS.REVRANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN value] [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -299,6 +299,8 @@ Optional parameters:
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples.
+* ALIGN - Time bucket alignment control, possible values: `start` or `-`, `end` or `+` or a specific timestamp, when not provided alignment is set to `0`.
+  This will control the time bucket timestamps by changing the reference timestamp on which a bucket is define.
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
   * timeBucket - Time bucket for aggregation in milliseconds
@@ -339,8 +341,8 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 Query a range across multiple time-series by filters in forward or reverse directions.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
-TS.MREVRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN value] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MREVRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN value] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -352,6 +354,8 @@ Optional parameters:
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples per time-series.
+* ALIGN - Time bucket alignment control, possible values: `start` or `-`, `end` or `+` or a specific timestamp, when not provided alignment is set to `0`.
+  This will control the time bucket timestamps by changing the reference timestamp on which a bucket is define.
 * WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s

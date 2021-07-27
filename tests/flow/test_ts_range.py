@@ -322,3 +322,54 @@ def test_filter_by():
                                 'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
                                 'FILTER_BY_VALUE', 1022, 1025)
         env.assertEqual(res, [[start_ts+1022, b'1022'], [start_ts+1023, b'1023'], [start_ts+1025, b'1025']])
+
+def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
+    return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
+
+def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
+    expected_data = []
+    last_bucket = get_bucket(start_ts, alignment_ts, agg_size)
+    curr_bucket_val = 0
+    curr_bucket = None
+    # import pdb;pdb.set_trace()
+    for i in range(start_ts, end_ts):
+        current_ts = i
+        curr_bucket = get_bucket(current_ts, alignment_ts, agg_size)
+        if curr_bucket  <= last_bucket:
+            curr_bucket_val+=1
+        else:
+            expected_data.append([last_bucket, str(curr_bucket_val)])
+            last_bucket = curr_bucket
+            curr_bucket_val = 1
+    expected_data.append([curr_bucket, str(curr_bucket_val)])
+    return expected_data
+
+
+def test_aggreataion_alignment():
+    start_ts = 1511885909
+    samples_count = 1200
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'tester')
+    _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+
+    agg_size = 60
+    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
+
+    assert expected_data == \
+           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size)
+
+    assert expected_data == \
+           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size)
+
+    specific_ts = start_ts + 50
+    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
+    assert expected_data == \
+           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size)
+
+    end_ts = start_ts + samples_count - 1
+    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
+    assert expected_data == \
+           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size)
+    assert expected_data == \
+           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', '+', 'AGGREGATION', 'count', agg_size)

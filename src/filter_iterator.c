@@ -100,10 +100,14 @@ static bool finalizeBucket(Sample *currentSample, const AggregationIterator *sel
     return hasSample;
 }
 
-inline static timestamp_t calc_ts_bucket(timestamp_t ts,
-                                         u_int64_t timedelta,
-                                         timestamp_t timestampAlignment) {
-    return ts - ((ts - timestampAlignment) % timedelta);
+// process C's modulo result to translate from a negative modulo to a positive
+#define modulo(x, N) ((x % N + N) % N)
+
+static timestamp_t calc_ts_bucket(timestamp_t ts,
+                                  u_int64_t timedelta,
+                                  timestamp_t timestampAlignment) {
+    const int64_t timestamp_diff = ts - timestampAlignment;
+    return ts - modulo(timestamp_diff, (int64_t)timedelta);
 }
 
 ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample) {
@@ -118,8 +122,9 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     bool is_reserved = self->reverse;
     if (result == CR_OK && !self->initilized) {
         timestamp_t init_ts = internalSample.timestamp;
-        self->aggregationLastTimestamp =
-            calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
+        timestamp_t t1 = calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
+        self->aggregationLastTimestamp = t1;
+
         self->initilized = true;
     }
 
