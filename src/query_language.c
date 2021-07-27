@@ -352,6 +352,11 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     }
 
+    if (args.alignment != DefaultAlignment && args.aggregationArgs.aggregationClass == NULL) {
+        RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
+        return TSDB_ERROR;
+    }
+
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }

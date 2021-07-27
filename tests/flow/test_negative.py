@@ -69,8 +69,13 @@ def test_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2' 'FILTER', 'metric=cpu')
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2' 'FILTER', 'metric=cpu')
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2' 'FILTER', 'metric=cpu')
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
+        assert r.execute_command('TS.CREATE', 'tester')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start')
