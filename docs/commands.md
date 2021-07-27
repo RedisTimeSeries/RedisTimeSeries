@@ -299,8 +299,13 @@ Optional parameters:
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples.
-* ALIGN - Time bucket alignment control, possible values: `start` or `-`, `end` or `+` or a specific timestamp, when not provided alignment is set to `0`.
-  This will control the time bucket timestamps by changing the reference timestamp on which a bucket is define.
+* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+  Possible values:
+  * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
+  * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+  *  A specific timestamp: align the reference timestamp to a specific time.
+
+  Note: when not provided alignment is set to `0`.
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
   * timeBucket - Time bucket for aggregation in milliseconds
@@ -354,8 +359,13 @@ Optional parameters:
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
 * COUNT - Maximum number of returned samples per time-series.
-* ALIGN - Time bucket alignment control, possible values: `start` or `-`, `end` or `+` or a specific timestamp, when not provided alignment is set to `0`.
-  This will control the time bucket timestamps by changing the reference timestamp on which a bucket is define.
+* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+  Possible values:
+  * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
+  * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+  *  A specific timestamp: align the reference timestamp to a specific time.
+
+  Note: when not provided alignment is set to `0`.
 * WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
