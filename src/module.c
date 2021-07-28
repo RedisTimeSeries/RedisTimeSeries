@@ -863,6 +863,9 @@ void _tsdb_get_free_privdata_callback(RedisModuleCtx *ctx, void *privdata) {
     RedisModule_Free(privdata);
 }
 
+/*
+TS.GET ts_key [TIMESTAMP timestamp] [BLOCK timeout]
+*/
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -917,7 +920,13 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
+    // The series exists
     if (status == TSDB_OK) {
+        // If timestamp wasn't defined the default is the last timestamp
+        if (timestamp == -1) {
+            timestamp = series->lastTimestamp;
+        }
+
         // In case a retention is set shouldn't return event older than the retention
         if (series->retentionTime) {
             timestamp = series->lastTimestamp > series->retentionTime
@@ -941,17 +950,19 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             Sample sample;
             if (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
                 ReplyWithSample(ctx, sample.timestamp, sample.value);
-            } // TODO handle error
+            } // TODO handle error?
             SeriesIteratorClose(iterator);
 
             RedisModule_CloseKey(key);
             return REDISMODULE_OK;
+        } else if (block_location == -1) {
+            // can return without result no need to block
+            RedisModule_CloseKey(key);
+            return RedisModule_ReplyWithArray(ctx, 0);
         }
         RedisModule_CloseKey(key);
-    }
-
-    // If the key doesn't exist and not blocking
-    if (block_location == -1) {
+    } else if (block_location == -1) {
+        // If the key doesn't exist and not blocking
         return RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
     }
 
