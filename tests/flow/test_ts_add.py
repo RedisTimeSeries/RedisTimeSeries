@@ -119,3 +119,11 @@ def test_gorilla():
                            [100002, b'1'], [100004, b'1'], [1000000, b'1'], [1000001, b'1'],
                            [10000011000001, b'1'], [10000011000002, b'1']]
         assert expected_result == r.execute_command('TS.range', 'monkey', 0, -1)
+
+
+def test_ts_add_negative():
+    with Env().getClusterConnectionIfNeeded() as r:
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.CREATE', 'tester', 'ENCODING')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding')

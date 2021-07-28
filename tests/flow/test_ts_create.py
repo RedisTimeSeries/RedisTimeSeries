@@ -14,6 +14,10 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'invalid', 'RETENTION', 'retention')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'CHUNK_SIZE', 'chunk_size')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING', 'bad-encoding-type')
 
         r.execute_command('TS.CREATE', 'a')
         with pytest.raises(redis.ResponseError) as excinfo:
