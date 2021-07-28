@@ -4,12 +4,28 @@ import time
 import _thread
 from RLTest import Env
 
-def test_get_timestamp(self):
+def test_bad_get(self):
     with Env().getClusterConnectionIfNeeded() as r:
         
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("TS.GET", "X")
 
+        self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("TS.GET", "BAD_X")
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("TS.GET", "BAD_X", "TIMESTAMP", "20")
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("TS.GET", "BAD_X", "BLOCK", "10")
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("TS.GET", "BAD_X", "TIMESTAMP", "21" , "BLOCK", "40")
+
+def test_get_timestamp(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        
         self.assertTrue(r.execute_command("TS.CREATE", "X"))
         self.assertEqual(r.execute_command("TS.GET", "X"), [])
         self.assertEqual(r.execute_command("TS.GET", "X", "TIMESTAMP", "0"), [])

@@ -1,8 +1,6 @@
 from RLTest import Env
 from test_helper_classes import ALLOWED_ERROR, _insert_data, _get_ts_info
 
-
-
 def test_simple_dump_restore(self):
     with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test_key', 'UNCOMPRESSED')
@@ -10,6 +8,16 @@ def test_simple_dump_restore(self):
         dump = r.execute_command('dump', 'test_key')
         r.execute_command('del', 'test_key')
         r.execute_command('restore', 'test_key', 0, dump)
+        assert r.execute_command('TS.RANGE', 'test_key', '-', '+') == [[1, b'1']]
+
+
+def test_not_ts_restore(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('SET', 'not_ts', 'not_series')
+        dump = r.execute_command('DUMP', 'not_ts')
+        r.execute_command('DEL', 'not_ts')
+        r.execute_command('restore', 'not_ts', 0, dump)
+        assert r.execute_command('GET', 'not_ts') == b'not_series'
 
 def test_rdb():
     start_ts = 1511885909
