@@ -39,6 +39,14 @@ typedef struct FilterByTSArgs
     timestamp_t values[MAX_TS_VALUES_FILTER];
 } FilterByTSArgs;
 
+typedef enum RangeAlignment
+{
+    DefaultAlignment,
+    StartAlignment,
+    EndAlignment,
+    TimestampAlignment
+} RangeAlignment;
+
 typedef struct RangeArgs
 {
     api_timestamp_t startTimestamp;
@@ -47,6 +55,8 @@ typedef struct RangeArgs
     AggregationArgs aggregationArgs;
     FilterByValueArgs filterByValueArgs;
     FilterByTSArgs filterByTSArgs;
+    RangeAlignment alignment;
+    timestamp_t timestampAlignment;
 } RangeArgs;
 
 typedef enum MultiSeriesReduceOp
