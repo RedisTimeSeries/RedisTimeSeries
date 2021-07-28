@@ -7,6 +7,9 @@ from RLTest import Env
 def test_get_timestamp(self):
     with Env().getClusterConnectionIfNeeded() as r:
         
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("TS.GET", "X")
+
         self.assertTrue(r.execute_command("TS.CREATE", "X"))
         self.assertEqual(r.execute_command("TS.GET", "X"), [])
         self.assertEqual(r.execute_command("TS.GET", "X", "TIMESTAMP", "0"), [])
@@ -59,6 +62,10 @@ def test_block(self):
         # test block timed out
         _thread.start_new_thread( async_add, (r, "blocked_key", 103, 32, 0.2) )
         self.assertEqual([], r.execute_command("TS.GET", "blocked_key", "BLOCK", "100"))
+
+        # test block key doesn't exist
+        _thread.start_new_thread( async_add, (r, "blocked_new_key", "*", 32, 0.5) )
+        self.assertEqual([], r.execute_command("TS.GET", "blocked_new_key", "BLOCK", "1000"))
 
         # wrong block time
         with pytest.raises(redis.ResponseError) as excinfo:
