@@ -761,7 +761,9 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
 }
 
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
-    *skipped = 0;
+    if (skipped != NULL) {
+        *skipped = 0;
+    }
     if (series->totalSamples == 0) {
         return 0;
     }
@@ -783,7 +785,9 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         ++i;
     }
 
-    *skipped = i;
+    if (skipped != NULL) {
+        *skipped = i;
+    }
     SeriesIteratorClose(iterator);
     return sample.timestamp;
 }
@@ -797,10 +801,28 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
             chain, args->filterByValueArgs, args->filterByTSArgs);
     }
 
+    timestamp_t timestampAlignment;
+    switch (args->alignment) {
+        case StartAlignment:
+            // args-startTimestamp can hold an older timestamp than what we currently have or just 0
+            timestampAlignment = max(args->startTimestamp, getFirstValidTimestamp(series, NULL));
+            break;
+        case EndAlignment:
+            timestampAlignment = args->endTimestamp;
+            break;
+        case TimestampAlignment:
+            timestampAlignment = args->timestampAlignment;
+            break;
+        default:
+            timestampAlignment = 0;
+            break;
+    }
+
     if (args->aggregationArgs.aggregationClass != NULL) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
+                                                            timestampAlignment,
                                                             reverse);
     }
 

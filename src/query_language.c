@@ -206,6 +206,37 @@ static int parseCountArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+static int parseAlignmentArgs(RedisModuleCtx *ctx,
+                              RedisModuleString **argv,
+                              int argc,
+                              RangeAlignment *alignment,
+                              timestamp_t *timestamp) {
+    *alignment = DefaultAlignment;
+    int align_location = RMUtil_ArgIndex("ALIGN", argv, argc);
+    if (align_location > 0) {
+        if (align_location + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        char *aligment = RedisModule_StringPtrLen(argv[align_location + 1], NULL);
+        if (strcasecmp(aligment, "start") == 0 || strcasecmp(aligment, "-") == 0) {
+            *alignment = StartAlignment;
+            return TSDB_OK;
+        } else if (strcasecmp(aligment, "end") == 0 || strcasecmp(aligment, "+") == 0) {
+            *alignment = EndAlignment;
+            return TSDB_OK;
+        } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) == TSDB_OK) {
+            *alignment = TimestampAlignment;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown ALIGN parameter");
+            return TSDB_ERROR;
+        }
+    }
+    return TSDB_OK;
+}
+
 static int parseFilterByValueArgument(RedisModuleCtx *ctx,
                                       RedisModuleString **argv,
                                       int argc,
@@ -314,6 +345,16 @@ int parseRangeArguments(RedisModuleCtx *ctx,
 
     if (parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
+    }
+
+    if (parseAlignmentArgs(ctx, argv, argc, &args.alignment, &args.timestampAlignment) ==
+        TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (args.alignment != DefaultAlignment && args.aggregationArgs.aggregationClass == NULL) {
+        RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
+        return TSDB_ERROR;
     }
 
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
