@@ -136,6 +136,17 @@ class testGlobalConfigTests():
 
 def test_negative_configuration():
     Env().skipOnCluster()
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; DUPLICATE_POLICY abc')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; DUPLICATE_POLICY')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; CHUNK_TYPE')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; ENCODING')
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='ENCODING; CHUNK_SIZE_BYTES 100')
