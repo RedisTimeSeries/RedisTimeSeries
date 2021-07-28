@@ -875,7 +875,6 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // simple get without args
     if (timestamp_location == -1 && block_location == -1) {
-
         Series *series;
         RedisModuleKey *key;
         const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
@@ -886,14 +885,14 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ReplyWithSeriesLastDatapoint(ctx, series);
         RedisModule_CloseKey(key);
         return REDISMODULE_OK;
-    } 
+    }
 
     // Parse timestamp
     api_timestamp_t timestamp = -1;
     if (timestamp_location != -1) {
         long long tmp_timestamp;
         if ((RedisModule_StringToLongLong(argv[timestamp_location + 1], &tmp_timestamp) !=
-                REDISMODULE_OK) ||
+             REDISMODULE_OK) ||
             tmp_timestamp < 0) {
             return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing timestamp");
         }
@@ -902,9 +901,9 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // Parse block time
     long long block_timeout = -1;
-    if (block_location != -1) { // Blocking waiting for a sample        
+    if (block_location != -1) { // Blocking waiting for a sample
         if ((RedisModule_StringToLongLong(argv[block_location + 1], &block_timeout) !=
-                REDISMODULE_OK) ||
+             REDISMODULE_OK) ||
             block_timeout < 0) {
             return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing block timeout");
         }
@@ -916,9 +915,9 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // The key exists but not a series
     if (status == TSDB_ERROR) {
         return RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-    }    
+    }
 
-    if (status == TSDB_OK) {    
+    if (status == TSDB_OK) {
         // In case a retention is set shouldn't return event older than the retention
         if (series->retentionTime) {
             timestamp = series->lastTimestamp > series->retentionTime
@@ -930,11 +929,11 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (timestamp < series->lastTimestamp) {
             // read next event right after `timestamp`
             RangeArgs args = { .startTimestamp = timestamp + 1,
-                                .endTimestamp = series->lastTimestamp,
-                                .count = -1,
-                                .aggregationArgs = NULL,
-                                .filterByValueArgs = NULL,
-                                .filterByTSArgs = NULL };
+                               .endTimestamp = series->lastTimestamp,
+                               .count = -1,
+                               .aggregationArgs = NULL,
+                               .filterByValueArgs = NULL,
+                               .filterByTSArgs = NULL };
             SeriesIterator *iterator = SeriesQuery(series, &args, false);
             if (iterator == NULL) {
                 return RedisModule_ReplyWithArray(ctx, 0);
@@ -947,26 +946,26 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
             RedisModule_CloseKey(key);
             return REDISMODULE_OK;
-        } 
+        }
         RedisModule_CloseKey(key);
-    }                       
-        
+    }
+
     // If the key doesn't exist and not blocking
-    if (block_location == -1) { 
+    if (block_location == -1) {
         return RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
     }
 
-    // Blocking waiting for a sample        
+    // Blocking waiting for a sample
     api_timestamp_t *private_timestamp = RedisModule_Alloc(sizeof(api_timestamp_t));
     *private_timestamp = timestamp;
     RedisModule_BlockClientOnKeys(ctx,
-                                    _tsdb_get_block_callback,
-                                    _tsdb_get_timeout_callback,
-                                    _tsdb_get_free_privdata_callback,
-                                    block_timeout,
-                                    &argv[1],
-                                    1,
-                                    private_timestamp);
+                                  _tsdb_get_block_callback,
+                                  _tsdb_get_timeout_callback,
+                                  _tsdb_get_free_privdata_callback,
+                                  block_timeout,
+                                  &argv[1],
+                                  1,
+                                  private_timestamp);
     return REDISMODULE_OK;
 }
 
