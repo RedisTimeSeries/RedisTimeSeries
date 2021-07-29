@@ -312,8 +312,8 @@ Optional parameters:
 
 * ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
-     * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to `0`.
 
@@ -393,8 +393,8 @@ Optional parameters:
 
 * ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
-     * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to `0`.
 
