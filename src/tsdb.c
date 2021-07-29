@@ -111,10 +111,10 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
-void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
+int SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
     // if not causedByRetention, caused by ts.del
     if (causedByRetention && series->retentionTime == 0) {
-        return;
+        return 0;
     }
     RedisModuleDictIter *iter;
     if (causedByRetention) {
@@ -133,6 +133,7 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
                                    ? series->lastTimestamp - series->retentionTime
                                    : 0;
 
+    int deletedSamples = 0;
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         bool retentionCondition =
             causedByRetention && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
@@ -146,16 +147,19 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
             // go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
 
-            series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
+            deletedSamples += series->funcs->GetNumOfSample(currentChunk);
             series->funcs->FreeChunk(currentChunk);
         } else {
             if (!causedByRetention) {
-                series->totalSamples -= series->funcs->DelRange(currentChunk, startTs, endTs);
+                deletedSamples += series->funcs->DelRange(currentChunk, startTs, endTs);
             }
             break;
         }
     }
+    series->totalSamples -= deletedSamples;
+
     RedisModule_DictIteratorStop(iter);
+    return deletedSamples;
 }
 
 // Encode timestamps as bigendian to allow correct lexical sorting
@@ -592,8 +596,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 }
 
 int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-    SeriesTrim(series, false, start_ts, end_ts);
-    return TSDB_OK;
+    return SeriesTrim(series, false, start_ts, end_ts);
 }
 
 CompactionRule *SeriesAddRule(Series *series,
