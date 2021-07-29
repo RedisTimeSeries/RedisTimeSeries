@@ -118,6 +118,9 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     queryArg->limitLabels = calloc(args.numLimitLabels, sizeof(RedisModuleString *));
     memcpy(
         queryArg->limitLabels, args.limitLabels, sizeof(RedisModuleString *) * args.numLimitLabels);
+    for (int i = 0; i < queryArg->limitLabelsSize; i++) {
+        RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
+    }
     RedisGears_FlatMap(rg_ctx, "ShardMgetMapper", queryArg);
 
     RGM_Collect(rg_ctx);
@@ -158,6 +161,9 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->limitLabels = calloc(args.numLimitLabels, sizeof(RedisModuleString *));
     memcpy(
         queryArg->limitLabels, args.limitLabels, sizeof(RedisModuleString *) * args.numLimitLabels);
+    for (int i = 0; i < queryArg->limitLabelsSize; i++) {
+        RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
+    }
     RedisGears_FlatMap(rg_ctx, "ShardSeriesMapper", queryArg);
     RGM_Collect(rg_ctx);
 
