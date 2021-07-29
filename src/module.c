@@ -925,9 +925,9 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
+    int deleted = SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
 
-    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    RedisModule_ReplyWithLongLong(ctx, deleted);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
