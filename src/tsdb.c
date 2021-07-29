@@ -808,14 +808,10 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
     switch (args->alignment) {
         case StartAlignment:
             // args-startTimestamp can hold an older timestamp than what we currently have or just 0
-            timestampAlignment = max(args->startTimestamp, getFirstValidTimestamp(series, NULL));
+            timestampAlignment = args->startTimestamp;
             break;
         case EndAlignment:
-            if (args->endTimestamp != LLONG_MAX) {
-                timestampAlignment = args->endTimestamp;
-            } else {
-                timestampAlignment = series->lastTimestamp;
-            }
+            timestampAlignment = args->endTimestamp;
             break;
         case TimestampAlignment:
             timestampAlignment = args->timestampAlignment;

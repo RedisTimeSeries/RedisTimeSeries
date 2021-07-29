@@ -1,8 +1,10 @@
 import pytest
 import redis
 import time
+from collections import defaultdict
 from utils import Env, set_hertz
 from test_helper_classes import _insert_data
+from test_ts_range import build_expected_aligned_data
 
 def test_mrange_with_expire_cmd():
     env = Env()
@@ -303,3 +305,50 @@ def test_non_local_filtered_labels():
         for previous_result in previous_results:
             ensure_replies_series_match(env,previous_result,actual_result)
         previous_results.append(actual_result)
+
+def test_mrange_align():
+    start_ts = 1511885909
+    samples_count = 50
+
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+        assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+        assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+        _insert_data(r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(r, 'tester3', start_ts, samples_count, 25)
+
+        end_ts = start_ts + samples_count
+        agg_bucket_size = 15
+        expected_start_result = [
+            ['tester1', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, start_ts)],
+            ['tester2', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, start_ts)],
+            ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, start_ts)],
+        ]
+        expected_end_result = [
+            ['tester1', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
+            ['tester2', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
+            ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
+        ]
+
+        assert expected_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
+                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')
+        assert expected_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
+                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')
+
+        def groupby(data):
+            result =  defaultdict(lambda: 0)
+            for key, labels, samples in data:
+                for sample in samples:
+                    result[sample[0]] = max(result[sample[0]], int(sample[1]))
+            return [[s[0], str(s[1])] for s in result.items()]
+
+        expected_groupby_start_result = [['generation=x', [], groupby(expected_start_result)]]
+        expected_groupby_end_result = [['generation=x', [], groupby(expected_end_result)]]
+
+        assert expected_groupby_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
+                                 'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
+                                 'GROUPBY', 'generation', 'REDUCE', 'max')
+        assert expected_groupby_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
+                                                                  'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
+                                                                  'GROUPBY', 'generation', 'REDUCE', 'max')
