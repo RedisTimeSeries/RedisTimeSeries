@@ -331,10 +331,10 @@ def test_mrange_align():
             ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
         ]
 
-        assert expected_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
-                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')
-        assert expected_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
-                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')
+        assert expected_start_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
+                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
+        assert expected_end_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
+                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
 
         def groupby(data):
             result =  defaultdict(lambda: 0)
