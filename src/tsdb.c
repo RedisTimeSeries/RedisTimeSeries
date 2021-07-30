@@ -129,7 +129,6 @@ void SeriesTrim(Series *series, timestamp_t startTs, timestamp_t endTs) {
 
     const ChunkFuncs *funcs = series->funcs;
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
-
         if (funcs->GetLastTimestamp(currentChunk) >= minTimestamp) {
             break;
         }
@@ -580,18 +579,18 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 }
 
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-
     // start iterator from smallest key compare to startTs
     timestamp_t rax_key;
     seriesEncodeTimestamp(&rax_key, start_ts);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    RedisModuleDictIter *iter =
+        RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
 
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
     size_t deletedSamples = 0;
     const ChunkFuncs *funcs = series->funcs;
-    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {        
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         // Should we delete the all chunk?
         bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
                                 funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
