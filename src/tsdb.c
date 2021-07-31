@@ -662,13 +662,11 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
         rules_options &= SERIES_OPT_UNCOMPRESSED;
 
-        TSGlobalConfig.options &= SERIES_OPT_DEFAULT_COMPRESSION;
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
-            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
             .options = rules_options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
