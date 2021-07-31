@@ -1,7 +1,7 @@
 from RLTest import Env
 import pytest
 import redis
-
+from test_helper_classes import _get_ts_info
 
 def test_ts_del_uncompressed():
     # total samples = 101
@@ -59,22 +59,26 @@ def test_ts_del_compressed():
         assert len(res) == 0
 
 
-def test_ts_del_compressed_multi_chunk():
-    sample_len = 1001
-    with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key')
-
-        for i in range(sample_len):
-            assert i == r.execute_command("ts.add", 'test_key', i, '1')
-
-        res = r.execute_command('ts.range', 'test_key', 0, sample_len - 1)
-        i = 0
-        for sample in res:
-            assert sample == [i, '1'.encode('ascii')]
-            i += 1
-        assert 1000 == r.execute_command('ts.del', 'test_key', 0, 999)
-        res = r.execute_command('ts.range', 'test_key', 0, sample_len - 1)
-        assert len(res) == 1
+def test_ts_del_multi_chunk():
+    for CHUNK_TYPE in ["compressed","uncompressed"]:
+        sample_len = 1
+        e = Env()
+        with e.getClusterConnectionIfNeeded() as r:
+            r.execute_command("ts.create", 'test_key', CHUNK_TYPE)
+            while(_get_ts_info(r, 'test_key').chunk_count<2):
+                assert sample_len == r.execute_command("ts.add", 'test_key', sample_len, '1')
+                sample_len = sample_len + 1
+            sample_len = sample_len -1
+            res = r.execute_command('ts.range', 'test_key', 0, sample_len - 1)
+            i = 1
+            for sample in res:
+                e.assertEqual(sample, [i, '1'.encode('ascii')])
+                i += 1
+            assert sample_len - 1 == r.execute_command('ts.del', 'test_key', 0, sample_len - 1)
+            res = r.execute_command('ts.range', 'test_key', 0, sample_len)
+            e.assertEqual(_get_ts_info(r, 'test_key').chunk_count,1)
+            e.assertEqual(len(res), 1)
+        e.flush()
 
 
 def test_ts_del_compressed_out_range():
