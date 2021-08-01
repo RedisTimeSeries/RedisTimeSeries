@@ -483,11 +483,15 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     }
     s->funcs = record->funcs;
 
+    Chunk_t *chunk;
     for (int chunk_index = 0; chunk_index < record->chunkCount; chunk_index++) {
+        chunk = record->chunks[chunk_index];
+        s->totalSamples += s->funcs->GetNumOfSample(chunk);
         dictOperator(s->chunks,
-                     s->funcs->CloneChunk(record->chunks[chunk_index]),
-                     record->funcs->GetFirstTimestamp(record->chunks[chunk_index]),
+                     s->funcs->CloneChunk(chunk),
+                     record->funcs->GetFirstTimestamp(chunk),
                      DICT_OP_SET);
     }
+    s->lastTimestamp = s->funcs->GetLastTimestamp(chunk);
     return s;
 }

@@ -71,6 +71,8 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
+        minimizedArgs.startTimestamp = 0;
+        minimizedArgs.endTimestamp = UINT64_MAX;
         minimizedArgs.aggregationArgs.aggregationClass = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByValueArgs.hasValue = false;

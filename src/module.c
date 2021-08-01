@@ -232,6 +232,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     RangeArgs minimizedArgs = args->rangeArgs;
+    minimizedArgs.startTimestamp = 0;
+    minimizedArgs.endTimestamp = UINT64_MAX;
     minimizedArgs.aggregationArgs.aggregationClass = NULL;
     minimizedArgs.aggregationArgs.timeDelta = 0;
     minimizedArgs.filterByTSArgs.hasValue = false;
