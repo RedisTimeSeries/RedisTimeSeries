@@ -357,10 +357,10 @@ def test_aggreataion_alignment():
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size)
+           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size)
 
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size)
+           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size)
 
     specific_ts = start_ts + 50
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
@@ -370,6 +370,6 @@ def test_aggreataion_alignment():
     end_ts = start_ts + samples_count - 1
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size)
+           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size)
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', '+', 'AGGREGATION', 'count', agg_size)
+           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size)
