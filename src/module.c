@@ -966,6 +966,9 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (block_location == -1) {
         // If the key doesn't exist and not blocking
         return RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+    } else if (timestamp_location == -1) {
+        // If the key doesn't exist and the timestamp is not set
+        timestamp = (api_timestamp_t)RedisModule_Milliseconds();
     }
 
     // Blocking waiting for a sample
