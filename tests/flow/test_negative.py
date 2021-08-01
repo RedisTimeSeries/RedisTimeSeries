@@ -80,10 +80,10 @@ def test_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 60000, 'max')
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '1627460206991', 'ALIGN', 'start', 'AGGREGATION', 60000, 'max')
+            assert r.execute_command('TS.RANGE', 'tester', '-', '1627460206991', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 60000, 'max')
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '1627460206991', '+', 'ALIGN', 'end', 'AGGREGATION', 60000, 'max')
+            assert r.execute_command('TS.RANGE', 'tester', '1627460206991', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)
