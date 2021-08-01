@@ -4,7 +4,7 @@ import time
 import pytest
 import redis
 from RLTest import Env
-from test_helper_classes import SAMPLE_SIZE, _get_ts_info
+from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo
 
 
 def test_create_params():
@@ -14,6 +14,10 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'invalid', 'RETENTION', 'retention')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'CHUNK_SIZE', 'chunk_size')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING', 'bad-encoding-type')
 
         r.execute_command('TS.CREATE', 'a')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -159,3 +163,14 @@ def test_expire():
         assert r.execute_command('expire', 'test', 1) == 1
         time.sleep(2)
         assert r.execute_command('keys', '*') == []
+
+def test_ts_create_encoding():
+    for ENCODING in ['compressed','uncompressed']:
+        e = Env()
+        e.flush()
+        with e.getClusterConnectionIfNeeded() as r:
+            r.execute_command('ts.create', 't1', 'ENCODING', ENCODING)
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING.encode())
+            # backwards compatible check
+            r.execute_command('ts.create', 't1_bc', ENCODING)
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING.encode())

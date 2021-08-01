@@ -97,6 +97,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
+        newSeries->options |= SERIES_OPT_COMPRESSED_GORILLA;
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
 
@@ -675,12 +676,16 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount + 1].value =
             RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
+        int rules_options = TSGlobalConfig.options;
+        rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+        rules_options &= SERIES_OPT_UNCOMPRESSED;
+
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
-            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+            .options = rules_options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);

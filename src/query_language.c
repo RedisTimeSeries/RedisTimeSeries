@@ -107,8 +107,9 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
+        return REDISMODULE_ERR;
     }
 
     cCtx->duplicatePolicy = DP_NONE;
@@ -118,6 +119,41 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     return REDISMODULE_OK;
+}
+
+int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options) {
+    int encoding_location = RMUtil_ArgIndex("ENCODING", argv, argc);
+    if (encoding_location > 0) {
+        if (encoding_location + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        char *encoding = RedisModule_StringPtrLen(argv[encoding_location + 1], NULL);
+        if (strcasecmp(encoding, UNCOMPRESSED_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+            return TSDB_OK;
+        } else if (strcasecmp(encoding, COMPRESSED_GORILLA_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown ENCODING parameter");
+            return TSDB_ERROR;
+        }
+    } else {
+        // backwards compatible UNCOMPRESSED/COMPRESSED parsing
+        if (RMUtil_ArgIndex(UNCOMPRESSED_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+        }
+        if (RMUtil_ArgIndex(COMPRESSED_GORILLA_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+        }
+    }
+    return TSDB_OK;
 }
 
 int _parseAggregationArgs(RedisModuleCtx *ctx,

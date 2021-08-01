@@ -7,7 +7,7 @@
 Create a new time-series. 
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
+TS.CREATE key [RETENTION retentionTime] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
 * key - Key name for timeseries
@@ -17,7 +17,9 @@ Optional args:
  * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
+ * ENCODING - Specify the series samples encoding format.
+    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * UNCOMPRESSED: keep the raw samples in memory.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
@@ -132,7 +134,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append a new sample to the series. If the series has not been created yet with `TS.CREATE` it will be automatically created. 
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
 * timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
@@ -143,8 +145,10 @@ These arguments are optional because they can be set by TS.CREATE:
  * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * ENCODING - Specify the series samples encoding format.
+    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * UNCOMPRESSED: keep the raw samples in memory.
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4096.
  * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * labels - Set of label-value pairs that represent metadata labels of the key
 
