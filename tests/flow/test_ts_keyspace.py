@@ -40,6 +40,11 @@ def test_keyspace():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.decrby')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
 
+        # Test DEL generate event on key
+        r.execute_command("ts.DEL", 'tester{2}', "100", "100")
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.del')
+        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
+
 def test_keyspace_create_rules():
     sample_len = 1024
     env = Env()

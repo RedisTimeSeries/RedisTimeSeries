@@ -94,7 +94,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 size_t SeriesGetNumSamples(const Series *series);
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
-int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts);
+size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts);
 
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
