@@ -79,7 +79,6 @@ EXPIRE temperature:2:32 60
 
 ### TS.DEL
 
-
 Delete samples between two timestamps for a given key.
 
 The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
@@ -92,6 +91,10 @@ TS.DEL key fromTimestamp toTimestamp
 - fromTimestamp - Start timestamp for the range deletion.
 - toTimestamp - End timestamp for the range deletion.
 
+#### Return value
+
+Integer reply: The number of samples that were removed.
+
 #### Complexity
 
 TS.DEL complexity is O(N) where N is the number of data points that will be removed.
@@ -99,7 +102,8 @@ TS.DEL complexity is O(N) where N is the number of data points that will be remo
 #### Delete range of data points example
 
 ```sql
-TS.DEL temperature:2:32 1548149180000 1548149183000
+127.0.0.1:6379>TS.DEL temperature:2:32 1548149180000 1548149183000
+(integer) 150
 ```
 
 ## Update
@@ -316,8 +320,8 @@ Optional parameters:
 
 * ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
-     * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to `0`.
 
@@ -397,8 +401,8 @@ Optional parameters:
 
 * ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (fromTimestamp).
-     * `end` or `+`: The reference timestamp will be the signed remainder of query end interval time by the AGGREGATION time bucket (toTimestamp % timeBucket).
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to `0`.
 

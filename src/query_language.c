@@ -350,10 +350,13 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     args.filterByValueArgs.hasValue = false;
     args.filterByTSArgs.hasValue = false;
 
+    bool startTimestampMin = false;
+    bool endTimestampMax = false;
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
     if (strcmp(start, "-") == 0) {
         args.startTimestamp = 0;
+        startTimestampMin = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index],
                                          (long long int *)&args.startTimestamp) != REDISMODULE_OK) {
@@ -366,6 +369,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
         args.endTimestamp = maxTimestamp;
+        endTimestampMax = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index + 1],
                                          (long long int *)&args.endTimestamp) != REDISMODULE_OK) {
@@ -388,9 +392,23 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     }
 
-    if (args.alignment != DefaultAlignment && args.aggregationArgs.aggregationClass == NULL) {
-        RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
-        return TSDB_ERROR;
+    if (args.alignment != DefaultAlignment) {
+        if (args.aggregationArgs.aggregationClass == NULL) {
+            RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == StartAlignment && startTimestampMin) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: start alignment can only be used with explicit start timestamp");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == EndAlignment && endTimestampMax) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: end alignment can only be used with explicit end timestamp");
+            return TSDB_ERROR;
+        }
     }
 
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {

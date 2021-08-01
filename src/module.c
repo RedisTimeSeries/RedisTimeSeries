@@ -227,6 +227,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     RangeArgs minimizedArgs = args->rangeArgs;
+    minimizedArgs.startTimestamp = 0;
+    minimizedArgs.endTimestamp = UINT64_MAX;
     minimizedArgs.aggregationArgs.aggregationClass = NULL;
     minimizedArgs.aggregationArgs.timeDelta = 0;
     minimizedArgs.filterByTSArgs.hasValue = false;
@@ -921,10 +923,12 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    int deleted = SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
+    size_t deleted = SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
 
     RedisModule_ReplyWithLongLong(ctx, deleted);
     RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.del", argv[1]);
+
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
