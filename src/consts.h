@@ -9,6 +9,15 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+
+  #if defined(__GNUC__)
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
+  #elif _MSC_VER
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+  #endif
+
 #define TRUE 1
 #define FALSE 0
 
@@ -62,6 +71,10 @@ typedef enum DuplicatePolicy {
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
 
+#define SERIES_OPT_COMPRESSED_GORILLA 0x2
+
+#define SERIES_OPT_DEFAULT_COMPRESSION SERIES_OPT_COMPRESSED_GORILLA
+
 /* Chunk enum */
 typedef enum {
   CR_OK = 0,    // RM_OK
@@ -73,6 +86,8 @@ typedef enum {
 
 #define DUPLICATE_POLICY_ARG "DUPLICATE_POLICY"
 #define TS_ADD_DUPLICATE_POLICY_ARG "ON_DUPLICATE"
+#define UNCOMPRESSED_ARG_STR "uncompressed"
+#define COMPRESSED_GORILLA_ARG_STR "compressed"
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 

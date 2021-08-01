@@ -60,3 +60,30 @@ def test_errors():
             assert r.execute_command('TS.ADD', 'values', 'timestamp', '5')  # string
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.ADD', 'values', '*', 'value')  # string
+        with pytest.raises(redis.ResponseError) as excinfo:
+            labels = ["abc"] * 51
+            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            labels = ["abc"] * 51
+            assert r.execute_command('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
+        assert r.execute_command('TS.CREATE', 'tester')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '1627460206991', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', '1627460206991', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)

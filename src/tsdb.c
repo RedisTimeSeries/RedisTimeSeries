@@ -97,6 +97,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
+        newSeries->options |= SERIES_OPT_COMPRESSED_GORILLA;
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
 
@@ -111,21 +112,15 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     return newSeries;
 }
 
-void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, timestamp_t endTs) {
+void SeriesTrim(Series *series, timestamp_t startTs, timestamp_t endTs) {
     // if not causedByRetention, caused by ts.del
-    if (causedByRetention && series->retentionTime == 0) {
+    if (series->retentionTime == 0) {
         return;
     }
-    RedisModuleDictIter *iter;
-    if (causedByRetention) {
-        // start iterator from smallest key
-        iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    } else {
-        // start iterator from smallest key compare to startTs
-        timestamp_t rax_key;
-        seriesEncodeTimestamp(&rax_key, startTs);
-        iter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    }
+
+    // start iterator from smallest key
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
@@ -133,28 +128,21 @@ void SeriesTrim(Series *series, bool causedByRetention, timestamp_t startTs, tim
                                    ? series->lastTimestamp - series->retentionTime
                                    : 0;
 
+    const ChunkFuncs *funcs = series->funcs;
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
-        bool retentionCondition =
-            causedByRetention && series->funcs->GetLastTimestamp(currentChunk) < minTimestamp;
-        bool ts_delCondition = !causedByRetention &&
-                               (series->funcs->GetFirstTimestamp(currentChunk) >= startTs &&
-                                series->funcs->GetLastTimestamp(currentChunk) <= endTs) &&
-                               currentChunk != series->lastChunk;
-        if (retentionCondition || ts_delCondition) {
-            RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
-            // reseek iterator since we modified the dict,
-            // go to first element that is bigger than current key
-            RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
-
-            series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
-            series->funcs->FreeChunk(currentChunk);
-        } else {
-            if (!causedByRetention) {
-                series->totalSamples -= series->funcs->DelRange(currentChunk, startTs, endTs);
-            }
+        if (funcs->GetLastTimestamp(currentChunk) >= minTimestamp) {
             break;
         }
+
+        RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
+        // reseek iterator since we modified the dict,
+        // go to first element that is bigger than current key
+        RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
+
+        series->totalSamples -= funcs->GetNumOfSample(currentChunk);
+        funcs->FreeChunk(currentChunk);
     }
+
     RedisModule_DictIteratorStop(iter);
 }
 
@@ -578,7 +566,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 
     if (ret == CR_END) {
         // When a new chunk is created trim the series
-        SeriesTrim(series, true, 0, 0);
+        SeriesTrim(series, 0, 0);
 
         Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
@@ -591,9 +579,40 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-int SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-    SeriesTrim(series, false, start_ts, end_ts);
-    return TSDB_OK;
+size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
+    // start iterator from smallest key compare to startTs
+    timestamp_t rax_key;
+    seriesEncodeTimestamp(&rax_key, start_ts);
+    RedisModuleDictIter *iter =
+        RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+
+    Chunk_t *currentChunk;
+    void *currentKey;
+    size_t keyLen;
+    size_t deletedSamples = 0;
+    const ChunkFuncs *funcs = series->funcs;
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
+        // Should we delete the all chunk?
+        bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
+                                funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
+                               currentChunk != series->lastChunk;
+        if (!ts_delCondition) {
+            deletedSamples += funcs->DelRange(currentChunk, start_ts, end_ts);
+            break;
+        }
+
+        RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
+        deletedSamples += funcs->GetNumOfSample(currentChunk);
+        funcs->FreeChunk(currentChunk);
+
+        // reseek iterator since we modified the dict,
+        // go to first element that is bigger than current key
+        RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
+    }
+    series->totalSamples -= deletedSamples;
+
+    RedisModule_DictIteratorStop(iter);
+    return deletedSamples;
 }
 
 CompactionRule *SeriesAddRule(Series *series,
@@ -657,12 +676,16 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount + 1].value =
             RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
+        int rules_options = TSGlobalConfig.options;
+        rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+        rules_options &= SERIES_OPT_UNCOMPRESSED;
+
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
-            .options = TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+            .options = rules_options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         RedisModule_CloseKey(compactedKey);
@@ -761,7 +784,9 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
 }
 
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
-    *skipped = 0;
+    if (skipped != NULL) {
+        *skipped = 0;
+    }
     if (series->totalSamples == 0) {
         return 0;
     }
@@ -783,7 +808,9 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         ++i;
     }
 
-    *skipped = i;
+    if (skipped != NULL) {
+        *skipped = i;
+    }
     SeriesIteratorClose(iterator);
     return sample.timestamp;
 }
@@ -797,10 +824,28 @@ AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
             chain, args->filterByValueArgs, args->filterByTSArgs);
     }
 
+    timestamp_t timestampAlignment;
+    switch (args->alignment) {
+        case StartAlignment:
+            // args-startTimestamp can hold an older timestamp than what we currently have or just 0
+            timestampAlignment = args->startTimestamp;
+            break;
+        case EndAlignment:
+            timestampAlignment = args->endTimestamp;
+            break;
+        case TimestampAlignment:
+            timestampAlignment = args->timestampAlignment;
+            break;
+        default:
+            timestampAlignment = 0;
+            break;
+    }
+
     if (args->aggregationArgs.aggregationClass != NULL) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
+                                                            timestampAlignment,
                                                             reverse);
     }
 

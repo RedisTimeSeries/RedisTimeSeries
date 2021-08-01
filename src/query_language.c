@@ -10,6 +10,12 @@
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
 
+#define QUERY_TOKEN_SIZE 9
+static const char *QUERY_TOKENS[] = {
+    "WITHLABELS", "AGGREGATION",     "LIMIT",        "GROUPBY", "REDUCE",
+    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
+};
+
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
@@ -101,8 +107,9 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
+        return REDISMODULE_ERR;
     }
 
     cCtx->duplicatePolicy = DP_NONE;
@@ -112,6 +119,41 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     return REDISMODULE_OK;
+}
+
+int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options) {
+    int encoding_location = RMUtil_ArgIndex("ENCODING", argv, argc);
+    if (encoding_location > 0) {
+        if (encoding_location + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        char *encoding = RedisModule_StringPtrLen(argv[encoding_location + 1], NULL);
+        if (strcasecmp(encoding, UNCOMPRESSED_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+            return TSDB_OK;
+        } else if (strcasecmp(encoding, COMPRESSED_GORILLA_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown ENCODING parameter");
+            return TSDB_ERROR;
+        }
+    } else {
+        // backwards compatible UNCOMPRESSED/COMPRESSED parsing
+        if (RMUtil_ArgIndex(UNCOMPRESSED_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+        }
+        if (RMUtil_ArgIndex(COMPRESSED_GORILLA_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+        }
+    }
+    return TSDB_OK;
 }
 
 int _parseAggregationArgs(RedisModuleCtx *ctx,
@@ -200,6 +242,37 @@ static int parseCountArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+static int parseAlignmentArgs(RedisModuleCtx *ctx,
+                              RedisModuleString **argv,
+                              int argc,
+                              RangeAlignment *alignment,
+                              timestamp_t *timestamp) {
+    *alignment = DefaultAlignment;
+    int align_location = RMUtil_ArgIndex("ALIGN", argv, argc);
+    if (align_location > 0) {
+        if (align_location + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        char *aligment = RedisModule_StringPtrLen(argv[align_location + 1], NULL);
+        if (strcasecmp(aligment, "start") == 0 || strcasecmp(aligment, "-") == 0) {
+            *alignment = StartAlignment;
+            return TSDB_OK;
+        } else if (strcasecmp(aligment, "end") == 0 || strcasecmp(aligment, "+") == 0) {
+            *alignment = EndAlignment;
+            return TSDB_OK;
+        } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) == TSDB_OK) {
+            *alignment = TimestampAlignment;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown ALIGN parameter");
+            return TSDB_ERROR;
+        }
+    }
+    return TSDB_OK;
+}
+
 static int parseFilterByValueArgument(RedisModuleCtx *ctx,
                                       RedisModuleString **argv,
                                       int argc,
@@ -225,6 +298,14 @@ static int parseFilterByValueArgument(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+int comp_uint64(const void *a, const void *b) {
+    if (*((uint64_t *)a) > *((uint64_t *)b))
+        return (+1);
+    if (*((uint64_t *)a) < *((uint64_t *)b))
+        return (-1);
+    return (0);
+}
+
 static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                                   RedisModuleString **argv,
                                   int argc,
@@ -248,6 +329,8 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                 break;
             }
         }
+        // We sort the provided timestamps in order to improve query time filtering
+        qsort(args->values, index, sizeof(uint64_t), comp_uint64);
 
         args->hasValue = (index > 0);
         args->count = index;
@@ -267,10 +350,13 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     args.filterByValueArgs.hasValue = false;
     args.filterByTSArgs.hasValue = false;
 
+    bool startTimestampMin = false;
+    bool endTimestampMax = false;
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
     if (strcmp(start, "-") == 0) {
         args.startTimestamp = 0;
+        startTimestampMin = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index],
                                          (long long int *)&args.startTimestamp) != REDISMODULE_OK) {
@@ -283,6 +369,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
         args.endTimestamp = maxTimestamp;
+        endTimestampMax = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index + 1],
                                          (long long int *)&args.endTimestamp) != REDISMODULE_OK) {
@@ -298,6 +385,30 @@ int parseRangeArguments(RedisModuleCtx *ctx,
 
     if (parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
+    }
+
+    if (parseAlignmentArgs(ctx, argv, argc, &args.alignment, &args.timestampAlignment) ==
+        TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (args.alignment != DefaultAlignment) {
+        if (args.aggregationArgs.aggregationClass == NULL) {
+            RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == StartAlignment && startTimestampMin) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: start alignment can only be used with explicit start timestamp");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == EndAlignment && endTimestampMax) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: end alignment can only be used with explicit end timestamp");
+            return TSDB_ERROR;
+        }
     }
 
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
@@ -399,6 +510,105 @@ int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reduce
     return TSDB_ERROR;
 }
 
+int parseLabelQuery(RedisModuleCtx *ctx,
+                    RedisModuleString **argv,
+                    int argc,
+                    bool *withLabels,
+                    RedisModuleString **limitLabels,
+                    unsigned short *limitLabelsSize) {
+    *withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+    const int limit_location = RMUtil_ArgIndex("SELECTED_LABELS", argv, argc);
+    if (limit_location > 0 && *withLabels) {
+        RTS_ReplyGeneralError(ctx, "TSDB: cannot accept WITHLABELS and SELECT_LABELS together");
+        return REDISMODULE_ERR;
+    }
+
+    if (limit_location > 0) {
+        size_t count = 0;
+        for (int i = limit_location + 1; i < argc; i++) {
+            size_t len;
+            const char *c_str = RedisModule_StringPtrLen(argv[i], &len);
+            bool found = false;
+            for (int j = 0; j < QUERY_TOKEN_SIZE; ++j) {
+                if (strcasecmp(QUERY_TOKENS[j], c_str) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                break;
+            }
+            if (count >= LIMIT_LABELS_SIZE) {
+                RTS_ReplyGeneralError(ctx, "TSDB: reached max size for SELECT_LABELS");
+                return REDISMODULE_ERR;
+            }
+            limitLabels[count] = argv[i];
+            count++;
+        }
+        if (count == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: SELECT_LABELS should have at least 1 parameter");
+            return REDISMODULE_ERR;
+        }
+        *limitLabelsSize = count;
+    }
+    return REDISMODULE_OK;
+}
+
+int parseFilter(RedisModuleCtx *ctx,
+                RedisModuleString **argv,
+                int argc,
+                int filter_location,
+                int query_count,
+                QueryPredicateList **out) {
+    int response;
+    QueryPredicateList *queries = NULL;
+
+    queries = parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
+    if (response == TSDB_ERROR) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+        return REDISMODULE_ERR;
+    }
+
+    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
+        QueryPredicateList_Free(queries);
+        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
+        return REDISMODULE_ERR;
+    }
+    *out = queries;
+    return REDISMODULE_OK;
+}
+
+int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out) {
+    MGetArgs args = { 0 };
+    if (argc < 3) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+
+    int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location == -1) {
+        RedisModule_WrongArity(ctx);
+        return REDISMODULE_ERR;
+    }
+    size_t query_count = argc - 1 - filter_location;
+
+    if (parseLabelQuery(
+            ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
+        REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    QueryPredicateList *queries;
+    if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    args.queryPredicates = queries;
+    *out = args;
+    return REDISMODULE_OK;
+}
+
 int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MRangeArgs *out) {
     if (argc < 4) {
         RedisModule_WrongArity(ctx);
@@ -408,6 +618,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     MRangeArgs args;
     args.groupByLabel = NULL;
     args.queryPredicates = NULL;
+    args.numLimitLabels = 0;
 
     if (parseRangeArguments(ctx, 1, argv, argc, LLONG_MAX, &args.rangeArgs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -419,7 +630,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    args.withLabels = RMUtil_ArgIndex("WITHLABELS", argv, argc) > 0;
+    parseLabelQuery(ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels);
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 
@@ -433,21 +644,10 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    int response;
-    QueryPredicateList *queries =
-        parseLabelListFromArgs(ctx, argv, filter_location + 1, query_count, &response);
-    if (response == TSDB_ERROR) {
-        QueryPredicateList_Free(queries);
-        RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
+    QueryPredicateList *queries = NULL;
+    if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
-
-    if (CountPredicateType(queries, EQ) + CountPredicateType(queries, LIST_MATCH) == 0) {
-        QueryPredicateList_Free(queries);
-        RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
-        return REDISMODULE_ERR;
-    }
-
     args.queryPredicates = queries;
 
     if (groupby_location > 0) {
@@ -479,5 +679,9 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 }
 
 void MRangeArgs_Free(MRangeArgs *args) {
+    QueryPredicateList_Free(args->queryPredicates);
+}
+
+void MGetArgs_Free(MGetArgs *args) {
     QueryPredicateList_Free(args->queryPredicates);
 }

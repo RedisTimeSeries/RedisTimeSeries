@@ -7,7 +7,7 @@
 Create a new time-series. 
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
+TS.CREATE key [RETENTION retentionTime] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
 * key - Key name for timeseries
@@ -17,7 +17,9 @@ Optional args:
  * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * UNCOMPRESSED - since version 1.2, both timestamps and values are compressed by default.
+ * ENCODING - Specify the series samples encoding format.
+    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * UNCOMPRESSED: keep the raw samples in memory.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
@@ -48,8 +50,61 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 ### DEL
 
-A series can be deleted using redis `DEL` command. Timeout can be set for a series using
-redis `EXPIRE` command.
+A series can be deleted using redis [`DEL`](https://redis.io/commands/del) command.
+
+Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands/expire) command.
+
+
+```sql
+DEL key [key2 ...]
+```
+
+* key - Key name for timeseries
+
+#### Complexity
+
+DEL complexity is O(N) where N is the number of keys that will be removed.
+
+#### Delete Serie Example
+
+```sql
+DEL temperature:2:32
+```
+
+#### Expire in 60 seconds Example
+
+```sql
+EXPIRE temperature:2:32 60
+```
+
+### TS.DEL
+
+Delete samples between two timestamps for a given key.
+
+The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
+
+```sql
+TS.DEL key fromTimestamp toTimestamp
+```
+
+* key - Key name for timeseries
+- fromTimestamp - Start timestamp for the range deletion.
+- toTimestamp - End timestamp for the range deletion.
+
+#### Return value
+
+Integer reply: The number of samples that were removed.
+
+#### Complexity
+
+TS.DEL complexity is O(N) where N is the number of data points that will be removed.
+
+#### Delete range of data points example
+
+```sql
+127.0.0.1:6379>TS.DEL temperature:2:32 1548149180000 1548149183000
+(integer) 150
+```
 
 ## Update
 
@@ -79,7 +134,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 Append a new sample to the series. If the series has not been created yet with `TS.CREATE` it will be automatically created. 
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
+TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
 * timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
@@ -90,8 +145,10 @@ These arguments are optional because they can be set by TS.CREATE:
  * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * ENCODING - Specify the series samples encoding format.
+    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * UNCOMPRESSED: keep the raw samples in memory.
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4096.
  * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * labels - Set of label-value pairs that represent metadata labels of the key
 
@@ -237,8 +294,17 @@ Note: Whenever filters need to be provided, a minimum of one `l=v` filter must b
 Query a range in forward or reverse directions.
 
 ```sql
-TS.RANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket]
-TS.REVRANGE key fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket]
+TS.RANGE key fromTimestamp toTimestamp
+         [FILTER_BY_TS TS1 TS2 ..]
+         [FILTER_BY_VALUE min max]
+         [COUNT count] [ALIGN value]
+         [AGGREGATION aggregationType timeBucket]
+
+TS.REVRANGE key fromTimestamp toTimestamp
+         [FILTER_BY_TS TS1 TS2 ..]
+         [FILTER_BY_VALUE min max]
+         [COUNT count] [ALIGN value]
+         [AGGREGATION aggregationType timeBucket]
 ```
 
 - key - Key name for timeseries
@@ -249,7 +315,16 @@ Optional parameters:
 
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
+
 * COUNT - Maximum number of returned samples.
+
+* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+     Possible values:
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
+     * A specific timestamp: align the reference timestamp to a specific time.
+     * **Note:** when not provided alignment is set to `0`.
+
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
   * timeBucket - Time bucket for aggregation in milliseconds
@@ -290,8 +365,23 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 Query a range across multiple time-series by filters in forward or reverse directions.
 
 ```sql
-TS.MRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
-TS.MREVRANGE fromTimestamp toTimestamp [FILTER_BY_TS TS1 TS2 ..] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregationType timeBucket] [WITHLABELS] FILTER filter..
+TS.MRANGE fromTimestamp toTimestamp
+          [FILTER_BY_TS TS1 TS2 ..]
+          [FILTER_BY_VALUE min max]
+          [WITHLABELS | SELECTED_LABELS label1 ..]
+          [COUNT count] [ALIGN value]
+          [AGGREGATION aggregationType timeBucket]
+          FILTER filter..
+          [GROUPBY <label> REDUCE <reducer>]
+
+TS.MREVRANGE fromTimestamp toTimestamp
+          [FILTER_BY_TS TS1 TS2 ..]
+          [FILTER_BY_VALUE min max]
+          [WITHLABELS | SELECTED_LABELS label1 ..]
+          [COUNT count] [ALIGN value]
+          [AGGREGATION aggregationType timeBucket]
+          FILTER filter..
+          [GROUPBY <label> REDUCE <reducer>]
 ```
 
 * fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -302,11 +392,32 @@ Optional parameters:
 
 * FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
 * FILTER_BY_VALUE - Filter result by value using minimum and maximum.
-* COUNT - Maximum number of returned samples per time-series.
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
+
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+
+* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+
+* COUNT - Maximum number of returned samples per time series.
+
+* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+     Possible values:
+     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
+     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
+     * A specific timestamp: align the reference timestamp to a specific time.
+     * **Note:** when not provided alignment is set to `0`.
+
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
     * timeBucket - Time bucket for aggregation in milliseconds.
+
+* GROUPBY - Aggregate results across different time series, grouped by the provided label name.
+  When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+    * label - label name to group series by.
+    * reducer - Reducer type used to aggregate series that share the same label value. Available reducers: sum, min, max.
+    * **Note:** The resulting series will contain 3 labels with the following label array structure:
+         * `<label>=<groupbyvalue>` : containing the label name and label value.
+         * `__reducer__=<reducer>` : containing the used reducer.
+         * `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
 
 #### Return Value
 
@@ -315,7 +426,9 @@ Array-reply, specifically:
 The command returns the entries with labels matching the specified filter.
 The returned entries are complete, that means that the name, labels and all the samples that match the range are returned.
 
-The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, with labels and values being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
+The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time series.
+
+If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time series.
 
 
 #### Examples
@@ -401,6 +514,89 @@ The returned array will contain key1,labels1,values1,...,keyN,labelsN,valuesN, w
          2) "20"
 ```
 
+##### Query time series with metric=cpu, group them by metric_name reduce max
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 1548149185000 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER metric=cpu GROUPBY metric_name REDUCE max
+1) 1) "metric_name=system"
+   2) 1) 1) "metric_name"
+         2) "system"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "ts1"
+   3) 1) 1) (integer) 1548149180000
+         2) 90
+      2) 1) (integer) 1548149185000
+         2) 45
+2) 1) "metric_name=user"
+   2) 1) 1) "metric_name"
+         2) "user"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "ts2"
+   3) 1) 1) (integer) 1548149180000
+         2) 99
+```
+
+##### Query time series with metric=cpu, filter values larger or equal to 90.0 and smaller or equal to 100.0
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 1548149185000 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + FILTER_BY_VALUE 90 100 WITHLABELS FILTER metric=cpu
+1) 1) "ts1"
+   2) 1) 1) "metric"
+         2) "cpu"
+      2) 1) "metric_name"
+         2) "system"
+   3) 1) 1) (integer) 1548149180000
+         2) 90
+2) 1) "ts2"
+   2) 1) 1) "metric"
+         2) "cpu"
+      2) 1) "metric_name"
+         2) "user"
+   3) 1) 1) (integer) 1548149180000
+         2) 99
+```
+
+
+##### Query time series with metric=cpu, but only reply the team label
+
+```sql
+127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system team NY
+(integer) 1
+127.0.0.1:6379> TS.ADD ts1 1548149185000 45
+(integer) 2
+127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user team SF
+(integer) 2
+127.0.0.1:6379> TS.MRANGE - + SELECTED_LABELS team FILTER metric=cpu
+1) 1) "ts1"
+   2) 1) 1) "team"
+         2) "NY"
+   3) 1) 1) (integer) 1548149180000
+         2) 90
+      2) 1) (integer) 1548149185000
+         2) 45
+2) 1) "ts2"
+   2) 1) 1) "team"
+         2) "SF"
+   3) 1) 1) (integer) 1548149180000
+         2) 99
+```
+
 ### TS.GET
 
 Get the last sample.
@@ -446,22 +642,26 @@ TS.GET complexity is O(1).
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET [WITHLABELS] FILTER filter...
+TS.MGET [WITHLABELS | SELECTED_LABELS label1 ..] FILTER filter...
 ```
 * filter - [See Filtering](#filtering)
 
 Optional args:
 
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time-series. If this argument is not set, by default, an empty Array will be replied on the labels array position.
+* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+
+* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
 #### Return Value
 
 Array-reply, specifically:
 
 The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels and all the last sample of the time-serie.
+The returned entries are complete, that means that the name, labels and all the last sample of the time serie.
 
-The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time-series. If the `WITHLABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time-series.
+The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time series.
+
+If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time series.
 
 
 #### Complexity
