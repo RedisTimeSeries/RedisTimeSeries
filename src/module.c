@@ -893,7 +893,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     // Parse timestamp
-    api_timestamp_t timestamp = -1;
+    api_timestamp_t timestamp = 0;
     if (timestamp_location != -1) {
         long long tmp_timestamp;
         if ((RedisModule_StringToLongLong(argv[timestamp_location + 1], &tmp_timestamp) !=
@@ -924,8 +924,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // The series exists
     if (status == TSDB_OK) {
-        // If timestamp wasn't defined the default is the last timestamp
-        if (timestamp == -1) {
+        // If timestamp wasn't defined set the default to the last timestamp
+        if (timestamp_location == -1) {
             timestamp = series->lastTimestamp;
         }
 
@@ -966,9 +966,6 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (block_location == -1) {
         // If the key doesn't exist and not blocking
         return RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
-    } else if (timestamp_location == -1) {
-        // If the key doesn't exist and the timestamp is not set
-        timestamp = (api_timestamp_t)RedisModule_Milliseconds();
     }
 
     // Blocking waiting for a sample
