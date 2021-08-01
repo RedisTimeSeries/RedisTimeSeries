@@ -77,7 +77,7 @@ def test_block(self):
         
         # test block timed out
         _thread.start_new_thread( async_add, (r, "blocked_key", 103, 32, 0.2) )
-        self.assertEqual([], r.execute_command("TS.GET", "blocked_key", "BLOCK", "100"))
+        self.assertEqual([], r.execute_command("TS.GET", "blocked_key", "BLOCK", "10"))
 
         # wrong block time
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -93,9 +93,12 @@ def test_block_none_existing_key(self):
         res = r.execute_command("TS.GET", "blocked_new_key1", "BLOCK", "2000")
         self.assertEqual(b'32', res[1])
 
+        _thread.start_new_thread( async_add, (r, "blocked_new_key2", "10", 32.4, 0.5) )
+        self.assertEqual([10, b'32.4'], r.execute_command("TS.GET", "blocked_new_key2", "BLOCK", "2000"))
+
         # test block key doesn't exist with timestamp
-        _thread.start_new_thread( async_add, (r, "blocked_new_key2", 1001, 55, 0.5) )
-        self.assertEqual([1001, b'55'], r.execute_command("TS.GET", "blocked_new_key2", "TIMESTAMP", 1000, "BLOCK", "1000"))
+        _thread.start_new_thread( async_add, (r, "blocked_new_key3", 1001, 55, 0.5) )
+        self.assertEqual([1001, b'55'], r.execute_command("TS.GET", "blocked_new_key3", "TIMESTAMP", 1000, "BLOCK", "1000"))
 
 def async_madd(r, block, *events):
     time.sleep(block)
@@ -104,11 +107,11 @@ def async_madd(r, block, *events):
 def test_block_madd(self):
     with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("TS.CREATE", "blocked_madd_key")        
-        _thread.start_new_thread( async_madd, (r, 0.5, "blocked_madd_key",  10, 32, "blocked_new_key", 12, 44, "blocked_new_key", 21, 19))
-        self.assertEqual([10, b'32'], r.execute_command("TS.GET", "blocked_madd_key", "BLOCK", "1000"))
+        _thread.start_new_thread( async_madd, (r, 0.5, "blocked_madd_key",  10, 32, "blocked_madd_key", 12, 44, "blocked_madd_key", 21, 19))
+        self.assertEqual([21, b'19'], r.execute_command("TS.GET", "blocked_madd_key", "BLOCK", "1000"))
 
-        _thread.start_new_thread( async_madd, (r, 0.5, "blocked_madd_key",  30, 12, "blocked_new_key", 56, 77, "blocked_new_key", 60, 77))
-        self.assertEqual([], r.execute_command("TS.GET", "blocked_madd_key", "TIMESTAMP", 55, "BLOCK", "1000"))
+        _thread.start_new_thread( async_madd, (r, 0.5, "blocked_madd_key",  30, 12, "blocked_madd_key", 56, 77, "blocked_madd_key", 60, 77))
+        self.assertEqual([60, b'77'], r.execute_command("TS.GET", "blocked_madd_key", "TIMESTAMP", 55, "BLOCK", "1000"))
 
 def test_block_timestamp(self):
     with Env().getClusterConnectionIfNeeded() as r:
