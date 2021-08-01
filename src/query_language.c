@@ -107,8 +107,9 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         return REDISMODULE_ERR;
     }
 
-    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
+        return REDISMODULE_ERR;
     }
 
     cCtx->duplicatePolicy = DP_NONE;
@@ -118,6 +119,41 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     return REDISMODULE_OK;
+}
+
+int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options) {
+    int encoding_location = RMUtil_ArgIndex("ENCODING", argv, argc);
+    if (encoding_location > 0) {
+        if (encoding_location + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        char *encoding = RedisModule_StringPtrLen(argv[encoding_location + 1], NULL);
+        if (strcasecmp(encoding, UNCOMPRESSED_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+            return TSDB_OK;
+        } else if (strcasecmp(encoding, COMPRESSED_GORILLA_ARG_STR) == 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown ENCODING parameter");
+            return TSDB_ERROR;
+        }
+    } else {
+        // backwards compatible UNCOMPRESSED/COMPRESSED parsing
+        if (RMUtil_ArgIndex(UNCOMPRESSED_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_UNCOMPRESSED;
+        }
+        if (RMUtil_ArgIndex(COMPRESSED_GORILLA_ARG_STR, argv, argc) > 0) {
+            *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+            *options |= SERIES_OPT_COMPRESSED_GORILLA;
+        }
+    }
+    return TSDB_OK;
 }
 
 int _parseAggregationArgs(RedisModuleCtx *ctx,
@@ -314,10 +350,13 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     args.filterByValueArgs.hasValue = false;
     args.filterByTSArgs.hasValue = false;
 
+    bool startTimestampMin = false;
+    bool endTimestampMax = false;
     size_t start_len;
     const char *start = RedisModule_StringPtrLen(argv[start_index], &start_len);
     if (strcmp(start, "-") == 0) {
         args.startTimestamp = 0;
+        startTimestampMin = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index],
                                          (long long int *)&args.startTimestamp) != REDISMODULE_OK) {
@@ -330,6 +369,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
         args.endTimestamp = maxTimestamp;
+        endTimestampMax = true;
     } else {
         if (RedisModule_StringToLongLong(argv[start_index + 1],
                                          (long long int *)&args.endTimestamp) != REDISMODULE_OK) {
@@ -352,9 +392,23 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     }
 
-    if (args.alignment != DefaultAlignment && args.aggregationArgs.aggregationClass == NULL) {
-        RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
-        return TSDB_ERROR;
+    if (args.alignment != DefaultAlignment) {
+        if (args.aggregationArgs.aggregationClass == NULL) {
+            RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == StartAlignment && startTimestampMin) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: start alignment can only be used with explicit start timestamp");
+            return TSDB_ERROR;
+        }
+
+        if (args.alignment == EndAlignment && endTimestampMax) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: end alignment can only be used with explicit end timestamp");
+            return TSDB_ERROR;
+        }
     }
 
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
