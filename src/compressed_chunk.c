@@ -30,6 +30,7 @@ Chunk_t *Compressed_NewChunk(size_t size) {
 #endif
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
+    chunk->prevTimestamp = 0;
     return chunk;
 }
 
