@@ -483,7 +483,7 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     }
     s->funcs = record->funcs;
 
-    Chunk_t *chunk;
+    Chunk_t *chunk = NULL;
     for (int chunk_index = 0; chunk_index < record->chunkCount; chunk_index++) {
         chunk = record->chunks[chunk_index];
         s->totalSamples += s->funcs->GetNumOfSample(chunk);
@@ -492,6 +492,8 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
                      record->funcs->GetFirstTimestamp(chunk),
                      DICT_OP_SET);
     }
-    s->lastTimestamp = s->funcs->GetLastTimestamp(chunk);
+    if (chunk != NULL) {
+        s->lastTimestamp = s->funcs->GetLastTimestamp(chunk);
+    }
     return s;
 }
