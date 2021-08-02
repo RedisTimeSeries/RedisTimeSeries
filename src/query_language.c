@@ -634,7 +634,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 
-    if (groupby_location < filter_location) {
+    if (groupby_location > 0 && groupby_location < filter_location) {
         RTS_ReplyGeneralError(ctx, "TSDB: GROUPBY should always come after filter");
         return REDISMODULE_ERR;
     }
