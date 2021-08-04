@@ -7,7 +7,12 @@ def assert_msg(env, msg, expected_type, expected_data):
     env.assertEqual(expected_type, msg['type']) 
     env.assertEqual(expected_data, msg['data']) 
 
+# Skip all tests on cluster because for each node we will need to configure to enable keyspace and then have a dedicated
+# connection that will handle the pubsub from that specific shard since keyspace notification are not broadcasted
+# across all nodes.
+
 def test_keyspace():
+    Env().skipOnCluster()
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
@@ -46,6 +51,7 @@ def test_keyspace():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester{2}')
 
 def test_keyspace_create_rules():
+    Env().skipOnCluster()
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
@@ -81,6 +87,8 @@ def test_keyspace_create_rules():
 
 
 def test_keyspace_rules_send():
+    Env().skipOnCluster()
+
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
