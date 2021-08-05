@@ -68,12 +68,12 @@ install_gears() {
 }
 
 OP=""
-[[ "$NOP" == "1" ]] && OP=echo
+[[ $NOP == 1 ]] && OP=echo
 
 os="$($READIES/bin/platform --os)"
 arch="$($READIES/bin/platform --arch)"
 
-if [[ ! -z "$GEARS_PATH" ]]; then
+if [[ -n $GEARS_PATH ]]; then
 	platform="$($READIES/bin/platform -t)"
 else
 	dist="$($READIES/bin/platform --dist)"
@@ -81,27 +81,37 @@ else
 
 	BUILD=${BUILD:-0}
 	if [[ $BUILD != 1 ]]; then
-		if [[ "$os" != "linux" || "$arch" != "x64" ]]; then
+		if [[ $os != linux && $os != macos || $arch != x64 ]]; then
 			echo "Cannot match binary artifacts; build RedisGears"
 			BUILD=1
 		else
 			if [[ $dist == "ubuntu" ]]; then
-				if [[ $nick != "bionic" && $nick != "xenial" && $nick != "trusty" ]]; then
-					nick="bionic"
+				if [[ $nick != focal && $nick != bionic && $nick != xenial && $nick != trusty ]]; then
+					nick=bionic
 				fi
 			elif [[ $dist == debian ]]; then
 				nick=bionic
 			elif [[ $dist == centos || $dist == redhat || $dist == fedora ]]; then
 				nick=centos7
-			elif [[ ! -z "$GEARS_OSNICK" ]]; then
+			elif [[ -n $GEARS_OSNICK ]]; then
 				nick=$GEARS_OSNICK
-			else
+			elif [[ $os != macos ]]; then
 				echo "Cannot match binary artifacts; build RedisGears"
 				BUILD=1
 			fi
+
+			[[ $nick == trusty ]]  && nick=ubuntu14.04
+			[[ $nick == xenial ]]  && nick=ubuntu16.04
+			[[ $nick == bionic ]]  && nick=ubuntu18.04
+			[[ $nick == focal ]]   && nick=ubuntu20.04
+			[[ $nick == centos7 ]] && nick=rhel7
+			[[ $nick == centos8 ]] && nick=rhel8 
+			platform="${os}-${nick}-${arch}"
 		fi
 	fi
 
+	[[ $os == linux ]] && os=Linux
+	[[ $arch == x64 ]] && arch=x86_64
 	platform="${os}-${nick}-${arch}"
 
 	if [[ $BUILD == 1 ]]; then

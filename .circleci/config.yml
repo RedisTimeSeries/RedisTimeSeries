@@ -504,7 +504,8 @@ workflows:
             parameters:
               platform: [focal, bionic]
       - build-macos:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *never
       - coverage:
