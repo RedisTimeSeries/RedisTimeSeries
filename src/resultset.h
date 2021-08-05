@@ -23,7 +23,7 @@ int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
-                           RangeArgs *args,
+                           const RangeArgs *args,
                            MultiSeriesReduceOp reducerOp,
                            bool reverse);
 

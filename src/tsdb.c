@@ -815,9 +815,21 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     return sample.timestamp;
 }
 
-AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reverse) {
+AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reverse) {
+    // In case a retention is set shouldn't return chunks older than the retention
+    timestamp_t startTimestamp = args->startTimestamp;
+    if (series->retentionTime > 0) {
+        startTimestamp =
+            series->lastTimestamp > series->retentionTime
+                ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
+                : args->startTimestamp;
+        //        // if new start_ts > end_ts, there are no results to return
+        //        if (startTimestamp > args->endTimestamp) {
+        //            return RedisModule_ReplyWithArray(ctx, 0);
+        //        }
+    }
     AbstractIterator *chain =
-        SeriesIterator_New(series, args->startTimestamp, args->endTimestamp, reverse);
+        SeriesIterator_New(series, startTimestamp, args->endTimestamp, reverse);
 
     if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
         chain = (AbstractIterator *)SeriesFilterIterator_New(

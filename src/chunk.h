@@ -75,6 +75,6 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // Gears
 void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
-void Uncompressed_GearsDeserialize(Chunk_t *chunk, Gears_BufferReader *br);
+void Uncompressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br);
 
 #endif

@@ -221,9 +221,10 @@ static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
     return !(bins[bit / BINW] & BIT(localbit(bit)));
 }
 
-static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
-    return !Bins_bitoff(bins, bit);
-}
+// unused:
+// static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
+//    return !Bins_bitoff(bins, bit);
+//}
 
 // Append `dataLen` bits from `data` into `bins` at bit position `bit`
 static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen) {

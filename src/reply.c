@@ -19,7 +19,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         bool withlabels,
                         RedisModuleString *limitLabels[],
                         ushort limitLabelsSize,
-                        RangeArgs *args,
+                        const RangeArgs *args,
                         bool rev) {
     RedisModule_ReplyWithArray(ctx, 3);
     RedisModule_ReplyWithString(ctx, s->keyName);
@@ -34,22 +34,9 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, RangeArgs *args, bool reverse) {
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
     Sample sample;
     long long arraylen = 0;
-
-    // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?) or to iterator
-    if (series->retentionTime) {
-        args->startTimestamp =
-            series->lastTimestamp > series->retentionTime
-                ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
-                : args->startTimestamp;
-        // if new start_ts > end_ts, there are no results to return
-        if (args->startTimestamp > args->endTimestamp) {
-            return RedisModule_ReplyWithArray(ctx, 0);
-        }
-    }
 
     AbstractIterator *iter = SeriesQuery(series, args, reverse);
 
@@ -68,7 +55,7 @@ void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     const Series *series,
                                     RedisModuleString **limitLabels,
                                     ushort limitLabelsSize) {
-    char **limitLabelsStr = malloc(sizeof(char *) * limitLabelsSize);
+    const char **limitLabelsStr = malloc(sizeof(char *) * limitLabelsSize);
     for (int i = 0; i < limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(limitLabels[i], NULL);
     }
@@ -78,9 +65,8 @@ void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
 
 void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                                      const Series *series,
-                                     char **limitLabels,
+                                     const char **limitLabels,
                                      ushort limitLabelsSize) {
-    long count = 0;
     RedisModule_ReplyWithArray(ctx, limitLabelsSize);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;

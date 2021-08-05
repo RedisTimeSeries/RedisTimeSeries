@@ -16,6 +16,17 @@ static const char *QUERY_TOKENS[] = {
     "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
 };
 
+static int parseTimestamp(RedisModuleString *string, timestamp_t *out) {
+    long long int timestamp_raw = 0;
+    if (RedisModule_StringToLongLong(string, &timestamp_raw) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    } else if (timestamp_raw < 0) {
+        return REDISMODULE_ERR;
+    }
+    *out = timestamp_raw;
+    return REDISMODULE_OK;
+}
+
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
@@ -129,7 +140,7 @@ int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, i
             return TSDB_ERROR;
         }
 
-        char *encoding = RedisModule_StringPtrLen(argv[encoding_location + 1], NULL);
+        const char *encoding = RedisModule_StringPtrLen(argv[encoding_location + 1], NULL);
         if (strcasecmp(encoding, UNCOMPRESSED_ARG_STR) == 0) {
             *options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             *options |= SERIES_OPT_UNCOMPRESSED;
@@ -255,14 +266,14 @@ static int parseAlignmentArgs(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        char *aligment = RedisModule_StringPtrLen(argv[align_location + 1], NULL);
+        const char *aligment = RedisModule_StringPtrLen(argv[align_location + 1], NULL);
         if (strcasecmp(aligment, "start") == 0 || strcasecmp(aligment, "-") == 0) {
             *alignment = StartAlignment;
             return TSDB_OK;
         } else if (strcasecmp(aligment, "end") == 0 || strcasecmp(aligment, "+") == 0) {
             *alignment = EndAlignment;
             return TSDB_OK;
-        } else if (RedisModule_StringToLongLong(argv[align_location + 1], timestamp) == TSDB_OK) {
+        } else if (parseTimestamp(argv[align_location + 1], timestamp) == REDISMODULE_OK) {
             *alignment = TimestampAlignment;
             return TSDB_OK;
         } else {
@@ -320,7 +331,7 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
 
         while (offset + 1 < argc && index < MAX_TS_VALUES_FILTER) {
             timestamp_t val;
-            if (RedisModule_StringToLongLong(argv[offset + 1], &val) == REDISMODULE_OK) {
+            if (parseTimestamp(argv[offset + 1], &val) == REDISMODULE_OK) {
                 args->values[index] = val;
                 index++;
                 offset++;
@@ -358,8 +369,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         args.startTimestamp = 0;
         startTimestampMin = true;
     } else {
-        if (RedisModule_StringToLongLong(argv[start_index],
-                                         (long long int *)&args.startTimestamp) != REDISMODULE_OK) {
+        if (parseTimestamp(argv[start_index], &args.startTimestamp) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: wrong fromTimestamp");
             return REDISMODULE_ERR;
         }
@@ -371,8 +381,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         args.endTimestamp = maxTimestamp;
         endTimestampMax = true;
     } else {
-        if (RedisModule_StringToLongLong(argv[start_index + 1],
-                                         (long long int *)&args.endTimestamp) != REDISMODULE_OK) {
+        if (parseTimestamp(argv[start_index + 1], &args.endTimestamp) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
             return REDISMODULE_ERR;
         }

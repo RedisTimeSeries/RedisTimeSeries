@@ -34,7 +34,7 @@ void GroupList_Free(TS_GroupList *g);
 
 void GroupList_ApplyReducer(TS_GroupList *group,
                             char *labelKey,
-                            RangeArgs *args,
+                            const RangeArgs *args,
                             MultiSeriesReduceOp reducerOp,
                             bool reverse);
 
@@ -43,7 +43,7 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               bool withlabels,
                               RedisModuleString *limitLabels[],
                               ushort limitLabelsSize,
-                              RangeArgs *args,
+                              const RangeArgs *args,
                               bool reverse);
 
 void FreeTempSeries(Series *s) {
@@ -99,7 +99,7 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               bool withlabels,
                               RedisModuleString *limitLabels[],
                               ushort limitLabelsSize,
-                              RangeArgs *args,
+                              const RangeArgs *args,
                               bool rev) {
     for (int i = 0; i < group->count; i++) {
         ReplySeriesArrayPos(
@@ -152,7 +152,7 @@ int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
 }
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
-                           RangeArgs *args,
+                           const RangeArgs *args,
                            MultiSeriesReduceOp reducerOp,
                            bool reverse) {
     // ^ seek the smallest element of the radix tree.
@@ -167,7 +167,7 @@ int ResultSet_ApplyReducer(TS_ResultSet *r,
 }
 void GroupList_ApplyReducer(TS_GroupList *group,
                             char *labelKey,
-                            RangeArgs *args,
+                            const RangeArgs *args,
                             MultiSeriesReduceOp reducerOp,
                             bool reverse) {
     Label *labels = createReducedSeriesLabels(labelKey, group->labelValue, reducerOp);

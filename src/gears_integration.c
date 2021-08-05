@@ -155,10 +155,9 @@ Record *ListSeriesLabels(const Series *series) {
 }
 
 Record *ListSeriesLabelsWithLimit(const Series *series,
-                                  char **limitLabels,
+                                  const char **limitLabels,
                                   RedisModuleString **rLimitLabels,
                                   ushort limitLabelsSize) {
-    long count = 0;
     Record *r = RedisGears_ListRecordCreate(series->labelsCount);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;
