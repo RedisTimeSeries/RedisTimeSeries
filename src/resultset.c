@@ -130,7 +130,7 @@ Label *createReducedSeriesLabels(char *labelKey, char *labelValue, MultiSeriesRe
     labels[1].key = RedisModule_CreateStringPrintf(NULL, "__reducer__");
     labels[1].value = RedisModule_CreateString(NULL, reducer_str, strlen(reducer_str));
     labels[2].key = RedisModule_CreateStringPrintf(NULL, "__source__");
-    labels[2].value = RedisModule_CreateStringPrintf(NULL, "");
+    labels[2].value = RedisModule_CreateString(NULL, "", 0);
     return labels;
 }
 

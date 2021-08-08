@@ -226,7 +226,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             continue;
         }
@@ -270,7 +270,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             continue;
         }

@@ -8,6 +8,7 @@
 #include "consts.h"
 #include "endianconv.h"
 
+#include <inttypes.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
@@ -83,7 +84,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             double val = RedisModule_LoadDouble(io);
             int result = SeriesAddSample(series, ts, val);
             if (result != TSDB_OK) {
-                RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+                RedisModule_LogIOError(
+                    io, "warning", "couldn't load sample: %" PRIu64 " %lf", ts, val);
             }
         }
     } else {

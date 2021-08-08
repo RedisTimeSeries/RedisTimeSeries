@@ -44,7 +44,7 @@ void ResultSet_Free(TS_ResultSet *r);
 int MultiSerieReduce(Series *dest,
                      Series *source,
                      MultiSeriesReduceOp op,
-                     RangeArgs *args,
+                     const RangeArgs *args,
                      bool reverse);
 
 #endif // REDISTIMESERIES_RESULTSET_H

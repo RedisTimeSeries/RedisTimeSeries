@@ -13,6 +13,7 @@
 #include "module.h"
 #include "series_iterator.h"
 
+#include <inttypes.h>
 #include <math.h>
 #include "rmutil/alloc.h"
 #include "rmutil/logging.h"
@@ -407,7 +408,7 @@ size_t SeriesGetNumSamples(const Series *series) {
 int MultiSerieReduce(Series *dest,
                      Series *source,
                      MultiSeriesReduceOp op,
-                     RangeArgs *args,
+                     const RangeArgs *args,
                      bool reverse) {
     Sample sample;
     AbstractIterator *iterator = SeriesQuery(source, args, reverse);
@@ -648,13 +649,19 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
     for (i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
-        RedisModuleString *destKey = RedisModule_CreateStringPrintf(
-            ctx, "%s_%s_%ld", RedisModule_StringPtrLen(keyName, &len), aggString, rule->timeBucket);
+        RedisModuleString *destKey =
+            RedisModule_CreateStringPrintf(ctx,
+                                           "%s_%s_%" PRIu64,
+                                           RedisModule_StringPtrLen(keyName, &len),
+                                           aggString,
+                                           rule->timeBucket);
         RedisModule_RetainString(ctx, destKey);
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
-            RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
+            RM_LOG_WARNING(ctx,
+                           "Cannot create compacted key, key '%s' already exists",
+                           RedisModule_StringPtrLen(destKey, NULL));
             RedisModule_FreeString(ctx, destKey);
             RedisModule_CloseKey(compactedKey);
             continue;
@@ -674,7 +681,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             RedisModule_CreateString(NULL, aggString, strlen(aggString));
         compactedLabels[labelsCount + 1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
         compactedLabels[labelsCount + 1].value =
-            RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
+            RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->timeBucket);
 
         int rules_options = TSGlobalConfig.options;
         rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
