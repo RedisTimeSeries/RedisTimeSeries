@@ -165,8 +165,8 @@ def test_downsampling_current():
                 assert r.execute_command('TS.ADD', key, 5, 2) == 5
                 assert r.execute_command('TS.ADD', key, 10, 10) == 10
 
-                expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
-                actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
                 assert expected_result[0] == actual_result[0]
 
                 # present add
@@ -175,8 +175,8 @@ def test_downsampling_current():
                 assert r.execute_command('TS.ADD', key, 14, 14) == 14
                 assert r.execute_command('TS.ADD', key, 20, 20) == 20
 
-                expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
-                actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
                 assert expected_result[0:1] == actual_result[0:1]
 
                 # present + past add
@@ -186,8 +186,8 @@ def test_downsampling_current():
                 assert r.execute_command('TS.ADD', key, 23, 25) == 23
                 assert r.execute_command('TS.ADD', key, 30, 30) == 30
 
-                expected_result = r.execute_command('TS.RANGE', key, 0, -1, 'aggregation', agg_type, 10)
-                actual_result = r.execute_command('TS.RANGE', agg_key, 0, -1)
+                expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
                 assert expected_result[0:3] == actual_result[0:3]
                 assert 3 == _get_ts_info(r, agg_key).total_samples
                 assert 11 == _get_ts_info(r, key).total_samples

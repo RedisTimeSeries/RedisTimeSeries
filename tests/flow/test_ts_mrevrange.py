@@ -31,12 +31,12 @@ def test_mrevrange():
                                   [[1511885958, b'25'], [1511885957, b'25'], [1511885956, b'25'], [1511885955, b'25'],
                                    [1511885954, b'25']]]]
 
-        agg_result = r.execute_command('TS.mrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
-        rev_agg_result = r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+        agg_result = r.execute_command('TS.mrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+        rev_agg_result = r.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
         rev_agg_result.reverse()
         assert rev_agg_result == agg_result
         last_results = list(agg_result)
         last_results.reverse()
         last_results = last_results[0:3]
-        assert r.execute_command('TS.mrevrange', 0, -1, 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][
+        assert r.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][
                    2] == last_results

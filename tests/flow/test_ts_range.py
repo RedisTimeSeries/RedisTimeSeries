@@ -22,34 +22,34 @@ def test_range_query():
         assert expected_result == rev_result
 
         # test out of range returns empty list
-        assert [] == r.execute_command('TS.range', 'tester', int(start_ts * 2), -1)
+        assert [] == r.execute_command('TS.range', 'tester', int(start_ts * 2), '+')
         assert [] == r.execute_command('TS.range', 'tester', int(start_ts / 3), int(start_ts / 2))
 
-        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts * 2), -1)
+        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts * 2), '+')
         assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2))
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 'string', -1)
+            assert r.execute_command('TS.RANGE', 'tester', 'string', '+')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, 'string')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'nonexist', 0 -1)
+            assert r.execute_command('TS.RANGE', 'nonexist', 0, '+')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, '', 'aggregation')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', '', 'aggregation')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'count', 'number')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count', 'number')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'count')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count', 'number')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', 'number')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'count')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', '')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', 'not_aggregation_function')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'not_aggregation_function')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1, 'aggregation', '')
+            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -195,15 +195,15 @@ def test_range_count():
         r.execute_command('TS.CREATE', 'tester1')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-        full_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+        full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
         assert len(full_results) == samples_count
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, b'COUNT', 10)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10)
         assert count_results == full_results[:10]
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
         assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, b'AGGREGATION', 'COUNT', 3)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == math.ceil(samples_count / 3.0)
 
 
@@ -296,7 +296,7 @@ def test_issue358():
                 line = fp.readline()
                 if line != '':
                     r.execute_command(*line.split())
-        range_res = r.execute_command('ts.range', 'issue358', 1582848000, -1)[0][1]
+        range_res = r.execute_command('ts.range', 'issue358', 1582848000, '+')[0][1]
         get_res = r.execute_command('ts.get', 'issue358')[1]
         assert range_res == get_res
 
@@ -309,16 +309,16 @@ def test_filter_by():
                                  'brown', 'color', 'pink')
         _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-        res = r.execute_command('ts.range', 'tester', start_ts, -1, 'FILTER_BY_VALUE', 40, 52)
+        res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
 
         assert len(res) == 13
         assert  [int(sample[1]) for sample in res] == list(range(40, 53))
 
-        res = r.execute_command('ts.range', 'tester', start_ts, -1,
+        res = r.execute_command('ts.range', 'tester', start_ts, '+',
                           'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1025, start_ts+1029)
         env.assertEqual(res, [[start_ts+1021, b'1021'], [start_ts+1022, b'1022'], [start_ts+1025, b'1025'], [start_ts+1029, b'1029']])
 
-        res = r.execute_command('ts.range', 'tester', start_ts, -1,
+        res = r.execute_command('ts.range', 'tester', start_ts, '+',
                                 'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
                                 'FILTER_BY_VALUE', 1022, 1025)
         env.assertEqual(res, [[start_ts+1022, b'1022'], [start_ts+1023, b'1023'], [start_ts+1025, b'1025']])
