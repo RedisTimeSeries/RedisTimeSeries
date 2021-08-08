@@ -33,6 +33,10 @@ def test_range_query():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, 'string')
         with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', 0, -1)
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.RANGE', 'tester', -1, 1000)
+        with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'nonexist', 0, '+')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 0, '+', '', 'aggregation')
