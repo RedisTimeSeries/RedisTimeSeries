@@ -141,7 +141,7 @@ if [[ $VALGRIND == 1 ]]; then
 fi
 
 if [[ -n $TEST ]]; then
-	RLTEST_ARGS+=" --test $TEST -s"
+	RLTEST_ARGS+=" --test $TEST"
 	export BB=${BB:-1}
 fi
 
@@ -173,8 +173,8 @@ cd $ROOT/tests/flow
 setup_redis_server
 
 [[ $GEN == 1 ]] && run_tests
-[[ $CLUSTER == 1 ]] && RLTEST_ARGS+=" --env oss-cluster --shards-count 2" run_tests "oss-cluster"
-[[ $SLAVES == 1 ]] && RLTEST_ARGS+=" --use-slaves" run_tests "with slaves"
-[[ $AOF == 1 ]] && RLTEST_ARGS+=" --use-aof" run_tests "with AOF"
+[[ $CLUSTER == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count 2" run_tests "oss-cluster"
+[[ $SLAVES == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves"
+[[ $AOF == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF"
 
 exit 0

@@ -119,14 +119,15 @@ def test_keyspace_rules_send():
         assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
-        r.execute_command('ts.add', 'tester_src{2}', 101, 1.1)
+        for i in range(1000):
+            r.execute_command('ts.add', 'tester_src{2}', 101 + i, 1.1)
 
-        # First getting the event from the dest on the previous window 
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
+            # First getting the event from the dest on the previous window
+            assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add:dest')
+            assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_dest{2}')
 
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
-        assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
+            assert_msg(env, pubsub.get_message(), 'pmessage', b'ts.add')
+            assert_msg(env, pubsub.get_message(), 'pmessage', b'tester_src{2}')
 
         r.execute_command('ts.incrby', 'tester_src{2}', 3)
 
