@@ -830,10 +830,6 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
             series->lastTimestamp > series->retentionTime
                 ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
                 : args->startTimestamp;
-        //        // if new start_ts > end_ts, there are no results to return
-        //        if (startTimestamp > args->endTimestamp) {
-        //            return RedisModule_ReplyWithArray(ctx, 0);
-        //        }
     }
     AbstractIterator *chain =
         SeriesIterator_New(series, startTimestamp, args->endTimestamp, reverse);
