@@ -205,7 +205,7 @@ def test_multilabel_filter():
         actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
         assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
 
-        actual_result = r.execute_command('TS.mrange', 0, -1, 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
+        actual_result = r.execute_command('TS.mrange', 0, '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
                                           'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
 

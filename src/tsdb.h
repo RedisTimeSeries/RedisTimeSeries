@@ -67,7 +67,7 @@ int SilentGetSeries(RedisModuleCtx *ctx,
                     Series **series,
                     int mode);
 
-AbstractIterator *SeriesQuery(Series *series, RangeArgs *args, bool reserve);
+AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);

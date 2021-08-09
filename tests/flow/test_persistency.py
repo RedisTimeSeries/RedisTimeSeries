@@ -113,7 +113,7 @@ def test_dump_trimmed_series(self):
         r.execute_command('ts.create', 'test_key', 'RETENTION', 3000, 'CHUNK_SIZE', 160, 'UNCOMPRESSED')
         for i in range(1, samples):
             r.execute_command('ts.add', 'test_key', start_ts + i * 1000, i)
-        assert r.execute_command('ts.range', 'test_key', 0, -1) == \
+        assert r.execute_command('ts.range', 'test_key', '-', '+') == \
                [[1589461421983, b'116'], [1589461422983, b'117'], [1589461423983, b'118'], [1589461424983, b'119']]
         before = r.execute_command('ts.range', 'test_key', '-', '+')
         dump = r.execute_command('dump', 'test_key')
@@ -128,7 +128,7 @@ def test_empty_series():
         agg_list = ['avg', 'sum', 'min', 'max', 'range', 'first', 'last',
                     'std.p', 'std.s', 'var.p', 'var.s']
         for agg in agg_list:
-            assert [] == r.execute_command('TS.range', 'tester', 0, -1, 'aggregation', agg, 1000)
+            assert [] == r.execute_command('TS.range', 'tester', '-', '+', 'aggregation', agg, 1000)
         assert r.execute_command('DUMP', 'tester')
 
 def test_533_dump_rules():

@@ -237,7 +237,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     replyResultSet(ctx,
                    resultset,
                    args->withLabels,
-                   args->limitLabels,
+                   (RedisModuleString **)args->limitLabels,
                    args->numLimitLabels,
                    &minimizedArgs,
                    args->reverse);
@@ -267,8 +267,9 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
 
         if (!status) {
             RedisModule_Log(ctx,
+                            "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
@@ -278,7 +279,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
         ReplySeriesArrayPos(ctx,
                             series,
                             args->withLabels,
-                            args->limitLabels,
+                            (RedisModuleString **)args->limitLabels,
                             args->numLimitLabels,
                             &args->rangeArgs,
                             args->reverse);
@@ -880,7 +881,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             continue;
         }

@@ -23,7 +23,7 @@ int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
-                           RangeArgs *args,
+                           const RangeArgs *args,
                            MultiSeriesReduceOp reducerOp,
                            bool reverse);
 
@@ -44,7 +44,7 @@ void ResultSet_Free(TS_ResultSet *r);
 int MultiSerieReduce(Series *dest,
                      Series *source,
                      MultiSeriesReduceOp op,
-                     RangeArgs *args,
+                     const RangeArgs *args,
                      bool reverse);
 
 #endif // REDISTIMESERIES_RESULTSET_H

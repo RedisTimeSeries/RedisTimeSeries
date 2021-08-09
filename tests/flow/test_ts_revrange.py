@@ -10,8 +10,8 @@ def test_revrange():
         r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, "+")
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, "+")
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
@@ -20,8 +20,8 @@ def test_revrange():
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
-        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
@@ -30,8 +30,8 @@ def test_revrange():
         r.execute_command('TS.CREATE', 'tester1')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1)
+        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+')
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
@@ -40,13 +40,13 @@ def test_revrange():
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
-        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'AGGREGATION', 'sum', 50)
+        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev.reverse()
         assert actual_results == actual_results_rev
 
-        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, -1, 'COUNT', 5)
-        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, -1)
+        actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'COUNT', 5)
+        actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
         actual_results.reverse()
         assert len(actual_results_rev) == 5
         assert actual_results[0:5] == actual_results_rev[0:5]

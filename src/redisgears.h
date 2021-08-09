@@ -19,6 +19,7 @@
 #elif defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpedantic"
+#pragma clang diagnostic ignored "-Wtypedef-redefinition"
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif
 

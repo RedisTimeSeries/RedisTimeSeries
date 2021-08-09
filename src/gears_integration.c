@@ -155,10 +155,9 @@ Record *ListSeriesLabels(const Series *series) {
 }
 
 Record *ListSeriesLabelsWithLimit(const Series *series,
-                                  char **limitLabels,
+                                  const char *limitLabels[],
                                   RedisModuleString **rLimitLabels,
                                   ushort limitLabelsSize) {
-    long count = 0;
     Record *r = RedisGears_ListRecordCreate(series->labelsCount);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;
@@ -227,7 +226,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             continue;
         }
@@ -271,7 +270,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            currentKeyLen,
+                            (int)currentKeyLen,
                             currentKey);
             continue;
         }
