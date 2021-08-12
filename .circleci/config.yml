@@ -74,7 +74,7 @@ commands:
       - run:
           name: Install Redis
           command: |
-            bash -l -c "python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force '<<parameters.getredis_params>>'"
+            bash -l -c "python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>"
             redis-server --version
 
   save-tests-logs:
