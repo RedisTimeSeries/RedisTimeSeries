@@ -418,7 +418,7 @@ static int internalAdd(RedisModuleCtx *ctx,
         if (SeriesUpsertSample(series, timestamp, value, dp_override) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx,
                                   "TSDB: Error at upsert, update is not supported when "
-                                  "DUPLICATE_POLICY in set to BLOCK mode");
+                                  "DUPLICATE_POLICY is set to BLOCK mode");
             return REDISMODULE_ERR;
         }
     } else {
