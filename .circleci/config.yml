@@ -373,7 +373,7 @@ jobs:
             cd "workspace/artifacts/<<parameters.location>>"
             du -ah --apparent-size *
             if [[ -z "<<parameters.location>>" ]]; then
-                path="/"
+                path=""
             else
                 path="<<parameters.location>>/"
             fi
