@@ -140,9 +140,9 @@ TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOM
 * timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
 * value - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
-These arguments are optional because they can be set by TS.CREATE:
+The following arguments are optional because they can be set by TS.CREATE:
 
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
+ * RETENTION - Maximum age for samples compared to last event time (in milliseconds). Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * ENCODING - Specify the series samples encoding format.
@@ -150,9 +150,8 @@ These arguments are optional because they can be set by TS.CREATE:
     * UNCOMPRESSED: keep the raw samples in memory.
  * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4096.
  * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
- * labels - Set of label-value pairs that represent metadata labels of the key
+ * LABELS - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
 
-If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
 #### Examples
 ```sql
