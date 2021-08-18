@@ -1,5 +1,6 @@
 from utils import Env
 from test_helper_classes import _insert_data
+from includes import *
 
 
 def test_mrevrange():
@@ -13,23 +14,23 @@ def test_mrevrange():
         _insert_data(r, 'tester2', start_ts, samples_count, 15)
         _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
+        expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         expected_result.reverse()
         actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
-        assert [[b'tester1', [], expected_result]] == actual_result
+        assert [['tester1', [], expected_result]] == actual_result
 
         actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'COUNT', '5', 'FILTER',
                                           'generation=x')
         actual_result.sort(key=lambda x:x[0])
-        assert actual_result == [[b'tester1', [],
-                                  [[1511885958, b'5'], [1511885957, b'5'], [1511885956, b'5'], [1511885955, b'5'],
-                                   [1511885954, b'5']]],
-                                 [b'tester2', [],
-                                  [[1511885958, b'15'], [1511885957, b'15'], [1511885956, b'15'], [1511885955, b'15'],
-                                   [1511885954, b'15']]],
-                                 [b'tester3', [],
-                                  [[1511885958, b'25'], [1511885957, b'25'], [1511885956, b'25'], [1511885955, b'25'],
-                                   [1511885954, b'25']]]]
+        assert actual_result == [['tester1', [],
+                                  [[1511885958, '5'], [1511885957, '5'], [1511885956, '5'], [1511885955, '5'],
+                                   [1511885954, '5']]],
+                                 ['tester2', [],
+                                  [[1511885958, '15'], [1511885957, '15'], [1511885956, '15'], [1511885955, '15'],
+                                   [1511885954, '15']]],
+                                 ['tester3', [],
+                                  [[1511885958, '25'], [1511885957, '25'], [1511885956, '25'], [1511885955, '25'],
+                                   [1511885954, '25']]]]
 
         agg_result = r.execute_command('TS.mrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
         rev_agg_result = r.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]

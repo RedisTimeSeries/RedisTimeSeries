@@ -4,6 +4,7 @@ import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info
+from includes import *
 
 
 def test_ooo(self):
@@ -27,15 +28,15 @@ def test_ooo(self):
                 assert ooo_res[i] == no_ooo_res[i]
 
             ooo_res = r.execute_command('ts.range', 'ooo', 1000, 1000)
-            assert ooo_res[0] == [1000, b'1000']
+            assert ooo_res[0] == [1000, '1000']
             last_sample = r.execute_command('ts.get', 'ooo')
             r.execute_command('ts.add', 'ooo', 1000, 42)
             ooo_res = r.execute_command('ts.range', 'ooo', 1000, 1000)
-            assert ooo_res[0] == [1000, b'42']
+            assert ooo_res[0] == [1000, '42']
             assert last_sample == r.execute_command('ts.get', 'ooo')
 
             r.execute_command('ts.add', 'ooo', last_sample[0], 42)
-            assert [last_sample[0], b'42'] == r.execute_command('ts.get', 'ooo')
+            assert [last_sample[0], '42'] == r.execute_command('ts.get', 'ooo')
 
             r.execute_command('DEL', 'no_ooo')
             r.execute_command('DEL', 'ooo')

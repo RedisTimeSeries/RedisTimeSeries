@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[[ $VERBOSE == 1 ]] && set -x
+# [[ $VERBOSE == 1 ]] && set -x
 [[ $IGNERR == 1 ]] || set -e
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -24,9 +24,9 @@ help() {
 		SLAVES=0|1          Tests with --test-slaves
 		CLUSTER=0|1         Tests with --env oss-cluster
 
-        REDIS_SERVER=path   Location of redis-server
+		REDIS_SERVER=path   Location of redis-server
 		GEARS=0|1           Tests with RedisGears
-        GEARS_PATH=path     Path to redisgears.so
+		GEARS_PATH=path     Path to redisgears.so
 
 		TEST=test           Run specific test (e.g. test.py:test_name)
 		VALGRIND|VG=1       Run with Valgrind
@@ -107,7 +107,8 @@ EOF
 		echo "RLTest configuration:"
 		cat $config
 	fi
-	$OP python3 -m RLTest @$config
+	PYTHONPATH=/w/rafi_1/RLTest:/w/rafi_1/redis-py-3.5.3:/w/rafi_1/redis-py-cluster:$PYTHONPATH $OP python3 -m RLTest @$config
+	# PYTHONPATH=/w/rafi_1/RLTest:$PYTHONPATH $OP python3 -m RLTest @$config
 	[[ $KEEP != 1 ]] && rm -f $config
 }
 
@@ -177,4 +178,7 @@ setup_redis_server
 [[ $SLAVES == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves"
 [[ $AOF == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF"
 
+# [[ $RLEC == 1 ]] && RLTEST_ARGS+=" --env cluster_existing-env --existing-env-addr ranch1:12000 --cluster_address 172.17.0.2 --shards_ports 1:25144,2:26549,3:23188 --cluster_credentials a@a.com:a" run_tests "rlec"
+
 exit 0
+

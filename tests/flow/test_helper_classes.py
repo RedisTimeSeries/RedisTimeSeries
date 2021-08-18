@@ -1,6 +1,9 @@
 import builtins
 import math
 
+from includes import *
+
+
 ALLOWED_ERROR = 0.001
 SAMPLE_SIZE = 16
 
@@ -172,18 +175,18 @@ class TSInfo(object):
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
-        if b'rules' in response: self.rules = response[b'rules']
-        if b'sourceKey' in response: self.sourceKey = response[b'sourceKey']
-        if b'chunkCount' in response: self.chunk_count = response[b'chunkCount']
-        if b'labels' in response: self.labels = list_to_dict(response[b'labels'])
-        if b'memoryUsage' in response: self.memory_usage = response[b'memoryUsage']
-        if b'totalSamples' in response: self.total_samples = response[b'totalSamples']
-        if b'retentionTime' in response: self.retention_msecs = response[b'retentionTime']
-        if b'lastTimestamp' in response: self.last_time_stamp = response[b'lastTimestamp']
-        if b'firstTimestamp' in response: self.first_time_stamp = response[b'firstTimestamp']
-        if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
-        if b'chunkType' in response: self.chunk_type = response[b'chunkType']
-        if b'Chunks' in response: self.chunks = response[b'Chunks']
+        if 'rules' in response: self.rules = response['rules']
+        if 'sourceKey' in response: self.sourceKey = response['sourceKey']
+        if 'chunkCount' in response: self.chunk_count = response['chunkCount']
+        if 'labels' in response: self.labels = list_to_dict(response['labels'])
+        if 'memoryUsage' in response: self.memory_usage = response['memoryUsage']
+        if 'totalSamples' in response: self.total_samples = response['totalSamples']
+        if 'retentionTime' in response: self.retention_msecs = response['retentionTime']
+        if 'lastTimestamp' in response: self.last_time_stamp = response['lastTimestamp']
+        if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
+        if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
+        if 'chunkType' in response: self.chunk_type = response['chunkType']
+        if 'Chunks' in response: self.chunks = response['Chunks']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):

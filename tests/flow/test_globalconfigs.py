@@ -1,7 +1,7 @@
 import pytest
 from RLTest import Env
 from test_helper_classes import TSInfo
-
+from includes import *
 
 class testModuleLoadTimeArguments(object):
     def __init__(self):
@@ -48,7 +48,7 @@ def test_uncompressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'uncompressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
 
 def test_compressed():
@@ -57,11 +57,11 @@ def test_compressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
 
 def test_compressed_debug():
     Env().skipOnCluster()
-    
+
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -69,7 +69,7 @@ def test_compressed_debug():
         r.execute_command('TS.ADD', 't1', '3000', 1.0)
         r.execute_command('TS.ADD', 't1', '5000', 1.0)
 
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [['startTimestamp', 0, 'endTimestamp', 3000, 'samples', 2, 'size', 4096, 'bytesPerSample', '2048']]
 
 class testGlobalConfigTests():
 
@@ -83,17 +83,17 @@ class testGlobalConfigTests():
                                      'brown color pink') == 1980
             keys = r.execute_command('keys *')
             keys = sorted(keys)
-            assert keys == [b'tester', b'tester_AVG_259200000', b'tester_AVG_7200000', b'tester_MAX_1',
-                            b'tester_MIN_10000']
+            assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
+                            'tester_MIN_10000']
             r.execute_command('TS.ADD tester 1981 1')
 
             r.execute_command('set exist_MAX_1 foo')
             r.execute_command('TS.ADD exist 1980 0')
             keys = r.execute_command('keys *')
             keys = sorted(keys)
-            assert keys == [b'exist', b'exist_AVG_259200000', b'exist_AVG_7200000', b'exist_MAX_1', b'exist_MIN_10000',
-                            b'tester', b'tester_AVG_259200000', b'tester_AVG_7200000', b'tester_MAX_1',
-                            b'tester_MIN_10000']
+            assert keys == ['exist', 'exist_AVG_259200000', 'exist_AVG_7200000', 'exist_MAX_1', 'exist_MIN_10000',
+                            'tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
+                            'tester_MIN_10000']
             r.execute_command('TS.ADD exist 1981 0')
 
     def test_big_compressed_chunk_reverserange(self):
@@ -104,11 +104,11 @@ class testGlobalConfigTests():
             samples = []
             for i in range(4099):
                 last_ts = start_ts + i * 60000
-                samples.append([last_ts, '1'.encode('ascii')])
+                samples.append([last_ts, '1'])
                 r.execute_command('TS.ADD', 'tester', last_ts, 1)
             rev_samples = list(samples)
             rev_samples.reverse()
-            assert r.execute_command('TS.GET', 'tester') == [last_ts, b'1']
+            assert r.execute_command('TS.GET', 'tester') == [last_ts, '1']
             assert r.execute_command('TS.RANGE', 'tester', '-', '+') == samples
             assert r.execute_command('TS.REVRANGE', 'tester', '-', '+') == rev_samples
 

@@ -1,6 +1,7 @@
 import pytest
 import redis
 from utils import Env
+from includes import *
 
 
 def test_label_index():
@@ -14,25 +15,25 @@ def test_label_index():
 
         def assert_data(query, expected_data):
             assert sorted(expected_data) == sorted(r.execute_command(*query))
-        assert_data(['TS.QUERYINDEX', 'generation=x'], [b'tester1', b'tester2', b'tester3'])
-        assert_data(['TS.QUERYINDEX', 'generation=x', 'x='], [b'tester1', b'tester2'])
-        assert_data(['TS.QUERYINDEX', 'generation=x', 'x=2'], [b'tester3'])
-        assert_data(['TS.QUERYINDEX', 'x=2'], [b'tester3', b'tester4'])
-        assert_data(['TS.QUERYINDEX', 'generation=x', 'class!=middle', 'x='], [b'tester2'])
+        assert_data(['TS.QUERYINDEX', 'generation=x'], ['tester1', 'tester2', 'tester3'])
+        assert_data(['TS.QUERYINDEX', 'generation=x', 'x='], ['tester1', 'tester2'])
+        assert_data(['TS.QUERYINDEX', 'generation=x', 'x=2'], ['tester3'])
+        assert_data(['TS.QUERYINDEX', 'x=2'], ['tester3', 'tester4'])
+        assert_data(['TS.QUERYINDEX', 'generation=x', 'class!=middle', 'x='], ['tester2'])
         assert_data(['TS.QUERYINDEX', 'generation=x', 'class=top', 'x='], [])
-        assert_data(['TS.QUERYINDEX', 'generation=x', 'class=top', 'z='], [b'tester3'])
-        assert_data(['TS.QUERYINDEX',  'z=', 'x=2'], [b'tester3'])
+        assert_data(['TS.QUERYINDEX', 'generation=x', 'class=top', 'z='], ['tester3'])
+        assert_data(['TS.QUERYINDEX',  'z=', 'x=2'], ['tester3'])
 
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.QUERYINDEX', 'z=', 'x!=2')
 
         # Test filter list
-        assert_data(['TS.QUERYINDEX', 'generation=x', 'class=(middle,junior)'], [b'tester1', b'tester2'])
+        assert_data(['TS.QUERYINDEX', 'generation=x', 'class=(middle,junior)'], ['tester1', 'tester2'])
         assert_data(['TS.QUERYINDEX', 'generation=x', 'class=(a,b,c)'], [])
         assert sorted(r.execute_command('TS.QUERYINDEX', 'generation=x')) == sorted(r.execute_command('TS.QUERYINDEX',
                                                                                        'generation=(x)'))
         assert_data(['TS.QUERYINDEX', 'generation=x', 'class=()'], [])
-        assert_data(['TS.QUERYINDEX', 'class=(middle,junior,top)', 'name!=(bob,rudy,fabi)'], [b'tester4'])
+        assert_data(['TS.QUERYINDEX', 'class=(middle,junior,top)', 'name!=(bob,rudy,fabi)'], ['tester4'])
         with pytest.raises(redis.ResponseError):
             assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(')
         with pytest.raises(redis.ResponseError):

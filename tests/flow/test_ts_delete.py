@@ -2,6 +2,8 @@ from RLTest import Env
 import pytest
 import redis
 from test_helper_classes import _get_ts_info
+from includes import *
+
 
 def test_ts_del_uncompressed():
     # total samples = 101
@@ -15,7 +17,7 @@ def test_ts_del_uncompressed():
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         i = 0
         for sample in res:
-            assert sample == [i, '1'.encode('ascii')]
+            assert sample == [i, '1']
             i += 1
         r.execute_command('ts.del', 'test_key', 0, 100)
         res = r.execute_command('ts.range', 'test_key', 0, 100)
@@ -33,7 +35,7 @@ def test_ts_del_uncompressed_in_range():
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         i = 0
         for sample in res:
-            assert sample == [i, '1'.encode('ascii')]
+            assert sample == [i, '1']
             i += 1
         # delete 11 samples
         assert 11 == r.execute_command('ts.del', 'test_key', 50, 60)
@@ -52,7 +54,7 @@ def test_ts_del_compressed():
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         i = 0
         for sample in res:
-            assert sample == [i, '1'.encode('ascii')]
+            assert sample == [i, '1']
             i += 1
         assert sample_len == r.execute_command('ts.del', 'test_key', 0, 100)
         res = r.execute_command('ts.range', 'test_key', 0, 100)
@@ -72,7 +74,7 @@ def test_ts_del_multi_chunk():
             res = r.execute_command('ts.range', 'test_key', 0, sample_len - 1)
             i = 1
             for sample in res:
-                e.assertEqual(sample, [i, '1'.encode('ascii')])
+                e.assertEqual(sample, [i, '1'])
                 i += 1
             assert sample_len - 1 == r.execute_command('ts.del', 'test_key', 0, sample_len - 1)
             res = r.execute_command('ts.range', 'test_key', 0, sample_len)
@@ -92,7 +94,7 @@ def test_ts_del_compressed_out_range():
         res = r.execute_command('ts.range', 'test_key', 0 + 100, sample_len + 100 - 1)
         i = 0
         for sample in res:
-            assert sample == [i + 100, '1'.encode('ascii')]
+            assert sample == [i + 100, '1']
             i += 1
         assert sample_len == r.execute_command('ts.del', 'test_key', 0, 500)
         res = r.execute_command('ts.range', 'test_key', 0 + 100, sample_len + 100 - 1)
@@ -111,11 +113,11 @@ def test_bad_del(self):
             r.execute_command("ts.del", "test_key", 100)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command("ts.del", "test_key", 100, '200a')            
+            r.execute_command("ts.del", "test_key", 100, '200a')
 
         assert r.execute_command("ts.del", "test_key", 200, 100) == 0
 
-        assert r.execute_command("ts.del", "test_key", 100, 300) == 2             
+        assert r.execute_command("ts.del", "test_key", 100, 300) == 2
 
         self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
         with pytest.raises(redis.ResponseError) as excinfo:

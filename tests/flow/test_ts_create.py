@@ -5,6 +5,7 @@ import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo
+from includes import *
 
 
 def test_create_params():
@@ -29,20 +30,20 @@ def test_create_retention():
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
 
         assert r.execute_command('TS.ADD', 'tester', 500, 10)
-        expected_result = [[500, b'10']]
+        expected_result = [[500, '10']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         # check for (lastTimestamp - retension < 0)
         assert _get_ts_info(r, 'tester').total_samples == 1
 
         assert r.execute_command('TS.ADD', 'tester', 1001, 20)
-        expected_result = [[500, b'10'], [1001, b'20']]
+        expected_result = [[500, '10'], [1001, '20']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         assert _get_ts_info(r, 'tester').total_samples == 2
 
         assert r.execute_command('TS.ADD', 'tester', 2000, 30)
-        expected_result = [[1001, b'20'], [2000, b'30']]
+        expected_result = [[1001, '20'], [2000, '30']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         assert _get_ts_info(r, 'tester').total_samples == 2
@@ -65,8 +66,8 @@ def test_check_retention_64bit():
         for i in range(10):
             r.execute_command('TS.ADD', 'tester', int(huge_timestamp * i / 4), i)
         assert r.execute_command('TS.RANGE', 'tester', 0, "+") == \
-               [[5000000000, b'5'], [6000000000, b'6'], [7000000000, b'7'],
-                [8000000000, b'8'], [9000000000, b'9']]
+               [[5000000000, '5'], [6000000000, '6'], [7000000000, '7'],
+                [8000000000, '8'], [9000000000, '9']]
 
 
 def test_uncompressed():
@@ -78,18 +79,18 @@ def test_uncompressed():
         assert 2 == r.execute_command('ts.add', 'not_compressed', 2, 4.5)
         assert 3 == r.execute_command('ts.add', 'not_compressed', 3, 5.5)
         assert 5.5 == float(r.execute_command('ts.get', 'not_compressed')[1])
-        assert [[1, b'3.5'], [2, b'4.5'], [3, b'5.5']] == \
+        assert [[1, '3.5'], [2, '4.5'], [3, '5.5']] == \
                r.execute_command('ts.range', 'not_compressed', 0, '+')
         info = _get_ts_info(r, 'not_compressed')
         assert info.total_samples == 3 and info.memory_usage == 4136
 
-        # rdb load
-        data = r.execute_command('dump', 'not_compressed')
-        r.execute_command('del', 'not_compressed')
+    # rdb load
+    data = r.dump('not_compressed')
+    r.execute_command('del', 'not_compressed')
 
     with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('RESTORE', 'not_compressed', 0, data)
-        assert [[1, b'3.5'], [2, b'4.5'], [3, b'5.5']] == \
+        assert [[1, '3.5'], [2, '4.5'], [3, '5.5']] == \
                r.execute_command('ts.range', 'not_compressed', 0, "+")
         info = _get_ts_info(r, 'not_compressed')
         assert info.total_samples == 3 and info.memory_usage == 4136
@@ -143,23 +144,23 @@ def test_issue299():
         for i in range(1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
         actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10)
-        assert actual_result[0] == [0, b'0']
+        assert actual_result[0] == [0, '0']
         actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 100)
-        assert actual_result[0] == [0, b'4.5']
+        assert actual_result[0] == [0, '4.5']
 
         r.execute_command('del', 'issue299')
         r.execute_command('ts.create', 'issue299')
         for i in range(100, 1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
         actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10)
-        assert actual_result[0] != [0, b'0']
+        assert actual_result[0] != [0, '0']
 
 
 def test_expire():
     Env().skipOnCluster()
     with Env().getConnection() as r:
-        assert r.execute_command('ts.create', 'test') == b'OK'
-        assert r.execute_command('keys', '*') == [b'test']
+        assert r.execute_command('ts.create', 'test') == 'OK'
+        assert r.execute_command('keys', '*') == ['test']
         assert r.execute_command('expire', 'test', 1) == 1
         time.sleep(2)
         assert r.execute_command('keys', '*') == []

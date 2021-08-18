@@ -4,6 +4,7 @@ import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
+from includes import *
 
 
 def test_issue_504():
@@ -49,13 +50,13 @@ def test_add_create_key():
         info = _get_ts_info(r, 'tester1')
         assert info.total_samples == 1
         assert info.retention_msecs == 666
-        assert info.labels == {b'name': b'blabla'}
+        assert info.labels == {'name': 'blabla'}
 
         assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location',
                                  'earth')
         info = _get_ts_info(r, 'tester2')
         assert info.total_samples == 1
-        assert info.labels == {b'location': b'earth', b'name': b'blabla2'}
+        assert info.labels == {'location': 'earth', 'name': 'blabla2'}
 
 def test_ts_add_encoding():
     for ENCODING in ['compressed','uncompressed']:
@@ -80,8 +81,8 @@ def test_valid_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')           
-            
+            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
+
 def test_valid_timestamp():
     with Env().getConnection() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -113,11 +114,11 @@ def test_gorilla():
         r.execute_command('ts.add', 'monkey', '1000001', '1')
         r.execute_command('ts.add', 'monkey', '10000011000001', '1')
         r.execute_command('ts.add', 'monkey', '10000011000002', '1')
-        expected_result = [[0, b'1'], [1, b'1'], [2, b'1'], [50, b'1'], [51, b'1'],
-                           [500, b'1'], [501, b'1'], [3000, b'1'], [3001, b'1'],
-                           [10000, b'1'], [10001, b'1'], [100000, b'1'], [100001, b'1'],
-                           [100002, b'1'], [100004, b'1'], [1000000, b'1'], [1000001, b'1'],
-                           [10000011000001, b'1'], [10000011000002, b'1']]
+        expected_result = [[0, '1'], [1, '1'], [2, '1'], [50, '1'], [51, '1'],
+                           [500, '1'], [501, '1'], [3000, '1'], [3001, '1'],
+                           [10000, '1'], [10001, '1'], [100000, '1'], [100001, '1'],
+                           [100002, '1'], [100004, '1'], [1000000, '1'], [1000001, '1'],
+                           [10000011000001, '1'], [10000011000002, '1']]
         assert expected_result == r.execute_command('TS.range', 'monkey', 0, '+')
 
 

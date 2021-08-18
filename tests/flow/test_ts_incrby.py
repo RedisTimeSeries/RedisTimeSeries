@@ -3,6 +3,7 @@ import time
 import pytest
 import redis
 from utils import Env
+from includes import *
 
 
 def test_incrby():
@@ -21,7 +22,7 @@ def test_incrby():
 
         now = int(time.time() * 1000)
         result = r.execute_command('TS.RANGE', 'tester', 0, now)
-        assert result[-1][1] == b'70'
+        assert result[-1][1] == '70'
         assert result[-1][0] <= now
         assert result[0][0] >= start_incr_time
         assert len(result) <= 40
@@ -35,7 +36,7 @@ def test_incrby_with_timestamp():
             assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
-        assert result[19][1] == b'100'
+        assert result[19][1] == '100'
 
         query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') / 1000
         cur_time = int(time.time())
@@ -54,14 +55,14 @@ def test_incrby_with_update_latest():
 
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
-        assert result[19] == [20, b'100']
+        assert result[19] == [20, '100']
 
         assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', 20) == i
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
-        assert result[19] == [20, b'105']
+        assert result[19] == [20, '105']
 
         assert r.execute_command('ts.decrby', 'tester', '10', 'TIMESTAMP', 20) == i
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
-        assert result[19] == [20, b'95']
+        assert result[19] == [20, '95']

@@ -4,6 +4,7 @@ import pytest
 import redis
 from utils import Env
 from test_helper_classes import _fill_data
+from includes import *
 
 
 class testDuplicationPolicyTests():
@@ -34,9 +35,9 @@ class testDuplicationPolicyTests():
             assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value) == overrided_ts
 
             assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_ts).encode('ascii')]]
+                [overrided_ts, str(overrided_ts)]]
             assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_value).encode('ascii')]]
+                [overrided_ts, str(overrided_value)]]
 
             # check that inserting a non-duplicate sample doesn't fail
             non_dup_ts = date_ranges[0][1] + 1
@@ -46,13 +47,13 @@ class testDuplicationPolicyTests():
             assert r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value, 'ON_DUPLICATE',
                                      'LAST') == overrided_ts
             assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_value).encode('ascii')]]
+                [overrided_ts, str(overrided_value)]]
 
             # check that `ON_DUPLICATE` overrides the key configuration
             assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value * 10, 'ON_DUPLICATE',
                                      'MAX') == overrided_ts
             assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == \
-                   [[overrided_ts, str(overrided_value * 10).encode('ascii')]]
+                   [[overrided_ts, str(overrided_value * 10)]]
 
     def test_policies_correctness(self):
         policies = {

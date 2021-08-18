@@ -5,6 +5,8 @@ from collections import defaultdict
 from utils import Env, set_hertz
 from test_helper_classes import _insert_data
 from test_ts_range import build_expected_aligned_data
+from includes import *
+
 
 def test_mrange_with_expire_cmd():
     env = Env()
@@ -48,23 +50,23 @@ def test_range_by_labels():
         _insert_data(r, 'tester2', start_ts, samples_count, 15)
         _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
+        expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
-        assert [[b'tester1', [], expected_result]] == actual_result
+        assert [['tester1', [], expected_result]] == actual_result
 
         expected_result.reverse()
         actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
-        assert [[b'tester1', [], expected_result]] == actual_result
+        assert [['tester1', [], expected_result]] == actual_result
 
         def build_expected(val, time_bucket):
-            return [[int(i - i % time_bucket), str(val).encode('ascii')] for i in
+            return [[int(i - i % time_bucket), str(val)] for i in
                     range(start_ts, start_ts + samples_count + 1, time_bucket)]
 
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5,
                                           'FILTER', 'generation=x')
-        expected_result = [[b'tester1', [], build_expected(5, 5)],
-                           [b'tester2', [], build_expected(15, 5)],
-                           [b'tester3', [], build_expected(25, 5)],
+        expected_result = [['tester1', [], build_expected(5, 5)],
+                           ['tester2', [], build_expected(15, 5)],
+                           ['tester3', [], build_expected(25, 5)],
                            ]
         env.assertEqual(sorted(expected_result), sorted(actual_result))
         assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
@@ -75,7 +77,7 @@ def test_range_by_labels():
         assert expected_result[0][2][:3] == sorted(actual_result, key=lambda x:x[0])[0][2]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5,
                                           'FILTER', 'generation=x')
-        assert [[1511885905, b'1']] == actual_result[0][2][:1]
+        assert [[1511885905, '1']] == actual_result[0][2][:1]
         assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                           'COUNT', 3, 'FILTER', 'generation=x')
@@ -147,16 +149,16 @@ def test_mrange_filterby():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 1, "a" ,'FILTER', 'name=bob')
 
-        expected_result = [[b'tester1', [], []],
-                           [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(samples_count)]],
-                           [b'tester3', [], []],
+        expected_result = [['tester1', [], []],
+                           ['tester2', [], [[start_ts + i, str(15)] for i in range(samples_count)]],
+                           ['tester3', [], []],
                            ]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
 
-        expected_result = [[b'tester1', [], []],
-                           [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(9, 12)]],
-                           [b'tester3', [], []],
+        expected_result = [['tester1', [], []],
+                           ['tester2', [], [[start_ts + i, str(15)] for i in range(9, 12)]],
+                           ['tester3', [], []],
                            ]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
@@ -173,15 +175,15 @@ def test_mrange_withlabels():
         _insert_data(r, 'tester2', start_ts, samples_count, 15)
         _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
+        expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                                           'name=bob')
-        assert [[b'tester1', [[b'name', b'bob'], [b'class', b'middle'], [b'generation', b'x']],
+        assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']],
                  expected_result]] == actual_result
 
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER',
                                           'name=bob')
-        assert [[b'tester1', [[b'name', b'bob'], [b'generation', b'x']],
+        assert [['tester1', [['name', 'bob'], ['generation', 'x']],
                  expected_result]] == actual_result
 
         actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
@@ -203,17 +205,17 @@ def test_multilabel_filter():
         assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
 
         actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
+        assert set(item[0] for item in actual_result) == set(['tester1', 'tester2'])
 
         actual_result = r.execute_command('TS.mrange', 0, '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
                                           'class!=(middle,top)')
-        assert actual_result[0][0] == b'tester2'
+        assert actual_result[0][0] == 'tester2'
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
+        assert set(item[0] for item in actual_result) == set(['tester1', 'tester2'])
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
-        assert actual_result[0][0] == b'tester2'
+        assert actual_result[0][0] == 'tester2'
 
 def test_large_key_value_pairs():
     with Env().getClusterConnectionIfNeeded() as r:

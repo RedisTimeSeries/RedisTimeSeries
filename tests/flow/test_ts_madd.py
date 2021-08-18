@@ -1,6 +1,7 @@
 import time
 
 from RLTest import Env
+from includes import *
 
 
 def test_madd():
@@ -19,19 +20,19 @@ def test_madd():
         res = r.execute_command('ts.range', 'test_key1', 1000, 1000 + sample_len)
         i = 0
         for sample in res:
-            assert sample == [1000 + i, str(i).encode('ascii')]
+            assert sample == [1000 + i, str(i)]
             i += 1
 
         res = r.execute_command('ts.range', 'test_key2', 3000, 3000 + sample_len)
         i = 0
         for sample in res:
-            assert sample == [3000 + i, str(i).encode('ascii')]
+            assert sample == [3000 + i, str(i)]
             i += 1
 
         res = r.execute_command('ts.range', 'test_key3', 6000, 6000 + sample_len)
         i = 0
         for sample in res:
-            assert sample == [6000 + i, str(i).encode('ascii')]
+            assert sample == [6000 + i, str(i)]
             i += 1
 
 
@@ -48,10 +49,10 @@ def test_ooo_madd():
                     start_ts + (i * 1000)] == r.execute_command("ts.madd", 'test_key1', start_ts + (i * 1000 + 2000), i,
                                                                 'test_key1', start_ts + i * 1000 + 1000, i, 'test_key1',
                                                                 start_ts + i * 1000, i)
-            samples.append([start_ts + (i * 1000), str(i).encode('ascii')])
-            samples.append([start_ts + (i * 1000 + 1000), str(i).encode('ascii')])
-            samples.append([start_ts + (i * 1000 + 2000), str(i).encode('ascii')])
-            last_sample = [start_ts + (i * 1000 + 2000), str(i).encode('ascii')]
+            samples.append([start_ts + (i * 1000), str(i)])
+            samples.append([start_ts + (i * 1000 + 1000), str(i)])
+            samples.append([start_ts + (i * 1000 + 2000), str(i)])
+            last_sample = [start_ts + (i * 1000 + 2000), str(i)]
 
         assert r.execute_command('ts.get', 'test_key1') == last_sample
         assert r.execute_command('ts.range', 'test_key1', '-', '+') == samples
