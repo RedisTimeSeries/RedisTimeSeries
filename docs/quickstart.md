@@ -78,9 +78,19 @@ In your redis-server run: `loadmodule bin/redistimeseries.so`
 
 For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
 
+## Give it a try with `redis-cli`
+
+After you setup RedisTimeSeries, you can interact with it using redis-cli.
+
+```sh
+$ redis-cli
+127.0.0.1:6379> TS.CREATE sensor1
+OK
+```
+
 
 ## Creating a timeseries
-A new timeseries can be created with the `TS.CREATE` command; for example, to create a timeseries named `sensor1` run the following:
+A new timeseries can be created with the [`TS.CREATE`](commands.md#tscreate) command; for example, to create a timeseries named `sensor1` run the following:
 
 ```
 TS.CREATE sensor1
@@ -95,7 +105,7 @@ This will create a timeseries called `sensor1` and trim it to values of up to on
 
 
 ## Adding data points
-Adding a new data point to a timeseries is straightforward:
+For adding new data points to a timeseries we use the [`TS.ADD`](commands.md#tsadd) command:
 
 ```
 TS.ADD key timestamp value
@@ -121,7 +131,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 
 
 ## Deleting data points
-Data points between two timestamps (inclusive) can be deleted with the `TS.DEL` command:
+Data points between two timestamps (inclusive) can be deleted with the [`TS.DEL`](commands.md#tsdel) command:
 ```
 TS.DEL key fromTimestamp toTimestamp
 ```
@@ -148,7 +158,7 @@ TS.CREATE sensor1 LABELS region east
 
 
 ## Downsampling
-Another useful feature of RedisTimeSeries is compacting data with downsampling. For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p and var.s`.
+Another useful feature of RedisTimeSeries is compacting data by creating a rule for downsampling ([`TS.CREATERULE`](commands.md#tscreaterule)). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p and var.s`.
  
 It's important to point out that there is no data rewriting on the original timeseries; the compaction happens in a new series, while the original one stays the same. In order to prevent the original timeseries from growing indefinitely, you can use the retention option, which will trim it down to a certain period of time.
 
@@ -180,7 +190,7 @@ TS.MRANGE - + FILTER area_id=32
 
 This query will show data from all sensors (timeseries) that have a label of `area_id` with a value of `32`. The results will be grouped by timeseries.
 
-Or we can also use the `TS.MGET` command to get the last sample that matches the specific filter:
+Or we can also use the [`TS.MGET`](commands.md#tsmget) command to get the last sample that matches the specific filter:
 
 ```
 TS.MGET FILTER area_id=32
@@ -267,7 +277,7 @@ The result array will contain the following datapoints: 1000, 4000 and 6000
 
 By default, results of multiple timeseries will be grouped by timeseries, but (since v1.6) you can use the `GROUPBY` and `REDUCE` options to group them by label and apply an additional aggregation.
 
-To find minimum temperature per region we can run:
+To find minimum temperature per region, for example, we can run:
 
 ```
 TS.MRANGE - + FILTER region=(east,west) GROUPBY region REDUCE min
