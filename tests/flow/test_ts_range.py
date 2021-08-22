@@ -8,26 +8,26 @@ from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_inf
 from includes import *
 
 
-def test_range_query():
+def test_range_query(env):
     start_ts = 1488823384
     samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100)
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(99, 151)]
         actual_result = r.execute_command('TS.range', 'tester', start_ts + 50, start_ts + 150)
-        assert expected_result == actual_result
+        env.assertEqual(expected_result, actual_result)
         rev_result = r.execute_command('TS.revrange', 'tester', start_ts + 50, start_ts + 150)
         rev_result.reverse()
         assert expected_result == rev_result
 
         # test out of range returns empty list
-        assert [] == r.execute_command('TS.range', 'tester', int(start_ts * 2), '+')
-        assert [] == r.execute_command('TS.range', 'tester', int(start_ts / 3), int(start_ts / 2))
+        env.expect('TS.range', 'tester', int(start_ts * 2), '+', conn=r).equal([])
+        env.expect('TS.range', 'tester', int(start_ts / 3), int(start_ts / 2), conn=r).equal([])
 
-        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts * 2), '+')
-        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2))
+        env.expect('TS.revrange', 'tester', int(start_ts * 2), '+', conn=r).equal([])
+        env.expect('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2), conn=r).equal([])
 
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', 'string', '+')
@@ -66,9 +66,9 @@ def test_range_query():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
 
-def test_range_midrange():
+def test_range_midrange(env):
     samples_count = 5000
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester', i, i)
@@ -204,9 +204,9 @@ def test_range_count():
         assert len(full_results) == samples_count
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10)
         assert count_results == full_results[:10]
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, 'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 4, 'COUNT', 10)
         assert len(count_results) == 10
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == math.ceil(samples_count / 3.0)
@@ -328,8 +328,10 @@ def test_filter_by():
                                 'FILTER_BY_VALUE', 1022, 1025)
         env.assertEqual(res, [[start_ts+1022, '1022'], [start_ts+1023, '1023'], [start_ts+1025, '1025']])
 
+
 def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
     return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
+
 
 def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     expected_data = []
@@ -350,31 +352,24 @@ def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     return expected_data
 
 
-def test_aggreataion_alignment():
+def test_aggreataion_alignment(env):
     start_ts = 1511885909
     samples_count = 1200
-    env = Env(decodeResponses=True)
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-    _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+        env.expect('TS.CREATE', 'tester', conn=r).ok()
+        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-    agg_size = 60
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
+        agg_size = 60
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
-    assert expected_data == \
-           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size)
+        env.expect('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size, conn=r).equal(expected_data)
+        env.expect('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size, conn=r).equal(expected_data)
 
-    assert expected_data == \
-           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size)
+        specific_ts = start_ts + 50
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
+        env.expect('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size, conn=r).equal(expected_data)
 
-    specific_ts = start_ts + 50
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
-    assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size)
-
-    end_ts = start_ts + samples_count - 1
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
-    assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size)
-    assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size)
+        end_ts = start_ts + samples_count - 1
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
+        env.expect('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size, conn=r).equal(expected_data)
+        env.expect('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size, conn=r).equal(expected_data)

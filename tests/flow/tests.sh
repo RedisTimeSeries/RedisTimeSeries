@@ -31,6 +31,9 @@ help() {
 		TEST=test           Run specific test (e.g. test.py:test_name)
 		VALGRIND|VG=1       Run with Valgrind
 
+		DOCKER_HOST         Address of Docker server (default: localhost)
+		RLEC_PORT           Port of existing-env in RLEC container
+
 		VERBOSE=1           Print commands
 		IGNERR=1            Do not abort on error
 
@@ -107,8 +110,16 @@ EOF
 		echo "RLTest configuration:"
 		cat $config
 	fi
-	PYTHONPATH=/w/rafi_1/RLTest:/w/rafi_1/redis-py-3.5.3:/w/rafi_1/redis-py-cluster:$PYTHONPATH $OP python3 -m RLTest @$config
-	# PYTHONPATH=/w/rafi_1/RLTest:$PYTHONPATH $OP python3 -m RLTest @$config
+
+	if [[ $PYHACK == 1 ]]; then
+		viewdir=$(cd $HERE/.. && pwd)
+		[[ -d $viewdir/RLTest ]] && PYTHONPATH=$viewdir/RLTest:$PYTHONPATH
+		[[ -d $viewdir/redis-py ]] && PYTHONPATH=$viewdir/redis-py:$PYTHONPATH
+		[[ -d $viewdir/redis-py-cluster ]] && PYTHONPATH=$viewdir/redis-py-cluster:$PYTHONPATH
+		export PYTHONPATH
+	fi
+
+	$OP python3 -m RLTest @$config
 	[[ $KEEP != 1 ]] && rm -f $config
 }
 
@@ -124,6 +135,9 @@ SLAVES=${SLAVES:-1}
 AOF=${AOF:-1}
 CLUSTER=${CLUSTER:-1}
 GEARS=${GEARS:-0}
+
+DOCKER_HOST=${DOCKER_HOST:-localhost}
+RLEC_PORT=${RLEC_PORT:-12000}
 
 GDB=${GDB:-0}
 
@@ -177,8 +191,7 @@ setup_redis_server
 [[ $CLUSTER == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count 2" run_tests "oss-cluster"
 [[ $SLAVES == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves"
 [[ $AOF == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF"
-
-# [[ $RLEC == 1 ]] && RLTEST_ARGS+=" --env cluster_existing-env --existing-env-addr ranch1:12000 --cluster_address 172.17.0.2 --shards_ports 1:25144,2:26549,3:23188 --cluster_credentials a@a.com:a" run_tests "rlec"
+[[ $RLEC == 1 ]] && RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "rlec"
 
 exit 0
 

@@ -61,6 +61,6 @@ def test_alter_key(self):
 
         r.execute_command('TS.ALTER', key, 'DUPLICATE_POLICY', 'LAST')
         assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [
-            [overrided_ts, str(overrided_ts).encode("ascii")]]
+            [overrided_ts, str(overrided_ts)]]
         r.execute_command('TS.ADD', key, date_ranges[0][0] + 10, 10)
         assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [[overrided_ts, '10']]

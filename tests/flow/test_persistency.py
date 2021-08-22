@@ -2,9 +2,8 @@ from RLTest import Env
 from test_helper_classes import ALLOWED_ERROR, _insert_data, _get_ts_info
 from includes import *
 
-
-def test_simple_dump_restore(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_simple_dump_restore(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test_key', 'UNCOMPRESSED')
         r.execute_command('ts.add', 'test_key', 1, 1)
         dump = r.dump('test_key')

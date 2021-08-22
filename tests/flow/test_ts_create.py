@@ -171,7 +171,7 @@ def test_ts_create_encoding():
         e.flush()
         with e.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.create', 't1', 'ENCODING', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING.encode())
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
             # backwards compatible check
             r.execute_command('ts.create', 't1_bc', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING.encode())
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)

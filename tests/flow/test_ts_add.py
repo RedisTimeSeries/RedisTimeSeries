@@ -64,10 +64,10 @@ def test_ts_add_encoding():
         e.flush()
         with e.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.add', 't1', '*', '5.0', 'ENCODING', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING.encode())
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
             # backwards compatible check
             r.execute_command('ts.add', 't1_bc', '*', '5.0', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING.encode())
+            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
 
 
 def test_valid_labels():
