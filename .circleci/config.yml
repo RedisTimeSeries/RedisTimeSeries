@@ -135,7 +135,7 @@ commands:
           name: Flow Test
           no_output_timeout: 30m
           command: |
-            python3 -m RLTest --version
+            python3 -m pip list
             mkdir -p ~/workspace/tests
             bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
       - run:

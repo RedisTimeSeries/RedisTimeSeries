@@ -10,15 +10,15 @@ def test_simple_dump_restore(env):
         r.execute_command('del', 'test_key')
         r.execute_command('restore', 'test_key', 0, dump)
 
-def test_rdb():
+def test_rdb(env):
     start_ts = 1511885909
     samples_count = 1500
     data = None
     key_name = 'tester{abc}'
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name, 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
-        assert r.execute_command('TS.CREATE', '{}_agg_avg_10'.format(key_name))
+        env.expect('TS.CREATE', '{}_agg_avg_10'.format(key_name), conn=r).ok()
         assert r.execute_command('TS.CREATE', '{}_agg_max_10'.format(key_name))
         assert r.execute_command('TS.CREATE', '{}_agg_sum_10'.format(key_name))
         assert r.execute_command('TS.CREATE', '{}_agg_stds_10'.format(key_name))
