@@ -412,12 +412,13 @@ Optional parameters:
 
 * GROUPBY - Aggregate results across different time series, grouped by the provided label name.
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
-    * label - label name to group series by.
+    * label - label name to group series by.  A new series for each value will be produced.
     * reducer - Reducer type used to aggregate series that share the same label value. Available reducers: sum, min, max.
-    * **Note:** The resulting series will contain 3 labels with the following label array structure:
-         * `<label>=<groupbyvalue>` : containing the label name and label value.
+    * **Note:** The resulting series will contain 2 labels with the following label array structure:
          * `__reducer__=<reducer>` : containing the used reducer.
          * `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
+    * **note** The produced series will be named `<label>=<groupbyvalue>`
+
 
 #### Return Value
 
