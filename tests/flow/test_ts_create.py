@@ -8,8 +8,8 @@ from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo
 from includes import *
 
 
-def test_create_params():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_create_params(env):
+    with env.getClusterConnectionIfNeeded() as r:
         # test string instead of value
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'RETENTION', 'retention')
@@ -25,8 +25,8 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'a')  # filter exists
 
 
-def test_create_retention():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_create_retention(env):
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
 
         assert r.execute_command('TS.ADD', 'tester', 500, 10)
@@ -52,14 +52,14 @@ def test_create_retention():
             assert r.execute_command('TS.CREATE', 'negative', 'RETENTION', -10)
 
 
-def test_create_with_negative_chunk_size():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_create_with_negative_chunk_size(env):
+    with env.getClusterConnectionIfNeeded() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', -10)
 
 
-def test_check_retention_64bit():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_check_retention_64bit(env):
+    with env.getClusterConnectionIfNeeded() as r:
         huge_timestamp = 4000000000  # larger than uint32
         r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
         assert _get_ts_info(r, 'tester').retention_msecs == huge_timestamp
@@ -70,8 +70,8 @@ def test_check_retention_64bit():
                 [8000000000, '8'], [9000000000, '9']]
 
 
-def test_uncompressed():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_uncompressed(env):
+    with env.getClusterConnectionIfNeeded() as r:
         # test simple commands
         r.execute_command('ts.create', 'not_compressed', 'UNCOMPRESSED')
         assert 1 == r.execute_command('ts.add', 'not_compressed', 1, 3.5)
@@ -88,7 +88,7 @@ def test_uncompressed():
     data = r.dump('not_compressed')
     r.execute_command('del', 'not_compressed')
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('RESTORE', 'not_compressed', 0, data)
         assert [[1, '3.5'], [2, '4.5'], [3, '5.5']] == \
                r.execute_command('ts.range', 'not_compressed', 0, "+")
@@ -98,8 +98,8 @@ def test_uncompressed():
         assert r.delete('not_compressed')
 
 
-def test_trim():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_trim(env):
+    with env.getClusterConnectionIfNeeded() as r:
         for mode in ["UNCOMPRESSED", "COMPRESSED"]:
             samples = 2000
             chunk_size = 64 * SAMPLE_SIZE
@@ -123,8 +123,8 @@ def test_trim():
             r.delete("dont_trim_me")
 
 
-def test_empty():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_empty(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'empty')
         info = _get_ts_info(r, 'empty')
         assert info.total_samples == 0
@@ -138,8 +138,8 @@ def test_empty():
         assert [] == r.execute_command('TS.get', 'empty')
 
 
-def test_issue299():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_issue299(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'issue299')
         for i in range(1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
@@ -156,22 +156,21 @@ def test_issue299():
         assert actual_result[0] != [0, '0']
 
 
-def test_expire():
-    Env().skipOnCluster()
-    with Env().getConnection() as r:
+def test_expire(env):
+    env.skipOnCluster()
+    with env.getConnection() as r:
         assert r.execute_command('ts.create', 'test') == 'OK'
         assert r.execute_command('keys', '*') == ['test']
         assert r.execute_command('expire', 'test', 1) == 1
         time.sleep(2)
         assert r.execute_command('keys', '*') == []
 
-def test_ts_create_encoding():
-    for ENCODING in ['compressed','uncompressed']:
-        e = Env()
-        e.flush()
-        with e.getClusterConnectionIfNeeded() as r:
+def test_ts_create_encoding(env):
+    for ENCODING in ['compressed', 'uncompressed']:
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.create', 't1', 'ENCODING', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
+            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
             # backwards compatible check
             r.execute_command('ts.create', 't1_bc', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
+            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
