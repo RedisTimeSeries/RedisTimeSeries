@@ -327,8 +327,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, Record *data, void *arg) {
 }
 
 int register_rg(RedisModuleCtx *ctx) {
-    if (RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION) !=
-        REDISMODULE_OK) {
+    Plugin *rg_plugin =
+        RedisGears_InitAsRedisModule(ctx, "timeseries", REDISMODULE_TYPE_METHOD_VERSION);
+    if (rg_plugin == NULL) {
         RedisModule_Log(ctx, "warning", "Failed initialize RedisGears API");
         return REDISMODULE_ERR;
     }
