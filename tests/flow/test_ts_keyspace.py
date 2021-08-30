@@ -54,8 +54,8 @@ def test_keyspace():
 
         # Test ALTER generate event on key
         r.execute_command("ts.ALTER", 'tester{2}', "LABELS", "abc", 123)
-        assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'ts.alter')
-        assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'tester{2}')
+        assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', 'ts.alter')
+        assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', 'tester{2}')
 
 def test_keyspace_create_rules():
     Env().skipOnCluster()
