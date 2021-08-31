@@ -19,7 +19,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
 
-        self.install("git jq curl")
+        self.install("git jq curl unzip")
         self.run("%s/bin/enable-utf8" % READIES)
 
     def debian_compat(self):
