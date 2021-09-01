@@ -4,37 +4,23 @@ from RLTest import Env
 from includes import *
 
 
-def test_errors():
-    with Env().getConnection() as r:
+def test_errors(env):
+    with env.getConnection() as r:
         # test wrong arity
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.ALTER')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.ADD')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MADD')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.INCRBY')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DECRBY')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DELETERULE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.QUERYINDEX')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.GET')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.INFO')
+        env.expect('TS.CREATE', conn=r).error()
+        env.expect('TS.ALTER', conn=r).error()
+        env.expect('TS.ADD', conn=r).error()
+        env.expect('TS.MADD', conn=r).error()
+        env.expect('TS.INCRBY', conn=r).error()
+        env.expect('TS.DECRBY', conn=r).error()
+        env.expect('TS.CREATERULE', conn=r).error()
+        env.expect('TS.DELETERULE', conn=r).error()
+        env.expect('TS.QUERYINDEX', conn=r).error()
+        env.expect('TS.GET', conn=r).error()
+        env.expect('TS.MGET', conn=r).error()
+        env.expect('TS.RANGE', conn=r).error()
+        env.expect('TS.MRANGE', conn=r).error()
+        env.expect('TS.INFO', conn=r).error()
 
     with Env().getClusterConnectionIfNeeded() as r:
         # different type key
@@ -49,42 +35,28 @@ def test_errors():
             assert r.execute_command('TS.INFO', 'foo')  # wrong type
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.INFO', 'bar')  # does not exist
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'foo', '0', '-1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.ALTER', 'foo')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.INCRBY', 'foo', '1', 'timestamp', '5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DECRBY', 'foo', '1', 'timestamp', '5')
+        env.expect('TS.RANGE', 'foo', '0', '-1', conn=r).error()
+        env.expect('TS.ALTER', 'foo', conn=r).error()
+        env.expect('TS.INCRBY', 'foo', '1', 'timestamp', '5', conn=r).error()
+        env.expect('TS.DECRBY', 'foo', '1', 'timestamp', '5', conn=r).error()
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.ADD', 'values', 'timestamp', '5')  # string
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.ADD', 'values', '*', 'value')  # string
         with pytest.raises(redis.ResponseError) as excinfo:
             labels = ["abc"] * 51
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+            env.expect('TS.MGET', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu', conn=r).noError()
         with pytest.raises(redis.ResponseError) as excinfo:
             labels = ["abc"] * 51
-            assert r.execute_command('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
-        assert r.execute_command('TS.CREATE', 'tester')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '1627460206991', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '1627460206991', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000)
+            env.expect('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu', conn=r).noError()
+        env.expect('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu', conn=r).error()
+        env.expect('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu', conn=r).error()
+        env.expect('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu', conn=r).error()
+        env.expect('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu', conn=r).error()
+        env.expect('TS.CREATE', 'tester', conn=r).noError()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'ALIGN', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000, conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '1627460206991', 'ALIGN', 'start', 'AGGREGATION', 'max', 60000, conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000, conn=r).error()
+        env.expect('TS.RANGE', 'tester', '1627460206991', '+', 'ALIGN', 'end', 'AGGREGATION', 'max', 60000, conn=r).error()

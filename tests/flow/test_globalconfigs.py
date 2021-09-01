@@ -25,8 +25,8 @@ class testModuleLoadTimeArguments(object):
                     assert Env(testName="Test load time args: {}".format(variation[1]), moduleArgs=variation[1])
 
 
-def test_encoding_uncompressed():
-    Env().skipOnCluster()
+def test_encoding_uncompressed(env):
+    env.skipOnCluster()
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -34,16 +34,16 @@ def test_encoding_uncompressed():
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
 
-def test_encoding_compressed():
-    Env().skipOnCluster()
+def test_encoding_compressed(env):
+    env.skipOnCluster()
     env = Env(moduleArgs='ENCODING compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
 
-def test_uncompressed():
-    Env().skipOnCluster()
+def test_uncompressed(env):
+    env.skipOnCluster()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -51,16 +51,16 @@ def test_uncompressed():
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
 
-def test_compressed():
-    Env().skipOnCluster()
+def test_compressed(env):
+    env.skipOnCluster()
     env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
 
-def test_compressed_debug():
-    Env().skipOnCluster()
+def test_compressed_debug(env):
+    env.skipOnCluster()
 
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
@@ -134,8 +134,8 @@ class testGlobalConfigTests():
             r.execute_command('DEL', 'tester_agg')
 
 
-def test_negative_configuration():
-    Env().skipOnCluster()
+def test_negative_configuration(env):
+    env.skipOnCluster()
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; DUPLICATE_POLICY abc')
 

@@ -1,28 +1,28 @@
 import pytest
 import redis
-import time 
+import time
 from utils import Env, set_hertz
 from includes import *
 
 
-def test_mget_with_expire_cmd():
-    set_hertz(Env())
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_mget_with_expire_cmd(env):
+    set_hertz(env)
+    with env.getClusterConnectionIfNeeded() as r:
         # Lower hz value to make it more likely that mget triggers key expiration
-        assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
-        assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
-        assert r.execute_command("TS.ADD", "Z" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
+        env.expect("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED", conn=r).noError()
+        env.expect("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED", conn=r).noError()
+        env.expect("TS.ADD", "Z" ,"*" ,"1" ,"LABELS", "type", "DELAYED", conn=r).noError()
         current_ts = time.time()
-        assert r.execute_command("EXPIRE","X", 5)
-        assert r.execute_command("EXPIRE","Y", 6)
-        assert r.execute_command("EXPIRE","Z", 7)
+        env.expect("EXPIRE","X", 5, conn=r).noError()
+        env.expect("EXPIRE","Y", 6, conn=r).noError()
+        env.expect("EXPIRE","Z", 7, conn=r).noError()
         while time.time() < (current_ts+10):
             reply = r.execute_command('TS.MGET', 'FILTER', 'type=DELAYED')
             assert(len(reply)>=0 and len(reply)<=3)
-        assert r.execute_command("PING")
-        
+        env.expect("PING", conn=r).noError()
 
-def test_mget_cmd():
+
+def test_mget_cmd(env):
     num_of_keys = 3
     time_stamp = 1511885909
     keys = ['k1', 'k2', 'k3']
@@ -30,10 +30,10 @@ def test_mget_cmd():
     values = [100, 200, 300]
     kvlabels = []
 
-    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         # test for empty series
-        assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
-        assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
+        env.expect('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE", conn=r).noError()
+        env.expect('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE", conn=r).noError()
         # expect to received time-series k1 and k2
         expected_result = [
             ["key4_empty", [], []],
@@ -45,11 +45,11 @@ def test_mget_cmd():
 
         # test for series with data
         for i in range(num_of_keys):
-            assert r.execute_command('TS.CREATE', keys[i], 'LABELS', labels[i], '1', 'metric', 'cpu')
+            env.expect('TS.CREATE', keys[i], 'LABELS', labels[i], '1', 'metric', 'cpu', conn=r).noError()
             kvlabels.append([[labels[i], '1'], ['metric', 'cpu']])
 
-            assert r.execute_command('TS.ADD', keys[i], time_stamp - 1, values[i] - 1)
-            assert r.execute_command('TS.ADD', keys[i], time_stamp, values[i])
+            env.expect('TS.ADD', keys[i], time_stamp - 1, values[i] - 1, conn=r).noError()
+            env.expect('TS.ADD', keys[i], time_stamp, values[i], conn=r).noError()
 
         # expect to received time-series k1 and k2
         expected_result = [
@@ -90,28 +90,20 @@ def test_mget_cmd():
         # negative test
         assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
         assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter', 'k+1')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter', 'k!=5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'retlif', 'k!=5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
+        env.expect('TS.MGET', 'filter', conn=r).error()
+        env.expect('TS.MGET', 'filter', 'k+1', conn=r).error()
+        env.expect('TS.MGET', 'filter', 'k!=5', conn=r).error()
+        env.expect('TS.MGET', 'retlif', 'k!=5', conn=r).error()
+        env.expect('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5', conn=r).error()
+        env.expect('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5', conn=r).error()
+        env.expect('TS.MGET', 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5', conn=r).error()
+        env.expect('TS.MGET', 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5', conn=r).error()
 
-def test_large_key_value_pairs():
-     with Env().getClusterConnectionIfNeeded() as r:
+def test_large_key_value_pairs(env):
+     with env.getClusterConnectionIfNeeded() as r:
         number_series = 100
         for i in range(0,number_series):
-            assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
+            env.expect('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK', conn=r).noError()
 
         kv_label1 = 'baseAsset=(13830,10249,16019,10135,17049,10777,10138,11036,11292,15778,11043,10025,11436,12207,13359,10807,12216,11833,10170,10811,12864,12738,10053,11334,12487,12619,12364,13266,11219,15827,12374,11223,10071,12249,11097,14430,13282,16226,13667,11365,12261,12646,12650,12397,12785,13941,10231,16254,12159,15103)'
         kv_label2 = 'counterAsset=(840)'

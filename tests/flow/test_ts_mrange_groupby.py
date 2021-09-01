@@ -6,37 +6,31 @@ import redis
 import create_test_rdb_file
 from includes import *
 
-def test_groupby_reduce_errors():
-    env = Env()
+def test_groupby_reduce_errors(env):
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system')
-        assert r.execute_command('TS.ADD', 's1', 2, 95)
+        env.expect('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system', conn=r).noError()
+        env.expect('TS.ADD', 's1', 2, 95, conn=r).noError()
 
         # test wrong arity
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY')
+        env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', conn=r).error()
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name')
+        env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', conn=r).error()
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc')
+        env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc', conn=r).error()
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla')
+        env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla', conn=r).error()
 
     with pytest.raises(redis.ResponseError) as excinfo:
-        assert r.execute_command('TS.MRANGE', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu')
+        env.expect('TS.MRANGE', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu', conn=r).noError()
 
-def test_groupby_reduce():
-    env = Env()
+def test_groupby_reduce(env):
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system')
-        assert r.execute_command('TS.ADD', 's1', 2, 95)
+        env.expect('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system', conn=r).noError()
+        env.expect('TS.ADD', 's1', 2, 95, conn=r).noError()
 
         actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'max')
@@ -79,25 +73,23 @@ def test_groupby_reduce():
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, '100']])
 
-def test_groupby_reduce_empty():
-    env = Env()
+def test_groupby_reduce_empty(env):
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
-        assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system')
-        assert r.execute_command('TS.ADD', 's1', 2, 95)
+        env.expect('TS.ADD', 's1', 1, 100, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's2', 2, 55, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user', conn=r).noError()
+        env.expect('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system', conn=r).noError()
+        env.expect('TS.ADD', 's1', 2, 95, conn=r).noError()
 
         actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'labelX', 'REDUCE', 'max')
         env.assertEqual(actual_result, [])
 
-def test_groupby_reduce_multiple_groups():
-    env = Env()
+def test_groupby_reduce_multiple_groups(env):
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.ADD', 's1', 1, 100, 'LABELS', 'HOST', 'A', 'REGION', 'EU', 'PROVIDER', 'AWS')
-        assert r.execute_command('TS.ADD', 's2', 1, 55, 'LABELS', 'HOST', 'B', 'REGION', 'EU', 'PROVIDER', 'AWS')
-        assert r.execute_command('TS.ADD', 's2', 2, 90, 'LABELS', 'HOST', 'B', 'REGION', 'EU', 'PROVIDER', 'AWS')
-        assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'HOST', 'C', 'REGION', 'US', 'PROVIDER', 'AWS')
+        env.expect('TS.ADD', 's1', 1, 100, 'LABELS', 'HOST', 'A', 'REGION', 'EU', 'PROVIDER', 'AWS', conn=r).noError()
+        env.expect('TS.ADD', 's2', 1, 55, 'LABELS', 'HOST', 'B', 'REGION', 'EU', 'PROVIDER', 'AWS', conn=r).noError()
+        env.expect('TS.ADD', 's2', 2, 90, 'LABELS', 'HOST', 'B', 'REGION', 'EU', 'PROVIDER', 'AWS', conn=r).noError()
+        env.expect('TS.ADD', 's3', 2, 40, 'LABELS', 'HOST', 'C', 'REGION', 'US', 'PROVIDER', 'AWS', conn=r).noError()
 
         actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'PROVIDER=AWS', 'GROUPBY', 'REGION', 'REDUCE', 'max')
@@ -129,8 +121,7 @@ def test_groupby_reduce_multiple_groups():
 def truncate_month(date):
     return "-".join(date.split("-")[0:2])
 
-def test_filterby():
-    env = Env()
+def test_filterby(env):
     high_temps = defaultdict(lambda : defaultdict(lambda: 0))
     specific_days = defaultdict(lambda : defaultdict(lambda: 0))
     days = [1335830400000, 1338508800000]

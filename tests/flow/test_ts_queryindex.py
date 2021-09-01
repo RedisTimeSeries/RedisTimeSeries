@@ -4,10 +4,10 @@ from utils import Env
 from includes import *
 
 
-def test_label_index():
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
-        assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
+def test_label_index(env):
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
+        env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x',
                                  'x', '2')
         assert r.execute_command('TS.CREATE', 'tester4', 'LABELS', 'name', 'anybody', 'class', 'top', 'type', 'noone',
@@ -34,18 +34,15 @@ def test_label_index():
                                                                                        'generation=(x)'))
         assert_data(['TS.QUERYINDEX', 'generation=x', 'class=()'], [])
         assert_data(['TS.QUERYINDEX', 'class=(middle,junior,top)', 'name!=(bob,rudy,fabi)'], ['tester4'])
-        with pytest.raises(redis.ResponseError):
-            assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(')
-        with pytest.raises(redis.ResponseError):
-            assert r.execute_command('TS.QUERYINDEX', 'generation=x', 'class=(ab')
-        with pytest.raises(redis.ResponseError):
-            assert r.execute_command('TS.QUERYINDEX', 'generation!=(x,y)')
+        env.expect('TS.QUERYINDEX', 'generation=x', 'class=(', conn=r).error()
+        env.expect('TS.QUERYINDEX', 'generation=x', 'class=(ab', conn=r).error()
+        env.expect('TS.QUERYINDEX', 'generation!=(x,y)', conn=r).error()
 
-def test_large_key_value_pairs():
-     with Env().getClusterConnectionIfNeeded() as r:
+def test_large_key_value_pairs(env):
+     with env.getClusterConnectionIfNeeded() as r:
         number_series = 100
         for i in range(0,number_series):
-            assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
+            env.expect('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK', conn=r).noError()
 
         kv_label1 = 'baseAsset=(13830,10249,16019,10135,17049,10777,10138,11036,11292,15778,11043,10025,11436,12207,13359,10807,12216,11833,10170,10811,12864,12738,10053,11334,12487,12619,12364,13266,11219,15827,12374,11223,10071,12249,11097,14430,13282,16226,13667,11365,12261,12646,12650,12397,12785,13941,10231,16254,12159,15103)'
         kv_label2 = 'counterAsset=(840)'

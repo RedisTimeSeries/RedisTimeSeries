@@ -53,8 +53,8 @@ def test_revrange():
         assert actual_results[0:5] == actual_results_rev[0:5]
 
 
-def test_issue400():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_issue400(env):
+    with env.getClusterConnectionIfNeeded() as r:
         times = 300
         r.execute_command('ts.create', 'issue376', 'UNCOMPRESSED')
         for i in range(1, times):

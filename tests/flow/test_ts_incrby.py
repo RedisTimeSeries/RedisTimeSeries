@@ -6,8 +6,8 @@ from utils import Env
 from includes import *
 
 
-def test_incrby():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_incrby(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
 
         start_incr_time = int(time.time() * 1000)
@@ -28,8 +28,8 @@ def test_incrby():
         assert len(result) <= 40
 
 
-def test_incrby_with_timestamp():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_incrby_with_timestamp(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
 
         for i in range(20):
@@ -43,12 +43,11 @@ def test_incrby_with_timestamp():
         assert query_res >= cur_time
         assert query_res <= cur_time + 1
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
+        env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', '10', conn=r).error()
 
 
-def test_incrby_with_update_latest():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_incrby_with_update_latest(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
         for i in range(1, 21):
             assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i

@@ -7,8 +7,8 @@ from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
 
 
-def test_issue_504():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_issue_504(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
         for i in range(100, 3000):
             assert r.execute_command('ts.add', 'tester', i, i * 1.1) == i
@@ -16,8 +16,8 @@ def test_issue_504():
         assert r.execute_command('ts.add', 'tester', 98, 1) == 98
 
 
-def test_issue_588():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_issue_588(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test1', "DUPLICATE_POLICY", "min")
         r.execute_command('ts.add', 'test1', 1, -0.05)
         assert float(r.execute_command('TS.RANGE', 'test1', "-", "+")[0][1]) == -0.05
@@ -31,9 +31,9 @@ def test_issue_588():
         assert float(r.execute_command('TS.RANGE', 'test2', "-", "+")[0][1]) == -0.05
 
 
-def test_automatic_timestamp():
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+def test_automatic_timestamp(env):
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester', conn=r).noError()
         response_timestamp = r.execute_command('TS.ADD', 'tester', '*', 1)
         curr_time = int(time.time() * 1000)
         result = r.execute_command('TS.RANGE', 'tester', 0, curr_time)
@@ -42,8 +42,8 @@ def test_automatic_timestamp():
         assert response_timestamp - curr_time <= 5
 
 
-def test_add_create_key():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_add_create_key(env):
+    with env.getClusterConnectionIfNeeded() as r:
         ts = time.time()
         assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name',
                                  'blabla') == int(ts)
@@ -70,8 +70,8 @@ def test_ts_add_encoding():
             e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
 
 
-def test_valid_labels():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_valid_labels(env):
+    with env.getClusterConnectionIfNeeded() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.CREATE', 'tester', 'LABELS', 'name', '')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -83,8 +83,8 @@ def test_valid_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
 
-def test_valid_timestamp():
-    with Env().getConnection() as r:
+def test_valid_timestamp(env):
+    with env.getConnection() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'timestamp', '12434fd', '34')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -92,8 +92,8 @@ def test_valid_timestamp():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'timestamp', '*235', '45')
 
-def test_gorilla():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_gorilla(env):
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'monkey')
         r.execute_command('ts.add', 'monkey', '0', '1')
         r.execute_command('ts.add', 'monkey', '1', '1')
@@ -122,8 +122,8 @@ def test_gorilla():
         assert expected_result == r.execute_command('TS.range', 'monkey', 0, '+')
 
 
-def test_ts_add_negative():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_ts_add_negative(env):
+    with env.getClusterConnectionIfNeeded() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.CREATE', 'tester', 'ENCODING')
         with pytest.raises(redis.ResponseError) as excinfo:

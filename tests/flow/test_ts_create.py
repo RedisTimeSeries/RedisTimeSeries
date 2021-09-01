@@ -11,14 +11,10 @@ from includes import *
 def test_create_params(env):
     with env.getClusterConnectionIfNeeded() as r:
         # test string instead of value
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'invalid', 'RETENTION', 'retention')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'invalid', 'CHUNK_SIZE', 'chunk_size')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'invalid', 'ENCODING', 'bad-encoding-type')
+        env.expect('TS.CREATE', 'invalid', 'RETENTION', 'retention', conn=r).error()
+        env.expect('TS.CREATE', 'invalid', 'CHUNK_SIZE', 'chunk_size', conn=r).error()
+        env.expect('TS.CREATE', 'invalid', 'ENCODING', conn=r).error()
+        env.expect('TS.CREATE', 'invalid', 'ENCODING', 'bad-encoding-type', conn=r).error()
 
         r.execute_command('TS.CREATE', 'a')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -27,35 +23,33 @@ def test_create_params(env):
 
 def test_create_retention(env):
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
+        env.expect('TS.CREATE', 'tester', 'RETENTION', 1000, conn=r).noError()
 
-        assert r.execute_command('TS.ADD', 'tester', 500, 10)
+        env.expect('TS.ADD', 'tester', 500, 10, conn=r).noError()
         expected_result = [[500, '10']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         # check for (lastTimestamp - retension < 0)
         assert _get_ts_info(r, 'tester').total_samples == 1
 
-        assert r.execute_command('TS.ADD', 'tester', 1001, 20)
+        env.expect('TS.ADD', 'tester', 1001, 20, conn=r).noError()
         expected_result = [[500, '10'], [1001, '20']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         assert _get_ts_info(r, 'tester').total_samples == 2
 
-        assert r.execute_command('TS.ADD', 'tester', 2000, 30)
+        env.expect('TS.ADD', 'tester', 2000, 30, conn=r).noError()
         expected_result = [[1001, '20'], [2000, '30']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
         assert expected_result == actual_result
         assert _get_ts_info(r, 'tester').total_samples == 2
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'negative', 'RETENTION', -10)
+        env.expect('TS.CREATE', 'negative', 'RETENTION', -10, conn=r).error()
 
 
 def test_create_with_negative_chunk_size(env):
     with env.getClusterConnectionIfNeeded() as r:
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'tester', 'CHUNK_SIZE', -10)
+        env.expect('TS.CREATE', 'tester', 'CHUNK_SIZE', -10, conn=r).error()
 
 
 def test_check_retention_64bit(env):

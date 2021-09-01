@@ -24,7 +24,7 @@ Latitude = 5
 Longitude = 6
 
 def read_from_disk():
-    with open('GlobalLandTemperaturesByMajorCity.csv') as csvfile:
+    with open('GlobalLandTemperaturesByMajorCity.csv', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
         _ = next(reader)  # skip the column
         for row in reader:

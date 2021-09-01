@@ -19,13 +19,13 @@ def test_rdb(env):
         assert r.execute_command('TS.CREATE', key_name, 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
         env.expect('TS.CREATE', '{}_agg_avg_10'.format(key_name), conn=r).ok()
-        assert r.execute_command('TS.CREATE', '{}_agg_max_10'.format(key_name))
-        assert r.execute_command('TS.CREATE', '{}_agg_sum_10'.format(key_name))
-        assert r.execute_command('TS.CREATE', '{}_agg_stds_10'.format(key_name))
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_avg_10'.format(key_name), 'AGGREGATION', 'AVG', 10)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_max_10'.format(key_name), 'AGGREGATION', 'MAX', 10)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_sum_10'.format(key_name), 'AGGREGATION', 'SUM', 10)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_stds_10'.format(key_name), 'AGGREGATION', 'STD.S', 10)
+        env.expect('TS.CREATE', '{}_agg_max_10'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_sum_10'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_stds_10'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_avg_10'.format(key_name), 'AGGREGATION', 'AVG', 10, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_max_10'.format(key_name), 'AGGREGATION', 'MAX', 10, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_sum_10'.format(key_name), 'AGGREGATION', 'SUM', 10, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_stds_10'.format(key_name), 'AGGREGATION', 'STD.S', 10, conn=r).noError()
         _insert_data(r, key_name, start_ts, samples_count, 5)
 
         data = r.dump(key_name)
@@ -50,7 +50,7 @@ def test_rdb(env):
         assert _get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey == key_name
 
 
-def test_rdb_aggregation_context():
+def test_rdb_aggregation_context(env):
     """
     Check that the aggregation context of the rules is saved in rdb. Write data with not a full bucket,
     then save it and restore, add more data to the bucket and check the rules results considered the previous data
@@ -60,16 +60,16 @@ def test_rdb_aggregation_context():
     start_ts = 3
     samples_count = 4  # 1 full bucket and another one with 1 value
     key_name = 'tester{abc}'
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', key_name)
-        assert r.execute_command('TS.CREATE', '{}_agg_avg_3'.format(key_name))
-        assert r.execute_command('TS.CREATE', '{}_agg_min_3'.format(key_name))
-        assert r.execute_command('TS.CREATE', '{}_agg_sum_3'.format(key_name))
-        assert r.execute_command('TS.CREATE', '{}_agg_std_3'.format(key_name))
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_avg_3'.format(key_name), 'AGGREGATION', 'AVG', 3)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_min_3'.format(key_name), 'AGGREGATION', 'MIN', 3)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_sum_3'.format(key_name), 'AGGREGATION', 'SUM', 3)
-        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_std_3'.format(key_name), 'AGGREGATION', 'STD.S', 3)
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', key_name, conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_avg_3'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_min_3'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_sum_3'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATE', '{}_agg_std_3'.format(key_name), conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_avg_3'.format(key_name), 'AGGREGATION', 'AVG', 3, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_min_3'.format(key_name), 'AGGREGATION', 'MIN', 3, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_sum_3'.format(key_name), 'AGGREGATION', 'SUM', 3, conn=r).noError()
+        env.expect('TS.CREATERULE', key_name, '{}_agg_std_3'.format(key_name), 'AGGREGATION', 'STD.S', 3, conn=r).noError()
         _insert_data(r, key_name, start_ts, samples_count, list(range(samples_count)))
         data_tester = r.dump(key_name)
         data_avg_tester = r.dump('{}_agg_avg_3'.format(key_name))
@@ -87,7 +87,7 @@ def test_rdb_aggregation_context():
         r.execute_command('RESTORE', '{}_agg_min_3'.format(key_name), 0, data_min_tester)
         r.execute_command('RESTORE', '{}_agg_sum_3'.format(key_name), 0, data_sum_tester)
         r.execute_command('RESTORE', '{}_agg_std_3'.format(key_name), 0, data_std_tester)
-        assert r.execute_command('TS.ADD', key_name, start_ts + samples_count, samples_count)
+        env.expect('TS.ADD', key_name, start_ts + samples_count, samples_count, conn=r).noError()
         assert r.execute_command('TS.ADD', key_name, start_ts + samples_count + 10, 0)  # closes the last time_bucket
         # if the aggregation context wasn't saved, the results were considering only the new value added
         expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
@@ -105,8 +105,8 @@ def test_rdb_aggregation_context():
         assert abs(float(actual_result_std[1][1]) - float(expected_result_std[1][1])) < ALLOWED_ERROR
 
 
-def test_dump_trimmed_series(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_dump_trimmed_series(env):
+    with env.getClusterConnectionIfNeeded() as r:
         samples = 120
         start_ts = 1589461305983
         r.execute_command('ts.create', 'test_key', 'RETENTION', 3000, 'CHUNK_SIZE', 160, 'UNCOMPRESSED')
@@ -121,17 +121,17 @@ def test_dump_trimmed_series(self):
         assert r.execute_command('ts.range', 'test_key', '-', '+') == before
 
 
-def test_empty_series():
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+def test_empty_series(env):
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester', conn=r).noError()
         agg_list = ['avg', 'sum', 'min', 'max', 'range', 'first', 'last',
                     'std.p', 'std.s', 'var.p', 'var.s']
         for agg in agg_list:
             assert [] == r.execute_command('TS.range', 'tester', '-', '+', 'aggregation', agg, 1000)
         assert r.dump('tester')
 
-def test_533_dump_rules():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_533_dump_rules(env):
+    with env.getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
         r.execute_command('TS.CREATE', key1)

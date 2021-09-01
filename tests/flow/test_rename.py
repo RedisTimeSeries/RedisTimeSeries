@@ -6,15 +6,15 @@ from includes import *
 def test_rename_src(env):
     with env.getClusterConnectionIfNeeded() as r:
 
-        assert r.execute_command('TS.CREATE', 'a1{1}')
-        assert r.execute_command('TS.CREATE', 'b{1}')
+        env.expect('TS.CREATE', 'a1{1}', conn=r).noError()
+        env.expect('TS.CREATE', 'b{1}', conn=r).noError()
 
         env.assertTrue(r.execute_command('RENAME', 'a1{1}', 'a2{1}'))
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a2{1}'))
         env.assertEqual(aInfo.sourceKey, None)
         env.assertEqual(aInfo.rules, [])
         
-        assert r.execute_command('TS.CREATERULE', 'a2{1}', 'b{1}', 'AGGREGATION', 'AVG', 5000)
+        env.expect('TS.CREATERULE', 'a2{1}', 'b{1}', 'AGGREGATION', 'AVG', 5000, conn=r).noError()
         bInfo = TSInfo(r.execute_command('TS.INFO', 'b{1}'))
         env.assertEqual(bInfo.sourceKey, 'a2{1}')
         env.assertEqual(bInfo.rules, [])
@@ -28,20 +28,20 @@ def test_rename_src(env):
 def test_rename_dst(env):
     with env.getClusterConnectionIfNeeded() as r:
 
-        assert r.execute_command('TS.CREATE', 'a{2}')
-        assert r.execute_command('TS.CREATE', 'b{2}')
-        assert r.execute_command('TS.CREATERULE', 'a{2}', 'b{2}', 'AGGREGATION', 'AVG', 5000)
+        env.expect('TS.CREATE', 'a{2}', conn=r).noError()
+        env.expect('TS.CREATE', 'b{2}', conn=r).noError()
+        env.expect('TS.CREATERULE', 'a{2}', 'b{2}', 'AGGREGATION', 'AVG', 5000, conn=r).noError()
 
         env.assertTrue(r.execute_command('RENAME', 'b{2}', 'b1{2}'))
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a{2}'))
         env.assertEqual(aInfo.sourceKey, None)
         env.assertEqual(aInfo.rules[0][0], 'b1{2}')
 
-        assert r.execute_command('TS.CREATE', 'c{2}')
-        assert r.execute_command('TS.CREATERULE', 'a{2}', 'c{2}', 'AGGREGATION', 'COUNT', 2000)
+        env.expect('TS.CREATE', 'c{2}', conn=r).noError()
+        env.expect('TS.CREATERULE', 'a{2}', 'c{2}', 'AGGREGATION', 'COUNT', 2000, conn=r).noError()
 
-        assert r.execute_command('TS.CREATE', 'd{2}')
-        assert r.execute_command('TS.CREATERULE', 'a{2}', 'd{2}', 'AGGREGATION', 'SUM', 3000)
+        env.expect('TS.CREATE', 'd{2}', conn=r).noError()
+        env.expect('TS.CREATERULE', 'a{2}', 'd{2}', 'AGGREGATION', 'SUM', 3000, conn=r).noError()
 
         env.assertTrue(r.execute_command('RENAME', 'c{2}', 'c1{2}'))
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a{2}'))
@@ -64,15 +64,15 @@ def test_rename_indexed(env):
 def test_rename_none_ts(env):
     with env.getClusterConnectionIfNeeded() as r:
         
-        assert r.execute_command('TS.CREATE', 'a{4}')
-        assert r.execute_command('SET', 'key1{4}', 'val1')
-        assert r.execute_command('SET', 'key2{4}', 'val2')
+        env.expect('TS.CREATE', 'a{4}', conn=r).noError()
+        env.expect('SET', 'key1{4}', 'val1', conn=r).noError()
+        env.expect('SET', 'key2{4}', 'val2', conn=r).noError()
 
         env.assertTrue(r.execute_command('RENAME', 'key1{4}', 'key3{4}'))
         env.assertTrue(r.execute_command('RENAME', 'key2{4}', 'key1{4}'))
 
-        assert r.execute_command('SET', 'key1{4}', 'val3')
-        assert r.execute_command('SET', 'key3{4}', 'val4')
+        env.expect('SET', 'key1{4}', 'val3', conn=r).noError()
+        env.expect('SET', 'key3{4}', 'val4', conn=r).noError()
 
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a{4}'))
         env.assertEqual(aInfo.sourceKey, None)

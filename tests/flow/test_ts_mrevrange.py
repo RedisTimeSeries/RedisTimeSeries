@@ -3,13 +3,13 @@ from test_helper_classes import _insert_data
 from includes import *
 
 
-def test_mrevrange():
+def test_mrevrange(env):
     start_ts = 1511885909
     samples_count = 50
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
-        assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
-        assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
+        env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
+        env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
         _insert_data(r, 'tester1', start_ts, samples_count, 5)
         _insert_data(r, 'tester2', start_ts, samples_count, 15)
         _insert_data(r, 'tester3', start_ts, samples_count, 25)

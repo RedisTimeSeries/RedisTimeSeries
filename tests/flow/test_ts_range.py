@@ -12,7 +12,7 @@ def test_range_query(env):
     start_ts = 1488823384
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100)
+        env.expect('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100, conn=r).noError()
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(99, 151)]
@@ -29,47 +29,29 @@ def test_range_query(env):
         env.expect('TS.revrange', 'tester', int(start_ts * 2), '+', conn=r).equal([])
         env.expect('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2), conn=r).equal([])
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 'string', '+')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, 'string')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', -1, 1000)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'nonexist', 0, '+')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', '', 'aggregation')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count', 'number')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', 'number')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'not_aggregation_function')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', 'FILTER_BY_VALUE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 'FILTER_BY_TS')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
+        env.expect('TS.RANGE', 'tester', 'string', '+', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, 'string', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, -1, conn=r).error()
+        env.expect('TS.RANGE', 'tester', -1, 1000, conn=r).error()
+        env.expect('TS.RANGE', 'nonexist', 0, '+', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', '', 'aggregation', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'count', 'number', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'count', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', 'number', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'aggregation', '', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'aggregation', 'not_aggregation_function', conn=r).error()
+        env.expect('TS.RANGE', 'tester', 0, '+', 'aggregation', '', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', 'FILTER_BY_VALUE', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 'FILTER_BY_TS', conn=r).error()
+        env.expect('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS', conn=r).error()
 
 def test_range_midrange(env):
     samples_count = 5000
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
+        env.expect('TS.CREATE', 'tester', 'UNCOMPRESSED', conn=r).noError()
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester', i, i)
         res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
@@ -84,11 +66,11 @@ def test_range_midrange(env):
         assert res == []
 
 
-def test_range_with_agg_query():
+def test_range_with_agg_query(env):
     start_ts = 1488823384
     samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester', conn=r).noError()
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[1488823000, '116'], [1488823500, '500'], [1488824000, '500'], [1488824500, '384']]
@@ -107,8 +89,8 @@ def test_range_with_agg_query():
                                      'count', -1)
 
 
-def test_agg_std_p():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_std_p(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'std.p')
 
         expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
@@ -117,8 +99,8 @@ def test_agg_std_p():
             assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_std_s():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_std_s(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'std.s')
 
         expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
@@ -127,8 +109,8 @@ def test_agg_std_s():
             assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_var_p():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_var_p(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'var.p')
 
         expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
@@ -137,8 +119,8 @@ def test_agg_var_p():
             assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_var_s():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_var_s(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'var.s')
 
         expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
@@ -147,8 +129,8 @@ def test_agg_var_s():
             assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_sum():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_sum(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'sum')
 
         expected_result = [[10, '1565'], [20, '2565'], [30, '3565'], [40, '4565']]
@@ -156,8 +138,8 @@ def test_agg_sum():
         assert expected_result == actual_result
 
 
-def test_agg_count():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_count(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'count')
 
         expected_result = [[10, '10'], [20, '10'], [30, '10'], [40, '10']]
@@ -165,8 +147,8 @@ def test_agg_count():
         assert expected_result == actual_result
 
 
-def test_agg_first():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_first(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'first')
 
         expected_result = [[10, '131'], [20, '231'], [30, '331'], [40, '431']]
@@ -174,8 +156,8 @@ def test_agg_first():
         assert expected_result == actual_result
 
 
-def test_agg_last():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_last(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'last')
 
         expected_result = [[10, '184'], [20, '284'], [30, '384'], [40, '484']]
@@ -183,8 +165,8 @@ def test_agg_last():
         assert expected_result == actual_result
 
 
-def test_agg_range():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_range(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'range')
 
         expected_result = [[10, '74'], [20, '74'], [30, '74'], [40, '74']]
@@ -192,11 +174,11 @@ def test_agg_range():
         assert expected_result == actual_result
 
 
-def test_range_count():
+def test_range_count(env):
     start_ts = 1511885908
     samples_count = 50
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'tester1')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
@@ -212,8 +194,8 @@ def test_range_count():
         assert len(count_results) == math.ceil(samples_count / 3.0)
 
 
-def test_agg_min():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_min(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'min')
 
         expected_result = [[10, '123'], [20, '223'], [30, '323'], [40, '423']]
@@ -221,8 +203,8 @@ def test_agg_min():
         assert expected_result == actual_result
 
 
-def test_agg_max():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_max(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'max')
 
         expected_result = [[10, '197'], [20, '297'], [30, '397'], [40, '497']]
@@ -230,8 +212,8 @@ def test_agg_max():
         assert expected_result == actual_result
 
 
-def test_agg_avg():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_agg_avg(env):
+    with env.getClusterConnectionIfNeeded() as r:
         agg_key = _insert_agg_data(r, 'tester{a}', 'avg')
 
         expected_result = [[10, '156.5'], [20, '256.5'], [30, '356.5'], [40, '456.5']]
@@ -239,8 +221,8 @@ def test_agg_avg():
         assert expected_result == actual_result
 
 
-def test_series_ordering():
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_series_ordering(env):
+    with env.getClusterConnectionIfNeeded() as r:
         sample_len = 1024
         chunk_size = 4
 
@@ -255,10 +237,10 @@ def test_series_ordering():
             i += 1
 
 
-def test_sanity():
+def test_sanity(env):
     start_ts = 1511885909
     samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
         _insert_data(r, 'tester', start_ts, samples_count, 5)
@@ -276,11 +258,11 @@ def test_sanity():
         assert TSInfo(expected_result) == _get_ts_info(r, 'tester')
 
 
-def test_sanity_pipeline():
+def test_sanity_pipeline(env):
     start_ts = 1488823384
     samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
+    with env.getClusterConnectionIfNeeded() as r:
+        env.expect('TS.CREATE', 'tester', conn=r).noError()
         with r.pipeline(transaction=False) as p:
             p.set("name", "danni")
             _insert_data(p, 'tester', start_ts, samples_count, 5)
@@ -290,9 +272,9 @@ def test_sanity_pipeline():
         assert expected_result == actual_result
 
 
-def test_issue358():
+def test_issue358(env):
     filepath = "./issue358.txt"
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'issue358')
 
         with open(filepath) as fp:
@@ -305,10 +287,9 @@ def test_issue358():
         get_res = r.execute_command('ts.get', 'issue358')[1]
         assert range_res == get_res
 
-def test_filter_by():
+def test_filter_by(env):
     start_ts = 1511885909
     samples_count = 1500
-    env = Env()
     with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
