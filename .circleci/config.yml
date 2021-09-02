@@ -337,14 +337,12 @@ jobs:
     machine:
       enabled: true
       image: ubuntu-2004:202010-01 # ubuntu-1604:202010-01
-    working_directory: /view/RedisTimeSeries
+    working_directory: ~/RedisTimeSeries
     steps:
       - run:
           name: Setup workdir
           command: |
-            sudo mkdir -p /view/RedisTimeSeries
-            sudo chown -R $USER:$USER /view
-            sudo chmod -R g+s /view
+            mkdir ~/RedisTimeSeries
       - early-returns
       - checkout-all
       - run:
@@ -358,7 +356,7 @@ jobs:
       - run:
           name: Install Arlecchino
           command: |
-            cd /view
+            cd
             sudo bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
       - run:
           name: Build
@@ -370,7 +368,7 @@ jobs:
       - run:
           name: Start RLEC
           command: |
-            cd /view
+            cd
             sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
             sudo bash -l -c "rlec start --os bionic"
       - run:
