@@ -339,10 +339,6 @@ jobs:
       image: ubuntu-2004:202010-01 # ubuntu-1604:202010-01
     working_directory: ~/RedisTimeSeries
     steps:
-      - run:
-          name: Setup workdir
-          command: |
-            mkdir ~/RedisTimeSeries
       - early-returns
       - checkout-all
       - run:
