@@ -542,6 +542,8 @@ workflows:
           <<: *on-any-branch
       - build:
           <<: *on-any-branch
+      - test-rlec:
+          <<: *on-any-branch
       - valgrind:
           requires:
             - build
