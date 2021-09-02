@@ -112,8 +112,8 @@ def test_dump_trimmed_series(env):
         r.execute_command('ts.create', 'test_key', 'RETENTION', 3000, 'CHUNK_SIZE', 160, 'UNCOMPRESSED')
         for i in range(1, samples):
             r.execute_command('ts.add', 'test_key', start_ts + i * 1000, i)
-        assert r.execute_command('ts.range', 'test_key', '-', '+') == \
-               [[1589461421983, '116'], [1589461422983, '117'], [1589461423983, '118'], [1589461424983, '119']]
+        env.expect('ts.range', 'test_key', '-', '+', conn=r).equal(
+               [[1589461421983, '116'], [1589461422983, '117'], [1589461423983, '118'], [1589461424983, '119']])
         before = r.execute_command('ts.range', 'test_key', '-', '+')
         dump = r.dump('test_key')
         r.execute_command('del', 'test_key')

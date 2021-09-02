@@ -84,8 +84,7 @@ def test_uncompressed(env):
 
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('RESTORE', 'not_compressed', 0, data)
-        assert [[1, '3.5'], [2, '4.5'], [3, '5.5']] == \
-               r.execute_command('ts.range', 'not_compressed', 0, "+")
+        env.expect('ts.range', 'not_compressed', 0, "+", conn=r).equal([[1, '3.5'], [2, '4.5'], [3, '5.5']])
         info = _get_ts_info(r, 'not_compressed')
         assert info.total_samples == 3 and info.memory_usage == 4136
         # test deletion

@@ -69,32 +69,24 @@ def test_range_by_labels(env):
         assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                         'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
                                                         'class!=middle'), key=lambda x:x[0])
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
-                                          'LAST', 5, 'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
         assert expected_result[0][2][:3] == sorted(actual_result, key=lambda x:x[0])[0][2]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5,
-                                          'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
         assert [[1511885905, '1']] == actual_result[0][2][:1]
         assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
-                                          'COUNT', 3, 'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
         assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
-                                          'COUNT', 3, 'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
         assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
-                                          'FILTER', 'generation=x')
+        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
         assert 18 == len(actual_result[0][2])  # just checking that agg count before count works
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3,
-                                     'FILTER', 'generation=x')
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string',
-                                     'FILTER', 'generation=x')
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string', 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER',
-                                     'generation=x')
+            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER', 'generation=x')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.mrange', '-', '+' ,'FILTER')  # missing args
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -313,10 +305,8 @@ def test_mrange_align(env):
             ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
         ]
 
-        assert expected_start_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
-                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
-        assert expected_end_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
-                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
+        assert expected_start_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
+        assert expected_end_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
 
         def groupby(data):
             result =  defaultdict(lambda: 0)
@@ -328,9 +318,5 @@ def test_mrange_align(env):
         expected_groupby_start_result = [['generation=x', [], groupby(expected_start_result)]]
         expected_groupby_end_result = [['generation=x', [], groupby(expected_end_result)]]
 
-        assert expected_groupby_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
-                                 'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
-                                 'GROUPBY', 'generation', 'REDUCE', 'max')
-        assert expected_groupby_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
-                                                                  'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
-                                                                  'GROUPBY', 'generation', 'REDUCE', 'max')
+        assert expected_groupby_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max')
+        assert expected_groupby_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max')

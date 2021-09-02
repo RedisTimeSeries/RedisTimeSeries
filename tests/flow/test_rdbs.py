@@ -16,8 +16,7 @@ def normalize_info(data):
     return info
 
 
-def testRDBCompatibility():
-    env = Env()
+def testRDBCompatibility(env):
     env.skipOnCluster()
     RDBS = os.listdir('rdbs')
 

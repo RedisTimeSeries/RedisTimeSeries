@@ -13,9 +13,7 @@ def test_madd():
         r.execute_command("ts.create", 'test_key3')
 
         for i in range(sample_len):
-            assert [i + 1000, i + 3000, i + 6000] == r.execute_command("ts.madd", 'test_key1', i + 1000, i,
-                                                                       'test_key2', i + 3000, i, 'test_key3',
-                                                                       i + 6000, i, )
+            assert [i + 1000, i + 3000, i + 6000] == r.execute_command("ts.madd", 'test_key1', i + 1000, i, 'test_key2', i + 3000, i, 'test_key3', i + 6000, i)
 
         res = r.execute_command('ts.range', 'test_key1', 1000, 1000 + sample_len)
         i = 0
@@ -36,11 +34,11 @@ def test_madd():
             i += 1
 
 
-def test_ooo_madd():
+def test_ooo_madd(env):
     sample_len = 100
     start_ts = 1600204334000
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", 'test_key1')
         last_sample = None
         samples = []
@@ -58,9 +56,9 @@ def test_ooo_madd():
         assert r.execute_command('ts.range', 'test_key1', '-', '+') == samples
 
 
-def test_partial_madd():
-    Env().skipOnCluster()
-    with Env().getConnection() as r:
+def test_partial_madd(env):
+    env.skipOnCluster()
+    with env.getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
         r.execute_command("ts.create", 'test_key3')
@@ -78,9 +76,9 @@ def test_partial_madd():
         assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
 
 
-def test_extensive_ts_madd():
-    Env().skipOnCluster()
-    with Env(decodeResponses=True).getConnection() as r:
+def test_extensive_ts_madd(env):
+    env.skipOnCluster()
+    with env.getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
         pos = 1
@@ -90,9 +88,8 @@ def test_extensive_ts_madd():
             lines = file.readlines()
         for line in lines:
             float_v = float(line.strip())
-            res = r.execute_command("ts.madd", 'test_key1', pos, float_v, 'test_key2', pos, float_v)
-            assert res == [pos,pos]
-            pos=pos+1
+            env.expect("ts.madd", 'test_key1', pos, float_v, 'test_key2', pos, float_v, conn=r).equal([pos, pos])
+            pos += 1
             float_lines.append(float_v)
         returned_floats = r.execute_command('ts.range', 'test_key1', "-", "+")
         assert len(returned_floats) == len(float_lines)

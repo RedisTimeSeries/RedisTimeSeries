@@ -5,13 +5,13 @@ from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _i
 from includes import *
 
 
-def test_alter_cmd():
+def test_alter_cmd(env):
     start_ts = 1511885909
     samples_count = 1500
     end_ts = start_ts + samples_count
     key = 'tester'
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
                                  'LABELS', 'name', 'brown', 'color', 'pink')
         _insert_data(r, key, start_ts, samples_count, 5)
@@ -50,8 +50,8 @@ def test_alter_cmd():
         assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
 
 
-def test_alter_key(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_alter_key(env):
+    with env.getClusterConnectionIfNeeded() as r:
         key = 'tester'
         r.execute_command('TS.CREATE', key)
         date_ranges = _fill_data(r, key)

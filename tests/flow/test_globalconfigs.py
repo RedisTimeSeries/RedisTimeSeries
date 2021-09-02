@@ -33,7 +33,6 @@ def test_encoding_uncompressed(env):
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
-
 def test_encoding_compressed(env):
     env.skipOnCluster()
     env = Env(moduleArgs='ENCODING compressed; COMPACTION_POLICY max:1s:1m')
@@ -49,7 +48,6 @@ def test_uncompressed(env):
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
-
 
 def test_compressed(env):
     env.skipOnCluster()
@@ -70,8 +68,8 @@ def test_compressed_debug(env):
 
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [['startTimestamp', 0, 'endTimestamp', 3000, 'samples', 2, 'size', 4096, 'bytesPerSample', '2048']]
 
-class testGlobalConfigTests():
 
+class testGlobalConfigTests():
     def __init__(self):
         Env().skipOnCluster()
         self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')

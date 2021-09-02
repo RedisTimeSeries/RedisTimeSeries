@@ -18,7 +18,8 @@ class testDuplicationPolicyTests():
             self.env.expect('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", "---------------", conn=r).error()
 
     def test_precendence_key(self):
-        with self.env.getClusterConnectionIfNeeded() as r:
+        env = self.env
+        with env.getClusterConnectionIfNeeded() as r:
             key = 'tester'
             key_no_dup = 'tester_no_dup'
             r.execute_command('TS.CREATE', key, 'DUPLICATE_POLICY', 'LAST')
@@ -28,32 +29,26 @@ class testDuplicationPolicyTests():
 
             overrided_ts = date_ranges[0][0] + 10
             overrided_value = 666
-            with pytest.raises(redis.ResponseError):
-                r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value)
-            assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value) == overrided_ts
+            env.expect('TS.ADD', key_no_dup, overrided_ts, overrided_value, conn=r).error()
+            env.expect('TS.ADD', key, overrided_ts, overrided_value, conn=r).equal(overrided_ts)
 
-            assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_ts)]]
-            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_value)]]
+            env.expect('TS.RANGE', key_no_dup, overrided_ts, overrided_ts, conn=r).equal([[overrided_ts, str(overrided_ts)]])
+            env.expect('TS.RANGE', key, overrided_ts, overrided_ts, conn=r).equal([[overrided_ts, str(overrided_value)]])
 
             # check that inserting a non-duplicate sample doesn't fail
             non_dup_ts = date_ranges[0][1] + 1
-            assert r.execute_command('TS.ADD', key_no_dup, non_dup_ts, overrided_value) == non_dup_ts
+            env.expect('TS.ADD', key_no_dup, non_dup_ts, overrided_value, conn=r).equal(non_dup_ts)
 
             # check that `ON_DUPLICATE` overrides the module configuration
-            assert r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value, 'ON_DUPLICATE',
-                                     'LAST') == overrided_ts
-            assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [
-                [overrided_ts, str(overrided_value)]]
+            assert r.execute_command('TS.ADD', key_no_dup, overrided_ts, overrided_value, 'ON_DUPLICATE', 'LAST') == overrided_ts
+            assert r.execute_command('TS.RANGE', key_no_dup, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_value)]]
 
             # check that `ON_DUPLICATE` overrides the key configuration
-            assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value * 10, 'ON_DUPLICATE',
-                                     'MAX') == overrided_ts
-            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == \
-                   [[overrided_ts, str(overrided_value * 10)]]
+            assert r.execute_command('TS.ADD', key, overrided_ts, overrided_value * 10, 'ON_DUPLICATE', 'MAX') == overrided_ts
+            assert r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts) == [[overrided_ts, str(overrided_value * 10)]]
 
     def test_policies_correctness(self):
+        env = self.env
         policies = {
             'LAST': lambda x, y: y,
             'FIRST': lambda x, y: x,
@@ -62,7 +57,7 @@ class testDuplicationPolicyTests():
             'SUM': lambda x, y: x + y
         }
 
-        with self.env.getClusterConnectionIfNeeded() as r:
+        with env.getClusterConnectionIfNeeded() as r:
             key = 'tester'
 
             for chunk_type in ['', 'UNCOMPRESSED']:
@@ -76,10 +71,8 @@ class testDuplicationPolicyTests():
                 for policy in policies:
                     old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
                     new_value = random.randint(-5000, 1000000)
-                    assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE',
-                                             policy) == overrided_ts
+                    assert r.execute_command('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy) == overrided_ts
                     proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
-                    assert policies[policy](old_value,
-                                            new_value) == proccessed_value, "check that {} is correct".format(policy)
+                    assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
 
                 r.execute_command('DEL', key)
