@@ -45,6 +45,7 @@ make test          # run tests
   GEARS_PATH=path  # RedisGears module path
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
+  RLEC=1           # test with RLEC
 
 make pack          # build packages (ramp & dependencies)
 
@@ -238,6 +239,8 @@ export CLUSTER ?= 0
 export GEARS ?= 0
 endif
 
+ifneq ($(RLEC),1)
+
 tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
@@ -252,6 +255,23 @@ endif
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
+
+else # RLEC
+
+tests: #$(TARGET)
+ifeq ($(COV),1)
+	$(COVERAGE_RESET)
+endif
+	$(SHOW)\
+		MODULE=$(realpath $(TARGET)) \
+		RLEC=1 \
+		GEARS=$(GEARS) \
+		$(ROOT)/tests/flow/tests.sh
+ifeq ($(COV),1)
+	$(COVERAGE_COLLECT_REPORT)
+endif
+
+endif # RLEC
 
 $(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
 	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)

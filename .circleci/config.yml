@@ -252,7 +252,7 @@ jobs:
     resource_class: xlarge
     steps:
       - build-steps:
-          platform: debian
+          platform: buster
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
@@ -273,7 +273,7 @@ jobs:
       - image: redisfab/rmbuilder:6.2.5-x64-buster
     steps:
       - build-steps:
-          platform: debian
+          platform: buster
       - persist-artifacts
 
   build-platforms:
@@ -325,6 +325,17 @@ jobs:
           command: |
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
+      - setup-automation
+      - run:
+          name: Build for platform
+          command: |
+            ROOT=$PWD
+            cd build/docker
+            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
+            cd $ROOT
+            mkdir -p tests/flow/logs
+            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
+          no_output_timeout: 30m
       - run:
           name: Build
           command: |
@@ -332,6 +343,61 @@ jobs:
             make -C build/docker build
             sudo make -C build/docker publish
           no_output_timeout: 20m
+
+  test-rlec:
+    machine:
+      enabled: true
+      image: ubuntu-2004:202010-01 # ubuntu-1604:202010-01
+    working_directory: /view/RedisTimeSeries
+    steps:
+      - early-returns
+      - checkout-all
+#      - run:
+#          name: Set up Python3
+#          command: pyenv global 3.7.0
+#      - run:
+#          name: Setup Docker client experimental features
+#          command: |
+#            sudo ./deps/readies/bin/getdocker --just-enable-exp
+#            docker version
+      - setup-automation
+      - install-prerequisites
+      - run:
+          name: Install Docker
+          command: |
+            sudo ./deps/readies/bin/getdocker
+            docker version
+      - run:
+          name: Install Arlecchino
+          command: |
+            cd /view
+            sudo bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+      - run:
+          name: Build
+          command: |
+            cd build/docker
+            bash -l -c "make build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
+            bash -l -c "./sbin/getgears"
+          no_output_timeout: 30m
+      - run:
+          name: Start RLEC
+          command: |
+            cd /view
+            cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
+            bash -l -c "rlec start --os bionic"
+      - run:
+          name: Flow Test
+          no_output_timeout: 30m
+          command: |
+            python3 -m pip list
+            mkdir -p ~/workspace/tests
+            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests RLEC=1 SHOW=1"
+      - run:
+          name: Run flow with gears
+          no_output_timeout: 30m
+          command: |
+            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 RLEC=1 SHOW=1 V=2"
+      - save-tests-logs
 
   coverage:
     docker:

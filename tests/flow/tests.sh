@@ -23,6 +23,7 @@ help() {
 		AOF=0|1             Tests with --test-aof
 		SLAVES=0|1          Tests with --test-slaves
 		CLUSTER=0|1         Tests with --env oss-cluster
+		RLEC=0|1            Tests with --existing-env and RLEC
 
 		REDIS_SERVER=path   Location of redis-server
 		GEARS=0|1           Tests with RedisGears
@@ -32,7 +33,7 @@ help() {
 		VALGRIND|VG=1       Run with Valgrind
 
 		DOCKER_HOST         Address of Docker server (default: localhost)
-		RLEC_PORT           Port of existing-env in RLEC container
+		RLEC_PORT           Port of existing-env in RLEC container (default: 12000)
 
 		VERBOSE=1           Print commands
 		IGNERR=1            Do not abort on error
@@ -93,7 +94,8 @@ run_tests() {
 
 	config=$(mktemp "${TMPDIR:-/tmp}/rltest.XXXXXXX")
 	rm -f $config
-	cat << EOF > $config
+	if [[ $RLEC != 1 ]]; then
+		cat << EOF > $config
 
 --clear-logs
 --oss-redis-path=$REDIS_SERVER
@@ -104,6 +106,15 @@ $GEARS_ARGS
 $VALGRIND_ARGS
 
 EOF
+	else
+		cat << EOF > $config
+
+--clear-logs
+$RLTEST_ARGS
+$VALGRIND_ARGS
+
+EOF
+	fi
 
 	cd $ROOT/tests/flow
 	if [[ $VERBOSE == 1 ]]; then
@@ -119,6 +130,7 @@ EOF
 		export PYTHONPATH
 	fi
 
+	[[ $RLEC == 1 ]] && export RLEC_CLUSTER=1
 	$OP python3 -m RLTest @$config
 	[[ $KEEP != 1 ]] && rm -f $config
 }
@@ -130,11 +142,20 @@ EOF
 	exit 0
 }
 
-GEN=${GEN:-1}
-SLAVES=${SLAVES:-1}
-AOF=${AOF:-1}
-CLUSTER=${CLUSTER:-1}
-GEARS=${GEARS:-0}
+RLEC=${RLEC:-0}
+if [[ $RLEC != 1 ]]; then
+	GEN=${GEN:-1}
+	SLAVES=${SLAVES:-1}
+	AOF=${AOF:-1}
+	CLUSTER=${CLUSTER:-1}
+	GEARS=${GEARS:-0}
+else
+	GEN=0
+	SLAVES=0
+	AOF=0
+	CLUSTER=0
+	GEARS=${GEARS:-0}
+fi
 
 DOCKER_HOST=${DOCKER_HOST:-localhost}
 RLEC_PORT=${RLEC_PORT:-12000}
@@ -187,11 +208,11 @@ cd $ROOT/tests/flow
 
 setup_redis_server
 
-[[ $GEN == 1 ]] && run_tests
-[[ $CLUSTER == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count 2" run_tests "oss-cluster"
-[[ $SLAVES == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves"
-[[ $AOF == 1 ]] && RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF"
-[[ $RLEC == 1 ]] && RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "rlec"
+[[ $GEN == 1 ]] && (run_tests)
+[[ $CLUSTER == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count 2" run_tests "oss-cluster")
+[[ $SLAVES == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves")
+[[ $AOF == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF")
+[[ $RLEC == 1 ]] && (RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "rlec")
 
 exit 0
 
