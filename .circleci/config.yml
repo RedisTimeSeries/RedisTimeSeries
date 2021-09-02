@@ -336,7 +336,7 @@ jobs:
   test-rlec:
     machine:
       enabled: true
-      image: ubuntu-2004:202010-01 # ubuntu-1604:202010-01
+      image: ubuntu-2004:202010-01
     working_directory: ~/RedisTimeSeries
     steps:
       - early-returns
@@ -349,6 +349,9 @@ jobs:
             sudo ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
+     - add_ssh_keys:
+          fingerprints:
+            - "2a:11:3f:16:9f:ab:90:34:6b:51:28:f5:b7:3a:d1:6d"
       - run:
           name: Install Arlecchino
           command: |
@@ -357,8 +360,7 @@ jobs:
       - run:
           name: Build
           command: |
-            cd build/docker
-            sudo bash -l -c "make build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
+            sudo bash -l -c "make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
             sudo bash -l -c "./sbin/getgears"
           no_output_timeout: 30m
       - run:
