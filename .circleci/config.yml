@@ -325,17 +325,6 @@ jobs:
           command: |
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
-      - setup-automation
-      - run:
-          name: Build for platform
-          command: |
-            ROOT=$PWD
-            cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
-            cd $ROOT
-            mkdir -p tests/flow/logs
-            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
-          no_output_timeout: 30m
       - run:
           name: Build
           command: |
