@@ -15,15 +15,10 @@ def test_groupby_reduce_errors(env):
 
         # test wrong arity
         env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', conn=r).error()
-
         env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', conn=r).error()
-
         env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc', conn=r).error()
-
         env.expect('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla', conn=r).error()
-
-    with pytest.raises(redis.ResponseError) as excinfo:
-        env.expect('TS.MRANGE', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu', conn=r).noError()
+        env.expect('TS.MRANGE', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu', conn=r).error()
 
 def test_groupby_reduce(env):
     with env.getClusterConnectionIfNeeded() as r:

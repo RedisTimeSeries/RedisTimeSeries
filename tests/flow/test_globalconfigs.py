@@ -61,7 +61,6 @@ def test_compressed(env):
 
 def test_compressed_debug(env):
     env.skipOnCluster()
-
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')

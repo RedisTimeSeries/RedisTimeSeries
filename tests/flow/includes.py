@@ -10,3 +10,5 @@ try:
     import paella
 except:
     pass
+
+RLEC_CLUSTER = os.getenv('RLEC_CLUSTER')

@@ -13,7 +13,7 @@ def test_rename_src(env):
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a2{1}'))
         env.assertEqual(aInfo.sourceKey, None)
         env.assertEqual(aInfo.rules, [])
-        
+
         env.expect('TS.CREATERULE', 'a2{1}', 'b{1}', 'AGGREGATION', 'AVG', 5000, conn=r).noError()
         bInfo = TSInfo(r.execute_command('TS.INFO', 'b{1}'))
         env.assertEqual(bInfo.sourceKey, 'a2{1}')
@@ -27,7 +27,6 @@ def test_rename_src(env):
 
 def test_rename_dst(env):
     with env.getClusterConnectionIfNeeded() as r:
-
         env.expect('TS.CREATE', 'a{2}', conn=r).noError()
         env.expect('TS.CREATE', 'b{2}', conn=r).noError()
         env.expect('TS.CREATERULE', 'a{2}', 'b{2}', 'AGGREGATION', 'AVG', 5000, conn=r).noError()
@@ -63,7 +62,7 @@ def test_rename_indexed(env):
 
 def test_rename_none_ts(env):
     with env.getClusterConnectionIfNeeded() as r:
-        
+
         env.expect('TS.CREATE', 'a{4}', conn=r).noError()
         env.expect('SET', 'key1{4}', 'val1', conn=r).noError()
         env.expect('SET', 'key2{4}', 'val2', conn=r).noError()
