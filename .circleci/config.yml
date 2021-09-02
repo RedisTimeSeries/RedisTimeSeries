@@ -339,22 +339,21 @@ jobs:
       image: ubuntu-2004:202010-01 # ubuntu-1604:202010-01
     working_directory: /view/RedisTimeSeries
     steps:
+      - run:
+          name: Setup workdir
+          command: |
+            sudo mkdir -p /view/RedisTimeSeries
+            sudo chown -R $USER:$USER /view
+            sudo chmod -R g+s /view
       - early-returns
       - checkout-all
-#      - run:
-#          name: Set up Python3
-#          command: pyenv global 3.7.0
-#      - run:
-#          name: Setup Docker client experimental features
-#          command: |
-#            sudo ./deps/readies/bin/getdocker --just-enable-exp
-#            docker version
-      - setup-automation
-      - install-prerequisites
       - run:
-          name: Install Docker
+          name: Install prerequisites
           command: |
-            sudo ./deps/readies/bin/getdocker
+            sudo ./deps/readies/bin/getpy3
+            sudo ./system-setup.py
+            sudo ./deps/readies/bin/getredis
+            sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
       - run:
           name: Install Arlecchino
@@ -365,27 +364,27 @@ jobs:
           name: Build
           command: |
             cd build/docker
-            bash -l -c "make build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
-            bash -l -c "./sbin/getgears"
+            sudo bash -l -c "make build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
+            sudo bash -l -c "./sbin/getgears"
           no_output_timeout: 30m
       - run:
           name: Start RLEC
           command: |
             cd /view
-            cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
-            bash -l -c "rlec start --os bionic"
+            sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
+            sudo bash -l -c "rlec start --os bionic"
       - run:
           name: Flow Test
           no_output_timeout: 30m
           command: |
-            python3 -m pip list
-            mkdir -p ~/workspace/tests
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests RLEC=1 SHOW=1"
+            sudo python3 -m pip list
+            sudo mkdir -p ~/workspace/tests
+            sudo bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests RLEC=1 SHOW=1"
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 RLEC=1 SHOW=1 V=2"
+            sudo bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 RLEC=1 SHOW=1 V=2"
       - save-tests-logs
 
   coverage:
@@ -566,7 +565,8 @@ workflows:
           <<: *never
       - coverage:
           context: common
-          <<: *on-any-branch
+          #@@ <<: *on-any-branch
+          <<: *never
       - performance-ci-automation:
           context: common
           requires:
