@@ -356,7 +356,8 @@ jobs:
           name: Install Arlecchino
           command: |
             cd
-            sudo bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+            export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"
+            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
       - run:
           name: Build
           command: |
@@ -367,6 +368,7 @@ jobs:
           name: Start RLEC
           command: |
             cd
+            sudo mkdir -p rlec
             sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
             sudo bash -l -c "rlec start --os bionic"
       - run:

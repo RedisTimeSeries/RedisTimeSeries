@@ -3,7 +3,7 @@ redistimeseries:
     # args:
     modules_v2_api: yes
 redisgears-python:
-    path: /opt/view/RedisTimeSeries/bin/linux-bionic-x64/RedisGears/redisgears-python.Linux-ubuntu18.04-x86_64.master.zip
+    path: /opt/view/RedisTimeSeries/bin/linux-bionic-x64/RedisGears/redisgears-python.Linux-ubuntu18.04-x86_64.master.tgz
     dest: /var/opt/redislabs/modules/rg/999999/deps
     unzip: no
 redisgears:
