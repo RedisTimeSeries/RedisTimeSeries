@@ -19,6 +19,8 @@ help() {
 		[ARGVARS...] tests.sh [--help|help] [<module-so-path>]
 
 		Argument variables:
+		MODULE=path         Module .so path
+
 		GEN=0|1             General tests
 		AOF=0|1             Tests with --test-aof
 		SLAVES=0|1          Tests with --test-slaves
@@ -165,11 +167,13 @@ GDB=${GDB:-0}
 OP=""
 [[ $NOP == 1 ]] && OP=echo
 
-MODULE=${MODULE:-$1}
-[[ -z $MODULE || ! -f $MODULE ]] && {
-	echo "Module not found at ${MODULE}. Aborting."
-	exit 1
-}
+if [[ $RLEC != 1 ]]; then
+	MODULE=${MODULE:-$1}
+	[[ -z $MODULE || ! -f $MODULE ]] && {
+		echo "Module not found at ${MODULE}. Aborting."
+		exit 1
+	}
+fi
 
 [[ $VG == 1 ]] && VALGRIND=1
 if [[ $VALGRIND == 1 ]]; then
