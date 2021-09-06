@@ -11,4 +11,4 @@ try:
 except:
     pass
 
-RLEC_CLUSTER = os.getenv('RLEC_CLUSTER')
+RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'
