@@ -120,3 +120,99 @@ def test_bad_del(self):
         self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("TS.DEL", "BAD_X", 100, 200)
+
+def test_del_retention_with_rules(self):
+    sample_len = 1010
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 1, 'uncompressed')
+        r.execute_command("ts.create", 'test_key_3', 'uncompressed')
+        r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'avg', 10)
+
+        for i in range(sample_len):
+            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("ts.del", "test_key_2", 1, 10)
+
+        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 25, 'uncompressed')
+        r.execute_command("ts.create", 'test_key_5', 'uncompressed')
+        r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'avg', 10)
+
+        for i in range(30):
+            assert i == r.execute_command("ts.add", 'test_key_4', i, 1)
+
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command("ts.del", "test_key_4", 9, 10)
+
+
+def test_del_with_rules(self):
+    sample_len = 1010
+    e = Env()
+    with e.getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 5000, 'uncompressed')
+        r.execute_command("ts.create", 'test_key_3', 'uncompressed')
+        r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'sum', 10)
+
+        for i in range(70):
+            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+        for i in range(80, sample_len):
+            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+
+        res = r.execute_command('ts.range', 'test_key_3', 0, 9)
+        e.assertEqual(len(res), 1)
+        assert res[0] == [0, b'10']
+        assert r.execute_command("ts.del", "test_key_2", 0, 9) == 10
+        res = r.execute_command('ts.range', 'test_key_3', 0, 9)
+        e.assertEqual(len(res), 0)
+
+        res = r.execute_command('ts.range', 'test_key_3', 10, 19)
+        e.assertEqual(len(res), 1)
+        assert res[0] == [10, b'10']
+        assert r.execute_command("ts.del", "test_key_2", 12, 14) == 3
+        res = r.execute_command('ts.range', 'test_key_3', 10, 19)
+        e.assertEqual(len(res), 1)
+        assert res[0] == [10, b'7']
+
+        res = r.execute_command('ts.range', 'test_key_3', 20, 39)
+        e.assertEqual(len(res), 2)
+        assert res == [[20, b'10'], [30, b'10']]
+        assert r.execute_command("ts.del", "test_key_2", 28, 31) == 4
+        res = r.execute_command('ts.range', 'test_key_3', 20, 39)
+        e.assertEqual(len(res), 2)
+        assert res == [[20, b'8'], [30, b'8']]
+
+        res = r.execute_command('ts.range', 'test_key_3', 50, 89)
+        e.assertEqual(len(res), 3)
+        assert res == [[50, b'10'], [60, b'10'], [80, b'10']]
+        assert r.execute_command("ts.del", "test_key_2", 58, 81) == 14
+        res = r.execute_command('ts.range', 'test_key_3', 50, 89)
+        e.assertEqual(len(res), 2)
+        assert res == [[50, b'8'], [80, b'8']]
+
+        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        e.assertEqual(len(res), 1)
+        assert res[0] == [990, b'10']
+        assert r.execute_command("ts.del", "test_key_2", 995, 1002) == 8
+        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        e.assertEqual(len(res), 1)
+        assert res == [[990, b'5']]
+        assert 1010 == r.execute_command("ts.add", 'test_key_2', 1010, 1)
+        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        e.assertEqual(len(res), 2)
+        assert res == [[990, b'5'], [1000, b'7']]
+
+        ##### delete chunk of a rule #####
+        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 5000, 'CHUNK_SIZE', '1024', 'uncompressed')
+        r.execute_command("ts.create", 'test_key_5', 'CHUNK_SIZE', '1024', 'uncompressed')
+        r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'sum', 10)
+
+        for i in range(2070):
+            assert i == r.execute_command("ts.add", 'test_key_4', i, 1)
+
+        res = r.execute_command('ts.range', 'test_key_5', 1010, 2059)
+        e.assertEqual(len(res), 105)
+        assert r.execute_command("ts.del", "test_key_4", 1019, 2050) == 1032
+        res = r.execute_command('ts.range', 'test_key_5', 1010, 2059)
+        e.assertEqual(len(res), 2)
+        assert res == [[1010, b'9'], [2050, b'9']]
+
