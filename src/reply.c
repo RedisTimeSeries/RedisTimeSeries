@@ -100,13 +100,14 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
+static char _buf[MAX_VAL_LEN + 1];
+
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
-    char buf[MAX_VAL_LEN + 1];
-    int str_len = fpconv_dtoa(value, buf);
-    buf[str_len] = '\0';
-    RedisModule_ReplyWithSimpleString(ctx, buf);
+    int str_len = fpconv_dtoa(value, _buf);
+    _buf[str_len] = '\0';
+    RedisModule_ReplyWithSimpleString(ctx, _buf);
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
