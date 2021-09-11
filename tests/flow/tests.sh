@@ -21,14 +21,14 @@ help() {
 		Argument variables:
 		MODULE=path         Module .so path
 
-		GEN=0|1             General tests
-		AOF=0|1             Tests with --test-aof
-		SLAVES=0|1          Tests with --test-slaves
-		CLUSTER=0|1         Tests with --env oss-cluster
-		RLEC=0|1            Tests with --existing-env and RLEC
+		GEN=0|1             General tests on standalone Redis (default)
+		AOF=0|1             AOF persistency tests on standalone Redis
+		SLAVES=0|1          Replication tests on standalone Redis
+		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
+		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
-		GEARS=0|1           Tests with RedisGears
+		GEARS=0|1           Test with RedisGears (on OSS Redis Cluster)
 		GEARS_PATH=path     Path to redisgears.so
 
 		TEST=test           Run specific test (e.g. test.py:test_name)
@@ -37,6 +37,7 @@ help() {
 		DOCKER_HOST         Address of Docker server (default: localhost)
 		RLEC_PORT           Port of existing-env in RLEC container (default: 12000)
 
+		RLTEST_ARGS=...     Extra RLTest arguments
 		VERBOSE=1           Print commands
 		IGNERR=1            Do not abort on error
 
@@ -91,7 +92,7 @@ run_tests() {
 	local title="$1"
 	if [[ -n $title ]]; then
 		$READIES/bin/sep -0
-		printf "Tests with $title:\n\n"
+		printf "Running $title:\n\n"
 	fi
 
 	config=$(mktemp "${TMPDIR:-/tmp}/rltest.XXXXXXX")
@@ -144,28 +145,36 @@ EOF
 	exit 0
 }
 
+OP=""
+[[ $NOP == 1 ]] && OP=echo
+
+#----------------------------------------------------------------------------------------------
+
 RLEC=${RLEC:-0}
 if [[ $RLEC != 1 ]]; then
 	GEN=${GEN:-1}
 	SLAVES=${SLAVES:-1}
 	AOF=${AOF:-1}
-	CLUSTER=${CLUSTER:-1}
-	GEARS=${GEARS:-0}
+	if [[ $OSS_CLUSTER == 1 ]]; then
+		GEARS=${GEARS:-1}
+	else
+		OSS_CLUSTER=${OSS_CLUSTER:-0}
+		GEARS=${GEARS:-0}
+	fi
 else
 	GEN=0
 	SLAVES=0
 	AOF=0
-	CLUSTER=0
+	OSS_CLUSTER=0
 	GEARS=${GEARS:-0}
 fi
+
+#----------------------------------------------------------------------------------------------
 
 DOCKER_HOST=${DOCKER_HOST:-localhost}
 RLEC_PORT=${RLEC_PORT:-12000}
 
-GDB=${GDB:-0}
-
-OP=""
-[[ $NOP == 1 ]] && OP=echo
+#----------------------------------------------------------------------------------------------
 
 if [[ $RLEC != 1 ]]; then
 	MODULE=${MODULE:-$1}
@@ -174,6 +183,8 @@ if [[ $RLEC != 1 ]]; then
 		exit 1
 	}
 fi
+
+GDB=${GDB:-0}
 
 [[ $VG == 1 ]] && VALGRIND=1
 if [[ $VALGRIND == 1 ]]; then
@@ -210,13 +221,22 @@ fi
 
 cd $ROOT/tests/flow
 
-setup_redis_server
+[[ $RLEC != 1 ]] && setup_redis_server
 
-[[ $GEN == 1 ]] && (run_tests)
-[[ $CLUSTER == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count 2" run_tests "oss-cluster")
-[[ $SLAVES == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "with slaves")
-[[ $AOF == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "with AOF")
-[[ $RLEC == 1 ]] && (RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "rlec")
+NOTE=""
+OSS_CLUSTER_ARGS=""
+if [[ $OSS_CLUSTER == 1 ]]; then
+	NOTE+=" on oss-cluster"
+	OSS_CLUSTER_ARGS="--env oss-cluster --shards-count 2"
+fi
+if [[ $GEARS == 1 ]]; then
+	NOTE+=" with gears"
+fi
+
+[[ $GEN == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS}" run_tests "general tests$NOTE")
+[[ $SLAVES == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-slaves" run_tests "tests with slaves$NOTE")
+[[ $AOF == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-aof" run_tests "tests with AOF$NOTE")
+
+[[ $RLEC == 1 ]] && (RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "tests on RLEC")
 
 exit 0
-

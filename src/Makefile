@@ -34,18 +34,24 @@ make clean         # remove binary files
 make deps          # build dependant modules
 make all           # build all libraries and packages
 
-make test          # run tests
+make unit_tests    # run unit tests
+
+make flow_tests    # run tests
   TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
-  GEN=0|1          # run general tests on a standalone Redis topology
-  AOF=0|1          # run AOF persistency tests on a standalone Redis topology
-  SLAVES=0|1       # run replication tests on standalone Redis topology
-  CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
-  GEARS=0|1        # also load RedisGears
-  GEARS_PATH=path  # RedisGears module path
+  UNIT=1           # run unit tests
+  STD=1            # flow tests on standalone Redis
+  OSS_CLUSTER=1    # flow tests on Redis OSS Cluster
+  RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
-  RLEC=1           # test with RLEC
+  
+  More test options:
+  GEN=0|1          # general tests on standalone Redis
+  AOF=0|1          # AOF persistency tests on standalone Redis
+  SLAVES=0|1       # replication tests on standalone Redis
+  GEARS=0|1        # test with RedisGears
+  GEARS_PATH=path  # RedisGears module path
 
 make pack          # build packages (ramp & dependencies)
 
@@ -172,7 +178,7 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs
+.PHONY: package flow_tests unit_tests clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
@@ -223,6 +229,15 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 
 #----------------------------------------------------------------------------------------------
 
+$(UNITTESTS_RUNNER): $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+
+unit_tests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
+
 TEST_REPORT_DIR ?= $(PWD)
 
 ifeq ($(SIMPLE),1)
@@ -241,45 +256,39 @@ endif
 
 ifneq ($(RLEC),1)
 
-tests: #$(TARGET)
+flow_tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
 	$(SHOW)\
-		MODULE=$(realpath $(TARGET)) \
-		CLUSTER=$(CLUSTER) \
-		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
-		VALGRIND=$(VALGRIND) \
-		GEARS=$(GEARS) \
-		$(ROOT)/tests/flow/tests.sh
+	MODULE=$(realpath $(TARGET)) \
+	STD=$(STD) \
+	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
+	OSS_CLUSTER=$(OSS_CLUSTER) \
+	GEARS=$(GEARS) \
+	VALGRIND=$(VALGRIND) \
+	$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
 
 else # RLEC
 
-tests: #$(TARGET)
+flow_tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
 	$(SHOW)\
-		MODULE=$(realpath $(TARGET)) \
-		RLEC=1 \
-		GEARS=$(GEARS) \
-		$(ROOT)/tests/flow/tests.sh
+	RLEC=1 \
+	GEARS=$(GEARS) \
+	$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
 
 endif # RLEC
 
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
-
-unittests: $(UNITTESTS_RUNNER)
-	@echo Running unit tests...
-	$(SHOW)$<
-
+#----------------------------------------------------------------------------------------------
 
 BENCHMARK_ARGS = redisbench-admin run-local
 
@@ -304,7 +313,6 @@ endif
 
 benchmark: $(TARGET)
 	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
-
 
 #----------------------------------------------------------------------------------------------
 

@@ -77,6 +77,18 @@ commands:
             bash -l -c "python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>"
             redis-server --version
 
+  install-arlecchino:
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "2a:11:3f:16:9f:ab:90:34:6b:51:28:f5:b7:3a:d1:6d"
+      - run:
+          name: Install Arlecchino
+          command: |
+            cd
+            export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"
+            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+
   save-tests-logs:
     steps:
       - run:
@@ -130,19 +142,19 @@ commands:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c "make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
+            bash -l -c "make unittests <<parameters.test_params>> SHOW=1"
       - run:
-          name: Flow Test
+          name: Flow test
           no_output_timeout: 30m
           command: |
             python3 -m pip list
             mkdir -p ~/workspace/tests
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
+            bash -l -c "make test STD=1 <<parameters.test_params>> SHOW=1 VERBOSE=1"
       - run:
-          name: Run flow with gears
+          name: Flow tests on OSS cluster
           no_output_timeout: 30m
           command: |
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
+            bash -l -c "make test OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1"
       - save-tests-logs
 
   build-platforms-steps:
@@ -184,7 +196,7 @@ commands:
       - setup-automation
       - run:
           name: Install Docker
-          command: bash <(curl -fsSL https://raw.githubusercontent.com/docker/docker-install/master/install.sh)
+          command: bash -l -c "./deps/readies/bin/getdocker"
       - run:
           name: Build for platform
           command: |
@@ -349,15 +361,7 @@ jobs:
             sudo ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
-      - add_ssh_keys:
-          fingerprints:
-            - "2a:11:3f:16:9f:ab:90:34:6b:51:28:f5:b7:3a:d1:6d"
-      - run:
-          name: Install Arlecchino
-          command: |
-            cd
-            export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"
-            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+      - install-arlecchino
       - run:
           name: Build
           command: |
@@ -377,12 +381,12 @@ jobs:
           command: |
             sudo python3 -m pip list
             sudo mkdir -p ~/workspace/tests
-            sudo bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests RLEC=1 SHOW=1"
+            sudo bash -l -c "make test RLEC=1 SHOW=1"
       - run:
           name: Run flow with gears
           no_output_timeout: 30m
           command: |
-            sudo bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 RLEC=1 SHOW=1 V=2"
+            sudo bash -l -c "make test RLEC=1 GEARS=1 SHOW=1 V=2"
       - save-tests-logs
 
   coverage:
@@ -404,7 +408,7 @@ jobs:
       - run:
           name: Test with Gears
           command: |
-            bash -l -c "make test COV=1 GEARS=1 CLUSTER=1 SHOW=1"
+            bash -l -c "make test COV=1 OSS_CLUSTER=1 SHOW=1"
             bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov) -f bin/linux-x64-debug-cov/cov.info
 
   deploy-artifacts:
