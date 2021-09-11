@@ -149,12 +149,12 @@ commands:
           command: |
             python3 -m pip list
             mkdir -p ~/workspace/tests
-            bash -l -c "make test STD=1 <<parameters.test_params>> SHOW=1 VERBOSE=1"
+            bash -l -c "make test STD=1 <<parameters.test_params>> SHOW=1"
       - run:
           name: Flow tests on OSS cluster
           no_output_timeout: 30m
           command: |
-            bash -l -c "make test OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1 VERBOSE=1"
+            bash -l -c "make test OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1"
       - save-tests-logs
 
   build-platforms-steps:

@@ -25,6 +25,7 @@ help() {
 		AOF=0|1             AOF persistency tests on standalone Redis
 		SLAVES=0|1          Replication tests on standalone Redis
 		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
+		OSS_SHARDS=n        Number of shards (default: 2)
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
@@ -153,11 +154,14 @@ OP=""
 RLEC=${RLEC:-0}
 if [[ $RLEC != 1 ]]; then
 	GEN=${GEN:-1}
-	SLAVES=${SLAVES:-1}
-	AOF=${AOF:-1}
 	if [[ $OSS_CLUSTER == 1 ]]; then
+		SLAVES=${SLAVES:-0}
+		AOF=${AOF:-0}
+		OSS_SHARDS=${OSS_SHARDS:-2}
 		GEARS=${GEARS:-1}
 	else
+		SLAVES=${SLAVES:-1}
+		AOF=${AOF:-1}
 		OSS_CLUSTER=${OSS_CLUSTER:-0}
 		GEARS=${GEARS:-0}
 	fi
@@ -227,7 +231,7 @@ NOTE=""
 OSS_CLUSTER_ARGS=""
 if [[ $OSS_CLUSTER == 1 ]]; then
 	NOTE+=" on oss-cluster"
-	OSS_CLUSTER_ARGS="--env oss-cluster --shards-count 2"
+	OSS_CLUSTER_ARGS="--env oss-cluster --shards-count $OSS_SHARDS"
 fi
 if [[ $GEARS == 1 ]]; then
 	NOTE+=" with gears"

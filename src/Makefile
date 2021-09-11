@@ -45,11 +45,12 @@ make flow_tests    # run tests
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
-  
+
   More test options:
   GEN=0|1          # general tests on standalone Redis
   AOF=0|1          # AOF persistency tests on standalone Redis
   SLAVES=0|1       # replication tests on standalone Redis
+  OSS_SHARDS=n     # number of OSS shards
   GEARS=0|1        # test with RedisGears
   GEARS_PATH=path  # RedisGears module path
 
@@ -241,17 +242,21 @@ unit_tests: $(UNITTESTS_RUNNER)
 TEST_REPORT_DIR ?= $(PWD)
 
 ifeq ($(SIMPLE),1)
+export OSS_CLUSTER=0
 export GEN=1
 export SLAVES=0
 export AOF=0
-export CLUSTER=0
 export GEARS=0
-else
+
+else ifeq ($(STD),1)
+export OSS_CLUSTER=0
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
-export CLUSTER ?= 0
 export GEARS ?= 0
+
+else ifeq ($(OSS_CLUSTER),1)
+export GEARS ?= 1
 endif
 
 ifneq ($(RLEC),1)
@@ -262,7 +267,6 @@ ifeq ($(COV),1)
 endif
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
-	STD=$(STD) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
 	OSS_CLUSTER=$(OSS_CLUSTER) \
 	GEARS=$(GEARS) \
