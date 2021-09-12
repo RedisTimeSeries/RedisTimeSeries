@@ -124,8 +124,8 @@ def test_bad_del(self):
 def test_del_retention_with_rules(self):
     sample_len = 1010
     with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 1, 'uncompressed')
-        r.execute_command("ts.create", 'test_key_3', 'uncompressed')
+        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 1, 'compressed')
+        r.execute_command("ts.create", 'test_key_3', 'compressed')
         r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'avg', 10)
 
         for i in range(sample_len):
@@ -134,8 +134,8 @@ def test_del_retention_with_rules(self):
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("ts.del", "test_key_2", 1, 10)
 
-        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 25, 'uncompressed')
-        r.execute_command("ts.create", 'test_key_5', 'uncompressed')
+        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 25, 'compressed')
+        r.execute_command("ts.create", 'test_key_5', 'compressed')
         r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'avg', 10)
 
         for i in range(30):
@@ -149,8 +149,8 @@ def test_del_with_rules(self):
     sample_len = 1010
     e = Env()
     with e.getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 5000, 'uncompressed')
-        r.execute_command("ts.create", 'test_key_3', 'uncompressed')
+        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 5000, 'compressed')
+        r.execute_command("ts.create", 'test_key_3', 'compressed')
         r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'sum', 10)
 
         for i in range(70):
@@ -202,8 +202,8 @@ def test_del_with_rules(self):
         assert res == [[990, b'5'], [1000, b'7']]
 
         ##### delete chunk of a rule #####
-        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 5000, 'CHUNK_SIZE', '1024', 'uncompressed')
-        r.execute_command("ts.create", 'test_key_5', 'CHUNK_SIZE', '1024', 'uncompressed')
+        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 5000, 'CHUNK_SIZE', '1024', 'compressed')
+        r.execute_command("ts.create", 'test_key_5', 'CHUNK_SIZE', '1024', 'compressed')
         r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'sum', 10)
 
         for i in range(2070):

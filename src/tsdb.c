@@ -605,7 +605,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             CalcWindowStart(series->lastTimestamp, ruleTimebucket);
 
         if (start_ts >= curAggWindowStart) {
-            // All deletion range in latest timebucket
+            // All deletion range in latest timebucket - only update the context on the rule
             const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
@@ -617,7 +617,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             timestamp_t rule_deletion_start;
             timestamp_t rule_deletion_end;
             double val = 0;
-            bool empty_range;
+            bool is_empty;
             int rv;
 
             // ---- handle start bucket ----
@@ -627,13 +627,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                  startTSWindowStart + ruleTimebucket - 1,
                                  rule,
                                  &val,
-                                 &empty_range);
+                                 &is_empty);
             if (unlikely(rv == TSDB_ERROR)) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            if (empty_range) {
+            if (is_empty) {
                 // first bucket should be deleted
                 rule_deletion_start = startTSWindowStart;
             } else {
@@ -669,14 +669,14 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                      endTSWindowStart + ruleTimebucket - 1,
                                      rule,
                                      &val,
-                                     &empty_range);
+                                     &is_empty);
                 if (unlikely(rv == TSDB_ERROR)) {
                     RedisModule_Log(
                         ctx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
 
-                if (empty_range) {
+                if (is_empty) {
                     // deletion in end timebucket
                     rule_deletion_end = endTSWindowStart;
                 } else {
@@ -900,20 +900,21 @@ int SeriesCalcRange(Series *series,
                     timestamp_t end_ts,
                     CompactionRule *rule,
                     double *val,
-                    bool *empty_range) {
+                    bool *is_empty) {
     AggregationClass *aggObject = rule->aggClass;
 
     Sample sample = { 0 };
     AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
-    bool _empty_range = true;
+    bool _is_empty = true;
 
     while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
-        _empty_range = false;
+        _is_empty = false;
     }
-    if (empty_range)
-        *empty_range = _empty_range;
+    if (is_empty) {
+        *is_empty = _is_empty;
+    }
 
     SeriesIteratorClose(iterator);
     if (val == NULL) { // just update context for current window

@@ -102,7 +102,7 @@ int SeriesCalcRange(Series *series,
                     timestamp_t end_ts,
                     CompactionRule *rule,
                     double *val,
-                    bool *empty_range);
+                    bool *is_empty);
 
 // Calculate the begining of  aggregation window
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
