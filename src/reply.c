@@ -14,6 +14,8 @@
 
 #include "rmutil/alloc.h"
 
+#include "dragonbox.h"
+
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
                         bool withlabels,
@@ -104,8 +106,9 @@ void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     char buf[MAX_VAL_LEN + 1];
-    int str_len = fpconv_dtoa(value, buf);
-    buf[str_len] = '\0';
+    dragonbox_double_to_chars(value, buf);
+    //int str_len = fpconv_dtoa(value, buf);
+    //buf[str_len] = '\0';
     RedisModule_ReplyWithSimpleString(ctx, buf);
 }
 
