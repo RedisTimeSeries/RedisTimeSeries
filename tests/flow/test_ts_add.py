@@ -11,9 +11,9 @@ def test_issue_504(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
         for i in range(100, 3000):
-            assert r.execute_command('ts.add', 'tester', i, i * 1.1) == i
-        assert r.execute_command('ts.add', 'tester', 99, 1) == 99
-        assert r.execute_command('ts.add', 'tester', 98, 1) == 98
+            env.expect('ts.add', 'tester', i, i * 1.1, conn=r).equal(i)
+        env.expect('ts.add', 'tester', 99, 1, conn=r).equal(99)
+        env.expect('ts.add', 'tester', 98, 1, conn=r).equal(98)
 
 
 def test_issue_588(env):
@@ -45,52 +45,46 @@ def test_automatic_timestamp(env):
 def test_add_create_key(env):
     with env.getClusterConnectionIfNeeded() as r:
         ts = time.time()
-        assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name',
-                                 'blabla') == int(ts)
+        env.expect('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666',
+                   'LABELS', 'name', 'blabla', conn=r).equal(int(ts))
         info = _get_ts_info(r, 'tester1')
-        assert info.total_samples == 1
-        assert info.retention_msecs == 666
-        assert info.labels == {'name': 'blabla'}
+        env.assertEqual(info.total_samples, 1)
+        env.assertEqual(info.retention_msecs, 666)
+        env.assertEqual(info.labels, {'name': 'blabla'})
 
-        assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location',
-                                 'earth')
+        env.expect('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name',
+                   'blabla2', 'location', 'earth', conn=r).noError()
         info = _get_ts_info(r, 'tester2')
-        assert info.total_samples == 1
-        assert info.labels == {'location': 'earth', 'name': 'blabla2'}
+        env.assertEqual(info.total_samples, 1)
+        env.assertEqual(info.labels,  {'location': 'earth', 'name': 'blabla2'})
 
-def test_ts_add_encoding():
+
+def test_ts_add_encoding(env):
     for ENCODING in ['compressed','uncompressed']:
-        e = Env()
-        e.flush()
-        with e.getClusterConnectionIfNeeded() as r:
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.add', 't1', '*', '5.0', 'ENCODING', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
+            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
             # backwards compatible check
             r.execute_command('ts.add', 't1_bc', '*', '5.0', ENCODING)
-            e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
+            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
 
 
 def test_valid_labels(env):
     with env.getClusterConnectionIfNeeded() as r:
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.CREATE', 'tester', 'LABELS', 'name', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'list)')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
+        env.expect('TS.CREATE', 'tester', 'LABELS', 'name', '', conn=r).raiseError()
+        env.expect('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', '', conn=r).raiseError()
+        env.expect('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'list)', conn=r).raiseError()
+        env.expect('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st', conn=r).raiseError()
+        env.expect('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t', conn=r).raiseError()
+
 
 def test_valid_timestamp(env):
     with env.getConnection() as r:
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'timestamp', '12434fd', '34')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'timestamp', '-34', '22')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'timestamp', '*235', '45')
+        env.expect('TS.ADD', 'timestamp', '12434fd', '34', conn=r).raiseError()
+        env.expect('TS.ADD', 'timestamp', '-34', '22', conn=r).raiseError()
+        env.expect('TS.ADD', 'timestamp', '*235', '45', conn=r).raiseError()
+
 
 def test_gorilla(env):
     with env.getClusterConnectionIfNeeded() as r:
@@ -119,12 +113,10 @@ def test_gorilla(env):
                            [10000, '1'], [10001, '1'], [100000, '1'], [100001, '1'],
                            [100002, '1'], [100004, '1'], [1000000, '1'], [1000001, '1'],
                            [10000011000001, '1'], [10000011000002, '1']]
-        assert expected_result == r.execute_command('TS.range', 'monkey', 0, '+')
+        env.expect('TS.range', 'monkey', 0, '+', conn=r).equal(expected_result)
 
 
 def test_ts_add_negative(env):
     with env.getClusterConnectionIfNeeded() as r:
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.CREATE', 'tester', 'ENCODING')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding')
+        env.expect('TS.CREATE', 'tester', 'ENCODING', conn=r).raiseError()
+        env.expect('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding', conn=r).raiseError()

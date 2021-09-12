@@ -48,22 +48,22 @@ def test_ooo_with_retention(env):
         batch = 100
         r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 10, 'RETENTION', retention, 'DUPLICATE_POLICY', 'LAST')
         for i in range(batch):
-            assert r.execute_command('ts.add', 'ooo', i, i) == i
-        assert r.execute_command('ts.range', 'ooo' ,0, batch - retention - 2) == []
+            env.expect('ts.add', 'ooo', i, i, conn=r).equal(i)
+        env.expect('ts.range', 'ooo' ,0, batch - retention - 2, conn=r).equal([])
         assert len(r.execute_command('ts.range', 'ooo', '-', '+')) == retention + 1
 
         env.expect('ts.add', 'ooo', 70, 70, conn=r).error()
 
         for i in range(batch, batch * 2):
-            assert r.execute_command('ts.add', 'ooo', i, i) == i
-        assert r.execute_command('ts.range', 'ooo', 0, batch * 2 - retention - 2) == []
+            env.expect('ts.add', 'ooo', i, i, conn=r).equal(i)
+        env.expect('ts.range', 'ooo', 0, batch * 2 - retention - 2, conn=r).equal([])
         assert len(r.execute_command('ts.range', 'ooo', '-', '+')) == retention + 1
 
         # test for retention larger than timestamp
         r.execute_command('ts.create', 'large', 'RETENTION', 1000000, 'DUPLICATE_POLICY', 'LAST')
-        assert r.execute_command('ts.add', 'large', 100, 0) == 100
-        assert r.execute_command('ts.add', 'large', 101, 0) == 101
-        assert r.execute_command('ts.add', 'large', 100, 0) == 100
+        env.expect('ts.add', 'large', 100, 0, conn=r).equal(100)
+        env.expect('ts.add', 'large', 101, 0, conn=r).equal(101)
+        env.expect('ts.add', 'large', 100, 0, conn=r).equal(100)
 
 
 def test_ooo_split(env):

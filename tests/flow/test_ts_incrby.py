@@ -33,7 +33,7 @@ def test_incrby_with_timestamp(env):
         r.execute_command('ts.create', 'tester')
 
         for i in range(20):
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
+            env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', i, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
         assert result[19][1] == '100'
@@ -50,18 +50,18 @@ def test_incrby_with_update_latest(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
         for i in range(1, 21):
-            assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', i) == i
+            env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', i, conn=r).equal(i)
 
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
         assert result[19] == [20, '100']
 
-        assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', 20) == i
+        env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', 20, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
         assert result[19] == [20, '105']
 
-        assert r.execute_command('ts.decrby', 'tester', '10', 'TIMESTAMP', 20) == i
+        env.expect('ts.decrby', 'tester', '10', 'TIMESTAMP', 20, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
         assert result[19] == [20, '95']

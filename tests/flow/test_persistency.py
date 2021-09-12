@@ -2,6 +2,7 @@ from RLTest import Env
 from test_helper_classes import ALLOWED_ERROR, _insert_data, _get_ts_info
 from includes import *
 
+
 def test_simple_dump_restore(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test_key', 'UNCOMPRESSED')
@@ -10,14 +11,15 @@ def test_simple_dump_restore(env):
         r.execute_command('del', 'test_key')
         r.execute_command('restore', 'test_key', 0, dump)
 
+
 def test_rdb(env):
     start_ts = 1511885909
     samples_count = 1500
     data = None
     key_name = 'tester{abc}'
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', key_name, 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name',
-                                 'brown', 'color', 'pink')
+        env.expect('TS.CREATE', key_name, 'RETENTION', '0', 'CHUNK_SIZE', '360',
+                   'LABELS', 'name', 'brown', 'color', 'pink', conn=r).noError()
         env.expect('TS.CREATE', '{}_agg_avg_10'.format(key_name), conn=r).ok()
         env.expect('TS.CREATE', '{}_agg_max_10'.format(key_name), conn=r).noError()
         env.expect('TS.CREATE', '{}_agg_sum_10'.format(key_name), conn=r).noError()
@@ -38,16 +40,16 @@ def test_rdb(env):
 
         expected_result = [[start_ts + i, '5'] for i in range(samples_count)]
         actual_result = r.execute_command('TS.range', key_name, start_ts, start_ts + samples_count)
-        assert expected_result == actual_result
+        env.assertEqual(expected_result, actual_result)
         actual_result = r.execute_command('TS.range', key_name, start_ts, start_ts + samples_count, 'count', 3)
-        assert expected_result[:3] == actual_result
+        env.assertEqual(expected_result[:3], actual_result)
 
-        assert _get_ts_info(r, key_name).rules == [['{}_agg_avg_10'.format(key_name), 10, 'AVG'],
-                                                   ['{}_agg_max_10'.format(key_name), 10, 'MAX'],
-                                                   ['{}_agg_sum_10'.format(key_name), 10, 'SUM'],
-                                                   ['{}_agg_stds_10'.format(key_name), 10, 'STD.S']]
+        env.assertEqual(_get_ts_info(r, key_name).rules, [[f'{key_name}_agg_avg_10', 10, 'AVG'],
+                                                          [f'{key_name}_agg_max_10', 10, 'MAX'],
+                                                          [f'{key_name}_agg_sum_10', 10, 'SUM'],
+                                                          [f'{key_name}_agg_stds_10', 10, 'STD.S']])
 
-        assert _get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey == key_name
+        env.assertEqual(_get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey, key_name)
 
 
 def test_rdb_aggregation_context(env):
@@ -76,33 +78,26 @@ def test_rdb_aggregation_context(env):
         data_min_tester = r.dump('{}_agg_min_3'.format(key_name))
         data_sum_tester = r.dump('{}_agg_sum_3'.format(key_name))
         data_std_tester = r.dump('{}_agg_std_3'.format(key_name))
-        r.execute_command('DEL',
-                          key_name,
-                          '{}_agg_avg_3'.format(key_name),
-                          '{}_agg_min_3'.format(key_name),
-                          '{}_agg_sum_3'.format(key_name),
-                          '{}_agg_std_3'.format(key_name))
+        r.execute_command('DEL', key_name, f'{key_name}_agg_avg_3', f'{key_name}_agg_min_3',
+                          f'{key_name}_agg_sum_3', f'{key_name}_agg_std_3')
         r.execute_command('RESTORE', key_name, 0, data_tester)
         r.execute_command('RESTORE', '{}_agg_avg_3'.format(key_name), 0, data_avg_tester)
         r.execute_command('RESTORE', '{}_agg_min_3'.format(key_name), 0, data_min_tester)
         r.execute_command('RESTORE', '{}_agg_sum_3'.format(key_name), 0, data_sum_tester)
         r.execute_command('RESTORE', '{}_agg_std_3'.format(key_name), 0, data_std_tester)
         env.expect('TS.ADD', key_name, start_ts + samples_count, samples_count, conn=r).noError()
-        assert r.execute_command('TS.ADD', key_name, start_ts + samples_count + 10, 0)  # closes the last time_bucket
+        env.expect('TS.ADD', key_name, start_ts + samples_count + 10, 0, conn=r).noError()  # closes the last time_bucket
         # if the aggregation context wasn't saved, the results were considering only the new value added
         expected_result_avg = [[start_ts, '1'], [start_ts + 3, '3.5']]
         expected_result_min = [[start_ts, '0'], [start_ts + 3, '3']]
         expected_result_sum = [[start_ts, '3'], [start_ts + 3, '7']]
         expected_result_std = [[start_ts, '1'], [start_ts + 3, '0.7071']]
-        actual_result_avg = r.execute_command('TS.range', '{}_agg_avg_3'.format(key_name), start_ts, start_ts + samples_count)
-        assert actual_result_avg == expected_result_avg
-        actual_result_min = r.execute_command('TS.range', '{}_agg_min_3'.format(key_name), start_ts, start_ts + samples_count)
-        assert actual_result_min == expected_result_min
-        actual_result_sum = r.execute_command('TS.range', '{}_agg_sum_3'.format(key_name), start_ts, start_ts + samples_count)
-        assert actual_result_sum == expected_result_sum
+        env.expect('TS.range', '{}_agg_avg_3'.format(key_name), start_ts, start_ts + samples_count, conn=r).equal(expected_result_avg)
+        env.expect('TS.range', '{}_agg_min_3'.format(key_name), start_ts, start_ts + samples_count, conn=r).equal(expected_result_min)
+        env.expect('TS.range', '{}_agg_sum_3'.format(key_name), start_ts, start_ts + samples_count, conn=r).equal(expected_result_sum)
         actual_result_std = r.execute_command('TS.range', '{}_agg_std_3'.format(key_name), start_ts, start_ts + samples_count)
-        assert actual_result_std[0] == expected_result_std[0]
-        assert abs(float(actual_result_std[1][1]) - float(expected_result_std[1][1])) < ALLOWED_ERROR
+        env.assertEqual(actual_result_std[0], expected_result_std[0])
+        env.assertTrue(abs(float(actual_result_std[1][1]) - float(expected_result_std[1][1])) < ALLOWED_ERROR)
 
 
 def test_dump_trimmed_series(env):
@@ -118,7 +113,7 @@ def test_dump_trimmed_series(env):
         dump = r.dump('test_key')
         r.execute_command('del', 'test_key')
         r.execute_command('restore', 'test_key', 0, dump)
-        assert r.execute_command('ts.range', 'test_key', '-', '+') == before
+        env.expect('ts.range', 'test_key', '-', '+', conn=r).equal(before)
 
 
 def test_empty_series(env):
@@ -127,8 +122,9 @@ def test_empty_series(env):
         agg_list = ['avg', 'sum', 'min', 'max', 'range', 'first', 'last',
                     'std.p', 'std.s', 'var.p', 'var.s']
         for agg in agg_list:
-            assert [] == r.execute_command('TS.range', 'tester', '-', '+', 'aggregation', agg, 1000)
-        assert r.dump('tester')
+            env.expect('TS.range', 'tester', '-', '+', 'aggregation', agg, 1000, conn=r).equal([])
+        env.assertNotEqual(r.dump('tester'), [])
+
 
 def test_533_dump_rules(env):
     with env.getClusterConnectionIfNeeded() as r:
@@ -138,12 +134,12 @@ def test_533_dump_rules(env):
         r.execute_command('TS.CREATE', key2)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
 
-        assert _get_ts_info(r, key2).sourceKey == key1
-        assert len(_get_ts_info(r, key1).rules) == 1
+        env.assertEqual(_get_ts_info(r, key2).sourceKey, key1)
+        env.assertEqual(len(_get_ts_info(r, key1).rules), 1)
 
         data = r.dump(key1)
         r.execute_command('DEL', key1)
         r.execute_command('restore', key1, 0, data)
 
-        assert len(_get_ts_info(r, key1).rules) == 1
-        assert _get_ts_info(r, key2).sourceKey == key1
+        env.assertEqual(len(_get_ts_info(r, key1).rules), 1)
+        env.assertEqual(_get_ts_info(r, key2).sourceKey, key1)

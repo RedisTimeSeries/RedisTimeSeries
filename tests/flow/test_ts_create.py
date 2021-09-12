@@ -59,9 +59,9 @@ def test_check_retention_64bit(env):
         assert _get_ts_info(r, 'tester').retention_msecs == huge_timestamp
         for i in range(10):
             r.execute_command('TS.ADD', 'tester', int(huge_timestamp * i / 4), i)
-        assert r.execute_command('TS.RANGE', 'tester', 0, "+") == \
+        env.expect('TS.RANGE', 'tester', 0, "+", conn=r).equal(
                [[5000000000, '5'], [6000000000, '6'], [7000000000, '7'],
-                [8000000000, '8'], [9000000000, '9']]
+                [8000000000, '8'], [9000000000, '9']])
 
 
 def test_uncompressed(env):
@@ -152,11 +152,11 @@ def test_issue299(env):
 def test_expire(env):
     env.skipOnCluster()
     with env.getConnection() as r:
-        assert r.execute_command('ts.create', 'test') == 'OK'
-        assert r.execute_command('keys', '*') == ['test']
-        assert r.execute_command('expire', 'test', 1) == 1
+        env.expect('ts.create', 'test', conn=r).equal('OK')
+        env.expect('keys', '*', conn=r).equal(['test'])
+        env.expect('expire', 'test', 1, conn=r).equal(1)
         time.sleep(2)
-        assert r.execute_command('keys', '*') == []
+        env.expect('keys', '*', conn=r).equal([])
 
 def test_ts_create_encoding(env):
     for ENCODING in ['compressed', 'uncompressed']:

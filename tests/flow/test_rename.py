@@ -5,7 +5,6 @@ from includes import *
 
 def test_rename_src(env):
     with env.getClusterConnectionIfNeeded() as r:
-
         env.expect('TS.CREATE', 'a1{1}', conn=r).noError()
         env.expect('TS.CREATE', 'b{1}', conn=r).noError()
 
@@ -62,7 +61,6 @@ def test_rename_indexed(env):
 
 def test_rename_none_ts(env):
     with env.getClusterConnectionIfNeeded() as r:
-
         env.expect('TS.CREATE', 'a{4}', conn=r).noError()
         env.expect('SET', 'key1{4}', 'val1', conn=r).noError()
         env.expect('SET', 'key2{4}', 'val2', conn=r).noError()

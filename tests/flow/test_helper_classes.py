@@ -26,7 +26,7 @@ def _get_series_value(ts_key_result):
     return [float(value[1]) for value in ts_key_result]
 
 
-def _assert_alter_cmd(r, key, start_ts, end_ts,
+def _assert_alter_cmd(env, r, key, start_ts, end_ts,
                       expected_data=None,
                       expected_retention=None,
                       expected_chunk_size=None,
@@ -44,14 +44,13 @@ def _assert_alter_cmd(r, key, start_ts, end_ts,
     actual_result = _get_ts_info(r, key)
 
     if expected_data:
-        actual_data = r.execute_command('TS.range', key, start_ts, end_ts)
-        assert expected_data == actual_data
+        env.expect('TS.range', key, start_ts, end_ts, conn=r).equal(expected_data)
     if expected_retention:
-        assert expected_retention == actual_result.retention_msecs
+        env.assertEqual(expected_retention, actual_result.retention_msecs)
     if expected_labels:
-        assert list_to_dict(expected_labels) == actual_result.labels
+        env.assertEqual(list_to_dict(expected_labels), actual_result.labels)
     if expected_chunk_size:
-        assert expected_chunk_size == actual_result.chunk_size_bytes
+        env.assertEqual(expected_chunk_size, actual_result.chunk_size_bytes)
 
 
 def _ts_alter_cmd(r, key, set_retention=None, set_chunk_size=None, set_labels=None):
@@ -110,26 +109,26 @@ def calc_rule(rule, values, bucket_size):
         return _calc_downsampling_series(values, bucket_size, len)
 
 
-def _insert_agg_data(redis, key, agg_type, chunk_type="", fromTS=10, toTS=50, key_create_args=None):
+def _insert_agg_data(env, r, key, agg_type, chunk_type="", fromTS=10, toTS=50, key_create_args=None):
     agg_key = '%s_agg_%s_10' % (key, agg_type)
 
     if key_create_args is None:
         key_create_args = []
 
-    assert redis.execute_command('TS.CREATE', key, chunk_type, *key_create_args)
-    assert redis.execute_command('TS.CREATE', agg_key, chunk_type, *key_create_args)
-    assert redis.execute_command('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10)
+    env.expect('TS.CREATE', key, chunk_type, *key_create_args, conn=r).noError()
+    env.expect('TS.CREATE', agg_key, chunk_type, *key_create_args, conn=r).noError()
+    env.expect('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10, conn=r).noError()
 
     values = (31, 41, 59, 26, 53, 58, 97, 93, 23, 84)
     for i in range(fromTS, toTS):
-        assert redis.execute_command('TS.ADD', key, i, i // 10 * 100 + values[i % 10])
+        env.expect('TS.ADD', key, i, i // 10 * 100 + values[i % 10], conn=r).noError()
     # close last bucket
-    assert redis.execute_command('TS.ADD', key, toTS + 1000, 0)
+    env.expect('TS.ADD', key, toTS + 1000, 0, conn=r).noError()
 
     return agg_key
 
 
-def _insert_data(redis, key, start_ts, samples_count, value):
+def _insert_data(r, key, start_ts, samples_count, value):
     """
     insert data to key, starting from start_ts, with 1 sec interval between them
     :param redis: redis connection
@@ -144,7 +143,7 @@ def _insert_data(redis, key, start_ts, samples_count, value):
             value_to_insert = value[i]
         else:
             value_to_insert = float(value)
-        actual_result = redis.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
+        actual_result = r.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
         if type(actual_result) == int:
             assert actual_result == int(start_ts + i)
         else:
@@ -155,8 +154,8 @@ def list_to_dict(aList):
     return {aList[i][0]: aList[i][1] for i in range(len(aList))}
 
 
-def _get_ts_info(redis, key):
-    return TSInfo(redis.execute_command('TS.INFO', key))
+def _get_ts_info(r, key):
+    return TSInfo(r.execute_command('TS.INFO', key))
 
 
 class TSInfo(object):

@@ -52,8 +52,8 @@ def test_ooo_madd(env):
             samples.append([start_ts + (i * 1000 + 2000), str(i)])
             last_sample = [start_ts + (i * 1000 + 2000), str(i)]
 
-        assert r.execute_command('ts.get', 'test_key1') == last_sample
-        assert r.execute_command('ts.range', 'test_key1', '-', '+') == samples
+        env.expect('ts.get', 'test_key1', conn=r).equal(last_sample)
+        env.expect('ts.range', 'test_key1', '-', '+', conn=r).equal(samples)
 
 
 def test_partial_madd(env):

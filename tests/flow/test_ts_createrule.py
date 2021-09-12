@@ -152,32 +152,32 @@ def test_downsampling_current(env):
                 env.expect('TS.CREATERULE', key, agg_key, "AGGREGATION", agg_type, 10, conn=r).noError()
 
                 # present update
-                assert r.execute_command('TS.ADD', key, 3, 3) == 3
-                assert r.execute_command('TS.ADD', key, 5, 5) == 5
-                assert r.execute_command('TS.ADD', key, 7, 7) == 7
-                assert r.execute_command('TS.ADD', key, 5, 2) == 5
-                assert r.execute_command('TS.ADD', key, 10, 10) == 10
+                env.expect('TS.ADD', key, 3, 3, conn=r).equal(3)
+                env.expect('TS.ADD', key, 5, 5, conn=r).equal(5)
+                env.expect('TS.ADD', key, 7, 7, conn=r).equal(7)
+                env.expect('TS.ADD', key, 5, 2, conn=r).equal(5)
+                env.expect('TS.ADD', key, 10, 10, conn=r).equal(10)
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
                 assert expected_result[0] == actual_result[0]
 
                 # present add
-                assert r.execute_command('TS.ADD', key, 11, 11) == 11
-                assert r.execute_command('TS.ADD', key, 15, 15) == 15
-                assert r.execute_command('TS.ADD', key, 14, 14) == 14
-                assert r.execute_command('TS.ADD', key, 20, 20) == 20
+                env.expect('TS.ADD', key, 11, 11, conn=r).equal(11)
+                env.expect('TS.ADD', key, 15, 15, conn=r).equal(15)
+                env.expect('TS.ADD', key, 14, 14, conn=r).equal(14)
+                env.expect('TS.ADD', key, 20, 20, conn=r).equal(20)
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
                 assert expected_result[0:1] == actual_result[0:1]
 
                 # present + past add
-                assert r.execute_command('TS.ADD', key, 23, 23) == 23
-                assert r.execute_command('TS.ADD', key, 15, 22) == 15
-                assert r.execute_command('TS.ADD', key, 27, 27) == 27
-                assert r.execute_command('TS.ADD', key, 23, 25) == 23
-                assert r.execute_command('TS.ADD', key, 30, 30) == 30
+                env.expect('TS.ADD', key, 23, 23, conn=r).equal(23)
+                env.expect('TS.ADD', key, 15, 22, conn=r).equal(15)
+                env.expect('TS.ADD', key, 27, 27, conn=r).equal(27)
+                env.expect('TS.ADD', key, 23, 25, conn=r).equal(23)
+                env.expect('TS.ADD', key, 30, 30, conn=r).equal(30)
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
@@ -199,7 +199,7 @@ def test_downsampling_extensive(env):
             agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                         'var.s']  # more
             for agg in agg_list:
-                agg_key = _insert_agg_data(r, key, agg, chunk_type, fromTS, toTS,
+                agg_key = _insert_agg_data(env, r, key, agg, chunk_type, fromTS, toTS,
                                            key_create_args=['DUPLICATE_POLICY', 'LAST'])
 
                 # sanity + check result have changed
@@ -282,12 +282,12 @@ def test_backfill_downsampling(env):
         for chunk_type in type_list:
             agg_list = ['sum', 'min', 'max', 'count', 'first', 'last']  # more
             for agg in agg_list:
-                agg_key = _insert_agg_data(r, key, agg, chunk_type, key_create_args=['DUPLICATE_POLICY', 'LAST'])
+                agg_key = _insert_agg_data(env, r, key, agg, chunk_type, key_create_args=['DUPLICATE_POLICY', 'LAST'])
 
                 expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
                 assert expected_result == actual_result
-                assert r.execute_command('TS.ADD', key, 15, 50) == 15
+                env.expect('TS.ADD', key, 15, 50, conn=r).equal(15)
                 expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
                 assert expected_result == actual_result

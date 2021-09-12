@@ -91,7 +91,7 @@ def test_range_with_agg_query(env):
 
 def test_agg_std_p(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'std.p')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'std.p')
 
         expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -101,7 +101,7 @@ def test_agg_std_p(env):
 
 def test_agg_std_s(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'std.s')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'std.s')
 
         expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -111,7 +111,7 @@ def test_agg_std_s(env):
 
 def test_agg_var_p(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'var.p')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'var.p')
 
         expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -121,7 +121,7 @@ def test_agg_var_p(env):
 
 def test_agg_var_s(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'var.s')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'var.s')
 
         expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -131,7 +131,7 @@ def test_agg_var_s(env):
 
 def test_agg_sum(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'sum')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'sum')
 
         expected_result = [[10, '1565'], [20, '2565'], [30, '3565'], [40, '4565']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -140,7 +140,7 @@ def test_agg_sum(env):
 
 def test_agg_count(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'count')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'count')
 
         expected_result = [[10, '10'], [20, '10'], [30, '10'], [40, '10']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -149,7 +149,7 @@ def test_agg_count(env):
 
 def test_agg_first(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'first')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'first')
 
         expected_result = [[10, '131'], [20, '231'], [30, '331'], [40, '431']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -158,7 +158,7 @@ def test_agg_first(env):
 
 def test_agg_last(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'last')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'last')
 
         expected_result = [[10, '184'], [20, '284'], [30, '384'], [40, '484']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -167,7 +167,7 @@ def test_agg_last(env):
 
 def test_agg_range(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'range')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'range')
 
         expected_result = [[10, '74'], [20, '74'], [30, '74'], [40, '74']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -196,7 +196,7 @@ def test_range_count(env):
 
 def test_agg_min(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'min')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'min')
 
         expected_result = [[10, '123'], [20, '223'], [30, '323'], [40, '423']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -205,7 +205,7 @@ def test_agg_min(env):
 
 def test_agg_max(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'max')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'max')
 
         expected_result = [[10, '197'], [20, '297'], [30, '397'], [40, '497']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
@@ -214,7 +214,7 @@ def test_agg_max(env):
 
 def test_agg_avg(env):
     with env.getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'avg')
+        agg_key = _insert_agg_data(env, r, 'tester{a}', 'avg')
 
         expected_result = [[10, '156.5'], [20, '256.5'], [30, '356.5'], [40, '456.5']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)

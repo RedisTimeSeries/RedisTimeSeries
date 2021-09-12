@@ -237,6 +237,8 @@ if [[ $GEARS == 1 ]]; then
 	NOTE+=" with gears"
 fi
 
+RLTEST_ARGS+=" --print-server-cmd"
+
 [[ $GEN == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS}" run_tests "general tests$NOTE")
 [[ $SLAVES == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-slaves" run_tests "tests with slaves$NOTE")
 [[ $AOF == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-aof" run_tests "tests with AOF$NOTE")

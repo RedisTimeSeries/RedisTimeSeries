@@ -28,9 +28,9 @@ def test_mrange_expire_issue549(env):
     env.skipOnDebugger()
     set_hertz(env)
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('ts.add', 'k1', 1, 10, 'LABELS', 'l', '1') == 1
-        assert r.execute_command('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1') == 2
-        assert r.execute_command('expire', 'k1', '1') == 1
+        env.expect('ts.add', 'k1', 1, 10, 'LABELS', 'l', '1', conn=r).equal(1)
+        env.expect('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1', conn=r).equal(2)
+        env.expect('expire', 'k1', '1', conn=r).equal(1)
         for i in range(0, 5000):
             assert env.getConnection().execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
 
@@ -175,9 +175,9 @@ def test_multilabel_filter(env):
         env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
 
-        assert r.execute_command('TS.ADD', 'tester1', 0, 1) == 0
-        assert r.execute_command('TS.ADD', 'tester2', 0, 2) == 0
-        assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
+        env.expect('TS.ADD', 'tester1', 0, 1, conn=r).equal(0)
+        env.expect('TS.ADD', 'tester2', 0, 2, conn=r).equal(0)
+        env.expect('TS.ADD', 'tester3', 0, 3, conn=r).equal(0)
 
         actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
         assert set(item[0] for item in actual_result) == set(['tester1', 'tester2'])

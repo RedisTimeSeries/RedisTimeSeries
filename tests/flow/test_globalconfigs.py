@@ -19,7 +19,7 @@ class testModuleLoadTimeArguments(object):
                 env = Env(testName="Test load time args: {}".format(variation[1]),
                           moduleArgs=variation[1])
                 r = env.getConnection()
-                assert r.execute_command('PING') == True
+                env.expect('PING', conn=r).equal(True)
             else:
                 with pytest.raises(Exception) as excinfo:
                     assert Env(testName="Test load time args: {}".format(variation[1]), moduleArgs=variation[1])
@@ -75,9 +75,9 @@ class testGlobalConfigTests():
         self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')
 
     def test_autocreate(self):
-        with self.env.getConnection() as r:
-            assert r.execute_command('TS.ADD tester 1980 0 LABELS name',
-                                     'brown color pink') == 1980
+        env = self.env
+        with env.getConnection() as r:
+            env.expect('TS.ADD tester 1980 0 LABELS name', 'brown color pink', conn=r).equal(1980)
             keys = r.execute_command('keys *')
             keys = sorted(keys)
             assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
@@ -88,9 +88,9 @@ class testGlobalConfigTests():
             r.execute_command('TS.ADD exist 1980 0')
             keys = r.execute_command('keys *')
             keys = sorted(keys)
-            assert keys == ['exist', 'exist_AVG_259200000', 'exist_AVG_7200000', 'exist_MAX_1', 'exist_MIN_10000',
-                            'tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
-                            'tester_MIN_10000']
+            env.assertEqual(keys, ['exist', 'exist_AVG_259200000', 'exist_AVG_7200000', 'exist_MAX_1', 'exist_MIN_10000',
+                                   'tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
+                                   'tester_MIN_10000'])
             r.execute_command('TS.ADD exist 1981 0')
 
     def test_big_compressed_chunk_reverserange(self):
@@ -105,9 +105,9 @@ class testGlobalConfigTests():
                 r.execute_command('TS.ADD', 'tester', last_ts, 1)
             rev_samples = list(samples)
             rev_samples.reverse()
-            assert r.execute_command('TS.GET', 'tester') == [last_ts, '1']
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+') == samples
-            assert r.execute_command('TS.REVRANGE', 'tester', '-', '+') == rev_samples
+            env.expect('TS.GET', 'tester', conn=r).equal([last_ts, '1'])
+            env.expect('TS.RANGE', 'tester', '-', '+', conn=r).equal(samples)
+            env.expect('TS.REVRANGE', 'tester', '-', '+', conn=r).equal(rev_samples)
 
     def test_561_compressed(self):
         self.verify_561('')
@@ -124,8 +124,9 @@ class testGlobalConfigTests():
             r.execute_command('TS.ADD', 'tester', 1602166828000, 1)
             r.execute_command('TS.ADD', 'tester', 1602151165000, 1)
 
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10000')[:1] == \
-                   r.execute_command('TS.RANGE', 'tester_agg', '-', '+')
+            x1 = r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10000')[:1]
+            x2 = r.execute_command('TS.RANGE', 'tester_agg', '-', '+')
+            env.assertEqual(x1, x2)
 
             r.execute_command('DEL', 'tester')
             r.execute_command('DEL', 'tester_agg')
