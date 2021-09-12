@@ -94,7 +94,8 @@ class testGlobalConfigTests():
             r.execute_command('TS.ADD exist 1981 0')
 
     def test_big_compressed_chunk_reverserange(self):
-        with self.env.getConnection() as r:
+        env = self.env
+        with env.getConnection() as r:
             r.execute_command('del tester')
             start_ts = 1599941160000
             last_ts = 0
@@ -116,7 +117,8 @@ class testGlobalConfigTests():
         self.verify_561('UNCOMPRESSED')
 
     def verify_561(self, chunk_type):
-        with self.env.getConnection() as r:
+        env = self.env
+        with env.getConnection() as r:
             r.execute_command('TS.CREATE', 'tester', chunk_type, 'DUPLICATE_POLICY', 'Last', 'RETENTION', '86400000')
             r.execute_command('TS.CREATE', 'tester_agg', chunk_type, 'DUPLICATE_POLICY', 'Last')
             r.execute_command('TS.CREATERULE', 'tester', 'tester_agg', 'AGGREGATION', 'sum', '10000')
