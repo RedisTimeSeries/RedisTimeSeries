@@ -83,6 +83,7 @@ TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
 
 CC=gcc
+CXX=g++
 
 CC_FLAGS = \
 	-I$(SDK_DIR) \
@@ -97,6 +98,8 @@ CC_FLAGS = \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
 	-DREDISMODULE_EXPERIMENTAL_API
 
+CXXFLAGS = -std=c++17 -Wall -fPIC -pedantic
+
 LD_FLAGS += 
 LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++
 
@@ -110,15 +113,19 @@ endif
 
 ifeq ($(PROFILE),1)
 CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+CXXFLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DDEBUG
+CXXFLAGS += -g -ggdb -O0 -DDEBUG
 LD_FLAGS += -g
 else ifeq ($(PROFILE),1)
 CC_FLAGS += -O2
+CXXFLAGS += -O2
 else
 CC_FLAGS += -O3
+CXXFLAGS += -O3
 endif
 
 
@@ -211,9 +218,16 @@ clean:
 
 -include $(CC_DEPS)
 
+DRAGONBOX_DIR=$(ROOT)/deps/dragonbox
+
+$(DRAGONBOX_DIR)/dragonbox.o: $(DRAGONBOX_DIR)/dragonbox.cpp $(DRAGONBOX_DIR)/dragonbox.h
+	$(SHOW)$(CXX) $(CXXFLAGS) -c $(DRAGONBOX_DIR)/dragonbox.cpp -o $(DRAGONBOX_DIR)/dragonbox.o
+
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+
+OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
 
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 	@echo Linking $@...
