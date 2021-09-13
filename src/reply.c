@@ -6,14 +6,13 @@
 
 #include "reply.h"
 
+#include "dragonbox/dragonbox.h"
 #include "query_language.h"
 #include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
 
 #include "rmutil/alloc.h"
-
-#include "dragonbox/dragonbox.h"
 
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
