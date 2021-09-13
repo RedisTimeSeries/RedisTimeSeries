@@ -218,15 +218,16 @@ clean:
 
 -include $(CC_DEPS)
 
+DRAGONBOX_DIR=$(ROOT)/deps/dragonbox
 
-$(BINDIR)/dragonbox.o: dragonbox.cpp dragonbox.h
-	$(SHOW)$(CXX) $(CXXFLAGS) -c dragonbox.cpp -o $(BINDIR)/dragonbox.o
+$(DRAGONBOX_DIR)/dragonbox.o: $(DRAGONBOX_DIR)/dragonbox.cpp $(DRAGONBOX_DIR)/dragonbox.h
+	$(SHOW)$(CXX) $(CXXFLAGS) -c $(DRAGONBOX_DIR)/dragonbox.cpp -o $(DRAGONBOX_DIR)/dragonbox.o
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-OBJECTS += $(BINDIR)/dragonbox.o
+OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
 
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 	@echo Linking $@...
