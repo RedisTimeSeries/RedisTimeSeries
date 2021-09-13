@@ -14,7 +14,7 @@
 
 #include "rmutil/alloc.h"
 
-#include "dragonbox.h"
+#include "dragonbox/dragonbox.h"
 
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
