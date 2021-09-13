@@ -6,15 +6,13 @@
 
 #include "reply.h"
 
-#include "fpconv.h"
+#include "dragonbox/dragonbox.h"
 #include "query_language.h"
 #include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
 
 #include "rmutil/alloc.h"
-
-#include "dragonbox/dragonbox.h"
 
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
@@ -107,8 +105,6 @@ void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     char buf[MAX_VAL_LEN + 1];
     dragonbox_double_to_chars(value, buf);
-    //int str_len = fpconv_dtoa(value, buf);
-    //buf[str_len] = '\0';
     RedisModule_ReplyWithSimpleString(ctx, buf);
 }
 
