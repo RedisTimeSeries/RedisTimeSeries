@@ -3000,8 +3000,8 @@ namespace jkj::dragonbox {
                                                                      result.exponent, buffer);
             }
             else {
-                std::memcpy(buffer, "0E0", 3);
-                return buffer + 3;
+                std::memcpy(buffer, "0", 1);
+                return buffer + 1;
             }
         }
         else {
@@ -3152,8 +3152,7 @@ namespace jkj::dragonbox {
         char* to_chars<float, default_float_traits<float>>(std::uint32_t s32, int exponent,
                                                            char* buffer) noexcept {
             int remaining_digits_minus_1 = int(decimal_length_minus_1(s32));
-            exponent += remaining_digits_minus_1;
-            int exponent_position = remaining_digits_minus_1 + 2;
+            int exponent_position = remaining_digits_minus_1 + 1;
 
             while (remaining_digits_minus_1 >= 4) {
 #ifdef __clang__ // https://bugs.llvm.org/show_bug.cgi?id=38217
@@ -3166,8 +3165,8 @@ namespace jkj::dragonbox {
                 // c1 = c / 100; c2 = c % 100;
                 auto [c1, c2] = fast_div<100, 14, 5>(c);
 
-                std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 2);
-                std::memcpy(buffer + remaining_digits_minus_1 - 2, &radix_100_table[c1 * 2], 2);
+                std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 2);
+                std::memcpy(buffer + remaining_digits_minus_1 - 3, &radix_100_table[c1 * 2], 2);
                 remaining_digits_minus_1 -= 4;
             }
             if (remaining_digits_minus_1 >= 2) {
@@ -3175,7 +3174,7 @@ namespace jkj::dragonbox {
                 auto [c1, c2] = fast_div<100, 14, 5>(s32);
                 s32 = c1;
 
-                std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 2);
+                std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 2);
                 remaining_digits_minus_1 -= 2;
             }
             if (remaining_digits_minus_1 > 0) {
@@ -3184,24 +3183,19 @@ namespace jkj::dragonbox {
                 auto [d1, d2] = fast_div<10, 7, 3>(s32);
 
                 buffer[0] = char('0' + d1);
-                buffer[1] = '.';
                 buffer[2] = char('0' + d2);
                 buffer += exponent_position;
             }
             else {
                 buffer[0] = char('0' + s32);
-
-                // If the significand is of 1 digit, do not print decimal dot.
-                if (exponent_position != 2) {
-                    buffer[1] = '.';
-                    buffer += exponent_position;
-                }
-                else {
-                    buffer += 1;
-                }
+                buffer += exponent_position;
             }
 
             // Print exponent and return
+            if(exponent == 0) {
+                return buffer;
+            }
+
             if (exponent < 0) {
                 std::memcpy(buffer, "E-", 2);
                 buffer += 2;
@@ -3231,6 +3225,7 @@ namespace jkj::dragonbox {
             std::uint32_t s32;
             int remaining_digits_minus_1;
             int exponent_position;
+            int n_trailing_zeros = 0;
             bool may_have_more_trailing_zeros = false;
 
             if ((significand >> 32) != 0) {
@@ -3240,8 +3235,7 @@ namespace jkj::dragonbox {
                 auto r = std::uint32_t(significand) - s32 * 1'0000'0000;
 
                 remaining_digits_minus_1 = int(decimal_length_minus_1(s32)) + 8;
-                exponent += remaining_digits_minus_1;
-                exponent_position = remaining_digits_minus_1 + 2;
+                exponent_position = remaining_digits_minus_1 + 1;
 
                 if (r != 0) {
                     // Print 8 digits
@@ -3262,62 +3256,62 @@ namespace jkj::dragonbox {
                         goto print_c4_label;
                     }
                     else if (tz == 1) {
-                        std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c4 * 2], 1);
-                        exponent_position -= 1;
+                        std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c4 * 2], 1);
+                        n_trailing_zeros += 1;
                         goto print_c3_label;
                     }
 
                     tz = trailing_zero_count_table[c3];
                     if (tz == 0) {
-                        exponent_position -= 2;
+                        n_trailing_zeros += 2;
                         goto print_c3_label;
                     }
                     else if (tz == 1) {
-                        std::memcpy(buffer + remaining_digits_minus_1 - 2, &radix_100_table[c3 * 2],
+                        std::memcpy(buffer + remaining_digits_minus_1 - 3, &radix_100_table[c3 * 2],
                                     1);
-                        exponent_position -= 3;
+                        n_trailing_zeros += 3;
                         goto print_c2_label;
                     }
 
                     tz = trailing_zero_count_table[c2];
                     if (tz == 0) {
-                        exponent_position -= 4;
+                        n_trailing_zeros += 4;
                         goto print_c2_label;
                     }
                     else if (tz == 1) {
-                        std::memcpy(buffer + remaining_digits_minus_1 - 4, &radix_100_table[c2 * 2],
+                        std::memcpy(buffer + remaining_digits_minus_1 - 5, &radix_100_table[c2 * 2],
                                     1);
-                        exponent_position -= 5;
+                        n_trailing_zeros += 5;
                         goto print_c1_label;
                     }
 
                     tz = trailing_zero_count_table[c1];
                     if (tz == 0) {
-                        exponent_position -= 6;
+                        n_trailing_zeros += 6;
                         goto print_c1_label;
                     }
                     // We assumed r != 0, so c1 cannot be zero in this case.
                     assert(tz == 1);
-                    std::memcpy(buffer + remaining_digits_minus_1 - 6, &radix_100_table[c1 * 2], 1);
-                    exponent_position -= 7;
+                    std::memcpy(buffer + remaining_digits_minus_1 - 7, &radix_100_table[c1 * 2], 1);
+                    n_trailing_zeros += 7;
                     goto after_print_label;
 
                 print_c4_label:
-                    std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c4 * 2], 2);
+                    std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c4 * 2], 2);
 
                 print_c3_label:
-                    std::memcpy(buffer + remaining_digits_minus_1 - 2, &radix_100_table[c3 * 2], 2);
+                    std::memcpy(buffer + remaining_digits_minus_1 - 3, &radix_100_table[c3 * 2], 2);
 
                 print_c2_label:
-                    std::memcpy(buffer + remaining_digits_minus_1 - 4, &radix_100_table[c2 * 2], 2);
+                    std::memcpy(buffer + remaining_digits_minus_1 - 5, &radix_100_table[c2 * 2], 2);
 
                 print_c1_label:
-                    std::memcpy(buffer + remaining_digits_minus_1 - 6, &radix_100_table[c1 * 2], 2);
+                    std::memcpy(buffer + remaining_digits_minus_1 - 7, &radix_100_table[c1 * 2], 2);
 
                 after_print_label:;
                 }      // r != 0
                 else { // r == 0
-                    exponent_position -= 8;
+                    n_trailing_zeros += 8;
                     may_have_more_trailing_zeros = true;
                 }
                 remaining_digits_minus_1 -= 8;
@@ -3330,8 +3324,7 @@ namespace jkj::dragonbox {
                 else {
                     remaining_digits_minus_1 = int(decimal_length_minus_1(s32));
                 }
-                exponent += remaining_digits_minus_1;
-                exponent_position = remaining_digits_minus_1 + 2;
+                exponent_position = remaining_digits_minus_1 + 1;
                 may_have_more_trailing_zeros = true;
             }
 
@@ -3354,33 +3347,33 @@ namespace jkj::dragonbox {
                     }
                     else if (tz == 1) {
                         may_have_more_trailing_zeros = false;
-                        exponent_position -= 1;
-                        std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 1);
+                        n_trailing_zeros += 1;
+                        std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 1);
                         goto inside_loop_print_c1_label;
                     }
 
                     tz = trailing_zero_count_table[c1];
                     if (tz == 0) {
                         may_have_more_trailing_zeros = false;
-                        exponent_position -= 2;
+                        n_trailing_zeros += 2;
                         goto inside_loop_print_c1_label;
                     }
                     else if (tz == 1) {
                         may_have_more_trailing_zeros = false;
-                        exponent_position -= 3;
-                        std::memcpy(buffer + remaining_digits_minus_1 - 2, &radix_100_table[c1 * 2],
+                        n_trailing_zeros += 3;
+                        std::memcpy(buffer + remaining_digits_minus_1 - 3, &radix_100_table[c1 * 2],
                                     1);
                         goto inside_loop_after_print_label;
                     }
-                    exponent_position -= 4;
+                    n_trailing_zeros += 4;
                     goto inside_loop_after_print_label;
                 }
 
             inside_loop_print_c2_label:
-                std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 2);
+                std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 2);
 
             inside_loop_print_c1_label:
-                std::memcpy(buffer + remaining_digits_minus_1 - 2, &radix_100_table[c1 * 2], 2);
+                std::memcpy(buffer + remaining_digits_minus_1 - 3, &radix_100_table[c1 * 2], 2);
 
             inside_loop_after_print_label:
                 remaining_digits_minus_1 -= 4;
@@ -3390,20 +3383,22 @@ namespace jkj::dragonbox {
                 auto [c1, c2] = fast_div<100, 14, 5>(s32);
                 s32 = c1;
 
-                if (may_have_more_trailing_zeros) {
+                // if we have 3 digit significand without exp we would like to represent it without the exp 
+                // even if it has trailing zeros.
+                if (may_have_more_trailing_zeros && !(remaining_digits_minus_1 == 2 && n_trailing_zeros == 0 && exponent == 0)) {
                     auto tz = trailing_zero_count_table[c2];
-                    exponent_position -= tz;
+                    n_trailing_zeros += tz;
                     if (tz == 0) {
-                        std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 2);
+                        std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 2);
                         may_have_more_trailing_zeros = false;
                     }
                     else if (tz == 1) {
-                        std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 1);
+                        std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 1);
                         may_have_more_trailing_zeros = false;
                     }
                 }
                 else {
-                    std::memcpy(buffer + remaining_digits_minus_1, &radix_100_table[c2 * 2], 2);
+                    std::memcpy(buffer + remaining_digits_minus_1 - 1, &radix_100_table[c2 * 2], 2);
                 }
 
                 remaining_digits_minus_1 -= 2;
@@ -3414,28 +3409,33 @@ namespace jkj::dragonbox {
                 auto [d1, d2] = fast_div<10, 7, 3>(s32);
 
                 buffer[0] = char('0' + d1);
-                if (may_have_more_trailing_zeros && d2 == 0) {
+                if (may_have_more_trailing_zeros && d2 == 0 && !(n_trailing_zeros == 0 && exponent == 0)) {
+                    exponent += n_trailing_zeros + 1;
                     buffer += 1;
                 }
                 else {
-                    buffer[1] = '.';
-                    buffer[2] = char('0' + d2);
-                    buffer += exponent_position;
+                    buffer[1] = char('0' + d2);
+                    exponent += n_trailing_zeros;
+                    buffer += exponent_position - n_trailing_zeros;
                 }
             }
             else {
                 buffer[0] = char('0' + s32);
+                exponent += n_trailing_zeros;
 
-                if (may_have_more_trailing_zeros) {
+                if (may_have_more_trailing_zeros && !(n_trailing_zeros == 0 && exponent == 0)) {
                     buffer += 1;
                 }
                 else {
-                    buffer[1] = '.';
-                    buffer += exponent_position;
+                    buffer += exponent_position - n_trailing_zeros;
                 }
             }
 
             // Print exponent and return
+            if(exponent == 0) {
+                return buffer;
+            }
+
             if (exponent < 0) {
                 std::memcpy(buffer, "E-", 2);
                 buffer += 2;
