@@ -102,8 +102,8 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 #define MAX_VAL_LEN 24
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
-    RedisModule_ReplyWithStringBuffer(ctx, (char*)&value, sizeof(double));
+    RedisModule_ReplyWithStringBuffer(ctx, (char *)&timestamp, sizeof(u_int64_t));
+    RedisModule_ReplyWithStringBuffer(ctx, (char *)&value, sizeof(double));
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {
