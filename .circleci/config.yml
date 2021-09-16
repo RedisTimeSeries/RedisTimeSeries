@@ -213,6 +213,15 @@ commands:
       module_path:
         type: string
         default: ../../bin/redistimeseries.so
+      gears_module_path:
+        type: string
+        default: ../../bin/linux-bionic-x64/RedisGears/redisgears.so 
+      allowed_envs:
+        type: string
+        default: "oss-standalone"
+      timeout:
+        type: string
+        default: 40m
     steps:
       - run:
           name: Install remote benchmark tool dependencies
@@ -221,9 +230,15 @@ commands:
       - run:
           name: Install remote benchmark python dependencies
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
+      
+      - run:
+          name: Get gears
+          command: |
+            ./sbin/getgears
+
       - run:
           name: Run CI benchmarks on aws
-          timeout: 60m
+          timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
             cd ./tests/benchmarks
@@ -233,6 +248,7 @@ commands:
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
 
             redisbench-admin run-remote \
+              --module_path << parameters.gears_module_path >> \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
@@ -416,6 +432,20 @@ jobs:
           name: Build
           command: bash -l -c "make build"
       - benchmark-automation
+  
+  performance-ci-automation-extensive:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-buster
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build"
+      - benchmark-automation:
+          allowed_envs: "oss-cluster"
+          timeout: 180m
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -467,6 +497,17 @@ on-version-tags: &on-version-tags
     tags:
       only: /^v[0-9].*/
 
+on-perf-and-version-tags: &on-perf-and-version-tags
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+        - /^perf.*$/
+    tags:
+      only: /^v[0-9].*/
+
 on-integ-and-version-tags: &on-integ-and-version-tags
   filters:
     branches:
@@ -514,7 +555,12 @@ workflows:
           context: common
           requires:
             - build
-          <<: *on-integ-and-version-tags
+          <<: *on-perf-and-version-tags
+      - performance-ci-automation-extensive:
+          context: common
+          requires:
+            - build
+          <<: *on-perf-and-version-tags
       - deploy-artifacts:
           name: deploy-snapshot
           location: snapshots
@@ -546,7 +592,7 @@ workflows:
             branches:
               only: master
     jobs:
-      - performance-ci-automation:
+      - performance-ci-automation-extensive:
           context: common
 
   nightly-twice-a-week:

@@ -1,0 +1,39 @@
+name: "tsbs-scale100-double-groupby-1@324rps"
+
+metadata:
+  labels:
+    test_type: query
+    includes_targets: "true"
+
+remote:
+  - type: oss-standalone
+  - setup: redistimeseries-m5
+
+setups:
+  - oss-cluster-05-primaries
+  - oss-cluster-15-primaries
+  - oss-cluster-30-primaries
+
+dbconfig:
+  - tool: tsbs_load_redistimeseries
+  - parameters:
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+  - check:
+      keyspacelen: 1000
+
+clientconfig:
+  - tool: tsbs_run_queries_redistimeseries
+  - parameters:
+    - workers: 32
+    - max-rps: 324
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_double-groupby-1_10000.dat"
+
+exporter:
+  redistimeseries:
+    metrics:
+      - "$.Totals.overallQuantiles.all_queries.q50":
+          "target-1": 98.17
+          "target-2": 310.77
+      - "$.Totals.overallQueryRates.all_queries":
+          "target-1": 324
+          "target-2": 324

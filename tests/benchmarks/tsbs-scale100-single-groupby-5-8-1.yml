@@ -6,7 +6,7 @@ dbconfig:
   - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/devops-scale100-4days.rdb"
 setups:
   - oss-standalone
-  - oss-cluster-15-primaries
+
 clientconfig:
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
