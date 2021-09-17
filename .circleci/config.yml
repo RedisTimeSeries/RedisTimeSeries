@@ -215,7 +215,7 @@ commands:
         default: ../../bin/redistimeseries.so
       gears_module_path:
         type: string
-        default: ../../bin/linux-bionic-x64/RedisGears/redisgears.so 
+        default: ../../bin/linux-buster-x64/RedisGears/redisgears.so 
       allowed_envs:
         type: string
         default: "oss-standalone"
@@ -553,13 +553,9 @@ workflows:
           <<: *on-any-branch
       - performance-ci-automation:
           context: common
-          requires:
-            - build
           <<: *on-perf-and-version-tags
       - performance-ci-automation-extensive:
           context: common
-          requires:
-            - build
           <<: *on-perf-and-version-tags
       - deploy-artifacts:
           name: deploy-snapshot
