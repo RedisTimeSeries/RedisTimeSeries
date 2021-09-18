@@ -135,8 +135,16 @@ EOF
 	fi
 
 	[[ $RLEC == 1 ]] && export RLEC_CLUSTER=1
-	$OP python3 -m RLTest @$config
+
+	if [[ $NOP != 1 ]]; then
+		{ $OP python3 -m RLTest @$config; E=$?; } || true
+	else
+		$OP python3 -m RLTest @$config
+		E=0
+	fi
+
 	[[ $KEEP != 1 ]] && rm -f $config
+	return $E
 }
 
 #----------------------------------------------------------------------------------------------
@@ -239,10 +247,11 @@ fi
 
 RLTEST_ARGS+=" --print-server-cmd"
 
-[[ $GEN == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS}" run_tests "general tests$NOTE")
-[[ $SLAVES == 1 ]] && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-slaves" run_tests "tests with slaves$NOTE")
-[[ $AOF == 1 ]]    && (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-aof" run_tests "tests with AOF$NOTE")
+E=0
+[[ $GEN == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS}" run_tests "general tests$NOTE"); (( E |= $? )); } || true
+[[ $SLAVES == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-slaves" run_tests "tests with slaves$NOTE"); (( E |= $? )); } || true
+[[ $AOF == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} ${OSS_CLUSTER_ARGS} --use-aof" run_tests "tests with AOF$NOTE"); (( E |= $? )); } || true
 
-[[ $RLEC == 1 ]] && (RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "tests on RLEC")
+[[ $RLEC == 1 ]]   && { (RLTEST_ARGS+=" --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "tests on RLEC"); (( E |= $? )); } || true
 
-exit 0
+exit $E

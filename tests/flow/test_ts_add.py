@@ -121,5 +121,6 @@ def test_gorilla(env):
 
 def test_ts_add_negative(env):
     with env.getClusterConnectionIfNeeded() as r:
+        time.sleep(0.1)
         env.expect('TS.CREATE', 'tester', 'ENCODING', conn=r).raiseError()
         env.expect('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding', conn=r).raiseError()
