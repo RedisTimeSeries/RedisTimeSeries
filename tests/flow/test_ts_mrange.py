@@ -77,9 +77,9 @@ def test_range_by_labels(env):
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 
                    'FILTER', 'generation=x', conn=r).apply(lambda x: len(x[0][2])).equal(3) 
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 
-                   'FILTER', 'generation=x', conn=r).apply(labmda x: len(x[0][2])).equal(3)
+                   'FILTER', 'generation=x', conn=r).apply(lambda x: len(x[0][2])).equal(3)
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 
-                   'FILTER', 'generation=x', conn=r).apply(labmda x: len(x[0][2])).equal(18)
+                   'FILTER', 'generation=x', conn=r).apply(lambda x: len(x[0][2])).equal(18)
 
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x', conn=r).error()
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string', 'FILTER', 'generation=x', conn=r).error()
@@ -300,8 +300,10 @@ def test_mrange_align(env):
             ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
         ]
 
-        assert expected_start_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
-        assert expected_end_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size,
+                   'FILTER', 'generation=x', conn=r).apply(sorted).equal(expected_start_result)
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size,
+                   'FILTER', 'generation=x', conn=r).apply(sorted).equal(expected_end_result)
 
         def groupby(data):
             result =  defaultdict(lambda: 0)
@@ -313,5 +315,7 @@ def test_mrange_align(env):
         expected_groupby_start_result = [['generation=x', [], groupby(expected_start_result)]]
         expected_groupby_end_result = [['generation=x', [], groupby(expected_end_result)]]
 
-        assert expected_groupby_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max')
-        assert expected_groupby_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max')
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION', 'COUNT', agg_bucket_size,
+                   'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max', conn=r).equal(expected_groupby_start_result)
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION', 'COUNT', agg_bucket_size,
+                   'FILTER', 'generation=x', 'GROUPBY', 'generation', 'REDUCE', 'max', conn=r).equal(expected_groupby_end_result)

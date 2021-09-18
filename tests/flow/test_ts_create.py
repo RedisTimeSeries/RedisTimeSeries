@@ -119,14 +119,14 @@ def test_empty(env):
         r.execute_command('ts.create', 'empty')
         info = _get_ts_info(r, 'empty')
         assert info.total_samples == 0
-        assert [] == r.execute_command('TS.range', 'empty', 0, "+")
-        assert [] == r.execute_command('TS.get', 'empty')
+        env.expect('TS.range', 'empty', 0, "+", conn=r).equal([])
+        env.expect('TS.get', 'empty', conn=r).equal([])
 
         r.execute_command('ts.create', 'empty_uncompressed', 'uncompressed')
         info = _get_ts_info(r, 'empty_uncompressed')
         assert info.total_samples == 0
-        assert [] == r.execute_command('TS.range', 'empty_uncompressed', 0, "+")
-        assert [] == r.execute_command('TS.get', 'empty')
+        env.expect('TS.range', 'empty_uncompressed', 0, "+", conn=r).equal([])
+        env.expect('TS.get', 'empty', conn=r).equal([])
 
 
 def test_issue299(env):
@@ -134,17 +134,14 @@ def test_issue299(env):
         r.execute_command('ts.create', 'issue299')
         for i in range(1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
-        actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10)
-        assert actual_result[0] == [0, '0']
-        actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 100)
-        assert actual_result[0] == [0, '4.5']
+        env.expect('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10, conn=r).apply(lambda x: x[0]).equal([0, '0'])
+        env.expect('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 100, conn=r).apply(lambda x: x[0]).equal([0, '4.5'])
 
         r.execute_command('del', 'issue299')
         r.execute_command('ts.create', 'issue299')
         for i in range(100, 1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
-        actual_result = r.execute_command('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10)
-        assert actual_result[0] != [0, '0']
+        env.expect('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10, conn=r).apply(lambda x: x[0]).notEqual([0, '0'])
 
 
 def test_expire(env):
@@ -157,11 +154,14 @@ def test_expire(env):
         env.expect('keys', '*', conn=r).equal([])
 
 def test_ts_create_encoding(env):
+    def chunk_type(res):
+        return TSInfo(res).chunk_type
+
     for ENCODING in ['compressed', 'uncompressed']:
         env.flush()
         with env.getClusterConnectionIfNeeded() as r:
             r.execute_command('ts.create', 't1', 'ENCODING', ENCODING)
-            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1')).chunk_type, ENCODING)
+            env.expect('TS.INFO', 't1', conn=r).apply(chunk_type).equal(ENCODING)
             # backwards compatible check
             r.execute_command('ts.create', 't1_bc', ENCODING)
-            env.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING)
+            env.expect('TS.INFO', 't1_bc', conn=r).apply(chunk_type).equal(ENCODING)

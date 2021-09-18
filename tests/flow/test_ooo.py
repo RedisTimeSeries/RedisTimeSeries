@@ -33,10 +33,10 @@ def test_ooo(env):
             r.execute_command('ts.add', 'ooo', 1000, 42)
             ooo_res = r.execute_command('ts.range', 'ooo', 1000, 1000)
             assert ooo_res[0] == [1000, '42']
-            assert last_sample == r.execute_command('ts.get', 'ooo')
+            env.expect('ts.get', 'ooo', conn=r).equal(last_sample)
 
             r.execute_command('ts.add', 'ooo', last_sample[0], 42)
-            assert [last_sample[0], '42'] == r.execute_command('ts.get', 'ooo')
+            env.expect('ts.get', 'ooo', conn=r).equal([last_sample[0], '42'])
 
             r.execute_command('DEL', 'no_ooo')
             r.execute_command('DEL', 'ooo')
@@ -50,14 +50,14 @@ def test_ooo_with_retention(env):
         for i in range(batch):
             env.expect('ts.add', 'ooo', i, i, conn=r).equal(i)
         env.expect('ts.range', 'ooo' ,0, batch - retention - 2, conn=r).equal([])
-        assert len(r.execute_command('ts.range', 'ooo', '-', '+')) == retention + 1
+        env.expect('ts.range', 'ooo', '-', '+', conn=r).apply(len).equal(retention + 1)
 
         env.expect('ts.add', 'ooo', 70, 70, conn=r).error()
 
         for i in range(batch, batch * 2):
             env.expect('ts.add', 'ooo', i, i, conn=r).equal(i)
         env.expect('ts.range', 'ooo', 0, batch * 2 - retention - 2, conn=r).equal([])
-        assert len(r.execute_command('ts.range', 'ooo', '-', '+')) == retention + 1
+        env.expect('ts.range', 'ooo', '-', '+', conn=r).apply(len).equal(retention + 1)
 
         # test for retention larger than timestamp
         r.execute_command('ts.create', 'large', 'RETENTION', 1000000, 'DUPLICATE_POLICY', 'LAST')

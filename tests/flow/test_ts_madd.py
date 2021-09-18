@@ -13,7 +13,8 @@ def test_madd():
         r.execute_command("ts.create", 'test_key3')
 
         for i in range(sample_len):
-            assert [i + 1000, i + 3000, i + 6000] == r.execute_command("ts.madd", 'test_key1', i + 1000, i, 'test_key2', i + 3000, i, 'test_key3', i + 6000, i)
+            env.expect("ts.madd", 'test_key1', i + 1000, i, 'test_key2', i + 3000, i, 'test_key3', i + 6000, i, conn=r).\
+                equal([i + 1000, i + 3000, i + 6000])
 
         res = r.execute_command('ts.range', 'test_key1', 1000, 1000 + sample_len)
         i = 0
@@ -71,9 +72,9 @@ def test_partial_madd(env):
 
         res = r.execute_command("ts.madd", 'test_key1', now + 1000, 10, 'test_key2', 1000, 20, 'test_key3', 3001, 30)
         assert (now + 1000, 1000, 3001) == (res[0], res[1], res[2])
-        assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
-        assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
-        assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+        env.expect('ts.range', 'test_key1', "-", "+", conn=r).apply(len).equal(2)
+        env.expect('ts.range', 'test_key2', "-", "+", conn=r).apply(len).equal(2)
+        env.expect('ts.range', 'test_key3', "-", "+", conn=r).apply(len).equal(2)
 
 
 def test_extensive_ts_madd(env):

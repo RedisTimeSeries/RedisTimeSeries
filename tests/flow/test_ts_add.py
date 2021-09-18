@@ -17,18 +17,21 @@ def test_issue_504(env):
 
 
 def test_issue_588(env):
+    def result(res):
+        return float(res[0][1])
+        
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test1', "DUPLICATE_POLICY", "min")
         r.execute_command('ts.add', 'test1', 1, -0.05)
-        assert float(r.execute_command('TS.RANGE', 'test1', "-", "+")[0][1]) == -0.05
+        env.expect('TS.RANGE', 'test1', "-", "+", conn=r).apply(result).equal(-0.05)
         r.execute_command('ts.add', 'test1', 1, -0.06)
-        assert float(r.execute_command('TS.RANGE', 'test1', "-", "+")[0][1]) == -0.06
+        env.expect('TS.RANGE', 'test1', "-", "+", conn=r).apply(result).equal(-0.06)
 
         r.execute_command('ts.create', 'test2', "DUPLICATE_POLICY", "max")
         r.execute_command('ts.add', 'test2', 1, -0.06)
-        assert float(r.execute_command('TS.RANGE', 'test2', "-", "+")[0][1]) == -0.06
+        env.expect('TS.RANGE', 'test2', "-", "+", conn=r).apply(result).equal(-0.06)
         r.execute_command('ts.add', 'test2', 1, -0.05)
-        assert float(r.execute_command('TS.RANGE', 'test2', "-", "+")[0][1]) == -0.05
+        env.expect('TS.RANGE', 'test2', "-", "+", conn=r).apply(result).equal(-0.05)
 
 
 def test_automatic_timestamp(env):

@@ -25,13 +25,16 @@ class testModuleLoadTimeArguments(object):
                     assert Env(testName="Test load time args: {}".format(variation[1]), moduleArgs=variation[1])
 
 
+def chunk_type(res):
+    return TSInfo(res).chunk_type
+
 def test_encoding_uncompressed(env):
     env.skipOnCluster()
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
+        env.expect('TS.INFO', 't1_MAX_1000', conn=r).apply(chunk_type).equal('uncompressed')
 
 def test_encoding_compressed(env):
     env.skipOnCluster()
@@ -39,7 +42,7 @@ def test_encoding_compressed(env):
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
+        env.expect('TS.INFO', 't1_MAX_1000', conn=r).apply(chunk_type).equal('compressed')
 
 def test_uncompressed(env):
     env.skipOnCluster()
@@ -47,7 +50,7 @@ def test_uncompressed(env):
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
+        env.expect('TS.INFO', 't1_MAX_1000', conn=r).apply(chunk_type).equal('uncompressed')
 
 def test_compressed(env):
     env.skipOnCluster()
@@ -55,7 +58,7 @@ def test_compressed(env):
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
+        env.expect('TS.INFO', 't1_MAX_1000', conn=r).apply(chunk_type).equal('compressed')
 
 def test_compressed_debug(env):
     env.skipOnCluster()
@@ -66,7 +69,8 @@ def test_compressed_debug(env):
         r.execute_command('TS.ADD', 't1', '3000', 1.0)
         r.execute_command('TS.ADD', 't1', '5000', 1.0)
 
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [['startTimestamp', 0, 'endTimestamp', 3000, 'samples', 2, 'size', 4096, 'bytesPerSample', '2048']]
+        env.expect('TS.INFO', 't1_MAX_1000', 'DEBUG', conn=r).apply(lambda x: TSInfo(x).chunks).\
+            equal([['startTimestamp', 0, 'endTimestamp', 3000, 'samples', 2, 'size', 4096, 'bytesPerSample', '2048']])
 
 
 class testGlobalConfigTests():

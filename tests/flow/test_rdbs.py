@@ -55,4 +55,4 @@ def testRDBCompatibility(env):
         env.assertEqual(OLD_KEYS, KEYS)
         for key in OLD_KEYS:
             env.expect('ts.range', key, "-", "+", conn=r).equal(TSRANGE_RESULTS[key])
-            assert normalize_info(r.execute_command('ts.info', key)) == TSINFO_RESULTS[key]
+            env.expect('ts.info', key, conn=r).apply(normalize_info).equal(TSINFO_RESULTS[key])

@@ -1,6 +1,6 @@
 import math
 
-import pytest
+# import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
@@ -171,16 +171,11 @@ def test_range_count(env):
         r.execute_command('TS.CREATE', 'tester1')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-        full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
-        assert len(full_results) == samples_count
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10)
-        assert count_results == full_results[:10]
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, 'AGGREGATION', 'COUNT', 3)
-        assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 4, 'COUNT', 10)
-        assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 3)
-        assert len(count_results) == math.ceil(samples_count / 3.0)
+        env.expect('TS.RANGE', 'tester1', 0, '+', conn=r).apply(len).equal(samples_count)
+        env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, conn=r).apply(len).equal(full_results[:10])
+        env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, 'AGGREGATION', 'COUNT', 3, conn=r).apply(len).equal(10)
+        env.expect('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 4, 'COUNT', 10, conn=r).apply(len).equal(10)
+        env.expect('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 3, conn=r).apply(len).equal(math.ceil(samples_count / 3.0))
 
 
 def test_agg_min(env):
@@ -276,8 +271,8 @@ def test_filter_by(env):
     start_ts = 1511885909
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
-                                 'brown', 'color', 'pink')
+        env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
+                   'brown', 'color', 'pink', conn=r).equal([])
         _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
