@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from utils import Env
-import pytest
+# import pytest
 import redis
 import create_test_rdb_file
 from includes import *

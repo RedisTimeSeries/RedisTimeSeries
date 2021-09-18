@@ -48,49 +48,44 @@ def test_range_by_labels(env):
         _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
-        assert [['tester1', [], expected_result]] == actual_result
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob', conn=r).equal([['tester1', [], expected_result]])
 
         expected_result.reverse()
-        actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
-        assert [['tester1', [], expected_result]] == actual_result
+        env.expect('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob', conn=r).equal([['tester1', [], expected_result]])
 
         def build_expected(val, time_bucket):
             return [[int(i - i % time_bucket), str(val)] for i in
                     range(start_ts, start_ts + samples_count + 1, time_bucket)]
 
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5,
-                                          'FILTER', 'generation=x')
         expected_result = [['tester1', [], build_expected(5, 5)],
                            ['tester2', [], build_expected(15, 5)],
                            ['tester3', [], build_expected(25, 5)],
                            ]
-        env.assertEqual(sorted(expected_result), sorted(actual_result))
-        assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
-                                                        'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
-                                                        'class!=middle'), key=lambda x:x[0])
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x')
-        assert expected_result[0][2][:3] == sorted(actual_result, key=lambda x:x[0])[0][2]
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5,
+                   'FILTER', 'generation=x', conn=r).apply(sorted).equal(sorted(expected_result))
+        env.expect('TS.mrange', start_ts, start_ts + samples_count,
+                   'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
+                   'class!=middle', conn=r).apply(lambda x: sorted(x, key=lambda x: x[0])).equal(expected_result[1:])
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
+                   'LAST', 5, 'FILTER', 'generation=x', conn=r).\
+                   apply(lambda x: sorted(x, key=lambda x:x[0])[0][2]).equal(expected_result[0][2][:3])
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5, 'FILTER', 'generation=x')
-        assert [[1511885905, '1']] == actual_result[0][2][:1]
-        assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 'FILTER', 'generation=x')
-        assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
-        assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'FILTER', 'generation=x')
-        assert 18 == len(actual_result[0][2])  # just checking that agg count before count works
+        env.assertEqual([[1511885905, '1']], actual_result[0][2][:1])
+        env.assertEqual(expected_result[0][2][1:9], actual_result[0][2][1:9])
+        
+        # checking that agg count before count works
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 'COUNT', 3, 
+                   'FILTER', 'generation=x', conn=r).apply(lambda x: len(x[0][2])).equal(3) 
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3, 
+                   'FILTER', 'generation=x', conn=r).apply(labmda x: len(x[0][2])).equal(3)
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3, 
+                   'FILTER', 'generation=x', conn=r).apply(labmda x: len(x[0][2])).equal(18)
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string', 'FILTER', 'generation=x')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER', 'generation=x')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+' ,'FILTER')  # missing args
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'RETLIF')  # no filter word
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3, 'FILTER', 'generation=x', conn=r).error()
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string', 'FILTER', 'generation=x', conn=r).error()
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER', 'generation=x', conn=r).error()
+        env.expect('TS.mrange', '-', '+' ,'FILTER', conn=r).error()  # missing args
+        env.expect('TS.mrange', '-', '+', 'RETLIF', conn=r).error()  # no filter word
         env.expect('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x', conn=r).error()
         env.expect('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x', conn=r).error()
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x', conn=r).error()

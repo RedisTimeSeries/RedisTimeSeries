@@ -17,8 +17,7 @@ def test_create_params(env):
         env.expect('TS.CREATE', 'invalid', 'ENCODING', 'bad-encoding-type', conn=r).error()
 
         r.execute_command('TS.CREATE', 'a')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'a')  # filter exists
+        env.expect('TS.CREATE', 'a', conn=r).error()  # filter exists
 
 
 def test_create_retention(env):
@@ -68,15 +67,14 @@ def test_uncompressed(env):
     with env.getClusterConnectionIfNeeded() as r:
         # test simple commands
         r.execute_command('ts.create', 'not_compressed', 'UNCOMPRESSED')
-        assert 1 == r.execute_command('ts.add', 'not_compressed', 1, 3.5)
-        assert 3.5 == float(r.execute_command('ts.get', 'not_compressed')[1])
-        assert 2 == r.execute_command('ts.add', 'not_compressed', 2, 4.5)
-        assert 3 == r.execute_command('ts.add', 'not_compressed', 3, 5.5)
-        assert 5.5 == float(r.execute_command('ts.get', 'not_compressed')[1])
-        assert [[1, '3.5'], [2, '4.5'], [3, '5.5']] == \
-               r.execute_command('ts.range', 'not_compressed', 0, '+')
+        env.expect('ts.add', 'not_compressed', 1, 3.5, conn=r).equal(1)
+        env.expect('ts.get', 'not_compressed', conn=r).apply(lambda x: float(x[1])).equal(3.5)
+        env.expect('ts.add', 'not_compressed', 2, 4.5, conn=r).equal(2)
+        env.expect('ts.add', 'not_compressed', 3, 5.5, conn=r).equal(3)
+        env.expect('ts.get', 'not_compressed', conn=r).apply(lambda x: float(x[1])).equal(5.5)
+        env.expect('ts.range', 'not_compressed', 0, '+', conn=r).equal([[1, '3.5'], [2, '4.5'], [3, '5.5']])
         info = _get_ts_info(r, 'not_compressed')
-        assert info.total_samples == 3 and info.memory_usage == 4136
+        env.assertTrue(info.total_samples == 3 and info.memory_usage == 4136)
 
     # rdb load
     data = r.dump('not_compressed')
@@ -86,9 +84,9 @@ def test_uncompressed(env):
         r.execute_command('RESTORE', 'not_compressed', 0, data)
         env.expect('ts.range', 'not_compressed', 0, "+", conn=r).equal([[1, '3.5'], [2, '4.5'], [3, '5.5']])
         info = _get_ts_info(r, 'not_compressed')
-        assert info.total_samples == 3 and info.memory_usage == 4136
+        env.assertTrue(info.total_samples == 3 and info.memory_usage == 4136)
         # test deletion
-        assert r.delete('not_compressed')
+        env.assertTrue(r.delete('not_compressed') != [])
 
 
 def test_trim(env):
@@ -109,8 +107,8 @@ def test_trim(env):
             assert samples == untrimmed_info.total_samples
             # extra test for uncompressed
             if mode == "UNCOMPRESSED":
-                assert 11 == trimmed_info.total_samples
-                assert total_chunk_count == untrimmed_info.chunk_count
+                env.assertEqual(trimmed_info.total_samples, 11)
+                env.assertEqual(total_chunk_count, untrimmed_info.chunk_count)
 
             r.delete("trim_me")
             r.delete("dont_trim_me")

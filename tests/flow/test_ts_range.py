@@ -20,7 +20,7 @@ def test_range_query(env):
         env.assertEqual(expected_result, actual_result)
         rev_result = r.execute_command('TS.revrange', 'tester', start_ts + 50, start_ts + 150)
         rev_result.reverse()
-        assert expected_result == rev_result
+        env.assertEqual(expected_result, rev_result)
 
         # test out of range returns empty list
         env.expect('TS.range', 'tester', int(start_ts * 2), '+', conn=r).equal([])
@@ -54,16 +54,14 @@ def test_range_midrange(env):
         env.expect('TS.CREATE', 'tester', 'UNCOMPRESSED', conn=r).noError()
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester', i, i)
-        res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
-        assert len(res) == 500  # sample_count is not in range() so not included
-        res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
-        assert len(res) == 501
+        # sample_count is not in range() so not included
+        res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count, conn=r).apply(len).equal(500)
+        env.expect('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000, conn=r).apply(len).equal(501)
 
         # test for empty range between two full ranges
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester', samples_count * 2 + i, i)
-        res = r.execute_command('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2))
-        assert res == []
+        env.expect('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2), conn=r).equal([])
 
 
 def test_range_with_agg_query(env):
@@ -74,19 +72,15 @@ def test_range_with_agg_query(env):
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[1488823000, '116'], [1488823500, '500'], [1488824000, '500'], [1488824500, '384']]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
-                                          'count', 500)
-        assert expected_result == actual_result
+        env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
+                   'count', 500, conn=r).equal(expected_result)
 
         # test first aggregation is not [0,0] if out of range
         expected_result = [[1488823000, '116'], [1488823500, '500']]
-        actual_result = r.execute_command('TS.range', 'tester', 1488822000, 1488823999, 'AGGREGATION',
-                                          'count', 500)
-        assert expected_result == actual_result
+        env.expect('TS.range', 'tester', 1488822000, 1488823999, 'AGGREGATION',
+                   'count', 500, conn=r).equal(expected_result)
 
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
-                                     'count', -1)
+        env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION', 'count', -1, conn=r).error()
 
 
 def test_agg_std_p(env):
@@ -96,7 +90,7 @@ def test_agg_std_p(env):
         expected_result = [[10, '25.869'], [20, '25.869'], [30, '25.869'], [40, '25.869']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+            env.assertTrue(abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR)
 
 
 def test_agg_std_s(env):
@@ -106,7 +100,7 @@ def test_agg_std_s(env):
         expected_result = [[10, '27.269'], [20, '27.269'], [30, '27.269'], [40, '27.269']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+            env.assertTrue(abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR)
 
 
 def test_agg_var_p(env):
@@ -116,7 +110,7 @@ def test_agg_var_p(env):
         expected_result = [[10, '669.25'], [20, '669.25'], [30, '669.25'], [40, '669.25']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+            env.assertTrue(abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR)
 
 
 def test_agg_var_s(env):
@@ -126,7 +120,7 @@ def test_agg_var_s(env):
         expected_result = [[10, '743.611'], [20, '743.611'], [30, '743.611'], [40, '743.611']]
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+            env.assertTrue(abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR)
 
 
 def test_agg_sum(env):
@@ -134,8 +128,7 @@ def test_agg_sum(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'sum')
 
         expected_result = [[10, '1565'], [20, '2565'], [30, '3565'], [40, '4565']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_count(env):
@@ -143,8 +136,7 @@ def test_agg_count(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'count')
 
         expected_result = [[10, '10'], [20, '10'], [30, '10'], [40, '10']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_first(env):
@@ -152,8 +144,7 @@ def test_agg_first(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'first')
 
         expected_result = [[10, '131'], [20, '231'], [30, '331'], [40, '431']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_last(env):
@@ -161,8 +152,7 @@ def test_agg_last(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'last')
 
         expected_result = [[10, '184'], [20, '284'], [30, '384'], [40, '484']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_range(env):
@@ -170,8 +160,7 @@ def test_agg_range(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'range')
 
         expected_result = [[10, '74'], [20, '74'], [30, '74'], [40, '74']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_range_count(env):
@@ -199,8 +188,7 @@ def test_agg_min(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'min')
 
         expected_result = [[10, '123'], [20, '223'], [30, '323'], [40, '423']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_max(env):
@@ -208,8 +196,7 @@ def test_agg_max(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'max')
 
         expected_result = [[10, '197'], [20, '297'], [30, '397'], [40, '497']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_agg_avg(env):
@@ -217,8 +204,7 @@ def test_agg_avg(env):
         agg_key = _insert_agg_data(env, r, 'tester{a}', 'avg')
 
         expected_result = [[10, '156.5'], [20, '256.5'], [30, '356.5'], [40, '456.5']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+        env.expect('TS.RANGE', agg_key, 10, 50, conn=r).equal(expected_result)
 
 
 def test_series_ordering(env):
@@ -233,7 +219,7 @@ def test_series_ordering(env):
         res = r.execute_command('ts.range', 'test_key', 0, sample_len)
         i = 0
         for sample in res:
-            assert sample == [i, str(i)]
+            env.assertEqual(sample, [i, str(i)])
             i += 1
 
 
@@ -241,13 +227,13 @@ def test_sanity(env):
     start_ts = 1511885909
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
-                                 'brown', 'color', 'pink')
+        env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024',
+                   'LABELS', 'name', 'brown', 'color', 'pink', conn=r).notEqual([])
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
-        assert expected_result == actual_result
+        env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, conn=r).equal(expected_result)
+
         expected_result = [
             'totalSamples', 1500, 'memoryUsage', 1166,
             'firstTimestamp', start_ts, 'chunkCount', 1,
@@ -255,7 +241,7 @@ def test_sanity(env):
             'lastTimestamp', start_ts + samples_count - 1,
             'chunkSize', 1024, 'retentionTime', 0,
             'sourceKey', None, 'rules', []]
-        assert TSInfo(expected_result) == _get_ts_info(r, 'tester')
+        env.assertEqual(TSInfo(expected_result), _get_ts_info(r, 'tester'))
 
 
 def test_sanity_pipeline(env):
@@ -268,8 +254,7 @@ def test_sanity_pipeline(env):
             _insert_data(p, 'tester', start_ts, samples_count, 5)
             p.execute()
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
-        assert expected_result == actual_result
+        env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, conn=r).equal(expected_result)
 
 
 def test_issue358(env):
@@ -284,8 +269,8 @@ def test_issue358(env):
                 if line != '':
                     r.execute_command(*line.split())
         range_res = r.execute_command('ts.range', 'issue358', 1582848000, '+')[0][1]
-        get_res = r.execute_command('ts.get', 'issue358')[1]
-        assert range_res == get_res
+        env.expect('ts.get', 'issue358', conn=r).apply(lambda x: x[1]).equal(range_res)
+
 
 def test_filter_by(env):
     start_ts = 1511885909
@@ -296,18 +281,17 @@ def test_filter_by(env):
         _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
-
-        assert len(res) == 13
-        assert  [int(sample[1]) for sample in res] == list(range(40, 53))
+        env.assertEqual(len(res), 13)
+        env.assertEqual([int(sample[1]) for sample in res], list(range(40, 53)))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+',
                           'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1025, start_ts+1029)
         env.assertEqual(res, [[start_ts+1021, '1021'], [start_ts+1022, '1022'], [start_ts+1025, '1025'], [start_ts+1029, '1029']])
 
-        res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                                'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
-                                'FILTER_BY_VALUE', 1022, 1025)
-        env.assertEqual(res, [[start_ts+1022, '1022'], [start_ts+1023, '1023'], [start_ts+1025, '1025']])
+        exp_res = [[start_ts+1022, '1022'], [start_ts+1023, '1023'], [start_ts+1025, '1025']]
+        env.expect('ts.range', 'tester', start_ts, '+',
+                   'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
+                   'FILTER_BY_VALUE', 1022, 1025, conn=r).equal(exp_res)
 
 
 def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
