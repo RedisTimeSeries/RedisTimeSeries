@@ -2,7 +2,7 @@ import math
 import random
 import statistics
 
-import pytest
+# import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
@@ -23,7 +23,7 @@ def test_compaction_rules(env):
 
         start_ts = 1488823384
         samples_count = 1500
-        _insert_data(r, key_name, start_ts, samples_count, 5)
+        _insert_data(env, r, key_name, start_ts, samples_count, 5)
         last_ts = start_ts + samples_count + 10
         r.execute_command('TS.ADD', key_name, last_ts, 5)
 
@@ -87,11 +87,11 @@ def test_create_compaction_rule_and_del_dest_series(env):
         env.expect('TS.CREATE', key_name, conn=r).noError()
         env.expect('TS.CREATE', agg_key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'AVG', 10, conn=r).noError()
-        assert r.delete(agg_key_name)
+        env.assertTrue(r.delete(agg_key_name))
 
         start_ts = 1488823384
         samples_count = 1500
-        _insert_data(r, key_name, start_ts, samples_count, 5)
+        _insert_data(env, r, key_name, start_ts, samples_count, 5)
 
 
 def test_std_var_func(env):
@@ -116,8 +116,8 @@ def test_std_var_func(env):
             r.execute_command('TS.ADD', raw_key, i, items[i])
         r.execute_command('TS.ADD', raw_key, random_numbers, 0)  # close time bucket
 
-        assert abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR
-        assert abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR
+        env.assertTrue(abs(stdev - float(r.execute_command('TS.GET', std_key)[1])) < ALLOWED_ERROR)
+        env.assertTrue(abs(var - float(r.execute_command('TS.GET', var_key)[1])) < ALLOWED_ERROR)
 
 
 def test_delete_key(env):
@@ -125,12 +125,12 @@ def test_delete_key(env):
         env.expect('TS.CREATE', key_name, 'CHUNK_SIZE', '360', conn=r).noError()
         env.expect('TS.CREATE', agg_key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 10, conn=r).noError()
-        assert r.delete(agg_key_name)
+        env.assertTrue(r.delete(agg_key_name))
         env.assertEqual(_get_ts_info(r, key_name).rules, [])
 
         env.expect('TS.CREATE', agg_key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 11, conn=r).noError()
-        assert r.delete(key_name)
+        env.assertTrue(r.delete(key_name))
         env.assertEqual(_get_ts_info(r, agg_key_name).sourceKey, None)
 
         env.expect('TS.CREATE', key_name, conn=r).noError()
@@ -218,8 +218,8 @@ def test_downsampling_extensive(env):
                 # remove aggs with identical results
                 compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
                 if agg in compare_list:
-                    assert expected_result1 != expected_result2
-                    assert actual_result1 != actual_result2
+                    env.assertNotEqual(expected_result1, expected_result2)
+                    env.assertNotEqual(actual_result1, actual_result2)
 
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
@@ -250,7 +250,7 @@ def test_downsampling_rules(env):
         samples_count = 501
         end_ts = start_ts + samples_count
         values = list(range(samples_count))
-        _insert_data(r, key, start_ts, samples_count, values)
+        _insert_data(env, r, key, start_ts, samples_count, values)
         r.execute_command('TS.ADD', key, 3000, 7.77)
 
         for rule in rules:

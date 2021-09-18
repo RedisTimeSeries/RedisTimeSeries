@@ -1,6 +1,6 @@
 import time
 
-import pytest
+# import pytest
 import redis
 from utils import Env
 from includes import *
@@ -23,9 +23,9 @@ def test_incrby(env):
         now = int(time.time() * 1000)
         result = r.execute_command('TS.RANGE', 'tester', 0, now)
         env.assertEqual(result[-1][1], '70')
-        assert result[-1][0] <= now
-        assert result[0][0] >= start_incr_time
-        assert len(result) <= 40
+        env.assertTrue(result[-1][0] <= now)
+        env.assertTrue(result[0][0] >= start_incr_time)
+        env.assertTrue(len(result) <= 40)
 
 
 def test_incrby_with_timestamp(env):
@@ -40,8 +40,8 @@ def test_incrby_with_timestamp(env):
 
         query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') / 1000
         cur_time = int(time.time())
-        assert query_res >= cur_time
-        assert query_res <= cur_time + 1
+        env.assertTrue(query_res >= cur_time)
+        env.assertTrue(query_res <= cur_time + 1)
 
         env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', '10', conn=r).error()
 

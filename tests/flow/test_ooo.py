@@ -1,6 +1,6 @@
 import random
 
-import pytest
+# import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info
@@ -76,7 +76,7 @@ def test_ooo_split(env):
             r.execute_command('ts.add', 'split', quantity, 42)
             for i in range(quantity):
                 r.execute_command('ts.add', 'split', i, i * 1.01)
-            assert _get_ts_info(r, 'split').chunk_count in [13, 32]
+            env.assertTrue(_get_ts_info(r, 'split').chunk_count in [13, 32])
             res = r.execute_command('ts.range', 'split', '-', '+')
             for i in range(quantity - 1):
                 env.assertEqual(res[i][0] + 1, res[i + 1][0])

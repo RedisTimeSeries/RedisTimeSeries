@@ -44,10 +44,9 @@ def test_ooo_madd(env):
         last_sample = None
         samples = []
         for i in range(0, sample_len, 3):
-            assert [start_ts + (i * 1000 + 2000), start_ts + (i * 1000 + 1000),
-                    start_ts + (i * 1000)] == r.execute_command("ts.madd", 'test_key1', start_ts + (i * 1000 + 2000), i,
-                                                                'test_key1', start_ts + i * 1000 + 1000, i, 'test_key1',
-                                                                start_ts + i * 1000, i)
+            exp_res = [start_ts + (i * 1000 + 2000), start_ts + (i * 1000 + 1000), start_ts + (i * 1000)]
+            env.expect("ts.madd", 'test_key1', start_ts + (i * 1000 + 2000), i, 'test_key1', 
+                       start_ts + i * 1000 + 1000, i, 'test_key1', start_ts + i * 1000, i, conn=r).equal(exp_res)
             samples.append([start_ts + (i * 1000), str(i)])
             samples.append([start_ts + (i * 1000 + 1000), str(i)])
             samples.append([start_ts + (i * 1000 + 2000), str(i)])
@@ -66,7 +65,7 @@ def test_partial_madd(env):
 
         now = int(time.time() * 1000)
         res = r.execute_command("ts.madd", 'test_key1', "*", 10, 'test_key2', 2000, 20, 'test_key3', 3000, 30)
-        assert now <= res[0]
+        env.assertTrue(now <= res[0])
         env.assertEqual(2000, res[1])
         env.assertEqual(3000, res[2])
 

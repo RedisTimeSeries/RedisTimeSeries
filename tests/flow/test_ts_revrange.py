@@ -61,7 +61,7 @@ def test_issue400(env):
             r.execute_command('ts.add', 'issue376', i * 5, i)
         for i in range(1, times):
             range_res = r.execute_command('ts.range', 'issue376', i * 5 - 1, i * 5 + 60)
-            assert len(range_res) > 0
+            env.assertTrue(len(range_res) > 0)
         for i in range(1, times):
             range_res = r.execute_command('ts.revrange', 'issue376', i * 5 - 1, i * 5 + 60)
-            assert len(range_res) > 0
+            env.assertTrue(len(range_res) > 0)

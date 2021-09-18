@@ -1,4 +1,4 @@
-import pytest
+# import pytest
 import redis
 from utils import Env
 from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _insert_data
@@ -14,7 +14,7 @@ def test_alter_cmd(env):
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', key, 'CHUNK_SIZE', '360',
                    'LABELS', 'name', 'brown', 'color', 'pink', conn=r).noError()
-        _insert_data(r, key, start_ts, samples_count, 5)
+        _insert_data(env, r, key, start_ts, samples_count, 5)
 
         expected_data = [[start_ts + i, str(5)] for i in range(samples_count)]
 

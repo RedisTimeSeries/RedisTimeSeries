@@ -1,4 +1,4 @@
-import pytest
+# import pytest
 import redis
 import time
 from utils import Env, set_hertz
@@ -88,8 +88,8 @@ def test_mget_cmd(env):
         env.assertEqual(sorted(expected_result_withlabels), sorted(actual_result))
 
         # negative test
-        assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
-        assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
+        env.expect('TS.MGET', 'FILTER', 'a=100', conn=r).false()
+        env.expect('TS.MGET', 'FILTER', 'k=1', conn=r).false()
         env.expect('TS.MGET', 'filter', conn=r).error()
         env.expect('TS.MGET', 'filter', 'k+1', conn=r).error()
         env.expect('TS.MGET', 'filter', 'k!=5', conn=r).error()

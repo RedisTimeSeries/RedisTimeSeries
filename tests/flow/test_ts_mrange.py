@@ -1,4 +1,4 @@
-import pytest
+# import pytest
 import redis
 import time
 from collections import defaultdict
@@ -21,7 +21,7 @@ def test_mrange_with_expire_cmd(env):
         env.expect("EXPIRE","Z", 7, conn=r).noError()
         while time.time() < (current_ts+10):
             reply = r.execute_command('TS.mrange', '-', '+', 'FILTER', 'type=DELAYED')
-            assert(len(reply)>=0 and len(reply)<=3)
+            env.assertTrue(len(reply) >= 0 and len(reply) <= 3)
         env.expect("PING", conn=r).noError()
 
 def test_mrange_expire_issue549(env):
@@ -32,7 +32,8 @@ def test_mrange_expire_issue549(env):
         env.expect('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1', conn=r).equal(2)
         env.expect('expire', 'k1', '1', conn=r).equal(1)
         for i in range(0, 5000):
-            assert env.getConnection().execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
+            r1 = env.getConnection()
+            env.expect('ts.mrange - + aggregation avg 10 withlabels filter l=1', conn=r1).noEqual(None)
 
 
 def test_range_by_labels(env):
@@ -43,9 +44,9 @@ def test_range_by_labels(env):
         env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
-        _insert_data(r, 'tester1', start_ts, samples_count, 5)
-        _insert_data(r, 'tester2', start_ts, samples_count, 15)
-        _insert_data(r, 'tester3', start_ts, samples_count, 25)
+        _insert_data(env, r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(env, r, 'tester3', start_ts, samples_count, 25)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob', conn=r).equal([['tester1', [], expected_result]])
@@ -110,10 +111,9 @@ def test_mrange_filterby(env):
         env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
-        _insert_data(r, 'tester1', start_ts, samples_count, 5)
-        _insert_data(r, 'tester2', start_ts, samples_count, 15)
-        _insert_data(r, 'tester3', start_ts, samples_count, 25)
-
+        _insert_data(env, r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(env, r, 'tester3', start_ts, samples_count, 25)
 
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", 1 ,'FILTER', 'name=bob', conn=r).error()
         env.expect('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", "a" ,'FILTER', 'name=bob', conn=r).error()
@@ -141,20 +141,16 @@ def test_mrange_withlabels(env):
         env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
-        _insert_data(r, 'tester1', start_ts, samples_count, 5)
-        _insert_data(r, 'tester2', start_ts, samples_count, 15)
-        _insert_data(r, 'tester3', start_ts, samples_count, 25)
+        _insert_data(env, r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(env, r, 'tester3', start_ts, samples_count, 25)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
-                                          'name=bob')
-        assert [['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']],
-                 expected_result]] == actual_result
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER', 'name=bob', conn=r).\
+            equal([['tester1', [['name', 'bob'], ['class', 'middle'], ['generation', 'x']], expected_result]])
 
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER',
-                                          'name=bob')
-        assert [['tester1', [['name', 'bob'], ['generation', 'x']],
-                 expected_result]] == actual_result
+        env.expect('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER', 'name=bob', conn=r).\
+            equal([['tester1', [['name', 'bob'], ['generation', 'x']], expected_result]])
 
         actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
                                           'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
@@ -283,9 +279,9 @@ def test_mrange_align(env):
         env.expect('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x', conn=r).noError()
         env.expect('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x', conn=r).noError()
-        _insert_data(r, 'tester1', start_ts, samples_count, 5)
-        _insert_data(r, 'tester2', start_ts, samples_count, 15)
-        _insert_data(r, 'tester3', start_ts, samples_count, 25)
+        _insert_data(env, r, 'tester1', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester2', start_ts, samples_count, 15)
+        _insert_data(env, r, 'tester3', start_ts, samples_count, 25)
 
         end_ts = start_ts + samples_count
         agg_bucket_size = 15

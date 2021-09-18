@@ -1,6 +1,6 @@
 import time
 
-import pytest
+# import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
@@ -41,8 +41,8 @@ def test_automatic_timestamp(env):
         curr_time = int(time.time() * 1000)
         result = r.execute_command('TS.RANGE', 'tester', 0, curr_time)
         # test time difference is not more than 5 milliseconds
-        assert result[0][0] - curr_time <= 5
-        assert response_timestamp - curr_time <= 5
+        env.assertTrue(result[0][0] - curr_time <= 5)
+        env.assertTrue(response_timestamp - curr_time <= 5)
 
 
 def test_add_create_key(env):

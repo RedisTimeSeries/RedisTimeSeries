@@ -28,7 +28,7 @@ def test_rdb(env):
         env.expect('TS.CREATERULE', key_name, '{}_agg_max_10'.format(key_name), 'AGGREGATION', 'MAX', 10, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, '{}_agg_sum_10'.format(key_name), 'AGGREGATION', 'SUM', 10, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, '{}_agg_stds_10'.format(key_name), 'AGGREGATION', 'STD.S', 10, conn=r).noError()
-        _insert_data(r, key_name, start_ts, samples_count, 5)
+        _insert_data(env, r, key_name, start_ts, samples_count, 5)
 
         data = r.dump(key_name)
         avg_data = r.dump('{}_agg_avg_10'.format(key_name))
@@ -72,7 +72,7 @@ def test_rdb_aggregation_context(env):
         env.expect('TS.CREATERULE', key_name, '{}_agg_min_3'.format(key_name), 'AGGREGATION', 'MIN', 3, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, '{}_agg_sum_3'.format(key_name), 'AGGREGATION', 'SUM', 3, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, '{}_agg_std_3'.format(key_name), 'AGGREGATION', 'STD.S', 3, conn=r).noError()
-        _insert_data(r, key_name, start_ts, samples_count, list(range(samples_count)))
+        _insert_data(env, r, key_name, start_ts, samples_count, list(range(samples_count)))
         data_tester = r.dump(key_name)
         data_avg_tester = r.dump('{}_agg_avg_3'.format(key_name))
         data_min_tester = r.dump('{}_agg_min_3'.format(key_name))

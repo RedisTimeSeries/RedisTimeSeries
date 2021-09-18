@@ -128,7 +128,7 @@ def _insert_agg_data(env, r, key, agg_type, chunk_type="", fromTS=10, toTS=50, k
     return agg_key
 
 
-def _insert_data(r, key, start_ts, samples_count, value):
+def _insert_data(env, r, key, start_ts, samples_count, value):
     """
     insert data to key, starting from start_ts, with 1 sec interval between them
     :param redis: redis connection
@@ -147,7 +147,7 @@ def _insert_data(r, key, start_ts, samples_count, value):
         if type(actual_result) == int:
             env.assertEqual(actual_result, int(start_ts + i))
         else:
-            assert actual_result
+            env.assertTrue(actual_result)
 
 
 def list_to_dict(aList):

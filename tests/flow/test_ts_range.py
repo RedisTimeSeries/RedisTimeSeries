@@ -13,7 +13,7 @@ def test_range_query(env):
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100, conn=r).noError()
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(99, 151)]
         actual_result = r.execute_command('TS.range', 'tester', start_ts + 50, start_ts + 150)
@@ -69,7 +69,7 @@ def test_range_with_agg_query(env):
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', conn=r).noError()
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[1488823000, '116'], [1488823500, '500'], [1488824000, '500'], [1488824500, '384']]
         env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
@@ -226,7 +226,7 @@ def test_sanity(env):
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024',
                    'LABELS', 'name', 'brown', 'color', 'pink', conn=r).noEqual([])
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
+        _insert_data(env, r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, conn=r).equal(expected_result)
@@ -248,7 +248,7 @@ def test_sanity_pipeline(env):
         env.expect('TS.CREATE', 'tester', conn=r).noError()
         with r.pipeline(transaction=False) as p:
             p.set("name", "danni")
-            _insert_data(p, 'tester', start_ts, samples_count, 5)
+            _insert_data(env, p, 'tester', start_ts, samples_count, 5)
             p.execute()
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
         env.expect('TS.range', 'tester', start_ts, start_ts + samples_count, conn=r).equal(expected_result)
@@ -275,7 +275,7 @@ def test_filter_by(env):
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
                    'brown', 'color', 'pink', conn=r).ok()
-        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+        _insert_data(env, r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
         env.assertEqual(len(res), 13)
@@ -319,7 +319,7 @@ def test_aggreataion_alignment(env):
     samples_count = 1200
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', conn=r).ok()
-        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+        _insert_data(env, r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
         agg_size = 60
         expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
