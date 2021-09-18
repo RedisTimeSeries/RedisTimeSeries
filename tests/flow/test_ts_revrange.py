@@ -2,12 +2,12 @@ from utils import Env
 from includes import *
 
 
-def test_revrange():
+def test_revrange(env):
     start_ts = 1511885908
     samples_count = 200
     expected_results = []
 
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'tester1', 'uncompressed')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)

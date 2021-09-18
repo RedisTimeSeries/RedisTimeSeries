@@ -12,10 +12,11 @@ class testDuplicationPolicyTests():
         self.env = Env(moduleArgs='DUPLICATE_POLICY BLOCK')
 
     def test_ts_add_unknow_duplicate_policy(self):
-        with self.env.getClusterConnectionIfNeeded() as r:
-            self.env.expect('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", conn=r).error()
+        env = self.env
+        with env.getClusterConnectionIfNeeded() as r:
+            env.expect('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", conn=r).error()
 
-            self.env.expect('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", "---------------", conn=r).error()
+            env.expect('TS.ADD', "test", 1, 1.5, "DUPLICATE_POLICY", "---------------", conn=r).error()
 
     def test_precendence_key(self):
         env = self.env
@@ -65,8 +66,7 @@ class testDuplicationPolicyTests():
                 date_ranges = _fill_data(r, key)
                 overrided_ts = date_ranges[0][0] + 10
                 # Verified Block
-                with pytest.raises(redis.ResponseError):
-                    r.execute_command('TS.ADD', key, overrided_ts, 1)
+                env.expect('TS.ADD', key, overrided_ts, 1, conn=r).error()
 
                 for policy in policies:
                     old_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])

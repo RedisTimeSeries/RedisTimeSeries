@@ -267,10 +267,10 @@ def test_downsampling_rules(env):
         r.execute_command('TS.ADD', key, 6000, 0)
         for rule in rules:
             for resolution in resolutions:
-                actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution),
-                                                  3000, 6000)
+                actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution), 3000, 6000)
                 env.assertEqual(len(actual_result), 1)
-                env.assertEqual(_get_series_value(actual_result) == [7.77] or _get_series_value(actual_result), [1])
+                sv = _get_series_value(actual_result)
+                env.assertTrue(sv == [7.77] or sv == [1])
 
 
 def test_backfill_downsampling(env):
