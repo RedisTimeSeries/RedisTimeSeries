@@ -23,16 +23,16 @@ def test_ooo(env):
 
             ooo_res = r.execute_command('ts.range', 'ooo', '-', '+')
             no_ooo_res = r.execute_command('ts.range', 'no_ooo', '-', '+')
-            assert len(ooo_res) == len(no_ooo_res)
+            env.assertEqual(len(ooo_res), len(no_ooo_res))
             for i in range(len(ooo_res)):
-                assert ooo_res[i] == no_ooo_res[i]
+                env.assertEqual(ooo_res[i], no_ooo_res[i])
 
             ooo_res = r.execute_command('ts.range', 'ooo', 1000, 1000)
-            assert ooo_res[0] == [1000, '1000']
+            env.assertEqual(ooo_res[0], [1000, '1000'])
             last_sample = r.execute_command('ts.get', 'ooo')
             r.execute_command('ts.add', 'ooo', 1000, 42)
             ooo_res = r.execute_command('ts.range', 'ooo', 1000, 1000)
-            assert ooo_res[0] == [1000, '42']
+            env.assertEqual(ooo_res[0], [1000, '42'])
             env.expect('ts.get', 'ooo', conn=r).equal(last_sample)
 
             r.execute_command('ts.add', 'ooo', last_sample[0], 42)
@@ -79,8 +79,8 @@ def test_ooo_split(env):
             assert _get_ts_info(r, 'split').chunk_count in [13, 32]
             res = r.execute_command('ts.range', 'split', '-', '+')
             for i in range(quantity - 1):
-                assert res[i][0] + 1 == res[i + 1][0]
-                assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
+                env.assertEqual(res[i][0] + 1, res[i + 1][0])
+                env.assertEqual(round(float(res[i][1]) + 1.01, 2), round(float(res[i + 1][1]), 2))
 
             r.execute_command('DEL', 'split')
 
@@ -109,7 +109,7 @@ def test_rand_oom(env):
 
         all_data = sorted(data + ooo_data, key=lambda x: x[0])
         res = r.execute_command('ts.range', 'tester', '-', '+')
-        assert len(res) == len(all_data)
+        env.assertEqual(len(res), len(all_data))
         for i in range(len(all_data)):
-            assert all_data[i][0] == res[i][0]
-            assert float(all_data[i][1]) == float(res[i][1])
+            env.assertEqual(all_data[i][0], res[i][0])
+            env.assertEqual(float(all_data[i][1]), float(res[i][1]))

@@ -29,10 +29,10 @@ def test_compaction_rules(env):
 
         actual_result = r.execute_command('TS.RANGE', agg_key_name, start_ts, start_ts + samples_count)
 
-        assert len(actual_result) == samples_count / 10
+        env.assertEqual(len(actual_result), samples_count / 10)
 
         info = _get_ts_info(r, key_name)
-        assert info.rules == [[agg_key_name, 10, 'AVG']]
+        env.assertEqual(info.rules, [[agg_key_name, 10, 'AVG']])
 
 
 def test_create_compaction_rule_with_wrong_aggregation(env):
@@ -126,16 +126,16 @@ def test_delete_key(env):
         env.expect('TS.CREATE', agg_key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 10, conn=r).noError()
         assert r.delete(agg_key_name)
-        assert _get_ts_info(r, key_name).rules == []
+        env.assertEqual(_get_ts_info(r, key_name).rules, [])
 
         env.expect('TS.CREATE', agg_key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 11, conn=r).noError()
         assert r.delete(key_name)
-        assert _get_ts_info(r, agg_key_name).sourceKey == None
+        env.assertEqual(_get_ts_info(r, agg_key_name).sourceKey, None)
 
         env.expect('TS.CREATE', key_name, conn=r).noError()
         env.expect('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 12, conn=r).noError()
-        assert _get_ts_info(r, key_name).rules == [[agg_key_name, 12, 'AVG']]
+        env.assertEqual(_get_ts_info(r, key_name).rules, [[agg_key_name, 12, 'AVG']])
 
 
 def test_downsampling_current(env):
@@ -160,7 +160,7 @@ def test_downsampling_current(env):
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
-                assert expected_result[0] == actual_result[0]
+                env.assertEqual(expected_result[0], actual_result[0])
 
                 # present add
                 env.expect('TS.ADD', key, 11, 11, conn=r).equal(11)
@@ -170,7 +170,7 @@ def test_downsampling_current(env):
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
-                assert expected_result[0:1] == actual_result[0:1]
+                env.assertEqual(expected_result[0:1], actual_result[0:1])
 
                 # present + past add
                 env.expect('TS.ADD', key, 23, 23, conn=r).equal(23)
@@ -181,9 +181,9 @@ def test_downsampling_current(env):
 
                 expected_result = r.execute_command('TS.RANGE', key, 0, '+', 'aggregation', agg_type, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 0, '+')
-                assert expected_result[0:3] == actual_result[0:3]
-                assert 3 == _get_ts_info(r, agg_key).total_samples
-                assert 11 == _get_ts_info(r, key).total_samples
+                env.assertEqual(expected_result[0:3], actual_result[0:3])
+                env.assertEqual(3, _get_ts_info(r, agg_key).total_samples)
+                env.assertEqual(11, _get_ts_info(r, key).total_samples)
 
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
@@ -205,15 +205,15 @@ def test_downsampling_extensive(env):
                 # sanity + check result have changed
                 expected_result1 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
                 actual_result1 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
-                assert expected_result1 == actual_result1
-                assert len(expected_result1) == 999
+                env.assertEqual(expected_result1, actual_result1)
+                env.assertEqual(len(expected_result1), 999)
 
                 for i in range(fromTS + 5, toTS - 4, 10):
                     env.expect('TS.ADD', key, i, 42, conn=r).noError()
 
                 expected_result2 = r.execute_command('TS.RANGE', key, fromTS, toTS, 'aggregation', agg, 10)
                 actual_result2 = r.execute_command('TS.RANGE', agg_key, fromTS, toTS)
-                assert expected_result2 == actual_result2
+                env.assertEqual(expected_result2, actual_result2)
 
                 # remove aggs with identical results
                 compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
@@ -257,12 +257,11 @@ def test_downsampling_rules(env):
             for resolution in resolutions:
                 actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution),
                                                   start_ts, end_ts)
-                assert len(actual_result) == math.ceil(samples_count / float(resolution))
+                env.assertEqual(len(actual_result), math.ceil(samples_count / float(resolution)))
                 expected_result = calc_rule(rule, values, resolution)
-                assert _get_series_value(actual_result) == expected_result
+                env.assertEqual(_get_series_value(actual_result), expected_result)
                 # last time stamp should be the beginning of the last bucket
-                assert _get_ts_info(r, '{}_{}_{}'.format(key, rule, resolution)).last_time_stamp == \
-                       (samples_count - 1) - (samples_count - 1) % resolution
+                env.assertEqual(_get_ts_info(r, '{}_{}_{}'.format(key, rule, resolution)).last_time_stamp, (samples_count - 1) - (samples_count - 1) % resolution)
 
         # test for results after empty buckets
         r.execute_command('TS.ADD', key, 6000, 0)
@@ -270,9 +269,8 @@ def test_downsampling_rules(env):
             for resolution in resolutions:
                 actual_result = r.execute_command('TS.RANGE', '{}_{}_{}'.format(key, rule, resolution),
                                                   3000, 6000)
-                assert len(actual_result) == 1
-                assert _get_series_value(actual_result) == [7.77] or \
-                       _get_series_value(actual_result) == [1]
+                env.assertEqual(len(actual_result), 1)
+                env.assertEqual(_get_series_value(actual_result) == [7.77] or _get_series_value(actual_result), [1])
 
 
 def test_backfill_downsampling(env):
@@ -286,11 +284,11 @@ def test_backfill_downsampling(env):
 
                 expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-                assert expected_result == actual_result
+                env.assertEqual(expected_result, actual_result)
                 env.expect('TS.ADD', key, 15, 50, conn=r).equal(15)
                 expected_result = r.execute_command('TS.RANGE', key, 10, 50, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-                assert expected_result == actual_result
+                env.assertEqual(expected_result, actual_result)
 
                 # add in latest window
                 r.execute_command('TS.ADD', key, 1055, 50) == 1055
@@ -298,7 +296,7 @@ def test_backfill_downsampling(env):
                 r.execute_command('TS.ADD', key, 1062, 60) == 1062
                 expected_result = r.execute_command('TS.RANGE', key, 10, 1060, 'aggregation', agg, 10)
                 actual_result = r.execute_command('TS.RANGE', agg_key, 10, 1060)
-                assert expected_result == actual_result
+                env.assertEqual(expected_result, actual_result)
 
                 # update in latest window
                 r.execute_command('TS.ADD', key, 1065, 65) == 1065
@@ -323,5 +321,5 @@ def test_rule_timebucket_64bit(env):
         r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
         r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
         info = _get_ts_info(r, 'test_key')
-        assert info.rules[0][1] == BELOW_32BIT_LIMIT
-        assert info.rules[1][1] == ABOVE_32BIT_LIMIT
+        env.assertEqual(info.rules[0][1], BELOW_32BIT_LIMIT)
+        env.assertEqual(info.rules[1][1], ABOVE_32BIT_LIMIT)

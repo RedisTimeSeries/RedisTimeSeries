@@ -84,8 +84,7 @@ class testGlobalConfigTests():
             env.expect('TS.ADD tester 1980 0 LABELS name', 'brown color pink', conn=r).equal(1980)
             keys = r.execute_command('keys *')
             keys = sorted(keys)
-            assert keys == ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1',
-                            'tester_MIN_10000']
+            env.assertEqual(keys, ['tester', 'tester_AVG_259200000', 'tester_AVG_7200000', 'tester_MAX_1', 'tester_MIN_10000'])
             r.execute_command('TS.ADD tester 1981 1')
 
             r.execute_command('set exist_MAX_1 foo')

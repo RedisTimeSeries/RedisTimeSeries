@@ -73,6 +73,6 @@ class testDuplicationPolicyTests():
                     new_value = random.randint(-5000, 1000000)
                     env.expect('TS.ADD', key, overrided_ts, new_value, 'ON_DUPLICATE', policy, conn=r).equal(overrided_ts)
                     proccessed_value = int(r.execute_command('TS.RANGE', key, overrided_ts, overrided_ts)[0][1])
-                    assert policies[policy](old_value, new_value) == proccessed_value, "check that {} is correct".format(policy)
+                    env.assertEqual(policies[policy](old_value, new_value), proccessed_value, message="check that {} is correct".format(policy))
 
                 r.execute_command('DEL', key)

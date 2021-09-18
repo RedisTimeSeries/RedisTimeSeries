@@ -159,9 +159,9 @@ def test_mrange_withlabels(env):
         actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
                                           'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
         # assert the labels length is 3 (name,class,generation) for each of the returned time-series
-        assert len(actual_result[0][1]) == 3
-        assert len(actual_result[1][1]) == 3
-        assert len(actual_result[2][1]) == 3
+        env.assertEqual(len(actual_result[0][1]), 3)
+        env.assertEqual(len(actual_result[1][1]), 3)
+        env.assertEqual(len(actual_result[2][1]), 3)
 
 
 def test_multilabel_filter(env):
@@ -175,17 +175,17 @@ def test_multilabel_filter(env):
         env.expect('TS.ADD', 'tester3', 0, 3, conn=r).equal(0)
 
         actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert set(item[0] for item in actual_result) == set(['tester1', 'tester2'])
+        env.assertEqual(set(item[0] for item in actual_result), set(['tester1', 'tester2']))
 
         actual_result = r.execute_command('TS.mrange', 0, '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
                                           'class!=(middle,top)')
-        assert actual_result[0][0] == 'tester2'
+        env.assertEqual(actual_result[0][0], 'tester2')
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
-        assert set(item[0] for item in actual_result) == set(['tester1', 'tester2'])
+        env.assertEqual(set(item[0] for item in actual_result), set(['tester1', 'tester2']))
 
         actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
-        assert actual_result[0][0] == 'tester2'
+        env.assertEqual(actual_result[0][0], 'tester2')
 
 def test_large_key_value_pairs(env):
     with env.getClusterConnectionIfNeeded() as r:
@@ -200,7 +200,7 @@ def test_large_key_value_pairs(env):
         kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
         for kv_label in kv_labels:
             res = r.execute_command('TS.MRANGE', '-', '+', 'FILTER', kv_label1)
-            assert len(res) == number_series
+            env.assertEqual(len(res), number_series)
 
 def ensure_replies_series_match(env,series_array_1, series_array_2):
     for ts in series_array_1:

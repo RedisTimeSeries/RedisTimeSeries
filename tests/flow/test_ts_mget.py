@@ -41,7 +41,7 @@ def test_mget_cmd(env):
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
-        assert sorted(expected_result) == sorted(actual_result)
+        env.assertEqual(sorted(expected_result), sorted(actual_result))
 
         # test for series with data
         for i in range(num_of_keys):
@@ -58,7 +58,7 @@ def test_mget_cmd(env):
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
-        assert sorted(expected_result) == sorted(actual_result)
+        env.assertEqual(sorted(expected_result), sorted(actual_result))
 
         # expect to received time-series k3 with labels
         expected_result_withlabels = [
@@ -66,7 +66,7 @@ def test_mget_cmd(env):
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
-        assert expected_result_withlabels == actual_result
+        env.assertEqual(expected_result_withlabels, actual_result)
 
         # expect to received time-series k1 and k2 with labels
         expected_result_withlabels = [
@@ -75,7 +75,7 @@ def test_mget_cmd(env):
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
-        assert sorted(expected_result_withlabels) == sorted(actual_result)
+        env.assertEqual(sorted(expected_result_withlabels), sorted(actual_result))
 
         # expect to recieve only some labels
         expected_labels = [["metric", "cpu"], ["new_label", None]]
@@ -85,7 +85,7 @@ def test_mget_cmd(env):
         ]
 
         actual_result = r.execute_command('TS.MGET', 'SELECTED_LABELS', 'metric', "new_label",'FILTER', 'a=1')
-        assert sorted(expected_result_withlabels) == sorted(actual_result)
+        env.assertEqual(sorted(expected_result_withlabels), sorted(actual_result))
 
         # negative test
         assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
@@ -112,4 +112,4 @@ def test_large_key_value_pairs(env):
         kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
         for kv_label in kv_labels:
             res = r.execute_command('TS.MGET', 'FILTER', kv_label1)
-            assert len(res) == number_series
+            env.assertEqual(len(res), number_series)

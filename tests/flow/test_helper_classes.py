@@ -145,7 +145,7 @@ def _insert_data(r, key, start_ts, samples_count, value):
             value_to_insert = float(value)
         actual_result = r.execute_command('TS.ADD', key, start_ts + i, value_to_insert)
         if type(actual_result) == int:
-            assert actual_result == int(start_ts + i)
+            env.assertEqual(actual_result, int(start_ts + i))
         else:
             assert actual_result
 

@@ -174,7 +174,7 @@ def test_range_count(env):
         full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
         env.assertEqual(len(full_results), samples_count)
         env.expect('TS.RANGE', 'tester1', 0, '+', conn=r).apply(len).equal(samples_count)
-        env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, conn=r).apply(len).equal(full_results[:10])
+        env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, conn=r).equal(full_results[:10])
         env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, 'AGGREGATION', 'COUNT', 3, conn=r).apply(len).equal(10)
         env.expect('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 4, 'COUNT', 10, conn=r).apply(len).equal(10)
         env.expect('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'COUNT', 3, conn=r).apply(len).equal(math.ceil(samples_count / 3.0))

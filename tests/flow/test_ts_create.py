@@ -27,21 +27,21 @@ def test_create_retention(env):
         env.expect('TS.ADD', 'tester', 500, 10, conn=r).noError()
         expected_result = [[500, '10']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
-        assert expected_result == actual_result
+        env.assertEqual(expected_result, actual_result)
         # check for (lastTimestamp - retension < 0)
-        assert _get_ts_info(r, 'tester').total_samples == 1
+        env.assertEqual(_get_ts_info(r, 'tester').total_samples, 1)
 
         env.expect('TS.ADD', 'tester', 1001, 20, conn=r).noError()
         expected_result = [[500, '10'], [1001, '20']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
-        assert expected_result == actual_result
-        assert _get_ts_info(r, 'tester').total_samples == 2
+        env.assertEqual(expected_result, actual_result)
+        env.assertEqual(_get_ts_info(r, 'tester').total_samples, 2)
 
         env.expect('TS.ADD', 'tester', 2000, 30, conn=r).noError()
         expected_result = [[1001, '20'], [2000, '30']]
         actual_result = r.execute_command('TS.range', 'tester', '-', '+')
-        assert expected_result == actual_result
-        assert _get_ts_info(r, 'tester').total_samples == 2
+        env.assertEqual(expected_result, actual_result)
+        env.assertEqual(_get_ts_info(r, 'tester').total_samples, 2)
 
         env.expect('TS.CREATE', 'negative', 'RETENTION', -10, conn=r).error()
 
@@ -55,7 +55,7 @@ def test_check_retention_64bit(env):
     with env.getClusterConnectionIfNeeded() as r:
         huge_timestamp = 4000000000  # larger than uint32
         r.execute_command('TS.CREATE', 'tester', 'RETENTION', huge_timestamp)
-        assert _get_ts_info(r, 'tester').retention_msecs == huge_timestamp
+        env.assertEqual(_get_ts_info(r, 'tester').retention_msecs, huge_timestamp)
         for i in range(10):
             r.execute_command('TS.ADD', 'tester', int(huge_timestamp * i / 4), i)
         env.expect('TS.RANGE', 'tester', 0, "+", conn=r).equal(
@@ -103,8 +103,8 @@ def test_trim(env):
 
             trimmed_info = _get_ts_info(r, 'trim_me')
             untrimmed_info = _get_ts_info(r, 'dont_trim_me')
-            assert 2 == trimmed_info.chunk_count
-            assert samples == untrimmed_info.total_samples
+            env.assertEqual(2, trimmed_info.chunk_count)
+            env.assertEqual(samples, untrimmed_info.total_samples)
             # extra test for uncompressed
             if mode == "UNCOMPRESSED":
                 env.assertEqual(trimmed_info.total_samples, 11)
@@ -118,13 +118,13 @@ def test_empty(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'empty')
         info = _get_ts_info(r, 'empty')
-        assert info.total_samples == 0
+        env.assertEqual(info.total_samples, 0)
         env.expect('TS.range', 'empty', 0, "+", conn=r).equal([])
         env.expect('TS.get', 'empty', conn=r).equal([])
 
         r.execute_command('ts.create', 'empty_uncompressed', 'uncompressed')
         info = _get_ts_info(r, 'empty_uncompressed')
-        assert info.total_samples == 0
+        env.assertEqual(info.total_samples, 0)
         env.expect('TS.range', 'empty_uncompressed', 0, "+", conn=r).equal([])
         env.expect('TS.get', 'empty', conn=r).equal([])
 

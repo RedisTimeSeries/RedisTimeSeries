@@ -14,17 +14,17 @@ def test_revrange():
         actual_results = r.execute_command('TS.RANGE', 'tester1', 0, "+")
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, "+")
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910, 1511886000)
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910, 1511886000)
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         # with compression
         r.execute_command('DEL', 'tester1')
@@ -34,23 +34,23 @@ def test_revrange():
         actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+')
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         actual_results = r.execute_command('TS.RANGE', 'tester1', 1511885910, 1511886000)
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 1511885910, 1511886000)
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'AGGREGATION', 'sum', 50)
         actual_results_rev.reverse()
-        assert actual_results == actual_results_rev
+        env.assertEqual(actual_results, actual_results_rev)
 
         actual_results_rev = r.execute_command('TS.REVRANGE', 'tester1', 0, '+', 'COUNT', 5)
         actual_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
         actual_results.reverse()
-        assert len(actual_results_rev) == 5
-        assert actual_results[0:5] == actual_results_rev[0:5]
+        env.assertEqual(len(actual_results_rev), 5)
+        env.assertEqual(actual_results[0:5], actual_results_rev[0:5])
 
 
 def test_issue400(env):

@@ -22,7 +22,7 @@ def test_incrby(env):
 
         now = int(time.time() * 1000)
         result = r.execute_command('TS.RANGE', 'tester', 0, now)
-        assert result[-1][1] == '70'
+        env.assertEqual(result[-1][1], '70')
         assert result[-1][0] <= now
         assert result[0][0] >= start_incr_time
         assert len(result) <= 40
@@ -35,8 +35,8 @@ def test_incrby_with_timestamp(env):
         for i in range(20):
             env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', i, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
-        assert len(result) == 20
-        assert result[19][1] == '100'
+        env.assertEqual(len(result), 20)
+        env.assertEqual(result[19][1], '100')
 
         query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') / 1000
         cur_time = int(time.time())
@@ -53,15 +53,15 @@ def test_incrby_with_update_latest(env):
             env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', i, conn=r).equal(i)
 
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
-        assert len(result) == 20
-        assert result[19] == [20, '100']
+        env.assertEqual(len(result), 20)
+        env.assertEqual(result[19], [20, '100'])
 
         env.expect('ts.incrby', 'tester', '5', 'TIMESTAMP', 20, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
-        assert len(result) == 20
-        assert result[19] == [20, '105']
+        env.assertEqual(len(result), 20)
+        env.assertEqual(result[19], [20, '105'])
 
         env.expect('ts.decrby', 'tester', '10', 'TIMESTAMP', 20, conn=r).equal(i)
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
-        assert len(result) == 20
-        assert result[19] == [20, '95']
+        env.assertEqual(len(result), 20)
+        env.assertEqual(result[19], [20, '95'])
