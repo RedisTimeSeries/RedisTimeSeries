@@ -55,7 +55,7 @@ def test_range_midrange(env):
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester', i, i)
         # sample_count is not in range() so not included
-        res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count, conn=r).apply(len).equal(500)
+        env.expect('TS.RANGE', 'tester', samples_count - 500, samples_count, conn=r).apply(len).equal(500)
         env.expect('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000, conn=r).apply(len).equal(501)
 
         # test for empty range between two full ranges
@@ -171,6 +171,8 @@ def test_range_count(env):
         r.execute_command('TS.CREATE', 'tester1')
         for i in range(samples_count):
             r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+        full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
+        env.assertEqual(len(full_results), samples_count)
         env.expect('TS.RANGE', 'tester1', 0, '+', conn=r).apply(len).equal(samples_count)
         env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, conn=r).apply(len).equal(full_results[:10])
         env.expect('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, 'AGGREGATION', 'COUNT', 3, conn=r).apply(len).equal(10)
@@ -223,7 +225,7 @@ def test_sanity(env):
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024',
-                   'LABELS', 'name', 'brown', 'color', 'pink', conn=r).notEqual([])
+                   'LABELS', 'name', 'brown', 'color', 'pink', conn=r).noEqual([])
         _insert_data(r, 'tester', start_ts, samples_count, 5)
 
         expected_result = [[start_ts + i, str(5)] for i in range(samples_count)]
@@ -272,7 +274,7 @@ def test_filter_by(env):
     samples_count = 1500
     with env.getClusterConnectionIfNeeded() as r:
         env.expect('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
-                   'brown', 'color', 'pink', conn=r).equal([])
+                   'brown', 'color', 'pink', conn=r).ok()
         _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)

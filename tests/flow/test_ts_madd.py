@@ -4,10 +4,10 @@ from RLTest import Env
 from includes import *
 
 
-def test_madd():
+def test_madd(env):
     sample_len = 1024
-    Env().skipOnCluster()
-    with Env().getConnection() as r:
+    env.skipOnCluster()
+    with env.getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
         r.execute_command("ts.create", 'test_key3')

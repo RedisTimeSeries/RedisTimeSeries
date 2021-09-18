@@ -349,6 +349,7 @@ jobs:
     machine:
       enabled: true
       image: ubuntu-2004:202010-01
+      resource_class: large
     working_directory: ~/RedisTimeSeries
     steps:
       - early-returns

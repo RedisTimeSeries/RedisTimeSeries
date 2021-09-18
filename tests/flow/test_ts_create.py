@@ -141,7 +141,7 @@ def test_issue299(env):
         r.execute_command('ts.create', 'issue299')
         for i in range(100, 1000):
             r.execute_command('ts.add', 'issue299', i * 10, i)
-        env.expect('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10, conn=r).apply(lambda x: x[0]).notEqual([0, '0'])
+        env.expect('ts.range', 'issue299', 0, "+", 'aggregation', 'avg', 10, conn=r).apply(lambda x: x[0]).noEqual([0, '0'])
 
 
 def test_expire(env):
