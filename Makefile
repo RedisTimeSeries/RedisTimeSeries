@@ -40,10 +40,10 @@ format:
 	@$(MAKE) -C src format
 
 test:
-	@$(MAKE) -C src tests
+	@$(MAKE) -C src flow_tests
 
 unittests:
-	@$(MAKE) -C src unittests
+	@$(MAKE) -C src unit_tests
 
 pack:
 	@$(MAKE) -C src package

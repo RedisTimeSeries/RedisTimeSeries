@@ -43,8 +43,9 @@ RUN set -e ;\
     if [ "$PACK" = "1" ]; then bash -l -c "make pack"; fi
 RUN set -e ;\
     if [ "$TEST" = "1" ]; then \
-        bash -l -c "TEST= make test" ;\
-		cd /build/tests/flow/logs ;\
+        bash -l -c "TEST= make test STD=1" ;\
+        bash -l -c "TEST= make test OSS_CLUSTER=1" ;\
+        cd /build/tests/flow/logs ;\
         rm -f *.aof *.rdb ;\
         tar -czf /build/bin/artifacts/tests-flow-logs-${ARCH}-${OSNICK}.tgz . ;\
     fi

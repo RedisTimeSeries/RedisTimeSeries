@@ -3,19 +3,20 @@ import os
 from RLTest import Env
 from create_test_rdb_file import load_into_redis
 from test_helper_classes import _get_ts_info
+from includes import *
+
 
 def normalize_info(data):
     info = {}
     for i in range(0, len(data), 2):
         info[data[i]] = data[i + 1]
-    info.pop(b'memoryUsage')
-    info.pop(b'chunkSize')
-    info.pop(b'chunkType')
+    info.pop('memoryUsage')
+    info.pop('chunkSize')
+    info.pop('chunkType')
     return info
 
 
-def testRDBCompatibility():
-    env = Env()
+def testRDBCompatibility(env):
     env.skipOnCluster()
     RDBS = os.listdir('rdbs')
 
@@ -35,8 +36,8 @@ def testRDBCompatibility():
     # Compatibility check
     for fileName in RDBS:
         filePath = os.path.abspath(os.path.join("rdbs", fileName))
-        dbFileName = env.cmd('config', 'get', 'dbfilename')[1].decode('ascii')
-        dbDir = env.cmd('config', 'get', 'dir')[1].decode('ascii')
+        dbFileName = env.cmd('config', 'get', 'dbfilename')[1]
+        dbDir = env.cmd('config', 'get', 'dir')[1]
         rdbFilePath = os.path.join(dbDir, dbFileName)
         env.stop()
         try:
@@ -48,10 +49,10 @@ def testRDBCompatibility():
 
         r = env.getConnection()
         OLD_KEYS = r.keys()
-        newDbFileName = r.execute_command('config', 'get', 'dbfilename')[1].decode('ascii')
+        newDbFileName = r.execute_command('config', 'get', 'dbfilename')[1]
         env.assertEqual(newDbFileName, dbFileName)
         OLD_KEYS.sort()
         env.assertEqual(OLD_KEYS, KEYS)
         for key in OLD_KEYS:
-            assert r.execute_command('ts.range', key, "-", "+") == TSRANGE_RESULTS[key]
-            assert normalize_info(r.execute_command('ts.info', key)) == TSINFO_RESULTS[key]
+            env.expect('ts.range', key, "-", "+", conn=r).equal(TSRANGE_RESULTS[key])
+            env.expect('ts.info', key, conn=r).apply(normalize_info).equal(TSINFO_RESULTS[key])

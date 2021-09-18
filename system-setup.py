@@ -19,7 +19,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
 
-        self.install("git jq curl")
+        self.install("git jq curl unzip")
         self.run("%s/bin/enable-utf8" % READIES)
 
     def debian_compat(self):
@@ -44,7 +44,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         if not self.has_command("lcov"):
             self.install("lcov")
 
-        self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
+        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r tests/flow/requirements.txt")
 
 #----------------------------------------------------------------------------------------------
