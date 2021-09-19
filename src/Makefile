@@ -233,6 +233,8 @@ $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
+dragonbox : $(DRAGONBOX_DIR)/dragonbox.o
+	$(SHOW)$(CC) -o $@ $(DRAGONBOX_DIR)/dragonbox.o
 #----------------------------------------------------------------------------------------------
 
 TEST_REPORT_DIR ?= $(PWD)

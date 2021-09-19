@@ -20,6 +20,12 @@
 #include <cstring>
 #include <limits>
 #include <type_traits>
+#include <stdio.h>
+#include <cmath>
+
+#include <cassert>
+#include <cstdint>
+#include <cstddef>
 
 // Suppress additional buffer overrun check.
 // I have no idea why MSVC thinks some functions here are vulnerable to the buffer overrun attacks.
@@ -3000,8 +3006,8 @@ namespace jkj::dragonbox {
                                                                      result.exponent, buffer);
             }
             else {
-                std::memcpy(buffer, "0E0", 3);
-                return buffer + 3;
+                std::memcpy(buffer, "0", 1);
+                return buffer + 1;
             }
         }
         else {
@@ -3224,10 +3230,197 @@ namespace jkj::dragonbox {
             return buffer;
         }
 
+
+        JKJ_FORCEINLINE static void convert_u64_to_string(char* const buffer, int buf_ind_start, int buf_ind_end, std::uint64_t &value)
+        {
+            while (buf_ind_end >= buf_ind_start + 1)
+            {
+                std::uint64_t quotient = value / (std::uint64_t)100;
+                std::uint64_t reminder = (value - 100ull*quotient);
+                std::memcpy(&(buffer[buf_ind_end - 1]), &radix_100_table[reminder * 2], 2);
+                buf_ind_end -= 2;
+                value = quotient;
+            }
+            if (buf_ind_end == buf_ind_start)
+            {
+                auto quotient = value / (std::uint64_t)10ull;
+                buffer[buf_ind_end--] = '0' + static_cast<char>(value - 10ull*quotient);
+                value = quotient;
+            }
+
+            return;
+        }
+
+        constexpr std::uint64_t __masks[] = {
+            0x0ull,
+            0x1ull,
+            0x3ull,
+            0x7ull,
+            0xFull,
+            0x1Full,
+            0x3Full,
+            0x7Full,
+            0xFFull,
+            0x1FFull,
+            0x3FFull,
+            0x7FFull,
+            0xFFFull,
+            0x1FFFull,
+            0x3FFFull,
+            0x7FFFull,
+            0xFFFFull,
+            0x1FFFFull,
+            0x3FFFFull,
+            0x7FFFFull
+        };
+
+        constexpr std::uint64_t MULINV_POW5[20][2] = {
+            { 1ull,                          // not used in ctzll_base10_fastest just for the case when dividing in 10^0
+              0                         },   // unused value
+            { 14757395258967641293ull,                 // modular multiplicative inverse of 5
+            (0xFFFF'FFFF'FFFF'FFFF)/5ull},   // condition: floor((2^64 - 1)/5)
+            { 10330176681277348905ull,                 // modular multiplicative inverse of 5^2
+            (0xFFFF'FFFF'FFFF'FFFF)/25ull},  // condition: floor((2^64 - 1)/(5^2))
+            { 2066035336255469781ull,                  // modular multiplicative inverse of 5^3
+            (0xFFFF'FFFF'FFFF'FFFF)/125ull},  // condition: floor((2^64 - 1)/(5^3))
+            { 15170602326218735249ull,                  // modular multiplicative inverse of 5^4
+            (0xFFFF'FFFF'FFFF'FFFF)/625ull},  // condition: floor((2^64 - 1)/(5^4))
+            { 6723469279985657373ull,                  // modular multiplicative inverse of 5^5
+            (0xFFFF'FFFF'FFFF'FFFF)/3125ull},  // condition: floor((2^64 - 1)/(5^5))
+            { 8723391485480952121ull,                  // modular multiplicative inverse of 5^6
+            (0xFFFF'FFFF'FFFF'FFFF)/15625ull},  // condition: floor((2^64 - 1)/(5^6))
+            { 16502073556063831717ull,                  // modular multiplicative inverse of 5^7
+            (0xFFFF'FFFF'FFFF'FFFF)/78125ull},  // condition: floor((2^64 - 1)/(5^7))
+            { 14368461155438497313ull,                  // modular multiplicative inverse of 5^8
+            (0xFFFF'FFFF'FFFF'FFFF)/390625ull},  // condition: floor((2^64 - 1)/(5^8))
+            { 10252389860571520109ull,                  // modular multiplicative inverse of 5^9
+            (0xFFFF'FFFF'FFFF'FFFF)/1953125ull},  // condition: floor((2^64 - 1)/(5^9))
+            { 5739826786856214345ull,                  // modular multiplicative inverse of 5^10
+            (0xFFFF'FFFF'FFFF'FFFF)/9765625ull},  // condition: floor((2^64 - 1)/(5^10))
+            { 1147965357371242869ull,                  // modular multiplicative inverse of 5^11
+            (0xFFFF'FFFF'FFFF'FFFF)/48828125ull},  // condition: floor((2^64 - 1)/(5^11))
+            { 3918941886216158897ull,                  // modular multiplicative inverse of 5^12
+            (0xFFFF'FFFF'FFFF'FFFF)/244140625ull},  // condition: floor((2^64 - 1)/(5^12))
+            { 11851834821468962749ull,                  // modular multiplicative inverse of 5^13
+            (0xFFFF'FFFF'FFFF'FFFF)/1220703125ull},  // condition: floor((2^64 - 1)/(5^13))
+            { 6059715779035702873ull,                  // modular multiplicative inverse of 5^14
+            (0xFFFF'FFFF'FFFF'FFFF)/6103515625ull},  // condition: floor((2^64 - 1)/(5^14))
+            { 8590640785290961221ull,                  // modular multiplicative inverse of 5^15
+            (0xFFFF'FFFF'FFFF'FFFF)/30517578125ull},  // condition: floor((2^64 - 1)/(5^15))
+            { 16475523416025833537ull,                  // modular multiplicative inverse of 5^16
+            (0xFFFF'FFFF'FFFF'FFFF)/152587890625ull},  // condition: floor((2^64 - 1)/(5^16))
+            { 14363151127430897677ull,                  // modular multiplicative inverse of 5^17
+            (0xFFFF'FFFF'FFFF'FFFF)/762939453125ull},  // condition: floor((2^64 - 1)/(5^17))
+            { 13940676669711910505ull,                  // modular multiplicative inverse of 5^18
+            (0xFFFF'FFFF'FFFF'FFFF)/3814697265625ull},  // condition: floor((2^64 - 1)/(5^18))
+            { 2788135333942382101ull,                  // modular multiplicative inverse of 5^19
+            (0xFFFF'FFFF'FFFF'FFFF)/19073486328125ull},  // condition: floor((2^64 - 1)/(5^19))
+        };
+
+        // Inspired by Hackers Delight
+        JKJ_FORCEINLINE static int ctzll_base10(std::uint64_t x, int n_digits_minus_1, std::uint64_t &q) {
+            while(n_digits_minus_1 > 0) {
+                q = x*MULINV_POW5[n_digits_minus_1][0]; // x*(multiplicative inverse of 5^n_digits_minus_1) (mod 2^64)
+                //printf("q=%lu, x=%lu, MULINV_POW5=%lu, n_digits_minus_1=%d\n", q, x, MULINV_POW5[n_digits_minus_1][0], n_digits_minus_1);
+                if(q <= MULINV_POW5[n_digits_minus_1][1] && ((q & __masks[n_digits_minus_1]) == 0)) {
+                    // q <= floor(2^64 - 1) and q ends in k or more 0-bits
+                    return n_digits_minus_1;
+                }
+                n_digits_minus_1 -= 1;
+            }
+            q = x;
+            return 0;
+        }
+
+        JKJ_FORCEINLINE static constexpr std::uint32_t
+        decimal_length_u64(std::uint64_t const v) {
+            assert(v < 10'0000'0000'0000'0000);
+            if (v >= 1'0000'0000'0000'0000) {
+                return 17;
+            }
+            if (v >= 1000'0000'0000'0000) {
+                return 16;
+            }
+            if (v >= 100'0000'0000'0000) {
+                return 15;
+            }
+            if (v >= 10'0000'0000'0000) {
+                return 14;
+            }
+            if (v >= 1'0000'0000'0000) {
+                return 13;
+            }
+            if (v >= 1000'0000'0000) {
+                return 12;
+            }
+            if (v >= 100'0000'0000) {
+                return 11;
+            }
+            if (v >= 10'0000'0000) {
+                return 10;
+            }
+            if (v >= 1'0000'0000) {
+                return 9;
+            }
+            if (v >= 1000'0000) {
+                return 8;
+            }
+            if (v >= 100'0000) {
+                return 7;
+            }
+            if (v >= 10'0000) {
+                return 6;
+            }
+            if (v >= 1'0000) {
+                return 5;
+            }
+            if (v >= 1000) {
+                return 4;
+            }
+            if (v >= 100) {
+                return 3;
+            }
+            if (v >= 10) {
+                return 2;
+            }
+            if (v >= 1) {
+                return 1;
+            }
+            return 0;
+        }
+
         // May have trailing zeros.
         template <>
-        char* to_chars<double, default_float_traits<double>>(std::uint64_t const significand,
+        char* to_chars<double, default_float_traits<double>>(std::uint64_t significand,
                                                              int exponent, char* buffer) noexcept {
+            if(exponent <= 0 && exponent >= -16) {
+                int n_digits = decimal_length_u64(significand);
+                if(n_digits + exponent > 0) {
+                    // in this case there is no need for the exponent cause the number can fit in 17 chars
+                    std::uint64_t q;
+                    int n_trailing_zeros = ctzll_base10(significand, n_digits - 1, q);
+                    if(n_trailing_zeros + exponent >= 0) { // no decimal point
+                        // computing significand /= drag__pow10[(-1)*exponent] using the modular multiplicate inverse
+                        // significand /= (5^((-1)*exponent)*2^((-1)*exponent))
+                        significand = (significand*MULINV_POW5[(-1)*exponent][0]) >> (std::uint64_t)((-1)*exponent);
+                        n_digits += exponent;
+                        //printf("exp=%d, signif=%lu, n_trailing_zeros=%d, ndigit=%d\n", exponent, significand, n_trailing_zeros, n_digits);
+                        convert_u64_to_string(buffer, 0, n_digits - 1, significand);
+                        return buffer + n_digits;
+                    } else {
+                        // computing significand /= drag__pow10[n_trailing_zeros] using the modular multiplicate inverse
+                        // significand /= (5^n_trailing_zeros*2^n_trailing_zeros)
+                        int decimal_point_index = n_digits + exponent;
+                        significand = q >> ((std::uint64_t)n_trailing_zeros);
+                        n_digits -= n_trailing_zeros;
+                        convert_u64_to_string(buffer, decimal_point_index + 1, n_digits, significand);
+                        buffer[decimal_point_index] = '.';
+                        convert_u64_to_string(buffer, 0, decimal_point_index - 1, significand);
+                        return buffer + n_digits + 1; // +1 for the decimal point
+                    }
+                }
+            }
+
             std::uint32_t s32;
             int remaining_digits_minus_1;
             int exponent_position;
