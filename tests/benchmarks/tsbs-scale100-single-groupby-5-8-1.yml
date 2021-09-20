@@ -7,15 +7,12 @@ remote:
 setups:
   - oss-standalone
 
-<<<<<<< HEAD
-=======
 dbconfig:
   - dataset_name: "data_redistimeseries_cpu-only_100"
   - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/devops-scale100-4days.rdb"
   - check:
       keyspacelen: 1000
 
->>>>>>> feature-perf-oss-cluster
 clientconfig:
   - benchmark_type: "read-only"
   - tool: tsbs_run_queries_redistimeseries
