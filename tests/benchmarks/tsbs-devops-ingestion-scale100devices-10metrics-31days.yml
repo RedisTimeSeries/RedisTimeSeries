@@ -1,14 +1,12 @@
 name: "tsbs-devops-ingestion-scale100devices-10metrics-31days"
-setups:
-  - oss-cluster-01-primaries
-  - oss-cluster-03-primaries
-  - oss-cluster-05-primaries
-  - oss-cluster-09-primaries
-  - oss-cluster-15-primaries
-  - oss-cluster-30-primaries
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
+
+setups:
+  - oss-cluster-30-primaries
+
 clientconfig:
   - tool: tsbs_load_redistimeseries
   - parameters:
@@ -18,6 +16,7 @@ clientconfig:
     - batch-size: 1000
     - reporting-period: 1s
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100devices_10metrics_31days.dat"
+
 exporter:
   redistimeseries:
     timemetric: "$.StartTime"

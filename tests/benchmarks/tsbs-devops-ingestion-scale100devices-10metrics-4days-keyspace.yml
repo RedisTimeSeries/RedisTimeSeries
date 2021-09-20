@@ -1,12 +1,16 @@
 name: "tsbs-devops-ingestion-scale100-4days-keyspace"
-setups:
-  - oss-standalone
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
+
 dbconfig:
   - configuration-parameters:
     - notify-keyspace-events: KEA
+
+setups:
+  - oss-standalone
+
 clientconfig:
   - tool: tsbs_load_redistimeseries
   - parameters:
@@ -16,6 +20,7 @@ clientconfig:
     - batch-size: 1000
     - reporting-period: 1s
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+
 exporter:
   redistimeseries:
     timemetric: "$.StartTime"
