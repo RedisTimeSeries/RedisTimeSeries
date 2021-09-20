@@ -10,15 +10,11 @@ remote:
   - setup: redistimeseries-m5
 
 setups:
-  - oss-cluster-05-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
 dbconfig:
-<<<<<<< HEAD
-=======
   - dataset_name: "data_redistimeseries_cpu-only_100"
->>>>>>> feature-perf-oss-cluster
   - tool: tsbs_load_redistimeseries
   - parameters:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
@@ -26,10 +22,7 @@ dbconfig:
       keyspacelen: 1000
 
 clientconfig:
-<<<<<<< HEAD
-=======
   - benchmark_type: "read-only"
->>>>>>> feature-perf-oss-cluster
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
     - workers: 32

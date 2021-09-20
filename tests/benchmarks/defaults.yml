@@ -51,6 +51,17 @@ spec:
         cpus: "1"
         memory: "10g"
 
+  - name: oss-cluster-02-primaries
+    type: oss-cluster
+    redis_topology:
+      primaries: 2
+      replicas: 0
+      placement: "sparse"
+    resources:
+      requests:
+        cpus: "2"
+        memory: "10g"
+
   - name: oss-cluster-03-primaries
     type: oss-cluster
     redis_topology:
