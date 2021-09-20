@@ -1,12 +1,12 @@
 # BUILD redisfab/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
 
-ARG REDIS_VER=6.2.4
+ARG REDIS_VER=6.2.5
 
-# OSNICK=focal|bionic|xenial|stretch|buster|centos8|centos7
-ARG OSNICK=buster
+# OSNICK=focal|bionic|xenial|bullseye|centos8|centos7
+ARG OSNICK=bullseye
 
-# OS=debian:buster-slim|debian:stretch-slim|ubuntu:bionic
-ARG OS=debian:buster-slim
+# OS=debian:bullseye-slim|ubuntu:bionic|centos:8
+ARG OS=debian:bullseye-slim
 
 # ARCH=x64|arm64v8|arm32v7
 ARG ARCH=x64
@@ -70,4 +70,3 @@ COPY --from=builder /build/bin/redistimeseries.so "$LIBDIR"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
-
