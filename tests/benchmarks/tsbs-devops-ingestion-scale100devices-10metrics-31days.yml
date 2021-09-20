@@ -21,5 +21,7 @@ exporter:
   redistimeseries:
     timemetric: "$.StartTime"
     metrics:
-      - "$.Totals.metricRate"
+      - "$.Totals.metricRate":
+          "target-1": 6481271.93
+          "target-2": 2945265.73
       - "$.Totals.rowRate"
