@@ -221,7 +221,7 @@ commands:
         default: "oss-standalone"
       timeout:
         type: string
-        default: 40m
+        default: 60m
     steps:
       - run:
           name: Install remote benchmark tool dependencies
@@ -237,7 +237,7 @@ commands:
             ./sbin/getgears
 
       - run:
-          name: Run CI benchmarks on aws
+          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
@@ -257,7 +257,8 @@ commands:
               --github_branch $CIRCLE_BRANCH \
               --upload_results_s3 \
               --triggering_env circleci \
-              --push_results_redistimeseries
+              --push_results_redistimeseries \
+              --allowed-envs << parameters.allowed_envs >> 
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -421,7 +422,7 @@ jobs:
           name: Run QA Automation
           command: MODULE_VERSION="$CIRCLE_BRANCH" VERBOSE=1 TEST=nightly QUICK=1 ./tests/qa/run
 
-  performance-ci-automation:
+  performance-ci-automation-oss-standalone:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-buster
     steps:
@@ -431,9 +432,10 @@ jobs:
       - run:
           name: Build
           command: bash -l -c "make build"
-      - benchmark-automation
+      - benchmark-automation:
+          allowed_envs: "oss-standalone"
   
-  performance-ci-automation-extensive:
+  performance-ci-automation-oss-cluster:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-buster
     steps:
@@ -551,10 +553,10 @@ workflows:
       - coverage:
           context: common
           <<: *on-any-branch
-      - performance-ci-automation:
+      - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-perf-and-version-tags
-      - performance-ci-automation-extensive:
+      - performance-ci-automation-oss-cluster:
           context: common
           <<: *on-perf-and-version-tags
       - deploy-artifacts:
@@ -588,7 +590,9 @@ workflows:
             branches:
               only: master
     jobs:
-      - performance-ci-automation-extensive:
+      - performance-ci-automation-oss-cluster:
+          context: common
+      - performance-ci-automation-oss-standalone:
           context: common
 
   nightly-twice-a-week:
