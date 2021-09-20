@@ -1,0 +1,41 @@
+name: "tsbs-scale100-high-cpu-1@1816rps"
+
+metadata:
+  labels:
+    test_type: query
+    includes_targets: "true"
+
+remote:
+  - type: oss-standalone
+  - setup: redistimeseries-m5
+
+setups:
+  - oss-cluster-05-primaries
+  - oss-cluster-15-primaries
+  - oss-cluster-30-primaries
+
+dbconfig:
+  - dataset_name: "data_redistimeseries_cpu-only_100"
+  - tool: tsbs_load_redistimeseries
+  - parameters:
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+  - check:
+      keyspacelen: 1000
+
+clientconfig:
+  - benchmark_type: "read-only"
+  - tool: tsbs_run_queries_redistimeseries
+  - parameters:
+    - workers: 32
+    - max-rps: 1816
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_high-cpu-1_10000.dat"
+
+exporter:
+  redistimeseries:
+    metrics:
+      - "$.Totals.overallQuantiles.all_queries.q50":
+          "target-1": 14.07
+          "target-2": 7.54
+      - "$.Totals.overallQueryRates.all_queries":
+          "target-1": 1816
+          "target-2": 1816
