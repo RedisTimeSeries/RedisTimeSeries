@@ -12,7 +12,7 @@ There are several reasons to develop in an isolated environment, like keeping yo
 The most general option for an isolated environment is a virtual machine (it's very easy to set one up using [Vagrant](https://www.vagrantup.com)).
 Docker is even a more agile solution, as it offers an almost instant solution:
 ```
-ts=$(docker run -d -it -v $PWD:/build debian:buster bash)
+ts=$(docker run -d -it -v $PWD:/build debian:bullseye bash)
 docker exec -it $ts bash
 ```
 Then, from whithin the container, ```cd /build``` and go on as usual.
