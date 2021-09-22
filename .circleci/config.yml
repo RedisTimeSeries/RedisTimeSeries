@@ -215,7 +215,7 @@ commands:
         default: ../../bin/redistimeseries.so
       gears_module_path:
         type: string
-        default: --module_path ../../bin/linux-buster-x64/RedisGears/redisgears.so 
+        default: --module_path ../../bin/linux-bullseye-x64/RedisGears/redisgears.so
       allowed_envs:
         type: string
         default: "oss-standalone"
@@ -424,7 +424,7 @@ jobs:
 
   performance-ci-automation-oss-standalone:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-buster
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -448,7 +448,7 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-cluster"
-          timeout: 180m
+          timeout: 90m
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
