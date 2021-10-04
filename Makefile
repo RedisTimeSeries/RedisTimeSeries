@@ -54,5 +54,8 @@ run:
 benchmark:
 	@$(MAKE) -C src benchmark
 
+docker:
+	@$(MAKE) -C ./build/docker
+
 # deploy:
 #	@make -C src deploy

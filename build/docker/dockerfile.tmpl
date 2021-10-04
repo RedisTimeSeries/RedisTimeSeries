@@ -1,0 +1,33 @@
+#----------------------------------------------------------------------------------------------
+FROM redisfab/redis:{{REDIS_VERSION}}-{{REDIS_ARCH}}-{{REDIS_OSNICK}} AS redis
+FROM {{REDIS_OS}} AS builder
+
+RUN echo "Building for {{REDIS_OSNICK}} ({{REDIS_OS}}) for {{REDIS_ARCH}} [with Redis {{REDIS_VERSION}}]"
+
+WORKDIR /build
+COPY --from=redis /usr/local/ /usr/local/
+
+ADD . /build
+
+{% include 'setup_environment.yml' %}
+RUN ./system-setup.py
+RUN bash -l -c "make fetch"
+RUN bash -l -c "make build"
+
+RUN mkdir -p bin/artifacts
+{% if REDIS_PACK == "1" %}
+RUN set -e ; bash -l -c "make pack"
+{% endif %}
+
+{% if REDIS_TEST == "1" %}
+RUN set -e ;\
+    bash -l -c "TEST= make test" ;\
+	cd /build/tests/flow/logs ;\
+    rm -f *.aof *.rdb ;\
+    tar -czf /build/bin/artifacts/tests-flow-logs-{{REDIS_ARCH}}-{{REDIS_OSNICK}}.tgz . ;\
+{% endif %}
+
+#----------------------------------------------------------------------------------------------
+{% with redis_module='redistimeseries.so', redis_module_srcpath='/build/bin/redistimeseries.so' %}
+{% include 'redis_docker.yml' %}
+{% endwith %}
