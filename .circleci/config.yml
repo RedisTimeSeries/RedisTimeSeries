@@ -158,8 +158,7 @@ commands:
           name: Build for platform
           command: |
             ROOT=$PWD
-            cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
+            make -C build/docker build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
             cd $ROOT
             mkdir -p tests/flow/logs
             tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
@@ -169,8 +168,7 @@ commands:
           name: Build for platform (publish)
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+            make -C build/docker build DOCKER_SUFFIX=".<<parameters.platform>>" OSNICK=<<parameters.platform>> PACK=1 TEST=1 VERBOSE=1 PUBLISH=1 DOCKERWRAPPER_EXTRA_VARS="DOCKER_PUSH_ONLY=1"
       - persist-artifacts
       - save-tests-logs
 
@@ -230,14 +228,14 @@ commands:
       - run:
           name: Install remote benchmark python dependencies
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
-      
+
       - run:
           name: Get gears
           command: |
             ./sbin/getgears
 
       - run:
-          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
+          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
@@ -258,7 +256,7 @@ commands:
               --upload_results_s3 \
               --triggering_env circleci \
               --push_results_redistimeseries \
-              --allowed-envs << parameters.allowed_envs >> 
+              --allowed-envs << parameters.allowed_envs >>
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -435,7 +433,7 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-standalone"
           gears_module_path: ""
-  
+
   performance-ci-automation-oss-cluster:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
