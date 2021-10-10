@@ -188,8 +188,7 @@ commands:
           name: Build for platform
           command: |
             ROOT=$PWD
-            cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
+            make -C build/docker build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH PACK=1 TEST=1 SHOW=1 PACK=1
             cd $ROOT
             mkdir -p tests/flow/logs
             tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
@@ -199,8 +198,7 @@ commands:
           name: Build for platform (publish)
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+            make -C build/docker publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
       - save-tests-logs
 
