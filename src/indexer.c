@@ -138,6 +138,10 @@ void indexUnderKey(INDEXER_OPERATION_T op, RedisModuleString *key, RedisModuleSt
         RedisModule_DictSet(leaf, ts_key, NULL);
     } else if (op == Indexer_Remove) {
         RedisModule_DictDel(leaf, ts_key, NULL);
+        if (RedisModule_DictSize(leaf) == 0) {
+            RedisModule_FreeDict(NULL, leaf);
+            RedisModule_DictDel(labelsIndex, key, NULL);
+        }
     }
 }
 
