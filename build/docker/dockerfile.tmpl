@@ -24,7 +24,7 @@ RUN set -e ;\
     bash -l -c "TEST= make test" ;\
 	cd /build/tests/flow/logs ;\
     rm -f *.aof *.rdb ;\
-    tar -czf /build/bin/artifacts/tests-flow-logs-{{REDIS_ARCH}}-{{REDIS_OSNICK}}.tgz . ;\
+    tar -czf /build/bin/artifacts/tests-flow-logs-{{REDIS_ARCH}}-{{REDIS_OSNICK}}.tgz .
 {% endif %}
 
 #----------------------------------------------------------------------------------------------
