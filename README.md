@@ -5,13 +5,13 @@
 [![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
-[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
+[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
 
 ## Features
-Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
+Read more about the v1.0 GA features [here](https://redis.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
 - Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
@@ -24,7 +24,7 @@ In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you ca
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
-2. [Grafana](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
+2. [Grafana](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redis.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
 3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
@@ -125,11 +125,11 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 
 | Project | Language | License | Author | Stars |
 | ------- | -------- | ------- | ------ | --- |
-| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [RedisLabs][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
+| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
-| [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [RedisLabs][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
-| [redistimeseries-py][redistimeseries-py-url] | Python | BSD-3 | [RedisLabs][redistimeseries-py-author] | [![redistimeseries-py-stars]][redistimeseries-py-url] |
-| [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
+| [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
+| [redistimeseries-py][redistimeseries-py-url] | Python | BSD-3 | [Redis][redistimeseries-py-author] | [![redistimeseries-py-stars]][redistimeseries-py-url] |
+| [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [Redis][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
 | [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] |
 | [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] |
@@ -139,7 +139,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
 
 [JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
-[JRedisTimeSeries-author]: https://redislabs.com
+[JRedisTimeSeries-author]: https://redis.com
 [JRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/JRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redis-modules-java-url]: https://github.com/dengliming/redis-modules-java
@@ -147,15 +147,15 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redis-modules-java-stars]: https://img.shields.io/github/stars/dengliming/redis-modules-java.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redistimeseries-go-url]: https://github.com/RedisTimeSeries/redistimeseries-go/
-[redistimeseries-go-author]: https://redislabs.com
+[redistimeseries-go-author]: https://redis.com
 [redistimeseries-go-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-go.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redistimeseries-py-url]: https://github.com/RedisTimeSeries/redistimeseries-py/
-[redistimeseries-py-author]: https://redislabs.com
+[redistimeseries-py-author]: https://redis.com
 [redistimeseries-py-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-py.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [NRedisTimeSeries-url]: https://github.com/RedisTimeSeries/NRedisTimeSeries/
-[NRedisTimeSeries-author]: https://redislabs.com
+[NRedisTimeSeries-author]: https://redis.com
 [NRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/NRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [phpRedisTimeSeries-url]: https://github.com/palicao/phpRedisTimeSeries
@@ -225,7 +225,7 @@ For example, to run the tests strictly desigined for TS.ADD command, follow thes
 Read the docs at http://redistimeseries.io
 
 ## Mailing List / Forum
-Got questions? Feel free to ask at the [RedisTimeSeries forum](https://forum.redislabs.com/c/modules/redistimeseries).
+Got questions? Feel free to ask at the [RedisTimeSeries forum](https://forum.redis.com/c/modules/redistimeseries).
 
 ## License
 Redis Source Available License Agreement, see [LICENSE](LICENSE)
