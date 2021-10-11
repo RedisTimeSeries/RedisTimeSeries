@@ -40,7 +40,29 @@ spec:
         cpus: "2"
         memory: "10g"
 
-  - name: oss-cluster-3-primaries
+  - name: oss-cluster-01-primaries
+    type: oss-cluster
+    redis_topology:
+      primaries: 1
+      replicas: 0
+      placement: "sparse"
+    resources:
+      requests:
+        cpus: "1"
+        memory: "10g"
+
+  - name: oss-cluster-02-primaries
+    type: oss-cluster
+    redis_topology:
+      primaries: 2
+      replicas: 0
+      placement: "sparse"
+    resources:
+      requests:
+        cpus: "2"
+        memory: "10g"
+
+  - name: oss-cluster-03-primaries
     type: oss-cluster
     redis_topology:
       primaries: 3
@@ -51,7 +73,7 @@ spec:
         cpus: "3"
         memory: "30g"
 
-  - name: oss-cluster-5-primaries
+  - name: oss-cluster-05-primaries
     type: oss-cluster
     redis_topology:
       primaries: 5
@@ -62,7 +84,7 @@ spec:
         cpus: "5"
         memory: "50g"
 
-  - name: oss-cluster-9-primaries
+  - name: oss-cluster-09-primaries
     type: oss-cluster
     redis_topology:
       primaries: 9

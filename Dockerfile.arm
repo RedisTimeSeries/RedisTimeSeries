@@ -1,13 +1,13 @@
 # BUILD redisfab/redistimeseries-${OSNICK}:M.m.b-${ARCH}
 
-# stretch|bionic|buster
-ARG OSNICK=buster
+# xenial|bionic|bullseye|centos7|centos8
+ARG OSNICK=bullseye
 
 # ARCH=arm64v8|arm32v7
 ARG ARCH=arm64v8
 
 #----------------------------------------------------------------------------------------------
-FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:6.2.4 as builder
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:6.2.5 as builder
 
 RUN [ "cross-build-start" ]
 
@@ -25,7 +25,7 @@ RUN make build
 RUN [ "cross-build-end" ]
 
 #----------------------------------------------------------------------------------------------
-FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:6.2.4
+FROM redisfab/redis-${ARCH}-${OSNICK}-xbuild:6.2.5
 
 RUN [ "cross-build-start" ]
 

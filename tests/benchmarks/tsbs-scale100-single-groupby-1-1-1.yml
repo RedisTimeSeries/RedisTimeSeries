@@ -1,13 +1,20 @@
 name: "tsbs-scale100_single-groupby-1-1-1"
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
+
 setups:
   - oss-standalone
-  - oss-cluster-15-primaries
+
 dbconfig:
+  - dataset_name: "data_redistimeseries_cpu-only_100"
   - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/devops-scale100-4days.rdb"
+  - check:
+      keyspacelen: 1000
+
 clientconfig:
+  - benchmark_type: "read-only"
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
     - workers: 64
