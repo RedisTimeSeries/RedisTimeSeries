@@ -21,6 +21,7 @@
 #include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
+#include "series_iterator.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -207,7 +208,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                            &key,
                                            &series,
                                            REDISMODULE_READ);
-        if (!status) {
+        if (status != TSDB_OK) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
             // The iterator may have been invalidated, stop and restart from after the current
@@ -265,7 +266,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                                            &series,
                                            REDISMODULE_READ);
 
-        if (!status) {
+        if (status != TSDB_OK) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
@@ -487,6 +488,7 @@ static inline int add(RedisModuleCtx *ctx,
     }
     int rv = internalAdd(ctx, series, timestamp, value, dp);
     RedisModule_CloseKey(key);
+    RedisModule_SignalKeyAsReady(ctx, keyName); // TODO add on every key update
     return rv;
 }
 
@@ -826,23 +828,155 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return rv;
 }
 
+int _tsdb_get_block_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    REDISMODULE_NOT_USED(argv);
+    REDISMODULE_NOT_USED(argc);
+
+    RedisModuleString *keyname = RedisModule_GetBlockedClientReadyKey(ctx);
+
+    Series *series;
+    RedisModuleKey *key;
+    const int status = GetSeries(ctx, keyname, &key, &series, REDISMODULE_READ);
+    if (!status) {
+        return REDISMODULE_ERR;
+    }
+    api_timestamp_t *timestamp = RedisModule_GetBlockedClientPrivateData(ctx);
+
+    if (*timestamp < series->lastTimestamp) {
+        ReplyWithSeriesLastDatapoint(ctx, series);
+    } else {
+        RedisModule_ReplyWithArray(ctx, 0);
+    }
+
+    RedisModule_CloseKey(key);
+    return REDISMODULE_OK;
+}
+
+int _tsdb_get_timeout_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    REDISMODULE_NOT_USED(argv);
+    REDISMODULE_NOT_USED(argc);
+    return RedisModule_ReplyWithArray(ctx, 0);
+}
+
+void _tsdb_get_free_privdata_callback(RedisModuleCtx *ctx, void *privdata) {
+    REDISMODULE_NOT_USED(ctx);
+    RedisModule_Free(privdata);
+}
+
+/*
+TS.GET ts_key [TIMESTAMP timestamp] [BLOCK timeout]
+*/
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) {
+    if (argc < 2 || argc > 6) {
         return RedisModule_WrongArity(ctx);
+    }
+
+    const int timestamp_location = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
+    const int block_location = RMUtil_ArgIndex("BLOCK", argv, argc);
+
+    // simple get without args
+    if (timestamp_location == -1 && block_location == -1) {
+        Series *series;
+        RedisModuleKey *key;
+        const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+        if (!status) {
+            return REDISMODULE_ERR;
+        }
+
+        ReplyWithSeriesLastDatapoint(ctx, series);
+        RedisModule_CloseKey(key);
+        return REDISMODULE_OK;
+    }
+
+    // Parse timestamp
+    api_timestamp_t timestamp = 0;
+    if (timestamp_location != -1) {
+        long long tmp_timestamp;
+        if ((RedisModule_StringToLongLong(argv[timestamp_location + 1], &tmp_timestamp) !=
+             REDISMODULE_OK) ||
+            tmp_timestamp < 0) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing timestamp");
+        }
+        timestamp = (api_timestamp_t)tmp_timestamp;
+    }
+
+    // Parse block time
+    long long block_timeout = -1;
+    if (block_location != -1) { // Blocking waiting for a sample
+        if ((RedisModule_StringToLongLong(argv[block_location + 1], &block_timeout) !=
+             REDISMODULE_OK) ||
+            block_timeout < 0) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing block timeout");
+        }
     }
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
-    if (!status) {
-        return REDISMODULE_ERR;
+    const int status = SilentGetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    // The key exists but not a series
+    if (status == TSDB_ERROR) {
+        return RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
-    ReplyWithSeriesLastDatapoint(ctx, series);
-    RedisModule_CloseKey(key);
+    // The series exists
+    if (status == TSDB_OK) {
+        // If timestamp wasn't defined set the default to the last timestamp
+        if (timestamp_location == -1) {
+            timestamp = series->lastTimestamp;
+        }
 
+        // In case a retention is set shouldn't return event older than the retention
+        if (series->retentionTime) {
+            timestamp = series->lastTimestamp > series->retentionTime
+                            ? max(timestamp, series->lastTimestamp - series->retentionTime)
+                            : timestamp;
+        }
+
+        // Looking for a sample with timestamp bigger than given timestamp
+        if (timestamp < series->lastTimestamp) {
+            // read next event right after `timestamp`
+            RangeArgs args = { .startTimestamp = timestamp + 1,
+                               .endTimestamp = series->lastTimestamp,
+                               .count = -1,
+                               .aggregationArgs = NULL,
+                               .filterByValueArgs = NULL,
+                               .filterByTSArgs = NULL };
+            SeriesIterator *iterator = SeriesQuery(series, &args, false);
+            if (iterator == NULL) {
+                return RedisModule_ReplyWithArray(ctx, 0);
+            }
+            Sample sample;
+            if (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
+                ReplyWithSample(ctx, sample.timestamp, sample.value);
+            } // TODO handle error?
+            SeriesIteratorClose(iterator);
+
+            RedisModule_CloseKey(key);
+            return REDISMODULE_OK;
+        } else if (block_location == -1) {
+            // can return without result no need to block
+            RedisModule_CloseKey(key);
+            return RedisModule_ReplyWithArray(ctx, 0);
+        }
+        RedisModule_CloseKey(key);
+    } else if (block_location == -1) {
+        // If the key doesn't exist and not blocking
+        return RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+    }
+
+    // Blocking waiting for a sample
+    api_timestamp_t *private_timestamp = RedisModule_Alloc(sizeof(api_timestamp_t));
+    *private_timestamp = timestamp;
+    RedisModule_BlockClientOnKeys(ctx,
+                                  _tsdb_get_block_callback,
+                                  _tsdb_get_timeout_callback,
+                                  _tsdb_get_free_privdata_callback,
+                                  block_timeout,
+                                  &argv[1],
+                                  1,
+                                  private_timestamp);
     return REDISMODULE_OK;
 }
 
@@ -878,7 +1012,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                            &key,
                                            &series,
                                            REDISMODULE_READ);
-        if (!status) {
+        if (status != TSDB_OK) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",

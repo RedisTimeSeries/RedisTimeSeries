@@ -52,15 +52,15 @@ int SilentGetSeries(RedisModuleCtx *ctx,
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
     if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(new_key);
-        return FALSE;
+        return TSDB_NOTEXISTS;
     }
     if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
         RedisModule_CloseKey(new_key);
-        return FALSE;
+        return TSDB_ERROR;
     }
     *key = new_key;
     *series = RedisModule_ModuleTypeGetValue(new_key);
-    return TRUE;
+    return TSDB_OK;
 }
 
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
@@ -218,7 +218,7 @@ void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
-    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TRUE) {
+    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TSDB_OK) {
         return;
     }
 
@@ -228,7 +228,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         Series *destSeries;
         const int status =
             SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
-        if (status == TRUE) {
+        if (status == TSDB_OK) {
             RedisModule_RetainString(ctx, keyname);
             destSeries->srcKey = keyname;
             RedisModule_CloseKey(destKey);
@@ -244,7 +244,7 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     Series *series;
     RedisModuleKey *key = NULL;
     const int status = SilentGetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ);
-    if (!status) { // Not a timeseries key
+    if (status != TSDB_OK) { // Not a timeseries key
         goto cleanup;
     }
 
@@ -258,7 +258,7 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         RedisModuleKey *srcKey;
         const int status =
             SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
-        if (!status) {
+        if (status != TSDB_OK) {
             const char *srcKeyName = RedisModule_StringPtrLen(series->srcKey, NULL);
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", srcKeyName);
@@ -287,7 +287,7 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
         while (rule) {
             const int status =
                 SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
-            if (!status) {
+            if (status != TSDB_OK) {
                 const char *destKeyName = RedisModule_StringPtrLen(rule->destKey, NULL);
                 RedisModule_Log(ctx,
                                 "warning",

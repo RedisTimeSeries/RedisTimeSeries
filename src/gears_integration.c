@@ -222,7 +222,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, Record *data, void *arg) {
         const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
         RedisModule_FreeString(ctx, keyName);
 
-        if (!status) {
+        if (status != TSDB_OK) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
@@ -266,7 +266,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, Record *data, void *arg) {
         const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
         RedisModule_FreeString(ctx, keyName);
 
-        if (!status) {
+        if (status != TSDB_OK) {
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
