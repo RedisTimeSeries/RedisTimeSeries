@@ -306,6 +306,9 @@ cgdb: $(TARGET)
 	$(SHOW)cgdb --args `command -v redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 #----------------------------------------------------------------------------------------------
+# To see more kinds of leaks add --show-leak-kinds=all to args
+# A good way to search for relevant leaks is greping for "TSDB"
+# For greacefull exit from redis use the cli: FLUSHDB SYNC; shutdown NOSAVE;
 
 VALGRIND_ARGS=\
 	--leak-check=full \
