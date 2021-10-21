@@ -139,10 +139,10 @@ commands:
             mkdir -p ~/workspace/tests
             bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
       - run:
-          name: Run flow with gears
+          name: Run flow with LibMR
           no_output_timeout: 30m
           command: |
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEARS=1 GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
+            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
       - save-tests-logs
 
   build-platforms-steps:
@@ -213,9 +213,6 @@ commands:
       module_path:
         type: string
         default: ../../bin/redistimeseries.so
-      gears_module_path:
-        type: string
-        default: --module_path ../../bin/linux-bullseye-x64/RedisGears/redisgears.so
       allowed_envs:
         type: string
         default: "oss-standalone"
@@ -230,11 +227,6 @@ commands:
       - run:
           name: Install remote benchmark python dependencies
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
-      
-      - run:
-          name: Get gears
-          command: |
-            ./sbin/getgears
 
       - run:
           name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
@@ -248,7 +240,6 @@ commands:
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
 
             redisbench-admin run-remote \
-              << parameters.gears_module_path >> \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
@@ -367,9 +358,9 @@ jobs:
           path: coverage
           destination: coverage
       - run:
-          name: Test with Gears
+          name: Test with LibMR
           command: |
-            bash -l -c "make test COV=1 GEARS=1 CLUSTER=1 SHOW=1"
+            bash -l -c "make test COV=1 CLUSTER=1 SHOW=1"
             bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov) -f bin/linux-x64-debug-cov/cov.info
 
   deploy-artifacts:
@@ -434,7 +425,6 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-standalone"
-          gears_module_path: ""
   
   performance-ci-automation-oss-cluster:
     docker:

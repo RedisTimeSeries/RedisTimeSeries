@@ -13,16 +13,17 @@
 #include "compaction.h"
 #include "config.h"
 #include "fast_double_parser_c/fast_double_parser_c.h"
-#include "gears_commands.h"
-#include "gears_integration.h"
+#include "libmr_commands.h"
+#include "libmr_integration.h"
 #include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
-#include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
+#include "LibMR/src/mr.h"
+#include "LibMR/src/cluster.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -179,7 +180,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         TSDB_queryindex_RG(ctx, queries);
         QueryPredicateList_Free(queries);
     } else {
@@ -319,7 +320,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mrange_RG(ctx, argv, argc, false);
     }
 
@@ -327,7 +328,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mrange_RG(ctx, argv, argc, true);
     }
     return TSDB_generic_mrange(ctx, argv, argc, true);
@@ -847,7 +848,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mget_RG(ctx, argv, argc);
     }
 
@@ -955,16 +956,6 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
     return REDISMODULE_OK;
 }
 
-void module_loaded(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
-    if (subevent != REDISMODULE_SUBEVENT_MODULE_LOADED) {
-        return;
-    }
-    RedisModuleModuleChange *moduleChange = (RedisModuleModuleChange *)data;
-    if (strcasecmp(moduleChange->module_name, "rg") == 0) {
-        register_rg(ctx);
-    }
-}
-
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1021,8 +1012,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    // ignore errors from redis gears registration, this can fail if the module is not loaded.
-    register_rg(ctx);
+    if(register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
 
     RedisModuleTypeMethods tm = { .version = REDISMODULE_TYPE_METHOD_VERSION,
                                   .rdb_load = series_rdb_load,
@@ -1070,8 +1062,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
-
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ModuleChange, module_loaded);
 
     return REDISMODULE_OK;
 }

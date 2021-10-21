@@ -8,7 +8,7 @@
 #define GENERIC__CHUNK_H
 
 #include "consts.h"
-#include "redisgears.h"
+#include "LibMR/src/mr.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -76,8 +76,8 @@ typedef struct ChunkFuncs
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
     void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
-    void (*GearsSerialize)(Chunk_t *chunk, Gears_BufferWriter *bw);
-    void (*GearsDeserialize)(Chunk_t **chunk, Gears_BufferReader *br);
+    void (*MRSerialize)(Chunk_t *chunk, WriteSerializationCtx* sctx);
+    void (*MRDeserialize)(Chunk_t **chunk, ReaderSerializationCtx* sctx);
 } ChunkFuncs;
 
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample);

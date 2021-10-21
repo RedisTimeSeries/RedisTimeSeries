@@ -1,37 +1,54 @@
 
-#include "gears_commands.h"
+#include "libmr_commands.h"
 
 #include "consts.h"
-#include "gears_integration.h"
+#include "libmr_integration.h"
 #include "query_language.h"
-#include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
+#include "LibMR/src/mr.h"
+#include "LibMR/src/utils/arr.h"
 
 #include "rmutil/alloc.h"
 
-static void mget_done(ExecutionPlan *gearsCtx, void *privateData) {
+static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
-    long long len = RedisGears_GetRecordsLen(gearsCtx);
-    RedisModule_ReplyWithArray(rctx, len);
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
     for (int i = 0; i < len; i++) {
-        Record *r = RedisGears_GetRecord(gearsCtx, i);
-        RedisGears_RecordSendReply(r, rctx);
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+    }
+    RedisModule_ReplyWithArray(rctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for(size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            r->recordType->sendReply(rctx, r);
+        }
     }
 
     RedisModule_UnblockClient(bc, NULL);
-    RedisGears_DropExecution(gearsCtx);
     RedisModule_FreeThreadSafeContext(rctx);
 }
 
-static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
+static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
-    long long len = RedisGears_GetRecordsLen(gearsCtx);
+    long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
     TS_ResultSet *resultset = NULL;
 
@@ -39,28 +56,44 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        RedisModule_ReplyWithArray(rctx, len);
+        size_t total_len = 0;
+        for (int i = 0; i < len; i++) {
+            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+            if (raw_listRecord->recordType != GetListRecordType()) {
+                continue;
+            }
+            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+        }
+        RedisModule_ReplyWithArray(rctx, total_len);
     }
 
-    Series **tempSeries = calloc(len, sizeof(Series *));
+    Series **tempSeries = array_new(Record*, len); //calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
-        Record *raw_record = RedisGears_GetRecord(gearsCtx, i);
-        if (raw_record->type != GetSeriesRecordType()) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
             continue;
         }
-        Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
-        tempSeries[i] = s;
 
-        if (data->args.groupByLabel) {
-            ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
-        } else {
-            ReplySeriesArrayPos(rctx,
-                                s,
-                                data->args.withLabels,
-                                data->args.limitLabels,
-                                data->args.numLimitLabels,
-                                &data->args.rangeArgs,
-                                data->args.reverse);
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for(size_t j = 0; j < list_len; j++) {
+            Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            if (raw_record->recordType != GetSeriesRecordType()) {
+                continue;
+            }
+            Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
+            tempSeries = array_append(tempSeries, s);
+
+            if (data->args.groupByLabel) {
+                ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
+            } else {
+                ReplySeriesArrayPos(rctx,
+                                    s,
+                                    data->args.withLabels,
+                                    data->args.limitLabels,
+                                    data->args.numLimitLabels,
+                                    &data->args.rangeArgs,
+                                    data->args.reverse);
+            }
         }
     }
 
@@ -88,13 +121,10 @@ static void mrange_done(ExecutionPlan *gearsCtx, void *privateData) {
         ResultSet_Free(resultset);
     }
     RedisModule_UnblockClient(bc, NULL);
-    for (int i = 0; i < len; i++) {
-        FreeSeries(tempSeries[i]);
-    }
-    free(tempSeries);
+    array_foreach(tempSeries, x, FreeSeries(x));
+    array_free(tempSeries);
     MRangeArgs_Free(&data->args);
     free(data);
-    RedisGears_DropExecution(gearsCtx);
     RedisModule_FreeThreadSafeContext(rctx);
 }
 
@@ -104,12 +134,9 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    char *err = NULL;
-    FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, err);
-    }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
@@ -123,20 +150,26 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-    RedisGears_FlatMap(rg_ctx, "ShardMgetMapper", queryArg);
 
-    RGM_Collect(rg_ctx);
+    MRError *err = NULL;
+    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
 
-    ExecutionPlan *ep = RGM_Run(rg_ctx, ExecutionModeAsync, NULL, NULL, NULL, &err);
-    if (!ep) {
-        RedisGears_FreeFlatExecution(rg_ctx);
-        RedisModule_ReplyWithError(ctx, err);
+    MR_ExecutionBuilderCollect(builder);
+
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
 
     RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
-    RedisGears_AddOnDoneCallback(ep, mget_done, bc);
-    RedisGears_FreeFlatExecution(rg_ctx);
+    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
+
+    MR_Run(exec);
+
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;
 }
 
@@ -147,12 +180,9 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     args.reverse = reverse;
 
-    char *err = NULL;
-    FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, err);
-    }
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
@@ -166,13 +196,17 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-    RedisGears_FlatMap(rg_ctx, "ShardSeriesMapper", queryArg);
-    RGM_Collect(rg_ctx);
 
-    ExecutionPlan *ep = RGM_Run(rg_ctx, ExecutionModeAsync, NULL, NULL, NULL, &err);
-    if (!ep) {
-        RedisGears_FreeFlatExecution(rg_ctx);
-        RedisModule_ReplyWithError(ctx, err);
+    MRError *err = NULL;
+
+    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
+
+    MR_ExecutionBuilderCollect(builder);
+
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
 
@@ -180,18 +214,20 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
-    RedisGears_AddOnDoneCallback(ep, mrange_done, data);
-    RedisGears_FreeFlatExecution(rg_ctx);
+    MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
+
+    MR_Run(exec);
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;
 }
 
 int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    char *err = NULL;
-    FlatExecutionPlan *rg_ctx = RedisGears_CreateCtx("ShardIDReader", &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, err);
-    }
+    MRError *err = NULL;
+
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
@@ -200,19 +236,24 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
-    RedisGears_FlatMap(rg_ctx, "ShardQueryindexMapper", queryArg);
 
-    RGM_Collect(rg_ctx);
+    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
 
-    ExecutionPlan *ep = RGM_Run(rg_ctx, ExecutionModeAsync, NULL, NULL, NULL, &err);
-    if (!ep) {
-        RedisGears_FreeFlatExecution(rg_ctx);
-        RedisModule_ReplyWithError(ctx, err);
+    MR_ExecutionBuilderCollect(builder);
+
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
 
     RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
-    RedisGears_AddOnDoneCallback(ep, mget_done, bc);
-    RedisGears_FreeFlatExecution(rg_ctx);
+    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
+
+    MR_Run(exec);
+
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;
 }

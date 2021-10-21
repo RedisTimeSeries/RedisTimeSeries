@@ -8,6 +8,7 @@
 
 #include "chunk.h"
 #include "generic_chunk.h"
+#include "LibMR/src/mr.h"
 
 #include <assert.h> // assert
 #include <limits.h>
@@ -335,16 +336,29 @@ void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
                            (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void Compressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
-    Compressed_Serialize(chunk,
-                         bw,
-                         (SaveUnsignedFunc)RedisGears_BWWriteLong,
-                         (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+static void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx* sctx, long long val) {
+    MRError *err;
+    MR_SerializationCtxWriteLongLong(sctx, val, &err);
 }
 
-static char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+static void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx* sctx, const char* buff, size_t len) {
+    MRError *err;
+    MR_SerializationCtxWriteBuffer(sctx, buff, len, &err);
+}
+
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx* sctx) {
+    Compressed_Serialize(chunk,
+                         sctx,
+                         (SaveUnsignedFunc)MR_SerializationCtxWriteLongLongWrapper,
+                         (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
+}
+
+static char *ownedBufferFromMR(ReaderSerializationCtx* sctx, size_t *len) {
+    MRError *err;
     size_t size = 0;
-    const char *temp = RedisGears_BRReadBuffer(br, &size);
+    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
     char *ret = malloc(size);
     memcpy(ret, temp, size);
     if (len != NULL) {
@@ -353,9 +367,15 @@ static char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
     return ret;
 }
 
-void Compressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+static long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx* sctx) {
+    MRError *err;  // TODO needs to call MR_ErrorCreate to allocate the error.
+    return MR_SerializationCtxReadeLongLong(sctx, &err);
+}
+
+void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx* sctx) {
     Compressed_Deserialize(chunk,
-                           br,
-                           (ReadUnsignedFunc)RedisGears_BRReadLong,
-                           (ReadStringBufferFunc)ownedBufferFromGears);
+                           sctx,
+                           (ReadUnsignedFunc)MR_SerializationCtxReadeLongLongWrapper,
+                           (ReadStringBufferFunc)ownedBufferFromMR);
 }

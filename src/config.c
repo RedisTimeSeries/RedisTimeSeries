@@ -137,6 +137,15 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
     }
+    if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
+        if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &TSGlobalConfig.numThreads) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            return TSDB_ERROR;
+        }
+    } else {
+        TSGlobalConfig.numThreads = 1;
+    }
     RedisModule_Log(ctx,
                     "notice",
                     "Setting default series ENCODING to: %s",

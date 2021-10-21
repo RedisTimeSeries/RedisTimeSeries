@@ -20,6 +20,7 @@ typedef struct
     short options;
     int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
+    long long numThreads; // number of threads used by libMR
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
