@@ -397,6 +397,50 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     return series_list;
 }
 
+static MRObjectType* MR_CreateType(char* type, ObjectFree free, ObjectDuplicate dup, ObjectSerialize serialize, ObjectDeserialize deserialize, ObjectToString tostring){
+    MRObjectType* ret = malloc(sizeof(*ret));
+    *ret = (MRObjectType){
+        .type = strdup(type),
+        .free = free,
+        .dup = dup,
+        .serialize = serialize,
+        .deserialize = deserialize,
+        .tostring = tostring,
+    };
+    return ret;
+}
+
+static MRRecordType* MR_RecordTypeCreate(char* type,
+                                    ObjectFree free,
+                                    ObjectDuplicate dup,
+                                    ObjectSerialize serialize,
+                                    ObjectDeserialize deserialize,
+                                    ObjectToString tostring,
+                                    SendAsRedisReply sendReply,
+                                    HashTag hashTag
+){
+    MRRecordType* ret = malloc(sizeof(MRRecordType));
+    *ret = (MRRecordType) {
+        .type = (MRObjectType){
+            .type = strdup(type),
+            .free = free,
+            .dup = dup,
+            .serialize = serialize,
+            .deserialize = deserialize,
+            .tostring = tostring,
+        },
+        .sendReply = sendReply,
+        .hashTag = hashTag
+    };
+    return ret;
+}
+
+static Record* MR_RecordCreate(MRRecordType* type, size_t size){
+    Record* ret = malloc(size);
+    ret->recordType = type;
+    return ret;
+}
+
 int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     if(MR_Init(ctx, numThreads) != REDISMODULE_OK) {
         RedisModule_Log(
@@ -407,7 +451,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     // TODO: free the types later.
 
     MRObjectType *QueryPredicatesType = MR_CreateType("QueryPredicatesType",
-                                                        1,
                                                         QueryPredicates_ObjectFree,
                                                         QueryPredicates_Duplicate,
                                                         QueryPredicates_ArgSerialize,
@@ -419,7 +462,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     listRecordType = MR_RecordTypeCreate("ListRecord",
-                                            2,
                                             ListRecord_Free,
                                             NULL,
                                             ListRecord_Serialize,
@@ -433,7 +475,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     stringRecordType = MR_RecordTypeCreate("StringRecord",
-                                        3,
                                         StringRecord_Free,
                                         NULL,
                                         StringRecord_Serialize,
@@ -447,7 +488,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     nullRecordType = MR_RecordTypeCreate("NullRecord",
-                                    4,
                                     NullRecord_Free,
                                     NULL,
                                     NullRecord_Serialize,
@@ -463,7 +503,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     NullRecord.recordType = nullRecordType;
 
     SeriesRecordType = MR_RecordTypeCreate(SeriesRecordName,
-                                        5,
                                         SeriesRecord_ObjectFree,
                                         NULL,
                                         SeriesRecord_Serialize,
@@ -477,7 +516,6 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     LongRecordType = MR_RecordTypeCreate("LongRecord",
-                                    6,
                                     LongRecord_Free,
                                     NULL,
                                     LongRecord_Serialize,
@@ -502,7 +540,7 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
 }
 
 bool IsMRCluster() {
-    return MR_ClusterIsClusterMode();
+    return MR_ClusterIsInClusterMode();
 }
 
 static void StringRecord_Free(void* base){
