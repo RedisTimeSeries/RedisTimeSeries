@@ -231,13 +231,10 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-<<<<<<< HEAD
 OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
-=======
 $(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(LIBFAST_DOUBLE_PARSER)
->>>>>>> 5f5cf22 (LibMR integration)
+
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
