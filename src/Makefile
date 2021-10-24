@@ -216,7 +216,6 @@ format:
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
-	-$(SHOW)$(MAKE) -C $(ROOT)/deps/LibMR clean
 	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
 
