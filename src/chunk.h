@@ -74,7 +74,7 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // LibMR
-void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx* sctx);
-void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx* sctx);
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
+void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
 #endif

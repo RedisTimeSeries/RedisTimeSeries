@@ -1,13 +1,13 @@
 
 #include "libmr_commands.h"
 
+#include "LibMR/src/mr.h"
+#include "LibMR/src/utils/arr.h"
 #include "consts.h"
 #include "libmr_integration.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
-#include "LibMR/src/mr.h"
-#include "LibMR/src/utils/arr.h"
 
 #include "rmutil/alloc.h"
 
@@ -33,7 +33,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
-        for(size_t j = 0; j < list_len; j++) {
+        for (size_t j = 0; j < list_len; j++) {
             Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
             r->recordType->sendReply(rctx, r);
         }
@@ -67,7 +67,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         RedisModule_ReplyWithArray(rctx, total_len);
     }
 
-    Series **tempSeries = array_new(Record*, len); //calloc(len, sizeof(Series *));
+    Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
@@ -75,7 +75,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
-        for(size_t j = 0; j < list_len; j++) {
+        for (size_t j = 0; j < list_len; j++) {
             Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
             if (raw_record->recordType != GetSeriesRecordType()) {
                 continue;

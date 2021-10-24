@@ -8,22 +8,22 @@
 
 #include "module.h"
 
+#include "LibMR/src/cluster.h"
+#include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
 #include "fast_double_parser_c/fast_double_parser_c.h"
+#include "indexer.h"
 #include "libmr_commands.h"
 #include "libmr_integration.h"
-#include "indexer.h"
 #include "query_language.h"
 #include "rdb.h"
 #include "reply.h"
 #include "resultset.h"
 #include "tsdb.h"
 #include "version.h"
-#include "LibMR/src/mr.h"
-#include "LibMR/src/cluster.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -1012,7 +1012,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if(register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
+    if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 

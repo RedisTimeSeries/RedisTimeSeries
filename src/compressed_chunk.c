@@ -6,9 +6,9 @@
 
 #include "compressed_chunk.h"
 
+#include "LibMR/src/mr.h"
 #include "chunk.h"
 #include "generic_chunk.h"
-#include "LibMR/src/mr.h"
 
 #include <assert.h> // assert
 #include <limits.h>
@@ -337,25 +337,27 @@ void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 }
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
-static void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx* sctx, long long val) {
+static void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val) {
     MRError *err;
     MR_SerializationCtxWriteLongLong(sctx, val, &err);
 }
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
-static void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx* sctx, const char* buff, size_t len) {
+static void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
+                                                  const char *buff,
+                                                  size_t len) {
     MRError *err;
     MR_SerializationCtxWriteBuffer(sctx, buff, len, &err);
 }
 
-void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx* sctx) {
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
     Compressed_Serialize(chunk,
                          sctx,
                          (SaveUnsignedFunc)MR_SerializationCtxWriteLongLongWrapper,
                          (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
 }
 
-static char *ownedBufferFromMR(ReaderSerializationCtx* sctx, size_t *len) {
+static char *ownedBufferFromMR(ReaderSerializationCtx *sctx, size_t *len) {
     MRError *err;
     size_t size = 0;
     const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
@@ -368,12 +370,12 @@ static char *ownedBufferFromMR(ReaderSerializationCtx* sctx, size_t *len) {
 }
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
-static long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx* sctx) {
-    MRError *err;  // TODO needs to call MR_ErrorCreate to allocate the error.
+static long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx) {
+    MRError *err; // TODO needs to call MR_ErrorCreate to allocate the error.
     return MR_SerializationCtxReadeLongLong(sctx, &err);
 }
 
-void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx* sctx) {
+void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
     Compressed_Deserialize(chunk,
                            sctx,
                            (ReadUnsignedFunc)MR_SerializationCtxReadeLongLongWrapper,

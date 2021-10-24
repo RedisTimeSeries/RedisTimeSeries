@@ -277,6 +277,6 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
                              (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx* sctx) {}
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {}
 
-void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx* sctx) {}
+void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {}

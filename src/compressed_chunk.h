@@ -42,8 +42,8 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
 void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // LibMR
-void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx* sctx);
-void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx* sctx);
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
+void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
 /* Used in tests */
 u_int64_t getIterIdx(ChunkIter_t *iter);
