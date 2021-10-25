@@ -189,7 +189,7 @@ $(LIBRMUTIL): rmutil
 
 mr:
 	@echo Building $@...
-	$(SHOW) MODULE_NAME=timeseries $(MAKE) -C $(ROOT)/deps/LibMR
+	$(SHOW) MODULE_NAME=timeseries MAKEFLAGS='' $(MAKE) -C $(ROOT)/deps/LibMR
 
 $(LIBMR): mr
 
