@@ -99,7 +99,7 @@ CC_FLAGS = \
 CXXFLAGS = -std=c++17 -Wall -fPIC -pedantic
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
+LD_LIBS += -lc -lm -lpthread -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -270,8 +270,8 @@ ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
 
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LIBMR) $(LD_LIBS)
 
 unittests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
