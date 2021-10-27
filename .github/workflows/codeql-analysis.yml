@@ -72,7 +72,7 @@ jobs:
 
     - name: Build
       run: |
-        ./system-setup.py
+        sudo ./system-setup.py
         make fetch
         make build
 
