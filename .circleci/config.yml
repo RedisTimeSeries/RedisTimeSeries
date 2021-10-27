@@ -187,7 +187,7 @@ commands:
           name: Build for platform
           command: |
             ROOT=$PWD
-            make -C build/docker build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH PACK=1 TEST=1 SHOW=1 PACK=1
+            make -C build/docker build OSNICK=<<parameters.platform>> OSNICK_OFFICIAL=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH PACK=1 TEST=1 SHOW=1 PACK=1
             cd $ROOT
             mkdir -p tests/flow/logs
             tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
@@ -197,7 +197,7 @@ commands:
           name: Build for platform (publish)
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            make -C build/docker publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+            make -C build/docker publish OSNICK=<<parameters.platform>> OSNICK_OFFICIAL=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
       - persist-artifacts
       - save-tests-logs
 
@@ -514,7 +514,7 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic, xenial, centos7, centos8]
+              platform: [focal, bionic, xenial, centos7, centos8, bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
