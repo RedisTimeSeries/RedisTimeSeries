@@ -31,7 +31,10 @@ jobs:
         # https://docs.github.com/en/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#overriding-automatic-language-detection
 
     steps:
-    - run: sudo apt update && sudo apt install -y libssl-dev
+    - name: install python
+      uses: action/setup-python@v2
+      with:
+        python-version: 3.9
 
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -69,7 +72,6 @@ jobs:
 
     - name: Build
       run: |
-        ./deps/readies/bin/getpy3
         ./system-setup.py
         make fetch
         make build
