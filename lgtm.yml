@@ -1,0 +1,9 @@
+extraction:
+  cpp:
+    configure:
+      command:
+        sudo ./system-setup.py
+    index:
+      build_command:
+        - $GNU_MAKE -j2 fetch
+        - $GNU_MAKE -j2 build
