@@ -13,7 +13,7 @@ exporter:
 clusterconfig:
   init_commands:
   - commands:
-    - 'RG.REFRESHCLUSTER'
+    - 'timeseries.REFRESHCLUSTER'
 
 spec:
   setups:

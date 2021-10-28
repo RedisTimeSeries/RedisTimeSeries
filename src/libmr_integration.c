@@ -576,12 +576,6 @@ static Record *StringRecord_Create(char *val, size_t len) {
     return &ret->base;
 }
 
-void StringRecordSet(Record *base, char *val, size_t len) {
-    StringRecord *r = (StringRecord *)base;
-    r->str = val;
-    r->len = len;
-}
-
 static size_t ListRecord_Len(Record *base) {
     ListRecord *r = (ListRecord *)base;
     return array_len(r->records);

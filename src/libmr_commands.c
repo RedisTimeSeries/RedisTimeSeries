@@ -20,6 +20,10 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
             continue;
         }
         total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
@@ -29,6 +33,10 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
             continue;
         }
 
@@ -60,6 +68,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         for (int i = 0; i < len; i++) {
             Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
             if (raw_listRecord->recordType != GetListRecordType()) {
+                RedisModule_Log(rctx,
+                                "warning",
+                                "Unexpected record type: %s",
+                                raw_listRecord->recordType->type.type);
                 continue;
             }
             total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
@@ -71,6 +83,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
             continue;
         }
 

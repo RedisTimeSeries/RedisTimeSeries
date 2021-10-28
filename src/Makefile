@@ -175,7 +175,7 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs
+.PHONY: package tests unittests clean all install uninstall docker bindirs mr
 
 all: bindirs $(TARGET)
 
