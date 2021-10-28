@@ -99,7 +99,7 @@ CC_FLAGS = \
 CXXFLAGS = -std=c++17 -Wall -fPIC -pedantic
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -lpthread -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
+LD_LIBS += -lc -lm -lpthread -lssl -lcrypto -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
