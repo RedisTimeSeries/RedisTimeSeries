@@ -41,8 +41,6 @@ make test          # run tests
   AOF=0|1          # run AOF persistency tests on a standalone Redis topology
   SLAVES=0|1       # run replication tests on standalone Redis topology
   CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
-  GEARS=0|1        # also load RedisGears
-  GEARS_PATH=path  # RedisGears module path
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
 
@@ -51,8 +49,6 @@ make pack          # build packages (ramp & dependencies)
 make benchmarks    # run all benchmarks
   BENCHMARK=file   # run benchmark specified by 'filename'
   BENCH_ARGS="..." # redisbench_admin  extra arguments
-  GEARS=0|1        # also load RedisGears
-  GEARS_PATH=path  # RedisGears module path
 endef
 
 #----------------------------------------------------------------------------------------------  
@@ -73,6 +69,8 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 SDK_DIR=$(ROOT)/deps/RedisModulesSDK
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
 LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
+MR_LIBDIR=$(ROOT)/deps/LibMR/src
+LIBMR=$(MR_LIBDIR)/libmr.a
 FAST_DOUBLE_PARSER_LIBDIR=$(BINROOT)/fast_double_parser_c
 FAST_DOUBLE_PARSER_SRCDIR=$(SRCDIR)/fast_double_parser_c
 LIBFAST_DOUBLE_PARSER=$(FAST_DOUBLE_PARSER_LIBDIR)/libfast_double_parser_c.a
@@ -101,9 +99,10 @@ CC_FLAGS = \
 CXXFLAGS = -std=c++17 -Wall -fPIC -pedantic
 
 LD_FLAGS += 
-LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++
+LD_LIBS += -lc -lm -lpthread -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
 
 ifeq ($(OS),linux)
+LD_LIBS += -lssl -lcrypto
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
@@ -149,8 +148,8 @@ _SOURCES=\
 	tsdb.c \
 	series_iterator.c \
 	filter_iterator.c \
-	gears_integration.c \
-	gears_commands.c
+	libmr_integration.c \
+	libmr_commands.c
 
 _TEST_SOURCES=\
 	unittests.c \
@@ -177,7 +176,7 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs
+.PHONY: package tests unittests clean all install uninstall docker bindirs mr
 
 all: bindirs $(TARGET)
 
@@ -188,6 +187,12 @@ rmutil:
 	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
 $(LIBRMUTIL): rmutil
+
+mr:
+	@echo Building $@...
+	$(SHOW) MODULE_NAME=timeseries $(MAKE) -C $(ROOT)/deps/LibMR
+
+$(LIBMR): mr
 
 libfast_double_parser_c:
 	@echo Building $@...
@@ -228,7 +233,8 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 
 OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
 
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBFAST_DOUBLE_PARSER)
+$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(LIBFAST_DOUBLE_PARSER)
+
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
@@ -244,13 +250,11 @@ export GEN=1
 export SLAVES=0
 export AOF=0
 export CLUSTER=0
-export GEARS=0
 else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
 export CLUSTER ?= 0
-export GEARS ?= 0
 endif
 
 tests: #$(TARGET)
@@ -262,14 +266,13 @@ endif
 		CLUSTER=$(CLUSTER) \
 		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
 		VALGRIND=$(VALGRIND) \
-		GEARS=$(GEARS) \
 		$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
 
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LD_LIBS)
+$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(TEST_OBJECTS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LIBMR) $(LD_LIBS)
 
 unittests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
@@ -280,10 +283,6 @@ BENCHMARK_ARGS = redisbench-admin run-local
 
 ifneq ($(REMOTE),)
 	BENCHMARK_ARGS = redisbench-admin run-remote 
-endif
-
-ifeq ($(GEARS),1)
-	BENCHMARK_ARGS += --module_path $(realpath $(GEARS_PATH))
 endif
 
 BENCHMARK_ARGS += --module_path $(realpath $(TARGET)) \

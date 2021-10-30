@@ -5,7 +5,7 @@
  */
 #include "chunk.h"
 
-#include "gears_integration.h"
+#include "libmr_integration.h"
 
 #include "rmutil/alloc.h"
 
@@ -277,6 +277,6 @@ void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
                              (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
 }
 
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {}
 
-void Uncompressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {}
+void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {}
