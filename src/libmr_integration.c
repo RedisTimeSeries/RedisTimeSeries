@@ -540,6 +540,7 @@ bool IsMRCluster() {
 static void StringRecord_Free(void *base) {
     StringRecord *record = (StringRecord *)base;
     free(record->str);
+    free(record);
 }
 
 static void StringRecord_Serialize(WriteSerializationCtx *sctx, void *base, MRError **error) {
@@ -616,6 +617,7 @@ static void ListRecord_Free(void *base) {
         MR_RecordFree(record->records[i]);
     }
     array_free(record->records);
+    free(record);
 }
 
 static void ListRecord_Add(Record *base, Record *element) {
@@ -690,6 +692,7 @@ void SeriesRecord_ObjectFree(void *record) {
 
     free(series->chunks);
     RedisModule_FreeString(NULL, series->keyName);
+    free(series);
 }
 
 void SeriesRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
@@ -764,7 +767,9 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     return s;
 }
 
-static void LongRecord_Free(void *arg) {}
+static void LongRecord_Free(void *arg) {
+    free(arg);
+}
 
 static void LongRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
     LongRecord *r = (LongRecord *)arg;
