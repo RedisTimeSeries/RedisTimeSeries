@@ -154,6 +154,7 @@ commands:
       - setup-executor
       - checkout
       - setup-automation
+      - install-prerequisites
       - run:
           name: Build for platform
           command: |
