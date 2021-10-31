@@ -24,6 +24,7 @@ class RedisTimeSeriesSetup(paella.Setup):
 
         self.install("libssl-dev")
         self.install("autoconf")
+        self.install("libtool")
 
     def debian_compat(self):
         self.run("%s/bin/getgcc --modern" % READIES)
