@@ -22,9 +22,10 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("git jq curl")
         self.run("%s/bin/enable-utf8" % READIES)
 
-        self.install("libssl-dev")
-        self.install("autoconf")
-        self.install("libtool")
+        if self.os != 'macos' and self.dist != 'centos':
+            self.install("libssl-dev")
+            self.install("autoconf")
+            self.install("libtool")
 
     def debian_compat(self):
         self.run("%s/bin/getgcc --modern" % READIES)
