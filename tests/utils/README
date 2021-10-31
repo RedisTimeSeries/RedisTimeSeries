@@ -37,12 +37,12 @@ You can use the following env variables to change how the cluster is setup
 
 ### Example
 
-#### Running RedisTimeSeries cluster with 15 main nodes and RedisGears
+#### Running RedisTimeSeries cluster with 15 main nodes and LibMR
 
 ```
-NODES=15 ADDITIONAL_OPTIONS=" --loadmodule ../../../RedisGears/bin/linux-x64-release/redisgears.so --loadmodule  ../../bin/redistimeseries.so " ./create-cluster start
+NODES=15 ADDITIONAL_OPTIONS=" --loadmodule --loadmodule  ../../bin/redistimeseries.so " ./create-cluster start
 NODES=15 ./create-cluster create
-NODES=15 ./create-cluster call RG.REFRESHCLUSTER
+NODES=15 ./create-cluster call timeseries.REFRESHCLUSTER
 
 # stop the servers
 NODES=15 ./create-cluster stop

@@ -23,7 +23,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.run("%s/bin/enable-utf8" % READIES)
 
     def debian_compat(self):
-        self.run("%s/bin/getgcc" % READIES)
+        self.run("%s/bin/getgcc --modern" % READIES)
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
