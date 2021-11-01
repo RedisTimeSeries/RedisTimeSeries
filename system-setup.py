@@ -30,7 +30,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             elif self.platform.is_debian_compat():
                 self.install("libssl-dev")
             elif self.platform.is_redhat_compat():
-                self.install("openssl")
+                self.install("openssl-devel")
             elif self.dist == 'suse':
                 self.install("openssl")
             elif self.dist == 'arch':
@@ -38,7 +38,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             elif self.dist == 'alpine':
                 self.install("openssl")
         elif self.os == 'macos':
-            self.install("openssl")
+            self.install("openssl@3.0.0_1")
         elif self.os == 'freebsd':
             self.install("openssl")
 
