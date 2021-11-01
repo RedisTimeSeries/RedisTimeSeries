@@ -22,10 +22,14 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("git jq curl")
         self.run("%s/bin/enable-utf8" % READIES)
 
-        if self.os != 'macos' and self.dist != 'centos':
+        self.install("autoconf libtool")
+
+        if self.dist == 'fedora':
+            self.install("openssl-devel")
+        elif self.os == 'macos':
+            self.install("openssl")
+        else:
             self.install("libssl-dev")
-            self.install("autoconf")
-            self.install("libtool")
 
     def debian_compat(self):
         self.run("%s/bin/getgcc --modern" % READIES)
@@ -39,6 +43,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("lcov-git", aur=True)
 
     def fedora(self):
+        self.install(openssl-devel)
         self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
