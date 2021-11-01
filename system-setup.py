@@ -24,12 +24,23 @@ class RedisTimeSeriesSetup(paella.Setup):
 
         self.install("autoconf libtool")
 
-        if self.dist == 'fedora':
-            self.install("openssl-devel")
+        if self.os == 'linux':
+            if self.dist == 'fedora':  # also include centos 8
+                self.install("openssl-devel")
+            elif self.platform.is_debian_compat():
+                self.install("libssl-dev")
+            elif self.platform.is_redhat_compat():
+                self.install("openssl")
+            elif self.dist == 'suse':
+                self.install("openssl")
+            elif self.dist == 'arch':
+                self.install("openssl")
+            elif self.dist == 'alpine':
+                self.install("openssl")
         elif self.os == 'macos':
             self.install("openssl")
-        else:
-            self.install("libssl-dev")
+        elif self.os == 'freebsd':
+            self.install("openssl")
 
     def debian_compat(self):
         self.run("%s/bin/getgcc --modern" % READIES)
