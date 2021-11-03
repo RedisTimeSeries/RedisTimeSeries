@@ -514,6 +514,9 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (replication_count > 0) {
+        // we want to replicate only successful sample inserts to avoid errors on the replica, when
+        // this errors occurs, redis will CRITICAL error to its log and potentially fill up the disk
+        // depending on the actual traffic.
         RedisModule_Replicate(ctx, "TS.MADD", "v", replication_data, replication_count);
     }
     free(replication_data);
