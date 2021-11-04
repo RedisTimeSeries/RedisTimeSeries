@@ -499,13 +499,27 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
+    RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
+    size_t replication_count = 0;
     for (int i = 1; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
         RedisModuleString *valueStr = argv[i + 2];
-        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
+        if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
+            replication_data[replication_count] = keyName;
+            replication_data[replication_count + 1] = timestampStr;
+            replication_data[replication_count + 2] = valueStr;
+            replication_count += 3;
+        }
     }
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (replication_count > 0) {
+        // we want to replicate only successful sample inserts to avoid errors on the replica, when
+        // this errors occurs, redis will CRITICAL error to its log and potentially fill up the disk
+        // depending on the actual traffic.
+        RedisModule_Replicate(ctx, "TS.MADD", "v", replication_data, replication_count);
+    }
+    free(replication_data);
 
     for (int i = 1; i < argc; i += 3) {
         RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
