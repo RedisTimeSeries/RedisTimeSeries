@@ -178,6 +178,10 @@ void CleanLastDeletedSeries(RedisModuleString *key) {
         RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
         RedisModule_AutoMemory(ctx);
 
+        if (!lastDeletedSeries->isTemporary) {
+            RemoveIndexedMetric(lastDeletedSeries->keyName);
+        }
+
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
             RedisModuleKey *seriesKey;
@@ -236,7 +240,44 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         rule = rule->nextRule;
     }
 
+    if(unlikely(IsKeyIndexed(keyname))) {
+        // when doing a restore for a key the key shouldn't be in index (free should be called before on replace)
+        size_t len;
+        const char *str = RedisModule_StringPtrLen(keyname, &len);
+        RedisModule_Log(mr_staticCtx, "warning", "Trying to restore a key=%s, which is already in index", str);
+        RemoveIndexedMetric(keyname); // for safety
+    }
+
+    IndexMetric(keyname, series->labels, series->labelsCount);
+
     RedisModule_CloseKey(key);
+}
+
+void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
+    // Try to open the series
+    Series *series;
+    RedisModuleKey *key = NULL;
+    RedisModule_HoldString(ctx, keyname);
+    const int status = SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ);
+    if (!status) { // Not a timeseries key
+        goto cleanup;
+    }
+
+    if(unlikely(IsKeyIndexed(keyname))) {
+        // when loading from rdb file the key shouldn't exist.
+        size_t len;
+        const char *str = RedisModule_StringPtrLen(keyname, &len);
+        RedisModule_Log(ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
+        RemoveIndexedMetric(keyname); // for safety
+    }
+
+    IndexMetric(keyname, series->labels, series->labelsCount);
+
+cleanup:
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(ctx, keyname);
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
@@ -249,8 +290,8 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     }
 
     // Reindex key by the new name
-    RemoveIndexedMetric(ctx, renameFromKey, series->labels, series->labelsCount);
-    IndexMetric(ctx, keyTo, series->labels, series->labelsCount);
+    RemoveIndexedMetric(renameFromKey);
+    IndexMetric(keyTo, series->labels, series->labelsCount);
 
     // A destination key was renamed
     if (series->srcKey) {
@@ -313,8 +354,52 @@ cleanup:
     renameFromKey = NULL;
 }
 
+void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
+    Series *src = (Series *)value;
+    Series *dst = (Series *)malloc(sizeof(Series));
+    memcpy(dst, src, sizeof(Series));
+    RedisModule_RetainString(NULL, tokey);
+    dst->keyName = tokey;
+
+    // Copy labels
+    if(src->labelsCount > 0) {
+        dst->labels = malloc(sizeof(Label) * src->labelsCount);
+        for(size_t i = 0; i < dst->labelsCount; i++) {
+            dst->labels[i].key = RedisModule_CreateStringFromString(NULL, src->labels[i].key);
+            dst->labels[i].value = RedisModule_CreateStringFromString(NULL, src->labels[i].value);
+        }
+    }
+
+    // Copy chunks
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0);
+    Chunk_t *curChunk;
+    char *curKey;
+    size_t keylen;
+    while((curKey = RedisModule_DictNextC(iter, &keylen, &curChunk)) != NULL) {
+        Chunk_t *newChunk = src->funcs->CloneChunk(curChunk);
+        RedisModule_DictSetC(dst->chunks, curKey, keylen, newChunk);
+        if(src->lastChunk == curChunk) {
+            dst->lastChunk = newChunk;
+        }
+    }
+
+    dst->srcKey = NULL;
+    src->rules = NULL;
+
+    RemoveIndexedMetric(tokey); // in case of replace
+    if(dst->labelsCount > 0) {
+        IndexMetric(tokey, dst->labels, dst->labelsCount);
+    }
+    return dst;
+}
+
 // Releases Series and all its compaction rules
+// Doesn't free the cross reference between rules just on "del" keyspace notification,
+// since Flush anyway will free all series.
+// Doesn't free the index just on "del" keyspace notification since RoF might delete the key while it's only on the disk,
+// in this case FreeSeries won't be called just the "del" keyspace notification.
 void FreeSeries(void *value) {
+    printf("FreeSeries\n");
     Series *currentSeries = (Series *)value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
@@ -323,16 +408,8 @@ void FreeSeries(void *value) {
     }
     RedisModule_DictIteratorStop(iter);
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModule_AutoMemory(ctx);
-    if (!currentSeries->isTemporary) {
-        RemoveIndexedMetric(
-            ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
-    }
-
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
-    RedisModule_FreeThreadSafeContext(ctx);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
 
     if (currentSeries->isTemporary) {

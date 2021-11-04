@@ -51,6 +51,20 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     return newChunk;
 }
 
+/**
+ * Deep copy of src chunk to dst
+ * @param src: src chunk
+ * @return the copied chunk
+ */
+Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src) {
+    const Chunk *_src = src;
+    Chunk *dst = (Chunk *)malloc(sizeof(Chunk));
+    memcpy(dst, _src, sizeof(Chunk));
+    dst->samples = (Sample *)malloc(dst->num_samples * SAMPLE_SIZE);
+    memcpy(dst->samples, _src->samples, dst->num_samples * SAMPLE_SIZE);
+    return dst;
+}
+
 static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->size / SAMPLE_SIZE;
 }

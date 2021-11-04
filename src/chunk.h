@@ -37,6 +37,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk);
  * @return
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
+Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src);
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 
 /**
