@@ -109,6 +109,7 @@ def test_madd_some_failed_replicas():
         r.execute_command("ts.create", "test_key1", "DUPLICATE_POLICY", "block")
         r.execute_command("ts.madd", "test_key1", 123, 11, "test_key1", 124, 12)
         r.execute_command("ts.madd", "test_key1", 122, 11, "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
+        r.execute_command("wait", 1, 0)
         env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"), [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
 
     with env.getSlaveConnection() as r:
