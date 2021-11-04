@@ -42,8 +42,8 @@ void Compressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
-Chunk_t *Compressed_CloneChunk(Chunk_t *chunk) {
-    CompressedChunk *oldChunk = chunk;
+Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
+    const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
     memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
     newChunk->data = malloc(newChunk->size);

@@ -10,6 +10,7 @@ static ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
+    .CloneChunk = Uncompressed_CloneChunk,
 
     .AddSample = Uncompressed_AddSample,
     .UpsertSample = Uncompressed_UpsertSample,

@@ -16,7 +16,7 @@
 // Initialize compressed chunk
 Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
-Chunk_t *Compressed_CloneChunk(Chunk_t *chunk);
+Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk);
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk

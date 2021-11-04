@@ -13,6 +13,7 @@
 #include <rmutil/alloc.h>
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
+    printf("series_rdb_load\n");
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -58,7 +59,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     Series *series = NewSeries(keyName, &cCtx);
 
     CompactionRule *lastRule = NULL;
-    RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
 
     for (int i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = RedisModule_LoadString(io);
@@ -110,7 +110,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->lastChunk = chunk;
     }
 
-    IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     return series;
 }
 

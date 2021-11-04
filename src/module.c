@@ -562,7 +562,7 @@ int CreateTsKey(RedisModuleCtx *ctx,
         return TSDB_ERROR;
     }
 
-    IndexMetric(ctx, keyName, (*series)->labels, (*series)->labelsCount);
+    IndexMetric(keyName, (*series)->labels, (*series)->labelsCount);
 
     return TSDB_OK;
 }
@@ -632,14 +632,14 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
-        RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
+        RemoveIndexedMetric(keyName);
         // free current labels
         FreeLabels(series->labels, series->labelsCount);
 
         // set new newLabels
         series->labels = cCtx.labels;
         series->labelsCount = cCtx.labelsCount;
-        IndexMetric(ctx, keyName, series->labels, series->labelsCount);
+        IndexMetric(keyName, series->labels, series->labelsCount);
     }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
@@ -950,8 +950,20 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid))) && subevent == REDISMODULE_SUBEVENT_FLUSHDB_END) {
+        RemoveAllIndexedMetrics();
+    }
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
-    if (strcasecmp(event, "del") == 0) {
+    printf("notif=%s\n", event);
+    if (strcasecmp(event, "del") == 0     || // unlink also notifies with del with freeseries called before
+        strcasecmp(event, "set") == 0     ||
+        strcasecmp(event, "expire") == 0  ||
+        strcasecmp(event, "evict") == 0   ||
+        strcasecmp(event, "trimmed") == 0     // only on enterprise
+    ) {
         CleanLastDeletedSeries(key);
     }
 
@@ -959,14 +971,20 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         RestoreKey(ctx, key);
     }
 
-    if (strcasecmp(event, "rename_from") == 0) {
+    if (strcasecmp(event, "rename_from") == 0) { // include also renamenx
         RenameSeriesFrom(ctx, key);
     }
 
-    if (strcasecmp(event, "rename_to") == 0) {
+    if (strcasecmp(event, "rename_to") == 0) { // include also renamenx
         RenameSeriesTo(ctx, key);
     }
 
+    if (strcasecmp(event, "loaded") == 0) {
+        IndexMetricFromName(ctx, key);
+    }
+
+    if (strcasecmp(event, "short read") == 0) {
+    }
     return REDISMODULE_OK;
 }
 
@@ -1035,6 +1053,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .rdb_save = series_rdb_save,
                                   .aof_rewrite = RMUtil_DefaultAofRewrite,
                                   .mem_usage = SeriesMemUsage,
+                                  .copy = CopySeries,
                                   .free = FreeSeries };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_SIZE_RDB_VER, &tm);
@@ -1075,7 +1094,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
+    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET 
+    | REDISMODULE_NOTIFY_STRING | REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED
+    | REDISMODULE_NOTIFY_LOADED, NotifyCallback);
+
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
 
     return REDISMODULE_OK;
 }
