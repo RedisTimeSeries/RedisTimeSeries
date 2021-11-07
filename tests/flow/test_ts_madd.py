@@ -1,7 +1,8 @@
+import os
 import time
+import aof_parser
 
-from RLTest import Env
-
+from RLTest import Env, StandardEnv
 
 def test_madd():
     sample_len = 1024
@@ -74,3 +75,27 @@ def test_partial_madd():
         assert len(r.execute_command('ts.range', 'test_key1', "-", "+")) == 2
         assert len(r.execute_command('ts.range', 'test_key2', "-", "+")) == 2
         assert len(r.execute_command('ts.range', 'test_key3', "-", "+")) == 2
+
+def test_madd_some_failed_replicas():
+    if not Env().useSlaves:
+        Env().skip()
+    # getSlaveConnection is not supported in cluster mode
+    Env().skipOnCluster()
+    env =  Env(decodeResponses=False)
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", "test_key1", "DUPLICATE_POLICY", "block")
+        r.execute_command("ts.madd", "test_key1", 123, 11, "test_key1", 124, 12)
+        r.execute_command("ts.madd", "test_key1", 122, 11, "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
+        r.execute_command("wait", 1, 0)
+        env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"), [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
+
+    with env.getSlaveConnection() as r:
+        env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"),  [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
+
+    if env.useAof and isinstance(env.envRunner, StandardEnv):
+        cmds = aof_parser.parse_file(os.path.join(env.envRunner.dbDirPath, env.envRunner._getFileName('master', '.aof')))
+        cmds = filter(lambda c: c[0].lower().startswith('ts.'), cmds)
+        env.assertEqual(list(cmds),
+                        [['ts.create', 'test_key1', 'DUPLICATE_POLICY', 'block'],
+                         ['TS.MADD', 'test_key1', '123', '11', 'test_key1', '124', '12'],
+                         ['TS.MADD', 'test_key1', '122', '11', 'test_key1', '125', '12']])
