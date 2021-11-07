@@ -107,6 +107,7 @@ SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
+LD_LIBS += -L/usr/local/opt/openssl/lib/ -lssl -lcrypto
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 endif
 
