@@ -124,7 +124,7 @@ Label *createReducedSeriesLabels(char *labelKey, char *labelValue, MultiSeriesRe
             reducer_str = "sum";
             break;
     }
-    Label *labels = malloc(sizeof(Label) * 3);
+    Label *labels = calloc(3, sizeof(Label));
     labels[0].key = RedisModule_CreateStringPrintf(NULL, "%s", labelKey);
     labels[0].value = RedisModule_CreateStringPrintf(NULL, "%s", labelValue);
     labels[1].key = RedisModule_CreateStringPrintf(NULL, "__reducer__");

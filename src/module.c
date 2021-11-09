@@ -22,6 +22,7 @@
 #include "rdb.h"
 #include "reply.h"
 #include "resultset.h"
+#include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -951,18 +952,19 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
-    if((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid))) && subevent == REDISMODULE_SUBEVENT_FLUSHDB_END) {
+    if ((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid))) &&
+        subevent == REDISMODULE_SUBEVENT_FLUSHDB_END) {
         RemoveAllIndexedMetrics();
     }
 }
 
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     printf("notif=%s\n", event);
-    if (strcasecmp(event, "del") == 0     || // unlink also notifies with del with freeseries called before
-        strcasecmp(event, "set") == 0     ||
-        strcasecmp(event, "expire") == 0  ||
-        strcasecmp(event, "evict") == 0   ||
-        strcasecmp(event, "trimmed") == 0     // only on enterprise
+    if (strcasecmp(event, "del") ==
+            0 || // unlink also notifies with del with freeseries called before
+        strcasecmp(event, "set") == 0 ||
+        strcasecmp(event, "expire") == 0 || strcasecmp(event, "evict") == 0 ||
+        strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
         CleanLastDeletedSeries(key);
     }
@@ -983,9 +985,51 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         IndexMetricFromName(ctx, key);
     }
 
-    if (strcasecmp(event, "short read") == 0) {
-    }
+    if (strcasecmp(event, "short read") == 0) {}
     return REDISMODULE_OK;
+}
+
+void ReplicaBackupCallback(RedisModuleCtx *ctx,
+                           RedisModuleEvent eid,
+                           uint64_t subevent,
+                           void *data) {
+    REDISMODULE_NOT_USED(eid);
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_CREATE:
+            Backup_Globals();
+            break;
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_RESTORE:
+            Restore_Globals();
+            break;
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_DISCARD:
+            Discard_Globals_Backup();
+            break;
+    }
+}
+
+int CheckVersionForShortRead() {
+    // Minimal versions: 6.2.5
+    // (6.0.15 is not supporting the required event notification for modules)
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion == 2) {
+        return RTS_currVersion.redisPatchVersion >= 5 ? REDISMODULE_OK : REDISMODULE_ERR;
+    } else if (RTS_currVersion.redisMajorVersion == 255 &&
+               RTS_currVersion.redisMinorVersion == 255 &&
+               RTS_currVersion.redisPatchVersion == 255) {
+        // Also supported on master (version=255.255.255)
+        return REDISMODULE_OK;
+    }
+    return REDISMODULE_ERR;
+}
+
+void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
+    if (CheckVersionForShortRead() == REDISMODULE_OK) {
+        int success = RedisModule_SubscribeToServerEvent(
+            ctx, RedisModuleEvent_ReplBackup, ReplicaBackupCallback);
+        RedisModule_Assert(success !=
+                           REDISMODULE_ERR); // should be supported in this redis version/release
+        RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS);
+        RedisModule_Log(ctx, "notice", "Enabled diskless replication");
+    }
 }
 
 /*
@@ -1094,11 +1138,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET 
-    | REDISMODULE_NOTIFY_STRING | REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED
-    | REDISMODULE_NOTIFY_LOADED, NotifyCallback);
+    RedisModule_SubscribeToKeyspaceEvents(
+        ctx,
+        REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
+            REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED,
+        NotifyCallback);
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
+
+    Initialize_RdbNotifications(ctx);
 
     return REDISMODULE_OK;
 }

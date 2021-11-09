@@ -46,6 +46,7 @@ typedef struct Series
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+void freeLastDeletedSeries();
 void FreeSeries(void *value);
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void CleanLastDeletedSeries(RedisModuleString *key);

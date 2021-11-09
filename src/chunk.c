@@ -247,48 +247,45 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);
 typedef void (*SaveStringBufferFunc)(void *, const char *str, size_t len);
-typedef uint64_t (*ReadUnsignedFunc)(void *);
-typedef char *(*ReadStringBufferFunc)(void *, size_t *);
 
-static void Uncompressed_GenericSerialize(Chunk_t *chunk,
-                                          void *ctx,
-                                          SaveUnsignedFunc saveUnsigned,
-                                          SaveStringBufferFunc saveString) {
+static void Uncompressed_GenericSerialize(Chunk_t *chunk, void *ctx) {
     Chunk *uncompchunk = chunk;
 
-    saveUnsigned(ctx, uncompchunk->base_timestamp);
-    saveUnsigned(ctx, uncompchunk->num_samples);
-    saveUnsigned(ctx, uncompchunk->size);
+    RedisModule_SaveUnsigned(ctx, uncompchunk->base_timestamp);
+    RedisModule_SaveUnsigned(ctx, uncompchunk->num_samples);
+    RedisModule_SaveUnsigned(ctx, uncompchunk->size);
 
-    saveString(ctx, (char *)uncompchunk->samples, uncompchunk->size);
+    RedisModule_SaveStringBuffer(ctx, (char *)uncompchunk->samples, uncompchunk->size);
 }
 
-static void Uncompressed_Deserialize(Chunk_t **chunk,
-                                     void *ctx,
-                                     ReadUnsignedFunc readUnsigned,
-                                     ReadStringBufferFunc readStringBuffer) {
+static int Uncompressed_Deserialize(Chunk_t **chunk, void *ctx) {
     Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
 
-    uncompchunk->base_timestamp = readUnsigned(ctx);
-    uncompchunk->num_samples = readUnsigned(ctx);
-    uncompchunk->size = readUnsigned(ctx);
+    uncompchunk->base_timestamp = LoadUnsigned_IOError(ctx, goto err);
+    uncompchunk->num_samples = LoadUnsigned_IOError(ctx, goto err);
+    uncompchunk->size = LoadUnsigned_IOError(ctx, goto err);
     size_t string_buffer_size;
-    uncompchunk->samples = (Sample *)readStringBuffer(ctx, &string_buffer_size);
+    uncompchunk->samples = (Sample *)LoadStringBuffer_IOError(ctx, &string_buffer_size, goto err);
     *chunk = (Chunk_t *)uncompchunk;
+    return 0;
+
+err:
+    *chunk = NULL;
+    if (uncompchunk->samples) {
+        RedisModule_Free(uncompchunk->samples);
+    }
+    if (uncompchunk) {
+        free(uncompchunk);
+    }
+    return 1;
 }
 
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
-    Uncompressed_GenericSerialize(chunk,
-                                  io,
-                                  (SaveUnsignedFunc)RedisModule_SaveUnsigned,
-                                  (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
+    Uncompressed_GenericSerialize(chunk, io);
 }
 
-void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    Uncompressed_Deserialize(chunk,
-                             io,
-                             (ReadUnsignedFunc)RedisModule_LoadUnsigned,
-                             (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    return Uncompressed_Deserialize(chunk, io);
 }
 
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {}

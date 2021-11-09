@@ -78,16 +78,11 @@ int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
 }
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
-    Series *newSeries = (Series *)malloc(sizeof(Series));
+    Series *newSeries = (Series *)calloc(1, sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->chunkSizeBytes = cCtx->chunkSizeBytes;
     newSeries->retentionTime = cCtx->retentionTime;
-    newSeries->srcKey = NULL;
-    newSeries->rules = NULL;
-    newSeries->lastTimestamp = 0;
-    newSeries->lastValue = 0;
-    newSeries->totalSamples = 0;
     newSeries->labels = cCtx->labels;
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
@@ -167,7 +162,9 @@ void freeLastDeletedSeries() {
     if (lastDeletedSeries->srcKey != NULL) {
         RedisModule_FreeString(NULL, lastDeletedSeries->srcKey);
     }
-    RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
+    if (lastDeletedSeries->keyName) {
+        RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
+    }
     free(lastDeletedSeries);
     lastDeletedSeries = NULL;
 }
@@ -240,11 +237,13 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         rule = rule->nextRule;
     }
 
-    if(unlikely(IsKeyIndexed(keyname))) {
-        // when doing a restore for a key the key shouldn't be in index (free should be called before on replace)
+    if (unlikely(IsKeyIndexed(keyname))) {
+        // when doing a restore for a key the key shouldn't be in index (free should be called
+        // before on replace)
         size_t len;
         const char *str = RedisModule_StringPtrLen(keyname, &len);
-        RedisModule_Log(mr_staticCtx, "warning", "Trying to restore a key=%s, which is already in index", str);
+        RedisModule_Log(
+            ctx, "warning", "Trying to restore a key=%s, which is already in index", str);
         RemoveIndexedMetric(keyname); // for safety
     }
 
@@ -257,27 +256,28 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     // Try to open the series
     Series *series;
     RedisModuleKey *key = NULL;
-    RedisModule_HoldString(ctx, keyname);
-    const int status = SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ);
+    RedisModuleString *_keyname = RedisModule_HoldString(ctx, keyname);
+    const int status = SilentGetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ);
     if (!status) { // Not a timeseries key
         goto cleanup;
     }
 
-    if(unlikely(IsKeyIndexed(keyname))) {
+    if (unlikely(IsKeyIndexed(_keyname))) {
         // when loading from rdb file the key shouldn't exist.
         size_t len;
-        const char *str = RedisModule_StringPtrLen(keyname, &len);
-        RedisModule_Log(ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
-        RemoveIndexedMetric(keyname); // for safety
+        const char *str = RedisModule_StringPtrLen(_keyname, &len);
+        RedisModule_Log(
+            ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
+        RemoveIndexedMetric(_keyname); // for safety
     }
 
-    IndexMetric(keyname, series->labels, series->labelsCount);
+    IndexMetric(_keyname, series->labels, series->labelsCount);
 
 cleanup:
     if (key) {
         RedisModule_CloseKey(key);
     }
-    RedisModule_FreeString(ctx, keyname);
+    RedisModule_FreeString(ctx, _keyname);
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
@@ -356,15 +356,15 @@ cleanup:
 
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
     Series *src = (Series *)value;
-    Series *dst = (Series *)malloc(sizeof(Series));
+    Series *dst = (Series *)calloc(1, sizeof(Series));
     memcpy(dst, src, sizeof(Series));
     RedisModule_RetainString(NULL, tokey);
     dst->keyName = tokey;
 
     // Copy labels
-    if(src->labelsCount > 0) {
-        dst->labels = malloc(sizeof(Label) * src->labelsCount);
-        for(size_t i = 0; i < dst->labelsCount; i++) {
+    if (src->labelsCount > 0) {
+        dst->labels = calloc(src->labelsCount, sizeof(Label));
+        for (size_t i = 0; i < dst->labelsCount; i++) {
             dst->labels[i].key = RedisModule_CreateStringFromString(NULL, src->labels[i].key);
             dst->labels[i].value = RedisModule_CreateStringFromString(NULL, src->labels[i].value);
         }
@@ -375,10 +375,10 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     Chunk_t *curChunk;
     char *curKey;
     size_t keylen;
-    while((curKey = RedisModule_DictNextC(iter, &keylen, &curChunk)) != NULL) {
+    while ((curKey = RedisModule_DictNextC(iter, &keylen, &curChunk)) != NULL) {
         Chunk_t *newChunk = src->funcs->CloneChunk(curChunk);
         RedisModule_DictSetC(dst->chunks, curKey, keylen, newChunk);
-        if(src->lastChunk == curChunk) {
+        if (src->lastChunk == curChunk) {
             dst->lastChunk = newChunk;
         }
     }
@@ -387,17 +387,18 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     src->rules = NULL;
 
     RemoveIndexedMetric(tokey); // in case of replace
-    if(dst->labelsCount > 0) {
+    if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
     return dst;
 }
 
 // Releases Series and all its compaction rules
-// Doesn't free the cross reference between rules just on "del" keyspace notification,
+// Doesn't free the cross reference between rules, only on "del" keyspace notification,
 // since Flush anyway will free all series.
-// Doesn't free the index just on "del" keyspace notification since RoF might delete the key while it's only on the disk,
-// in this case FreeSeries won't be called just the "del" keyspace notification.
+// Doesn't free the index just on "del" keyspace notification since RoF might delete the key while
+// it's only on the disk, in this case FreeSeries won't be called just the "del" keyspace
+// notification.
 void FreeSeries(void *value) {
     printf("FreeSeries\n");
     Series *currentSeries = (Series *)value;
@@ -745,7 +746,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         }
         SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
 
-        Label *compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
+        Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof(Label));
         // todo: deep copy labels function
         for (int l = 0; l < labelsCount; l++) {
             compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
