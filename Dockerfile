@@ -16,6 +16,7 @@ ARG REDIS_VER
 ADD ./ /build
 WORKDIR /build
 
+RUN apt-get --allow-releaseinfo-change update
 RUN ./deps/readies/bin/getpy3
 RUN ./system-setup.py
 RUN make fetch
