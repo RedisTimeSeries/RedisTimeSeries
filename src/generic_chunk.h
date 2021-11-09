@@ -34,6 +34,24 @@ typedef void ChunkIter_t;
 // "temporary" uncompressed chunk.
 #define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
+#define LoadUnsigned_IOError(rdb, cleanup_exp)                                                     \
+    __extension__({                                                                                \
+        uint64_t res = RedisModule_LoadUnsigned((rdb));                                            \
+        if (RedisModule_IsIOError(rdb)) {                                                          \
+            cleanup_exp;                                                                           \
+        }                                                                                          \
+        (res);                                                                                     \
+    })
+
+#define LoadStringBuffer_IOError(rdb, str, cleanup_exp)                                            \
+    __extension__({                                                                                \
+        char *res = RedisModule_LoadStringBuffer((rdb), (str));                                    \
+        if (RedisModule_IsIOError(rdb)) {                                                          \
+            cleanup_exp;                                                                           \
+        }                                                                                          \
+        (res);                                                                                     \
+    })
+
 typedef enum CHUNK_TYPES_T
 {
     CHUNK_REGULAR,
@@ -75,7 +93,7 @@ typedef struct ChunkFuncs
     u_int64_t (*GetFirstTimestamp)(Chunk_t *chunk);
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
-    void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
+    int (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
     void (*MRSerialize)(Chunk_t *chunk, WriteSerializationCtx *sctx);
     void (*MRDeserialize)(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 } ChunkFuncs;

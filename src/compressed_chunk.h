@@ -39,7 +39,7 @@ timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);
 
 // RDB
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // LibMR
 void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);

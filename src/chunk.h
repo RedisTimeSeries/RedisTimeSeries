@@ -72,7 +72,7 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // LibMR
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);

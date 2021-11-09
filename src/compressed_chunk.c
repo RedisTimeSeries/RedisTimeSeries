@@ -300,26 +300,35 @@ static void Compressed_Serialize(Chunk_t *chunk,
     saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
 }
 
-static void Compressed_Deserialize(Chunk_t **chunk,
-                                   void *ctx,
-                                   ReadUnsignedFunc readUnsigned,
-                                   ReadStringBufferFunc readStringBuffer) {
-    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+static int Compressed_Deserialize(Chunk_t **chunk, void *ctx) {
+    CompressedChunk *compchunk = (CompressedChunk *)calloc(1, sizeof(*compchunk));
 
-    compchunk->size = readUnsigned(ctx);
-    compchunk->count = readUnsigned(ctx);
-    compchunk->idx = readUnsigned(ctx);
-    compchunk->baseValue.u = readUnsigned(ctx);
-    compchunk->baseTimestamp = readUnsigned(ctx);
-    compchunk->prevTimestamp = readUnsigned(ctx);
-    compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx);
-    compchunk->prevValue.u = readUnsigned(ctx);
-    compchunk->prevLeading = readUnsigned(ctx);
-    compchunk->prevTrailing = readUnsigned(ctx);
+    compchunk->size = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->count = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->idx = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->baseValue.u = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->baseTimestamp = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->prevTimestamp = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->prevTimestampDelta = (int64_t)LoadUnsigned_IOError(ctx, goto err);
+    compchunk->prevValue.u = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->prevLeading = LoadUnsigned_IOError(ctx, goto err);
+    compchunk->prevTrailing = LoadUnsigned_IOError(ctx, goto err);
 
     size_t len;
-    compchunk->data = (uint64_t *)readStringBuffer(ctx, &len);
+    compchunk->data = (uint64_t *)LoadStringBuffer_IOError(ctx, &len, goto err);
     *chunk = (Chunk_t *)compchunk;
+    return 0;
+
+err:
+    *chunk = NULL;
+    if (compchunk->data) {
+        RedisModule_Free(compchunk->data);
+        compchunk->data = NULL;
+    }
+    if (compchunk) {
+        free(compchunk);
+    }
+    return 1;
 }
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
@@ -329,11 +338,8 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    Compressed_Deserialize(chunk,
-                           io,
-                           (ReadUnsignedFunc)RedisModule_LoadUnsigned,
-                           (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    return Compressed_Deserialize(chunk, io);
 }
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
@@ -375,9 +381,31 @@ static long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx 
     return MR_SerializationCtxReadeLongLong(sctx, &err);
 }
 
+static void Compressed_Deserialize_MR(Chunk_t **chunk,
+                                      void *ctx,
+                                      ReadUnsignedFunc readUnsigned,
+                                      ReadStringBufferFunc readStringBuffer) {
+    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+
+    compchunk->size = readUnsigned(ctx);
+    compchunk->count = readUnsigned(ctx);
+    compchunk->idx = readUnsigned(ctx);
+    compchunk->baseValue.u = readUnsigned(ctx);
+    compchunk->baseTimestamp = readUnsigned(ctx);
+    compchunk->prevTimestamp = readUnsigned(ctx);
+    compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx);
+    compchunk->prevValue.u = readUnsigned(ctx);
+    compchunk->prevLeading = readUnsigned(ctx);
+    compchunk->prevTrailing = readUnsigned(ctx);
+
+    size_t len;
+    compchunk->data = (uint64_t *)readStringBuffer(ctx, &len);
+    *chunk = (Chunk_t *)compchunk;
+}
+
 void Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
-    Compressed_Deserialize(chunk,
-                           sctx,
-                           (ReadUnsignedFunc)MR_SerializationCtxReadeLongLongWrapper,
-                           (ReadStringBufferFunc)ownedBufferFromMR);
+    Compressed_Deserialize_MR(chunk,
+                              sctx,
+                              (ReadUnsignedFunc)MR_SerializationCtxReadeLongLongWrapper,
+                              (ReadStringBufferFunc)ownedBufferFromMR);
 }
