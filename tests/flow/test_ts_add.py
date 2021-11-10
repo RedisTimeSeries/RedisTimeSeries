@@ -70,6 +70,7 @@ def test_ts_add_encoding():
 
 
 def test_different_chunk_size():
+    Env().skipOnCluster()
     with Env().getConnection() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '0')
