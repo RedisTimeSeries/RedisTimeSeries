@@ -114,7 +114,12 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     if (cCtx->chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
+        return REDISMODULE_ERR;
+    }
+
+    if (cCtx->chunkSizeBytes > 1048576) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
         return REDISMODULE_ERR;
     }
 
