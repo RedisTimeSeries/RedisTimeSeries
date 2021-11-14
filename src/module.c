@@ -153,46 +153,56 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx->labelsCount = 0;
+    cCtx->labels = NULL;
     if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
-        return REDISMODULE_ERR;
+        goto err_exit;
     }
 
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &cCtx->retentionTime) !=
-            REDISMODULE_OK) {
+        REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
+        goto err_exit;
     }
 
     if (cCtx->retentionTime < 0) {
         RedisModule_ReplyWithError(ctx, "TSDB: Couldn't parse RETENTION");
-        return REDISMODULE_ERR;
+        goto err_exit;
     }
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
-            REDISMODULE_OK) {
+        REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        return REDISMODULE_ERR;
+        goto err_exit;
     }
 
     if (cCtx->chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        return REDISMODULE_ERR;
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
+        goto err_exit;
     }
 
-    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
-        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
+    if (cCtx->chunkSizeBytes > 1048576) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
+        goto err_exit;
+    }
+
+    if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
+        goto err_exit;
     }
 
     cCtx->duplicatePolicy = DP_NONE;
     if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
         TSDB_OK) {
-        return TSDB_ERROR;
+        goto err_exit;
     }
 
     return REDISMODULE_OK;
+    err_exit:
+    free(cCtx->labels);
+    return REDISMODULE_ERR;
 }
 
 static int _parseAggregationArgs(RedisModuleCtx *ctx,
