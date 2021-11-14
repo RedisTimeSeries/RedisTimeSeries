@@ -137,7 +137,9 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
 
     return REDISMODULE_OK;
 err_exit:
-    free(cCtx->labels);
+    if (cCtx->labelsCount > 0) {
+        FreeLabels(cCtx->labels, cCtx->labelsCount);
+    }
     return REDISMODULE_ERR;
 }
 
