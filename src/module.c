@@ -188,9 +188,8 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
         goto err_exit;
     }
 
-    if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
-        goto err_exit;
+    if (RMUtil_ArgIndex("UNCOMPRESSED", argv, argc) > 0) {
+        cCtx->options |= SERIES_OPT_UNCOMPRESSED;
     }
 
     cCtx->duplicatePolicy = DP_NONE;
@@ -200,8 +199,10 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
     }
 
     return REDISMODULE_OK;
-    err_exit:
-    free(cCtx->labels);
+err_exit:
+    if (cCtx->labelsCount > 0 && cCtx->labels != NULL) {
+        FreeLabels(cCtx->labels, cCtx->labelsCount);
+    }
     return REDISMODULE_ERR;
 }
 
