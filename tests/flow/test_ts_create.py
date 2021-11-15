@@ -25,8 +25,6 @@ def test_create_params():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'CHUNK_SIZE', '4000000000')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'ENCODING', 'bad-encoding-type')
-        with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'DUPLICATE_POLICY', 'bla')
 
         r.execute_command('TS.CREATE a')
