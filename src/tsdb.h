@@ -30,7 +30,7 @@ typedef struct Series
     RedisModuleDict *chunks;
     Chunk_t *lastChunk;
     uint64_t retentionTime;
-    short chunkSizeBytes;
+    long long chunkSizeBytes;
     short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;

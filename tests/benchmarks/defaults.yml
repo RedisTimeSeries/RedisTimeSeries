@@ -13,9 +13,7 @@ exporter:
 clusterconfig:
   init_commands:
   - commands:
-    - 'RG.REFRESHCLUSTER'
-    when_modules_present:
-    - redisgears.so
+    - 'timeseries.REFRESHCLUSTER'
 
 spec:
   setups:

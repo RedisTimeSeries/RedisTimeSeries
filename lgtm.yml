@@ -1,0 +1,9 @@
+extraction:
+  cpp:
+    prepare:
+      packages:
+        - libssl-dev
+    index:
+      build_command:
+        - make fetch
+        - make build
