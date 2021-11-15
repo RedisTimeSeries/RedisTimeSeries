@@ -69,6 +69,19 @@ def test_ts_add_encoding():
             e.assertEqual(TSInfo(r.execute_command('TS.INFO', 't1_bc')).chunk_type, ENCODING.encode())
 
 
+def test_different_chunk_size():
+    Env().skipOnCluster()
+    with Env().getConnection() as r:
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '0')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '-1000')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000000')
+
+        r.execute_command('TS.add', 'tester2', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000')
+
+
 def test_valid_labels():
     with Env().getClusterConnectionIfNeeded() as r:
         with pytest.raises(redis.ResponseError) as excinfo:

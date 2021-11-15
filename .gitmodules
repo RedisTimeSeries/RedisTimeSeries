@@ -7,4 +7,7 @@
 [submodule "deps/fast_double_parser"]
 	path = deps/fast_double_parser
 	url = https://github.com/lemire/fast_double_parser.git
+[submodule "deps/LibMR"]
+	path = deps/LibMR
+	url = https://github.com/RedisGears/LibMR.git
 

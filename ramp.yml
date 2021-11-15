@@ -20,7 +20,3 @@ capabilities:
     - clustering
     - reshard_rebalance
     - intershard_tls
-exclude_commands:
-    - ts.mrange
-    - ts.mget
-    - ts.queryindex

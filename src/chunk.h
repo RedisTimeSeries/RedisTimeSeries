@@ -73,8 +73,8 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
 void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
-// Gears
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
-void Uncompressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br);
+// LibMR
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
+void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
 #endif
