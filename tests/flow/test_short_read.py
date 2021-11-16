@@ -20,8 +20,6 @@ if platform.system() != 'Darwin':
     import gevent.socket
 import time
 
-Defaults.decode_responses = True
-
 CREATE_LOCAL_RDB_TARGET_DIR = '/tmp/test'
 BASE_RDBS_URL = 'http://redismodules.s3.amazonaws.com/redistimeseries/rdbs/'
 
@@ -347,7 +345,7 @@ def downloadFiles(target_dir):
     return True
 
 def test_ShortRead():
-    env = Env()
+    env = Env(decodeResponses=True)
     env.skipOnCluster()
 
     env.execute_command('FLUSHALL')
@@ -376,6 +374,7 @@ def test_ShortRead():
             fullfilePath = os.path.join(temp_dir, f)
             env.assertNotEqual(fullfilePath, None, message='testShortReadRTS')
             sendShortReads(env, fullfilePath)
+
 
 def sendShortReads(env, rdb_file):
     # Add some initial content to test backup/restore/discard when short read fails

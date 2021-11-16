@@ -178,7 +178,7 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs mr
+.PHONY: package tests unittests clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
@@ -190,11 +190,9 @@ rmutil:
 
 $(LIBRMUTIL): rmutil
 
-mr:
+$(LIBMR):
 	@echo Building $@...
 	$(SHOW) MODULE_NAME=timeseries $(MAKE) -C $(ROOT)/deps/LibMR
-
-$(LIBMR): mr
 
 libfast_double_parser_c:
 	@echo Building $@...
@@ -218,6 +216,10 @@ format:
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
+ifeq ($(DEPS),1)
+		-$(SHOW)$(MAKE) -C $(ROOT)/deps/LibMR clean
+		-$(SHOW)rm -rf $(ROOT)/deps/dragonbox/dragonbox.o # Directly delete the dragonbox build artifacts
+endif
 	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
 	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
 	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
