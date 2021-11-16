@@ -184,7 +184,9 @@ def test_del_with_rules(self):
         res = r.execute_command('ts.range', 'test_key_3', 50, 89)
         e.assertEqual(len(res), 3)
         assert res == [[50, b'10'], [60, b'10'], [80, b'10']]
-        assert r.execute_command("ts.del", "test_key_2", 58, 81) == 14
+        # Tests empty end bucket which is not the lastest bucket:
+        assert r.execute_command("ts.del", "test_key_2", 58, 79) == 12
+        assert r.execute_command("ts.del", "test_key_2", 80, 81) == 2
         res = r.execute_command('ts.range', 'test_key_3', 50, 89)
         e.assertEqual(len(res), 2)
         assert res == [[50, b'8'], [80, b'8']]

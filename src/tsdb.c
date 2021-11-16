@@ -593,6 +593,21 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
+static int ContinuousDeletion(RedisModuleCtx *ctx,
+                              RedisModuleString *key_str,
+                              timestamp_t start,
+                              timestamp_t end) {
+    RedisModuleKey *key;
+    Series *series;
+    if (!GetSeries(ctx, key_str, &key, &series, REDISMODULE_READ)) {
+        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        return TSDB_ERROR;
+    }
+
+    SeriesDelRange(series, start, end);
+    return TSDB_OK;
+}
+
 void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
     CompactionRule *rule = series->rules;
     if (!rule)
@@ -614,8 +629,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
         } else {
             const timestamp_t startTSWindowStart = CalcWindowStart(start_ts, ruleTimebucket);
             const timestamp_t endTSWindowStart = CalcWindowStart(end_ts, ruleTimebucket);
-            timestamp_t rule_deletion_start;
-            timestamp_t rule_deletion_end;
+            timestamp_t continuous_deletion_start;
+            timestamp_t continuous_deletion_end;
             double val = 0;
             bool is_empty;
             int rv;
@@ -635,19 +650,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
             if (is_empty) {
                 // first bucket should be deleted
-                rule_deletion_start = startTSWindowStart;
-            } else {
-                // first bucket needs update
-                rule_deletion_start = startTSWindowStart + ruleTimebucket;
+                continuous_deletion_start = startTSWindowStart;
+            } else { // first bucket needs update
+                // continuous deletion starts one bucket after startTSWindowStart
+                continuous_deletion_start = startTSWindowStart + ruleTimebucket;
                 if (!RuleSeriesUpsertSample(ctx, rule, startTSWindowStart, val)) {
                     continue;
                 }
-            }
-
-            // An optimization in case that end_ts on the same bucket as start_ts
-            if (startTSWindowStart == endTSWindowStart) {
-                rule_deletion_end = endTSWindowStart;
-                goto __continous_del;
             }
 
             // ---- handle end bucket ----
@@ -661,7 +670,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                         ctx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
-                rule_deletion_end = endTSWindowStart - ruleTimebucket;
+                // continuous deletion ends one bucket before endTSWindowStart
+                continuous_deletion_end = endTSWindowStart - ruleTimebucket;
             } else {
                 // deletion in old timebucket
                 rv = SeriesCalcRange(series,
@@ -677,11 +687,11 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                 }
 
                 if (is_empty) {
-                    // deletion in end timebucket
-                    rule_deletion_end = endTSWindowStart;
-                } else {
-                    // update in end timebucket
-                    rule_deletion_end = endTSWindowStart - ruleTimebucket;
+                    // continuous deletion ends in end timebucket
+                    continuous_deletion_end = endTSWindowStart;
+                } else { // update in end timebucket
+                    // continuous deletion ends one bucket before endTSWindowStart
+                    continuous_deletion_end = endTSWindowStart - ruleTimebucket;
                     if (!RuleSeriesUpsertSample(ctx, rule, endTSWindowStart, val)) {
                         continue;
                     }
@@ -689,16 +699,10 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             }
 
             // ---- handle continuous deletion ----
-__continous_del:
-            if (rule_deletion_end >= rule_deletion_start) {
-                RedisModuleKey *key;
-                Series *destSeries;
-                if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
-                    RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
-                    continue;
-                }
 
-                SeriesDelRange(destSeries, rule_deletion_start, rule_deletion_end);
+            if (continuous_deletion_end >= continuous_deletion_start) {
+                ContinuousDeletion(
+                    ctx, rule->destKey, continuous_deletion_start, continuous_deletion_end);
             }
         }
 
