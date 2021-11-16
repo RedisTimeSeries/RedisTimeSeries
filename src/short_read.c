@@ -32,7 +32,7 @@ void Restore_Globals() {
 }
 
 void Discard_Globals_Backup() {
-    RemoveAllIndexedMetrics_generic(labelsIndex_bkup, tsLabelIndex_bkup);
+    RemoveAllIndexedMetrics_generic(labelsIndex_bkup, &tsLabelIndex_bkup);
 
     RedisModule_FreeDict(NULL, labelsIndex_bkup);
     labelsIndex_bkup = NULL;

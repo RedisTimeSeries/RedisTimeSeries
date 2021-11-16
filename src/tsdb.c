@@ -238,15 +238,9 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
 
     if (unlikely(IsKeyIndexed(keyname))) {
-        // when doing a restore for a key the key shouldn't be in index (free should be called
-        // before on replace)
-        size_t len;
-        const char *str = RedisModule_StringPtrLen(keyname, &len);
-        RedisModule_Log(
-            ctx, "warning", "Trying to restore a key=%s, which is already in index", str);
-        RemoveIndexedMetric(keyname); // for safety
+        // Key is still in the index cause only free series being called, remove it if for safety
+        RemoveIndexedMetric(keyname);
     }
-
     IndexMetric(keyname, series->labels, series->labelsCount);
 
     RedisModule_CloseKey(key);
@@ -371,6 +365,7 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     }
 
     // Copy chunks
+    dst->chunks = RedisModule_CreateDict(NULL);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0);
     Chunk_t *curChunk;
     char *curKey;
@@ -384,7 +379,7 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     }
 
     dst->srcKey = NULL;
-    src->rules = NULL;
+    dst->rules = NULL;
 
     RemoveIndexedMetric(tokey); // in case of replace
     if (dst->labelsCount > 0) {
@@ -400,7 +395,6 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
 // it's only on the disk, in this case FreeSeries won't be called just the "del" keyspace
 // notification.
 void FreeSeries(void *value) {
-    printf("FreeSeries\n");
     Series *currentSeries = (Series *)value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;

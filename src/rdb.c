@@ -40,7 +40,6 @@
     })
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
-    printf("series_rdb_load\n");
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -52,7 +51,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     Series *series = NULL;
 
     CreateCtx cCtx = { 0 };
-    RedisModuleString *keyName = LoadString_IOError(io, goto err);
+    RedisModuleString *keyName = NULL;
+    keyName = LoadString_IOError(io, goto err);
+
     cCtx.retentionTime = LoadUnsigned_IOError(io, goto err);
     cCtx.chunkSizeBytes = LoadUnsigned_IOError(io, goto err);
     if (encver < TS_SIZE_RDB_VER) {

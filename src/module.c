@@ -1002,12 +1002,20 @@ void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
     }
 }
 
+void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, void *data) {
+    RedisModule_Log(ctx, "warning", "swapdb isn't supported by redis timeseries");
+    if ((!memcmp(&e, &RedisModuleEvent_FlushDB, sizeof(e)))) {
+        RedisModuleSwapDbInfo *ei = data;
+        REDISMODULE_NOT_USED(ei);
+    }
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
-    printf("notif=%s\n", event);
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before
         strcasecmp(event, "set") == 0 ||
-        strcasecmp(event, "expire") == 0 || strcasecmp(event, "evict") == 0 ||
+        strcasecmp(event, "expire") == 0 || strcasecmp(event, "expired") == 0 ||
+        strcasecmp(event, "evict") == 0 || strcasecmp(event, "evicted") == 0 ||
         strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
         CleanLastDeletedSeries(key);
@@ -1189,6 +1197,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         NotifyCallback);
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
 
     Initialize_RdbNotifications(ctx);
 
