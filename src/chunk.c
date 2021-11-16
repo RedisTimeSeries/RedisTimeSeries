@@ -259,7 +259,7 @@ static void Uncompressed_GenericSerialize(Chunk_t *chunk, void *ctx) {
 }
 
 static int Uncompressed_Deserialize(Chunk_t **chunk, void *ctx) {
-    Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
+    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
 
     uncompchunk->base_timestamp = LoadUnsigned_IOError(ctx, goto err);
     uncompchunk->num_samples = LoadUnsigned_IOError(ctx, goto err);

@@ -52,6 +52,7 @@ class RedisTimeSeriesSetup(paella.Setup):
 
         self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r tests/flow/requirements.txt")
+        self.pip_install("gevent")
 
 #----------------------------------------------------------------------------------------------
 

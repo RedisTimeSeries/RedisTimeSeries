@@ -33,8 +33,10 @@ void IndexInit() {
 void FreeLabels(void *value, size_t labelsCount) {
     Label *labels = (Label *)value;
     for (int i = 0; i < labelsCount; ++i) {
-        RedisModule_FreeString(NULL, labels[i].key);
-        RedisModule_FreeString(NULL, labels[i].value);
+        if (labels[i].key)
+            RedisModule_FreeString(NULL, labels[i].key);
+        if (labels[i].value)
+            RedisModule_FreeString(NULL, labels[i].value);
     }
     free(labels);
 }
@@ -228,20 +230,20 @@ void RemoveIndexedMetric(RedisModuleString *ts_key) {
 
 // Removes all indexed metrics
 void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
-                                     RedisModuleDict *_tsLabelIndex) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(_tsLabelIndex, "^", NULL, 0);
+                                     RedisModuleDict **_tsLabelIndex) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(*_tsLabelIndex, "^", NULL, 0);
     RedisModuleString *currentTSKey;
     while ((currentTSKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-        RemoveIndexedMetric_generic(currentTSKey, _labelsIndex, _tsLabelIndex, false);
+        RemoveIndexedMetric_generic(currentTSKey, _labelsIndex, *_tsLabelIndex, false);
         RedisModule_FreeString(NULL, currentTSKey);
     }
-    RedisModule_FreeDict(NULL, _tsLabelIndex);
-    _tsLabelIndex = RedisModule_CreateDict(NULL);
     RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(NULL, *_tsLabelIndex);
+    *_tsLabelIndex = RedisModule_CreateDict(NULL);
 }
 
 void RemoveAllIndexedMetrics() {
-    RemoveAllIndexedMetrics_generic(labelsIndex, tsLabelIndex);
+    RemoveAllIndexedMetrics_generic(labelsIndex, &tsLabelIndex);
 }
 
 int IsKeyIndexed(RedisModuleString *ts_key) {
