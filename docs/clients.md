@@ -13,7 +13,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [RedisLabs][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [RedisLabs][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
-| [redistimeseries-py][redistimeseries-py-url] | Python | BSD-3 | [RedisLabs][redistimeseries-py-author] | [![redistimeseries-py-stars]][redistimeseries-py-url] |
+| [redis-py][redis-py-url] | Python | MIT | [RedisLabs][redis-py-author] | [![redis-py-stars]][redis-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
 | [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] |
@@ -40,9 +40,9 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redistimeseries-go-author]: https://redislabs.com
 [redistimeseries-go-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-go.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
-[redistimeseries-py-url]: https://github.com/RedisTimeSeries/redistimeseries-py/
-[redistimeseries-py-author]: https://redislabs.com
-[redistimeseries-py-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-py.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[redis-py-url]: https://github.com/redis/redis-py/
+[redis-py-author]: https://redislabs.com
+[redis-py-stars]: https://img.shields.io/github/stars/redis/redis-py.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [NRedisTimeSeries-url]: https://github.com/RedisTimeSeries/NRedisTimeSeries/
 [NRedisTimeSeries-author]: https://redislabs.com
