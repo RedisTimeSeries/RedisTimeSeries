@@ -19,7 +19,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+        if (unlikely(raw_listRecord->recordType != GetListRecordType())) {
             RedisModule_Log(rctx,
                             "warning",
                             "Unexpected record type: %s",
@@ -32,7 +32,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+        if (unlikely(raw_listRecord->recordType != GetListRecordType())) {
             RedisModule_Log(rctx,
                             "warning",
                             "Unexpected record type: %s",
@@ -67,7 +67,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         size_t total_len = 0;
         for (int i = 0; i < len; i++) {
             Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-            if (raw_listRecord->recordType != GetListRecordType()) {
+            if (unlikely(raw_listRecord->recordType != GetListRecordType())) {
                 RedisModule_Log(rctx,
                                 "warning",
                                 "Unexpected record type: %s",
@@ -82,7 +82,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+        if (unlikely(raw_listRecord->recordType != GetListRecordType())) {
             RedisModule_Log(rctx,
                             "warning",
                             "Unexpected record type: %s",
@@ -93,7 +93,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            if (raw_record->recordType != GetSeriesRecordType()) {
+            if (unlikely(raw_record->recordType != GetSeriesRecordType())) {
                 continue;
             }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
