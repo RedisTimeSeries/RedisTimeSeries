@@ -249,11 +249,10 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RTS_LockRead();
 
     RedisModuleDict *result =
-        QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
+        QueryIndex(ts_staticCtx, predicates->predicates->list, predicates->predicates->count);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -264,13 +263,14 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
+        RedisModuleString *keyName =
+            RedisModule_CreateString(ts_staticCtx, currentKey, currentKeyLen);
+        const int status = SilentGetSeries(ts_staticCtx, keyName, &key, &series, REDISMODULE_READ);
 
-        RedisModule_FreeString(ctx, keyName);
+        RedisModule_FreeString(ts_staticCtx, keyName);
 
         if (!status) {
-            RedisModule_Log(ctx,
+            RedisModule_Log(ts_staticCtx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
                             (int)currentKeyLen,
@@ -286,9 +286,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
 
     RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(ctx, result);
+    RedisModule_FreeDict(ts_staticCtx, result);
     RTS_UnlockRead();
-    RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
 }
@@ -301,7 +300,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     const char **limitLabelsStr = calloc(predicates->limitLabelsSize, sizeof(char *));
     for (int i = 0; i < predicates->limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
@@ -310,7 +308,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RTS_LockRead();
 
     RedisModuleDict *result =
-        QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
+        QueryIndex(ts_staticCtx, predicates->predicates->list, predicates->predicates->count);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -321,12 +319,13 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
-        RedisModule_FreeString(ctx, keyName);
+        RedisModuleString *keyName =
+            RedisModule_CreateString(ts_staticCtx, currentKey, currentKeyLen);
+        const int status = SilentGetSeries(ts_staticCtx, keyName, &key, &series, REDISMODULE_READ);
+        RedisModule_FreeString(ts_staticCtx, keyName);
 
         if (!status) {
-            RedisModule_Log(ctx,
+            RedisModule_Log(ts_staticCtx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
                             (int)currentKeyLen,
@@ -352,10 +351,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         ListRecord_Add(series_list, key_record);
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(ctx, result);
+    RedisModule_FreeDict(ts_staticCtx, result);
     free(limitLabelsStr);
     RTS_UnlockRead();
-    RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
 }
@@ -368,10 +366,8 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-
     RedisModuleDict *result =
-        QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
+        QueryIndex(ts_staticCtx, predicates->predicates->list, predicates->predicates->count);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -385,9 +381,8 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(ctx, result);
+    RedisModule_FreeDict(ts_staticCtx, result);
     RTS_UnlockRead();
-    RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
 }

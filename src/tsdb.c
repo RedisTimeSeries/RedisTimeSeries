@@ -21,6 +21,7 @@
 
 static Series *lastDeletedSeries = NULL;
 static RedisModuleString *renameFromKey = NULL;
+RedisModuleCtx *ts_staticCtx;
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,

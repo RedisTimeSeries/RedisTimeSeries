@@ -1178,6 +1178,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
+    ts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
+
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }

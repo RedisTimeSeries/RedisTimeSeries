@@ -15,6 +15,8 @@
 #include "redismodule.h"
 #include "rts_lock.h"
 
+extern RedisModuleCtx *ts_staticCtx;
+
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
