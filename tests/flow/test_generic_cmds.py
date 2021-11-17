@@ -20,6 +20,7 @@ def init(env, r, compression="COMPRESSED"):
 
 def test_del():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -32,6 +33,7 @@ def test_del():
 
 def test_flush():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
 
@@ -51,6 +53,7 @@ def test_flush():
 
 def test_set():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
 
@@ -62,6 +65,7 @@ def test_set():
 
 def test_evict():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         info = r.execute_command('INFO')
         max_mem = info['used_memory'] + 1024*1024
@@ -86,6 +90,7 @@ def test_evict():
 
 def test_expire():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -101,6 +106,7 @@ def test_expire():
 
 def test_unlink():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -113,6 +119,7 @@ def test_unlink():
 
 def test_restore():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -132,6 +139,7 @@ def test_restore():
 
 def test_rename():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -153,6 +161,7 @@ def test_rename():
 
 def test_renamenx():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -174,6 +183,7 @@ def test_renamenx():
 
 def test_copy_compressed():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
@@ -210,6 +220,7 @@ def test_copy_compressed():
 
 def test_copy_uncompressed():
     env = Env()
+    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r, "UNCOMPRESSED")
         
