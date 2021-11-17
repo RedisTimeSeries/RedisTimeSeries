@@ -40,6 +40,7 @@
     })
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
+    RTS_LockWriteRecursive();
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -143,6 +144,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->lastChunk = chunk;
     }
 
+    RTS_UnlockWrite();
     return series;
 
 err:
@@ -171,6 +173,7 @@ err:
         }
     }
 
+    RTS_UnlockWrite();
     return NULL;
 }
 

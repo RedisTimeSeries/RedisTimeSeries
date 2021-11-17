@@ -9,6 +9,7 @@
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "query_language.h"
+#include "rts_lock.h"
 #include "tsdb.h"
 
 #include <assert.h>
@@ -249,7 +250,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     predicates->shouldReturnNull = true;
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModule_ThreadSafeContextLock(ctx);
+    RTS_LockRead();
 
     RedisModuleDict *result =
         QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
@@ -286,7 +287,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
-    RedisModule_ThreadSafeContextUnlock(ctx);
+    RTS_UnlockRead();
     RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
@@ -306,7 +307,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(ctx);
+    RTS_LockRead();
 
     RedisModuleDict *result =
         QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
@@ -353,7 +354,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(ctx);
+    RTS_UnlockRead();
     RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
@@ -378,14 +379,14 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     Record *series_list = ListRecord_Create(0);
 
-    RedisModule_ThreadSafeContextLock(ctx);
+    RTS_LockRead();
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         ListRecord_Add(series_list,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
-    RedisModule_ThreadSafeContextUnlock(ctx);
+    RTS_UnlockRead();
     RedisModule_FreeThreadSafeContext(ctx);
 
     return series_list;
@@ -533,7 +534,7 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     return REDISMODULE_OK;
 }
 
-bool IsMRCluster() {
+int IsMRCluster() {
     return MR_ClusterIsInClusterMode();
 }
 

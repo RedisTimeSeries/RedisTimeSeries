@@ -349,6 +349,7 @@ cleanup:
 }
 
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
+    RTS_LockWriteRecursive();
     Series *src = (Series *)value;
     Series *dst = (Series *)calloc(1, sizeof(Series));
     memcpy(dst, src, sizeof(Series));
@@ -385,6 +386,7 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
+    RTS_UnlockWrite();
     return dst;
 }
 
@@ -395,6 +397,7 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
 // it's only on the disk, in this case FreeSeries won't be called just the "del" keyspace
 // notification.
 void FreeSeries(void *value) {
+    RTS_LockWriteRecursive();
     Series *currentSeries = (Series *)value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
@@ -414,6 +417,7 @@ void FreeSeries(void *value) {
         freeLastDeletedSeries();
         lastDeletedSeries = currentSeries;
     }
+    RTS_UnlockWrite();
 }
 
 void FreeCompactionRule(void *value) {
