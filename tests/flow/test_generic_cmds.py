@@ -63,7 +63,9 @@ def test_set():
 def test_evict():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('CONFIG', 'SET', 'maxmemory', '1mb')
+        info = r.execute_command('INFO')
+        max_mem = info['used_memory'] + 1024*1024
+        assert r.execute_command('CONFIG', 'SET', 'maxmemory', str(max_mem) + 'b')
         assert r.execute_command('CONFIG', 'SET', 'maxmemory-policy', 'allkeys-lru')
         init(env, r)
 
@@ -77,6 +79,9 @@ def test_evict():
 
         res = r.execute_command('TS.QUERYINDEX', 'name=(mush)')
         env.assertEqual(res, [])
+
+        # restore maxmemory
+        assert r.execute_command('CONFIG', 'SET', 'maxmemory', '0')
 
 
 def test_expire():
