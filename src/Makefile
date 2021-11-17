@@ -233,7 +233,7 @@ $(DRAGONBOX_DIR)/dragonbox.o: $(DRAGONBOX_DIR)/dragonbox.cpp $(DRAGONBOX_DIR)/dr
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@ $(LD_LIBS)
 
 OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
 

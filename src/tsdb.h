@@ -13,6 +13,7 @@
 #include "indexer.h"
 #include "query_language.h"
 #include "redismodule.h"
+#include "rts_lock.h"
 
 typedef struct CompactionRule
 {
