@@ -32,5 +32,5 @@ source: $(SRCDIR)/configure
 
 .PHONY: source
 
-$(SRCDIR)/configure:
+$(SRCDIR)/configure: $(BIN_DIRS)
 	$(SHOW)cd $(SRCDIR); ./autogen.sh

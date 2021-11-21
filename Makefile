@@ -1,5 +1,8 @@
+
 ROOT=.
 MK.pyver:=3
+
+MK_ALL_TARGETS=bindirs deps build package
 
 ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
 $(error Submodules not present. Please run 'git submodule update --init --recursive')
@@ -14,7 +17,7 @@ include $(MK)/rules
 
 .PHONY: all setup fetch build clean deps test pack help
 
-all: fetch build
+all: fetch deps build
 
 help:
 	@$(MAKE) -C src help

@@ -12,6 +12,8 @@ override DEBUG:=1
 export DEBUG
 endif
 
+MK_ALL_TARGETS=bindirs deps build package
+
 include $(ROOT)/deps/readies/mk/main
 
 LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/LibMR
@@ -172,9 +174,6 @@ include $(MK)/defs
 #----------------------------------------------------------------------------------------------
 
 MISSING_DEPS:=
-ifeq ($(wildcard $(LIBMR)),)
-MISSING_DEPS += $(LIBMR)
-endif
 ifeq ($(wildcard $(HIREDIS)),)
 MISSING_DEPS += $(HIREDIS)
 endif
@@ -189,6 +188,9 @@ MISSING_DEPS += $(DRAGONBOX)
 endif
 ifeq ($(wildcard $(RMUTIL)),)
 MISSING_DEPS += $(RMUTIL)
+endif
+ifeq ($(wildcard $(LIBMR)),)
+MISSING_DEPS += $(LIBMR)
 endif
 
 ifneq ($(MISSING_DEPS),)
@@ -239,7 +241,7 @@ $(HIREDIS):
 
 libmr: $(LIBMR)
 
-$(LIBMR):
+$(LIBMR): $(LIBEVENT) $(HIREDIS)
 	@echo Building $@ ...
 	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG=''
 
