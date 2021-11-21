@@ -87,7 +87,8 @@ commands:
           name: Install Arlecchino
           command: |
             cd
-            export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"
+            echo 'export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i /home/circleci/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"' > /tmp/arlecchino.sh
+            sudo mv /tmp/arlecchino.sh /etc/profile.d
             sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
 
   save-tests-logs:
