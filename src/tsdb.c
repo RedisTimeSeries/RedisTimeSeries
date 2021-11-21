@@ -378,6 +378,8 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
         }
     }
 
+    RedisModule_DictIteratorStop(iter);
+
     dst->srcKey = NULL;
     dst->rules = NULL;
 
