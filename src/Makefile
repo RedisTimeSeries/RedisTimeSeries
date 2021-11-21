@@ -14,9 +14,27 @@ endif
 
 include $(ROOT)/deps/readies/mk/main
 
+LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/LibMR
+include $(ROOT)/build/LibMR/Makefile.defs
+
+HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
+include $(ROOT)/build/hiredis/Makefile.defs
+
+LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
+include $(ROOT)/build/libevent/Makefile.defs
+
+DRAGONBOX_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/dragonbox
+include $(ROOT)/build/dragonbox/Makefile.defs
+
+FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
+include $(ROOT)/build/fast_double_parser_c/Makefile.defs
+
+RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
+include $(ROOT)/build/rmutil/Makefile.defs
+
 #----------------------------------------------------------------------------------------------  
 
-define HELP
+define HELPTEXT
 make setup         # install packages required for build
 make fetch         # download and prepare dependant modules
 
@@ -34,13 +52,17 @@ make clean         # remove binary files
 make deps          # build dependant modules
 make all           # build all libraries and packages
 
-make test          # run tests
+make unit_tests    # run unit tests
+
+make flow_tests    # run tests
   TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
-  GEN=0|1          # run general tests on a standalone Redis topology
-  AOF=0|1          # run AOF persistency tests on a standalone Redis topology
-  SLAVES=0|1       # run replication tests on standalone Redis topology
-  CLUSTER=0|1      # run general tests on a OSS Redis Cluster topology
+  SIMPLE=1         # shortcut for GEN=1 AOF=0 SLAVES=0 OSS_CLUSTER=0
+  GEN=1            # run general tests on a standalone Redis topology
+  AOF=1            # run AOF persistency tests on a standalone Redis topology
+  SLAVES=1         # run replication tests on standalone Redis topology
+  OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
+  RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
 
@@ -60,31 +82,17 @@ SRCDIR=.
 
 #----------------------------------------------------------------------------------------------  
 
-PREFIX ?= /usr/local
-INSTALL_LIB:=$(PREFIX)/lib
-INSTALL:=/usr/bin/install
 PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
-
-# set environment variable RM_INCLUDE_DIR to the location of redismodule.h
-SDK_DIR=$(ROOT)/deps/RedisModulesSDK
-RMUTIL_LIBDIR=$(BINROOT)/rmutil
-LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
-MR_LIBDIR=$(ROOT)/deps/LibMR/src
-LIBMR=$(MR_LIBDIR)/libmr.a
-FAST_DOUBLE_PARSER_LIBDIR=$(BINROOT)/fast_double_parser_c
-FAST_DOUBLE_PARSER_SRCDIR=$(SRCDIR)/fast_double_parser_c
-LIBFAST_DOUBLE_PARSER=$(FAST_DOUBLE_PARSER_LIBDIR)/libfast_double_parser_c.a
 
 #----------------------------------------------------------------------------------------------
 
 TARGET=$(BINROOT)/redistimeseries.so
-UNITTESTS_RUNNER=$(BINROOT)/unittests_runner
+UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
 CC=gcc
-CXX=g++
 
 CC_FLAGS = \
-	-I$(SDK_DIR) \
+	-I$(ROOT)/deps/RedisModulesSDK \
 	-I$(ROOT)/deps \
 	-Wall \
 	-fPIC \
@@ -96,10 +104,15 @@ CC_FLAGS = \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
 	-DREDISMODULE_EXPERIMENTAL_API
 
-CXXFLAGS = -std=c++17 -Wall -fPIC -pedantic
-
 LD_FLAGS += 
-LD_LIBS += -lc -lm -lpthread -L$(RMUTIL_LIBDIR) -lrmutil -L$(FAST_DOUBLE_PARSER_LIBDIR) -lfast_double_parser_c -lstdc++ -L$(MR_LIBDIR) -lmr
+LD_LIBS += \
+	  $(LIBMR) \
+	  $(FAST_DOUBLE_PARSER_C) \
+	  $(DRAGONBOX) \
+	  $(LIBEVENT_LIBS) \
+	  $(HIREDIS) \
+	  $(RMUTIL) \
+	  -lc -lm -lpthread -lstdc++
 
 ifeq ($(OS),linux)
 LD_LIBS += -lssl -lcrypto
@@ -113,21 +126,16 @@ endif
 
 ifeq ($(PROFILE),1)
 CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
-CXXFLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -ggdb -O0 -DDEBUG
-CXXFLAGS += -g -ggdb -O0 -DDEBUG
 LD_FLAGS += -g
 else ifeq ($(PROFILE),1)
 CC_FLAGS += -O2
-CXXFLAGS += -O2
 else
 CC_FLAGS += -O3
-CXXFLAGS += -O3
 endif
-
 
 CC_FLAGS += $(CC_FLAGS.coverage)
 LD_FLAGS += $(LD_FLAGS.coverage)
@@ -137,9 +145,13 @@ _SOURCES=\
 	compaction.c \
 	compressed_chunk.c \
 	config.c \
+	endianconv.c \
+	filter_iterator.c \
 	generic_chunk.c \
 	gorilla.c \
 	indexer.c \
+	libmr_integration.c \
+	libmr_commands.c \
 	module.c \
 	parse_policies.c \
 	query_language.c \
@@ -147,29 +159,11 @@ _SOURCES=\
 	rdb.c \
 	resultset.c \
 	tsdb.c \
-	series_iterator.c \
-	filter_iterator.c \
-	libmr_integration.c \
-	libmr_commands.c
-
-_TEST_SOURCES=\
-	unittests.c \
-	endianconv.c
-
-_TEST_FILES=\
-	unittests.c \
-	unittests_parse_policies.c \
-	unittests_uncompressed_chunk.c \
-	unittests_compressed_chunk.c \
-	unittests_parse_duplicate_policy.c
+	series_iterator.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
-
-TEST_SOURCES=$(addprefix $(SRCDIR)/,$(_TEST_SOURCES))
-TEST_FILES=$(addprefix $(SRCDIR)/,$(_TEST_FILES))
-TEST_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(TEST_SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
 
@@ -177,108 +171,186 @@ include $(MK)/defs
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package tests unittests clean all install uninstall docker bindirs mr
+MISSING_DEPS:=
+ifeq ($(wildcard $(LIBMR)),)
+MISSING_DEPS += $(LIBMR)
+endif
+ifeq ($(wildcard $(HIREDIS)),)
+MISSING_DEPS += $(HIREDIS)
+endif
+ifeq ($(wildcard $(LIBEVENT)),)
+MISSING_DEPS += $(LIBEVENT)
+endif
+ifeq ($(wildcard $(FAST_DOUBLE_PARSER_C)),)
+MISSING_DEPS += $(FAST_DOUBLE_PARSER_C)
+endif
+ifeq ($(wildcard $(DRAGONBOX)),)
+MISSING_DEPS += $(DRAGONBOX)
+endif
+ifeq ($(wildcard $(RMUTIL)),)
+MISSING_DEPS += $(RMUTIL)
+endif
+
+ifneq ($(MISSING_DEPS),)
+DEPS=1
+endif
+
+DEPENDENCIES=rmutil libmr hiredis libevent fast_double_parser_c dragonbox
+
+ifneq ($(filter all deps $(DEPENDENCIES) pack,$(MAKECMDGOALS)),)
+DEPS=1
+endif
+
+.PHONY: deps $(DEPENDENCIES)
+
+#----------------------------------------------------------------------------------------------
+
+.PHONY: package flow_tests unit_tests clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
 include $(MK)/rules
 
-rmutil:
-	@echo Building $@...
-	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
+#----------------------------------------------------------------------------------------------
 
-$(LIBRMUTIL): rmutil
+ifeq ($(DEPS),1)
 
-mr:
-	@echo Building $@...
-	$(SHOW) MODULE_NAME=timeseries $(MAKE) -C $(ROOT)/deps/LibMR
+.PHONY: rmutil libmr hiredis dragonbox fast_double_parser_c
 
-$(LIBMR): mr
+deps: $(RMUTIL) $(LIBEVENT) $(HIREDIS) $(LIBMR) $(FAST_DOUBLE_PARSER_C) $(DRAGONBOX)
 
-libfast_double_parser_c:
-	@echo Building $@...
-	$(SHOW)$(MAKE) -C $(ROOT)/src/fast_double_parser_c
+rmutil: $(RMUTIL)
 
-$(LIBFAST_DOUBLE_PARSER): libfast_double_parser_c
+$(RMUTIL):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil DEBUG=''
 
-docker_lint:
-	$(SHOW)docker build -t llvm-toolset -f llvm.Dockerfile .
-	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+libevent: $(LIBEVENT)
 
-lint:
-	$(SHOW)clang-format -Werror -n $(SOURCES)
-	$(SHOW)clang-format -Werror -n $(HEADERS)
-	$(SHOW)clang-format -Werror -n $(TEST_FILES)
+$(LIBEVENT):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG=''
 
-format:
-	$(SHOW)clang-format -i $(SOURCES)
-	$(SHOW)clang-format -i $(HEADERS)
-	$(SHOW)clang-format -i $(TEST_FILES)
+hiredis: $(HIREDIS)
+
+$(HIREDIS):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG=''
+
+libmr: $(LIBMR)
+
+$(LIBMR):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG=''
+
+dragonbox: $(DRAGONBOX)
+
+$(DRAGONBOX):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG=''
+
+fast_double_parser_c: $(FAST_DOUBLE_PARSER_C)
+
+$(FAST_DOUBLE_PARSER_C):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE)  --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG=''
+
+#----------------------------------------------------------------------------------------------
+
+else
+
+deps: ;
+
+endif # DEPS
+
+#----------------------------------------------------------------------------------------------
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
-	-$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil clean
-	-$(SHOW)$(MAKE) -C $(FAST_DOUBLE_PARSER_SRCDIR) clean
-	-$(SHOW)rm -f $(TARGET) $(UNITTESTS_RUNNER)
+	-$(SHOW)rm -f $(TARGET)
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil  DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 
 -include $(CC_DEPS)
-
-DRAGONBOX_DIR=$(ROOT)/deps/dragonbox
-
-$(DRAGONBOX_DIR)/dragonbox.o: $(DRAGONBOX_DIR)/dragonbox.cpp $(DRAGONBOX_DIR)/dragonbox.h
-	$(SHOW)$(CXX) $(CXXFLAGS) -c $(DRAGONBOX_DIR)/dragonbox.cpp -o $(DRAGONBOX_DIR)/dragonbox.o
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-OBJECTS += $(DRAGONBOX_DIR)/dragonbox.o
-
-$(TARGET): $(BIN_DIRS) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(LIBFAST_DOUBLE_PARSER)
-
+$(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
-dragonbox : $(DRAGONBOX_DIR)/dragonbox.o
-	$(SHOW)$(CC) -o $@ $(DRAGONBOX_DIR)/dragonbox.o
 #----------------------------------------------------------------------------------------------
 
-TEST_REPORT_DIR ?= $(PWD)
+docker_lint:
+	$(SHOW)docker build -t llvm-toolset -f $(ROOT)/build/docker/llvm.Dockerfile .
+	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+
+lint:
+	$(SHOW)clang-format -Werror -n $(SOURCES) $(HEADERS)
+
+format:
+	$(SHOW)clang-format -i $(SOURCES) $(HEADERS)
+
+#----------------------------------------------------------------------------------------------
+
+$(UNITTESTS_RUNNER)	: $(TARGET)
+	$(SHOW)$(MAKE) -C ../tests/unit
+
+unit_tests: $(UNITTESTS_RUNNER)
+	@echo Running unit tests...
+	$(SHOW)$<
+
+#----------------------------------------------------------------------------------------------
 
 ifeq ($(SIMPLE),1)
 export GEN=1
 export SLAVES=0
 export AOF=0
-export CLUSTER=0
+export OSS_CLUSTER=0
 else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
-export CLUSTER ?= 0
+export OSS_CLUSTER ?= 1
 endif
 
-tests: #$(TARGET)
+ifneq ($(RLEC),1)
+
+flow_tests: #$(TARGET)
 ifeq ($(COV),1)
 	$(COVERAGE_RESET)
 endif
 	$(SHOW)\
-		MODULE=$(realpath $(TARGET)) \
-		CLUSTER=$(CLUSTER) \
-		GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) \
-		VALGRIND=$(VALGRIND) \
-		$(ROOT)/tests/flow/tests.sh
+	MODULE=$(realpath $(TARGET)) \
+	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	VALGRIND=$(VALGRIND) \
+	$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)
 endif
 
-$(UNITTESTS_RUNNER)	: $(TARGET) $(OBJECTS) $(LIBRMUTIL) $(LIBMR) $(TEST_OBJECTS)
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(TEST_OBJECTS) $(LIBMR) $(LD_LIBS)
+else # RLEC
 
-unittests: $(UNITTESTS_RUNNER)
-	@echo Running unit tests...
-	$(SHOW)$<
+flow_tests: #$(TARGET)
+ifeq ($(COV),1)
+	$(COVERAGE_RESET)
+endif
+	$(SHOW)RLEC=1 $(ROOT)/tests/flow/tests.sh
+ifeq ($(COV),1)
+	$(COVERAGE_COLLECT_REPORT)
+endif
 
+endif # RLEC
+
+#----------------------------------------------------------------------------------------------
 
 BENCHMARK_ARGS = redisbench-admin run-local
 
@@ -286,20 +358,21 @@ ifneq ($(REMOTE),)
 	BENCHMARK_ARGS = redisbench-admin run-remote 
 endif
 
-BENCHMARK_ARGS += --module_path $(realpath $(TARGET)) \
-				  --required-module timeseries \
-				  --dso $(realpath $(TARGET))
+BENCHMARK_ARGS += \
+	--module_path $(realpath $(TARGET)) \
+	--required-module timeseries \
+	--dso $(realpath $(TARGET))
+
 ifneq ($(BENCHMARK),)
-	BENCHMARK_ARGS += --test $(BENCHMARK)
+BENCHMARK_ARGS += --test $(BENCHMARK)
 endif
 
 ifneq ($(BENCH_ARGS),)
-	BENCHMARK_ARGS += $(BENCH_ARGS)
+BENCHMARK_ARGS += $(BENCH_ARGS)
 endif
 
 benchmark: $(TARGET)
-	cd ../tests/benchmarks; $(BENCHMARK_ARGS) ; cd ../../src
-
+	@(SHOW)set -e; cd tests/benchmarks; $(BENCHMARK_ARGS)
 
 #----------------------------------------------------------------------------------------------
 
@@ -316,9 +389,6 @@ run_dev: $(TARGET)
 
 gdb: $(TARGET)
 	$(SHOW)gdb --args `command -v redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
-
-cgdb: $(TARGET)
-	$(SHOW)cgdb --args `command -v redis-server` --loadmodule $(realpath $(TARGET)) --dir /tmp
 
 #----------------------------------------------------------------------------------------------
 # To see more kinds of leaks add --show-leak-kinds=all to args
@@ -362,8 +432,8 @@ docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
 coverage:
-	$(SHOW)DEBUG=1 COVERAGE=1 make tests
-	$(SHOW)DEBUG=1 COVERAGE=1 make unittests
+	$(SHOW)DEBUG=1 COVERAGE=1 make unit_tests
+	$(SHOW)DEBUG=1 COVERAGE=1 make flow_tests
 	$(SHOW)mkdir -p tmp/lcov
 	$(SHOW)lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
 	$(SHOW)lcov -l tmp/lcov/hiredis.info

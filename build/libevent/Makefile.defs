@@ -1,0 +1,6 @@
+
+LIBEVENT=$(LIBEVENT_BINDIR)/.libs/libevent.a
+
+LIBEVENT_LIBS=\
+	$(LIBEVENT_BINDIR)/.libs/libevent_pthreads.a \
+	$(LIBEVENT_BINDIR)/.libs/libevent.a

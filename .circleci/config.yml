@@ -73,9 +73,22 @@ commands:
           command: ./system-setup.py
       - run:
           name: Install Redis
+          shell: /bin/bash -l -eo pipefail
           command: |
-            bash -l -c "python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>"
+            python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>"
             redis-server --version
+
+  install-arlecchino:
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "2a:11:3f:16:9f:ab:90:34:6b:51:28:f5:b7:3a:d1:6d"
+      - run:
+          name: Install Arlecchino
+          command: |
+            cd
+            export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"
+            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
 
   save-tests-logs:
     steps:
@@ -130,19 +143,19 @@ commands:
           name: Unit Test
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c "make unittests TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
+            bash -l -c "make unit_tests <<parameters.test_params>> SHOW=1"
       - run:
-          name: Flow Test
+          name: Flow test
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
             mkdir -p ~/workspace/tests
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests <<parameters.test_params>> SHOW=1"
+            bash -l -c "make flow_test <<parameters.test_params>> SHOW=1"
       - run:
-          name: Run flow with LibMR
+          name: Flow tests on OSS cluster
           no_output_timeout: 30m
           command: |
-            bash -l -c "make test TEST_REPORT_DIR=$HOME/workspace/tests GEN=0 CLUSTER=1 <<parameters.test_params>> SHOW=1 V=2"
+            bash -l -c "make flow_test OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1"
       - save-tests-logs
 
   build-platforms-steps:
@@ -154,7 +167,6 @@ commands:
       - setup-executor
       - checkout
       - setup-automation
-      - install-prerequisites
       - run:
           name: Build for platform
           command: |
@@ -185,7 +197,7 @@ commands:
       - setup-automation
       - run:
           name: Install Docker
-          command: bash <(curl -fsSL https://raw.githubusercontent.com/docker/docker-install/master/install.sh)
+          command: bash -l -c "./deps/readies/bin/getdocker"
       - run:
           name: Build for platform
           command: |
@@ -261,7 +273,7 @@ jobs:
     resource_class: xlarge
     steps:
       - build-steps:
-          platform: debian
+          platform: bullseye
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
@@ -282,7 +294,7 @@ jobs:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
     steps:
       - build-steps:
-          platform: debian
+          platform: bullseye
       - persist-artifacts
 
   build-platforms:
@@ -342,6 +354,51 @@ jobs:
             sudo make -C build/docker publish
           no_output_timeout: 20m
 
+  test-rlec:
+    machine:
+      enabled: true
+      image: ubuntu-2004:202010-01
+      resource_class: large
+    working_directory: ~/RedisTimeSeries
+    steps:
+      - early-returns
+      - checkout-all
+      - run:
+          name: Install prerequisites
+          command: |
+            sudo ./deps/readies/bin/getpy3
+            sudo ./system-setup.py
+            sudo ./deps/readies/bin/getredis
+            sudo ./deps/readies/bin/getdocker --just-enable-exp
+            docker version
+      - install-arlecchino
+      - run:
+          name: Build
+          command: |
+            sudo bash -l -c "make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
+            sudo bash -l -c "./sbin/getgears"
+          no_output_timeout: 30m
+      - run:
+          name: Start RLEC
+          command: |
+            cd
+            sudo mkdir -p rlec
+            sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
+            sudo bash -l -c "rlec start --os bionic"
+      - run:
+          name: Flow Test
+          no_output_timeout: 30m
+          command: |
+            sudo python3 -m pip list
+            sudo mkdir -p ~/workspace/tests
+            sudo bash -l -c "make test RLEC=1 SHOW=1"
+      - run:
+          name: Run flow with gears
+          no_output_timeout: 30m
+          command: |
+            sudo bash -l -c "make test RLEC=1 GEARS=1 SHOW=1 V=2"
+      - save-tests-logs
+
   coverage:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -349,20 +406,17 @@ jobs:
       - early-returns
       - checkout-all
       - install-prerequisites
+      - build-steps:
+          platform: bullseye
+          build_params: COV=1
+		  test_params: COV=1
       - run:
-          name: Build & Test
+          name: Upload coverage data
           command: |
-            bash -l -c "make build COV=1 SHOW=1"
-            bash -l -c "make test COV=1"
             bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov) -f bin/linux-x64-debug-cov/cov.info
       - store_artifacts:
           path: coverage
           destination: coverage
-      - run:
-          name: Test with LibMR
-          command: |
-            bash -l -c "make test COV=1 CLUSTER=1 SHOW=1"
-            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov) -f bin/linux-x64-debug-cov/cov.info
 
   deploy-artifacts:
     parameters:
@@ -521,6 +575,8 @@ workflows:
       - lint:
           <<: *on-any-branch
       - build:
+          <<: *on-any-branch
+      - test-rlec:
           <<: *on-any-branch
       - valgrind:
           requires:
