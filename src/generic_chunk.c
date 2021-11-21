@@ -189,3 +189,29 @@ int timestamp_binary_search(const uint64_t *array, int size, uint64_t key) {
     // if we reach here, then element was not present
     return -1;
 }
+
+char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
+    MRError *err;
+    size_t size = 0;
+    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
+    char *ret = malloc(size);
+    memcpy(ret, temp, size);
+    if (len != NULL) {
+        *len = size;
+    }
+    return ret;
+}
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val) {
+    MRError *err;
+    MR_SerializationCtxWriteLongLong(sctx, val, &err);
+}
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
+                                           const char *buff,
+                                           size_t len) {
+    MRError *err;
+    MR_SerializationCtxWriteBuffer(sctx, buff, len, &err);
+}

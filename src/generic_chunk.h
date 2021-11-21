@@ -9,6 +9,7 @@
 
 #include "LibMR/src/mr.h"
 #include "consts.h"
+#include "load_io_error_macros.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -33,24 +34,6 @@ typedef void ChunkIter_t;
 // chunk by uncompressing it into a *un*compressed chunk and returning a reverse iterator on that
 // "temporary" uncompressed chunk.
 #define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
-
-#define LoadUnsigned_IOError(rdb, cleanup_exp)                                                     \
-    __extension__({                                                                                \
-        uint64_t res = RedisModule_LoadUnsigned((rdb));                                            \
-        if (RedisModule_IsIOError(rdb)) {                                                          \
-            cleanup_exp;                                                                           \
-        }                                                                                          \
-        (res);                                                                                     \
-    })
-
-#define LoadStringBuffer_IOError(rdb, str, cleanup_exp)                                            \
-    __extension__({                                                                                \
-        char *res = RedisModule_LoadStringBuffer((rdb), (str));                                    \
-        if (RedisModule_IsIOError(rdb)) {                                                          \
-            cleanup_exp;                                                                           \
-        }                                                                                          \
-        (res);                                                                                     \
-    })
 
 typedef enum CHUNK_TYPES_T
 {

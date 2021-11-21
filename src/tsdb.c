@@ -83,6 +83,11 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->chunkSizeBytes = cCtx->chunkSizeBytes;
     newSeries->retentionTime = cCtx->retentionTime;
+    newSeries->srcKey = NULL;
+    newSeries->rules = NULL;
+    newSeries->lastTimestamp = 0;
+    newSeries->lastValue = 0;
+    newSeries->totalSamples = 0;
     newSeries->labels = cCtx->labels;
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;

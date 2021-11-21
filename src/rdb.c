@@ -7,37 +7,11 @@
 
 #include "consts.h"
 #include "endianconv.h"
+#include "load_io_error_macros.h"
 
 #include <inttypes.h>
 #include <string.h>
 #include <rmutil/alloc.h>
-
-#define LoadDouble_IOError(rdb, cleanup_exp)                                                       \
-    __extension__({                                                                                \
-        double res = RedisModule_LoadDouble((rdb));                                                \
-        if (RedisModule_IsIOError(rdb)) {                                                          \
-            cleanup_exp;                                                                           \
-        }                                                                                          \
-        (res);                                                                                     \
-    })
-
-#define LoadUnsigned_IOError(rdb, cleanup_exp)                                                     \
-    __extension__({                                                                                \
-        uint64_t res = RedisModule_LoadUnsigned((rdb));                                            \
-        if (RedisModule_IsIOError(rdb)) {                                                          \
-            cleanup_exp;                                                                           \
-        }                                                                                          \
-        (res);                                                                                     \
-    })
-
-#define LoadString_IOError(rdb, cleanup_exp)                                                       \
-    __extension__({                                                                                \
-        RedisModuleString *res = RedisModule_LoadString((rdb));                                    \
-        if (RedisModule_IsIOError(rdb)) {                                                          \
-            cleanup_exp;                                                                           \
-        }                                                                                          \
-        (res);                                                                                     \
-    })
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
