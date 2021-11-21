@@ -10,6 +10,7 @@ remote:
   - setup: redistimeseries-m5
 
 setups:
+  - oss-cluster-05-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
@@ -25,6 +26,7 @@ clientconfig:
   - parameters:
     - workers: 32
     - max-rps: 648
+    - print-interval: 2500
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_single-groupby-5-1-1_10000.dat"
 
 exporter:
