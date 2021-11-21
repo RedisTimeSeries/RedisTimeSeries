@@ -16,6 +16,8 @@ MK_ALL_TARGETS=bindirs deps build package
 
 include $(ROOT)/deps/readies/mk/main
 
+#----------------------------------------------------------------------------------------------  
+
 LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
 
@@ -268,8 +270,13 @@ endif # DEPS
 #----------------------------------------------------------------------------------------------
 
 clean:
+ifeq ($(ALL),1)
+	-$(SHOW)rm -rf $(BINDIR) $(TARGET)
+else
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 	-$(SHOW)rm -f $(TARGET)
+endif
+ifdef ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil  DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
@@ -277,6 +284,7 @@ clean:
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
+endif
 
 -include $(CC_DEPS)
 
@@ -291,15 +299,19 @@ $(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 
 #----------------------------------------------------------------------------------------------
 
+NO_LINT_PATTERNS=endianconv
+
+LINT_SOURCES=$(call filter-out2,$(NO_LINT_PATTERNS),$(SOURCES) $(HEADERS))
+
 docker_lint:
 	$(SHOW)docker build -t llvm-toolset -f $(ROOT)/build/docker/llvm.Dockerfile .
 	$(SHOW)docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
 
 lint:
-	$(SHOW)clang-format -Werror -n $(SOURCES) $(HEADERS)
+	$(SHOW)clang-format -Werror -n $(LINT_SOURCES)
 
 format:
-	$(SHOW)clang-format -i $(SOURCES) $(HEADERS)
+	$(SHOW)clang-format -i $(LINT_SOURCES)
 
 #----------------------------------------------------------------------------------------------
 

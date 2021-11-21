@@ -36,12 +36,7 @@ include $(MK)/defs
 
 CC=gcc
 
-_SOURCES=\
-	unittests.c \
-	unittests_parse_policies.c \
-	unittests_uncompressed_chunk.c \
-	unittests_compressed_chunk.c \
-	unittests_parse_duplicate_policy.c
+_SOURCES=unittests.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
@@ -88,7 +83,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 
 clean:
 ifeq ($(ALL),1)
@@ -97,6 +92,10 @@ else
 	-$(SHOW)find $(BINDIR) -name '*.[oadh]' -type f -delete
 	$(SHOW)rm -f $(TARGET)
 endif
+
+run: $(TARGET)
+	@echo Running unit tests ...
+	$(SHOW)$<
 
 #----------------------------------------------------------------------------------------------
 

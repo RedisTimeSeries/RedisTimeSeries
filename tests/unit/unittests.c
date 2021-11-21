@@ -3,7 +3,10 @@
  *
  * This file is available under the Redis Labs Source Available License Agreement
  */
+#define REDISMODULE_MAIN
+
 #include "minunit.h"
+
 #include "parse_policies.h"
 #include "unittests_compressed_chunk.c"
 #include "unittests_parse_duplicate_policy.c"
