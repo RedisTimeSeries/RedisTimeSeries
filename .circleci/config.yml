@@ -150,12 +150,12 @@ commands:
           command: |
             python3 -m RLTest --version
             mkdir -p ~/workspace/tests
-            bash -l -c "make flow_test <<parameters.test_params>> SHOW=1"
+            bash -l -c "make flow_tests <<parameters.test_params>> SHOW=1"
       - run:
           name: Flow tests on OSS cluster
           no_output_timeout: 30m
           command: |
-            bash -l -c "make flow_test OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1"
+            bash -l -c "make flow_tests OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1"
       - save-tests-logs
 
   build-platforms-steps:
@@ -376,7 +376,6 @@ jobs:
           name: Build
           command: |
             sudo bash -l -c "make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1"
-            sudo bash -l -c "./sbin/getgears"
           no_output_timeout: 30m
       - run:
           name: Start RLEC
@@ -391,12 +390,7 @@ jobs:
           command: |
             sudo python3 -m pip list
             sudo mkdir -p ~/workspace/tests
-            sudo bash -l -c "make test RLEC=1 SHOW=1"
-      - run:
-          name: Run flow with gears
-          no_output_timeout: 30m
-          command: |
-            sudo bash -l -c "make test RLEC=1 GEARS=1 SHOW=1 V=2"
+            sudo bash -l -c "make flow_tests RLEC=1 SHOW=1"
       - save-tests-logs
 
   coverage:
