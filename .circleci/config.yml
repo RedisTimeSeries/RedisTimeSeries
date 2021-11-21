@@ -409,7 +409,7 @@ jobs:
       - build-steps:
           platform: bullseye
           build_params: COV=1
-		  test_params: COV=1
+          test_params: COV=1
       - run:
           name: Upload coverage data
           command: |
