@@ -921,6 +921,45 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static inline bool is_obsolete(timestamp_t ts,
+                               timestamp_t lastTimestamp,
+                               timestamp_t retentionTime) {
+    return (lastTimestamp > retentionTime) && (ts < lastTimestamp - retentionTime);
+}
+
+static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
+                                                  const Series *series,
+                                                  const RangeArgs *args) {
+    bool is_valid = true;
+    if (!series->rules)
+        return true;
+
+    // Verify startTimestamp in retention period
+    if (is_obsolete(args->startTimestamp, series->lastTimestamp, series->retentionTime)) {
+        is_valid = false;
+    }
+
+    // Verify all compaction's buckets are in the retention period
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t curAggWindowStart = CalcWindowStart(args->startTimestamp, ruleTimebucket);
+        if (is_obsolete(curAggWindowStart, series->lastTimestamp, series->retentionTime)) {
+            is_valid = false;
+        }
+        rule = rule->nextRule;
+    }
+
+    if (unlikely(!is_valid)) {
+        RTS_ReplyGeneralError(
+            ctx,
+            "TSDB: Can't delete an event which is older than retention time, in such case no "
+            "valid way to update the downsample");
+    }
+
+    return is_valid;
+}
+
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -937,6 +976,11 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key;
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
     if (!status) {
+        return REDISMODULE_ERR;
+    }
+
+    if (unlikely(!verify_compaction_del_possible(ctx, series, &args))) {
+        RedisModule_CloseKey(key);
         return REDISMODULE_ERR;
     }
 
