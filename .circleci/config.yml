@@ -229,6 +229,12 @@ commands:
       timeout:
         type: string
         default: 60m
+      profile_env:
+        type: string
+        default: "0"
+      triggering_env:
+        type: string
+        default: "circleci"
     steps:
       - run:
           name: Install remote benchmark tool dependencies
@@ -248,7 +254,7 @@ commands:
             export AWS_SECRET_ACCESS_KEY=$PERFORMANCE_EC2_SECRET_KEY
             export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
-
+            export PROFILE=<< parameters.profile_env >>
             redisbench-admin run-remote \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
@@ -257,7 +263,7 @@ commands:
               --github_sha $CIRCLE_SHA1 \
               --github_branch $CIRCLE_BRANCH \
               --upload_results_s3 \
-              --triggering_env circleci \
+              --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
               --allowed-envs << parameters.allowed_envs >> 
 
@@ -485,6 +491,38 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-cluster"
           timeout: 90m
+  
+  performance-ci-automation-oss-standalone-profiler:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build PROFILE=1"
+      - benchmark-automation:
+          allowed_envs: "oss-standalone"
+          timeout: 30m
+          profile_env: "1"
+          triggering_env: "circleci.profilers"
+
+  performance-ci-automation-oss-cluster-profiler:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build PROFILE=1"
+      - benchmark-automation:
+          allowed_envs: "oss-cluster"
+          timeout: 90m
+          profile_env: "1"
+          triggering_env: "circleci.profilers"
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -598,6 +636,12 @@ workflows:
       - performance-ci-automation-oss-cluster:
           context: common
           <<: *on-perf-and-version-tags
+      - performance-ci-automation-oss-standalone-profiler:
+          context: common
+          <<: *on-perf-and-version-tags
+      - performance-ci-automation-oss-cluster-profiler:
+          context: common
+          <<: *on-perf-and-version-tags
       - deploy-artifacts:
           name: deploy-snapshot
           location: snapshots
@@ -632,6 +676,10 @@ workflows:
       - performance-ci-automation-oss-cluster:
           context: common
       - performance-ci-automation-oss-standalone:
+          context: common
+      - performance-ci-automation-oss-standalone-profiler:
+          context: common
+      - performance-ci-automation-oss-cluster-profiler:
           context: common
 
   nightly-twice-a-week:

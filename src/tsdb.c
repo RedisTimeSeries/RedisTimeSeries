@@ -605,6 +605,8 @@ static int ContinuousDeletion(RedisModuleCtx *ctx,
     }
 
     SeriesDelRange(series, start, end);
+
+    RedisModule_CloseKey(key);
     return TSDB_OK;
 }
 
@@ -708,6 +710,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
         rule = rule->nextRule;
     }
+
+    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
