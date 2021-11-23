@@ -13,12 +13,6 @@ def Env(*args, **kwargs):
             if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
                 break
             env.getConnection(shard).execute_command('timeseries.REFRESHCLUSTER')
-    else:
-        for shard in range(0, env.shardsCount):
-            try:
-                env.getConnection(shard).execute_command('timeseries.REFRESHCLUSTER')
-            except:
-                pass
     return env
 
 def set_hertz(env):

@@ -152,11 +152,6 @@ commands:
             python3 -m RLTest --version
             mkdir -p ~/workspace/tests
             bash -l -c "make flow_tests <<parameters.test_params>> SHOW=1"
-      - run:
-          name: Flow tests on OSS cluster
-          no_output_timeout: 30m
-          command: |
-            bash -l -c "make flow_tests OSS_CLUSTER=1 <<parameters.test_params>> SHOW=1"
       - save-tests-logs
 
   build-platforms-steps:
@@ -168,6 +163,7 @@ commands:
       - setup-executor
       - checkout
       - setup-automation
+      - install-prerequisites
       - run:
           name: Build for platform
           command: |
