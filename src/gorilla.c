@@ -245,15 +245,7 @@ static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t
 static inline binary_t readBits(const binary_t *bins,
                                 globalbit_t start_pos,
                                 const u_int8_t dataLen) {
-    const localbit_t lbit = localbit(start_pos);
-    const localbit_t available = BINW - lbit;
-    if (available >= dataLen) {
-        return LSB(bins[start_pos / BINW] >> lbit, dataLen);
-    } else {
-        binary_t bin = LSB(bins[start_pos / BINW] >> lbit, available);
-        bin |= LSB(bins[(start_pos / BINW) + 1], dataLen - available) << available;
-        return bin;
-    }
+    return LSB(bins[start_pos / BINW] >> (start_pos % BINW), dataLen);
 }
 
 static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
