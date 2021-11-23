@@ -8,16 +8,17 @@
 #include "abstract_iterator.h"
 #include "series_iterator.h"
 
-static bool check_sample_value(Sample sample, FilterByValueArgs byValueArgs) {
-    if (!byValueArgs.hasValue) {
+static really_inline bool check_sample_value(const bool filterV,
+                                             const double value,
+                                             const double min,
+                                             const double max) {
+    if (!filterV) {
         return true;
     }
-
-    if (sample.value >= byValueArgs.min && sample.value <= byValueArgs.max) {
+    if (value >= min && value <= max) {
         return true;
-    } else {
-        return false;
     }
+    return false;
 }
 
 static bool check_sample_timestamp(Sample sample, FilterByTSArgs byTsArgs) {
@@ -32,11 +33,15 @@ ChunkResult SeriesFilterIterator_GetNext(struct AbstractIterator *base, Sample *
     SeriesFilterIterator *self = (SeriesFilterIterator *)base;
     Sample sample = { 0 };
     ChunkResult cr = CR_ERR;
+    const FilterByValueArgs byV = self->byValueArgs;
+    const bool filterV = byV.hasValue;
+    const double min = byV.min;
+    const double max = byV.max;
     while (true) {
         cr = self->base.input->GetNext(self->base.input, &sample);
 
         if (cr == CR_OK) {
-            if (check_sample_value(sample, self->byValueArgs) &&
+            if (check_sample_value(filterV, sample.value, min, max) &&
                 check_sample_timestamp(sample, self->ByTsArgs)) {
                 *currentSample = sample;
                 return cr;
