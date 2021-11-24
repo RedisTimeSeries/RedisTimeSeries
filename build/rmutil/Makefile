@@ -34,14 +34,21 @@ CC_FLAGS += -O3
 endif
 endif
 
-_SOURCES=util.c strings.c sds.c vector.c alloc.c periodic.c
+#	sds.c
+
+_SOURCES=\
+	util.c \
+	strings.c \
+	vector.c \
+	alloc.c \
+	periodic.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
 
-TARGET=$(BINDIR)/librmutil.a
+TARGET=$(BINDIR)/rmutil.a
 
 include $(MK)/defs
 
