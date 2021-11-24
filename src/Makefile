@@ -126,6 +126,7 @@ endif
 ifeq ($(OS),macos)
 LD_LIBS += -L/usr/local/opt/openssl/lib/ -lssl -lcrypto
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
 
 ifeq ($(PROFILE),1)
@@ -295,6 +296,9 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 $(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 	@echo Linking $@...
 	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+ifeq ($(OS),macos)
+	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
+endif
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
@@ -346,6 +350,7 @@ endif
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
+	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh
 ifeq ($(COV),1)
 	$(COVERAGE_COLLECT_REPORT)

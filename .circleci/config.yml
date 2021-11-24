@@ -606,7 +606,7 @@ workflows:
       - build:
           <<: *on-any-branch
       - test-rlec:
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - valgrind:
           requires:
             - build
@@ -618,13 +618,15 @@ workflows:
             parameters:
               platform: [focal, bionic, xenial, centos7, centos8]
       - build-arm-platforms:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
           context: common
           matrix:
             parameters:
               platform: [focal, bionic]
       - build-macos:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - build-multiarch-docker:
           <<: *never
       - coverage:

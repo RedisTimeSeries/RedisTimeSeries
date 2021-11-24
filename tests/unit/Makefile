@@ -53,8 +53,9 @@ CC_FLAGS += \
 	-I$(ROOT)/deps/RedisModulesSDK \
 	-I$(ROOT)/src \
 	-I$(ROOT)/deps/minunit \
-	-I/usr/local/opt/openssl/include \
 	$(CC_FLAGS.coverage)
+
+#	-I/usr/local/opt/openssl/include \
 
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -O0
@@ -65,11 +66,14 @@ endif
 
 ifeq ($(OS),macos)
 LD_FLAGS += -undefined dynamic_lookup
+LD_sHARED_EXT=dylib
+else
+LD_sHARED_EXT=so
 endif
 
 LD_FLAGS += $(LD_FLAGS.coverage)
 
-LD_LIBS += $(realpath $(BINROOT)/redistimeseries.so)
+LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_sHARED_EXT))
 
 #----------------------------------------------------------------------------------------------
 
