@@ -1,0 +1,2 @@
+
+FAST_DOUBLE_PARSER_C=$(FAST_DOUBLE_PARSER_C_BINDIR)/fast_double_parser_c.a
