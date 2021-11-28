@@ -12,6 +12,7 @@ from RLTest import Defaults
 from RLTest import Env
 import shutil
 import platform
+from test_helper_classes import SAMPLE_SIZE
 OS = os.getenv('OS')
 
 if platform.system() != 'Darwin':
@@ -58,7 +59,7 @@ def create_rdb(env, name):
     return
 
 def create_timeseries(env, is_backup):
-    chunk_size = 2
+    chunk_size = 2 * SAMPLE_SIZE
     rules = ['avg', 'sum', 'count', 'max', 'min']
 
     env.execute_command('ts.create', 'shortread_t1' + ['', '_bakup'][is_backup], 'UNCOMPRESSED', 'CHUNK_SIZE', chunk_size, "LABELS", "l1", "l1_value", "l2", "l2_value")
@@ -75,7 +76,7 @@ def create_timeseries(env, is_backup):
     
     for i in range(1, 4*chunk_size + 1):
         env.execute_command('ts.add', 'shortread_t1' + ['', '_bakup'][is_backup], i, i)
-        env.execute_command('ts.add', 'shortread_t1' + ['', '_bakup'][is_backup], i, i)
+        env.execute_command('ts.add', 'shortread_t2' + ['', '_bakup'][is_backup], i, i)
 
 class Connection(object):
     def __init__(self, sock, bufsize=4096, underlying_sock=None):
