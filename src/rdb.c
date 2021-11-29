@@ -23,6 +23,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     uint64_t totalSamples;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
+    RedisModuleString *destKey = NULL;
 
     CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = NULL;
@@ -64,12 +65,14 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     CompactionRule *lastRule = NULL;
 
     for (int i = 0; i < rulesCount; i++) {
-        RedisModuleString *destKey = LoadString_IOError(io, goto err);
+        destKey = LoadString_IOError(io, goto err);
         uint64_t timeBucket = LoadUnsigned_IOError(io, goto err);
         uint64_t aggType = LoadUnsigned_IOError(io, goto err);
+        timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
 
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
-        rule->startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
+        destKey = NULL;
+        rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
         if (i == 0) {
             series->rules = rule;
@@ -112,6 +115,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         series->totalSamples = totalSamples;
         series->srcKey = srcKey;
+        srcKey = NULL;
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
         series->lastChunk = chunk;
@@ -120,6 +124,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     return series;
 
 err:
+    if (destKey) { // clean if there is a key name which been alloced but not added to series yet
+        RedisModule_FreeString(NULL, destKey);
+    }
+    if(srcKey) { // clean if there is a key name which been alloced but not added to series yet
+        RedisModule_FreeString(NULL, srcKey);
+    }
     if (series) {
         // Note that we aren't calling RemoveIndexedMetric(series->keyName) since
         // the series only being indexed on loaded notification
@@ -128,9 +138,6 @@ err:
     } else {
         if (keyName) {
             RedisModule_FreeString(NULL, keyName);
-        }
-        if (srcKey) {
-            RedisModule_FreeString(NULL, srcKey);
         }
         if (cCtx.labels) {
             for (int i = 0; i < cCtx.labelsCount; i++) {
