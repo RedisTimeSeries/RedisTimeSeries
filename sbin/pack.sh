@@ -50,8 +50,6 @@ BINDIR=$(cd $BINDIR && pwd)
 mkdir -p $ARTDIR $ARTDIR/snapshots
 ARTDIR=$(cd $ARTDIR && pwd)
 
-. $READIES/bin/enable-utf8
-
 export ARCH=$($READIES/bin/platform --arch)
 export OS=$($READIES/bin/platform --os)
 export OSNICK=$($READIES/bin/platform --osnick)

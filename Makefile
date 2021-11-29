@@ -10,6 +10,7 @@ endif
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
+MK_CUSTOM_HELP=1
 BINDIR=$(BINROOT)
 
 include $(MK)/defs
