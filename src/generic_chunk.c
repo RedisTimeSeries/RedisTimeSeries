@@ -190,6 +190,12 @@ int timestamp_binary_search(const uint64_t *array, int size, uint64_t key) {
     return -1;
 }
 
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx) {
+    MRError *err;
+    return MR_SerializationCtxReadeLongLong(sctx, &err);
+}
+
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
     MRError *err;
     size_t size = 0;

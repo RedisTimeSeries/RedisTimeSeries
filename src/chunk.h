@@ -76,7 +76,7 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
 // LibMR
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
-void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
+int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
 void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val);
@@ -86,6 +86,7 @@ void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
                                            const char *buff,
                                            size_t len);
 
+long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx);
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len);
 
 #endif

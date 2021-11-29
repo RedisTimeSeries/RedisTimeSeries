@@ -261,22 +261,23 @@ static void Uncompressed_GenericSerialize(Chunk_t *chunk,
     saveStringBuffer(ctx, (char *)uncompchunk->samples, uncompchunk->size);
 }
 
-static int Uncompressed_Deserialize(Chunk_t **chunk, void *ctx) {
-    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
-
-    uncompchunk->base_timestamp = LoadUnsigned_IOError(ctx, goto err);
-    uncompchunk->num_samples = LoadUnsigned_IOError(ctx, goto err);
-    uncompchunk->size = LoadUnsigned_IOError(ctx, goto err);
-    size_t string_buffer_size;
-    uncompchunk->samples = (Sample *)LoadStringBuffer_IOError(ctx, &string_buffer_size, goto err);
-    *chunk = (Chunk_t *)uncompchunk;
-    return TSDB_OK;
-
-err:
-    *chunk = NULL;
-    Uncompressed_FreeChunk(uncompchunk);
-    return TSDB_ERROR;
-}
+#define UNCOMPRESSED_DESERIALIZE(chunk, ctx, load_unsigned, loadStringBuffer, ...) do {         \
+    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));                              \
+                                                                                                \
+    uncompchunk->base_timestamp = load_unsigned(ctx, ##__VA_ARGS__);                            \
+    uncompchunk->num_samples = load_unsigned(ctx, ##__VA_ARGS__);                               \
+    uncompchunk->size = load_unsigned(ctx, ##__VA_ARGS__);                                      \
+    size_t string_buffer_size;                                                                  \
+    uncompchunk->samples = (Sample *)loadStringBuffer(ctx, &string_buffer_size, ##__VA_ARGS__); \
+    *chunk = (Chunk_t *)uncompchunk;                                                            \
+    return TSDB_OK;                                                                             \
+                                                                                                \
+err:                                                                                            \
+    __attribute__((hot, unused));                                                               \
+    *chunk = NULL;                                                                              \
+    Uncompressed_FreeChunk(uncompchunk);                                                        \
+    return TSDB_ERROR;                                                                          \
+} while(0)
 
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Uncompressed_GenericSerialize(chunk,
@@ -286,7 +287,7 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
 }
 
 int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    return Uncompressed_Deserialize(chunk, io);
+    UNCOMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
@@ -296,16 +297,6 @@ void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
                                   (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
 }
 
-void Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
-    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
-    MRError *err;
-    uncompchunk->base_timestamp = MR_SerializationCtxReadeLongLong(sctx, &err);
-    uncompchunk->num_samples = MR_SerializationCtxReadeLongLong(sctx, &err);
-    uncompchunk->size = MR_SerializationCtxReadeLongLong(sctx, &err);
-
-    size_t len;
-    uncompchunk->samples = (Sample *)MR_ownedBufferFrom(sctx, &len);
-    *chunk = (Chunk_t *)uncompchunk;
-
-    return;
+int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
+    UNCOMPRESSED_DESERIALIZE(chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
 }
