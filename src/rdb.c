@@ -127,7 +127,7 @@ err:
     if (destKey) { // clean if there is a key name which been alloced but not added to series yet
         RedisModule_FreeString(NULL, destKey);
     }
-    if(srcKey) { // clean if there is a key name which been alloced but not added to series yet
+    if (srcKey) { // clean if there is a key name which been alloced but not added to series yet
         RedisModule_FreeString(NULL, srcKey);
     }
     if (series) {

@@ -12,9 +12,9 @@
 
 #include <assert.h> // assert
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
-#include <stdarg.h>
 #include "rmutil/alloc.h"
 
 #define BIT 8
@@ -301,32 +301,33 @@ static void Compressed_Serialize(Chunk_t *chunk,
     saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
 }
 
-#define COMPRESSED_DESERIALIZE(chunk, ctx, readUnsigned, readStringBuffer, ...) do { \
-    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));      \
-                                                                                     \
-    compchunk->size = readUnsigned(ctx, ##__VA_ARGS__);                              \
-    compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                             \
-    compchunk->idx = readUnsigned(ctx, ##__VA_ARGS__);                               \
-    compchunk->baseValue.u = readUnsigned(ctx, ##__VA_ARGS__);                       \
-    compchunk->baseTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                     \
-    compchunk->prevTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                     \
-    compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx, ##__VA_ARGS__);       \
-    compchunk->prevValue.u = readUnsigned(ctx, ##__VA_ARGS__);                       \
-    compchunk->prevLeading = readUnsigned(ctx, ##__VA_ARGS__);                       \
-    compchunk->prevTrailing = readUnsigned(ctx, ##__VA_ARGS__);                      \
-                                                                                     \
-    size_t len;                                                                      \
-    compchunk->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);        \
-    *chunk = (Chunk_t *)compchunk;                                                   \
-    return TSDB_OK;                                                                  \
-                                                                                     \
-err:                                                                                 \
-    __attribute__((hot, unused));                                                    \
-    *chunk = NULL;                                                                   \
-    Compressed_FreeChunk(compchunk);                                                 \
-                                                                                     \
-    return TSDB_ERROR;                                                               \
-} while(0)
+#define COMPRESSED_DESERIALIZE(chunk, ctx, readUnsigned, readStringBuffer, ...)                    \
+    do {                                                                                           \
+        CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));                \
+                                                                                                   \
+        compchunk->size = readUnsigned(ctx, ##__VA_ARGS__);                                        \
+        compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                                       \
+        compchunk->idx = readUnsigned(ctx, ##__VA_ARGS__);                                         \
+        compchunk->baseValue.u = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->baseTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
+        compchunk->prevTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
+        compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx, ##__VA_ARGS__);                 \
+        compchunk->prevValue.u = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->prevLeading = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->prevTrailing = readUnsigned(ctx, ##__VA_ARGS__);                                \
+                                                                                                   \
+        size_t len;                                                                                \
+        compchunk->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);                  \
+        *chunk = (Chunk_t *)compchunk;                                                             \
+        return TSDB_OK;                                                                            \
+                                                                                                   \
+err:                                                                                               \
+        __attribute__((hot, unused));                                                              \
+        *chunk = NULL;                                                                             \
+        Compressed_FreeChunk(compchunk);                                                           \
+                                                                                                   \
+        return TSDB_ERROR;                                                                         \
+    } while (0)
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Compressed_Serialize(chunk,
@@ -347,5 +348,6 @@ void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
 }
 
 int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
-    COMPRESSED_DESERIALIZE(chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
+    COMPRESSED_DESERIALIZE(
+        chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
 }
