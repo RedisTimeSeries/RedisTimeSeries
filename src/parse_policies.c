@@ -118,6 +118,7 @@ int ParseCompactionPolicy(const char *policy_string,
         *rules_count = 0;
         if (*parsed_rules_out) {
             free(*parsed_rules_out);
+            *parsed_rules_out = NULL;
         }
     }
     return success;

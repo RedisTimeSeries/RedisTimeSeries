@@ -29,9 +29,9 @@
         (res);                                                                                     \
     })
 
-#define LoadStringBuffer_IOError(rdb, str, cleanup_exp)                                            \
+#define LoadStringBuffer_IOError(rdb, len, cleanup_exp)                                            \
     __extension__({                                                                                \
-        char *res = RedisModule_LoadStringBuffer((rdb), (str));                                    \
+        char *res = RedisModule_LoadStringBuffer((rdb), (len));                                    \
         if (RedisModule_IsIOError(rdb)) {                                                          \
             cleanup_exp;                                                                           \
         }                                                                                          \

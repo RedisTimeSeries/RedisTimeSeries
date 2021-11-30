@@ -38,7 +38,9 @@ Chunk_t *Compressed_NewChunk(size_t size) {
 
 void Compressed_FreeChunk(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
-    free(cmpChunk->data);
+    if (cmpChunk->data) {
+        free(cmpChunk->data);
+    }
     cmpChunk->data = NULL;
     free(chunk);
 }
@@ -305,6 +307,7 @@ static void Compressed_Serialize(Chunk_t *chunk,
     do {                                                                                           \
         CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));                \
                                                                                                    \
+        compchunk->data = NULL;                                                                    \
         compchunk->size = readUnsigned(ctx, ##__VA_ARGS__);                                        \
         compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                                       \
         compchunk->idx = readUnsigned(ctx, ##__VA_ARGS__);                                         \

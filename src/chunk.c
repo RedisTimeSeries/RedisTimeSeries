@@ -22,7 +22,9 @@ Chunk_t *Uncompressed_NewChunk(size_t size) {
 }
 
 void Uncompressed_FreeChunk(Chunk_t *chunk) {
-    free(((Chunk *)chunk)->samples);
+    if (((Chunk *)chunk)->samples) {
+        free(((Chunk *)chunk)->samples);
+    }
     free(chunk);
 }
 
