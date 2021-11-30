@@ -3,6 +3,12 @@ import inspect
 from RLTest import Env as rltestEnv
 from includes import *
 
+
+def skip_on_rlec():
+    if RLEC_CLUSTER:
+        Env().skip()
+
+
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:
         kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)

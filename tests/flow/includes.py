@@ -1,10 +1,11 @@
 import os
 import sys
+from logging import exception
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
     import paella
-except:
+except exception:
     pass
 
 OSNICK = paella.Platform().osnick
