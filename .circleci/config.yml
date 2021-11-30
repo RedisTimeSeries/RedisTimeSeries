@@ -636,7 +636,7 @@ workflows:
             parameters:
               redis_version: ["5.0", "6.0"]
       - test-rlec:
-          <<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - valgrind:
           requires:
             - build
