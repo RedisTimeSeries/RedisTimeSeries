@@ -649,7 +649,9 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    if(parseLabelQuery(ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) == REDISMODULE_ERR) {
+    if (parseLabelQuery(
+            ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
+        REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
