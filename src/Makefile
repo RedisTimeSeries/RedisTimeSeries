@@ -76,6 +76,11 @@ make pack          # build packages (ramp & dependencies)
 make benchmarks    # run all benchmarks
   BENCHMARK=file   # run benchmark specified by 'filename'
   BENCH_ARGS="..." # redisbench_admin  extra arguments
+
+make platform      # build artifacts for given platform
+  OSNICK=nick        # build for OSNICK `nick`
+  TEST=1             # also run tests
+
 endef
 
 #----------------------------------------------------------------------------------------------  
@@ -464,3 +469,8 @@ coverage:
 package: $(TARGET)
 	@echo Creating packages...
 	$(SHOW)$(ROOT)/sbin/pack.sh
+
+#----------------------------------------------------------------------------------------------
+
+platform:
+	$(SHOW)$(MAKE) -C build/docker PACK=1 ARTIFACTS=1
