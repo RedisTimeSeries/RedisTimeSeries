@@ -116,7 +116,7 @@ int ParseCompactionPolicy(const char *policy_string,
     if (success == FALSE) {
         // all or nothing, don't allow partial parsing
         *rules_count = 0;
-        if(*parsed_rules_out) {
+        if (*parsed_rules_out) {
             free(*parsed_rules_out);
         }
     }

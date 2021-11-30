@@ -322,7 +322,7 @@ static void Compressed_Serialize(Chunk_t *chunk,
         return TSDB_OK;                                                                            \
                                                                                                    \
 err:                                                                                               \
-        __attribute__((cold, unused));                                                              \
+        __attribute__((cold, unused));                                                             \
         *chunk = NULL;                                                                             \
         Compressed_FreeChunk(compchunk);                                                           \
                                                                                                    \
