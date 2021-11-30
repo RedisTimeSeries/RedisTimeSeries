@@ -20,3 +20,4 @@ capabilities:
     - clustering
     - reshard_rebalance
     - intershard_tls
+    - flash

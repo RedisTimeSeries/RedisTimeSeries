@@ -38,7 +38,7 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     }
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2));
     if (*label_count > 0) {
-        labelsResult = malloc(sizeof(Label) * (*label_count));
+        labelsResult = calloc((*label_count), sizeof(Label));
         for (int i = 0; i < *label_count; i++) {
             RedisModuleString *key = argv[first_label_pos + i * 2];
             RedisModuleString *value = argv[first_label_pos + i * 2 + 1];

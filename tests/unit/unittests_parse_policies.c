@@ -63,8 +63,9 @@ MU_TEST(test_invalid_policy) {
     result = ParseCompactionPolicy("max:abcdfeffas", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
-
-    free(parsedRules);
+    if(parsedRules) {
+        free(parsedRules);
+    }
 }
 
 MU_TEST(test_StringLenAggTypeToEnum) {
