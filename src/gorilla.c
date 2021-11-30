@@ -89,6 +89,7 @@
  */
 
 #include "gorilla.h"
+
 #include "consts.h"
 
 #include <assert.h>
