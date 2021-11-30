@@ -1,5 +1,7 @@
 from test_helper_classes import TSInfo
 from utils import Env
+from includes import *
+
 
 def test_rename_src():
     env = Env()
@@ -12,7 +14,7 @@ def test_rename_src():
         aInfo = TSInfo(r.execute_command('TS.INFO', 'a2{1}'))
         env.assertEqual(aInfo.sourceKey, None)
         env.assertEqual(aInfo.rules, [])
-        
+
         assert r.execute_command('TS.CREATERULE', 'a2{1}', 'b{1}', 'AGGREGATION', 'AVG', 5000)
         bInfo = TSInfo(r.execute_command('TS.INFO', 'b{1}'))
         env.assertEqual(bInfo.sourceKey, b'a2{1}')
@@ -56,7 +58,7 @@ def test_rename_indexed():
 
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-        
+
         assert r.execute_command('TS.ADD', 'a{3}', 100, 200, 'LABELS', 'sensor_id', '2', 'area_id', '32')
         env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a{3}', [], [100, b'200']]])
 
@@ -70,7 +72,7 @@ def test_rename_none_ts():
 
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-        
+
         assert r.execute_command('TS.CREATE', 'a{4}')
         assert r.execute_command('SET', 'key1{4}', 'val1')
         assert r.execute_command('SET', 'key2{4}', 'val2')

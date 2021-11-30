@@ -1,7 +1,7 @@
 import pytest
 from RLTest import Env
 from test_helper_classes import TSInfo
-
+from includes import *
 
 class testModuleLoadTimeArguments(object):
     def __init__(self):
@@ -61,7 +61,7 @@ def test_compressed():
 
 def test_compressed_debug():
     Env().skipOnCluster()
-    
+
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
