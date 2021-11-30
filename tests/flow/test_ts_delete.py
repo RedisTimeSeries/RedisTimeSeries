@@ -136,15 +136,15 @@ def test_del_retention_with_rules(self):
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("ts.del", "test_key_2", 1, 10)
 
-        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 25, 'compressed')
-        r.execute_command("ts.create", 'test_key_5', 'compressed')
-        r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'avg', 10)
+        r.execute_command("ts.create", 'test_key_4{4}', 'RETENTION', 25, 'compressed')
+        r.execute_command("ts.create", 'test_key_5{4}', 'compressed')
+        r.execute_command('ts.createrule', 'test_key_4{4}', 'test_key_5{4}', 'AGGREGATION', 'avg', 10)
 
         for i in range(30):
-            assert i == r.execute_command("ts.add", 'test_key_4', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_4{4}', i, 1)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command("ts.del", "test_key_4", 9, 10)
+            r.execute_command("ts.del", "test_key_4{4}", 9, 10)
 
 
 def test_del_with_rules(self):
