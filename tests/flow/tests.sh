@@ -83,6 +83,7 @@ valgrind_config() {
 		--vg-verbose \
 		--vg-suppressions $VALGRIND_SUPRESSIONS"
 
+	export VALGRIND=1
 }
 
 #----------------------------------------------------------------------------------------------

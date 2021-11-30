@@ -7,6 +7,8 @@ import redis
 from RLTest import Env
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
     _get_ts_info, _insert_agg_data
+from includes import *
+
 
 key_name = 'tester{abc}'
 agg_key_name = '{}_agg_max_10'.format(key_name)
