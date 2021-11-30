@@ -19,6 +19,7 @@ def normalize_info(data):
 def testRDBCompatibility():
     env = Env()
     env.skipOnCluster()
+    skip_on_rlec()
     RDBS = os.listdir('rdbs')
 
     # Current RDB version check

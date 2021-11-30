@@ -2,7 +2,6 @@ import pytest
 from RLTest import Env
 from test_helper_classes import TSInfo
 from includes import *
-from utils import skip_on_rlec
 
 class testModuleLoadTimeArguments(object):
     def __init__(self):

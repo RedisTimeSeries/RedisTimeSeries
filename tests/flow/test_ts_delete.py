@@ -206,17 +206,17 @@ def test_del_with_rules(self):
         assert res == [[990, b'5'], [1000, b'7']]
 
         ##### delete chunk of a rule #####
-        r.execute_command("ts.create", 'test_key_4', 'RETENTION', 5000, 'CHUNK_SIZE', '1024', 'compressed')
-        r.execute_command("ts.create", 'test_key_5', 'CHUNK_SIZE', '1024', 'compressed')
-        r.execute_command('ts.createrule', 'test_key_4', 'test_key_5', 'AGGREGATION', 'sum', 10)
+        r.execute_command("ts.create", 'test_key_{4}', 'RETENTION', 5000, 'CHUNK_SIZE', '1024', 'compressed')
+        r.execute_command("ts.create", 'test_key_{4}_agg', 'CHUNK_SIZE', '1024', 'compressed')
+        r.execute_command('ts.createrule', 'test_key_{4}', 'test_key_{4}_agg', 'AGGREGATION', 'sum', 10)
 
         for i in range(2070):
-            assert i == r.execute_command("ts.add", 'test_key_4', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_{4}', i, 1)
 
-        res = r.execute_command('ts.range', 'test_key_5', 1010, 2059)
+        res = r.execute_command('ts.range', 'test_key_{4}_agg', 1010, 2059)
         e.assertEqual(len(res), 105)
-        assert r.execute_command("ts.del", "test_key_4", 1019, 2050) == 1032
-        res = r.execute_command('ts.range', 'test_key_5', 1010, 2059)
+        assert r.execute_command("ts.del", "test_key_{4}", 1019, 2050) == 1032
+        res = r.execute_command('ts.range', 'test_key_{4}_agg', 1010, 2059)
         e.assertEqual(len(res), 2)
         assert res == [[1010, b'9'], [2050, b'9']]
 
