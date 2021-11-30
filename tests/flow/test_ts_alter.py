@@ -2,6 +2,7 @@ import pytest
 import redis
 from utils import Env
 from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _insert_data
+from includes import *
 
 
 def test_alter_cmd():

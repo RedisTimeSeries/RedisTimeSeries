@@ -3,6 +3,8 @@ import os
 from RLTest import Env
 from create_test_rdb_file import load_into_redis
 from test_helper_classes import _get_ts_info
+from includes import *
+
 
 def normalize_info(data):
     info = {}
@@ -42,7 +44,7 @@ def testRDBCompatibility():
         try:
             os.remove(rdbFilePath)
         except FileNotFoundError:
-            pass 
+            pass
         os.symlink(filePath, rdbFilePath)
         env.start()
 

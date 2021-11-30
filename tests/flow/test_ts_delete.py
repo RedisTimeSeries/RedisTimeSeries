@@ -2,6 +2,8 @@ from RLTest import Env
 import pytest
 import redis
 from test_helper_classes import _get_ts_info
+from includes import *
+
 
 def test_ts_del_uncompressed():
     # total samples = 101
@@ -111,11 +113,11 @@ def test_bad_del(self):
             r.execute_command("ts.del", "test_key", 100)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command("ts.del", "test_key", 100, '200a')            
+            r.execute_command("ts.del", "test_key", 100, '200a')
 
         assert r.execute_command("ts.del", "test_key", 200, 100) == 0
 
-        assert r.execute_command("ts.del", "test_key", 100, 300) == 2             
+        assert r.execute_command("ts.del", "test_key", 100, 300) == 2
 
         self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
         with pytest.raises(redis.ResponseError) as excinfo:

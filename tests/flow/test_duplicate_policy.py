@@ -4,6 +4,7 @@ import pytest
 import redis
 from utils import Env
 from test_helper_classes import _fill_data
+from includes import *
 
 
 class testDuplicationPolicyTests():
