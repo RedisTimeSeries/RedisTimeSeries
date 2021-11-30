@@ -189,6 +189,8 @@ def test_mrange_withlabels():
         actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
                                           'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
         # assert the labels length is 3 (name,class,generation) for each of the returned time-series
+        if(len(actual_result[0][1]) != 3 or len(actual_result[1][1]) != 3 or len(actual_result[2][1]) != 3):
+            print(str(actual_result))
         assert len(actual_result[0][1]) == 3
         assert len(actual_result[1][1]) == 3
         assert len(actual_result[2][1]) == 3

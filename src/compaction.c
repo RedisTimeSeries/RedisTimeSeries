@@ -5,6 +5,8 @@
  */
 #include "compaction.h"
 
+#include "load_io_error_macros.h"
+
 #include <ctype.h>
 #include <math.h> // sqrt
 #include <string.h>
@@ -63,9 +65,12 @@ void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveDouble(io, context->value);
 }
 
-void SingleValueReadContext(void *contextPtr, RedisModuleIO *io) {
+int SingleValueReadContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
-    context->value = RedisModule_LoadDouble(io);
+    context->value = LoadDouble_IOError(io, goto err);
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
 }
 
 void *AvgCreateContext() {
@@ -101,10 +106,13 @@ void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveDouble(io, context->cnt);
 }
 
-void AvgReadContext(void *contextPtr, RedisModuleIO *io) {
+int AvgReadContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
-    context->val = RedisModule_LoadDouble(io);
-    context->cnt = RedisModule_LoadDouble(io);
+    context->val = LoadDouble_IOError(io, goto err);
+    context->cnt = LoadDouble_IOError(io, goto err);
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
 }
 
 void *StdCreateContext() {
@@ -189,11 +197,14 @@ void StdWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->cnt);
 }
 
-void StdReadContext(void *contextPtr, RedisModuleIO *io) {
+int StdReadContext(void *contextPtr, RedisModuleIO *io) {
     StdContext *context = (StdContext *)contextPtr;
-    context->sum = RedisModule_LoadDouble(io);
-    context->sum_2 = RedisModule_LoadDouble(io);
-    context->cnt = RedisModule_LoadUnsigned(io);
+    context->sum = LoadDouble_IOError(io, goto err);
+    context->sum_2 = LoadDouble_IOError(io, goto err);
+    context->cnt = LoadUnsigned_IOError(io, goto err);
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
 }
 
 void rm_free(void *ptr) {
@@ -305,14 +316,22 @@ void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
-void MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
+int MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
+    char *sb = NULL;
     size_t len = 1;
-    context->maxValue = RedisModule_LoadDouble(io);
-    context->minValue = RedisModule_LoadDouble(io);
-    char *sb = RedisModule_LoadStringBuffer(io, &len);
+    context->maxValue = LoadDouble_IOError(io, goto err);
+    context->minValue = LoadDouble_IOError(io, goto err);
+    sb = LoadStringBuffer_IOError(io, &len, goto err);
     context->isResetted = sb[0];
-    free(sb);
+    RedisModule_Free(sb);
+    return TSDB_OK;
+
+err:
+    if (sb) {
+        RedisModule_Free(sb);
+    }
+    return TSDB_ERROR;
 }
 
 void SumAppendValue(void *contextPtr, double value) {
