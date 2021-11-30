@@ -18,7 +18,7 @@ typedef struct AggregationClass
     void (*appendValue)(void *context, double value);
     void (*resetContext)(void *context);
     void (*writeContext)(void *context, RedisModuleIO *io);
-    void (*readContext)(void *context, RedisModuleIO *io);
+    int (*readContext)(void *context, RedisModuleIO *io);
     int (*finalize)(void *context, double *value);
 } AggregationClass;
 

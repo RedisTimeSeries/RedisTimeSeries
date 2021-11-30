@@ -46,9 +46,12 @@ typedef struct Series
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+void freeLastDeletedSeries();
 void FreeSeries(void *value);
+void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void CleanLastDeletedSeries(RedisModuleString *key);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
