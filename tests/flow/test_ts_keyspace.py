@@ -2,10 +2,12 @@ import time
 
 from RLTest import Env
 import time
+from includes import *
+
 
 def assert_msg(env, msg, expected_type, expected_data):
-    env.assertEqual(expected_type, msg['type']) 
-    env.assertEqual(expected_data, msg['data']) 
+    env.assertEqual(expected_type, msg['type'])
+    env.assertEqual(expected_data, msg['data'])
 
 # Skip all tests on cluster because for each node we will need to configure to enable keyspace and then have a dedicated
 # connection that will handle the pubsub from that specific shard since keyspace notification are not broadcasted
@@ -20,15 +22,15 @@ def test_keyspace():
 
         pubsub = r.pubsub()
         pubsub.psubscribe('__key*')
-       
+
         time.sleep(1)
-        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type']) 
+        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type'])
 
         r.execute_command('ts.add', 'tester{2}', 100, 1.1)
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'tester{2}')
 
-        # Test MADD generate events for each key updated 
+        # Test MADD generate events for each key updated
         r.execute_command("ts.madd", 'tester{2}', "*", 10, 'test_key2{2}', 2000, 20)
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'ts.add')
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'tester{2}')
@@ -64,9 +66,9 @@ def test_keyspace_create_rules():
 
         pubsub = r.pubsub()
         pubsub.psubscribe('__key*')
-       
+
         time.sleep(1)
-        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type']) 
+        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type'])
 
         r.execute_command('TS.CREATE', 'tester_src{2}')
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'ts.create')
@@ -101,9 +103,9 @@ def test_keyspace_rules_send():
 
         pubsub = r.pubsub()
         pubsub.psubscribe('__key*')
-       
+
         time.sleep(1)
-        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type']) 
+        env.assertEqual('psubscribe', pubsub.get_message(timeout=1)['type'])
 
         r.execute_command('TS.CREATE', 'tester_src{2}')
         assert_msg(env, pubsub.get_message(timeout=1), 'pmessage', b'ts.create')

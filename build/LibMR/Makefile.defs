@@ -1,0 +1,2 @@
+
+LIBMR=$(LIBMR_BINDIR)/libmr.a

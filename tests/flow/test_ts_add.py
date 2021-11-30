@@ -4,6 +4,7 @@ import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
+from includes import *
 
 
 def test_issue_504():
@@ -93,8 +94,8 @@ def test_valid_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')           
-            
+            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
+
 def test_valid_timestamp():
     with Env().getConnection() as r:
         with pytest.raises(redis.ResponseError) as excinfo:

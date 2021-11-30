@@ -19,7 +19,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
 
-        self.install("git jq curl")
+        self.install("git jq curl unzip")
         self.run("%s/bin/enable-utf8" % READIES)
 
         self.install("autoconf libtool m4 automake")
@@ -51,7 +51,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov")
 
         self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
-        self.pip_install("-r tests/flow/requirements.txt")
+        self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
 
 #----------------------------------------------------------------------------------------------
 

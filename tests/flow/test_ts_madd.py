@@ -3,6 +3,8 @@ import time
 import aof_parser
 
 from RLTest import Env, StandardEnv
+from includes import *
+
 
 def test_madd():
     sample_len = 1024
