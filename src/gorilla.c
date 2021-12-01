@@ -89,11 +89,8 @@
  */
 
 #include "gorilla.h"
-
+#include "fastmod.h"
 #include <assert.h>
-
-#define BIN_NUM_VALUES 64
-#define BINW BIN_NUM_VALUES
 
 #define DOUBLE_LEADING 5
 #define DOUBLE_BLOCK_SIZE 6
@@ -113,6 +110,8 @@
 #define CMPR_L3 11
 #define CMPR_L4 15
 #define CMPR_L5 32
+
+uint32_t _fastmod_d = BIN_NUM_VALUES; // divisor fastmod divisor
 
 // The powers of 2 from 0 to 63
 static u_int64_t bittt[] = {
@@ -217,8 +216,8 @@ static bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
-static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit, const uint64_t M) {
+    return !(bins[fastdiv_u32(bit,M)] & BIT(fastmod_u32(bit,M,BINW)));
 }
 
 // unused:
@@ -413,24 +412,24 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * then decodes the value back to an int64 and calculate the original value
  * using `prevTS` and `prevDelta`.
  */
-static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
+static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins, const uint64_t M) {
     // control bit ‘0’
     // Read stored double delta value
-    if (Bins_bitoff(bins, iter->idx++)) {
+    if (Bins_bitoff(bins, iter->idx++, M)) {
         return iter->prevTS += iter->prevDelta;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++, M)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++, M)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
         iter->idx += CMPR_L2;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++, M)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
         iter->idx += CMPR_L3;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++, M)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
         iter->idx += CMPR_L4;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter->idx++, M)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
         iter->idx += CMPR_L5;
     } else {
@@ -450,10 +449,10 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
  *
  * Finally, the compressed representation of the value is decoded.
  */
-static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) {
+static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data, const uint64_t M) {
     // Check if value was changed
     // control bit ‘0’ (case a)
-    if (Bins_bitoff(data, iter->idx++)) {
+    if (Bins_bitoff(data, iter->idx++, M)) {
         return iter->prevValue.d;
     }
     binary_t xorValue;
@@ -464,7 +463,7 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
     // many trailing zeros as with the previous value
     // use  the previous block  information and
     // just read the meaningful XORed value
-    if (Bins_bitoff(data, iter->idx++)) {
+    if (Bins_bitoff(data, iter->idx++, M)) {
 #ifdef DEBUG
         assert(iter->leading + iter->trailing <= BINW);
 #endif
@@ -504,8 +503,8 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         sample->timestamp = iter->chunk->baseTimestamp;
         sample->value = iter->chunk->baseValue.d;
     } else {
-        sample->timestamp = readInteger(iter, iter->chunk->data);
-        sample->value = readFloat(iter, iter->chunk->data);
+        sample->timestamp = readInteger(iter, iter->chunk->data, iter->M);
+        sample->value = readFloat(iter, iter->chunk->data, iter->M);
     }
     iter->count++;
     return CR_OK;

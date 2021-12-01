@@ -269,6 +269,7 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
     }
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
     Compressed_ResetChunkIterator(iter, compressedChunk);
+    iter->M = computeM_u32(BIN_NUM_VALUES);
     if (retChunkIterClass != NULL) {
         *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);
     }

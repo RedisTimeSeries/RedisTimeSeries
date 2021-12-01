@@ -11,3 +11,6 @@
 	path = deps/LibMR
 	url = https://github.com/RedisGears/LibMR.git
 
+[submodule "deps/fastmod"]
+	path = deps/fastmod
+	url = https://github.com/lemire/fastmod.git
