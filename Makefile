@@ -29,7 +29,7 @@ setup:
 	@./system-setup.py
 
 fetch:
-	-@git submodule update --init --recursive -j`nproc`
+	-@git submodule update --init --recursive
 
 build:
 	@$(MAKE) -C src all -j $(NCPUS)
