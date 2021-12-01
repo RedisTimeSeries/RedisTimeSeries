@@ -503,7 +503,8 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     //
     // control bit ‘0’
     // Read stored double delta value
-    sample->timestamp += Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+    sample->timestamp = iter->prevTS +=
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
     sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
