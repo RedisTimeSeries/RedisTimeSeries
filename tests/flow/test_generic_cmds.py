@@ -3,6 +3,7 @@ import redis
 import time
 
 from RLTest import Env
+from packaging import version
 
 def init(env, r, compression="COMPRESSED"):
     assert r.execute_command('TS.CREATE', 't1', 'ENCODING', compression, 'LABELS', 'name', 'mush', 'fname', 'ox')
@@ -185,6 +186,10 @@ def test_copy_compressed():
     env = Env()
     env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
+        res = r.execute_command('INFO')
+        if(version.parse(res['redis_version']) < version.parse("6.0.0")):
+            self.skip() # copy exists only from version 6
+
         init(env, r)
         
         assert r.execute_command('COPY', 't1', 't4')
@@ -222,6 +227,10 @@ def test_copy_uncompressed():
     env = Env()
     env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
+        res = r.execute_command('INFO')
+        if(version.parse(res['redis_version']) < version.parse("6.0.0")):
+            self.skip() # copy exists only from version 6
+
         init(env, r, "UNCOMPRESSED")
         
         assert r.execute_command('COPY', 't1', 't4')
