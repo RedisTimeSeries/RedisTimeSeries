@@ -630,12 +630,11 @@ workflows:
           <<: *on-any-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
-          #@@<<: *on-integ-branch
-          <<: *on-any-branch
+          <<: *on-integ-branch
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["5.0", "6.0", "6.2"]
+              redis_version: ["5.0", "6.0"]
       - test-rlec:
           <<: *on-integ-and-version-tags
       - valgrind:
