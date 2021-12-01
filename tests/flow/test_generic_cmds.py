@@ -160,29 +160,27 @@ def test_rename():
 
 def test_renamenx():
     env = Env()
-    env.skipOnCluster()
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
         
-        assert r.execute_command('RENAMENX', 't1', 't4')
-        res = r.execute_command('ts.info', 't3')
+        assert r.execute_command('RENAMENX', 't{1}', 't{1}_renamed')
+        res = r.execute_command('ts.info', 't{1}_agg')
         index = res.index(b'sourceKey')
-        env.assertEqual(res[index+1], b't4')
+        env.assertEqual(res[index+1], b't{1}_renamed')
 
         res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
-        env.assertEqual(sorted(res), [b't2', b't3', b't4'])
-        res = r.execute_command('keys *')
-        env.assertEqual(sorted(res), [b't2', b't3', b't4'])
+        env.assertEqual(sorted(res), [b't{1}_agg', b't{1}_renamed', b't{2}'])
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), [[b't{1}_agg', [], []], [b't{1}_renamed', [], [10, b'19']], [b't{2}', [], []]])
 
-        assert r.execute_command('RENAMENX', 't3', 't1')
-        res = r.execute_command('ts.info', 't4')
+        assert r.execute_command('RENAMENX', 't{1}_agg', 't{1}_agg_renamed')
+        res = r.execute_command('ts.info', 't{1}_renamed')
         index = res.index(b'rules')
-        env.assertEqual(res[index+1], [[b't1', 10, b'AVG']])
+        env.assertEqual(res[index+1], [[b't{1}_agg_renamed', 10, b'AVG']])
 
 
 def test_copy_compressed():
     env = Env()
-    env.skipOnCluster()
     env.skipOnVersionSmaller("7.0.0")
     with env.getClusterConnectionIfNeeded() as r:
         init(env, r)
@@ -206,7 +204,6 @@ def test_copy_compressed():
 
 def test_copy_compressed_uncompressed():
     env = Env()
-    env.skipOnCluster()
     env.skipOnVersionSmaller("7.0.0")
     for compresssion in [ "UNCOMPRESSED", 'COMPRESSED']:
         with env.getClusterConnectionIfNeeded() as r:
