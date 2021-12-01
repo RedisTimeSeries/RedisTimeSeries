@@ -414,11 +414,7 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * using `prevTS` and `prevDelta`.
  */
 static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
-    // control bit ‘0’
-    // Read stored double delta value
     if (Bins_bitoff(bins, iter->idx++)) {
-        return iter->prevTS += iter->prevDelta;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
     } else if (Bins_bitoff(bins, iter->idx++)) {
@@ -437,7 +433,7 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
         iter->prevDelta += readBits(bins, iter->idx, 64);
         iter->idx += 64;
     }
-    return iter->prevTS += iter->prevDelta;
+    return iter->prevDelta;
 }
 
 /*
@@ -453,9 +449,6 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
 static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) {
     // Check if value was changed
     // control bit ‘0’ (case a)
-    if (Bins_bitoff(data, iter->idx++)) {
-        return iter->prevValue.d;
-    }
     binary_t xorValue;
 
     // Check if we can use the previous block info
@@ -503,10 +496,16 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     if (unlikely(iter->count == 0)) {
         sample->timestamp = iter->chunk->baseTimestamp;
         sample->value = iter->chunk->baseValue.d;
-    } else {
-        sample->timestamp = readInteger(iter, iter->chunk->data);
-        sample->value = readFloat(iter, iter->chunk->data);
-    }
+        iter->count++;
+        return CR_OK;
+    } 
+    const uint64_t bins = iter->chunk->data;
+    // control bit ‘0’
+    // Read stored double delta value
+    sample->timestamp += Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+    // Check if value was changed
+    // control bit ‘0’ (case a)
+    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
     iter->count++;
     return CR_OK;
 }
