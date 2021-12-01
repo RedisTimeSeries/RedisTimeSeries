@@ -398,7 +398,7 @@ BENCHMARK_ARGS += $(BENCH_ARGS)
 endif
 
 benchmark: $(TARGET)
-	@(SHOW)set -e; cd tests/benchmarks; $(BENCHMARK_ARGS)
+	$(SHOW)set -e; cd ../tests/benchmarks; $(BENCHMARK_ARGS)
 
 #----------------------------------------------------------------------------------------------
 
