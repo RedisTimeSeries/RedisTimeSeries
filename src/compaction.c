@@ -9,6 +9,7 @@
 #include "rdb.h"
 
 #include <ctype.h>
+#include <float.h>
 #include <math.h> // sqrt
 #include <string.h>
 #include <rmutil/alloc.h>
@@ -30,6 +31,7 @@ typedef struct AvgContext
 {
     double val;
     double cnt;
+    u_int64_t overflow;
 } AvgContext;
 
 typedef struct StdContext
@@ -82,20 +84,42 @@ void *AvgCreateContext() {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     context->cnt = 0;
     context->val = 0;
+    context->overflow = 0;
     return context;
 }
 
 void AvgAddValue(void *contextPtr, double value) {
     AvgContext *context = (AvgContext *)contextPtr;
-    context->val += value;
     context->cnt++;
+
+    // Test for overflow
+    if (unlikely(((context->val < 0.0) == (value < 0.0) &&
+                  (fabs(context->val) > (DBL_MAX - fabs(value)))) ||
+                 context->overflow)) {
+        // calculating: avg(t+1) = t*avg(t)/(t+1) + val/(t+1)
+        long double ld_val = context->val;
+        long double ld_value = value;
+        ld_val /= context->cnt;
+        if (context->overflow) {
+            ld_val *= (long double)(context->cnt - 1);
+        }
+        ld_val += (ld_value / (long double)context->cnt);
+        context->val = ld_val;
+        context->overflow = 1;
+    } else { // No Overflow
+        context->val += value;
+    }
 }
 
 int AvgFinalize(void *contextPtr, double *value) {
     AvgContext *context = (AvgContext *)contextPtr;
     if (context->cnt == 0)
         return TSDB_ERROR;
-    *value = context->val / context->cnt;
+    if (unlikely(context->overflow)) {
+        *value = context->val;
+    } else {
+        *value = context->val / context->cnt;
+    }
     return TSDB_OK;
 }
 
@@ -103,18 +127,21 @@ void AvgReset(void *contextPtr) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = 0;
     context->cnt = 0;
+    context->overflow = 0;
 }
 
 void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
     RedisModule_SaveDouble(io, context->val);
     RedisModule_SaveDouble(io, context->cnt);
+    RedisModule_SaveUnsigned(io, context->overflow);
 }
 
 int AvgReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = LoadDouble_IOError(io, goto err);
     context->cnt = LoadDouble_IOError(io, goto err);
+    context->overflow = LoadUnsigned_IOError(io, goto err);
     return TSDB_OK;
 err:
     return TSDB_ERROR;
