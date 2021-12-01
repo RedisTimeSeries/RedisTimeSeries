@@ -91,6 +91,7 @@ int ParseCompactionPolicy(const char *policy_string,
     size_t len = strlen(policy_string);
     char *rest = malloc(len + 1);
     memcpy(rest, policy_string, len + 1);
+    *parsed_rules_out = NULL;
     *rules_count = 0;
 
     // the ';' is a separator so we need to add +1 for the policy count
@@ -115,6 +116,10 @@ int ParseCompactionPolicy(const char *policy_string,
     if (success == FALSE) {
         // all or nothing, don't allow partial parsing
         *rules_count = 0;
+        if (*parsed_rules_out) {
+            free(*parsed_rules_out);
+            *parsed_rules_out = NULL;
+        }
     }
     return success;
 }

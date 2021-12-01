@@ -168,6 +168,7 @@ _SOURCES=\
 	query_language.c \
 	reply.c \
 	rdb.c \
+	short_read.c \
 	resultset.c \
 	tsdb.c \
 	series_iterator.c
