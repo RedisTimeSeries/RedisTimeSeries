@@ -13,9 +13,6 @@
 #include <stdbool.h>   // bool
 #include <sys/types.h> // u_int_t
 
-#define BIN_NUM_VALUES 64
-#define BINW BIN_NUM_VALUES
-
 typedef u_int64_t timestamp_t;
 typedef u_int64_t binary_t;
 typedef u_int64_t globalbit_t;
@@ -62,9 +59,6 @@ typedef struct Compressed_Iterator
     u_int8_t leading;
     u_int8_t trailing;
     u_int8_t blocksize;
-
-    // used for Faster Remainder by Direct Computation
-    uint64_t M;
 } Compressed_Iterator;
 
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
