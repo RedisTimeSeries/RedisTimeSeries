@@ -89,7 +89,7 @@
  */
 
 #include "gorilla.h"
-#include "fastmod.h"
+#include "fastmod/include/fastmod.h"
 #include <assert.h>
 
 #define DOUBLE_LEADING 5
