@@ -5,3 +5,4 @@ git+https://github.com/RedisLabsModules/RLTest.git@master
 ramp-packer
 statistics
 hiredis==2.0.0
+gevent==1.2.1
