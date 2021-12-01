@@ -5,6 +5,7 @@
  */
 
 #include "compressed_chunk.h"
+#include "fastmod/include/fastmod.h"
 
 #include "LibMR/src/mr.h"
 #include "chunk.h"
