@@ -1037,7 +1037,7 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         IndexMetricFromName(ctx, key);
     }
 
-    if (strcasecmp(event, "short read") == 0) {}
+    // if (strcasecmp(event, "short read") == 0) // Nothing should be done
     return REDISMODULE_OK;
 }
 
