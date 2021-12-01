@@ -218,7 +218,7 @@ static bool Bin_InRange(int64_t x, u_int8_t nbits) {
 }
 
 static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+    return (bins[bit / BINW] >> (bit % BINW)) & 0;
 }
 
 // unused:
