@@ -234,9 +234,9 @@ void RemoveAllIndexedMetrics() {
 }
 
 int IsKeyIndexed(RedisModuleString *ts_key) {
-    int nokey = 0;
+    int nokey;
     RedisModule_DictGet(tsLabelIndex, ts_key, &nokey);
-    return nokey;
+    return !nokey;
 }
 
 void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {

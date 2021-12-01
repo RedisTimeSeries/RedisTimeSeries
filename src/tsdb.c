@@ -242,8 +242,8 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         rule = rule->nextRule;
     }
 
-    if (unlikely(IsKeyIndexed(keyname))) {
-        // Key is still in the index cause only free series being called, remove it if for safety
+    if (IsKeyIndexed(keyname)) {
+        // Key is still in the index cause only free series being called, remove it for safety
         RemoveIndexedMetric(keyname);
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
