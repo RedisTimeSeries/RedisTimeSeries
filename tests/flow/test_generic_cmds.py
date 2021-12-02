@@ -73,8 +73,8 @@ def test_evict():
         # make sure t{1} deleted
         res = r.execute_command('keys *')
         i = 4
-        while(sorted(res)[0] == b't{1}'):
-            assert r.execute_command('TS.CREATE', 't%s' % (i))
+        while b't{1}' in res:
+            assert r.execute_command('TS.CREATE', 't{%s}' % (i,))
             i += 1
             res = r.execute_command('keys *')
 
