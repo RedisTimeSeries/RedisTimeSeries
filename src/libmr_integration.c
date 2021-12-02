@@ -583,7 +583,7 @@ static size_t ListRecord_Len(Record *base) {
 }
 
 static Record *ListRecord_Get(Record *base, size_t index) {
-    RedisModule_Assert(ListRecord_Len(base) > index && index >= 0);
+    RedisModule_Assert(ListRecord_Len(base) > index);
     ListRecord *r = (ListRecord *)base;
     return r->records[index];
 }
