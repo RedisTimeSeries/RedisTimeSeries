@@ -18,22 +18,22 @@ include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
 
-LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/LibMR
+export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
 
-HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
+export HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
 include $(ROOT)/build/hiredis/Makefile.defs
 
-LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
+export LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
 include $(ROOT)/build/libevent/Makefile.defs
 
-DRAGONBOX_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/dragonbox
+export DRAGONBOX_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/dragonbox
 include $(ROOT)/build/dragonbox/Makefile.defs
 
-FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
+export FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
 include $(ROOT)/build/fast_double_parser_c/Makefile.defs
 
-RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
+export RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
 include $(ROOT)/build/rmutil/Makefile.defs
 
 #----------------------------------------------------------------------------------------------  
@@ -253,7 +253,7 @@ libmr: $(LIBMR)
 
 $(LIBMR): $(LIBEVENT) $(HIREDIS)
 	@echo Building $@ ...
-	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG=''
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR
 
 dragonbox: $(DRAGONBOX)
 
@@ -288,7 +288,7 @@ ifdef ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil  DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
