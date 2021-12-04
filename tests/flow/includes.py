@@ -23,3 +23,14 @@ def skip_on_rlec():
     if RLEC_CLUSTER:
         _rltestEnv().skip()
 
+
+def decode_if_needed(data):
+    if isinstance(data, list):
+        ret = []
+        for item in data:
+            ret.append(decode_if_needed(item))
+        return ret
+    elif isinstance(data, bytes):
+        return data.decode()
+    else:
+        return data
