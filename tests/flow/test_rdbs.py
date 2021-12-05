@@ -15,6 +15,21 @@ def normalize_info(data):
     info.pop(b'chunkType')
     return info
 
+def testRDB():
+    env = Env()
+    env.skipOnCluster()
+    with Env().getConnection() as r:
+        assert r.execute_command('TS.CREATE', 'ts1', 'RETENTION', '1000', 'CHUNK_SIZE', '1024',
+                            'ENCODING', 'UNCOMPRESSED', 'DUPLICATE_POLICY', 'min',
+                            'LABELS', 'name',
+                            'brown', 'color', 'pink')
+        r.execute_command('TS.ADD', 'ts1', 100, 99)
+        r.execute_command('TS.ADD', 'ts1', 110, 500.5)
+        dump = r.execute_command("dump", "ts1")
+        assert r.execute_command("restore", "ts2", "0", dump)
+        info1 = r.execute_command('TS.INFO', 'ts1', 'DEBUG')
+        info2 = r.execute_command('TS.INFO', 'ts2', 'DEBUG')
+        assert info1 == info2
 
 def testRDBCompatibility():
     env = Env()

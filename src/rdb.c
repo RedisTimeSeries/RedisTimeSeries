@@ -21,6 +21,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     double lastValue;
     timestamp_t lastTimestamp;
     uint64_t totalSamples;
+    DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
     RedisModuleString *destKey = NULL;
@@ -45,6 +46,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         lastTimestamp = LoadUnsigned_IOError(io, goto err);
         lastValue = LoadDouble_IOError(io, goto err);
         totalSamples = LoadUnsigned_IOError(io, goto err);
+        if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
+            duplicatePolicy = LoadUnsigned_IOError(io, goto err);
+        }
         uint64_t hasSrcKey = LoadUnsigned_IOError(io, goto err);
         if (hasSrcKey) {
             srcKey = LoadString_IOError(io, goto err);
@@ -79,7 +83,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         } else {
             lastRule->nextRule = rule;
         }
-        if (rule->aggClass->readContext(rule->aggContext, io)) {
+        if (rule->aggClass->readContext(rule->aggContext, io, encver)) {
             goto err;
         }
         lastRule = rule;
@@ -114,6 +118,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         series->totalSamples = totalSamples;
+        series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
         srcKey = NULL;
         series->lastTimestamp = lastTimestamp;
@@ -174,6 +179,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->lastTimestamp);
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
+    RedisModule_SaveUnsigned(io, series->duplicatePolicy);
     if (series->srcKey != NULL) {
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
