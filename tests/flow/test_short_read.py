@@ -13,6 +13,8 @@ from RLTest import Env
 import shutil
 import platform
 from test_helper_classes import SAMPLE_SIZE
+from includes import *
+
 OS = os.getenv('OS')
 
 if platform.system() != 'Darwin':
@@ -349,6 +351,7 @@ def test_ShortRead():
     env = Env(decodeResponses=True)
     env.skipOnCluster()
     env.skipOnVersionSmaller("6.2.0")
+    skip_on_rlec()
 
     env.execute_command('FLUSHALL')
     create_timeseries(env, False)

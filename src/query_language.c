@@ -125,7 +125,6 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
         goto err_exit;
     }
 
@@ -650,7 +649,11 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    parseLabelQuery(ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels);
+    if (parseLabelQuery(
+            ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
+        REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 

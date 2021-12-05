@@ -335,10 +335,10 @@ def test_mrange_align():
             ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
         ]
 
-        assert expected_start_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
-                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
-        assert expected_end_result == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
-                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x'))
+        assert expected_start_result == decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
+                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')))
+        assert expected_end_result == decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
+                                                          'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')))
 
         def groupby(data):
             result =  defaultdict(lambda: 0)
@@ -350,9 +350,9 @@ def test_mrange_align():
         expected_groupby_start_result = [['generation=x', [], groupby(expected_start_result)]]
         expected_groupby_end_result = [['generation=x', [], groupby(expected_end_result)]]
 
-        assert expected_groupby_start_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
+        assert expected_groupby_start_result == decode_if_needed(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
                                  'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
-                                 'GROUPBY', 'generation', 'REDUCE', 'max')
-        assert expected_groupby_end_result == r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
+                                 'GROUPBY', 'generation', 'REDUCE', 'max'))
+        assert expected_groupby_end_result == decode_if_needed(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
                                                                   'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
-                                                                  'GROUPBY', 'generation', 'REDUCE', 'max')
+                                                                  'GROUPBY', 'generation', 'REDUCE', 'max'))
