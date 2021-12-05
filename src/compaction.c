@@ -6,6 +6,7 @@
 #include "compaction.h"
 
 #include "load_io_error_macros.h"
+#include "rdb.h"
 
 #include <ctype.h>
 #include <math.h> // sqrt
@@ -63,11 +64,15 @@ int SingleValueFinalize(void *contextPtr, double *val) {
 void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
+    RedisModule_SaveUnsigned(io, context->isResetted);
 }
 
-int SingleValueReadContext(void *contextPtr, RedisModuleIO *io) {
+int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = LoadDouble_IOError(io, goto err);
+    if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
+        context->isResetted = LoadUnsigned_IOError(io, goto err);
+    }
     return TSDB_OK;
 err:
     return TSDB_ERROR;
@@ -106,7 +111,7 @@ void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveDouble(io, context->cnt);
 }
 
-int AvgReadContext(void *contextPtr, RedisModuleIO *io) {
+int AvgReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = LoadDouble_IOError(io, goto err);
     context->cnt = LoadDouble_IOError(io, goto err);
@@ -197,7 +202,7 @@ void StdWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->cnt);
 }
 
-int StdReadContext(void *contextPtr, RedisModuleIO *io) {
+int StdReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     StdContext *context = (StdContext *)contextPtr;
     context->sum = LoadDouble_IOError(io, goto err);
     context->sum_2 = LoadDouble_IOError(io, goto err);
@@ -316,7 +321,7 @@ void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
-int MaxMinReadContext(void *contextPtr, RedisModuleIO *io) {
+int MaxMinReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     char *sb = NULL;
     size_t len = 1;
