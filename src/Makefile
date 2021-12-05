@@ -70,6 +70,7 @@ make flow_tests    # run tests
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
+  EXT=1            # run tests with existing redis-server running
 
 make pack          # build packages (ramp & dependencies)
 
