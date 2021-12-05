@@ -57,7 +57,7 @@ CC_FLAGS += \
 	-I$(ROOT)/deps/LibMR/deps/hiredis \
 	-I$(ROOT)/deps/LibMR/deps/hiredis/adapters \
 	-I$(ROOT)/deps/LibMR/deps/libevent/include \
-	-I$(BINROOT)/libevent/include \
+	-I$(LIBEVENT_BINDIR)/include \
 	$(CC_FLAGS.coverage)
 
 ifeq ($(DEBUG),1)
