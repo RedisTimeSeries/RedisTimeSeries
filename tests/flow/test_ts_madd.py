@@ -9,6 +9,7 @@ from includes import *
 def test_madd():
     sample_len = 1024
     Env().skipOnCluster()
+    skip_on_rlec()
     with Env().getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
@@ -62,6 +63,7 @@ def test_ooo_madd():
 
 def test_partial_madd():
     Env().skipOnCluster()
+    skip_on_rlec()
     with Env().getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')
@@ -82,6 +84,7 @@ def test_partial_madd():
 
 def test_extensive_ts_madd():
     Env().skipOnCluster()
+    skip_on_rlec()
     with Env(decodeResponses=True).getConnection() as r:
         r.execute_command("ts.create", 'test_key1')
         r.execute_command("ts.create", 'test_key2')

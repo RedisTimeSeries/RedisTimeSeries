@@ -408,7 +408,7 @@ jobs:
             cd
             sudo mkdir -p rlec
             sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
-            sudo rlec start --os bionic
+            sudo rlec start --verbose --version 6.2.8 --build 50 --os bionic
       - run:
           name: Flow Test
           shell: /bin/bash -l -eo pipefail
@@ -636,7 +636,7 @@ workflows:
             parameters:
               redis_version: ["5.0", "6.0"]
       - test-rlec:
-          <<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - valgrind:
           requires:
             - build
