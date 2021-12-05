@@ -348,6 +348,7 @@ def downloadFiles(target_dir):
 def test_ShortRead():
     env = Env(decodeResponses=True)
     env.skipOnCluster()
+    env.skipOnVersionSmaller("6.2.0")
 
     env.execute_command('FLUSHALL')
     create_timeseries(env, False)
