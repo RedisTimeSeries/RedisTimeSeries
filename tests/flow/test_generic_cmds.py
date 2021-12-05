@@ -179,37 +179,11 @@ def test_renamenx():
         env.assertEqual(res[index+1], [[b't{1}_agg_renamed', 10, b'AVG']])
 
 
-def test_copy_compressed():
-    env = Env()
-    env.skipOnVersionSmaller("7.0.0")
-    with env.getClusterConnectionIfNeeded() as r:
-        init(env, r)
-        
-        assert r.execute_command('RENAMENX', 't{1}', 't{1}_renamed')
-        res = r.execute_command('ts.info', 't{1}_agg')
-        index = res.index(b'sourceKey')
-        env.assertEqual(res[index+1], b't{1}_renamed')
-
-        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
-        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg', b't{1}_renamed']))
-        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
-        env.assertEqual(sorted(res), sorted([[b't{2}', [], []],
-                                             [b't{1}_agg', [], []],
-                                             [b't{1}_renamed',  [], [10, b'19']]]))
-
-        assert r.execute_command('RENAMENX', 't{1}_agg', 't{1}')
-        res = r.execute_command('ts.info', 't{1}_renamed')
-        index = res.index(b'rules')
-        env.assertEqual(res[index+1], [[b't{1}', 10, b'AVG']])
-
 def test_copy_compressed_uncompressed():
     env = Env()
     env.skipOnVersionSmaller("7.0.0")
-    for compresssion in [ "UNCOMPRESSED", 'COMPRESSED']:
+    for compresssion in ["UNCOMPRESSED", 'COMPRESSED']:
         with env.getClusterConnectionIfNeeded() as r:
-            res = r.execute_command('INFO')
-            if(version.parse(res['redis_version']) < version.parse("6.0.0")):
-                self.skip() # copy exists only from version 6
             r.execute_command('FLUSHALL')
             init(env, r, compression=compresssion)
             for i in range(1000):
@@ -229,8 +203,8 @@ def test_copy_compressed_uncompressed():
             index = res.index(b'labels')
             env.assertEqual(res[index+1], t1_info[index+1])
 
-            copied_data = r.execute_command('TS.range', 't{1}', '-', '+')
-            data = r.execute_command('TS.range', 't{1}_copied', '-', '+',)
+            data = r.execute_command('TS.range', 't{1}', '-', '+')
+            copied_data = r.execute_command('TS.range', 't{1}_copied', '-', '+',)
             assert data == copied_data
 
             res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
