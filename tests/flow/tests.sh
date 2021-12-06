@@ -29,6 +29,7 @@ help() {
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
+		EXT|EXISTING_ENV=1  Run the tests on existing env
 
 		TEST=test           Run specific test (e.g. test.py:test_name)
 		VALGRIND|VG=1       Run with Valgrind
@@ -95,43 +96,55 @@ run_tests() {
 		printf "Running $title:\n\n"
 	fi
 
-	config=$(mktemp "${TMPDIR:-/tmp}/rltest.XXXXXXX")
-	rm -f $config
-	if [[ $RLEC != 1 ]]; then
-		cat <<-EOF > $config
-			--clear-logs
-			--oss-redis-path=$REDIS_SERVER
-			--module $MODULE
-			--module-args '$MODARGS'
-			$RLTEST_ARGS
-			$VALGRIND_ARGS
+	if [[ $EXISTING_ENV != 1 ]]; then
+		rltest_config=$(mktemp "${TMPDIR:-/tmp}/rltest.XXXXXXX")
+		rm -f $rltest_config
+		if [[ $RLEC != 1 ]]; then
+			cat <<-EOF > $rltest_config
+				--clear-logs
+				--oss-redis-path=$REDIS_SERVER
+				--module $MODULE
+				--module-args '$MODARGS'
+				$RLTEST_ARGS
+				$VALGRIND_ARGS
 
-			EOF
-	else
-		cat <<-EOF > $config
-			--clear-logs
+				EOF
+		else
+			cat <<-EOF > $rltest_config
+				--clear-logs
+				$RLTEST_ARGS
+				$VALGRIND_ARGS
+
+				EOF
+		fi
+	else # existing env
+		rltest_config=$(mktemp "${TMPDIR:-/tmp}/xredis_rltest.XXXXXXX")
+		rm -f $rltest_config
+		cat <<-EOF > $rltest_config
+			--env existing-env
 			$RLTEST_ARGS
-			$VALGRIND_ARGS
 
 			EOF
 	fi
 
 	cd $ROOT/tests/flow
+
 	if [[ $VERBOSE == 1 ]]; then
 		echo "RLTest configuration:"
-		cat $config
+		cat $rltest_config
 	fi
 
 	[[ $RLEC == 1 ]] && export RLEC_CLUSTER=1
-
+	
+	local E=0
 	if [[ $NOP != 1 ]]; then
-		{ $OP python3 -m RLTest @$config; E=$?; } || true
+		{ $OP python3 -m RLTest @$rltest_config; (( E |= $? )); } || true
 	else
-		$OP python3 -m RLTest @$config
-		E=0
+		$OP python3 -m RLTest @$rltest_config
 	fi
 
-	[[ $KEEP != 1 ]] && rm -f $config
+	[[ $KEEP != 1 ]] && rm -f $rltest_config
+
 	return $E
 }
 
@@ -153,6 +166,8 @@ AOF=${AOF:-1}
 OSS_CLUSTER=${OSS_CLUSTER:-0}
 SHARDS=${SHARDS:-2}
 RLEC=${RLEC:-0}
+
+[[ $EXT == 1 ]] && EXISTING_ENV=1
 
 #----------------------------------------------------------------------------------------------
 
