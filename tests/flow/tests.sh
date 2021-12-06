@@ -110,7 +110,7 @@ run_tests() {
 
 				EOF
 		else
-			cat <<-EOF > $config
+			cat <<-EOF > $rltest_config
 				--clear-logs
 				$RLTEST_ARGS
 				$VALGRIND_ARGS
