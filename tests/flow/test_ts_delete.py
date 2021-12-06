@@ -121,7 +121,7 @@ def test_bad_del(self):
         assert r.execute_command("ts.del", "test_key", 200, 100) == 0
 
         assert r.execute_command("ts.del", "test_key", 100, 300) == 2
-        assert r.execute_command("ts.del", "test_key2", 100, 300) == 0
+        assert r.execute_command("ts.del", "test_key2", 100, 300) == 2
 
         self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
         with pytest.raises(redis.ResponseError) as excinfo:
