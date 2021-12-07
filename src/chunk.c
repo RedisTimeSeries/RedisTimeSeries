@@ -11,6 +11,7 @@
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
+    newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
     newChunk->size = size;
     newChunk->samples = (Sample *)malloc(size);
