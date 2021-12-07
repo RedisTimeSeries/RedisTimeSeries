@@ -112,12 +112,17 @@ def test_bad_del(self):
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("ts.del", "test_key", 100)
 
+        dump = r.execute_command("dump", "test_key")
+        assert r.execute_command("restore", "test_key2", "0", dump)
+
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command("ts.del", "test_key", 100, '200a')
 
         assert r.execute_command("ts.del", "test_key", 200, 100) == 0
 
         assert r.execute_command("ts.del", "test_key", 100, 300) == 2
+
+        assert r.execute_command("ts.del", "test_key2", 100, 300) == 2
 
         self.assertTrue(r.execute_command("SET", "BAD_X", "NOT_TS"))
         with pytest.raises(redis.ResponseError) as excinfo:
