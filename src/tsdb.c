@@ -794,11 +794,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 }
 
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-    // start iterator from smallest key compare to startTs
-    timestamp_t rax_key;
-    seriesEncodeTimestamp(&rax_key, start_ts);
-    RedisModuleDictIter *iter =
-        RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    // start iterator from smallest key
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
 
     Chunk_t *currentChunk;
     void *currentKey;
