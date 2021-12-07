@@ -516,7 +516,7 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
                                    double val) {
     RedisModuleKey *key;
     Series *destSeries;
-    if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
+    if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE)) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return false;
     }
@@ -678,7 +678,7 @@ static int ContinuousDeletion(RedisModuleCtx *ctx,
                               timestamp_t end) {
     RedisModuleKey *key;
     Series *series;
-    if (!GetSeries(ctx, key_str, &key, &series, REDISMODULE_READ)) {
+    if (!GetSeries(ctx, key_str, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE)) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return TSDB_ERROR;
     }
