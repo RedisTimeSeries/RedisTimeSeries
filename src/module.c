@@ -975,7 +975,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE);
     if (!status) {
         return REDISMODULE_ERR;
     }
