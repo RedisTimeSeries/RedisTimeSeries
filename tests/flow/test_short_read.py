@@ -350,6 +350,7 @@ def downloadFiles(target_dir):
 def test_ShortRead():
     env = Env(decodeResponses=True)
     env.skipOnCluster()
+    env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnVersionSmaller("6.2.0")
     skip_on_rlec()
 
