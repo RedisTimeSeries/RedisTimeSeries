@@ -181,7 +181,7 @@ def test_renamenx():
 
 def test_copy_compressed_uncompressed():
     env = Env()
-    env.skipOnVersionSmaller("7.0.0")
+    env.skipOnVersionSmaller("6.2.0")
     for compresssion in ["UNCOMPRESSED", 'COMPRESSED']:
         with env.getClusterConnectionIfNeeded() as r:
             r.execute_command('FLUSHALL')
