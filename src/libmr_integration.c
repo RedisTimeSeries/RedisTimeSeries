@@ -264,7 +264,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
+        const int status = GetSeriesSafeSilent(ctx, keyName, &key, &series, REDISMODULE_READ);
 
         RedisModule_FreeString(ctx, keyName);
 
@@ -321,7 +321,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = SilentGetSeries(ctx, keyName, &key, &series, REDISMODULE_READ);
+        const int status = GetSeriesSafeSilent(ctx, keyName, &key, &series, REDISMODULE_READ);
         RedisModule_FreeString(ctx, keyName);
 
         if (!status) {

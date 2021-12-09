@@ -70,7 +70,7 @@ void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
 int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = LoadDouble_IOError(io, goto err);
-    if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
+    if (encver >= TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER) {
         context->isResetted = LoadUnsigned_IOError(io, goto err);
     }
     return TSDB_OK;
