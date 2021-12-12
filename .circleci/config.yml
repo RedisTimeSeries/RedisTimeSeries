@@ -89,7 +89,7 @@ commands:
             cd
             echo 'export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i /home/circleci/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"' > /tmp/arlecchino.sh
             sudo mv /tmp/arlecchino.sh /etc/profile.d
-            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+            sudo -E bash -l -c "source <(curl -Ls https://github.com/RedisLabsModules/arlecchino/blob/master/bin/setup-rlec)"
 
   save-tests-logs:
     steps:
@@ -250,7 +250,7 @@ commands:
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
 
       - run:
-          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
+          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
@@ -270,7 +270,7 @@ commands:
               --upload_results_s3 \
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
-              --allowed-envs << parameters.allowed_envs >> 
+              --allowed-envs << parameters.allowed_envs >>
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -500,7 +500,7 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-standalone"
-  
+
   performance-ci-automation-oss-cluster:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -514,7 +514,7 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-cluster"
           timeout: 90m
-  
+
   performance-ci-automation-oss-standalone-profiler:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
