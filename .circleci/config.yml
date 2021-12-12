@@ -244,14 +244,11 @@ commands:
       - run:
           name: Install remote benchmark python dependencies
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
-<<<<<<< HEAD
 
       - run:
           name: Get gears
           command: |
             ./sbin/getgears
-=======
->>>>>>> origin/master
 
       - run:
           name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
@@ -425,7 +422,6 @@ jobs:
             sudo make flow_tests RLEC=1 SHOW=1
       - save-tests-logs
 
->>>>>>> origin/master
   coverage:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -507,12 +503,8 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-standalone"
-<<<<<<< HEAD
           gears_module_path: ""
 
-=======
-  
->>>>>>> origin/master
   performance-ci-automation-oss-cluster:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
