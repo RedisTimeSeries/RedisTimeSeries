@@ -8,19 +8,21 @@
 
 #include "module.h"
 
+#include "LibMR/src/cluster.h"
+#include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
 #include "fast_double_parser_c/fast_double_parser_c.h"
-#include "gears_commands.h"
-#include "gears_integration.h"
 #include "indexer.h"
+#include "libmr_commands.h"
+#include "libmr_integration.h"
 #include "query_language.h"
 #include "rdb.h"
-#include "redisgears.h"
 #include "reply.h"
 #include "resultset.h"
+#include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
 
@@ -179,7 +181,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         TSDB_queryindex_RG(ctx, queries);
         QueryPredicateList_Free(queries);
     } else {
@@ -319,7 +321,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mrange_RG(ctx, argv, argc, false);
     }
 
@@ -327,7 +329,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mrange_RG(ctx, argv, argc, true);
     }
     return TSDB_generic_mrange(ctx, argv, argc, true);
@@ -498,13 +500,27 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
+    RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
+    size_t replication_count = 0;
     for (int i = 1; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
         RedisModuleString *valueStr = argv[i + 2];
-        add(ctx, keyName, timestampStr, valueStr, NULL, -1);
+        if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
+            replication_data[replication_count] = keyName;
+            replication_data[replication_count + 1] = timestampStr;
+            replication_data[replication_count + 2] = valueStr;
+            replication_count += 3;
+        }
     }
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (replication_count > 0) {
+        // we want to replicate only successful sample inserts to avoid errors on the replica, when
+        // this errors occurs, redis will CRITICAL error to its log and potentially fill up the disk
+        // depending on the actual traffic.
+        RedisModule_Replicate(ctx, "TS.MADD", "v", replication_data, replication_count);
+    }
+    free(replication_data);
 
     for (int i = 1; i < argc; i += 3) {
         RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
@@ -547,7 +563,7 @@ int CreateTsKey(RedisModuleCtx *ctx,
         return TSDB_ERROR;
     }
 
-    IndexMetric(ctx, keyName, (*series)->labels, (*series)->labelsCount);
+    IndexMetric(keyName, (*series)->labels, (*series)->labelsCount);
 
     return TSDB_OK;
 }
@@ -617,14 +633,14 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
-        RemoveIndexedMetric(ctx, keyName, series->labels, series->labelsCount);
+        RemoveIndexedMetric(keyName);
         // free current labels
         FreeLabels(series->labels, series->labelsCount);
 
         // set new newLabels
         series->labels = cCtx.labels;
         series->labelsCount = cCtx.labelsCount;
-        IndexMetric(ctx, keyName, series->labels, series->labelsCount);
+        IndexMetric(keyName, series->labels, series->labelsCount);
     }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
@@ -847,7 +863,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (IsGearsLoaded()) {
+    if (IsMRCluster()) {
         return TSDB_mget_RG(ctx, argv, argc);
     }
 
@@ -906,6 +922,45 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static inline bool is_obsolete(timestamp_t ts,
+                               timestamp_t lastTimestamp,
+                               timestamp_t retentionTime) {
+    return (lastTimestamp > retentionTime) && (ts < lastTimestamp - retentionTime);
+}
+
+static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
+                                                  const Series *series,
+                                                  const RangeArgs *args) {
+    bool is_valid = true;
+    if (!series->rules)
+        return true;
+
+    // Verify startTimestamp in retention period
+    if (is_obsolete(args->startTimestamp, series->lastTimestamp, series->retentionTime)) {
+        is_valid = false;
+    }
+
+    // Verify all compaction's buckets are in the retention period
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t curAggWindowStart = CalcWindowStart(args->startTimestamp, ruleTimebucket);
+        if (is_obsolete(curAggWindowStart, series->lastTimestamp, series->retentionTime)) {
+            is_valid = false;
+        }
+        rule = rule->nextRule;
+    }
+
+    if (unlikely(!is_valid)) {
+        RTS_ReplyGeneralError(
+            ctx,
+            "TSDB: Can't delete an event which is older than retention time, in such case no "
+            "valid way to update the downsample");
+    }
+
+    return is_valid;
+}
+
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -920,8 +975,13 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE);
     if (!status) {
+        return REDISMODULE_ERR;
+    }
+
+    if (unlikely(!verify_compaction_del_possible(ctx, series, &args))) {
+        RedisModule_CloseKey(key);
         return REDISMODULE_ERR;
     }
 
@@ -935,8 +995,29 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if ((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid))) &&
+        subevent == REDISMODULE_SUBEVENT_FLUSHDB_END) {
+        RemoveAllIndexedMetrics();
+    }
+}
+
+void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, void *data) {
+    RedisModule_Log(ctx, "warning", "swapdb isn't supported by redis timeseries");
+    if ((!memcmp(&e, &RedisModuleEvent_FlushDB, sizeof(e)))) {
+        RedisModuleSwapDbInfo *ei = data;
+        REDISMODULE_NOT_USED(ei);
+    }
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
-    if (strcasecmp(event, "del") == 0) {
+    if (strcasecmp(event, "del") ==
+            0 || // unlink also notifies with del with freeseries called before
+        strcasecmp(event, "set") == 0 ||
+        strcasecmp(event, "expire") == 0 || strcasecmp(event, "expired") == 0 ||
+        strcasecmp(event, "evict") == 0 || strcasecmp(event, "evicted") == 0 ||
+        strcasecmp(event, "trimmed") == 0 // only on enterprise
+    ) {
         CleanLastDeletedSeries(key);
     }
 
@@ -944,24 +1025,62 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         RestoreKey(ctx, key);
     }
 
-    if (strcasecmp(event, "rename_from") == 0) {
+    if (strcasecmp(event, "rename_from") == 0) { // include also renamenx
         RenameSeriesFrom(ctx, key);
     }
 
-    if (strcasecmp(event, "rename_to") == 0) {
+    if (strcasecmp(event, "rename_to") == 0) { // include also renamenx
         RenameSeriesTo(ctx, key);
     }
 
+    if (strcasecmp(event, "loaded") == 0) {
+        IndexMetricFromName(ctx, key);
+    }
+
+    // if (strcasecmp(event, "short read") == 0) // Nothing should be done
     return REDISMODULE_OK;
 }
 
-void module_loaded(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
-    if (subevent != REDISMODULE_SUBEVENT_MODULE_LOADED) {
-        return;
+void ReplicaBackupCallback(RedisModuleCtx *ctx,
+                           RedisModuleEvent eid,
+                           uint64_t subevent,
+                           void *data) {
+    REDISMODULE_NOT_USED(eid);
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_CREATE:
+            Backup_Globals();
+            break;
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_RESTORE:
+            Restore_Globals();
+            break;
+        case REDISMODULE_SUBEVENT_REPL_BACKUP_DISCARD:
+            Discard_Globals_Backup();
+            break;
     }
-    RedisModuleModuleChange *moduleChange = (RedisModuleModuleChange *)data;
-    if (strcasecmp(moduleChange->module_name, "rg") == 0) {
-        register_rg(ctx);
+}
+
+int CheckVersionForShortRead() {
+    // Minimal versions: 6.2.5
+    // (6.0.15 is not supporting the required event notification for modules)
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion == 2) {
+        return RTS_currVersion.redisPatchVersion >= 5 ? REDISMODULE_OK : REDISMODULE_ERR;
+    } else if (RTS_currVersion.redisMajorVersion == 255 &&
+               RTS_currVersion.redisMinorVersion == 255 &&
+               RTS_currVersion.redisPatchVersion == 255) {
+        // Also supported on master (version=255.255.255)
+        return REDISMODULE_OK;
+    }
+    return REDISMODULE_ERR;
+}
+
+void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
+    if (CheckVersionForShortRead() == REDISMODULE_OK) {
+        int success = RedisModule_SubscribeToServerEvent(
+            ctx, RedisModuleEvent_ReplBackup, ReplicaBackupCallback);
+        RedisModule_Assert(success !=
+                           REDISMODULE_ERR); // should be supported in this redis version/release
+        RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS);
+        RedisModule_Log(ctx, "notice", "Enabled diskless replication");
     }
 }
 
@@ -1021,17 +1140,20 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    // ignore errors from redis gears registration, this can fail if the module is not loaded.
-    register_rg(ctx);
+    if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
 
     RedisModuleTypeMethods tm = { .version = REDISMODULE_TYPE_METHOD_VERSION,
                                   .rdb_load = series_rdb_load,
                                   .rdb_save = series_rdb_save,
                                   .aof_rewrite = RMUtil_DefaultAofRewrite,
                                   .mem_usage = SeriesMemUsage,
+                                  .copy = CopySeries,
                                   .free = FreeSeries };
 
-    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_SIZE_RDB_VER, &tm);
+    SeriesType =
+        RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_IS_RESSETED_DUP_POLICY_RDB_VER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
     IndexInit();
@@ -1069,9 +1191,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_GENERIC, NotifyCallback);
+    RedisModule_SubscribeToKeyspaceEvents(
+        ctx,
+        REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
+            REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED,
+        NotifyCallback);
 
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ModuleChange, module_loaded);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+
+    Initialize_RdbNotifications(ctx);
 
     return REDISMODULE_OK;
 }

@@ -10,6 +10,7 @@ static ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
+    .CloneChunk = Uncompressed_CloneChunk,
 
     .AddSample = Uncompressed_AddSample,
     .UpsertSample = Uncompressed_UpsertSample,
@@ -24,8 +25,8 @@ static ChunkFuncs regChunk = {
 
     .SaveToRDB = Uncompressed_SaveToRDB,
     .LoadFromRDB = Uncompressed_LoadFromRDB,
-    .GearsSerialize = Uncompressed_GearsSerialize,
-    .GearsDeserialize = Uncompressed_GearsDeserialize,
+    .MRSerialize = Uncompressed_MRSerialize,
+    .MRDeserialize = Uncompressed_MRDeserialize,
 };
 
 ChunkIterFuncs uncompressedChunkIteratorClass = {
@@ -54,8 +55,8 @@ static ChunkFuncs comprChunk = {
 
     .SaveToRDB = Compressed_SaveToRDB,
     .LoadFromRDB = Compressed_LoadFromRDB,
-    .GearsSerialize = Compressed_GearsSerialize,
-    .GearsDeserialize = Compressed_GearsDeserialize,
+    .MRSerialize = Compressed_MRSerialize,
+    .MRDeserialize = Compressed_MRDeserialize,
 };
 
 static ChunkIterFuncs compressedChunkIteratorClass = {
@@ -187,4 +188,36 @@ int timestamp_binary_search(const uint64_t *array, int size, uint64_t key) {
     }
     // if we reach here, then element was not present
     return -1;
+}
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx) {
+    MRError *err;
+    return MR_SerializationCtxReadeLongLong(sctx, &err);
+}
+
+char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
+    MRError *err;
+    size_t size = 0;
+    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
+    char *ret = malloc(size);
+    memcpy(ret, temp, size);
+    if (len != NULL) {
+        *len = size;
+    }
+    return ret;
+}
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val) {
+    MRError *err;
+    MR_SerializationCtxWriteLongLong(sctx, val, &err);
+}
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
+                                           const char *buff,
+                                           size_t len) {
+    MRError *err;
+    MR_SerializationCtxWriteBuffer(sctx, buff, len, &err);
 }

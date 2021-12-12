@@ -78,7 +78,7 @@ int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
 }
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
-    Series *newSeries = (Series *)malloc(sizeof(Series));
+    Series *newSeries = (Series *)calloc(1, sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
     newSeries->chunkSizeBytes = cCtx->chunkSizeBytes;
@@ -167,7 +167,9 @@ void freeLastDeletedSeries() {
     if (lastDeletedSeries->srcKey != NULL) {
         RedisModule_FreeString(NULL, lastDeletedSeries->srcKey);
     }
-    RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
+    if (lastDeletedSeries->keyName) {
+        RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
+    }
     free(lastDeletedSeries);
     lastDeletedSeries = NULL;
 }
@@ -177,6 +179,10 @@ void CleanLastDeletedSeries(RedisModuleString *key) {
         RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
         RedisModule_AutoMemory(ctx);
+
+        if (!lastDeletedSeries->isTemporary) {
+            RemoveIndexedMetric(lastDeletedSeries->keyName);
+        }
 
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
@@ -236,7 +242,41 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         rule = rule->nextRule;
     }
 
+    if (IsKeyIndexed(keyname)) {
+        // Key is still in the index cause only free series being called, remove it for safety
+        RemoveIndexedMetric(keyname);
+    }
+    IndexMetric(keyname, series->labels, series->labelsCount);
+
     RedisModule_CloseKey(key);
+}
+
+void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
+    // Try to open the series
+    Series *series;
+    RedisModuleKey *key = NULL;
+    RedisModuleString *_keyname = RedisModule_HoldString(ctx, keyname);
+    const int status = SilentGetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ);
+    if (!status) { // Not a timeseries key
+        goto cleanup;
+    }
+
+    if (unlikely(IsKeyIndexed(_keyname))) {
+        // when loading from rdb file the key shouldn't exist.
+        size_t len;
+        const char *str = RedisModule_StringPtrLen(_keyname, &len);
+        RedisModule_Log(
+            ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
+        RemoveIndexedMetric(_keyname); // for safety
+    }
+
+    IndexMetric(_keyname, series->labels, series->labelsCount);
+
+cleanup:
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(ctx, _keyname);
 }
 
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
@@ -249,8 +289,8 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     }
 
     // Reindex key by the new name
-    RemoveIndexedMetric(ctx, renameFromKey, series->labels, series->labelsCount);
-    IndexMetric(ctx, keyTo, series->labels, series->labelsCount);
+    RemoveIndexedMetric(renameFromKey);
+    IndexMetric(keyTo, series->labels, series->labelsCount);
 
     // A destination key was renamed
     if (series->srcKey) {
@@ -313,7 +353,54 @@ cleanup:
     renameFromKey = NULL;
 }
 
+void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
+    Series *src = (Series *)value;
+    Series *dst = (Series *)calloc(1, sizeof(Series));
+    memcpy(dst, src, sizeof(Series));
+    RedisModule_RetainString(NULL, tokey);
+    dst->keyName = tokey;
+
+    // Copy labels
+    if (src->labelsCount > 0) {
+        dst->labels = calloc(src->labelsCount, sizeof(Label));
+        for (size_t i = 0; i < dst->labelsCount; i++) {
+            dst->labels[i].key = RedisModule_CreateStringFromString(NULL, src->labels[i].key);
+            dst->labels[i].value = RedisModule_CreateStringFromString(NULL, src->labels[i].value);
+        }
+    }
+
+    // Copy chunks
+    dst->chunks = RedisModule_CreateDict(NULL);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0);
+    Chunk_t *curChunk;
+    char *curKey;
+    size_t keylen;
+    while ((curKey = RedisModule_DictNextC(iter, &keylen, &curChunk)) != NULL) {
+        Chunk_t *newChunk = src->funcs->CloneChunk(curChunk);
+        RedisModule_DictSetC(dst->chunks, curKey, keylen, newChunk);
+        if (src->lastChunk == curChunk) {
+            dst->lastChunk = newChunk;
+        }
+    }
+
+    RedisModule_DictIteratorStop(iter);
+
+    dst->srcKey = NULL;
+    dst->rules = NULL;
+
+    RemoveIndexedMetric(tokey); // in case of replace
+    if (dst->labelsCount > 0) {
+        IndexMetric(tokey, dst->labels, dst->labelsCount);
+    }
+    return dst;
+}
+
 // Releases Series and all its compaction rules
+// Doesn't free the cross reference between rules, only on "del" keyspace notification,
+// since Flush anyway will free all series.
+// Doesn't free the index just on "del" keyspace notification since RoF might delete the key while
+// it's only on the disk, in this case FreeSeries won't be called just the "del" keyspace
+// notification.
 void FreeSeries(void *value) {
     Series *currentSeries = (Series *)value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
@@ -323,16 +410,8 @@ void FreeSeries(void *value) {
     }
     RedisModule_DictIteratorStop(iter);
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModule_AutoMemory(ctx);
-    if (!currentSeries->isTemporary) {
-        RemoveIndexedMetric(
-            ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
-    }
-
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
-    RedisModule_FreeThreadSafeContext(ctx);
     RedisModule_FreeDict(NULL, currentSeries->chunks);
 
     if (currentSeries->isTemporary) {
@@ -431,6 +510,27 @@ int MultiSerieReduce(Series *dest,
     return 1;
 }
 
+static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
+                                   CompactionRule *rule,
+                                   timestamp_t start,
+                                   double val) {
+    RedisModuleKey *key;
+    Series *destSeries;
+    if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE)) {
+        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        return false;
+    }
+
+    if (destSeries->totalSamples == 0) {
+        SeriesAddSample(destSeries, start, val);
+    } else {
+        SeriesUpsertSample(destSeries, start, val, DP_LAST);
+    }
+    RedisModule_CloseKey(key);
+
+    return true;
+}
+
 static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     CompactionRule *rule = series->rules;
     if (rule == NULL) {
@@ -444,7 +544,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
         const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
         if (upsertTimestamp >= curAggWindowStart) {
             // upsert in latest timebucket
-            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL);
+            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
@@ -453,24 +553,16 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             const timestamp_t start = CalcWindowStart(upsertTimestamp, ruleTimebucket);
             // ensure last include/exclude
             double val = 0;
-            const int rv = SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val);
+            const int rv =
+                SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            RedisModuleKey *key;
-            Series *destSeries;
-            if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+            if (!RuleSeriesUpsertSample(ctx, rule, start, val)) {
                 continue;
             }
-            if (destSeries->totalSamples == 0) {
-                SeriesAddSample(destSeries, start, val);
-            } else {
-                SeriesUpsertSample(destSeries, start, val, DP_LAST);
-            }
-            RedisModule_CloseKey(key);
         }
         rule = rule->nextRule;
     }
@@ -580,12 +672,130 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
+static int ContinuousDeletion(RedisModuleCtx *ctx,
+                              RedisModuleString *key_str,
+                              timestamp_t start,
+                              timestamp_t end) {
+    RedisModuleKey *key;
+    Series *series;
+    if (!GetSeries(ctx, key_str, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE)) {
+        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        return TSDB_ERROR;
+    }
+
+    SeriesDelRange(series, start, end);
+
+    RedisModule_CloseKey(key);
+    return TSDB_OK;
+}
+
+void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
+    CompactionRule *rule = series->rules;
+    if (!rule)
+        return;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+
+    while (rule) {
+        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t curAggWindowStart =
+            CalcWindowStart(series->lastTimestamp, ruleTimebucket);
+
+        if (start_ts >= curAggWindowStart) {
+            // All deletion range in latest timebucket - only update the context on the rule
+            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+            if (rv == TSDB_ERROR) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
+        } else {
+            const timestamp_t startTSWindowStart = CalcWindowStart(start_ts, ruleTimebucket);
+            const timestamp_t endTSWindowStart = CalcWindowStart(end_ts, ruleTimebucket);
+            timestamp_t continuous_deletion_start;
+            timestamp_t continuous_deletion_end;
+            double val = 0;
+            bool is_empty;
+            int rv;
+
+            // ---- handle start bucket ----
+
+            rv = SeriesCalcRange(series,
+                                 startTSWindowStart,
+                                 startTSWindowStart + ruleTimebucket - 1,
+                                 rule,
+                                 &val,
+                                 &is_empty);
+            if (unlikely(rv == TSDB_ERROR)) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
+
+            if (is_empty) {
+                // first bucket should be deleted
+                continuous_deletion_start = startTSWindowStart;
+            } else { // first bucket needs update
+                // continuous deletion starts one bucket after startTSWindowStart
+                continuous_deletion_start = startTSWindowStart + ruleTimebucket;
+                if (!RuleSeriesUpsertSample(ctx, rule, startTSWindowStart, val)) {
+                    continue;
+                }
+            }
+
+            // ---- handle end bucket ----
+
+            if (end_ts >= curAggWindowStart) {
+                // deletion in latest timebucket
+                const int rv =
+                    SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+                if (rv == TSDB_ERROR) {
+                    RedisModule_Log(
+                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                    continue;
+                }
+                // continuous deletion ends one bucket before endTSWindowStart
+                continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+            } else {
+                // deletion in old timebucket
+                rv = SeriesCalcRange(series,
+                                     endTSWindowStart,
+                                     endTSWindowStart + ruleTimebucket - 1,
+                                     rule,
+                                     &val,
+                                     &is_empty);
+                if (unlikely(rv == TSDB_ERROR)) {
+                    RedisModule_Log(
+                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                    continue;
+                }
+
+                if (is_empty) {
+                    // continuous deletion ends in end timebucket
+                    continuous_deletion_end = endTSWindowStart;
+                } else { // update in end timebucket
+                    // continuous deletion ends one bucket before endTSWindowStart
+                    continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+                    if (!RuleSeriesUpsertSample(ctx, rule, endTSWindowStart, val)) {
+                        continue;
+                    }
+                }
+            }
+
+            // ---- handle continuous deletion ----
+
+            if (continuous_deletion_end >= continuous_deletion_start) {
+                ContinuousDeletion(
+                    ctx, rule->destKey, continuous_deletion_start, continuous_deletion_end);
+            }
+        }
+
+        rule = rule->nextRule;
+    }
+
+    RedisModule_FreeThreadSafeContext(ctx);
+}
+
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-    // start iterator from smallest key compare to startTs
-    timestamp_t rax_key;
-    seriesEncodeTimestamp(&rax_key, start_ts);
-    RedisModuleDictIter *iter =
-        RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    // start iterator from smallest key
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
 
     Chunk_t *currentChunk;
     void *currentKey;
@@ -593,13 +803,19 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     size_t deletedSamples = 0;
     const ChunkFuncs *funcs = series->funcs;
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
+        // We deleted the latest samples, no more chunks/samples to delete or cur chunk start_ts is
+        // larger than end_ts
+        if (!currentKey || funcs->GetFirstTimestamp(currentChunk) > end_ts)
+            break;
+
         // Should we delete the all chunk?
         bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
                                 funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
                                currentChunk != series->lastChunk;
+
         if (!ts_delCondition) {
             deletedSamples += funcs->DelRange(currentChunk, start_ts, end_ts);
-            break;
+            continue;
         }
 
         RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
@@ -613,6 +829,8 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     series->totalSamples -= deletedSamples;
 
     RedisModule_DictIteratorStop(iter);
+
+    CompactionDelRange(series, start_ts, end_ts);
     return deletedSamples;
 }
 
@@ -668,7 +886,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         }
         SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
 
-        Label *compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
+        Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof(Label));
         // todo: deep copy labels function
         for (int l = 0; l < labelsCount; l++) {
             compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
@@ -765,16 +983,23 @@ int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
                     timestamp_t end_ts,
                     CompactionRule *rule,
-                    double *val) {
+                    double *val,
+                    bool *is_empty) {
     AggregationClass *aggObject = rule->aggClass;
 
     Sample sample = { 0 };
     AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
+    bool _is_empty = true;
 
     while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
+        _is_empty = false;
     }
+    if (is_empty) {
+        *is_empty = _is_empty;
+    }
+
     SeriesIteratorClose(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);

@@ -166,3 +166,20 @@
     fun:Cluster_MessageThreadMain
     fun:start_thread
 }
+
+{
+    <redis_oss_temp_superssions>
+    Memcheck:Leak
+    fun:malloc
+    fun:ztrymalloc_usable
+    fun:zmalloc
+    fun:createObject
+    fun:tryCreateRawStringObject
+    fun:rdbGenericLoadStringObject
+    fun:rdbLoadStringObject
+    fun:rdbLoadRio
+    fun:readSyncBulkPayload
+    fun:callHandler
+    fun:connSocketEventHandler
+    fun:aeProcessEvents
+}

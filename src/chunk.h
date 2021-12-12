@@ -37,6 +37,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk);
  * @return
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
+Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src);
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 
 /**
@@ -71,10 +72,21 @@ void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 
-// Gears
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw);
-void Uncompressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br);
+// LibMR
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
+int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val);
+
+// this is just a temporary wrapper function that ignores error in order to preserve the common api
+void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
+                                           const char *buff,
+                                           size_t len);
+
+long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx);
+char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len);
 
 #endif

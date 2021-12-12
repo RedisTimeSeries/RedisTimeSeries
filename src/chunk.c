@@ -5,12 +5,13 @@
  */
 #include "chunk.h"
 
-#include "gears_integration.h"
+#include "libmr_integration.h"
 
 #include "rmutil/alloc.h"
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
+    newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
     newChunk->size = size;
     newChunk->samples = (Sample *)malloc(size);
@@ -22,7 +23,9 @@ Chunk_t *Uncompressed_NewChunk(size_t size) {
 }
 
 void Uncompressed_FreeChunk(Chunk_t *chunk) {
-    free(((Chunk *)chunk)->samples);
+    if (((Chunk *)chunk)->samples) {
+        free(((Chunk *)chunk)->samples);
+    }
     free(chunk);
 }
 
@@ -49,6 +52,20 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     curChunk->samples = realloc(curChunk->samples, curChunk->size);
 
     return newChunk;
+}
+
+/**
+ * Deep copy of src chunk to dst
+ * @param src: src chunk
+ * @return the copied chunk
+ */
+Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src) {
+    const Chunk *_src = src;
+    Chunk *dst = (Chunk *)malloc(sizeof(Chunk));
+    memcpy(dst, _src, sizeof(Chunk));
+    dst->samples = (Sample *)malloc(dst->size);
+    memcpy(dst->samples, _src->samples, dst->size);
+    return dst;
 }
 
 static int IsChunkFull(Chunk *chunk) {
@@ -233,35 +250,39 @@ size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);
 typedef void (*SaveStringBufferFunc)(void *, const char *str, size_t len);
-typedef uint64_t (*ReadUnsignedFunc)(void *);
-typedef char *(*ReadStringBufferFunc)(void *, size_t *);
 
 static void Uncompressed_GenericSerialize(Chunk_t *chunk,
                                           void *ctx,
                                           SaveUnsignedFunc saveUnsigned,
-                                          SaveStringBufferFunc saveString) {
+                                          SaveStringBufferFunc saveStringBuffer) {
     Chunk *uncompchunk = chunk;
 
     saveUnsigned(ctx, uncompchunk->base_timestamp);
     saveUnsigned(ctx, uncompchunk->num_samples);
     saveUnsigned(ctx, uncompchunk->size);
 
-    saveString(ctx, (char *)uncompchunk->samples, uncompchunk->size);
+    saveStringBuffer(ctx, (char *)uncompchunk->samples, uncompchunk->size);
 }
 
-static void Uncompressed_Deserialize(Chunk_t **chunk,
-                                     void *ctx,
-                                     ReadUnsignedFunc readUnsigned,
-                                     ReadStringBufferFunc readStringBuffer) {
-    Chunk *uncompchunk = (Chunk *)malloc(sizeof(*uncompchunk));
-
-    uncompchunk->base_timestamp = readUnsigned(ctx);
-    uncompchunk->num_samples = readUnsigned(ctx);
-    uncompchunk->size = readUnsigned(ctx);
-    size_t string_buffer_size;
-    uncompchunk->samples = (Sample *)readStringBuffer(ctx, &string_buffer_size);
-    *chunk = (Chunk_t *)uncompchunk;
-}
+#define UNCOMPRESSED_DESERIALIZE(chunk, ctx, load_unsigned, loadStringBuffer, ...)                 \
+    do {                                                                                           \
+        Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));                             \
+                                                                                                   \
+        uncompchunk->base_timestamp = load_unsigned(ctx, ##__VA_ARGS__);                           \
+        uncompchunk->num_samples = load_unsigned(ctx, ##__VA_ARGS__);                              \
+        uncompchunk->size = load_unsigned(ctx, ##__VA_ARGS__);                                     \
+        size_t string_buffer_size;                                                                 \
+        uncompchunk->samples =                                                                     \
+            (Sample *)loadStringBuffer(ctx, &string_buffer_size, ##__VA_ARGS__);                   \
+        *chunk = (Chunk_t *)uncompchunk;                                                           \
+        return TSDB_OK;                                                                            \
+                                                                                                   \
+err:                                                                                               \
+        __attribute__((cold, unused));                                                             \
+        *chunk = NULL;                                                                             \
+        Uncompressed_FreeChunk(uncompchunk);                                                       \
+        return TSDB_ERROR;                                                                         \
+    } while (0)
 
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Uncompressed_GenericSerialize(chunk,
@@ -270,13 +291,18 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                                   (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-void Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    Uncompressed_Deserialize(chunk,
-                             io,
-                             (ReadUnsignedFunc)RedisModule_LoadUnsigned,
-                             (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    UNCOMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 
-void Uncompressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {}
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
+    Uncompressed_GenericSerialize(chunk,
+                                  sctx,
+                                  (SaveUnsignedFunc)MR_SerializationCtxWriteLongLongWrapper,
+                                  (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
+}
 
-void Uncompressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {}
+int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
+    UNCOMPRESSED_DESERIALIZE(
+        chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
+}

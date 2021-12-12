@@ -19,21 +19,27 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.pip_install("wheel")
         self.pip_install("setuptools --upgrade")
 
-        self.install("git jq curl")
+        self.install("git jq curl unzip")
         self.run("%s/bin/enable-utf8" % READIES)
+
+        self.install("autoconf libtool m4 automake")
+        self.install("openssl")
 
     def debian_compat(self):
         self.run("%s/bin/getgcc --modern" % READIES)
+        self.install("libssl-dev")
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
         self.run("%s/bin/getepel" % READIES)
+        self.install("openssl-devel")
         self.run("%s/bin/getgcc --modern" % READIES)
 
     def arch_compat(self):
         self.install("lcov-git", aur=True)
 
     def fedora(self):
+        self.install("openssl-devel")
         self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
@@ -45,7 +51,8 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov")
 
         self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
-        self.pip_install("-r tests/flow/requirements.txt")
+        self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
+        self.pip_install("gevent")
 
 #----------------------------------------------------------------------------------------------
 

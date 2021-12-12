@@ -1,6 +1,6 @@
 from RLTest import Env
 from test_helper_classes import ALLOWED_ERROR, _insert_data, _get_ts_info
-
+from includes import *
 
 
 def test_simple_dump_restore(self):

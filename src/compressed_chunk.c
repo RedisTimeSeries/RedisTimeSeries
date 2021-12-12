@@ -6,11 +6,13 @@
 
 #include "compressed_chunk.h"
 
+#include "LibMR/src/mr.h"
 #include "chunk.h"
 #include "generic_chunk.h"
 
 #include <assert.h> // assert
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
 #include "rmutil/alloc.h"
@@ -36,13 +38,15 @@ Chunk_t *Compressed_NewChunk(size_t size) {
 
 void Compressed_FreeChunk(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
-    free(cmpChunk->data);
+    if (cmpChunk->data) {
+        free(cmpChunk->data);
+    }
     cmpChunk->data = NULL;
     free(chunk);
 }
 
-Chunk_t *Compressed_CloneChunk(Chunk_t *chunk) {
-    CompressedChunk *oldChunk = chunk;
+Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
+    const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
     memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
     newChunk->data = malloc(newChunk->size);
@@ -299,27 +303,34 @@ static void Compressed_Serialize(Chunk_t *chunk,
     saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
 }
 
-static void Compressed_Deserialize(Chunk_t **chunk,
-                                   void *ctx,
-                                   ReadUnsignedFunc readUnsigned,
-                                   ReadStringBufferFunc readStringBuffer) {
-    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
-
-    compchunk->size = readUnsigned(ctx);
-    compchunk->count = readUnsigned(ctx);
-    compchunk->idx = readUnsigned(ctx);
-    compchunk->baseValue.u = readUnsigned(ctx);
-    compchunk->baseTimestamp = readUnsigned(ctx);
-    compchunk->prevTimestamp = readUnsigned(ctx);
-    compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx);
-    compchunk->prevValue.u = readUnsigned(ctx);
-    compchunk->prevLeading = readUnsigned(ctx);
-    compchunk->prevTrailing = readUnsigned(ctx);
-
-    size_t len;
-    compchunk->data = (uint64_t *)readStringBuffer(ctx, &len);
-    *chunk = (Chunk_t *)compchunk;
-}
+#define COMPRESSED_DESERIALIZE(chunk, ctx, readUnsigned, readStringBuffer, ...)                    \
+    do {                                                                                           \
+        CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));                \
+                                                                                                   \
+        compchunk->data = NULL;                                                                    \
+        compchunk->size = readUnsigned(ctx, ##__VA_ARGS__);                                        \
+        compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                                       \
+        compchunk->idx = readUnsigned(ctx, ##__VA_ARGS__);                                         \
+        compchunk->baseValue.u = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->baseTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
+        compchunk->prevTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
+        compchunk->prevTimestampDelta = (int64_t)readUnsigned(ctx, ##__VA_ARGS__);                 \
+        compchunk->prevValue.u = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->prevLeading = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk->prevTrailing = readUnsigned(ctx, ##__VA_ARGS__);                                \
+                                                                                                   \
+        size_t len;                                                                                \
+        compchunk->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);                  \
+        *chunk = (Chunk_t *)compchunk;                                                             \
+        return TSDB_OK;                                                                            \
+                                                                                                   \
+err:                                                                                               \
+        __attribute__((cold, unused));                                                             \
+        *chunk = NULL;                                                                             \
+        Compressed_FreeChunk(compchunk);                                                           \
+                                                                                                   \
+        return TSDB_ERROR;                                                                         \
+    } while (0)
 
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Compressed_Serialize(chunk,
@@ -328,34 +339,18 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    Compressed_Deserialize(chunk,
-                           io,
-                           (ReadUnsignedFunc)RedisModule_LoadUnsigned,
-                           (ReadStringBufferFunc)RedisModule_LoadStringBuffer);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+    COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 
-void Compressed_GearsSerialize(Chunk_t *chunk, Gears_BufferWriter *bw) {
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
     Compressed_Serialize(chunk,
-                         bw,
-                         (SaveUnsignedFunc)RedisGears_BWWriteLong,
-                         (SaveStringBufferFunc)RedisGears_BWWriteBuffer);
+                         sctx,
+                         (SaveUnsignedFunc)MR_SerializationCtxWriteLongLongWrapper,
+                         (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
 }
 
-static char *ownedBufferFromGears(Gears_BufferReader *br, size_t *len) {
-    size_t size = 0;
-    const char *temp = RedisGears_BRReadBuffer(br, &size);
-    char *ret = malloc(size);
-    memcpy(ret, temp, size);
-    if (len != NULL) {
-        *len = size;
-    }
-    return ret;
-}
-
-void Compressed_GearsDeserialize(Chunk_t **chunk, Gears_BufferReader *br) {
-    Compressed_Deserialize(chunk,
-                           br,
-                           (ReadUnsignedFunc)RedisGears_BRReadLong,
-                           (ReadStringBufferFunc)ownedBufferFromGears);
+int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
+    COMPRESSED_DESERIALIZE(
+        chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
 }

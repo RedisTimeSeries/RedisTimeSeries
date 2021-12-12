@@ -7,6 +7,8 @@ import redis
 from RLTest import Env
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
     _get_ts_info, _insert_agg_data
+from includes import *
+
 
 key_name = 'tester{abc}'
 agg_key_name = '{}_agg_max_10'.format(key_name)
@@ -325,11 +327,11 @@ def test_rule_timebucket_64bit(self):
     with Env().getClusterConnectionIfNeeded() as r:
         BELOW_32BIT_LIMIT = 2147483647
         ABOVE_32BIT_LIMIT = 2147483648
-        r.execute_command("ts.create", 'test_key', 'RETENTION', ABOVE_32BIT_LIMIT)
-        r.execute_command("ts.create", 'below_32bit_limit')
-        r.execute_command("ts.create", 'above_32bit_limit')
-        r.execute_command("ts.createrule", 'test_key', 'below_32bit_limit', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
-        r.execute_command("ts.createrule", 'test_key', 'above_32bit_limit', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
-        info = _get_ts_info(r, 'test_key')
+        r.execute_command("ts.create", 'test_key{test}', 'RETENTION', ABOVE_32BIT_LIMIT)
+        r.execute_command("ts.create", 'below_32bit_limit{test}')
+        r.execute_command("ts.create", 'above_32bit_limit{test}')
+        r.execute_command("ts.createrule", 'test_key{test}', 'below_32bit_limit{test}', 'AGGREGATION', 'max', BELOW_32BIT_LIMIT)
+        r.execute_command("ts.createrule", 'test_key{test}', 'above_32bit_limit{test}', 'AGGREGATION', 'max', ABOVE_32BIT_LIMIT)
+        info = _get_ts_info(r, 'test_key{test}')
         assert info.rules[0][1] == BELOW_32BIT_LIMIT
         assert info.rules[1][1] == ABOVE_32BIT_LIMIT

@@ -7,8 +7,9 @@
 #ifndef GENERIC__CHUNK_H
 #define GENERIC__CHUNK_H
 
+#include "LibMR/src/mr.h"
 #include "consts.h"
-#include "redisgears.h"
+#include "load_io_error_macros.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -58,7 +59,7 @@ typedef struct ChunkFuncs
 {
     Chunk_t *(*NewChunk)(size_t sampleCount);
     void (*FreeChunk)(Chunk_t *chunk);
-    Chunk_t *(*CloneChunk)(Chunk_t *chunk);
+    Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
 
     size_t (*DelRange)(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
@@ -75,9 +76,9 @@ typedef struct ChunkFuncs
     u_int64_t (*GetFirstTimestamp)(Chunk_t *chunk);
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
-    void (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
-    void (*GearsSerialize)(Chunk_t *chunk, Gears_BufferWriter *bw);
-    void (*GearsDeserialize)(Chunk_t **chunk, Gears_BufferReader *br);
+    int (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
+    void (*MRSerialize)(Chunk_t *chunk, WriteSerializationCtx *sctx);
+    int (*MRDeserialize)(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 } ChunkFuncs;
 
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample);

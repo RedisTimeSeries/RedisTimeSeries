@@ -30,7 +30,7 @@ typedef struct Series
     RedisModuleDict *chunks;
     Chunk_t *lastChunk;
     uint64_t retentionTime;
-    short chunkSizeBytes;
+    long long chunkSizeBytes;
     short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
@@ -46,9 +46,12 @@ typedef struct Series
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+void freeLastDeletedSeries();
 void FreeSeries(void *value);
+void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void CleanLastDeletedSeries(RedisModuleString *key);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
@@ -101,7 +104,8 @@ int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
                     timestamp_t end_ts,
                     CompactionRule *rule,
-                    double *val);
+                    double *val,
+                    bool *is_empty);
 
 // Calculate the begining of  aggregation window
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);

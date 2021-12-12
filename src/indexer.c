@@ -12,26 +12,30 @@
 #include <string.h>
 #include <rmutil/alloc.h>
 
-RedisModuleDict *labelsIndex;
+RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
+RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
 
 typedef enum
 {
-    Indexer_Add,
-    Indexer_Remove
+    Indexer_Add = 0x1,
+    Indexer_Remove = 0x2,
 } INDEXER_OPERATION_T;
 
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
+    tsLabelIndex = RedisModule_CreateDict(NULL);
 }
 
 void FreeLabels(void *value, size_t labelsCount) {
     Label *labels = (Label *)value;
     for (int i = 0; i < labelsCount; ++i) {
-        RedisModule_FreeString(NULL, labels[i].key);
-        RedisModule_FreeString(NULL, labels[i].value);
+        if (labels[i].key)
+            RedisModule_FreeString(NULL, labels[i].key);
+        if (labels[i].value)
+            RedisModule_FreeString(NULL, labels[i].value);
     }
     free(labels);
 }
@@ -126,59 +130,113 @@ int CountPredicateType(QueryPredicateList *queries, PredicateType type) {
     return count;
 }
 
-void indexUnderKey(INDEXER_OPERATION_T op, RedisModuleString *key, RedisModuleString *ts_key) {
-    int nokey = 0;
-    RedisModuleDict *leaf = RedisModule_DictGet(labelsIndex, key, &nokey);
-    if (nokey) {
-        leaf = RedisModule_CreateDict(NULL);
-        RedisModule_DictSet(labelsIndex, key, leaf);
-    }
-
-    if (op == Indexer_Add) {
-        RedisModule_DictSet(leaf, ts_key, NULL);
-    } else if (op == Indexer_Remove) {
-        RedisModule_DictDel(leaf, ts_key, NULL);
-        if (RedisModule_DictSize(leaf) == 0) {
-            RedisModule_FreeDict(NULL, leaf);
-            RedisModule_DictDel(labelsIndex, key, NULL);
-        }
+static inline void labelsIndexRemoveTsKey(RedisModuleDict *leaf,
+                                          RedisModuleString *key,
+                                          RedisModuleString *ts_key,
+                                          RedisModuleDict *_labelsIndex) {
+    RedisModule_DictDel(leaf, ts_key, NULL);
+    if (RedisModule_DictSize(leaf) == 0) {
+        RedisModule_FreeDict(NULL, leaf);
+        RedisModule_DictDel(_labelsIndex, key, NULL);
     }
 }
 
-void IndexOperation(RedisModuleCtx *ctx,
-                    INDEXER_OPERATION_T op,
-                    RedisModuleString *ts_key,
-                    Label *labels,
-                    size_t labels_count) {
+void labelIndexUnderKey(INDEXER_OPERATION_T op,
+                        RedisModuleString *key,
+                        RedisModuleString *ts_key,
+                        RedisModuleDict *_labelsIndex,
+                        RedisModuleDict *_tsLabelIndex) {
+    int nokey = 0;
+    RedisModuleDict *leaf = RedisModule_DictGet(_labelsIndex, key, &nokey);
+    if (nokey) {
+        leaf = RedisModule_CreateDict(NULL);
+        RedisModule_DictSet(_labelsIndex, key, leaf);
+    }
+
+    RedisModuleDict *ts_leaf = RedisModule_DictGet(_tsLabelIndex, ts_key, &nokey);
+    if (nokey) {
+        ts_leaf = RedisModule_CreateDict(NULL);
+        RedisModule_DictSet(_tsLabelIndex, ts_key, ts_leaf);
+    }
+
+    if (op & Indexer_Add) {
+        RedisModule_DictSet(leaf, ts_key, NULL);
+        RedisModule_DictSet(ts_leaf, key, NULL);
+    } else if (op & Indexer_Remove) {
+        labelsIndexRemoveTsKey(leaf, key, ts_key, _labelsIndex);
+    }
+}
+
+void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count) {
     const char *key_string, *value_string;
     for (int i = 0; i < labels_count; i++) {
         size_t _s;
         key_string = RedisModule_StringPtrLen(labels[i].key, &_s);
         value_string = RedisModule_StringPtrLen(labels[i].value, &_s);
         RedisModuleString *indexed_key_value =
-            RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key_string, value_string);
-        RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(ctx, K_PREFIX, key_string);
+            RedisModule_CreateStringPrintf(NULL, KV_PREFIX, key_string, value_string);
+        RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(NULL, K_PREFIX, key_string);
 
-        indexUnderKey(op, indexed_key_value, ts_key);
-        indexUnderKey(op, indexed_key, ts_key);
+        labelIndexUnderKey(Indexer_Add, indexed_key_value, ts_key, labelsIndex, tsLabelIndex);
+        labelIndexUnderKey(Indexer_Add, indexed_key, ts_key, labelsIndex, tsLabelIndex);
 
-        RedisModule_FreeString(ctx, indexed_key_value);
-        RedisModule_FreeString(ctx, indexed_key);
+        RedisModule_FreeString(NULL, indexed_key_value);
+        RedisModule_FreeString(NULL, indexed_key);
     }
 }
 
-void IndexMetric(RedisModuleCtx *ctx,
-                 RedisModuleString *ts_key,
-                 Label *labels,
-                 size_t labels_count) {
-    IndexOperation(ctx, Indexer_Add, ts_key, labels, labels_count);
+// Removes the ts from the label index and from the inverse index, if exist.
+// del_key should be false if caller wants to avoid iterator invalidation.
+void RemoveIndexedMetric_generic(RedisModuleString *ts_key,
+                                 RedisModuleDict *_labelsIndex,
+                                 RedisModuleDict *_tsLabelIndex,
+                                 bool del_key) {
+    int nokey = 0;
+    RedisModuleDict *ts_leaf = RedisModule_DictGet(_tsLabelIndex, ts_key, &nokey);
+    if (nokey) { // series has no labels or already been removed from index
+        return;
+    }
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(ts_leaf, "^", NULL, 0);
+    RedisModuleString *currentLabelKey;
+    while ((currentLabelKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        labelIndexUnderKey(Indexer_Remove, currentLabelKey, ts_key, _labelsIndex, _tsLabelIndex);
+        RedisModule_FreeString(NULL, currentLabelKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(NULL, ts_leaf);
+    if (del_key) {
+        RedisModule_DictDel(_tsLabelIndex, ts_key, NULL);
+    }
 }
 
-void RemoveIndexedMetric(RedisModuleCtx *ctx,
-                         RedisModuleString *ts_key,
-                         Label *labels,
-                         size_t labels_count) {
-    IndexOperation(ctx, Indexer_Remove, ts_key, labels, labels_count);
+// Removes the ts from the label index and from the inverse index, if exist.
+void RemoveIndexedMetric(RedisModuleString *ts_key) {
+    RemoveIndexedMetric_generic(ts_key, labelsIndex, tsLabelIndex, true);
+}
+
+// Removes all indexed metrics
+void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
+                                     RedisModuleDict **_tsLabelIndex) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(*_tsLabelIndex, "^", NULL, 0);
+    RedisModuleString *currentTSKey;
+    while ((currentTSKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        RemoveIndexedMetric_generic(currentTSKey, _labelsIndex, *_tsLabelIndex, false);
+        RedisModule_FreeString(NULL, currentTSKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(NULL, *_tsLabelIndex);
+    *_tsLabelIndex = RedisModule_CreateDict(NULL);
+}
+
+void RemoveAllIndexedMetrics() {
+    RemoveAllIndexedMetrics_generic(labelsIndex, &tsLabelIndex);
+}
+
+int IsKeyIndexed(RedisModuleString *ts_key) {
+    int nokey;
+    RedisModule_DictGet(tsLabelIndex, ts_key, &nokey);
+    return !nokey;
 }
 
 void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
