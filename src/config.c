@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "consts.h"
+#include "query_language.h"
 #include "redismodule.h"
 
 #include <assert.h>
@@ -75,15 +76,11 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("CHUNK_SIZE_BYTES", argv, argc) >= 0) {
-        if (RMUtil_ParseArgsAfter(
-                "CHUNK_SIZE_BYTES", argv, argc, "l", &TSGlobalConfig.chunkSizeBytes) !=
-            REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
-            return TSDB_ERROR;
-        }
-    } else {
-        TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
+    TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE_BYTES", &TSGlobalConfig.chunkSizeBytes) !=
+        REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
+        return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
                     "notice",
