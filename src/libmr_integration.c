@@ -232,11 +232,22 @@ Record *ListWithSample(u_int64_t timestamp, double value) {
     return r;
 }
 
+static Record *ListWithBlobSample(u_int64_t timestamp, TSBlob *blob) {
+    Record *r = ListRecord_Create(2);
+    ListRecord_Add(r, LongRecord_Create(timestamp));
+    ListRecord_Add(r, StringRecord_Create(blob->data, blob->len));
+    return r;
+}
+
 Record *ListWithSeriesLastDatapoint(const Series *series) {
     if (SeriesGetNumSamples(series) == 0) {
         return ListRecord_Create(0);
     } else {
-        return ListWithSample(series->lastTimestamp, series->lastValue);
+        if (SeriesIsBlob(series)) {
+            return ListWithBlobSample(series->lastTimestamp, VALUE_BLOB(&series->lastValue));
+        } else {
+            return ListWithSample(series->lastTimestamp, VALUE_DOUBLE(&series->lastValue));
+        }
     }
 }
 
@@ -707,7 +718,7 @@ void SeriesRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **er
 
     MR_SerializationCtxWriteLongLong(sctx, series->chunkCount, error);
     for (int i = 0; i < series->chunkCount; i++) {
-        series->funcs->MRSerialize(series->chunks[i], sctx);
+        series->funcs->MRSerialize(series->chunks[i], sctx, false);
     }
 }
 
@@ -726,7 +737,7 @@ void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     series->chunkCount = MR_SerializationCtxReadeLongLong(sctx, error);
     series->chunks = calloc(series->chunkCount, sizeof(Chunk_t *));
     for (int i = 0; i < series->chunkCount; i++) {
-        series->funcs->MRDeserialize(&series->chunks[i], sctx);
+        series->funcs->MRDeserialize(&series->chunks[i], sctx, false);
     }
     return &series->base;
 }

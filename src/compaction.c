@@ -5,6 +5,8 @@
  */
 #include "compaction.h"
 
+#include "blob.h"
+#include "generic_chunk.h"
 #include "load_io_error_macros.h"
 #include "rdb.h"
 
@@ -25,6 +27,13 @@ typedef struct SingleValueContext
     double value;
     char isResetted;
 } SingleValueContext;
+
+typedef struct BlobValueContext
+{
+    TSBlob *blob;
+    double count;
+    char isResetted;
+} BlobValueContext;
 
 typedef struct AvgContext
 {
@@ -76,6 +85,154 @@ int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     return TSDB_OK;
 err:
     return TSDB_ERROR;
+}
+
+/* Blobs */
+
+static void BlobValueReset(void *contextPtr) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    if (context->blob) {
+        FreeBlob(context->blob);
+        context->blob = NULL;
+    }
+    context->count = 0;
+    context->isResetted = TRUE;
+}
+
+static void BlobFirstReset(void *contextPtr) {
+    BlobValueReset(contextPtr);
+}
+
+static void BlobLastReset(void *contextPtr) {
+    BlobValueReset(contextPtr);
+}
+
+static void *BlobValueCreateContext() {
+    BlobValueContext *context = (BlobValueContext *)RedisModule_Alloc(sizeof(BlobValueContext));
+
+    context->blob = NULL;
+    BlobValueReset(context);
+    return context;
+}
+
+static void BlobCountAppendValue(void *contextPtr, double val) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    (void)val;
+
+    context->count++;
+    context->isResetted = FALSE;
+}
+
+static int BlobCountValueFinalize(void *contextPtr, double *val) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    if (context->isResetted)
+        return TSDB_ERROR;
+
+    *val = context->count;
+    return TSDB_OK;
+}
+
+static void BlobCountWriteContext(void *contextPtr, RedisModuleIO *io) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->count);
+}
+
+static int BlobCountReadContext(void *contextPtr,
+                                RedisModuleIO *io,
+                                REDISMODULE_ATTR_UNUSED int encver) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    context->count = RedisModule_LoadDouble(io);
+    return TSDB_OK;
+}
+
+static void BlobFirstAppendValue(void *contextPtr, double value) {
+    SampleValue val;
+    VALUE_DOUBLE(&val) = value;
+
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    if (!context->isResetted)
+        return;
+
+    context->isResetted = false;
+    TSBlob *srcblob = VALUE_BLOB(&val);
+
+    if (context->blob)
+        FreeBlob(context->blob);
+
+    context->blob = BlobDup(srcblob);
+}
+
+static void BlobLastAppendValue(void *contextPtr, double value) {
+    SampleValue val;
+    VALUE_DOUBLE(&val) = value;
+
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    TSBlob *srcblob = VALUE_BLOB(&val);
+    if (context->blob)
+        FreeBlob(context->blob);
+
+    context->blob = BlobDup(srcblob);
+    context->isResetted = false;
+}
+
+static int BlobValueFinalize(void *contextPtr, double *val) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    if (context->isResetted)
+        return TSDB_ERROR;
+
+    TSBlob **blob = (TSBlob **)val;
+
+    BlobCopy(*blob, context->blob);
+    return TSDB_OK;
+}
+
+static int BlobFirstFinalize(void *contextPtr, double *val) {
+    return BlobValueFinalize(contextPtr, val);
+}
+
+static int BlobLastFinalize(void *contextPtr, double *val) {
+    return BlobValueFinalize(contextPtr, val);
+}
+
+static void BlobValueDeleteContext(void *contextPtr) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+
+    if (context->blob) {
+        FreeBlob(context->blob);
+    }
+
+    RedisModule_Free(context);
+}
+
+static void BlobCountDeleteContext(void *contextPtr) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    RedisModule_Free(context);
+}
+
+static void BlobFirstDeleteContext(void *contextPtr) {
+    BlobValueDeleteContext(contextPtr);
+}
+
+static void BlobLastDeleteContext(void *contextPtr) {
+    BlobValueDeleteContext(contextPtr);
+}
+
+static void BlobValueWriteContext(void *contextPtr, RedisModuleIO *io) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    RedisModule_SaveBlob(io, context->blob);
+}
+
+static int BlobValueReadContext(void *contextPtr,
+                                RedisModuleIO *io,
+                                REDISMODULE_ATTR_UNUSED int encver) {
+    BlobValueContext *context = (BlobValueContext *)contextPtr;
+    context->blob = RedisModule_LoadBlob(io);
+    return TSDB_OK;
 }
 
 void *AvgCreateContext() {
@@ -419,6 +576,30 @@ static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .readContext = SingleValueReadContext,
                                     .resetContext = SingleValueReset };
 
+static AggregationClass blobAggCount = { .createContext = BlobValueCreateContext,
+                                         .appendValue = BlobCountAppendValue,
+                                         .freeContext = BlobCountDeleteContext,
+                                         .finalize = BlobCountValueFinalize,
+                                         .writeContext = BlobCountWriteContext,
+                                         .readContext = BlobCountReadContext,
+                                         .resetContext = BlobValueReset };
+
+static AggregationClass blobAggFirst = { .createContext = BlobValueCreateContext,
+                                         .appendValue = BlobFirstAppendValue,
+                                         .freeContext = BlobFirstDeleteContext,
+                                         .finalize = BlobFirstFinalize,
+                                         .writeContext = BlobValueWriteContext,
+                                         .readContext = BlobValueReadContext,
+                                         .resetContext = BlobFirstReset };
+
+static AggregationClass blobAggLast = { .createContext = BlobValueCreateContext,
+                                        .appendValue = BlobLastAppendValue,
+                                        .freeContext = BlobLastDeleteContext,
+                                        .finalize = BlobLastFinalize,
+                                        .writeContext = BlobValueWriteContext,
+                                        .readContext = BlobValueReadContext,
+                                        .resetContext = BlobLastReset };
+
 static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .appendValue = MaxMinAppendValue,
                                      .freeContext = rm_free,
@@ -426,6 +607,18 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .writeContext = MaxMinWriteContext,
                                      .readContext = MaxMinReadContext,
                                      .resetContext = MaxMinReset };
+
+AggregationClass *BlobAggClass(AggregationClass *class) {
+    AggregationClass *blobClass = class;
+    if (class == &aggCount)
+        blobClass = &blobAggCount;
+    else if (class == &aggFirst)
+        blobClass = &blobAggFirst;
+    else if (class == &aggLast)
+        blobClass = &blobAggLast;
+
+    return blobClass;
+}
 
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
@@ -496,10 +689,13 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
         case TS_AGG_VAR_S:
             return "VAR.S";
         case TS_AGG_COUNT:
+        case TS_AGG_BLOB_COUNT:
             return "COUNT";
         case TS_AGG_FIRST:
+        case TS_AGG_BLOB_FIRST:
             return "FIRST";
         case TS_AGG_LAST:
+        case TS_AGG_BLOB_LAST:
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
@@ -537,10 +733,43 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_BLOB_COUNT:
+            return &blobAggCount;
+        case TS_AGG_BLOB_FIRST:
+            return &blobAggFirst;
+        case TS_AGG_BLOB_LAST:
+            return &blobAggLast;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
             break;
     }
     return NULL;
+}
+
+// the only supported aggregation types for blob data
+
+bool IsCompactionBlobFriendly(TS_AGG_TYPES_T aggType) {
+    return (aggType == TS_AGG_NONE || aggType == TS_AGG_COUNT || aggType == TS_AGG_FIRST ||
+            aggType == TS_AGG_LAST);
+}
+
+// returns true if the aggregated result is of type blob
+
+bool aggClassIsBlob(const AggregationClass *class) {
+    return (class == &blobAggFirst || class == &blobAggLast);
+}
+
+TS_AGG_TYPES_T BlobAggType(TS_AGG_TYPES_T aggType) {
+    switch (aggType) {
+        case TS_AGG_COUNT:
+            return TS_AGG_BLOB_COUNT;
+        case TS_AGG_FIRST:
+            return TS_AGG_BLOB_FIRST;
+        case TS_AGG_LAST:
+            return TS_AGG_BLOB_LAST;
+        default:
+            break;
+    }
+    return aggType;
 }

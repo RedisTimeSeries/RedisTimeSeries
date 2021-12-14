@@ -23,7 +23,7 @@
 /*********************
  *  Chunk functions  *
  *********************/
-Chunk_t *Compressed_NewChunk(size_t size) {
+Chunk_t *Compressed_NewChunk(bool unused, size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
@@ -97,8 +97,8 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     size_t i = 0;
     Sample sample;
     ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, CHUNK_ITER_OP_NONE, NULL);
-    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
-    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
+    CompressedChunk *newChunk1 = Compressed_NewChunk(false, curChunk->size);
+    CompressedChunk *newChunk2 = Compressed_NewChunk(false, curChunk->size);
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         ensureAddSample(newChunk1, &sample);
@@ -126,7 +126,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
 
     size_t newSize = oldChunk->size;
 
-    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    CompressedChunk *newChunk = Compressed_NewChunk(false, newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
     timestamp_t ts = uCtx->sample.timestamp;
     int numSamples = oldChunk->count;
@@ -170,7 +170,8 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
 }
 
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
-    return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
+    return Compressed_Append(
+        (CompressedChunk *)chunk, sample->timestamp, VALUE_DOUBLE(&sample->value));
 }
 
 u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
@@ -195,7 +196,7 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     CompressedChunk *oldChunk = (CompressedChunk *)chunk;
     size_t newSize = oldChunk->size; // mem size
-    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
+    CompressedChunk *newChunk = Compressed_NewChunk(false, newSize);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
     size_t i = 0;
     size_t deleted_count = 0;
@@ -219,7 +220,7 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
     Sample sample;
     uint64_t numSamples = compressedChunk->count;
-    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
+    Chunk *uncompressedChunk = Uncompressed_NewChunk(false, numSamples * SAMPLE_SIZE);
 
     ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
     for (uint64_t i = 0; i < numSamples; ++i) {
@@ -287,7 +288,9 @@ typedef char *(*ReadStringBufferFunc)(void *, size_t *);
 static void Compressed_Serialize(Chunk_t *chunk,
                                  void *ctx,
                                  SaveUnsignedFunc saveUnsigned,
-                                 SaveStringBufferFunc saveStringBuffer) {
+                                 SaveStringBufferFunc saveStringBuffer,
+                                 bool isBlob) {
+    (void)isBlob;
     CompressedChunk *compchunk = chunk;
 
     saveUnsigned(ctx, compchunk->size);
@@ -332,25 +335,30 @@ err:                                                                            
         return TSDB_ERROR;                                                                         \
     } while (0)
 
-void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io, bool isBlob) {
     Compressed_Serialize(chunk,
                          io,
                          (SaveUnsignedFunc)RedisModule_SaveUnsigned,
-                         (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
+                         (SaveStringBufferFunc)RedisModule_SaveStringBuffer,
+                         isBlob);
 }
 
-int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, bool isBlob) {
+    (void)isBlob;
     COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 
-void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
+void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx, bool isBlob) {
+    (void)isBlob;
     Compressed_Serialize(chunk,
                          sctx,
                          (SaveUnsignedFunc)MR_SerializationCtxWriteLongLongWrapper,
-                         (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper);
+                         (SaveStringBufferFunc)MR_SerializationCtxWriteBufferWrapper,
+                         false);
 }
 
-int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
+int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx, bool isBlob) {
+    (void)isBlob;
     COMPRESSED_DESERIALIZE(
         chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
 }

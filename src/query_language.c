@@ -134,6 +134,9 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
+    if (RMUtil_ArgIndex("BLOB", argv, argc) > 0) {
+        cCtx->options |= SERIES_OPT_UNCOMPRESSED | SERIES_OPT_BLOB;
+    }
     return REDISMODULE_OK;
 err_exit:
     if (cCtx->labelsCount > 0 && cCtx->labels != NULL) {
@@ -230,6 +233,7 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
             RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
             return TSDB_ERROR;
         }
+        aggregationArgs.type = agg_type;
         *out = aggregationArgs;
         return TSDB_OK;
     } else {

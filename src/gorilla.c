@@ -493,7 +493,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // First sample
     if (unlikely(iter->count == 0)) {
         sample->timestamp = iter->chunk->baseTimestamp;
-        sample->value = iter->chunk->baseValue.d;
+        VALUE_DOUBLE(&sample->value) = iter->chunk->baseValue.d;
         iter->count++;
         return CR_OK;
     }
@@ -507,7 +507,8 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    VALUE_DOUBLE(&sample->value) =
+        Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
     iter->count++;
     return CR_OK;
 }

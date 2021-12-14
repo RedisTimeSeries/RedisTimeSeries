@@ -17,6 +17,7 @@ typedef struct Chunk
     Sample *samples;
     unsigned int num_samples;
     size_t size;
+    bool isBlob;
 } Chunk;
 
 typedef struct ChunkIterator
@@ -28,7 +29,7 @@ typedef struct ChunkIterator
     int options;
 } ChunkIterator;
 
-Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
+Chunk_t *Uncompressed_NewChunk(bool isBlob, size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
@@ -71,12 +72,12 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // RDB
-void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io, bool isBlob);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, bool isBlob);
 
 // LibMR
-void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
-int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
+void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx, bool isBlob);
+int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx, bool isBlob);
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
 void MR_SerializationCtxWriteLongLongWrapper(WriteSerializationCtx *sctx, long long val);

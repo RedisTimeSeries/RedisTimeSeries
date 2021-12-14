@@ -13,7 +13,8 @@ static bool check_sample_value(Sample sample, FilterByValueArgs byValueArgs) {
         return true;
     }
 
-    if (sample.value >= byValueArgs.min && sample.value <= byValueArgs.max) {
+    if (VALUE_DOUBLE(&sample.value) >= byValueArgs.min &&
+        VALUE_DOUBLE(&sample.value) <= byValueArgs.max) {
         return true;
     } else {
         return false;
@@ -93,7 +94,7 @@ static bool finalizeBucket(Sample *currentSample, const AggregationIterator *sel
     double value;
     if (self->aggregation->finalize(self->aggregationContext, &value) == TSDB_OK) {
         currentSample->timestamp = self->aggregationLastTimestamp;
-        currentSample->value = value;
+        VALUE_DOUBLE(&currentSample->value) = value;
         hasSample = TRUE;
         self->aggregation->resetContext(self->aggregationContext);
     }
@@ -145,8 +146,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
         }
         self->aggregationIsFirstSample = FALSE;
-
-        appendValue(aggregationContext, internalSample.value);
+        appendValue(self->aggregationContext, VALUE_DOUBLE(&internalSample.value));
         if (hasSample) {
             return CR_OK;
         }
@@ -160,7 +160,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             double value;
             if (aggregation->finalize(aggregationContext, &value) == TSDB_OK) {
                 currentSample->timestamp = self->aggregationLastTimestamp;
-                currentSample->value = value;
+                VALUE_DOUBLE(&currentSample->value) = value;
             }
             self->aggregationIsFinalized = TRUE;
             return CR_OK;
