@@ -66,7 +66,6 @@ int ParseChunkSize(RedisModuleCtx *ctx,
                    int argc,
                    const char *arg_prefix,
                    long long *chunkSizeBytes) {
-    size_t p = RMUtil_ArgIndex(arg_prefix, argv, argc);
     if (RMUtil_ArgIndex(arg_prefix, argv, argc) >= 0 &&
         RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "l", chunkSizeBytes) != REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");

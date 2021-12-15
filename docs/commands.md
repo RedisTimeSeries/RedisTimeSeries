@@ -22,7 +22,7 @@ Optional args:
     * UNCOMPRESSED: keep the raw samples in memory.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
  * DUPLICATE_POLICY - configure what to do on duplicate sample.
    When this is not set, the server-wide default will be used. 
    For further details: [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
@@ -148,7 +148,7 @@ The following arguments are optional because they can be set by TS.CREATE:
  * ENCODING - Specify the series samples encoding format.
     * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
     * UNCOMPRESSED: keep the raw samples in memory.
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4096.
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
  * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
  * LABELS - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
 
@@ -229,7 +229,7 @@ Optional args:
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Default: 4000.
+ * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
  * labels - Set of label-value pairs that represent metadata labels of the key
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
