@@ -205,7 +205,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
                   SERIES_RELATION_NO_RELATION,
                   &key,
                   &series,
-                  REDISMODULE_READ,
+                  REDISMODULE_READ | REDISMODULE_WRITE,
                   true) != TRUE) {
         return;
     }
@@ -215,6 +215,20 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         RemoveIndexedMetric(keyname);
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
+
+    // Remove references to other keys
+    if (series->srcKey) {
+        RedisModule_FreeString(NULL, series->srcKey);
+        series->srcKey = NULL;
+    }
+
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        CompactionRule *nextRule = rule->nextRule;
+        FreeCompactionRule(rule);
+        rule = nextRule;
+    }
+    series->rules = NULL;
 
     RedisModule_CloseKey(key);
 }
