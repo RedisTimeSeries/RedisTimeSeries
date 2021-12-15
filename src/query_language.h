@@ -95,7 +95,6 @@ typedef struct CreateCtx
     Label *labels;
     int options;
     DuplicatePolicy duplicatePolicy;
-    bool isTemporary;
     bool skipChunkCreation;
 } CreateCtx;
 

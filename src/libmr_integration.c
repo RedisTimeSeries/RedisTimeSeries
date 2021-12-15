@@ -264,7 +264,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = GetSeriesSafeSilent(ctx, keyName, &key, &series, REDISMODULE_READ);
+        const int status = GetSeries(
+            ctx, NULL, keyName, SERIES_RELATION_NO_RELATION, &key, &series, REDISMODULE_READ, true);
 
         RedisModule_FreeString(ctx, keyName);
 
@@ -321,7 +322,8 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const int status = GetSeriesSafeSilent(ctx, keyName, &key, &series, REDISMODULE_READ);
+        const int status = GetSeries(
+            ctx, NULL, keyName, SERIES_RELATION_NO_RELATION, &key, &series, REDISMODULE_READ, true);
         RedisModule_FreeString(ctx, keyName);
 
         if (!status) {
@@ -741,7 +743,6 @@ void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record) {
 
 Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     CreateCtx createArgs = { 0 };
-    createArgs.isTemporary = true;
     createArgs.skipChunkCreation = true;
     Series *s = NewSeries(RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
     s->labelsCount = record->labelsCount;
