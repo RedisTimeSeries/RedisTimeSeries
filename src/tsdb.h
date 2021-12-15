@@ -14,12 +14,9 @@
 #include "query_language.h"
 #include "redismodule.h"
 
-typedef uint64_t TSuuid;
-
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
-    TSuuid dest_uuid;
     timestamp_t timeBucket;
     AggregationClass *aggClass;
     TS_AGG_TYPES_T aggType;
@@ -40,14 +37,11 @@ typedef struct Series
     double lastValue;
     Label *labels;
     RedisModuleString *keyName;
-    TSuuid uuid;
     size_t labelsCount;
     RedisModuleString *srcKey;
-    TSuuid src_uuid;
     ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
-    bool isTemporary;
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
@@ -65,31 +59,20 @@ typedef enum SERIES_RELATION
     SERIES_RELATION_NO_RELATION
 } SERIES_RELATION;
 
-int GetSeriesSafe(RedisModuleCtx *ctx,
-                  RedisModuleString *keyName,
-                  RedisModuleKey **key,
-                  Series **series,
-                  int mode);
+CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
 
-int GetSeriesSafeSilent(RedisModuleCtx *ctx,
-                        RedisModuleString *keyName,
-                        RedisModuleKey **key,
-                        Series **series,
-                        int mode);
-
-// Deletes the reference if the series, watch out of rules iterator invalidation
+// Deletes the reference if the series deleted, watch out of rules iterator invalidation
 int GetSeries(RedisModuleCtx *ctx,
-              Series *original_series,
+              Series *originalSeries,
               RedisModuleString *keyName,
-              TSuuid uuid,
               SERIES_RELATION relation,
               RedisModuleKey **key,
               Series **series,
-              int mode);
+              int mode,
+              bool isSilent);
 
 AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
 
-TSuuid getNewTSuuid();
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 
@@ -100,7 +83,7 @@ int SeriesUpsertSample(Series *series,
                        DuplicatePolicy dp_override);
 
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
-int SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, Series *srcSeries);
+void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, Series *srcSeries);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
@@ -133,10 +116,7 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 // retention
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 
-CompactionRule *NewRule(RedisModuleString *destKey,
-                        TSuuid dstKeyUuid,
-                        int aggType,
-                        uint64_t timeBucket);
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 
 // set/delete/replace a chunk in a dictionary
 typedef enum

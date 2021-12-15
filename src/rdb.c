@@ -10,7 +10,6 @@
 #include "load_io_error_macros.h"
 
 #include <inttypes.h>
-#include <openssl/md4.h> // TODO remove once only support TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER
 #include <string.h>
 #include <rmutil/alloc.h>
 
@@ -24,23 +23,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     uint64_t totalSamples;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
-    TSuuid srcKeyUuid = 0;
     Series *series = NULL;
     RedisModuleString *destKey = NULL;
-    TSuuid uuid;
 
     CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = NULL;
     keyName = LoadString_IOError(io, goto err);
-    if (encver >= TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER) {
-        uuid = LoadUnsigned_IOError(io, goto err);
-    } else {
-        size_t len;
-        const char *keyStr = RedisModule_StringPtrLen(keyName, &len);
-        uint64_t md4;
-        MD4((const unsigned char *)keyStr, len, (unsigned char *)&md4);
-        uuid = (TSuuid)md4;
-    }
 
     cCtx.retentionTime = LoadUnsigned_IOError(io, goto err);
     cCtx.chunkSizeBytes = LoadUnsigned_IOError(io, goto err);
@@ -58,21 +46,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         lastTimestamp = LoadUnsigned_IOError(io, goto err);
         lastValue = LoadDouble_IOError(io, goto err);
         totalSamples = LoadUnsigned_IOError(io, goto err);
-        if (encver >= TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER) {
+        if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
             duplicatePolicy = LoadUnsigned_IOError(io, goto err);
         }
         uint64_t hasSrcKey = LoadUnsigned_IOError(io, goto err);
         if (hasSrcKey) {
             srcKey = LoadString_IOError(io, goto err);
-            if (encver >= TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER) {
-                srcKeyUuid = LoadUnsigned_IOError(io, goto err);
-            } else {
-                size_t len;
-                const char *keyStr = RedisModule_StringPtrLen(srcKey, &len);
-                uint64_t md4;
-                MD4((const unsigned char *)keyStr, len, (unsigned char *)&md4);
-                srcKeyUuid = (TSuuid)md4;
-            }
         }
     }
 
@@ -91,21 +70,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     for (int i = 0; i < rulesCount; i++) {
         destKey = LoadString_IOError(io, goto err);
-        TSuuid dstKeyUuid;
-        if (encver >= TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER) {
-            dstKeyUuid = LoadUnsigned_IOError(io, goto err);
-        } else {
-            size_t len;
-            const char *keyStr = RedisModule_StringPtrLen(destKey, &len);
-            uint64_t md4;
-            MD4((const unsigned char *)keyStr, len, (unsigned char *)&md4);
-            dstKeyUuid = (TSuuid)md4;
-        }
         uint64_t timeBucket = LoadUnsigned_IOError(io, goto err);
         uint64_t aggType = LoadUnsigned_IOError(io, goto err);
         timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
 
-        CompactionRule *rule = NewRule(destKey, dstKeyUuid, aggType, timeBucket);
+        CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
         destKey = NULL;
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
@@ -150,9 +119,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         series->totalSamples = totalSamples;
         series->duplicatePolicy = duplicatePolicy;
-        series->uuid = uuid;
         series->srcKey = srcKey;
-        series->src_uuid = srcKeyUuid;
         srcKey = NULL;
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
@@ -205,7 +172,6 @@ unsigned int countRules(Series *series) {
 void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
-    RedisModule_SaveUnsigned(io, series->uuid);
     RedisModule_SaveUnsigned(io, series->retentionTime);
     RedisModule_SaveUnsigned(io, series->chunkSizeBytes);
     RedisModule_SaveUnsigned(io, series->options);
@@ -216,7 +182,6 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     if (series->srcKey != NULL) {
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
-        RedisModule_SaveUnsigned(io, series->src_uuid);
     } else {
         RedisModule_SaveUnsigned(io, FALSE);
     }
@@ -232,7 +197,6 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         RedisModule_SaveString(io, rule->destKey);
-        RedisModule_SaveUnsigned(io, rule->dest_uuid);
         RedisModule_SaveUnsigned(io, rule->timeBucket);
         RedisModule_SaveUnsigned(io, rule->aggType);
         RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);

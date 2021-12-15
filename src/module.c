@@ -50,7 +50,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    int status = GetSeriesSafe(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    int status = GetSeries(
+        ctx, NULL, argv[1], SERIES_RELATION_NO_RELATION, &key, &series, REDISMODULE_READ, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -100,11 +101,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         const int status = GetSeries(ctx,
                                      series,
                                      series->srcKey,
-                                     series->src_uuid,
                                      SERIES_RELATION_SRC,
                                      &srcKey,
                                      &srcSeries,
-                                     REDISMODULE_READ);
+                                     REDISMODULE_READ | REDISMODULE_WRITE,
+                                     false);
         if (status) {
             RedisModule_ReplyWithString(ctx, series->srcKey);
             RedisModule_CloseKey(srcKey);
@@ -124,11 +125,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         const int status = GetSeries(ctx,
                                      series,
                                      rule->destKey,
-                                     rule->dest_uuid,
                                      SERIES_RELATION_DST,
                                      &destKey,
                                      &destSeries,
-                                     REDISMODULE_READ);
+                                     REDISMODULE_READ | REDISMODULE_WRITE,
+                                     false);
         if (!status) {
             rule = nextRule;
             continue;
@@ -235,12 +236,14 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status =
-            GetSeriesSafeSilent(ctx,
-                                RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                &key,
-                                &series,
-                                REDISMODULE_READ);
+        const int status = GetSeries(ctx,
+                                     NULL,
+                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                     SERIES_RELATION_NO_RELATION,
+                                     &key,
+                                     &series,
+                                     REDISMODULE_READ,
+                                     true);
         if (!status) {
             RedisModule_Log(
                 ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
@@ -293,12 +296,14 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     Series *series;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status =
-            GetSeriesSafeSilent(ctx,
-                                RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                &key,
-                                &series,
-                                REDISMODULE_READ);
+        const int status = GetSeries(ctx,
+                                     NULL,
+                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                     SERIES_RELATION_NO_RELATION,
+                                     &key,
+                                     &series,
+                                     REDISMODULE_READ,
+                                     true);
 
         if (!status) {
             RedisModule_Log(ctx,
@@ -377,7 +382,8 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeriesSafe(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    const int status = GetSeries(
+        ctx, NULL, argv[1], SERIES_RELATION_NO_RELATION, &key, &series, REDISMODULE_READ, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -649,8 +655,14 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    const int status =
-        GetSeriesSafe(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int status = GetSeries(ctx,
+                                 NULL,
+                                 argv[1],
+                                 SERIES_RELATION_NO_RELATION,
+                                 &key,
+                                 &series,
+                                 REDISMODULE_READ | REDISMODULE_WRITE,
+                                 false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -700,8 +712,14 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // First try to remove the rule from the source key
     Series *srcSeries;
     RedisModuleKey *srcKey;
-    const int statusS =
-        GetSeriesSafe(ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int statusS = GetSeries(ctx,
+                                  NULL,
+                                  srcKeyName,
+                                  SERIES_RELATION_NO_RELATION,
+                                  &srcKey,
+                                  &srcSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  false);
     if (!statusS) {
         return REDISMODULE_ERR;
     }
@@ -714,8 +732,14 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // If succeed to remove the rule from the source key remove from the destination too
     Series *destSeries;
     RedisModuleKey *destKey;
-    const int statusD = GetSeriesSafe(
-        ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int statusD = GetSeries(ctx,
+                                  NULL,
+                                  destKeyName,
+                                  SERIES_RELATION_NO_RELATION,
+                                  &destKey,
+                                  &destSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  false);
     if (!statusD) {
         return REDISMODULE_ERR;
     }
@@ -762,33 +786,95 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             ctx, "TSDB: the source key and destination key should be different");
     }
 
-    // First we verify the source is not a destination
+    // 1. Verify the source is not a destination
     Series *srcSeries;
     RedisModuleKey *srcKey;
-    const int statusS =
-        GetSeriesSafe(ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int statusS = GetSeries(ctx,
+                                  NULL,
+                                  srcKeyName,
+                                  SERIES_RELATION_NO_RELATION,
+                                  &srcKey,
+                                  &srcSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  false);
     if (!statusS) {
         return REDISMODULE_ERR;
     }
     if (srcSeries->srcKey) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: the source key already has a source rule");
+        // still src series might be deleted, check it
+        Series *_srcSeries;
+        RedisModuleKey *_srcKey;
+        const int status = GetSeries(ctx,
+                                     srcSeries,
+                                     srcSeries->srcKey,
+                                     SERIES_RELATION_SRC,
+                                     &_srcKey,
+                                     &_srcSeries,
+                                     REDISMODULE_READ | REDISMODULE_WRITE,
+                                     false);
+        if (status) { // src series exists series has a valid src key
+            RedisModule_CloseKey(_srcKey);
+            RedisModule_CloseKey(srcKey);
+            return RTS_ReplyGeneralError(ctx, "TSDB: the source key already has a source rule");
+        }
     }
 
-    // Second verify the destination doesn't have other rule
     Series *destSeries;
     RedisModuleKey *destKey;
-    const int statusD = GetSeriesSafe(
-        ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int statusD = GetSeries(ctx,
+                                  NULL,
+                                  destKeyName,
+                                  SERIES_RELATION_NO_RELATION,
+                                  &destKey,
+                                  &destSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  false);
     if (!statusD) {
+        RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;
     }
 
-    if (!SeriesSetSrcRule(ctx, destSeries, srcSeries)) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: the destination key already has a rule");
+    // 2. verify dst doesn't have dst
+    if (destSeries->rules) {
+        RedisModule_CloseKey(srcKey);
+        RedisModule_CloseKey(destKey);
+        return RTS_ReplyGeneralError(ctx, "TSDB: the destination key already has a dst rule");
+    }
+
+    // 3. verify dst doesn't have src,
+    // 4. This covers also the scenario when the rule is already exists
+    if (destSeries->srcKey) {
+        // still src series might be deleted, check it
+        Series *_srcSeries;
+        RedisModuleKey *_srcKey;
+        const int status = GetSeries(ctx,
+                                     destSeries,
+                                     destSeries->srcKey,
+                                     SERIES_RELATION_SRC,
+                                     &_srcKey,
+                                     &_srcSeries,
+                                     REDISMODULE_READ | REDISMODULE_WRITE,
+                                     false);
+        if (status) { // src series exists series has a valid src key
+            RedisModule_CloseKey(_srcKey);
+            RedisModule_CloseKey(srcKey);
+            RedisModule_CloseKey(destKey);
+            return RTS_ReplyGeneralError(ctx, "TSDB: the destination key already has a src rule");
+        }
+    }
+
+    SeriesSetSrcRule(ctx, destSeries, srcSeries);
+
+    CompactionRule *rule;
+    if ((rule = GetRule(srcSeries->rules, destSeries->keyName))) {
+        // There is an obsolete reference from src to dst, remove it.
+        SeriesDeleteRule(srcSeries, destSeries->keyName);
     }
 
     // Last add the rule to source
     if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, timeBucket) == NULL) {
+        RedisModule_CloseKey(srcKey);
+        RedisModule_CloseKey(destKey);
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
         return REDISMODULE_ERR;
     }
@@ -882,7 +968,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeriesSafe(ctx, argv[1], &key, &series, REDISMODULE_READ);
+    const int status = GetSeries(
+        ctx, NULL, argv[1], SERIES_RELATION_NO_RELATION, &key, &series, REDISMODULE_READ, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -920,12 +1007,14 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status =
-            GetSeriesSafeSilent(ctx,
-                                RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                &key,
-                                &series,
-                                REDISMODULE_READ);
+        const int status = GetSeries(ctx,
+                                     NULL,
+                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                                     SERIES_RELATION_NO_RELATION,
+                                     &key,
+                                     &series,
+                                     REDISMODULE_READ,
+                                     true);
         if (!status) {
             RedisModule_Log(ctx,
                             "warning",
@@ -1007,8 +1096,14 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    const int status =
-        GetSeriesSafe(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE);
+    const int status = GetSeries(ctx,
+                                 NULL,
+                                 argv[1],
+                                 SERIES_RELATION_NO_RELATION,
+                                 &key,
+                                 &series,
+                                 REDISMODULE_READ | REDISMODULE_WRITE,
+                                 false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -1132,8 +1227,6 @@ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY
 "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
 */
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    srand(time(0));
-
     if (RedisModule_Init(ctx, "timeseries", REDISTIMESERIES_MODULE_VERSION, REDISMODULE_APIVER_1) ==
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
@@ -1193,7 +1286,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .free = FreeSeries };
 
     SeriesType =
-        RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_IS_RESSETED_DUP_POLICY_UUID_RDB_VER, &tm);
+        RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_IS_RESSETED_DUP_POLICY_RDB_VER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
     IndexInit();
