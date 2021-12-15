@@ -101,6 +101,12 @@ typedef struct CreateCtx
 
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);
 
+int ParseChunkSize(RedisModuleCtx *ctx,
+                   RedisModuleString **argv,
+                   int argc,
+                   const char *arg_prefix,
+                   long long *chunkSizeBytes);
+
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
