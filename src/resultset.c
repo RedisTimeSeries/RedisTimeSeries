@@ -180,7 +180,6 @@ void GroupList_ApplyReducer(TS_GroupList *group,
         .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
     };
     cCtx.options |= SERIES_OPT_UNCOMPRESSED;
-    cCtx.isTemporary = true;
 
     Series *reduced = NewSeries(RedisModule_CreateString(NULL, serie_name, serie_name_len), &cCtx);
 
