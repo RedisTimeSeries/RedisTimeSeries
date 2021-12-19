@@ -1,11 +1,11 @@
 import pytest
 from RLTest import Env
 from test_helper_classes import TSInfo
-
+from includes import *
 
 class testModuleLoadTimeArguments(object):
     def __init__(self):
-        self.test_variations = [(True, 'CHUNK_SIZE_BYTES 2000'),
+        self.test_variations = [(True, 'CHUNK_SIZE_BYTES 2048'),
                                 (True, 'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'),
                                 (True, 'DUPLICATE_POLICY MAX'),
                                 (True, 'RETENTION_POLICY 30')
@@ -13,6 +13,7 @@ class testModuleLoadTimeArguments(object):
 
     def test(self):
         Env().skipOnCluster()
+        skip_on_rlec()
         for variation in self.test_variations:
             should_ok = variation[0]
             if should_ok:
@@ -27,6 +28,7 @@ class testModuleLoadTimeArguments(object):
 
 def test_encoding_uncompressed():
     Env().skipOnCluster()
+    skip_on_rlec()
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -36,6 +38,7 @@ def test_encoding_uncompressed():
 
 def test_encoding_compressed():
     Env().skipOnCluster()
+    skip_on_rlec()
     env = Env(moduleArgs='ENCODING compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -44,6 +47,7 @@ def test_encoding_compressed():
 
 def test_uncompressed():
     Env().skipOnCluster()
+    skip_on_rlec()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -53,6 +57,7 @@ def test_uncompressed():
 
 def test_compressed():
     Env().skipOnCluster()
+    skip_on_rlec()
     env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m')
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -61,8 +66,9 @@ def test_compressed():
 
 def test_compressed_debug():
     Env().skipOnCluster()
-    
+
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    skip_on_rlec()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -75,6 +81,7 @@ class testGlobalConfigTests():
 
     def __init__(self):
         Env().skipOnCluster()
+        skip_on_rlec()
         self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')
 
     def test_autocreate(self):
@@ -136,26 +143,34 @@ class testGlobalConfigTests():
 
 def test_negative_configuration():
     Env().skipOnCluster()
-    with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; DUPLICATE_POLICY abc')
+    skip_on_rlec()
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; DUPLICATE_POLICY')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; DUPLICATE_POLICY abc')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; CHUNK_TYPE')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; DUPLICATE_POLICY')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100; ENCODING')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES -1')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='ENCODING; CHUNK_SIZE_BYTES 100')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 100;')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='ENCODING abc; CHUNK_SIZE_BYTES 100')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; CHUNK_TYPE')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_TYPE; CHUNK_SIZE_BYTES 100')
+        env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; ENCODING')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='ENCODING; CHUNK_SIZE_BYTES 80')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='ENCODING abc; CHUNK_SIZE_BYTES 80')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE; CHUNK_SIZE_BYTES 88')
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY')

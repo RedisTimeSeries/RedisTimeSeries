@@ -55,14 +55,12 @@ void QueryPredicateList_Free(QueryPredicateList *list);
 
 void IndexInit();
 void FreeLabels(void *value, size_t labelsCount);
-void IndexMetric(RedisModuleCtx *ctx,
-                 RedisModuleString *ts_key,
-                 Label *labels,
-                 size_t labels_count);
-void RemoveIndexedMetric(RedisModuleCtx *ctx,
-                         RedisModuleString *ts_key,
-                         Label *labels,
-                         size_t labels_count);
+void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count);
+void RemoveIndexedMetric(RedisModuleString *ts_key);
+void RemoveAllIndexedMetrics();
+void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
+                                     RedisModuleDict **_tsLabelIndex);
+int IsKeyIndexed(RedisModuleString *ts_key);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count);

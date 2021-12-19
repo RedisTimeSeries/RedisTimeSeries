@@ -38,7 +38,7 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     }
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2));
     if (*label_count > 0) {
-        labelsResult = malloc(sizeof(Label) * (*label_count));
+        labelsResult = calloc((*label_count), sizeof(Label));
         for (int i = 0; i < *label_count; i++) {
             RedisModuleString *key = argv[first_label_pos + i * 2];
             RedisModuleString *value = argv[first_label_pos + i * 2 + 1];
@@ -59,6 +59,38 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     }
     *labels = labelsResult;
     return REDISMODULE_OK;
+}
+
+int ParseChunkSize(RedisModuleCtx *ctx,
+                   RedisModuleString **argv,
+                   int argc,
+                   const char *arg_prefix,
+                   long long *chunkSizeBytes) {
+    if (RMUtil_ArgIndex(arg_prefix, argv, argc) >= 0 &&
+        RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "l", chunkSizeBytes) != REDISMODULE_OK) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
+        return TSDB_ERROR;
+    }
+
+    if ((*chunkSizeBytes) <= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
+        return TSDB_ERROR;
+    }
+
+    if ((*chunkSizeBytes) > 1048576) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
+        return TSDB_ERROR;
+    }
+
+    if ((*chunkSizeBytes) % 8 != 0) {
+        // Currently the gorilla algorithm implementation can only handle chunks of size
+        // multiplication of 8
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: Couldn't parse CHUNK_SIZE, input must be multiplication of 8");
+        return TSDB_ERROR;
+    }
+
+    return TSDB_OK;
 }
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
@@ -107,25 +139,11 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
-    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
-        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
-            REDISMODULE_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        goto err_exit;
-    }
-
-    if (cCtx->chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
-        goto err_exit;
-    }
-
-    if (cCtx->chunkSizeBytes > 1048576) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes) != TSDB_OK) {
         goto err_exit;
     }
 
     if (parseEncodingArgs(ctx, argv, argc, &cCtx->options) != TSDB_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse ENCODING");
         goto err_exit;
     }
 
@@ -650,7 +668,11 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    parseLabelQuery(ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels);
+    if (parseLabelQuery(
+            ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
+        REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 

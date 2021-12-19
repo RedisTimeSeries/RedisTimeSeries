@@ -1,7 +1,9 @@
 import pytest
 import redis
-import time 
+import time
 from utils import Env, set_hertz
+from includes import *
+
 
 def test_mget_with_expire_cmd():
     set_hertz(Env())
@@ -18,7 +20,7 @@ def test_mget_with_expire_cmd():
             reply = r.execute_command('TS.MGET', 'FILTER', 'type=DELAYED')
             assert(len(reply)>=0 and len(reply)<=3)
         assert r.execute_command("PING")
-        
+
 
 def test_mget_cmd():
     num_of_keys = 3
@@ -39,7 +41,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
-        assert sorted(expected_result) == sorted(actual_result)
+        assert sorted(expected_result) == decode_if_needed(sorted(actual_result))
 
         # test for series with data
         for i in range(num_of_keys):
@@ -56,7 +58,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
-        assert sorted(expected_result) == sorted(actual_result)
+        assert sorted(expected_result) == decode_if_needed(sorted(actual_result))
 
         # expect to received time-series k3 with labels
         expected_result_withlabels = [
@@ -64,7 +66,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
-        assert expected_result_withlabels == actual_result
+        assert expected_result_withlabels == decode_if_needed(actual_result)
 
         # expect to received time-series k1 and k2 with labels
         expected_result_withlabels = [
@@ -73,7 +75,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
-        assert sorted(expected_result_withlabels) == sorted(actual_result)
+        assert sorted(expected_result_withlabels) == decode_if_needed(sorted(actual_result))
 
         # expect to recieve only some labels
         expected_labels = [["metric", "cpu"], ["new_label", None]]
@@ -83,7 +85,7 @@ def test_mget_cmd():
         ]
 
         actual_result = r.execute_command('TS.MGET', 'SELECTED_LABELS', 'metric', "new_label",'FILTER', 'a=1')
-        assert sorted(expected_result_withlabels) == sorted(actual_result)
+        assert sorted(expected_result_withlabels) == decode_if_needed(sorted(actual_result))
 
         # negative test
         assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')

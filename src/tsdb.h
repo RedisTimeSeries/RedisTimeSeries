@@ -42,30 +42,27 @@ typedef struct Series
     ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
-    bool isTemporary;
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
-void CleanLastDeletedSeries(RedisModuleString *key);
+void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
+void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
+CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series);
+
+// Deletes the reference if the series deleted, watch out of rules iterator invalidation
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
               RedisModuleKey **key,
               Series **series,
-              int mode);
-
-// This method provides the same logic as GetSeries, without replying to the client in case of error
-// The caller method should check the result for TRUE/FALSE and update the client accordingly if
-// required
-int SilentGetSeries(RedisModuleCtx *ctx,
-                    RedisModuleString *keyName,
-                    RedisModuleKey **key,
-                    Series **series,
-                    int mode);
+              int mode,
+              bool shouldDeleteRefs,
+              bool isSilent);
 
 AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
 
@@ -79,11 +76,12 @@ int SeriesUpsertSample(Series *series,
                        DuplicatePolicy dp_override);
 
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
-int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
+void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
-CompactionRule *SeriesAddRule(Series *series,
-                              RedisModuleString *destKeyStr,
+CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
+                              Series *series,
+                              Series *destSeries,
                               int aggType,
                               uint64_t timeBucket);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
@@ -101,7 +99,8 @@ int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,
                     timestamp_t end_ts,
                     CompactionRule *rule,
-                    double *val);
+                    double *val,
+                    bool *is_empty);
 
 // Calculate the begining of  aggregation window
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);

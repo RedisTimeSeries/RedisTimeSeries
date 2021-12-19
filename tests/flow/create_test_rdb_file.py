@@ -35,7 +35,7 @@ def parse_timestamp(ts):
     return calendar.timegm(date_time_obj.timetuple()) * 1000
 
 def load_into_redis(redis_conn):
-    r = redis_conn.pipeline()
+    r = redis_conn.pipeline(transaction=False)
     count = 0
     for row in read_from_disk():
         timestamp = parse_timestamp(row[0])
@@ -45,7 +45,7 @@ def load_into_redis(redis_conn):
         if count > PIPELINE_SIZE:
             r.execute()
             count = 0
-            r = redis_conn.pipeline()
+            r = redis_conn.pipeline(transaction=False)
 
         city = row[City]
         country = row[Country].replace("(", "[").replace(")", "]")

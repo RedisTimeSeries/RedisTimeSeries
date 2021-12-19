@@ -7,6 +7,7 @@
 
 #include "consts.h"
 #include "endianconv.h"
+#include "load_io_error_macros.h"
 
 #include <inttypes.h>
 #include <string.h>
@@ -20,68 +21,79 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     double lastValue;
     timestamp_t lastTimestamp;
     uint64_t totalSamples;
+    DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
+    Series *series = NULL;
+    RedisModuleString *destKey = NULL;
 
     CreateCtx cCtx = { 0 };
-    RedisModuleString *keyName = RedisModule_LoadString(io);
-    cCtx.retentionTime = RedisModule_LoadUnsigned(io);
-    cCtx.chunkSizeBytes = RedisModule_LoadUnsigned(io);
+    RedisModuleString *keyName = NULL;
+    keyName = LoadString_IOError(io, goto err);
+
+    cCtx.retentionTime = LoadUnsigned_IOError(io, goto err);
+    cCtx.chunkSizeBytes = LoadUnsigned_IOError(io, goto err);
     if (encver < TS_SIZE_RDB_VER) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
 
     if (encver >= TS_UNCOMPRESSED_VER) {
-        cCtx.options = RedisModule_LoadUnsigned(io);
+        cCtx.options = LoadUnsigned_IOError(io, goto err);
     } else {
         cCtx.options |= SERIES_OPT_UNCOMPRESSED;
     }
 
     if (encver >= TS_SIZE_RDB_VER) {
-        lastTimestamp = RedisModule_LoadUnsigned(io);
-        lastValue = RedisModule_LoadDouble(io);
-        totalSamples = RedisModule_LoadUnsigned(io);
-        uint64_t hasSrcKey = RedisModule_LoadUnsigned(io);
+        lastTimestamp = LoadUnsigned_IOError(io, goto err);
+        lastValue = LoadDouble_IOError(io, goto err);
+        totalSamples = LoadUnsigned_IOError(io, goto err);
+        if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
+            duplicatePolicy = LoadUnsigned_IOError(io, goto err);
+        }
+        uint64_t hasSrcKey = LoadUnsigned_IOError(io, goto err);
         if (hasSrcKey) {
-            srcKey = RedisModule_LoadString(io);
+            srcKey = LoadString_IOError(io, goto err);
         }
     }
 
-    cCtx.labelsCount = RedisModule_LoadUnsigned(io);
-    cCtx.labels = malloc(sizeof(Label) * cCtx.labelsCount);
+    cCtx.labelsCount = LoadUnsigned_IOError(io, goto err);
+    cCtx.labels = calloc(cCtx.labelsCount, sizeof(Label));
     for (int i = 0; i < cCtx.labelsCount; i++) {
-        cCtx.labels[i].key = RedisModule_LoadString(io);
-        cCtx.labels[i].value = RedisModule_LoadString(io);
+        cCtx.labels[i].key = LoadString_IOError(io, goto err);
+        cCtx.labels[i].value = LoadString_IOError(io, goto err);
     }
 
-    uint64_t rulesCount = RedisModule_LoadUnsigned(io);
+    uint64_t rulesCount = LoadUnsigned_IOError(io, goto err);
 
-    Series *series = NewSeries(keyName, &cCtx);
+    series = NewSeries(keyName, &cCtx);
 
     CompactionRule *lastRule = NULL;
-    RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
 
     for (int i = 0; i < rulesCount; i++) {
-        RedisModuleString *destKey = RedisModule_LoadString(io);
-        uint64_t timeBucket = RedisModule_LoadUnsigned(io);
-        uint64_t aggType = RedisModule_LoadUnsigned(io);
+        destKey = LoadString_IOError(io, goto err);
+        uint64_t timeBucket = LoadUnsigned_IOError(io, goto err);
+        uint64_t aggType = LoadUnsigned_IOError(io, goto err);
+        timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
 
         CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
-        rule->startCurrentTimeBucket = RedisModule_LoadUnsigned(io);
+        destKey = NULL;
+        rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
         if (i == 0) {
             series->rules = rule;
         } else {
             lastRule->nextRule = rule;
         }
-        rule->aggClass->readContext(rule->aggContext, io);
+        if (rule->aggClass->readContext(rule->aggContext, io, encver)) {
+            goto err;
+        }
         lastRule = rule;
     }
 
     if (encver < TS_SIZE_RDB_VER) {
-        uint64_t samplesCount = RedisModule_LoadUnsigned(io);
+        uint64_t samplesCount = LoadUnsigned_IOError(io, goto err);
         for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
-            timestamp_t ts = RedisModule_LoadUnsigned(io);
-            double val = RedisModule_LoadDouble(io);
+            timestamp_t ts = LoadUnsigned_IOError(io, goto err);
+            double val = LoadDouble_IOError(io, goto err);
             int result = SeriesAddSample(series, ts, val);
             if (result != TSDB_OK) {
                 RedisModule_LogIOError(
@@ -97,21 +109,54 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             series->funcs->FreeChunk(chunk);
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
-        uint64_t numChunks = RedisModule_LoadUnsigned(io);
+        uint64_t numChunks = LoadUnsigned_IOError(io, goto err);
         for (int i = 0; i < numChunks; ++i) {
-            series->funcs->LoadFromRDB(&chunk, io);
+            if (series->funcs->LoadFromRDB(&chunk, io)) {
+                goto err;
+            }
             dictOperator(
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         series->totalSamples = totalSamples;
+        series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
+        srcKey = NULL;
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
         series->lastChunk = chunk;
     }
 
-    IndexMetric(ctx, keyName, series->labels, series->labelsCount);
     return series;
+
+err:
+    if (destKey) { // clean if there is a key name which been alloced but not added to series yet
+        RedisModule_FreeString(NULL, destKey);
+    }
+    if (srcKey) { // clean if there is a key name which been alloced but not added to series yet
+        RedisModule_FreeString(NULL, srcKey);
+    }
+    if (series) {
+        // Note that we aren't calling RemoveIndexedMetric(series->keyName) since
+        // the series only being indexed on loaded notification
+        FreeSeries(series);
+    } else {
+        if (keyName) {
+            RedisModule_FreeString(NULL, keyName);
+        }
+        if (cCtx.labels) {
+            for (int i = 0; i < cCtx.labelsCount; i++) {
+                if (cCtx.labels[i].key) {
+                    RedisModule_FreeString(NULL, cCtx.labels[i].key);
+                }
+                if (cCtx.labels[i].value) {
+                    RedisModule_FreeString(NULL, cCtx.labels[i].value);
+                }
+            }
+            free(cCtx.labels);
+        }
+    }
+
+    return NULL;
 }
 
 unsigned int countRules(Series *series) {
@@ -133,6 +178,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->lastTimestamp);
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
+    RedisModule_SaveUnsigned(io, series->duplicatePolicy);
     if (series->srcKey != NULL) {
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);

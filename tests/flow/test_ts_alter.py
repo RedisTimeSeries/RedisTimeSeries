@@ -2,6 +2,7 @@ import pytest
 import redis
 from utils import Env
 from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _insert_data
+from includes import *
 
 
 def test_alter_cmd():
@@ -20,7 +21,7 @@ def test_alter_cmd():
         # test alter retention, chunk size and labels
         expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
         expected_retention = 500
-        expected_chunk_size = 100
+        expected_chunk_size = 104
         _ts_alter_cmd(r, key, expected_retention, expected_chunk_size, expected_labels)
         _assert_alter_cmd(r, key, end_ts - 501, end_ts, expected_data[-501:], expected_retention,
                           expected_chunk_size, expected_labels)
@@ -32,7 +33,7 @@ def test_alter_cmd():
                           expected_chunk_size, expected_labels)
 
         # test alter chunk size
-        expected_chunk_size = 100
+        expected_chunk_size = 104
         expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
         _ts_alter_cmd(r, key, set_chunk_size=expected_chunk_size)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,

@@ -4,6 +4,7 @@ import pytest
 import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
+from includes import *
 
 
 def test_issue_504():
@@ -77,6 +78,8 @@ def test_different_chunk_size():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '-1000')
         with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '100')
+        with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000000')
 
         r.execute_command('TS.add', 'tester2', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000')
@@ -93,8 +96,8 @@ def test_valid_labels():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'li(st')
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')           
-            
+            r.execute_command('TS.ADD', 'tester2', '*', 1, 'LABELS', 'name', 'myName', 'location', 'lis,t')
+
 def test_valid_timestamp():
     with Env().getConnection() as r:
         with pytest.raises(redis.ResponseError) as excinfo:
