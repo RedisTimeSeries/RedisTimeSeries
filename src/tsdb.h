@@ -52,23 +52,16 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
-typedef enum SERIES_RELATION
-{
-    SERIES_RELATION_DST,
-    SERIES_RELATION_SRC,
-    SERIES_RELATION_NO_RELATION
-} SERIES_RELATION;
-
 CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
 int GetSeries(RedisModuleCtx *ctx,
-              Series *originalSeries,
               RedisModuleString *keyName,
-              SERIES_RELATION relation,
               RedisModuleKey **key,
               Series **series,
               int mode,
+              bool shouldDeleteRefs,
               bool isSilent);
 
 AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
@@ -83,7 +76,7 @@ int SeriesUpsertSample(Series *series,
                        DuplicatePolicy dp_override);
 
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
-void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, Series *srcSeries);
+void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
