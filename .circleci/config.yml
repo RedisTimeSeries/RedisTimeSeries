@@ -390,8 +390,8 @@ jobs:
           name: Install prerequisites
           command: |
             ./deps/readies/bin/getpy3
-            sudo ./system-setup.py
-            sudo ./deps/readies/bin/getredis
+            ./system-setup.py
+            ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
             python3 -m pip list
