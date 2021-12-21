@@ -64,5 +64,8 @@ run:
 benchmark:
 	@$(MAKE) -C src benchmark
 
+platform:
+	@$(MAKE) -C src platform
+
 # deploy:
 #	@make -C src deploy
