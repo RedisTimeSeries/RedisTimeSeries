@@ -31,7 +31,7 @@ typedef struct AvgContext
 {
     double val;
     double cnt;
-    unsigned char isOverflow;
+    bool isOverflow;
 } AvgContext;
 
 typedef struct StdContext
@@ -137,13 +137,13 @@ void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->isOverflow);
 }
 
-int AvgReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
+int AvgReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->val = LoadDouble_IOError(io, goto err);
     context->cnt = LoadDouble_IOError(io, goto err);
     context->isOverflow = false;
     if (encver >= TS_OVERFLOW_RDB_VER) {
-        context->isOverflow = LoadUnsigned_IOError(io, goto err);
+        context->isOverflow = !!(LoadUnsigned_IOError(io, goto err));
     }
     return TSDB_OK;
 err:
