@@ -389,7 +389,7 @@ jobs:
       - run:
           name: Install prerequisites
           command: |
-            sudo ./deps/readies/bin/getpy3
+            ./deps/readies/bin/getpy3
             sudo ./system-setup.py
             sudo ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
