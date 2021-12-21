@@ -407,7 +407,8 @@ jobs:
           command: |
             cd
             sudo mkdir -p rlec
-            ./deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
+            ./RedisTimeSeries/deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) \
+                RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
             sudo rlec start --verbose --version 6.2.8 --build 50 --os bionic
       - run:
           name: Flow Test
