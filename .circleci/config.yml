@@ -38,7 +38,7 @@ commands:
           command: |
             apt-get -qq update
             apt-get -q install -y git openssh-client curl ca-certificates make tar gzip
-            bash <(curl -fsSL curl -fsSL http://tiny.cc/arlecchino)
+            bash <(curl -fsSL https://raw.githubusercontent.com/docker/docker-install/master/install.sh)
       - setup_remote_docker:
           version: 20.10.7
           docker_layer_caching: true
@@ -89,7 +89,7 @@ commands:
             cd
             echo 'export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i /home/circleci/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"' > /tmp/arlecchino.sh
             sudo mv /tmp/arlecchino.sh /etc/profile.d
-            bash -l -c "bash <(curl -fsSL https://github.com/RedisLabsModules/arlecchino/blob/master/bin/setup-rlec)"
+            bash -l -c "bash <(curl -fsSL http://tiny.cc/arlecchino)"
 
   save-tests-logs:
     steps:
