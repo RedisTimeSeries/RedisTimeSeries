@@ -1,3 +1,3 @@
 redistimeseries:
-    path: /opt/view/RedisTimeSeries/bin/artifacts/redistimeseries.{{MODULE}}.zip
+    path: /opt/view/RedisTimeSeries/bin/artifacts/{{MODULE}}
     # args:
