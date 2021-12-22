@@ -475,4 +475,4 @@ package: $(TARGET)
 #----------------------------------------------------------------------------------------------
 
 platform:
-	$(SHOW)$(MAKE) -C build/docker PACK=1 ARTIFACTS=1
+	$(SHOW)$(MAKE) -C $(ROOT)/build/docker PACK=1 ARTIFACTS=1
