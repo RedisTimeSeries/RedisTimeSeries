@@ -4,8 +4,8 @@ MK.pyver:=3
 
 MK_ALL_TARGETS=bindirs deps build package
 
-ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
-$(error Submodules not present. Please run 'git submodule update --init --recursive')
+ifeq ($(wildcard $(ROOT)/deps/readies),)
+$(shell git submodule update --init --recursive)
 endif
 include $(ROOT)/deps/readies/mk/main
 

@@ -410,7 +410,7 @@ jobs:
             mkdir -p rlec && chmod 777 rlec
             ./RedisTimeSeries/deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) \
                 RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
-            rlec start --verbose --version 6.2.8 --build 50 --os bionic
+            rlec start --verbose --version 6.2.8 --build 53 --os bionic
       - run:
           name: Flow Test
           shell: /bin/bash -l -eo pipefail
