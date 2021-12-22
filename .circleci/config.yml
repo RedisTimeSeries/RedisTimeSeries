@@ -89,7 +89,7 @@ commands:
             cd
             echo 'export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i /home/circleci/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"' > /tmp/arlecchino.sh
             sudo mv /tmp/arlecchino.sh /etc/profile.d
-            sudo -E bash -l -c "source <(curl -Ls http://tiny.cc/arlecchino)"
+            bash -l -c "bash <(curl -fsSL http://tiny.cc/arlecchino)"
 
   save-tests-logs:
     steps:
@@ -389,34 +389,36 @@ jobs:
       - run:
           name: Install prerequisites
           command: |
-            sudo ./deps/readies/bin/getpy3
-            sudo ./system-setup.py
-            sudo ./deps/readies/bin/getredis
+            ./deps/readies/bin/getpy3
+            ./system-setup.py
+            ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
+            python3 -m pip list
       - install-arlecchino
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
           command: |
-            sudo make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1
+            make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1
           no_output_timeout: 30m
       - run:
           name: Start RLEC
           shell: /bin/bash -l -eo pipefail
           command: |
             cd
-            sudo mkdir -p rlec
-            sudo cp RedisTimeSeries/tests/flow/rlec/redis-modules.yaml rlec/
-            sudo rlec start --verbose --version 6.2.8 --build 50 --os bionic
+            mkdir -p rlec && chmod 777 rlec
+            ./RedisTimeSeries/deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) \
+                RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
+            rlec start --verbose --version 6.2.8 --build 53 --os bionic
       - run:
           name: Flow Test
           shell: /bin/bash -l -eo pipefail
           no_output_timeout: 30m
           command: |
-            sudo python3 -m pip list
-            sudo mkdir -p ~/workspace/tests
-            sudo make flow_tests RLEC=1 SHOW=1
+            python3 -m pip list
+            mkdir -p ~/workspace/tests
+            make flow_tests RLEC=1 SHOW=1
       - save-tests-logs
 
   coverage:

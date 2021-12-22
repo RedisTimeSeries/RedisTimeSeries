@@ -16,39 +16,40 @@ class RedisTimeSeriesSetup(paella.Setup):
         paella.Setup.__init__(self, nop)
 
     def common_first(self):
-        self.pip_install("wheel")
-        self.pip_install("setuptools --upgrade")
-
         self.install("git jq curl unzip")
-        self.run("%s/bin/enable-utf8" % READIES)
+        self.run("%s/bin/enable-utf8" % READIES, sudo=self.os != 'macos')
 
         self.install("autoconf libtool m4 automake")
         self.install("openssl")
 
     def debian_compat(self):
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
         self.install("libssl-dev")
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
-        self.run("%s/bin/getepel" % READIES)
+        self.run("%s/bin/getepel" % READIES, sudo=True)
         self.install("openssl-devel")
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
 
-    def arch_compat(self):
+    def archlinux(self):
+        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
         self.install("lcov-git", aur=True)
 
     def fedora(self):
+        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
         self.install("openssl-devel")
-        self.run("%s/bin/getgcc" % READIES)
         self.install("python3-networkx")
 
     def macos(self):
         self.install_gnu_utils()
 
     def common_last(self):
-        if not self.has_command("lcov"):
+        if self.dist != "arch":
             self.install("lcov")
+        else:
+            self.install("lcov-git", aur=True)
+        self.pip_install("pudb awscli")
 
         self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
