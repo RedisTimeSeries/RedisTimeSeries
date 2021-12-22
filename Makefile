@@ -56,7 +56,7 @@ flow_tests:
 	@$(MAKE) -C src flow_tests
 
 pack:
-	@$(MAKE) -C src package
+	@$(MAKE) -C src pack
 
 run:
 	@$(MAKE) -C src run
