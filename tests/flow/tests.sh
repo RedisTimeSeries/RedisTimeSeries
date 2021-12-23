@@ -29,6 +29,7 @@ help() {
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
+		REDIS_CONFIG=file   Path to redis.conf config file
 		EXT|EXISTING_ENV=1  Run the tests on existing env
 
 		TEST=test           Run specific test (e.g. test.py:test_name)
@@ -128,6 +129,9 @@ run_tests() {
 	fi
 
 	cd $ROOT/tests/flow
+	if [[ -n $REDIS_CONFIG && -e $REDIS_CONFIG ]]; then
+		cat $REDIS_CONFIG >> $rltest_config
+	fi
 
 	if [[ $VERBOSE == 1 ]]; then
 		echo "RLTest configuration:"
