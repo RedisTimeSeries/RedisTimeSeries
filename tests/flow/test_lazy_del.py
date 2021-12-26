@@ -49,7 +49,6 @@ def test_dump_restore_dst_rule():
         r.execute_command('DEL', key2)
         r.execute_command('restore', key2, 0, data)
 
-        print(str(_get_ts_info(r, key1)))
         assert _get_ts_info(r, key1).sourceKey == None
         assert len(_get_ts_info(r, key1).rules) == 0
         assert _get_ts_info(r, key2).sourceKey == None

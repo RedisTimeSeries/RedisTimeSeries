@@ -368,6 +368,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     predicates->shouldReturnNull = true;
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    RedisModule_ThreadSafeContextLock(ctx);
 
     RedisModuleDict *result =
         QueryIndex(ctx, predicates->predicates->list, predicates->predicates->count);
@@ -378,7 +379,6 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     Record *series_list = ListRecord_Create(0);
 
-    RedisModule_ThreadSafeContextLock(ctx);
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         ListRecord_Add(series_list,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
