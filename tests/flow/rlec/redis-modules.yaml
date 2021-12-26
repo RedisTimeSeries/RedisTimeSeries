@@ -1,4 +1,3 @@
 redistimeseries:
-    path: /opt/view/RedisTimeSeries/bin/artifacts/redistimeseries.Linux-ubuntu18.04-x86_64.99.99.99.zip
+    path: /opt/view/RedisTimeSeries/bin/artifacts/{{MODULE}}
     # args:
-    modules_v2_api: yes
