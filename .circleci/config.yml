@@ -80,16 +80,12 @@ commands:
 
   install-arlecchino:
     steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "2a:11:3f:16:9f:ab:90:34:6b:51:28:f5:b7:3a:d1:6d"
       - run:
           name: Install Arlecchino
+          shell: /bin/bash -l -eo pipefail
           command: |
             cd
-            echo 'export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -i /home/circleci/.ssh/id_rsa_2a113f169fab90346b5128f5b73ad16d"' > /tmp/arlecchino.sh
-            sudo mv /tmp/arlecchino.sh /etc/profile.d
-            bash -l -c "bash <(curl -fsSL http://tiny.cc/arlecchino)"
+            bash <(curl -fsSL https://raw.githubusercontent.com/RedisLabsModules/arlecchino/master/bin/setup-rlec)
 
   save-tests-logs:
     steps:
@@ -410,7 +406,7 @@ jobs:
             mkdir -p rlec && chmod 777 rlec
             ./RedisTimeSeries/deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) \
                 RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
-            rlec start --verbose --version 6.2.8 --build 50 --os bionic
+            rlec start --verbose --version 6.2.8 --build 53 --os bionic
       - run:
           name: Flow Test
           shell: /bin/bash -l -eo pipefail
