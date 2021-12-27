@@ -40,6 +40,7 @@
 #endif
 
 RedisModuleType *SeriesType;
+RedisModuleCtx *rts_staticCtx; // global redis ctx
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -1136,6 +1137,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
+
+    rts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
 
     RedisModule_Log(ctx,
                     "notice",
