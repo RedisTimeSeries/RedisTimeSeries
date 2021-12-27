@@ -524,8 +524,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     if (series->rules == NULL) {
         return;
     }
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    deleteReferenceToDeletedSeries(ctx, series);
+    deleteReferenceToDeletedSeries(rts_staticCtx, series);
     CompactionRule *rule = series->rules;
     const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
@@ -536,7 +535,8 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             // upsert in latest timebucket
             const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
@@ -546,17 +546,17 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             const int rv =
                 SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            if (!RuleSeriesUpsertSample(ctx, series, rule, start, val)) {
+            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, start, val)) {
                 continue;
             }
         }
         rule = rule->nextRule;
     }
-    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 int SeriesUpsertSample(Series *series,
@@ -690,8 +690,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
     if (!series->rules)
         return;
 
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    deleteReferenceToDeletedSeries(ctx, series);
+    deleteReferenceToDeletedSeries(rts_staticCtx, series);
     CompactionRule *rule = series->rules;
 
     while (rule) {
@@ -703,7 +702,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // All deletion range in latest timebucket - only update the context on the rule
             const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
@@ -724,7 +724,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                  &val,
                                  &is_empty);
             if (unlikely(rv == TSDB_ERROR)) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
@@ -734,7 +735,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             } else { // first bucket needs update
                 // continuous deletion starts one bucket after startTSWindowStart
                 continuous_deletion_start = startTSWindowStart + ruleTimebucket;
-                if (!RuleSeriesUpsertSample(ctx, series, rule, startTSWindowStart, val)) {
+                if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startTSWindowStart, val)) {
                     continue;
                 }
             }
@@ -747,7 +748,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                     SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
                 if (rv == TSDB_ERROR) {
                     RedisModule_Log(
-                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
                 // continuous deletion ends one bucket before endTSWindowStart
@@ -762,7 +763,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                      &is_empty);
                 if (unlikely(rv == TSDB_ERROR)) {
                     RedisModule_Log(
-                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
 
@@ -772,7 +773,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                 } else { // update in end timebucket
                     // continuous deletion ends one bucket before endTSWindowStart
                     continuous_deletion_end = endTSWindowStart - ruleTimebucket;
-                    if (!RuleSeriesUpsertSample(ctx, series, rule, endTSWindowStart, val)) {
+                    if (!RuleSeriesUpsertSample(
+                            rts_staticCtx, series, rule, endTSWindowStart, val)) {
                         continue;
                     }
                 }
@@ -781,15 +783,16 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // ---- handle continuous deletion ----
 
             if (continuous_deletion_end >= continuous_deletion_start) {
-                ContinuousDeletion(
-                    ctx, series, rule, continuous_deletion_start, continuous_deletion_end);
+                ContinuousDeletion(rts_staticCtx,
+                                   series,
+                                   rule,
+                                   continuous_deletion_start,
+                                   continuous_deletion_end);
             }
         }
 
         rule = rule->nextRule;
     }
-
-    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {

@@ -47,8 +47,8 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         }
     }
 
-    RedisModule_UnblockClient(bc, NULL);
     RedisModule_FreeThreadSafeContext(rctx);
+    RedisModule_UnblockClient(bc, NULL);
 }
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
@@ -136,12 +136,12 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
         ResultSet_Free(resultset);
     }
-    RedisModule_UnblockClient(bc, NULL);
     array_foreach(tempSeries, x, FreeSeries(x));
     array_free(tempSeries);
     MRangeArgs_Free(&data->args);
     free(data);
     RedisModule_FreeThreadSafeContext(rctx);
+    RedisModule_UnblockClient(bc, NULL);
 }
 
 int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
