@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "consts.h"
+#include "module.h"
 #include "query_language.h"
 #include "redismodule.h"
 
@@ -184,8 +185,7 @@ int RTS_CheckSupportedVestion() {
 }
 
 void RTS_GetRedisVersion() {
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
+    RedisModuleCallReply *reply = RedisModule_Call(rts_staticCtx, "info", "c", "server");
     assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
     size_t len;
     const char *replyStr = RedisModule_CallReplyStringPtr(reply, &len);
@@ -217,5 +217,4 @@ void RTS_GetRedisVersion() {
     }
 
     RedisModule_FreeCallReply(reply);
-    RedisModule_FreeThreadSafeContext(ctx);
 }
