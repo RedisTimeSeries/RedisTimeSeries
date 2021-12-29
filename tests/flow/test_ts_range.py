@@ -239,6 +239,27 @@ def test_agg_avg():
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         assert expected_result == actual_result
 
+        #test overflow
+        MAX_DOUBLE = 1.7976931348623157E+308
+        assert r.execute_command('TS.CREATE', 'ts1')
+        assert r.execute_command('TS.ADD', 'ts1', 1, MAX_DOUBLE - 10)
+        assert r.execute_command('TS.ADD', 'ts1', 2, MAX_DOUBLE - 8)
+        assert r.execute_command('TS.ADD', 'ts1', 3, MAX_DOUBLE - 6)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts1', 0, 3, 'AGGREGATION', 'avg', 5)
+        #MAX_DOUBLE - 10 equals MAX_DOUBLE cause of precision limit
+        assert actual_result == [[0, b'1.7976931348623157E308']]
+
+        MIN_DOUBLE = -1.7976931348623157E+308
+        assert r.execute_command('TS.CREATE', 'ts2')
+        assert r.execute_command('TS.ADD', 'ts2', 1, MIN_DOUBLE + 10)
+        assert r.execute_command('TS.ADD', 'ts2', 2, MIN_DOUBLE + 8)
+        assert r.execute_command('TS.ADD', 'ts2', 3, MIN_DOUBLE + 6)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
+        #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
+        assert actual_result == [[0, b'-1.7976931348623157E308']]
+
 
 def test_series_ordering():
     with Env().getClusterConnectionIfNeeded() as r:
