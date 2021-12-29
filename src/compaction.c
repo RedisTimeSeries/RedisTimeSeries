@@ -296,7 +296,7 @@ void *MaxMinCreateContext() {
 
 void MaxMinAppendValue(void *contextPtr, double value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (context->isResetted) {
+    if (unlikely(context->isResetted)) {
         context->isResetted = FALSE;
         context->maxValue = value;
         context->minValue = value;
