@@ -12,7 +12,7 @@ override DEBUG:=1
 export DEBUG
 endif
 
-MK_ALL_TARGETS=bindirs deps build package
+MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
@@ -218,7 +218,7 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package flow_tests unit_tests clean all install uninstall docker bindirs
+.PHONY: pack flow_tests unit_tests clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
@@ -468,11 +468,11 @@ coverage:
 
 #----------------------------------------------------------------------------------------------
 
-package: $(TARGET)
+pack: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)$(ROOT)/sbin/pack.sh
+	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
 
 #----------------------------------------------------------------------------------------------
 
 platform:
-	$(SHOW)$(MAKE) -C build/docker PACK=1 ARTIFACTS=1
+	$(SHOW)$(MAKE) -C $(ROOT)/build/docker PACK=1 ARTIFACTS=1
