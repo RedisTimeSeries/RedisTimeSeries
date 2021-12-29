@@ -40,6 +40,7 @@
 #endif
 
 RedisModuleType *SeriesType;
+RedisModuleCtx *rts_staticCtx; // global redis ctx
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -1048,9 +1049,8 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before
         strcasecmp(event, "set") == 0 ||
-        strcasecmp(event, "expire") == 0 || strcasecmp(event, "expired") == 0 ||
-        strcasecmp(event, "evict") == 0 || strcasecmp(event, "evicted") == 0 ||
-        strcasecmp(event, "trimmed") == 0 // only on enterprise
+        strcasecmp(event, "expired") == 0 || strcasecmp(event, "evict") == 0 ||
+        strcasecmp(event, "evicted") == 0 || strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
         RemoveIndexedMetric(key);
         return REDISMODULE_OK;
@@ -1137,6 +1137,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
+
+    rts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
 
     RedisModule_Log(ctx,
                     "notice",
