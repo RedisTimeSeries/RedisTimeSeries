@@ -77,6 +77,9 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
     }
 
+    if (!ValidateChunkSize(ctx, Chunk_SIZE_BYTES_SECS)) {
+        return TSDB_ERROR;
+    }
     TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
     if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE_BYTES", &TSGlobalConfig.chunkSizeBytes) !=
         REDISMODULE_OK) {
