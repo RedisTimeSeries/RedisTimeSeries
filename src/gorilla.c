@@ -94,8 +94,8 @@
 
 #define BIN_NUM_VALUES 64
 #define BINW BIN_NUM_VALUES
-const u_int64_t BINW_SHIFT = 6; // log2(BIN_NUM_VALUES);
-const u_int64_t BINW_MASK = ((1ULL << BINW_SHIFT) - 1ULL);
+#define BINW_SHIFT 6 // log2(BIN_NUM_VALUES);
+#define BINW_MASK ((1ULL << BINW_SHIFT) - 1ULL)
 
 #define DOUBLE_LEADING 5
 #define DOUBLE_BLOCK_SIZE 6
