@@ -216,19 +216,58 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     return deleted_count;
 }
 
-static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
-    Sample sample;
-    uint64_t numSamples = compressedChunk->count;
-    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
+// decompress chunk
+static Chunk *decompressChunk
+(
+	const CompressedChunk *compressedChunk // chunk to decompress
+) {
+	// TODO: validate chuck in compressed
+	assert (compressedChunk != NULL) ;
 
-    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
-    for (uint64_t i = 0; i < numSamples; ++i) {
-        Compressed_ChunkIteratorGetNext(iter, &sample);
-        Uncompressed_AddSample(uncompressedChunk, &sample);
+    uint64_t numSamples = compressedChunk->count ;
+    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE) ;
+    Sample *samples = uncompressedChunk->samples ;
+
+    ChunkIter_t *iter = Compressed_NewChunkIterator (compressedChunk, CHUNK_ITER_OP_NONE, NULL) ;
+
+	// loop unrolling, 4 samples per iteration
+	uint64_t i = 0 ;
+	uint64_t n = numSamples / 4 ;
+    for (; i < n ; i+=4)
+	{
+        Compressed_ChunkIteratorGetNext (iter, samples+i) ;
+        Compressed_ChunkIteratorGetNext (iter, samples+i+1) ;
+        Compressed_ChunkIteratorGetNext (iter, samples+i+2) ;
+        Compressed_ChunkIteratorGetNext (iter, samples+i+3) ;
     }
-    Compressed_FreeChunkIterator(iter);
-    return uncompressedChunk;
+
+	// left-overs
+    for (; i < numSamples ; i++)
+	{
+		Compressed_ChunkIteratorGetNext (iter, samples+i) ;
+	}
+
+    uncompressedChunk->num_samples = numSamples ;
+	uncompressedChunk->base_timestamp = uncompressedChunk->samples[0].timestamp ;
+
+    Compressed_FreeChunkIterator (iter) ;
+
+    return uncompressedChunk ;
 }
+
+//static Chunk *decompressChunk(CompressedChunk *compressedChunk) {
+//    Sample sample;
+//    uint64_t numSamples = compressedChunk->count;
+//    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
+//
+//    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
+//    for (uint64_t i = 0; i < numSamples; ++i) {
+//        Compressed_ChunkIteratorGetNext(iter, &sample);
+//        Uncompressed_AddSample(uncompressedChunk, &sample);
+//    }
+//    Compressed_FreeChunkIterator(iter);
+//    return uncompressedChunk;
+//}
 
 /************************
  *  Iterator functions  *
