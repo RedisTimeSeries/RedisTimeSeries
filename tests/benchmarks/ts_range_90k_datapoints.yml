@@ -12,7 +12,7 @@ clientconfig:
   - parameters:
     - clients: 16
     - requests: 20000
-    - threads: 1
+    - threads: 2
     - pipeline: 1
     - command: 'TS.RANGE ts - +'
 exporter:
