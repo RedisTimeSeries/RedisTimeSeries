@@ -103,11 +103,16 @@ static bool finalizeBucket(Sample *currentSample, const AggregationIterator *sel
 // process C's modulo result to translate from a negative modulo to a positive
 #define modulo(x, N) ((x % N + N) % N)
 
-static timestamp_t calc_ts_bucket(timestamp_t ts,
-                                  u_int64_t timedelta,
-                                  timestamp_t timestampAlignment) {
+static inline timestamp_t calc_ts_bucket(timestamp_t ts,
+                                         u_int64_t timedelta,
+                                         timestamp_t timestampAlignment) {
+    /* If the timestamp difference is negative we
+     * we process C's modulo result to translate from a negative modulo to a positive.
+     * Otherwise we use the simpler (faster) modulo */
     const int64_t timestamp_diff = ts - timestampAlignment;
-    return ts - modulo(timestamp_diff, (int64_t)timedelta);
+    if (unlikely(timestamp_diff < 0))
+        return ts - modulo(timestamp_diff, (int64_t)timedelta);
+    return ts - (ts % timedelta);
 }
 
 ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample) {
@@ -118,13 +123,11 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     ChunkResult (*getNextInput)(struct AbstractIterator *, Sample *) = input->GetNext;
     ChunkResult result = getNextInput(input, &internalSample);
 
-    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
-    bool is_reserved = self->reverse;
+    const u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    const bool is_reverse = self->reverse;
     if (result == CR_OK && !self->initilized) {
-        timestamp_t init_ts = internalSample.timestamp;
-        timestamp_t t1 = calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
-        self->aggregationLastTimestamp = t1;
-
+        self->aggregationLastTimestamp = calc_ts_bucket(
+            internalSample.timestamp, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
     }
 
@@ -134,8 +137,8 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     void *aggregationContext = self->aggregationContext;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     while (result == CR_OK) {
-        if ((is_reserved == FALSE && internalSample.timestamp >= contextScope) ||
-            (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
+        if ((is_reverse == FALSE && internalSample.timestamp >= contextScope) ||
+            (is_reverse == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (self->aggregationIsFirstSample == FALSE) {
                 hasSample = finalizeBucket(currentSample, self);
