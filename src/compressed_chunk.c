@@ -228,7 +228,7 @@ static Chunk *decompressChunk(const CompressedChunk *compressedChunk) {
 
     // 4 samples per iteration
     uint64_t i = 0;
-    uint64_t n = numSamples / 4;
+    const uint64_t n = numSamples / 4;
     for (; i < n; i += 4) {
         Compressed_ChunkIteratorGetNext(iter, samples + i);
         Compressed_ChunkIteratorGetNext(iter, samples + i + 1);
