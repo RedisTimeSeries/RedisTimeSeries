@@ -32,7 +32,7 @@ def test_move_to_out_of_disk():
         r.execute_command("config set bigredis-max-disk-value 0")
         res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
         env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg']))
-        r.execute_command("config set bigredis-max-disk-value 1000")
+        r.execute_command("config set bigredis-max-disk-value 10000")
         r.execute_command("config set bigredis-max-ram-keys 0")
         res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
         env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg']))
@@ -67,4 +67,134 @@ def test_del_from_ram():
         res = r.execute_command('TS.MGET', 'filter',  'name=(mush,zavi,rex)')
         env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
 
-        r.execute_command("config set bigredis-max-disk-value 1000")
+        r.execute_command("config set bigredis-max-disk-value 10000")
+
+def test_flush_from_ram():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+
+        assert r.execute_command('FLUSHALL')
+
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(res, [])
+
+        init(env, r)
+        r.execute_command("config set bigredis-max-disk-value 0")
+        assert r.execute_command('FLUSHDB')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(res, [])
+
+        r.execute_command("config set bigredis-max-disk-value 10000")
+
+def test_flush_from_disk():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+
+        assert r.execute_command('FLUSHALL')
+
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(res, [])
+
+        init(env, r)
+        r.execute_command("config set bigredis-max-ram-keys 0")
+        assert r.execute_command('FLUSHDB')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(res, [])
+
+        r.execute_command("config set bigredis-max-ram-keys 3")
+
+def test_set_from_ram():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+
+        r.execute_command("config set bigredis-max-disk-value 0")
+        assert r.execute_command('SET', 't{1}', 'awesome')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        env.assertEqual(r.execute_command('GET', 't{1}'), b'awesome')
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-disk-value 10000")
+
+def test_set_from_disk():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+
+        r.execute_command("config set bigredis-max-ram-keys 0")
+        assert r.execute_command('SET', 't{1}', 'awesome')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        env.assertEqual(r.execute_command('GET', 't{1}'), b'awesome')
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-ram-keys 3")
+
+def test_expire_from_ram():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+        r.execute_command("config set bigredis-max-disk-value 0")
+
+        res = r.execute_command('EXPIRE', 't{1}', 1)
+        time.sleep(2)
+
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-disk-value 10000")
+
+def test_expire_from_disk():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+        r.execute_command("config set bigredis-max-ram-keys 0")
+
+        res = r.execute_command('EXPIRE', 't{1}', 1)
+        time.sleep(2)
+
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-ram-keys 3")
+
+def test_unlink_from_ram():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+        r.execute_command("config set bigredis-max-disk-value 0")
+
+        res = r.execute_command('UNLINK', 't{1}')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-ram-keys 3")
+
+def test_unlink_from_disk():
+    env = Env()
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        init(env, r)
+        r.execute_command("config set bigredis-max-ram-keys 0")
+
+        res = r.execute_command('UNLINK', 't{1}')
+        res = r.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg']))
+        res = r.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+        env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
+        r.execute_command("config set bigredis-max-ram-keys 3")
