@@ -15,51 +15,87 @@
 
 #include <inttypes.h>
 #include <math.h>
+#include <stdlib.h>
 #include "rmutil/alloc.h"
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
 
-static Series *lastDeletedSeries = NULL;
 static RedisModuleString *renameFromKey = NULL;
+
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series) {
+    Series *_series;
+    RedisModuleKey *_key;
+    int status;
+
+    if (series->srcKey) {
+        status = GetSeries(ctx, series->srcKey, &_key, &_series, REDISMODULE_READ, false, true);
+        if (!status || (!GetRule(_series->rules, series->keyName))) {
+            SeriesDeleteSrcRule(series, series->srcKey);
+        }
+        if (status) {
+            RedisModule_CloseKey(_key);
+        }
+    }
+
+    CompactionRule *rule = series->rules;
+    while (rule) {
+        CompactionRule *nextRule = rule->nextRule;
+        status = GetSeries(ctx, rule->destKey, &_key, &_series, REDISMODULE_READ, false, true);
+        if (!status || !_series->srcKey ||
+            (RedisModule_StringCompare(_series->srcKey, series->keyName) != 0)) {
+            SeriesDeleteRule(series, rule->destKey);
+        }
+        if (status) {
+            RedisModule_CloseKey(_key);
+        }
+        rule = nextRule;
+    }
+}
+
+CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName) {
+    CompactionRule *rule = rules;
+    while (rule != NULL) {
+        if (RedisModule_StringCompare(rule->destKey, keyName) == 0) {
+            return rule;
+        }
+        rule = rule->nextRule;
+    }
+    return NULL;
+}
 
 int GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
               RedisModuleKey **key,
               Series **series,
-              int mode) {
+              int mode,
+              bool shouldDeleteRefs,
+              bool isSilent) {
+    if (shouldDeleteRefs) {
+        mode = mode | REDISMODULE_WRITE;
+    }
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
     if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(new_key);
-        RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+        if (!isSilent) {
+            RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+        }
         return FALSE;
     }
     if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
         RedisModule_CloseKey(new_key);
-        RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        if (!isSilent) {
+            RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        }
         return FALSE;
     }
-    *key = new_key;
-    *series = RedisModule_ModuleTypeGetValue(new_key);
 
-    return TRUE;
-}
-
-int SilentGetSeries(RedisModuleCtx *ctx,
-                    RedisModuleString *keyName,
-                    RedisModuleKey **key,
-                    Series **series,
-                    int mode) {
-    RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
-    if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_CloseKey(new_key);
-        return FALSE;
-    }
-    if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
-        RedisModule_CloseKey(new_key);
-        return FALSE;
-    }
-    *key = new_key;
     *series = RedisModule_ModuleTypeGetValue(new_key);
+    *key = new_key;
+
+    if (shouldDeleteRefs) {
+        deleteReferenceToDeletedSeries(ctx, *series);
+    }
+
     return TRUE;
 }
 
@@ -92,7 +128,6 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
-    newSeries->isTemporary = cCtx->isTemporary;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -154,92 +189,12 @@ void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
     memcpy(buf, &e, sizeof(e));
 }
 
-void freeLastDeletedSeries() {
-    if (lastDeletedSeries == NULL) {
-        return;
-    }
-    CompactionRule *rule = lastDeletedSeries->rules;
-    while (rule != NULL) {
-        CompactionRule *nextRule = rule->nextRule;
-        FreeCompactionRule(rule);
-        rule = nextRule;
-    }
-    if (lastDeletedSeries->srcKey != NULL) {
-        RedisModule_FreeString(NULL, lastDeletedSeries->srcKey);
-    }
-    if (lastDeletedSeries->keyName) {
-        RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
-    }
-    free(lastDeletedSeries);
-    lastDeletedSeries = NULL;
-}
-
-void CleanLastDeletedSeries(RedisModuleString *key) {
-    if (lastDeletedSeries != NULL &&
-        RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
-        RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-        RedisModule_AutoMemory(ctx);
-
-        if (!lastDeletedSeries->isTemporary) {
-            RemoveIndexedMetric(lastDeletedSeries->keyName);
-        }
-
-        CompactionRule *rule = lastDeletedSeries->rules;
-        while (rule != NULL) {
-            RedisModuleKey *seriesKey;
-            Series *dstSeries;
-            const int status = GetSeries(
-                ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ | REDISMODULE_WRITE);
-            if (status) {
-                SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
-                RedisModule_CloseKey(seriesKey);
-            }
-            rule = rule->nextRule;
-        }
-        if (lastDeletedSeries->srcKey) {
-            RedisModuleKey *seriesKey;
-            Series *srcSeries;
-            const int status = GetSeries(ctx,
-                                         lastDeletedSeries->srcKey,
-                                         &seriesKey,
-                                         &srcSeries,
-                                         REDISMODULE_READ | REDISMODULE_WRITE);
-            if (status) {
-                SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
-                RedisModule_CloseKey(seriesKey);
-            }
-        }
-
-        RedisModule_FreeThreadSafeContext(ctx);
-    }
-    freeLastDeletedSeries();
-}
-
-void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
-    // keep in global variable for RenameSeriesTo() and increase recount
-    RedisModule_RetainString(NULL, key);
-    renameFromKey = key;
-}
-
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
-    if (SilentGetSeries(ctx, keyname, &key, &series, REDISMODULE_READ) != TRUE) {
+    if (GetSeries(ctx, keyname, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, true) !=
+        TRUE) {
         return;
-    }
-
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        RedisModuleKey *destKey = NULL;
-        Series *destSeries;
-        const int status =
-            SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
-        if (status == TRUE) {
-            RedisModule_RetainString(ctx, keyname);
-            destSeries->srcKey = keyname;
-            RedisModule_CloseKey(destKey);
-        }
-        rule = rule->nextRule;
     }
 
     if (IsKeyIndexed(keyname)) {
@@ -247,6 +202,20 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         RemoveIndexedMetric(keyname);
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
+
+    // Remove references to other keys
+    if (series->srcKey) {
+        RedisModule_FreeString(NULL, series->srcKey);
+        series->srcKey = NULL;
+    }
+
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        CompactionRule *nextRule = rule->nextRule;
+        FreeCompactionRule(rule);
+        rule = nextRule;
+    }
+    series->rules = NULL;
 
     RedisModule_CloseKey(key);
 }
@@ -256,7 +225,7 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
     RedisModuleString *_keyname = RedisModule_HoldString(ctx, keyname);
-    const int status = SilentGetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ);
+    const int status = GetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ, false, true);
     if (!status) { // Not a timeseries key
         goto cleanup;
     }
@@ -279,11 +248,63 @@ cleanup:
     RedisModule_FreeString(ctx, _keyname);
 }
 
+void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key) {
+    // keep in global variable for RenameSeriesTo() and increase recount
+    RedisModule_RetainString(NULL, key);
+    renameFromKey = key;
+}
+
+static void UpdateReferencesToRenamedSeries(RedisModuleCtx *ctx,
+                                            Series *series,
+                                            RedisModuleString *keyTo) {
+    // A destination key was renamed
+    if (series->srcKey) {
+        Series *srcSeries;
+        RedisModuleKey *srcKey;
+        const int status =
+            GetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE, false, false);
+        if (status) {
+            // Find the rule in the source key and rename the its destKey
+            CompactionRule *rule = srcSeries->rules;
+            while (rule) {
+                if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
+                    RedisModule_FreeString(NULL, rule->destKey);
+                    RedisModule_RetainString(NULL, keyTo);
+                    rule->destKey = keyTo;
+                    break; // Only one src can point back to destKey
+                }
+                rule = rule->nextRule;
+            }
+            RedisModule_CloseKey(srcKey);
+        }
+    }
+
+    // A source key was renamed need to rename the srcKey on all the destKeys
+    CompactionRule *rule = series->rules;
+    while (rule) {
+        Series *destSeries;
+        RedisModuleKey *destKey;
+        CompactionRule *nextRule = rule->nextRule; // avoid iterator invalidation
+        const int status =
+            GetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE, false, false);
+        if (status) {
+            // rename the srcKey in the destKey
+            RedisModule_FreeString(NULL, destSeries->srcKey);
+            RedisModule_RetainString(NULL, keyTo);
+            destSeries->srcKey = keyTo;
+
+            RedisModule_CloseKey(destKey);
+        }
+        rule = nextRule;
+    }
+}
+
 void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     // Try to open the series
     Series *series;
     RedisModuleKey *key = NULL;
-    const int status = SilentGetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ);
+    const int status =
+        GetSeries(ctx, keyTo, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, true, true);
     if (!status) { // Not a timeseries key
         goto cleanup;
     }
@@ -292,58 +313,11 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     RemoveIndexedMetric(renameFromKey);
     IndexMetric(keyTo, series->labels, series->labelsCount);
 
-    // A destination key was renamed
-    if (series->srcKey) {
-        Series *srcSeries;
-        RedisModuleKey *srcKey;
-        const int status =
-            SilentGetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE);
-        if (!status) {
-            const char *srcKeyName = RedisModule_StringPtrLen(series->srcKey, NULL);
-            RedisModule_Log(
-                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", srcKeyName);
-            goto cleanup;
-        }
+    UpdateReferencesToRenamedSeries(ctx, series, keyTo);
 
-        // Find the rule in the source key and rename the its destKey
-        CompactionRule *rule = srcSeries->rules;
-        while (rule) {
-            if (RedisModule_StringCompare(renameFromKey, rule->destKey) == 0) {
-                RedisModule_FreeString(NULL, rule->destKey);
-                RedisModule_RetainString(NULL, keyTo);
-                rule->destKey = keyTo;
-                break; // Only one src can point back to destKey
-            }
-            rule = rule->nextRule;
-        }
-        RedisModule_CloseKey(srcKey);
-    }
-
-    // A source key was renamed need to rename the srcKey on all the destKeys
-    if (series->rules) {
-        CompactionRule *rule = series->rules;
-        Series *destSeries;
-        RedisModuleKey *destKey;
-        while (rule) {
-            const int status =
-                SilentGetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE);
-            if (!status) {
-                const char *destKeyName = RedisModule_StringPtrLen(rule->destKey, NULL);
-                RedisModule_Log(ctx,
-                                "warning",
-                                "couldn't open key or key is not a Timeseries. key=%s",
-                                destKeyName);
-            } else {
-                // rename the srcKey in the destKey
-                RedisModule_FreeString(NULL, destSeries->srcKey);
-                RedisModule_RetainString(NULL, keyTo);
-                destSeries->srcKey = keyTo;
-
-                RedisModule_CloseKey(destKey);
-            }
-            rule = rule->nextRule;
-        }
-    }
+    RedisModule_FreeString(NULL, series->keyName);
+    RedisModule_RetainString(NULL, keyTo);
+    series->keyName = keyTo;
 
 cleanup:
     if (key) {
@@ -402,25 +376,33 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
 // it's only on the disk, in this case FreeSeries won't be called just the "del" keyspace
 // notification.
 void FreeSeries(void *value) {
-    Series *currentSeries = (Series *)value;
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
+    Series *series = (Series *)value;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
     while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk) != NULL) {
-        currentSeries->funcs->FreeChunk(currentChunk);
+        series->funcs->FreeChunk(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
 
-    FreeLabels(currentSeries->labels, currentSeries->labelsCount);
+    FreeLabels(series->labels, series->labelsCount);
 
-    RedisModule_FreeDict(NULL, currentSeries->chunks);
+    RedisModule_FreeDict(NULL, series->chunks);
 
-    if (currentSeries->isTemporary) {
-        RedisModule_FreeString(NULL, currentSeries->keyName);
-        free(currentSeries);
-    } else {
-        freeLastDeletedSeries();
-        lastDeletedSeries = currentSeries;
+    CompactionRule *rule = series->rules;
+    while (rule != NULL) {
+        CompactionRule *nextRule = rule->nextRule;
+        FreeCompactionRule(rule);
+        rule = nextRule;
     }
+
+    if (series->srcKey != NULL) {
+        RedisModule_FreeString(NULL, series->srcKey);
+    }
+    if (series->keyName) {
+        RedisModule_FreeString(NULL, series->keyName);
+    }
+
+    free(series);
 }
 
 void FreeCompactionRule(void *value) {
@@ -511,12 +493,19 @@ int MultiSerieReduce(Series *dest,
 }
 
 static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
+                                   Series *series,
                                    CompactionRule *rule,
                                    timestamp_t start,
                                    double val) {
     RedisModuleKey *key;
     Series *destSeries;
-    if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE)) {
+    if (!GetSeries(ctx,
+                   rule->destKey,
+                   &key,
+                   &destSeries,
+                   REDISMODULE_READ | REDISMODULE_WRITE,
+                   false,
+                   false)) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return false;
     }
@@ -532,11 +521,11 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
 }
 
 static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
-    CompactionRule *rule = series->rules;
-    if (rule == NULL) {
+    if (series->rules == NULL) {
         return;
     }
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    deleteReferenceToDeletedSeries(rts_staticCtx, series);
+    CompactionRule *rule = series->rules;
     const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
@@ -546,7 +535,8 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             // upsert in latest timebucket
             const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
@@ -556,17 +546,17 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             const int rv =
                 SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            if (!RuleSeriesUpsertSample(ctx, rule, start, val)) {
+            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, start, val)) {
                 continue;
             }
         }
         rule = rule->nextRule;
     }
-    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 int SeriesUpsertSample(Series *series,
@@ -673,27 +663,35 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 }
 
 static int ContinuousDeletion(RedisModuleCtx *ctx,
-                              RedisModuleString *key_str,
+                              Series *series,
+                              CompactionRule *rule,
                               timestamp_t start,
                               timestamp_t end) {
     RedisModuleKey *key;
-    Series *series;
-    if (!GetSeries(ctx, key_str, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE)) {
+    Series *destSeries;
+    if (!GetSeries(ctx,
+                   rule->destKey,
+                   &key,
+                   &destSeries,
+                   REDISMODULE_READ | REDISMODULE_WRITE,
+                   false,
+                   false)) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return TSDB_ERROR;
     }
 
-    SeriesDelRange(series, start, end);
+    SeriesDelRange(destSeries, start, end);
 
     RedisModule_CloseKey(key);
     return TSDB_OK;
 }
 
 void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
-    CompactionRule *rule = series->rules;
-    if (!rule)
+    if (!series->rules)
         return;
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+
+    deleteReferenceToDeletedSeries(rts_staticCtx, series);
+    CompactionRule *rule = series->rules;
 
     while (rule) {
         const timestamp_t ruleTimebucket = rule->timeBucket;
@@ -704,7 +702,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // All deletion range in latest timebucket - only update the context on the rule
             const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
@@ -725,7 +724,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                  &val,
                                  &is_empty);
             if (unlikely(rv == TSDB_ERROR)) {
-                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(
+                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
@@ -735,7 +735,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             } else { // first bucket needs update
                 // continuous deletion starts one bucket after startTSWindowStart
                 continuous_deletion_start = startTSWindowStart + ruleTimebucket;
-                if (!RuleSeriesUpsertSample(ctx, rule, startTSWindowStart, val)) {
+                if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startTSWindowStart, val)) {
                     continue;
                 }
             }
@@ -748,7 +748,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                     SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
                 if (rv == TSDB_ERROR) {
                     RedisModule_Log(
-                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
                 // continuous deletion ends one bucket before endTSWindowStart
@@ -763,7 +763,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                      &is_empty);
                 if (unlikely(rv == TSDB_ERROR)) {
                     RedisModule_Log(
-                        ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
 
@@ -773,7 +773,8 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                 } else { // update in end timebucket
                     // continuous deletion ends one bucket before endTSWindowStart
                     continuous_deletion_end = endTSWindowStart - ruleTimebucket;
-                    if (!RuleSeriesUpsertSample(ctx, rule, endTSWindowStart, val)) {
+                    if (!RuleSeriesUpsertSample(
+                            rts_staticCtx, series, rule, endTSWindowStart, val)) {
                         continue;
                     }
                 }
@@ -782,15 +783,16 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // ---- handle continuous deletion ----
 
             if (continuous_deletion_end >= continuous_deletion_start) {
-                ContinuousDeletion(
-                    ctx, rule->destKey, continuous_deletion_start, continuous_deletion_end);
+                ContinuousDeletion(rts_staticCtx,
+                                   series,
+                                   rule,
+                                   continuous_deletion_start,
+                                   continuous_deletion_end);
             }
         }
 
         rule = rule->nextRule;
     }
-
-    RedisModule_FreeThreadSafeContext(ctx);
 }
 
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
@@ -834,14 +836,16 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     return deletedSamples;
 }
 
-CompactionRule *SeriesAddRule(Series *series,
-                              RedisModuleString *destKeyStr,
+CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
+                              Series *series,
+                              Series *destSeries,
                               int aggType,
                               uint64_t timeBucket) {
-    CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
+    CompactionRule *rule = NewRule(destSeries->keyName, aggType, timeBucket);
     if (rule == NULL) {
         return NULL;
     }
+    RedisModule_RetainString(ctx, destSeries->keyName);
     if (series->rules == NULL) {
         series->rules = rule;
     } else {
@@ -873,7 +877,6 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                            RedisModule_StringPtrLen(keyName, &len),
                                            aggString,
                                            rule->timeBucket);
-        RedisModule_RetainString(ctx, destKey);
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
@@ -884,7 +887,6 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             RedisModule_CloseKey(compactedKey);
             continue;
         }
-        SeriesAddRule(series, destKey, rule->aggType, rule->timeBucket);
 
         Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof(Label));
         // todo: deep copy labels function
@@ -913,6 +915,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             .options = rules_options,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
+        SeriesSetSrcRule(ctx, compactedSeries, series->keyName);
+        SeriesAddRule(ctx, series, compactedSeries, rule->aggType, rule->timeBucket);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
@@ -957,12 +961,9 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
     return FALSE;
 }
 
-int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
-    if (series->srcKey) {
-        return FALSE;
-    }
-    series->srcKey = srctKey;
-    return TRUE;
+void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName) {
+    RedisModule_RetainString(ctx, srcKeyName);
+    series->srcKey = srcKeyName;
 }
 
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {

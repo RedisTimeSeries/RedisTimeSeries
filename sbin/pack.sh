@@ -16,6 +16,8 @@ if [[ $1 == --help || $1 == help ]]; then
 		[ARGVARS...] pack.sh [--help|help]
 		
 		Argument variables:
+		MODULE=path       Path to module .so file
+
 		RAMP=1|0          Build RAMP file
 		DEPS=0|1          Build dependencies file
 		SYM=0|1           Build debug symbols file
@@ -43,7 +45,12 @@ RAMP=${RAMP:-1}
 DEPS=${DEPS:-0}
 SYM=${SYM:-0}
 
-[[ -z $BINDIR ]] && BINDIR=$ROOT/bin/$($READIES/bin/platform --os)-$($READIES/bin/platform --arch)-release
+if [[ -z $MODULE || ! -f $MODULE ]]; then
+	eprint "pack: MODULE is not defined or does not refer to a file"
+	exit 1
+fi
+
+[[ -z $BINDIR ]] && BINDIR=$(dirname $MODULE)
 BINDIR=$(cd $BINDIR && pwd)
 
 [[ -z $ARTDIR ]] && ARTDIR=bin/artifacts
@@ -72,7 +79,6 @@ elif [[ $OSNICK == centos8 ]]; then
 fi
 
 export PRODUCT=redistimeseries
-export PRODUCT_LIB=$PRODUCT.so
 export DEPNAMES=""
 
 export PACKAGE_NAME=${PACKAGE_NAME:-${PRODUCT}}
@@ -92,7 +98,6 @@ pack_ramp() {
 	local fq_package=$stem.${verspec}.zip
 
 	local packfile="$ARTDIR/$fq_package"
-	local product_so="$BINDIR/$PRODUCT.so"
 
 	local xtx_vars=""
 	local dep_fname=${PACKAGE_NAME}.${platform}.${verspec}.tgz
@@ -108,7 +113,7 @@ pack_ramp() {
 		-e NUMVER -e SEMVER \
 		$ROOT/$rampfile > /tmp/ramp.yml
 	rm -f /tmp/ramp.fname $packfile
-	$RAMP_CMD pack -m /tmp/ramp.yml --packname-file /tmp/ramp.fname --verbose --debug -o $packfile $product_so >/tmp/ramp.err 2>&1 || true
+	$RAMP_CMD pack -m /tmp/ramp.yml --packname-file /tmp/ramp.fname --verbose --debug -o $packfile $MODULE >/tmp/ramp.err 2>&1 || true
 	if [[ ! -e $packfile ]]; then
 		eprint "Error generating RAMP file:"
 		>&2 cat /tmp/ramp.err
@@ -169,7 +174,7 @@ pack_deps() {
 prepare_symbols_dep() {
 	echo "Preparing debug symbols dependencies ..."
 	echo $BINDIR > $ARTDIR/debug.dir
-	echo $PRODUCT.so.debug > $ARTDIR/debug.files
+	echo $MODULE.debug > $ARTDIR/debug.files
 	echo "" > $ARTDIR/debug.prefix
 	pack_deps debug
 	echo "Done."

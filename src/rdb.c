@@ -139,7 +139,6 @@ err:
         // Note that we aren't calling RemoveIndexedMetric(series->keyName) since
         // the series only being indexed on loaded notification
         FreeSeries(series);
-        freeLastDeletedSeries();
     } else {
         if (keyName) {
             RedisModule_FreeString(NULL, keyName);

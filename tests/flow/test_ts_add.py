@@ -78,6 +78,8 @@ def test_different_chunk_size():
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '-1000')
         with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '100')
+        with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.add', 'tester', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000000')
 
         r.execute_command('TS.add', 'tester2', "1636545188", "123", 'LABELS', 'id', 'abc1231232', 'CHUNK_SIZE', '40000')

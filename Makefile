@@ -4,8 +4,8 @@ MK.pyver:=3
 
 MK_ALL_TARGETS=bindirs deps build package
 
-ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
-$(error Submodules not present. Please run 'git submodule update --init --recursive')
+ifeq ($(wildcard $(ROOT)/deps/readies),)
+$(shell git submodule update --init --recursive)
 endif
 include $(ROOT)/deps/readies/mk/main
 
@@ -56,7 +56,7 @@ flow_tests:
 	@$(MAKE) -C src flow_tests
 
 pack:
-	@$(MAKE) -C src package
+	@$(MAKE) -C src pack
 
 run:
 	@$(MAKE) -C src run
@@ -65,7 +65,7 @@ benchmark:
 	@$(MAKE) -C src benchmark
 
 docker:
-	@$(MAKE) -C ./build/docker
+	@$(MAKE) -C src docker
 
 # deploy:
 #	@make -C src deploy

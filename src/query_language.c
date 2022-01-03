@@ -61,6 +61,47 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     return REDISMODULE_OK;
 }
 
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
+    if (chunkSizeBytes <= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
+        return false;
+    }
+
+    if (chunkSizeBytes > 1048576) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
+        return false;
+    }
+
+    if (chunkSizeBytes % 8 != 0) {
+        // Currently the gorilla algorithm implementation can only handle chunks of size
+        // multiplication of 8
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: Couldn't parse CHUNK_SIZE, input must be multiplication of 8");
+        return false;
+    }
+
+    return true;
+}
+
+int ParseChunkSize(RedisModuleCtx *ctx,
+                   RedisModuleString **argv,
+                   int argc,
+                   const char *arg_prefix,
+                   long long *chunkSizeBytes) {
+    if (RMUtil_ArgIndex(arg_prefix, argv, argc) >= 0) {
+        if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "l", chunkSizeBytes) != REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
+            return TSDB_ERROR;
+        }
+
+        if (!ValidateChunkSize(ctx, *chunkSizeBytes)) {
+            return TSDB_ERROR;
+        }
+    }
+
+    return TSDB_OK;
+}
+
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
@@ -107,20 +148,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
-    if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
-        RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
-            REDISMODULE_OK) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
-        goto err_exit;
-    }
-
-    if (cCtx->chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
-        goto err_exit;
-    }
-
-    if (cCtx->chunkSizeBytes > 1048576) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be below 1048576");
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes) != TSDB_OK) {
         goto err_exit;
     }
 
