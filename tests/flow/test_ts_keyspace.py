@@ -15,6 +15,8 @@ def assert_msg(env, msg, expected_type, expected_data):
 
 def test_keyspace():
     Env().skipOnCluster()
+    Env().skipOnVersionSmaller("6.2.0")
+    skip_on_rlec()
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
@@ -59,6 +61,8 @@ def test_keyspace():
 
 def test_keyspace_create_rules():
     Env().skipOnCluster()
+    Env().skipOnVersionSmaller("6.2.0")
+    skip_on_rlec()
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
@@ -95,7 +99,8 @@ def test_keyspace_create_rules():
 
 def test_keyspace_rules_send():
     Env().skipOnCluster()
-
+    Env().skipOnVersionSmaller("6.2.0")
+    skip_on_rlec()
     sample_len = 1024
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:

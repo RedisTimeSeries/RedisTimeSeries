@@ -66,6 +66,7 @@ def test_range_query():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
 
+
 def test_range_midrange():
     samples_count = 5000
     with Env().getClusterConnectionIfNeeded() as r:
@@ -238,6 +239,27 @@ def test_agg_avg():
         actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
         assert expected_result == actual_result
 
+        #test overflow
+        MAX_DOUBLE = 1.7976931348623157E+308
+        assert r.execute_command('TS.CREATE', 'ts1')
+        assert r.execute_command('TS.ADD', 'ts1', 1, MAX_DOUBLE - 10)
+        assert r.execute_command('TS.ADD', 'ts1', 2, MAX_DOUBLE - 8)
+        assert r.execute_command('TS.ADD', 'ts1', 3, MAX_DOUBLE - 6)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts1', 0, 3, 'AGGREGATION', 'avg', 5)
+        #MAX_DOUBLE - 10 equals MAX_DOUBLE cause of precision limit
+        assert actual_result == [[0, b'1.7976931348623157E308']]
+
+        MIN_DOUBLE = -1.7976931348623157E+308
+        assert r.execute_command('TS.CREATE', 'ts2')
+        assert r.execute_command('TS.ADD', 'ts2', 1, MIN_DOUBLE + 10)
+        assert r.execute_command('TS.ADD', 'ts2', 2, MIN_DOUBLE + 8)
+        assert r.execute_command('TS.ADD', 'ts2', 3, MIN_DOUBLE + 6)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
+        #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
+        assert actual_result == [[0, b'-1.7976931348623157E308']]
+
 
 def test_series_ordering():
     with Env().getClusterConnectionIfNeeded() as r:
@@ -305,6 +327,7 @@ def test_issue358():
         get_res = r.execute_command('ts.get', 'issue358')[1]
         assert range_res == get_res
 
+
 def test_filter_by():
     start_ts = 1511885909
     samples_count = 1500
@@ -317,19 +340,23 @@ def test_filter_by():
         res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
 
         assert len(res) == 13
-        assert  [int(sample[1]) for sample in res] == list(range(40, 53))
+        assert [int(sample[1]) for sample in res] == list(range(40, 53))
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                          'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1025, start_ts+1029)
-        env.assertEqual(res, [[start_ts+1021, b'1021'], [start_ts+1022, b'1022'], [start_ts+1025, b'1025'], [start_ts+1029, b'1029']])
+                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1025, start_ts + 1029)
+        env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
+                              [start_ts + 1029, b'1029']])
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                                'FILTER_BY_TS', start_ts+1021, start_ts+1022, start_ts+1023, start_ts+1025, start_ts+1029,
+                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1023, start_ts + 1025,
+                                start_ts + 1029,
                                 'FILTER_BY_VALUE', 1022, 1025)
-        env.assertEqual(res, [[start_ts+1022, b'1022'], [start_ts+1023, b'1023'], [start_ts+1025, b'1025']])
+        env.assertEqual(res, [[start_ts + 1022, b'1022'], [start_ts + 1023, b'1023'], [start_ts + 1025, b'1025']])
+
 
 def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
     return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
+
 
 def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     expected_data = []
@@ -340,8 +367,8 @@ def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     for i in range(start_ts, end_ts):
         current_ts = i
         curr_bucket = get_bucket(current_ts, alignment_ts, agg_size)
-        if curr_bucket  <= last_bucket:
-            curr_bucket_val+=1
+        if curr_bucket <= last_bucket:
+            curr_bucket_val += 1
         else:
             expected_data.append([last_bucket, str(curr_bucket_val)])
             last_bucket = curr_bucket
@@ -362,19 +389,19 @@ def test_aggreataion_alignment():
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size)
+           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
 
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size)
+           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
 
     specific_ts = start_ts + 50
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size)
+           decode_if_needed(r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
 
     end_ts = start_ts + samples_count - 1
     expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size)
+           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
     assert expected_data == \
-           r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size)
+           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))

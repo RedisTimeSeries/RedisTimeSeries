@@ -15,10 +15,27 @@ def normalize_info(data):
     info.pop(b'chunkType')
     return info
 
+def testRDB():
+    env = Env()
+    env.skipOnCluster()
+    with Env().getConnection() as r:
+        assert r.execute_command('TS.CREATE', 'ts1', 'RETENTION', '1000', 'CHUNK_SIZE', '1024',
+                            'ENCODING', 'UNCOMPRESSED', 'DUPLICATE_POLICY', 'min',
+                            'LABELS', 'name',
+                            'brown', 'color', 'pink')
+        r.execute_command('TS.ADD', 'ts1', 100, 99)
+        r.execute_command('TS.ADD', 'ts1', 110, 500.5)
+        dump = r.execute_command("dump", "ts1")
+        assert r.execute_command("restore", "ts2", "0", dump)
+        info1 = r.execute_command('TS.INFO', 'ts1', 'DEBUG')
+        info2 = r.execute_command('TS.INFO', 'ts2', 'DEBUG')
+        assert info1 == info2
 
 def testRDBCompatibility():
     env = Env()
     env.skipOnCluster()
+    skip_on_rlec()
+    env.skipOnAOF()
     RDBS = os.listdir('rdbs')
 
     # Current RDB version check
@@ -53,6 +70,20 @@ def testRDBCompatibility():
         newDbFileName = r.execute_command('config', 'get', 'dbfilename')[1].decode('ascii')
         env.assertEqual(newDbFileName, dbFileName)
         OLD_KEYS.sort()
+
+        if(fileName == "1.4.9_with_avg_ctx.rdb"):
+            keys = r.keys()
+            keys.sort()
+            assert keys == [b'ts1', b'ts2']
+            assert r.execute_command('ts.info', 'ts1') == [b'totalSamples', 2, b'memoryUsage', 4240, b'firstTimestamp', 100, b'lastTimestamp', 120, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b'ts2', 1000, b'AVG']]]
+            assert r.execute_command('ts.info', 'ts2') == [b'totalSamples', 0, b'memoryUsage', 4184, b'firstTimestamp', 0, b'lastTimestamp', 0, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', b'ts1', b'rules', []]
+            assert r.execute_command('ts.range', 'ts1', '-', '+') == [[100, b'3'], [120, b'5']]
+            assert r.execute_command('ts.range', 'ts2', '-', '+') == []
+            assert r.execute_command('ts.add', 'ts1', 1500, 100)
+            assert r.execute_command('ts.range', 'ts2', '-', '+') == [[0, b'4']]
+
+            continue
+
         env.assertEqual(OLD_KEYS, KEYS)
         for key in OLD_KEYS:
             assert r.execute_command('ts.range', key, "-", "+") == TSRANGE_RESULTS[key]

@@ -12,28 +12,28 @@ override DEBUG:=1
 export DEBUG
 endif
 
-MK_ALL_TARGETS=bindirs deps build package
+MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------  
 
-LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/LibMR
+export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
 
-HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
+export HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
 include $(ROOT)/build/hiredis/Makefile.defs
 
-LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
+export LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
 include $(ROOT)/build/libevent/Makefile.defs
 
-DRAGONBOX_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/dragonbox
+export DRAGONBOX_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/dragonbox
 include $(ROOT)/build/dragonbox/Makefile.defs
 
-FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
+export FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
 include $(ROOT)/build/fast_double_parser_c/Makefile.defs
 
-RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
+export RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
 include $(ROOT)/build/rmutil/Makefile.defs
 
 #----------------------------------------------------------------------------------------------  
@@ -70,12 +70,18 @@ make flow_tests    # run tests
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
+  EXT=1            # run tests with existing redis-server running
 
 make pack          # build packages (ramp & dependencies)
 
 make benchmarks    # run all benchmarks
   BENCHMARK=file   # run benchmark specified by 'filename'
   BENCH_ARGS="..." # redisbench_admin  extra arguments
+
+make platform      # build artifacts for given platform
+  OSNICK=nick        # build for OSNICK `nick`
+  TEST=1             # also run tests
+
 endef
 
 #----------------------------------------------------------------------------------------------  
@@ -212,7 +218,7 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: package flow_tests unit_tests clean all install uninstall docker bindirs
+.PHONY: pack flow_tests unit_tests clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
@@ -248,7 +254,7 @@ libmr: $(LIBMR)
 
 $(LIBMR): $(LIBEVENT) $(HIREDIS)
 	@echo Building $@ ...
-	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG=''
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR
 
 dragonbox: $(DRAGONBOX)
 
@@ -283,7 +289,7 @@ ifdef ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil  DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
@@ -393,7 +399,7 @@ BENCHMARK_ARGS += $(BENCH_ARGS)
 endif
 
 benchmark: $(TARGET)
-	@(SHOW)set -e; cd tests/benchmarks; $(BENCHMARK_ARGS)
+	$(SHOW)set -e; cd $(ROOT)/tests/benchmarks; $(BENCHMARK_ARGS)
 
 #----------------------------------------------------------------------------------------------
 
@@ -462,6 +468,11 @@ coverage:
 
 #----------------------------------------------------------------------------------------------
 
-package: $(TARGET)
+pack: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)$(ROOT)/sbin/pack.sh
+	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
+
+#----------------------------------------------------------------------------------------------
+
+platform:
+	$(SHOW)$(MAKE) -C $(ROOT)/build/docker PACK=1 ARTIFACTS=1

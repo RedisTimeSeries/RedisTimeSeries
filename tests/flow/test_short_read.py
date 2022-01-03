@@ -13,6 +13,8 @@ from RLTest import Env
 import shutil
 import platform
 from test_helper_classes import SAMPLE_SIZE
+from includes import *
+
 OS = os.getenv('OS')
 
 if platform.system() != 'Darwin':
@@ -348,6 +350,9 @@ def downloadFiles(target_dir):
 def test_ShortRead():
     env = Env(decodeResponses=True)
     env.skipOnCluster()
+    env.skipOnSlave() # There can't be 2 rdb save at the same time
+    env.skipOnVersionSmaller("6.2.0")
+    skip_on_rlec()
 
     env.execute_command('FLUSHALL')
     create_timeseries(env, False)

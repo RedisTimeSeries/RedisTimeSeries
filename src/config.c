@@ -7,6 +7,8 @@
 
 #include "common.h"
 #include "consts.h"
+#include "module.h"
+#include "query_language.h"
 #include "redismodule.h"
 
 #include <assert.h>
@@ -75,15 +77,14 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("CHUNK_SIZE_BYTES", argv, argc) >= 0) {
-        if (RMUtil_ParseArgsAfter(
-                "CHUNK_SIZE_BYTES", argv, argc, "l", &TSGlobalConfig.chunkSizeBytes) !=
-            REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
-            return TSDB_ERROR;
-        }
-    } else {
-        TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
+    if (!ValidateChunkSize(ctx, Chunk_SIZE_BYTES_SECS)) {
+        return TSDB_ERROR;
+    }
+    TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE_BYTES", &TSGlobalConfig.chunkSizeBytes) !=
+        REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
+        return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
                     "notice",
@@ -187,8 +188,7 @@ int RTS_CheckSupportedVestion() {
 }
 
 void RTS_GetRedisVersion() {
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
-    RedisModuleCallReply *reply = RedisModule_Call(ctx, "info", "c", "server");
+    RedisModuleCallReply *reply = RedisModule_Call(rts_staticCtx, "info", "c", "server");
     assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
     size_t len;
     const char *replyStr = RedisModule_CallReplyStringPtr(reply, &len);
@@ -220,5 +220,4 @@ void RTS_GetRedisVersion() {
     }
 
     RedisModule_FreeCallReply(reply);
-    RedisModule_FreeThreadSafeContext(ctx);
 }

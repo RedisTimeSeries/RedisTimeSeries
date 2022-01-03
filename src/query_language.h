@@ -95,11 +95,16 @@ typedef struct CreateCtx
     Label *labels;
     int options;
     DuplicatePolicy duplicatePolicy;
-    bool isTemporary;
     bool skipChunkCreation;
 } CreateCtx;
 
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);
+
+int ParseChunkSize(RedisModuleCtx *ctx,
+                   RedisModuleString **argv,
+                   int argc,
+                   const char *arg_prefix,
+                   long long *chunkSizeBytes);
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
@@ -147,5 +152,6 @@ void MRangeArgs_Free(MRangeArgs *args);
 
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

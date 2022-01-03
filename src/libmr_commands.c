@@ -11,6 +11,15 @@
 
 #include "rmutil/alloc.h"
 
+// This function used for calling freeing the blocked client context
+// in the main thread. It's needed cause there is a bug in RoF when calling
+// RedisModule_FreeThreadSafeContext from thread which is not the main one, see:
+// https://redislabs.atlassian.net/browse/RED-68772 . It should be fixed in redis 7
+void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
+    RedisModuleCtx *_rctx = privateData;
+    RedisModule_FreeThreadSafeContext(_rctx);
+}
+
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
@@ -47,8 +56,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         }
     }
 
-    RedisModule_UnblockClient(bc, NULL);
-    RedisModule_FreeThreadSafeContext(rctx);
+    RedisModule_UnblockClient(bc, rctx);
 }
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
@@ -136,12 +144,11 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
         ResultSet_Free(resultset);
     }
-    RedisModule_UnblockClient(bc, NULL);
     array_foreach(tempSeries, x, FreeSeries(x));
     array_free(tempSeries);
     MRangeArgs_Free(&data->args);
     free(data);
-    RedisModule_FreeThreadSafeContext(rctx);
+    RedisModule_UnblockClient(bc, rctx);
 }
 
 int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -179,7 +186,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
+    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
@@ -226,7 +233,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
+    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
@@ -264,7 +271,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
+    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);

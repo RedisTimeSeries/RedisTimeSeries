@@ -43,12 +43,9 @@ def test_rdb():
         actual_result = r.execute_command('TS.range', key_name, start_ts, start_ts + samples_count, 'count', 3)
         assert expected_result[:3] == actual_result
 
-        assert _get_ts_info(r, key_name).rules == [[bytes('{}_agg_avg_10'.format(key_name), encoding="ascii"), 10, b'AVG'],
-                                                   [bytes('{}_agg_max_10'.format(key_name), encoding="ascii"), 10, b'MAX'],
-                                                   [bytes('{}_agg_sum_10'.format(key_name), encoding="ascii"), 10, b'SUM'],
-                                                   [bytes('{}_agg_stds_10'.format(key_name), encoding="ascii"), 10, b'STD.S']]
+        assert _get_ts_info(r, key_name).rules == []
 
-        assert _get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey == bytes(key_name, encoding="ascii")
+        assert _get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey == None
 
 
 def test_rdb_aggregation_context():
@@ -88,7 +85,12 @@ def test_rdb_aggregation_context():
         r.execute_command('RESTORE', '{}_agg_min_3'.format(key_name), 0, data_min_tester)
         r.execute_command('RESTORE', '{}_agg_sum_3'.format(key_name), 0, data_sum_tester)
         r.execute_command('RESTORE', '{}_agg_std_3'.format(key_name), 0, data_std_tester)
-        assert r.execute_command('TS.ADD', key_name, start_ts + samples_count, samples_count)
+        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_avg_3'.format(key_name), 'AGGREGATION', 'AVG', 3)
+        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_min_3'.format(key_name), 'AGGREGATION', 'MIN', 3)
+        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_sum_3'.format(key_name), 'AGGREGATION', 'SUM', 3)
+        assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_std_3'.format(key_name), 'AGGREGATION', 'STD.S', 3)
+        assert r.execute_command('TS.ADD', key_name, start_ts + samples_count, samples_count - 1)
+        assert r.execute_command('TS.ADD', key_name, start_ts + samples_count + 1, samples_count)
         assert r.execute_command('TS.ADD', key_name, start_ts + samples_count + 10, 0)  # closes the last time_bucket
         # if the aggregation context wasn't saved, the results were considering only the new value added
         expected_result_avg = [[start_ts, b'1'], [start_ts + 3, b'3.5']]
@@ -146,5 +148,7 @@ def test_533_dump_rules():
         r.execute_command('DEL', key1)
         r.execute_command('restore', key1, 0, data)
 
-        assert len(_get_ts_info(r, key1).rules) == 1
-        assert _get_ts_info(r, key2).sourceKey.decode() == key1
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) == 0
+        assert _get_ts_info(r, key2).sourceKey == None
+        assert len(_get_ts_info(r, key2).rules) == 0
