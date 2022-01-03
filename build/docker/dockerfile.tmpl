@@ -1,38 +1,46 @@
-#----------------------------------------------------------------------------------------------
-FROM redisfab/redis:{{REDIS_VERSION}}-{{REDIS_ARCH}}-{{REDIS_OSNICK}} AS redis
-FROM {{REDIS_OS}} AS builder
 
-RUN echo "Building for {{REDIS_OSNICK}} ({{REDIS_OS}}) for {{REDIS_ARCH}} [with Redis {{REDIS_VERSION}}]"
+#----------------------------------------------------------------------------------------------
+FROM redisfab/redis:{{REDIS_VERSION}}-{{ARCH}}-{{OSNICK}} AS redis
+FROM {{OS}} AS builder
+
+SHELL ["/bin/bash", "-l", "-c"]
+
+RUN echo "Building for {{OSNICK}} ({{OS}}) for {{ARCH}} [with Redis {{REDIS_VERSION}}]"
 
 WORKDIR /build
 COPY --from=redis /usr/local/ /usr/local/
 
 ADD . /build
 
-{% include 'setup_environment.yml' %}
+RUN ./deps/readies/bin/getupdates
+RUN ./deps/readies/bin/getpy3
 RUN ./system-setup.py
-RUN bash -l -c "make fetch"
-RUN bash -l -c "make build"
+RUN make fetch
+RUN make build
 
 RUN mkdir -p bin/artifacts
-{% if REDIS_PACK == "1" %}
-RUN set -e ; bash -l -c "make pack"
-{% endif %}
-
-{% if REDIS_TEST == "1" %}
 RUN set -e ;\
-    bash -l -c "TEST= make test" ;\
-	cd /build/tests/flow/logs ;\
-    rm -f *.aof *.rdb ;\
-    tar -czf /build/bin/artifacts/tests-flow-logs-{{REDIS_ARCH}}-{{REDIS_OSNICK}}.tgz .
-{% endif %}
+    if [[ "{{PACK}}" == "1" ]]; then make pack; fi
+RUN set -e ;\
+    if [[ "{{TEST}}" == "1" ]]; then \
+        TEST= make test ;\
+		cd /build/tests/flow/logs ;\
+        rm -f *.aof *.rdb ;\
+        tar -czf /build/bin/artifacts/tests-flow-logs-{{ARCH}}-{{OSNICK}}.tgz . ;\
+    fi
 
 #----------------------------------------------------------------------------------------------
-{% with redis_module='redistimeseries.so', redis_module_srcpath='/build/bin/redistimeseries.so' %}
-{% set redis_docker_extra_content ="
+FROM redisfab/redis:{{REDIS_VER}}-{{ARCH}}-{{OSNICK}}
+
+ENV LIBDIR /usr/lib/redis/modules/
+WORKDIR /data
+RUN mkdir -p "{{MODULES_DIR}}"
+
 RUN mkdir -p /var/opt/redislabs/artifacts
 RUN chown -R redis:redis /var/opt/redislabs
 COPY --from=builder /build/bin/artifacts/ /var/opt/redislabs/artifacts
-" %}
-{% include 'redis_docker.yml' %}
-{% endwith %}
+
+COPY --from=builder /build/bin/redistimeseries.so "{{MODULES_DIR}}"
+
+EXPOSE 6379
+CMD ["redis-server", "--loadmodule", "{{MODULES_DIR}}/redistimeseries.so"]
