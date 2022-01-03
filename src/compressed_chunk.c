@@ -218,7 +218,7 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 
 // decompress chunk
 static Chunk *decompressChunk(const CompressedChunk *compressedChunk) {
-	assert(compressedChunk != NULL);
+    assert(compressedChunk != NULL);
 
     uint64_t numSamples = compressedChunk->count;
     Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
@@ -226,23 +226,23 @@ static Chunk *decompressChunk(const CompressedChunk *compressedChunk) {
 
     ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
 
-	// 4 samples per iteration
-	uint64_t i = 0;
-	uint64_t n = numSamples / 4;
+    // 4 samples per iteration
+    uint64_t i = 0;
+    uint64_t n = numSamples / 4;
     for (; i < n; i += 4) {
         Compressed_ChunkIteratorGetNext(iter, samples + i);
         Compressed_ChunkIteratorGetNext(iter, samples + i + 1);
         Compressed_ChunkIteratorGetNext(iter, samples + i + 2);
         Compressed_ChunkIteratorGetNext(iter, samples + i + 3);
-	}
+    }
 
-	// left-overs
+    // left-overs
     for (; i < numSamples; i++) {
-		Compressed_ChunkIteratorGetNext(iter, samples + i);
-	}
+        Compressed_ChunkIteratorGetNext(iter, samples + i);
+    }
 
     uncompressedChunk->num_samples = numSamples;
-	uncompressedChunk->base_timestamp = uncompressedChunk->samples[0].timestamp;
+    uncompressedChunk->base_timestamp = uncompressedChunk->samples[0].timestamp;
 
     Compressed_FreeChunkIterator(iter);
 
