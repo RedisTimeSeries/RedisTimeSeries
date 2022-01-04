@@ -625,7 +625,7 @@ workflows:
       - lint:
           <<: *on-any-branch
       - build:
-          <<: *on-any-branch
+          <<: *not-on-integ-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
           <<: *on-integ-branch
@@ -636,12 +636,9 @@ workflows:
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
-          requires:
-            - build
           <<: *on-integ-and-version-tags
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
