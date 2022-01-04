@@ -396,7 +396,7 @@ jobs:
           name: Build
           shell: /bin/bash -l -eo pipefail
           command: |
-            make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1
+            make -C build/docker build OSNICK=bionic SHOW=1
           no_output_timeout: 30m
       - run:
           name: Start RLEC
