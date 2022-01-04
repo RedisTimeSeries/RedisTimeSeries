@@ -21,7 +21,7 @@ FROM redis:bullseye
 WORKDIR /data
 RUN mkdir -p /usr/lib/redis/modules
 
-COPY --from=builder /build/bin/redistimeseries.so /usr/lib/redis/modules
+COPY --from=builder /build/bin/redistimeseries.so /usr/lib/redis/modules/
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/redistimeseries.so"]
