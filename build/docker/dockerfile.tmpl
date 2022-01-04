@@ -30,7 +30,7 @@ RUN set -e ;\
     fi
 
 #----------------------------------------------------------------------------------------------
-FROM redisfab/redis:{{REDIS_VER}}-{{ARCH}}-{{OSNICK}}
+FROM redisfab/redis:{{REDIS_VERSION}}-{{ARCH}}-{{OSNICK}}
 
 ENV LIBDIR /usr/lib/redis/modules/
 WORKDIR /data
