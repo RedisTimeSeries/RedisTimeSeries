@@ -417,7 +417,7 @@ def runShortRead(env, data, total_len):
         # Notice: Do not use env.expect in this test
         # (since it is sending commands to redis and in this test we need to follow strict hand-shaking)
         res = env.cmd('replicaof', '127.0.0.1', shardMock.server_port)
-        env.execute_command("config set bigredis-max-ram-keys 0")
+        env.execute_command("DEBUG BIGREDIS-SWAPOUT")
         env.assertTrue(res)
         conn = shardMock.GetConnection()
         env.assertNotEqual(conn, None)
@@ -476,8 +476,6 @@ def runShortRead(env, data, total_len):
             keys = env.execute_command('keys *')
             assert len(keys) == 12
             assert not any(str.endswith("_bakup") for str in keys)
-
-        env.execute_command("config set bigredis-max-ram-keys 100")
 
         # Exit (avoid read-only exception with flush on replica)
         env.execute_command('replicaof', 'no', 'one')
