@@ -162,7 +162,7 @@ commands:
     steps:
       - early-returns
       - setup-executor
-      - checkout
+      - checkout-all
       - setup-automation
       - install-prerequisites
       - run:
@@ -170,7 +170,7 @@ commands:
           command: |
             ROOT=$PWD
             cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
+            make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=1 SHOW=1 VERBOSE=1
             cd $ROOT
             mkdir -p tests/flow/logs
             tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
@@ -182,7 +182,7 @@ commands:
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=1 SHOW=1 VERBOSE=1
       - persist-artifacts
 
   vm-build-platforms-steps:
@@ -191,7 +191,7 @@ commands:
         type: string
     steps:
       - early-returns
-      - checkout
+      - checkout-all
       - setup-automation
       - run:
           name: Install Docker
@@ -201,7 +201,7 @@ commands:
           command: |
             ROOT=$PWD
             cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 TEST=1 SHOW=1 PACK=1
+            make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=1 SHOW=1 VERBOSE=1
             cd $ROOT
             mkdir -p tests/flow/logs
             tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
@@ -213,7 +213,7 @@ commands:
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=0 SHOW=1 VERBOSE=1
+            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=1 SHOW=1 VERBOSE=1
       - persist-artifacts
 
   benchmark-automation:
@@ -266,7 +266,7 @@ commands:
               --upload_results_s3 \
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
-              --allowed-envs << parameters.allowed_envs >> 
+              --allowed-envs << parameters.allowed_envs >>
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -396,7 +396,7 @@ jobs:
           name: Build
           shell: /bin/bash -l -eo pipefail
           command: |
-            make -C build/docker build OSNICK=bionic VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH ARTIFACTS=1 SHOW=1
+            make -C build/docker build OSNICK=bionic SHOW=1
           no_output_timeout: 30m
       - run:
           name: Start RLEC
@@ -625,7 +625,7 @@ workflows:
       - lint:
           <<: *on-any-branch
       - build:
-          <<: *on-any-branch
+          <<: *not-on-integ-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
           <<: *on-integ-branch
@@ -636,15 +636,13 @@ workflows:
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
-          requires:
-            - build
           <<: *on-integ-and-version-tags
       - build-platforms:
           <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic, xenial, centos7, centos8]
+              platform: [focal, bionic, xenial, centos7, centos8, bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
@@ -653,8 +651,6 @@ workflows:
               platform: [focal, bionic]
       - build-macos:
           <<: *on-integ-and-version-tags
-      - build-multiarch-docker:
-          <<: *never
       - coverage:
           context: common
           <<: *on-any-branch
