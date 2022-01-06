@@ -62,7 +62,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
 }
 
 // this is an internal function that routes the next call to the appropriate chunk iterator function
-static inline ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
+static inline ChunkResult ChunkGetNextSample(SeriesIterator *iter, Sample *sample) {
     return iter->chunkIteratorFuncs.GetNext(iter->chunkIterator, sample);
 }
 
@@ -97,7 +97,7 @@ ChunkResult SeriesIteratorGetNext(AbstractIterator *abstractIterator, Sample *cu
     timestamp_t timestamp = 0;
     if (likely(not_reverse)) {
         while (TRUE) {
-            res = SeriesGetNext(iterator, currentSample);
+            res = ChunkGetNextSample(iterator, currentSample);
             if (unlikely(res == CR_END)) { // Reached the end of the chunk
                 if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
                     funcs->GetFirstTimestamp(currentChunk) > itt_max_ts ||
@@ -105,7 +105,7 @@ ChunkResult SeriesIteratorGetNext(AbstractIterator *abstractIterator, Sample *cu
                     return CR_END; // No more chunks or they out of range
                 }
                 iterator->chunkIteratorFuncs.Reset(iterator->chunkIterator, currentChunk);
-                if (SeriesGetNext(iterator, currentSample) != CR_OK) {
+                if (ChunkGetNextSample(iterator, currentSample) != CR_OK) {
                     return CR_END;
                 }
             } else if (res == CR_ERR) {
