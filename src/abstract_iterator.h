@@ -12,9 +12,14 @@
 typedef struct AbstractIterator
 {
     ChunkResult (*GetNext)(struct AbstractIterator *iter, Sample *currentSample);
+    bool (*GetNextBoundaryAggValue)(struct AbstractIterator *iter,
+                                    const timestamp_t timestampBoundaryStart,
+                                    const timestamp_t timestampBoundaryEnd,
+                                    int aggType,
+                                    Sample *sample);
     void (*Close)(struct AbstractIterator *iter);
 
     struct AbstractIterator *input;
 } AbstractIterator;
 
-#endif //ABSTRACT_ITERATOR_H
+#endif // ABSTRACT_ITERATOR_H

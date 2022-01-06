@@ -34,6 +34,7 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
     .GetNext = Uncompressed_ChunkIteratorGetNext,
     .GetPrev = Uncompressed_ChunkIteratorGetPrev,
     .Reset = Uncompressed_ResetChunkIterator,
+    .GetNextBoundaryAggValue = NULL,
 };
 
 static ChunkFuncs comprChunk = {
@@ -64,6 +65,7 @@ static ChunkIterFuncs compressedChunkIteratorClass = {
     .GetNext = Compressed_ChunkIteratorGetNext,
     /*** Reverse iteration is on temporary decompressed chunk ***/
     .GetPrev = NULL,
+    .GetNextBoundaryAggValue = Compressed_ChunkIteratorGetNextBoundaryAggValue,
     .Reset = Compressed_ResetChunkIterator,
 };
 

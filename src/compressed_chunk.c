@@ -33,6 +33,8 @@ Chunk_t *Compressed_NewChunk(size_t size) {
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
     chunk->prevTimestamp = 0;
+    chunk->precomputedAggsIndex = 0;
+    chunk->count = 0;
     return chunk;
 }
 

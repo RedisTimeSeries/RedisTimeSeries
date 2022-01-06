@@ -299,7 +299,7 @@ def test_sanity():
         actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
         assert expected_result == actual_result
         expected_result = [
-            b'totalSamples', 1500, b'memoryUsage', 1166,
+            b'totalSamples', 1500, b'memoryUsage', 1182,
             b'firstTimestamp', start_ts, b'chunkCount', 1,
             b'labels', [[b'name', b'brown'], [b'color', b'pink']],
             b'lastTimestamp', start_ts + samples_count - 1,

@@ -1084,6 +1084,7 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
 
     if (args->aggregationArgs.aggregationClass != NULL) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
+                                                            args->aggregationArgs.aggregationType,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,

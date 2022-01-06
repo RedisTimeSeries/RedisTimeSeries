@@ -29,6 +29,7 @@ typedef struct AggregationIterator
 {
     AbstractIterator base;
     AggregationClass *aggregation;
+    int aggregationType;
     int64_t aggregationTimeDelta;
     timestamp_t timestampAlignment;
     void *aggregationContext;
@@ -40,6 +41,7 @@ typedef struct AggregationIterator
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
+                                             int aggregationType,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,

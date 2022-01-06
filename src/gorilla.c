@@ -381,6 +381,19 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     return CR_OK;
 }
 
+static void Compressed_ComputeChunkAggs(CompressedChunk *chunk,
+                                        timestamp_t timestamp,
+                                        double value) {
+#ifdef DEBUG
+    assert(chunk);
+#endif
+    if (unlikely(chunk->count == 0)) {
+        chunk->precomputedAggs[PRECOMPUTED_AGG_POS(TS_AGG_MAX)] = value;
+    }
+    if (value > chunk->precomputedAggs[PRECOMPUTED_AGG_POS(TS_AGG_MAX)])
+        chunk->precomputedAggs[PRECOMPUTED_AGG_POS(TS_AGG_MAX)] = value;
+}
+
 ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, double value) {
 #ifdef DEBUG
     assert(chunk);
@@ -401,6 +414,8 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
             return CR_END;
         }
     }
+    Compressed_ComputeChunkAggs(chunk, timestamp, value);
+    chunk->precomputedAggsIndex++;
     chunk->count++;
     return CR_OK;
 }
@@ -482,6 +497,57 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
     return iter->prevValue.d = rv.d;
 }
 
+/*
+ * Check if we can use precomputed aggregations for the entire chunk instead of going through every
+ * value. This is only used when the aggregation range [C,D[ is larger than the chunk time interval
+ * [A,B] and we have the precomputed aggregation for [A,B].
+ * This can save a large number of iterations given we have detected use-cases with chunks with >300
+ * samples, meaning instead of doing 300 aggregations, we use the already computed aggregation for
+ * the entire chunk.
+ *
+ * Currently, the following aggregations are possible to use this optimization:
+ *    - Maximum: the MAX between [C,D[ is equal to the MAX( [C,B'], MAX( MAX([A,B]), MAX([A'',D])).
+ *               given that we can use the precomputed MAX of [A,B] we reduce the total MAX
+ *               comparisons by N-1.
+ *
+ *
+ *                  C: timestamp range start                     D: time range end
+ *                  │                                            │
+ *   A'             │   B'  A                             B  A'' │
+ *   ┌──────────────┼────┐ ┌───────────────────────────────┐ ┌───┼────────────────────┐
+ *   │              │    │ │                               │ │   │                    │
+ *   │ Previous     │    │ │  Chunk (N samples)            │ │   │ Next               │
+ *   │ Chunk        │    │ │   baseTimeStamp: A            │ │   │ Chunk              │
+ *   │              │    │ │   endTimeStamp: B             │ │   │                    │
+ *   └──────────────┼────┘ └───────────────────────────────┘ └───┼────────────────────┘
+ *                  │                                            │
+ */
+bool Compressed_ChunkIteratorGetNextBoundaryAggValue(ChunkIter_t *abstractIter,
+                                                     const timestamp_t timestampBoundaryStart,
+                                                     const timestamp_t timestampBoundaryEnd,
+                                                     int aggType,
+                                                     Sample *sample) {
+    bool res = false;
+    Compressed_Iterator *iter = (Compressed_Iterator *)abstractIter;
+    /* If we have precomputed aggregates ready and the maximum timestamp
+     * of this chunk is within the time boundary let's try to use it */
+    if (iter->count < iter->chunk->count && iter->chunk->baseTimestamp >= timestampBoundaryStart &&
+        iter->chunk->prevTimestamp < timestampBoundaryEnd &&
+        iter->chunk->precomputedAggsIndex == iter->chunk->count) {
+        switch (aggType) {
+            case TS_AGG_MAX:
+                sample->timestamp = iter->chunk->prevTimestamp;
+                sample->value = iter->chunk->precomputedAggs[PRECOMPUTED_AGG_POS(TS_AGG_MAX)];
+                iter->count = iter->chunk->count;
+                res = true;
+                break;
+            default:
+                break;
+        }
+    }
+    return res;
+}
+
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *sample) {
     Compressed_Iterator *iter = (Compressed_Iterator *)abstractIter;
 #ifdef DEBUG
@@ -494,8 +560,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     if (unlikely(iter->count == 0)) {
         sample->timestamp = iter->chunk->baseTimestamp;
         sample->value = iter->chunk->baseValue.d;
-        iter->count++;
-        return CR_OK;
+        goto common;
     }
     const u_int64_t *bins = iter->chunk->data;
     // We're fast checking the control bits for the cases in which the delta is 0
@@ -508,6 +573,19 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // Check if value was changed
     // control bit ‘0’ (case a)
     sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+common:
     iter->count++;
+    /* To avoid any change to the serialization formats, and to make the query aggregation
+     * optimizations completly runtime related we use Compressed_ChunkIteratorGetNext to calculate
+     * any of the required aggregations when the chunks have data and the aggregations where not
+     * already computed (i.e. after rdb loading the optimizations will only take effect after 1 full
+     * read of the chunk). After having the computed once the chunk aggregation we only updated when
+     * required (no unecessary cycles spent on this after a full pass).
+     */
+    if (iter->chunk->count != iter->chunk->precomputedAggsIndex &&
+        iter->count > iter->chunk->precomputedAggsIndex) {
+        iter->chunk->precomputedAggsIndex = iter->count;
+        Compressed_ComputeChunkAggs(iter->chunk, sample->timestamp, sample->value);
+    }
     return CR_OK;
 }

@@ -25,6 +25,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
     SeriesIterator *iter = malloc(sizeof(SeriesIterator));
     iter->base.Close = SeriesIteratorClose;
     iter->base.GetNext = SeriesIteratorGetNext;
+    iter->base.GetNextBoundaryAggValue = SeriesIteratorGetNextBoundaryAggValue;
     iter->base.input = NULL;
     iter->currentChunk = NULL;
     iter->chunkIterator = NULL;
@@ -64,6 +65,18 @@ AbstractIterator *SeriesIterator_New(Series *series,
 // this is an internal function that routes the next call to the appropriate chunk iterator function
 static inline ChunkResult SeriesGetNext(SeriesIterator *iter, Sample *sample) {
     return iter->chunkIteratorFuncs.GetNext(iter->chunkIterator, sample);
+}
+
+// this is an internal function that routes the next call to the appropriate chunk iterator function
+bool SeriesIteratorGetNextBoundaryAggValue(AbstractIterator *abstractIterator,
+                                           const timestamp_t boundaryStart,
+                                           const timestamp_t boundaryEnd,
+                                           Sample *sample) {
+    SeriesIterator *iterator = (SeriesIterator *)abstractIterator;
+    if (!iterator->chunkIteratorFuncs.GetNextBoundaryAggValue)
+        return false;
+    return iterator->chunkIteratorFuncs.GetNextBoundaryAggValue(
+        iterator->chunkIterator, boundaryStart, boundaryEnd, sample);
 }
 
 // this is an internal function that routes the next call to the appropriate chunk iterator function

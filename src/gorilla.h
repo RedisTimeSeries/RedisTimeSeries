@@ -42,6 +42,10 @@ typedef struct CompressedChunk
     union64bits prevValue;
     u_int8_t prevLeading;
     u_int8_t prevTrailing;
+
+    u_int64_t precomputedAggsIndex; /* if the node does not have precomputation ready, this is the
+                                       index pos. */
+    double precomputedAggs[PRECOMPUTED_AGGS_LEN];
 } CompressedChunk;
 
 typedef struct Compressed_Iterator
@@ -63,5 +67,10 @@ typedef struct Compressed_Iterator
 
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample);
+bool Compressed_ChunkIteratorGetNextBoundaryAggValue(ChunkIter_t *abstractIter,
+                                                     const timestamp_t timestampBoundaryStart,
+                                                     const timestamp_t timestampBoundaryEnd,
+                                                     int aggType,
+                                                     Sample *sample);
 
 #endif

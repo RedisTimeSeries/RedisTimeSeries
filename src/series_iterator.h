@@ -33,4 +33,9 @@ ChunkResult SeriesIteratorGetNext(AbstractIterator *iterator, Sample *currentSam
 
 void SeriesIteratorClose(AbstractIterator *iterator);
 
+bool SeriesIteratorGetNextBoundaryAggValue(AbstractIterator *iterator,
+                                           const timestamp_t boundaryStart,
+                                           const timestamp_t boundaryEnd,
+                                           Sample *sample);
+
 #endif // REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H

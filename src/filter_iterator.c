@@ -55,6 +55,7 @@ SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
     newIter->base.input = input;
     newIter->base.GetNext = SeriesFilterIterator_GetNext;
     newIter->base.Close = SeriesFilterIterator_Close;
+    newIter->base.GetNextBoundaryAggValue = NULL;
     newIter->byValueArgs = byValue;
     newIter->ByTsArgs = ByTsArgs;
     return newIter;
@@ -66,6 +67,7 @@ void SeriesFilterIterator_Close(struct AbstractIterator *iterator) {
 }
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
+                                             int aggregationType,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
@@ -76,6 +78,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->base.input = input;
     iter->aggregation = aggregation;
     iter->timestampAlignment = timestampAlignment;
+    iter->aggregationType = aggregationType;
     iter->aggregationTimeDelta = aggregationTimeDelta;
     iter->aggregationContext = iter->aggregation->createContext();
     iter->aggregationLastTimestamp = 0;
@@ -114,35 +117,36 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     AggregationIterator *self = (AggregationIterator *)iter;
 
     Sample internalSample = { 0 };
-    AbstractIterator *input = iter->input;
-    ChunkResult (*getNextInput)(struct AbstractIterator *, Sample *) = input->GetNext;
-    ChunkResult result = getNextInput(input, &internalSample);
+    AbstractIterator *baseIterator = iter->input;
+    ChunkResult (*getNextInput)(struct AbstractIterator *, Sample *) = baseIterator->GetNext;
+    bool (*getNextBoundaryAggValue)(
+        struct AbstractIterator *, const timestamp_t, const timestamp_t, int, Sample *) =
+        baseIterator->GetNextBoundaryAggValue;
+    const u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    bool is_reversed = self->reverse;
 
-    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
-    bool is_reserved = self->reverse;
+    ChunkResult result = getNextInput(baseIterator, &internalSample);
+
     if (result == CR_OK && !self->initilized) {
-        timestamp_t init_ts = internalSample.timestamp;
-        timestamp_t t1 = calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
-        self->aggregationLastTimestamp = t1;
-
+        self->aggregationLastTimestamp = calc_ts_bucket(
+            internalSample.timestamp, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
     }
-
     bool hasSample = FALSE;
     AggregationClass *aggregation = self->aggregation;
     void (*appendValue)(void *, double) = aggregation->appendValue;
     void *aggregationContext = self->aggregationContext;
-    u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    u_int64_t timestampBoundary = self->aggregationLastTimestamp + aggregationTimeDelta;
     while (result == CR_OK) {
-        if ((is_reserved == FALSE && internalSample.timestamp >= contextScope) ||
-            (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
+        if ((is_reversed == FALSE && internalSample.timestamp >= timestampBoundary) ||
+            (is_reversed == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (self->aggregationIsFirstSample == FALSE) {
                 hasSample = finalizeBucket(currentSample, self);
             }
             self->aggregationLastTimestamp = calc_ts_bucket(
                 internalSample.timestamp, aggregationTimeDelta, self->timestampAlignment);
-            contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+            timestampBoundary = self->aggregationLastTimestamp + aggregationTimeDelta;
         }
         self->aggregationIsFirstSample = FALSE;
 
@@ -150,7 +154,18 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
         if (hasSample) {
             return CR_OK;
         }
-        result = getNextInput(input, &internalSample);
+        // Check if we can use boundary aggregation optimizations
+        if (!is_reversed && getNextBoundaryAggValue != NULL) {
+            const bool boundaryOptUsed = getNextBoundaryAggValue(baseIterator,
+                                                                 internalSample.timestamp,
+                                                                 timestampBoundary,
+                                                                 self->aggregationType,
+                                                                 &internalSample);
+            if (!boundaryOptUsed)
+                result = getNextInput(baseIterator, &internalSample);
+        } else {
+            result = getNextInput(baseIterator, &internalSample);
+        }
     }
 
     if (result == CR_END) {

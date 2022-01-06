@@ -35,6 +35,9 @@ typedef void ChunkIter_t;
 // "temporary" uncompressed chunk.
 #define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
+#define PRECOMPUTED_AGGS_LEN 1
+#define PRECOMPUTED_AGGS_POS_TS_AGG_MAX 0
+#define PRECOMPUTED_AGG_POS(r) PRECOMPUTED_AGGS_POS_##r
 typedef enum CHUNK_TYPES_T
 {
     CHUNK_REGULAR,
@@ -52,6 +55,10 @@ typedef struct ChunkIterFuncs
     void (*Free)(ChunkIter_t *iter);
     ChunkResult (*GetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult (*GetPrev)(ChunkIter_t *iter, Sample *sample);
+    bool (*GetNextBoundaryAggValue)(ChunkIter_t *iter,
+                                    const timestamp_t boundaryStart,
+                                    const timestamp_t boundaryEnd,
+                                    Sample *sample);
     void (*Reset)(ChunkIter_t *iter, Chunk_t *chunk);
 } ChunkIterFuncs;
 

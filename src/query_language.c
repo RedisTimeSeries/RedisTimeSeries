@@ -249,11 +249,11 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          AggregationArgs *out) {
-    int agg_type;
     AggregationArgs aggregationArgs = { 0 };
-    int result = _parseAggregationArgs(ctx, argv, argc, &aggregationArgs.timeDelta, &agg_type);
+    int result = _parseAggregationArgs(
+        ctx, argv, argc, &aggregationArgs.timeDelta, &aggregationArgs.aggregationType);
     if (result == TSDB_OK) {
-        aggregationArgs.aggregationClass = GetAggClass(agg_type);
+        aggregationArgs.aggregationClass = GetAggClass(aggregationArgs.aggregationType);
         if (aggregationArgs.aggregationClass == NULL) {
             RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
             return TSDB_ERROR;
