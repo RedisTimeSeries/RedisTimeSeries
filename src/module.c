@@ -1193,8 +1193,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .copy = CopySeries,
                                   .free = FreeSeries };
 
-    SeriesType =
-        RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_IS_RESSETED_DUP_POLICY_RDB_VER, &tm);
+    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_OVERFLOW_RDB_VER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
     IndexInit();
