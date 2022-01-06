@@ -12,7 +12,11 @@
 #include <float.h>
 #include <math.h> // sqrt
 #include <string.h>
+#ifdef __linux__
 #include <valgrind/valgrind.h>
+#else
+#define RUNNING_ON_VALGRIND (false)
+#endif
 #include <rmutil/alloc.h>
 
 typedef struct MaxMinContext
