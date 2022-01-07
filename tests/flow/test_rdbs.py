@@ -10,9 +10,9 @@ def normalize_info(data):
     info = {}
     for i in range(0, len(data), 2):
         info[data[i]] = data[i + 1]
-    info.pop('memoryUsage')
-    info.pop('chunkSize')
-    info.pop('chunkType')
+    info.pop(b'memoryUsage')
+    info.pop(b'chunkSize')
+    info.pop(b'chunkType')
     return info
 
 def testRDB():
