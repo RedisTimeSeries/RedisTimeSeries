@@ -19,6 +19,9 @@ dbconfig:
   - tool: tsbs_load_redistimeseries
   - parameters:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+  module-configuration-parameters:
+    redistimeseries:
+      CHUNK_SIZE_BYTES: 128
 
 clientconfig:
   - benchmark_type: "read-only"
@@ -28,9 +31,6 @@ clientconfig:
     - max-rps: 1158
     - print-interval: 2500
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_single-groupby-5-8-1_100000.dat"
-  module-configuration-parameters:
-    redistimeseries:
-      CHUNK_SIZE_BYTES: 128
 
 exporter:
   redistimeseries:
