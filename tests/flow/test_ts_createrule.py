@@ -34,7 +34,7 @@ def test_compaction_rules(self):
         assert len(actual_result) == samples_count / 10
 
         info = _get_ts_info(r, key_name)
-        assert info.rules == [[agg_key_name.encode('ascii'), 10, b'AVG']]
+        assert info.rules == [[agg_key_name, 10, 'AVG']]
 
 
 def test_create_compaction_rule_with_wrong_aggregation():
@@ -144,7 +144,7 @@ def test_delete_key():
 
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 12)
-        assert _get_ts_info(r, key_name).rules == [[agg_key_name.encode('ascii'), 12, b'AVG']]
+        assert _get_ts_info(r, key_name).rules == [[agg_key_name, 12, 'AVG']]
 
 
 def test_downsampling_current():

@@ -11,9 +11,9 @@ def test_lazy_del_src():
         r.execute_command("ts.create", 'dst{test}')
         r.execute_command("ts.createrule", 'src{test}', 'dst{test}', 'AGGREGATION', 'avg', 60000)
         
-        assert _get_ts_info(r, 'dst{test}').sourceKey.decode() == 'src{test}'
+        assert _get_ts_info(r, 'dst{test}').sourceKey == 'src{test}'
         assert len(_get_ts_info(r, 'src{test}').rules) == 1
-        assert _get_ts_info(r, 'src{test}').rules[0][0].decode() == 'dst{test}'
+        assert _get_ts_info(r, 'src{test}').rules[0][0] == 'dst{test}'
         r.execute_command('DEL', 'src{test}')
 
         assert _get_ts_info(r, 'dst{test}').sourceKey == None
@@ -25,9 +25,9 @@ def test_lazy_del_dst():
         r.execute_command("ts.create", 'dst{test}')
         r.execute_command('TS.CREATERULE', 'src{test}', 'dst{test}', 'AGGREGATION', 'avg', 60000)
         
-        assert _get_ts_info(r, 'dst{test}').sourceKey.decode() == 'src{test}'
+        assert _get_ts_info(r, 'dst{test}').sourceKey == 'src{test}'
         assert len(_get_ts_info(r, 'src{test}').rules) == 1
-        assert _get_ts_info(r, 'src{test}').rules[0][0].decode() == 'dst{test}'
+        assert _get_ts_info(r, 'src{test}').rules[0][0] == 'dst{test}'
         r.execute_command('DEL', 'dst{test}')
 
         assert _get_ts_info(r, 'src{test}').sourceKey == None
@@ -42,7 +42,7 @@ def test_dump_restore_dst_rule():
         r.execute_command('TS.CREATE', key2)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
 
-        assert _get_ts_info(r, key2).sourceKey.decode() == key1
+        assert _get_ts_info(r, key2).sourceKey == key1
         assert len(_get_ts_info(r, key1).rules) == 1
 
         data = r.execute_command('DUMP', key2)

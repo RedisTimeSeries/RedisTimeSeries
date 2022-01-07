@@ -141,7 +141,7 @@ def test_533_dump_rules():
         r.execute_command('TS.CREATE', key2)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
 
-        assert _get_ts_info(r, key2).sourceKey.decode() == key1
+        assert _get_ts_info(r, key2).sourceKey == key1
         assert len(_get_ts_info(r, key1).rules) == 1
 
         data = r.execute_command('DUMP', key1)
