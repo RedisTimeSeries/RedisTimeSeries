@@ -8,11 +8,16 @@
 #include "load_io_error_macros.h"
 #include "rdb.h"
 
+#include "rmutil/alloc.h"
+
 #include <ctype.h>
 #include <float.h>
 #include <math.h> // sqrt
 #include <string.h>
-#include <rmutil/alloc.h>
+
+#ifdef _DEBUG
+#include "valgrind/valgrind.h"
+#endif
 
 typedef struct MaxMinContext
 {
@@ -88,6 +93,13 @@ void *AvgCreateContext() {
     return context;
 }
 
+// Except valgrind it's equivalent to sizeof(long double) > 8
+#if !defined(_DEBUG) && !defined(_VALGRIND)
+bool hasLongDouble = sizeof(long double) > 8;
+#else
+bool hasLongDouble = false;
+#endif
+
 void AvgAddValue(void *contextPtr, double value) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->cnt++;
@@ -97,11 +109,20 @@ void AvgAddValue(void *contextPtr, double value) {
                   (fabs(context->val) > (DBL_MAX - fabs(value)))) ||
                  context->isOverflow)) {
         // calculating: avg(t+1) = t*avg(t)/(t+1) + val/(t+1)
+
         long double ld_val = context->val;
         long double ld_value = value;
-        ld_val /= context->cnt;
-        if (context->isOverflow) {
-            ld_val *= (long double)(context->cnt - 1);
+        if (likely(hasLongDouble)) { // better accuracy
+            ld_val /= context->cnt;
+            if (context->isOverflow) {
+                ld_val *= (long double)(context->cnt - 1);
+            }
+        } else {
+            if (context->isOverflow) {
+                ld_val *= ((long double)(context->cnt - 1) / context->cnt);
+            } else {
+                ld_val /= context->cnt;
+            }
         }
         ld_val += (ld_value / (long double)context->cnt);
         context->val = ld_val;

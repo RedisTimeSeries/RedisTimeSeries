@@ -141,8 +141,12 @@ CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0 -DDEBUG
+CC_FLAGS += -g -ggdb -O0 -DDEBUG -D_DEBUG
 LD_FLAGS += -g
+
+ifeq ($(VALGRIND),1)
+CC_FLAGS += -D_VALGRIND
+endif
 else ifeq ($(PROFILE),1)
 CC_FLAGS += -O2
 else
@@ -474,5 +478,5 @@ pack: $(TARGET)
 
 #----------------------------------------------------------------------------------------------
 
-platform:
-	$(SHOW)$(MAKE) -C $(ROOT)/build/docker PACK=1 ARTIFACTS=1
+docker:
+	$(SHOW)$(MAKE) -C $(ROOT)/build/docker

@@ -248,7 +248,14 @@ def test_agg_avg():
 
         actual_result = r.execute_command('TS.RANGE', 'ts1', 0, 3, 'AGGREGATION', 'avg', 5)
         #MAX_DOUBLE - 10 equals MAX_DOUBLE cause of precision limit
-        assert actual_result == [[0, b'1.7976931348623157E308']]
+
+        # If this test fails in the future it means
+        # it run on an OS/compiler that doesn't support long double need to remove the comment below
+        # if(VALGRIND || sizeof(c_longdouble) > 8):
+        if(VALGRIND):
+            assert actual_result == [[0, b'1.7976931348623155E308']]
+        else:
+            assert actual_result == [[0, b'1.7976931348623157E308']]
 
         MIN_DOUBLE = -1.7976931348623157E+308
         assert r.execute_command('TS.CREATE', 'ts2')
@@ -258,7 +265,10 @@ def test_agg_avg():
 
         actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
         #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
-        assert actual_result == [[0, b'-1.7976931348623157E308']]
+        if(VALGRIND):
+            assert actual_result == [[0, b'-1.7976931348623155E308']]
+        else:
+            assert actual_result == [[0, b'-1.7976931348623157E308']]
 
 
 def test_series_ordering():
