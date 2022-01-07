@@ -30,6 +30,11 @@ def decode_if_needed(data):
         for item in data:
             ret.append(decode_if_needed(item))
         return ret
+    if isinstance(data, dict):
+        ret = {}
+        for k,v in data.items():
+            ret[decode_if_needed(k)] = decode_if_needed(v)
+        return ret
     elif isinstance(data, bytes):
         return data.decode()
     else:

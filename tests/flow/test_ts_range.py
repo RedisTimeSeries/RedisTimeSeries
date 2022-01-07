@@ -415,3 +415,51 @@ def test_aggreataion_alignment():
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
     assert expected_data == \
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+
+
+def test_precomputed_chunk_aggregation():
+    env = Env()
+    key_name = 'test:precomputed:aggs:max'
+    max_per_chunk = {}
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key_name, 'CHUNK_SIZE', '128')
+        # ensure we have more than one chunk and that we know the chunk maximum beforehand to ease test
+        i = 1
+        while(_get_ts_info(r, key_name).chunk_count < 3):
+            r.execute_command("ts.add", key_name, i, i)
+            max_per_chunk[_get_ts_info(r, key_name).chunk_count] = i
+            i = i+1
+
+        # on the first chunk we have samples [1, max_per_chunk[1]]
+        # so we want to ask for a range larger than that size
+        chunk_1_start = 1
+        chunk_1_end = max_per_chunk[1]
+        range_chunk_1 = chunk_1_end
+        full_range = max_per_chunk[3]
+        expected_data = [
+            [1, "{}".format(max_per_chunk[1])],
+            [chunk_1_end+1, "{}".format(chunk_1_end*2)],
+        ]
+
+        # we're comparing only the first 2 chunks on this assert
+        env.assertEqual(expected_data, decode_if_needed(r.execute_command('TS.range', key_name,
+                                                                          chunk_1_start, '+', 'ALIGN', 'start',
+                                                                          'AGGREGATION', 'MAX', range_chunk_1))[:2])
+
+        # request a max over the entire series
+        expected_data = [
+            [1, "{}".format(max_per_chunk[3])],
+        ]
+        env.assertEqual(expected_data, decode_if_needed(r.execute_command('TS.range', key_name,
+                                                                          chunk_1_start, '+', 'ALIGN', 'start',
+                                                                          'AGGREGATION', 'MAX', full_range)))
+
+        # Using DUMP -> RESTORE makes us rely on calculating the aggregation on the first query
+        # so only the 2nd TS.RANGE will use the precomputed aggregates.
+        # This check ensures the first reply (i.e. not using precomputed data) is equal to the next ones
+        dump = r.execute_command("dump", key_name)
+        assert r.execute_command("restore", "ts2", "0", dump)
+        for rep in range(1, 10):
+            env.assertEqual(expected_data, decode_if_needed(r.execute_command('TS.range', "ts2",
+                                                                              chunk_1_start, '+', 'ALIGN', 'start',
+                                                                              'AGGREGATION', 'MAX', full_range)))
