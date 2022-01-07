@@ -33,7 +33,7 @@ def test_encoding_uncompressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'uncompressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
 
 def test_encoding_compressed():
@@ -43,7 +43,7 @@ def test_encoding_compressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
 
 def test_uncompressed():
     Env().skipOnCluster()
@@ -52,7 +52,7 @@ def test_uncompressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'uncompressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'uncompressed'
 
 
 def test_compressed():
@@ -62,7 +62,7 @@ def test_compressed():
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == 'compressed'
 
 def test_compressed_debug():
     Env().skipOnCluster()
@@ -75,7 +75,7 @@ def test_compressed_debug():
         r.execute_command('TS.ADD', 't1', '3000', 1.0)
         r.execute_command('TS.ADD', 't1', '5000', 1.0)
 
-        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
+        assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [['startTimestamp', 0, 'endTimestamp', 3000, 'samples', 2, 'size', 4096, 'bytesPerSample', '2048']]
 
 class testGlobalConfigTests():
 

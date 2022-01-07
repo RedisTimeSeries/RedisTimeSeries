@@ -19,7 +19,7 @@ def test_alter_cmd():
         expected_data = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
 
         # test alter retention, chunk size and labels
-        expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
+        expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
         expected_retention = 500
         expected_chunk_size = 104
         _ts_alter_cmd(r, key, expected_retention, expected_chunk_size, expected_labels)
@@ -34,13 +34,13 @@ def test_alter_cmd():
 
         # test alter chunk size
         expected_chunk_size = 104
-        expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
+        expected_labels = [['A', '1'], ['B', '2'], ['C', '3']]
         _ts_alter_cmd(r, key, set_chunk_size=expected_chunk_size)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,
                           expected_chunk_size, expected_labels)
 
         # test alter labels
-        expected_labels = [[b'A', b'1']]
+        expected_labels = [['A', '1']]
         _ts_alter_cmd(r, key, expected_retention, set_labels=expected_labels)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,
                           expected_chunk_size, expected_labels)
