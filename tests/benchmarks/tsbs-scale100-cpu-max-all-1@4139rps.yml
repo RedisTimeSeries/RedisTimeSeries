@@ -6,6 +6,13 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: cpu-max-all-1
+  tsbs query detail: Aggregate across all CPU metrics per hour over 1 hour for a single host
+  sample query: "TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "AGGREGATION" "MAX" "3600000" "FILTER" "measurement=cpu" "hostname=host_7"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

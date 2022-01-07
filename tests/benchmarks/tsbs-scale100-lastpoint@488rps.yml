@@ -5,6 +5,14 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: lastpoint
+  tsbs query detail: The last reading for each host
+  sample query: "TS.MGET" "SELECTED_LABELS" "hostname" "fieldname" "FILTER" "measurement=cpu" "hostname!="
+  '
+
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

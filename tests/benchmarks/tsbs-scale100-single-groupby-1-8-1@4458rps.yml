@@ -5,6 +5,13 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: single-groupby-1-8-1
+  tsbs query detail: Simple aggregrate (MAX) on one metric for 8 hosts, every 5 mins for 1 hour
+  sample query: "TS.MRANGE" "1451787921535" "1451791521535" "AGGREGATION" "MAX" "60000" "FILTER" "measurement=cpu" "fieldname=usage_user" "hostname=(host_53,host_24,host_50,host_65,host_54,host_32,host_99,host_20)" "GROUPBY" "hostname" "REDUCE" "max"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

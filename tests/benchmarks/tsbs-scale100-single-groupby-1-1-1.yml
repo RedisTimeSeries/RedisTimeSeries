@@ -1,5 +1,12 @@
 name: "tsbs-scale100_single-groupby-1-1-1"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: single-groupby-1-1-1
+  tsbs query detail: Simple aggregrate (MAX) on one metric for 1 host, every 5 mins for 1 hour
+  sample query: "TS.MRANGE" "1451639198469" "1451642798469" "AGGREGATION" "MAX" "60000" "FILTER" "measurement=cpu" "fieldname=usage_user" "hostname=host_55"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

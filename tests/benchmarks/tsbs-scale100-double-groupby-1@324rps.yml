@@ -5,6 +5,13 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: double-groupby-1
+  tsbs query detail: Aggregate on across both time and host, giving the average of 1 CPU metric per host per hour for 24 hours
+  sample query: "TS.MRANGE" "1451736494155" "1451779694155" "AGGREGATION" "AVG" "3600000" "FILTER" "measurement=cpu" "fieldname=usage_user"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

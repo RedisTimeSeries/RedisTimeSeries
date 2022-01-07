@@ -1,5 +1,16 @@
 name: "tsbs-scale100_high-cpu-1"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: high-cpu-1
+  tsbs query detail: All the readings where one metric is above a threshold for a particular host
+  sample query:
+    1st get the series names that pass the condition:
+      "TS.MRANGE" "1451729628728" "1451772828728" "FILTER_BY_VALUE" "90.0" "1000" "FILTER" "fieldname=usage_user" "measurement=cpu" "hostname=host_1" "GROUPBY" "fieldname" "REDUCE" "max"
+    then pass the given hostnames and timestamps to a second query:
+      "TS.MRANGE" "1451656883002" "1451700083002" "FILTER_BY_TS" "1451665600000" "1451665620000" "1451665630000" "1451665640000" (...)
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
