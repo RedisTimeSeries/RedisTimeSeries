@@ -9,6 +9,7 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "chunk.h"
 
 #define QUERY_TOKEN_SIZE 9
 static const char *QUERY_TOKENS[] = {
@@ -97,6 +98,8 @@ int ParseChunkSize(RedisModuleCtx *ctx,
         if (!ValidateChunkSize(ctx, *chunkSizeBytes)) {
             return TSDB_ERROR;
         }
+
+        Update_tlsUncompressedChunk_size(*chunkSizeBytes);
     }
 
     return TSDB_OK;

@@ -477,7 +477,6 @@ int MultiSerieReduce(Series *dest,
                      MultiSeriesReduceOp op,
                      const RangeArgs *args,
                      bool reverse) {
-    Sample sample;
     AbstractIterator *iterator = SeriesQuery(source, args, reverse);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
@@ -491,8 +490,11 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
-    while (iterator->GetNext(iterator, &sample) == CR_OK) {
-        SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
+    Chunk *chunk;
+    while ((chunk = iterator->GetNext(iterator))) {
+        for (int i = 0; i < chunk->num_samples; ++i) {
+            SeriesUpsertSample(dest, chunk->samples[i].timestamp, chunk->samples[i].value, dp);
+        }
     }
     iterator->Close(iterator);
     return 1;
@@ -994,14 +996,16 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     AggregationClass *aggObject = rule->aggClass;
 
-    Sample sample = { 0 };
     AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
     bool _is_empty = true;
+    Chunk *chunk;
 
-    while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
-        aggObject->appendValue(context, sample.value);
+    while ((chunk = SeriesIteratorGetNextChunk(iterator))) {
         _is_empty = false;
+        for (size_t i = 0; i < chunk->num_samples; ++i) {
+            aggObject->appendValue(context, chunk->samples[i].value);
+        }
     }
     if (is_empty) {
         *is_empty = _is_empty;
@@ -1030,7 +1034,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         return 0;
     }
 
-    size_t i = 0;
+    size_t i, count = 0;
     Sample sample = { 0 };
 
     timestamp_t minTimestamp = 0;
@@ -1040,15 +1044,22 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
 
     AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false);
 
-    ChunkResult result = SeriesIteratorGetNext(iterator, &sample);
+    Chunk *chunk = SeriesIteratorGetNextChunk(iterator);
 
-    while (result == CR_OK && sample.timestamp < minTimestamp) {
-        result = SeriesIteratorGetNext(iterator, &sample);
-        ++i;
+    bool found = false;
+    while (chunk && !found) {
+        for (i = 0; i < chunk->num_samples; ++i, ++count) {
+            if (chunk->samples[i].timestamp >= minTimestamp) {
+                sample = chunk->samples[i];
+                found = true;
+                break;
+            }
+        }
+        chunk = SeriesIteratorGetNextChunk(iterator);
     }
 
     if (skipped != NULL) {
-        *skipped = i;
+        *skipped = count;
     }
     SeriesIteratorClose(iterator);
     return sample.timestamp;
