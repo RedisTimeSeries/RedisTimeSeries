@@ -8,6 +8,27 @@
 #include "libmr_integration.h"
 
 #include "rmutil/alloc.h"
+#include <pthread.h>
+
+static pthread_key_t _tlsUncompressedChunk; // Thread local storage uncompressed chunk.
+size_t tlsUncompressedChunk_size = 0;
+
+Chunk_t *GetTemporaryUncompressedChunk(void) {
+    Chunk *chunk = pthread_getspecific(_tlsUncompressedChunk);
+    if (unlikely(!chunk)) {
+        // Set a new thread-local QueryCtx if one has not been created.
+        chunk = (Chunk *)Uncompressed_NewChunk(tlsUncompressedChunk_size);
+        pthread_setspecific(_tlsUncompressedChunk, chunk);
+    } else {
+        if (unlikely(chunk->size < tlsUncompressedChunk_size)) {
+            chunk->size = tlsUncompressedChunk_size;
+            chunk->samples = realloc(chunk->samples, chunk->size);
+        }
+        chunk->base_timestamp = 0;
+        chunk->num_samples = 0;
+    }
+    return chunk;
+}
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
@@ -189,9 +210,9 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     return deleted_count;
 }
 
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
+void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
-    iter->chunk = chunk;
+    iter->chunk = (Chunk_t *)chunk;
     if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
     } else { // iterate from first to last
@@ -199,7 +220,7 @@ void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     }
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,
                                            ChunkIterFuncs *retChunkIterClass) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
