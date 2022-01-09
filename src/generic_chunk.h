@@ -52,7 +52,7 @@ typedef struct ChunkIterFuncs
     void (*Free)(ChunkIter_t *iter);
     ChunkResult (*GetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult (*GetPrev)(ChunkIter_t *iter, Sample *sample);
-    void (*Reset)(ChunkIter_t *iter, Chunk_t *chunk);
+    void (*Reset)(ChunkIter_t *iter, const Chunk_t *chunk);
 } ChunkIterFuncs;
 
 typedef struct ChunkFuncs
@@ -66,7 +66,7 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk,
+    ChunkIter_t *(*NewChunkIterator)(const Chunk_t *chunk,
                                      int options,
                                      ChunkIterFuncs *retChunkIterClass);
 
