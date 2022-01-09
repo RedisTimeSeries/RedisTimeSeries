@@ -11,7 +11,7 @@
 
 typedef struct AbstractIterator
 {
-    ChunkResult (*GetNext)(struct AbstractIterator *iter, Sample *currentSample);
+    Chunk *(*GetNext)(struct AbstractIterator *iter);
     void (*Close)(struct AbstractIterator *iter);
 
     struct AbstractIterator *input;

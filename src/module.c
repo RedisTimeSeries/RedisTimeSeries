@@ -34,6 +34,7 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "chunk.h"
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
@@ -1225,6 +1226,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
         return REDISMODULE_ERR;
     }
+
+    // mul by 4 cause the uncompressed chunk size is at most 4 time of the compressed
+    Update_tlsUncompressedChunk_size(TSGlobalConfig.chunkSizeBytes);
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
