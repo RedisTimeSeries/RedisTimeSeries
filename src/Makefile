@@ -176,7 +176,8 @@ _SOURCES=\
 	short_read.c \
 	resultset.c \
 	tsdb.c \
-	series_iterator.c
+	series_iterator.c \
+	system_props.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
