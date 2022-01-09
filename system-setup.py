@@ -54,6 +54,8 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
         self.pip_install("gevent")
+
+    def linux_last(self):
         self.install("valgrind")
 
 #----------------------------------------------------------------------------------------------
