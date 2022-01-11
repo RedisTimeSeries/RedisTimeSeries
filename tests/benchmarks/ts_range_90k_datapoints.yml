@@ -11,7 +11,7 @@ clientconfig:
   - min-tool-version: "6.2.0"
   - parameters:
     - clients: 16
-    - requests: 20000
+    - requests: 10000
     - threads: 2
     - pipeline: 1
     - command: 'TS.RANGE ts - +'
