@@ -176,7 +176,7 @@ static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
 // Converts `x`, an int64, to binary representation with length `l` bits
 // The commented out code is the full implementation, left for readability.
 // Final code is an optimization.
-static binary_t int2bin(int64_t x, u_int8_t l) {
+static inline binary_t int2bin(int64_t x, u_int8_t l) {
     /*  binary_t bin = LSB(x, l - 1);
      *  if (x >= 0) return bin;
      *  binary_t sign = 1 << (l - 1);
@@ -187,7 +187,7 @@ static binary_t int2bin(int64_t x, u_int8_t l) {
 }
 
 // Converts `bin`, a binary of length `l` bits, into an int64
-static int64_t bin2int(binary_t bin, u_int8_t l) {
+static inline int64_t bin2int(binary_t bin, u_int8_t l) {
     if (!(bin & BIT(l - 1)))
         return bin;
     // return (int64_t) (bin | ~MASK(l)); // sign extend `bin`
@@ -213,7 +213,7 @@ static inline u_int8_t localbit(const globalbit_t bit) {
 // return `true` if `x` is in [-(2^(n-1)), 2^(n-1)-1]
 // e.g. for n=6, range is [-32, 31]
 
-static bool Bin_InRange(int64_t x, u_int8_t nbits) {
+static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
@@ -227,7 +227,7 @@ static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
 //}
 
 // Append `dataLen` bits from `data` into `bins` at bit position `bit`
-static void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen) {
+static inline void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen) {
     binary_t *bin_it = &bins[(*bit) >> 6];
     localbit_t lbit = localbit(*bit);
     localbit_t available = BINW - lbit;
@@ -320,7 +320,7 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
     return CR_OK;
 }
 
-static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
+static inline ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     union64bits val;
     val.d = value;
     u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
