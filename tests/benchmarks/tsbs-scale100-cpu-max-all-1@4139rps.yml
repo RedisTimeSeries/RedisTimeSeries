@@ -39,7 +39,7 @@ clientconfig:
   - parameters:
     - workers: 32
     - max-rps: 4139
-    - print-interval: 2500
+    - print-interval: 25000
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_cpu-max-all-1_1000000.dat"
 
 exporter:
