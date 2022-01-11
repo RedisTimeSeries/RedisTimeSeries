@@ -23,21 +23,21 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("openssl")
 
     def debian_compat(self):
-        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
+        self.run("%s/bin/getgcc --modern" % READIES)
         self.install("libssl-dev")
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
         self.run("%s/bin/getepel" % READIES, sudo=True)
         self.install("openssl-devel")
-        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
+        self.run("%s/bin/getgcc --modern" % READIES)
 
     def archlinux(self):
-        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
+        self.run("%s/bin/getgcc --modern" % READIES)
         self.install("lcov-git", aur=True)
 
     def fedora(self):
-        self.run("%s/bin/getgcc --modern" % READIES, sudo=True)
+        self.run("%s/bin/getgcc --modern" % READIES)
         self.install("openssl-devel")
         self.install("python3-networkx")
 
