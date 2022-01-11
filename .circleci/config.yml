@@ -227,6 +227,9 @@ commands:
       allowed_envs:
         type: string
         default: "oss-standalone"
+      allowed_setups:
+        type: string
+        default: ""
       timeout:
         type: string
         default: 60m
@@ -266,7 +269,8 @@ commands:
               --upload_results_s3 \
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
-              --allowed-envs << parameters.allowed_envs >>
+              --allowed-envs << parameters.allowed_envs >> \
+              --allowed-setups << parameters.allowed_setups >>
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -541,6 +545,7 @@ jobs:
           command: bash -l -c "make build PROFILE=1"
       - benchmark-automation:
           allowed_envs: "oss-cluster"
+          allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
           profile_env: "1"
           triggering_env: "circleci.profilers"

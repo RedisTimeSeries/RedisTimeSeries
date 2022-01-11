@@ -22,7 +22,6 @@ remote:
   - setup: redistimeseries-m5
 
 setups:
-  - oss-cluster-05-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
