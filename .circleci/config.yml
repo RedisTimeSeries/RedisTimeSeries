@@ -229,7 +229,7 @@ commands:
         default: "oss-standalone"
       allowed_setups:
         type: string
-        default: ""
+        default: '""'
       timeout:
         type: string
         default: 60m
