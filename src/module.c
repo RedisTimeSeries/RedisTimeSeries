@@ -41,6 +41,7 @@
 
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
+bool isTrimming = false;
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -1045,6 +1046,47 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
     }
 }
 
+void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    /**
+     * On sharding event we need to do couple of things depends on the subevent given:
+     *
+     * 1. REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED
+     *    On this event we know that the slot range changed and we might have data
+     *    which are no longer belong to this shard, we must ignore it on searches
+     *
+     * 2. REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED
+     *    This event tells us that the trimming process has started and keys will start to be
+     *    deleted, we do not need to do anything on this event
+     *
+     * 3. REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED
+     *    This event tells us that the trimming process has finished, we are not longer
+     *    have data that are not belong to us and its safe to stop checking this on searches.
+     */
+    if (eid.id != REDISMODULE_EVENT_SHARDING) {
+        RedisModule_Log(rts_staticCtx, "warning", "Bad event given, ignored.");
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED:
+            RedisModule_Log(
+                ctx, "notice", "%s", "Got slot range change event, enter trimming phase.");
+            isTrimming = true;
+            break;
+        case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
+            RedisModule_Log(
+                ctx, "notice", "%s", "Got trimming started event, enter trimming phase.");
+            isTrimming = true;
+            break;
+        case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
+            RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
+            isTrimming = false;
+            break;
+        default:
+            RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
+    }
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before
@@ -1234,8 +1276,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RedisModule_SubscribeToKeyspaceEvents(
         ctx,
         REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
-            REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED,
+            REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED |
+            REDISMODULE_NOTIFY_TRIMMED,
         NotifyCallback);
+
+    if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
+        // we have server events support, lets subscribe to relevan events.
+        RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+    }
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
