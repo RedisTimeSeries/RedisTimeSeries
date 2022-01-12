@@ -17,6 +17,8 @@ if [[ $1 == --help || $1 == help ]]; then
 		QA_AUTOMATION_EMAIL=addr      Send notification to `addr` (optional)
 		TEST=name                     Name of .json parameters file
 		MODULE_VERSION=ver            Module version to test. Default: master
+		RS_VERSION=ver                Run on specified RS version
+		RS_VERSIONS"ver..."           Run on specified RS versions
 		NOP=1                         Do not execute automation command
 		VERBOSE=N                     Set verbosity level (N=1,2)
 		QUICK=1                       Only test one RS version
@@ -93,12 +95,16 @@ run_test() {
 	fi
 }
 
-rc=0
-if [[ $QUICK == 1 ]]; then
-	RS_VERSIONS=$(cat $HERE/RS_VERSIONS | head -1)
-else
-	RS_VERSIONS=$(cat $HERE/RS_VERSIONS)
+[[ -n $RS_VERSION ]] && RS_VERSIONS="$RS_VERSION"
+if [[ -z $RS_VERSIONS ]]; then
+	if [[ $QUICK == 1 ]]; then
+		RS_VERSIONS=$(cat $HERE/RS_VERSIONS | head -1)
+	else
+		RS_VERSIONS=$(cat $HERE/RS_VERSIONS)
+	fi
 fi
+
+rc=0
 for RS_VERSION in $RS_VERSIONS; do
 	run_test $RS_VERSION
 	[[ $? != 0 && $rc == 0 ]] && rc=$?
