@@ -1,5 +1,12 @@
 name: "tsbs-scale100_lastpoint"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: lastpoint
+  tsbs query detail: The last reading for each host
+  sample query: "TS.MGET" "SELECTED_LABELS" "hostname" "fieldname" "FILTER" "measurement=cpu" "hostname!="
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
@@ -18,4 +25,4 @@ clientconfig:
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
     - workers: 64
-    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_lastpoint_10000.dat"
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_lastpoint_100000.dat"
