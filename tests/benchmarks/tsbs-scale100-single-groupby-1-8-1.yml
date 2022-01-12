@@ -1,5 +1,12 @@
 name: "tsbs-scale100_single-groupby-1-8-1"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: single-groupby-1-8-1
+  tsbs query detail: Simple aggregrate (MAX) on one metric for 8 hosts, every 5 mins for 1 hour
+  sample query: "TS.MRANGE" "1451787921535" "1451791521535" "AGGREGATION" "MAX" "60000" "FILTER" "measurement=cpu" "fieldname=usage_user" "hostname=(host_53,host_24,host_50,host_65,host_54,host_32,host_99,host_20)" "GROUPBY" "hostname" "REDUCE" "max"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
@@ -18,4 +25,5 @@ clientconfig:
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
     - workers: 64
-    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_single-groupby-1-8-1_10000.dat"
+    - print-interval: 25000
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_single-groupby-1-8-1_100000.dat"

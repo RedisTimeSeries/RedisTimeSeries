@@ -1,5 +1,12 @@
 name: "tsbs-scale100_cpu-max-all-1"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: cpu-max-all-1
+  tsbs query detail: Aggregate across all CPU metrics per hour over 1 hour for a single host
+  sample query: "TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "AGGREGATION" "MAX" "3600000" "FILTER" "measurement=cpu" "hostname=host_7"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
@@ -18,4 +25,5 @@ clientconfig:
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
     - workers: 64
-    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_cpu-max-all-1_100000_123_2016-01-01T00:00:00Z_2016-01-04T00:00:00Z.dat"
+    - print-interval: 25000
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/queries/devops/scale100/devops-scale100-4days/queries_cpu-only_redistimeseries_100_cpu-max-all-1_100000.dat"

@@ -5,12 +5,23 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: high-cpu-all
+  tsbs query detail: All the readings (multi-metric) where one metric is above a threshold across all hosts
+  sample query:
+    1st get the series names that pass the condition
+      "TS.MRANGE" "1451692883796" "1451736083796" "FILTER_BY_VALUE" "90.0" "1000" "FILTER" "fieldname=usage_user" "measurement=cpu" "GROUPBY" "fieldname" "REDUCE" "max"
+
+    then pass the given hostnames and timestamps to a second query:
+      "TS.MRANGE" "1451631478487" "1451674678487" "FILTER_BY_TS" "1451631480000" "1451631490000" (...)
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
 
 setups:
-  - oss-cluster-05-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
@@ -21,6 +32,9 @@ dbconfig:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
   - check:
       keyspacelen: 1000
+  - module-configuration-parameters:
+      redistimeseries:
+        CHUNK_SIZE_BYTES: 128
 
 clientconfig:
   - benchmark_type: "read-only"
