@@ -11,13 +11,7 @@
 
 #include <sys/types.h>
 
-typedef struct Chunk
-{
-    timestamp_t base_timestamp;
-    Sample *samples;
-    unsigned int num_samples;
-    size_t size;
-} Chunk;
+extern __thread Chunk _tlsAuxChunk; // utility chunk
 
 typedef struct ChunkIterator
 {
@@ -29,9 +23,11 @@ typedef struct ChunkIterator
 } ChunkIterator;
 
 extern size_t tlsUncompressedChunk_size;
+bool tlsUncompressedChunk_Init(void);
+void Update_tlsUncompressedChunk_size(size_t chunkSizeBytes);
 
-Chunk_t *GetTemporaryUncompressedChunk(void);
-Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
+Chunk *GetTemporaryUncompressedChunk(void);
+Chunk_t *Uncompressed_NewChunk(size_t size, size_t alignment);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
@@ -65,9 +61,13 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
+Chunk *Uncompressed_ProcessChunk(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
+
 ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,
-                                           ChunkIterFuncs *retChunkIterClass);
+                                           ChunkIterFuncs *retChunkIterClass,
+                                           uint64_t start,
+                                           uint64_t end); __attribute__((unused))
 void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);

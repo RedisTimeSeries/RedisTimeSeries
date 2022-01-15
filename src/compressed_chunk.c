@@ -23,7 +23,7 @@
 /*********************
  *  Chunk functions  *
  *********************/
-Chunk_t *Compressed_NewChunk(size_t size) {
+Chunk_t *Compressed_NewChunk(size_t size, __attribute__((unused)) size_t alignment) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
@@ -96,9 +96,9 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     // add samples in new chunks
     size_t i = 0;
     Sample sample;
-    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, CHUNK_ITER_OP_NONE, NULL);
-    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
-    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk);
+    CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size, 0);
+    CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size, 0);
     for (; i < curNumSamples; ++i) {
         Compressed_ChunkIteratorGetNext(iter, &sample);
         ensureAddSample(newChunk1, &sample);
@@ -126,8 +126,8 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
 
     size_t newSize = oldChunk->size;
 
-    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize, 0);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk);
     timestamp_t ts = uCtx->sample.timestamp;
     int numSamples = oldChunk->count;
 
@@ -195,8 +195,8 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     CompressedChunk *oldChunk = (CompressedChunk *)chunk;
     size_t newSize = oldChunk->size; // mem size
-    CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    CompressedChunk *newChunk = Compressed_NewChunk(newSize, 0);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk);
     size_t i = 0;
     size_t deleted_count = 0;
     Sample iterSample;
@@ -216,30 +216,161 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     return deleted_count;
 }
 
-// decompress chunk
-static inline Chunk *decompressChunk(const CompressedChunk *compressedChunk) {
-    assert(compressedChunk);
-    Chunk *uncompressedChunk = GetTemporaryUncompressedChunk();
-    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
+// assumptions: there is at least one sample in samples and the first sample is greater than end
+// At the end end_ptr will point to the next sample after the end
+static inline void FindEndTSInedxReverse(Sample *samples, Sample **end_ptr, uint64_t end) {
+    if (samples->timestamp > end) { // handles the case of 1 sample in samples
+        (*end_ptr) = samples;
+        return;
+    }
+
+    // if reached here l < h
+    Sample *h = ((*end_ptr) - 1), *l = samples, *m;
+    while (l < h) {
+        m = l + (h - l)/2;
+        if (m->value > end && (m + 1)->value <= end) {
+            (*end_ptr) = m + 1;
+            return;
+        } else if (m->value < end) {
+            h = m - 1;
+        } else {
+            l = m + 1;
+        }
+    }
+
+    (*end_ptr) = m + 1;
+    return;
+}
+
+// TODO: convert to template and unify with decompressChunk when moving to RUST
+// decompress chunk reverse
+static inline Chunk *decompressChunkReverse(const CompressedChunk *compressedChunk,
+                                            uint64_t start,
+                                            uint64_t end) {
     uint64_t numSamples = compressedChunk->count;
+    Chunk *uncompressedChunk = GetTemporaryUncompressedChunk();
+    if (unlikely(numSamples == 0)) {
+        uncompressedChunk->num_samples = 0;
+        uncompressedChunk->base_timestamp = 0;
+        return uncompressedChunk;
+    }
+
+    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk);
     Sample *samples = uncompressedChunk->samples;
+    Sample *samples_ptr = samples + numSamples - 1;
+
+    size_t i = 0;
+
+    // find the first sample which is greater than start
+    Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+    while (samples_ptr->timestamp < start && i < numSamples) {
+        i++;
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+    }
+    samples_ptr--;
 
     // 4 samples per iteration
-    uint64_t i = 0;
-    const uint64_t n = numSamples / 4;
-    for (; i < n; i += 4) {
-        Compressed_ChunkIteratorGetNext(iter, samples + i);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 1);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 2);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 3);
+    const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
+    for (; i < n; i += 4, samples_ptr -= 4) {
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr - 1);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr - 2);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr - 3);
     }
 
     // left-overs
     for (; i < numSamples; i++) {
-        Compressed_ChunkIteratorGetNext(iter, samples + i);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr--);
     }
 
-    uncompressedChunk->num_samples = numSamples;
+    _tlsAuxChunk.samples = samples_ptr + 1;
+    samples_ptr = samples + numSamples;
+
+    if (_tlsAuxChunk.samples[0].timestamp > end) {
+        // Last TS is greater than end, find the end index
+        FindEndTSInedxReverse(_tlsAuxChunk.samples, &samples_ptr, end);
+    }
+
+    _tlsAuxChunk.num_samples = samples_ptr - samples;
+    _tlsAuxChunk.base_timestamp = _tlsAuxChunk.samples[0].timestamp;
+
+    Compressed_FreeChunkIterator(iter);
+
+    return &_tlsAuxChunk;
+}
+
+// assumptions: there is at least one sample in samples and the last sample is greater than end
+// At the end end_ptr will point to the next sample after the end
+static inline void FindEndTSInedx(Sample *samples, Sample **end_ptr, uint64_t end) {
+    if (samples->timestamp > end) { // handles the case of 1 sample in samples
+        (*end_ptr) = samples;
+        return;
+    }
+
+    // if reached here l < h
+    Sample *h = ((*end_ptr) - 1), *l = samples, *m;
+    while (l < h) {
+        m = l + (h - l)/2;
+        if (m->value <= end && (m + 1)->value > end) {
+            (*end_ptr) = m + 1;
+            return;
+        } else if (m->value < end) {
+            l = m + 1;
+        } else {
+            h = m - 1;
+        }
+    }
+
+    (*end_ptr) = m + 1;
+    return;
+}
+
+// decompress chunk
+static inline Chunk *decompressChunk(const CompressedChunk *compressedChunk,
+                                     uint64_t start,
+                                     uint64_t end) {
+    uint64_t numSamples = compressedChunk->count;
+    Chunk *uncompressedChunk = GetTemporaryUncompressedChunk();
+    if (unlikely(numSamples == 0)) {
+        uncompressedChunk->num_samples = 0;
+        uncompressedChunk->base_timestamp = 0;
+        return uncompressedChunk;
+    }
+
+    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk);
+    Sample *samples = uncompressedChunk->samples;
+    Sample *samples_ptr = samples;
+
+    size_t i = 0;
+
+    // find the first sample which is greater than start
+    Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+    while (samples_ptr->timestamp < start && i < numSamples) {
+        i++;
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+    }
+    samples_ptr++;
+
+    // 4 samples per iteration
+    const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
+    for (; i < n; i += 4, samples_ptr += 4) {
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr + 1);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr + 2);
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr + 3);
+    }
+
+    // left-overs
+    for (; i < numSamples; i++) {
+        Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+    }
+
+    if ((samples_ptr - 1)->timestamp > end) {
+        // Last TS is greater than end, find the end index
+        FindEndTSInedx(samples, &samples_ptr, end);
+    }
+
+    uncompressedChunk->num_samples = samples_ptr - samples;
     uncompressedChunk->base_timestamp = uncompressedChunk->samples[0].timestamp;
 
     Compressed_FreeChunkIterator(iter);
@@ -272,28 +403,32 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) 
     iterator = (ChunkIter_t *)iter;
 }
 
-ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk,
-                                         int options,
-                                         ChunkIterFuncs *retChunkIterClass) {
+ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk) {
     const CompressedChunk *compressedChunk = chunk;
-
-    // for reverse iterator of compressed chunks
-    if (options & CHUNK_ITER_OP_REVERSE) {
-        int uncompressed_options = CHUNK_ITER_OP_REVERSE | CHUNK_ITER_OP_FREE_CHUNK;
-        Chunk *uncompressedChunk = decompressChunk(compressedChunk);
-        return Uncompressed_NewChunkIterator(
-            uncompressedChunk, uncompressed_options, retChunkIterClass);
-    }
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
     Compressed_ResetChunkIterator(iter, compressedChunk);
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);
-    }
     return (ChunkIter_t *)iter;
 }
 
 void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
     free(iter);
+}
+
+Chunk *Compressed_ProcessChunk(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse) {
+    if (unlikely(!chunk)) {
+        return NULL;
+    }
+    const CompressedChunk *compressedChunk = chunk;
+    Chunk *uncompressedChunk;
+    if (unlikely(reverse)) {
+        uncompressedChunk = decompressChunkReverse(compressedChunk, start, end);
+    } else {
+        uncompressedChunk = decompressChunk(compressedChunk, start, end);
+    }
+    if (unlikely(uncompressedChunk->num_samples == 0)) {
+        return NULL;
+    }
+    return uncompressedChunk;
 }
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);

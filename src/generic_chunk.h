@@ -25,15 +25,20 @@ typedef struct Sample
     double value;
 } Sample;
 
+
+typedef struct Chunk
+{
+    timestamp_t base_timestamp;
+    Sample *samples;
+    unsigned int num_samples;
+    size_t size;
+} Chunk;
+
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
 #define CHUNK_ITER_OP_NONE 0
 #define CHUNK_ITER_OP_REVERSE 1
-// This is supported *only* by uncompressed chunk, this is used when we reverse read a compressed
-// chunk by uncompressing it into a *un*compressed chunk and returning a reverse iterator on that
-// "temporary" uncompressed chunk.
-#define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
 typedef enum CHUNK_TYPES_T
 {
@@ -57,7 +62,7 @@ typedef struct ChunkIterFuncs
 
 typedef struct ChunkFuncs
 {
-    Chunk_t *(*NewChunk)(size_t sampleCount);
+    Chunk_t *(*NewChunk)(size_t sampleCount, size_t alignment);
     void (*FreeChunk)(Chunk_t *chunk);
     Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
@@ -66,9 +71,7 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    ChunkIter_t *(*NewChunkIterator)(const Chunk_t *chunk,
-                                     int options,
-                                     ChunkIterFuncs *retChunkIterClass);
+    Chunk *(*ProcessChunk)(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);

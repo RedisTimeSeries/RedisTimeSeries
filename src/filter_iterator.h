@@ -21,7 +21,7 @@ SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
                                                FilterByValueArgs byValue,
                                                FilterByTSArgs ByTsArgs);
 
-ChunkResult SeriesFilterIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample);
+Chunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base);
 
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator);
 
@@ -44,7 +44,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse);
-ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *currentSample);
+Chunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
 #endif // FILTER_ITERATOR_H

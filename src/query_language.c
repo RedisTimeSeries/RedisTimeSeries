@@ -99,11 +99,7 @@ int ParseChunkSize(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        // mul by 2 to be on the safe side
-        size_t neededChunkSize = (*chunkSizeBytes) * SPLIT_FACTOR * 2;
-        if (unlikely(neededChunkSize > tlsUncompressedChunk_size)) {
-            tlsUncompressedChunk_size = TSGlobalConfig.chunkSizeBytes * SPLIT_FACTOR * 2;
-        }
+        Update_tlsUncompressedChunk_size(*chunkSizeBytes);
     }
 
     return TSDB_OK;

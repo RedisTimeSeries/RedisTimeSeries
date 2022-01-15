@@ -129,12 +129,19 @@ class testGlobalConfigTests():
         with self.env.getConnection() as r:
             r.execute_command('TS.CREATE', 'tester', chunk_type, 'DUPLICATE_POLICY', 'Last', 'RETENTION', '86400000')
             r.execute_command('TS.CREATE', 'tester_agg', chunk_type, 'DUPLICATE_POLICY', 'Last')
-            r.execute_command('TS.CREATERULE', 'tester', 'tester_agg', 'AGGREGATION', 'sum', '10000')
+            r.execute_command('TS.CREATERULE', 'tester', 'tester_agg', 'AGGREGATION', 'sum', '10')
 
-            r.execute_command('TS.ADD', 'tester', 1602166828000, 1)
-            r.execute_command('TS.ADD', 'tester', 1602151165000, 1)
+            #r.execute_command('TS.ADD', 'tester', 1602166828000, 1)
+            #r.execute_command('TS.ADD', 'tester', 1602151165000, 1)
 
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10000')[:1] == \
+            r.execute_command('TS.ADD', 'tester', 23, 1)
+            r.execute_command('TS.ADD', 'tester', 11, 1)
+            
+            res = r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10')
+            print(str(res))
+            res = r.execute_command('TS.RANGE', 'tester_agg', '-', '+')
+            print(str(res))
+            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'AGGREGATION', 'sum', '10')[:1] == \
                    r.execute_command('TS.RANGE', 'tester_agg', '-', '+')
 
             r.execute_command('DEL', 'tester')

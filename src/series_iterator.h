@@ -6,6 +6,7 @@
 #include "abstract_iterator.h"
 #include "query_language.h"
 #include "tsdb.h"
+#include "chunk.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H
 #define REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H
@@ -14,10 +15,8 @@ typedef struct SeriesIterator
 {
     AbstractIterator base;
     Series *series;
-    RedisModuleDictIter *dictIter;
+    RedisModuleDictIter *dictIter; // iterator over chunks
     Chunk_t *currentChunk;
-    ChunkIter_t *chunkIterator;
-    ChunkIterFuncs chunkIteratorFuncs;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
     bool reverse;
@@ -29,7 +28,7 @@ struct AbstractIterator *SeriesIterator_New(Series *series,
                                             timestamp_t end_ts,
                                             bool rev);
 
-ChunkResult SeriesIteratorGetNext(AbstractIterator *iterator, Sample *currentSample);
+Chunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
 
 void SeriesIteratorClose(AbstractIterator *iterator);
 

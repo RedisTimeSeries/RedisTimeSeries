@@ -17,7 +17,7 @@ MU_TEST(test_Uncompressed_NewChunk) {
     srand((unsigned int)time(NULL));
     size_t max_chunk_size = 8192;
     for (size_t chunk_size = 8; chunk_size < max_chunk_size; chunk_size += 64) {
-        Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+        Chunk *chunk = Uncompressed_NewChunk(chunk_size, 0);
         mu_assert(chunk != NULL, "create uncompressed chunk");
         mu_assert_short_eq(0, chunk->num_samples);
         Uncompressed_FreeChunk(chunk);
@@ -27,7 +27,7 @@ MU_TEST(test_Uncompressed_NewChunk) {
 MU_TEST(test_Uncompressed_Uncompressed_AddSample) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size, 0);
     mu_assert(chunk != NULL, "create uncompressed chunk");
     mu_assert_short_eq(0, chunk->num_samples);
     ChunkResult rv = CR_OK;
@@ -53,7 +53,7 @@ MU_TEST(test_Uncompressed_Uncompressed_AddSample) {
 MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size, 0);
     mu_assert(chunk != NULL, "create uncompressed chunk");
     mu_assert_short_eq(0, chunk->num_samples);
     ChunkResult rv = CR_OK;
@@ -93,7 +93,7 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
 MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size, 0);
     mu_assert(chunk != NULL, "create uncompressed chunk");
     mu_assert_short_eq(0, chunk->num_samples);
     ChunkResult rv = CR_OK;

@@ -6,23 +6,43 @@
 #include "chunk.h"
 
 #include "libmr_integration.h"
+#include "system_props.h"
 
 #include "rmutil/alloc.h"
 #include <pthread.h>
+#include <math.h>
+#include <stdlib.h>
 
-static pthread_key_t _tlsUncompressedChunk; // Thread local storage uncompressed chunk.
+pthread_key_t _tlsUncompressedChunk; // Thread local storage uncompressed chunk.
 size_t tlsUncompressedChunk_size = 0;
+__thread Chunk _tlsAuxChunk; // utility chunk
 
-Chunk_t *GetTemporaryUncompressedChunk(void) {
+bool tlsUncompressedChunk_Init(void) {
+	int res = pthread_key_create(&_tlsUncompressedChunk, NULL);
+
+	return (res == 0);
+}
+
+// mul by 4 cause the uncompressed chunk size is at most 4 time of the compressed
+void Update_tlsUncompressedChunk_size(size_t chunkSizeBytes) {
+    size_t chunkSizeUpperLimit = chunkSizeBytes * ceil(SPLIT_FACTOR) * 4 * sizeof(Sample);
+    if (unlikely(chunkSizeUpperLimit > tlsUncompressedChunk_size)) {
+        tlsUncompressedChunk_size = chunkSizeUpperLimit;
+    }
+}
+
+Chunk *GetTemporaryUncompressedChunk(void) {
     Chunk *chunk = pthread_getspecific(_tlsUncompressedChunk);
     if (unlikely(!chunk)) {
         // Set a new thread-local QueryCtx if one has not been created.
-        chunk = (Chunk *)Uncompressed_NewChunk(tlsUncompressedChunk_size);
+        printf("BBBBBBBB=%zu\n", getCPUCacheLineSize());
+        chunk = (Chunk *)Uncompressed_NewChunk(tlsUncompressedChunk_size, getCPUCacheLineSize());
         pthread_setspecific(_tlsUncompressedChunk, chunk);
     } else {
         if (unlikely(chunk->size < tlsUncompressedChunk_size)) {
+            free(chunk->samples); // realloc is prohibited for aligned allocations
             chunk->size = tlsUncompressedChunk_size;
-            chunk->samples = realloc(chunk->samples, chunk->size);
+            posix_memalign((void **)&chunk->samples, getCPUCacheLineSize(), chunk->size);
         }
         chunk->base_timestamp = 0;
         chunk->num_samples = 0;
@@ -30,12 +50,22 @@ Chunk_t *GetTemporaryUncompressedChunk(void) {
     return chunk;
 }
 
-Chunk_t *Uncompressed_NewChunk(size_t size) {
+extern RedisModuleCtx *rts_staticCtx;
+
+Chunk_t *Uncompressed_NewChunk(size_t size, size_t alignment) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
     newChunk->size = size;
-    newChunk->samples = (Sample *)malloc(size);
+    if (likely(!alignment)) {
+        newChunk->samples = (Sample *)malloc(size);
+    } else {
+        int res = posix_memalign((void **)&newChunk->samples, alignment, size);
+        if(unlikely(res)) {
+            printf("AAAAAAAAAAA\n");
+            RedisModule_Log(rts_staticCtx, "warning", "%s", "Failed to posix_memalign new chunk");
+        }
+    }
 #ifdef DEBUG
     memset(newChunk->samples, 0, size);
 #endif
@@ -61,7 +91,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
+    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE, 0);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
         Uncompressed_AddSample(newChunk, sample);
@@ -220,9 +250,56 @@ void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk
     }
 }
 
+// TODO: can be optimized further using binary search
+Chunk *Uncompressed_ProcessChunk(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse) {
+    const Chunk *_chunk = chunk;
+    if (unlikely(!_chunk || _chunk->num_samples == 0)) {
+        return NULL;
+    }
+    size_t si = _chunk->num_samples, ei = _chunk->num_samples - 1, i = 0;
+
+    // find start index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp >= start) {
+            si = i;
+            break;
+        }
+    }
+
+    if (si == _chunk->num_samples) { // all TS are smaller than start
+        return NULL;
+    }
+
+    // find end index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp > end) {
+            ei = i - 1;
+            break;
+        }
+    }
+
+    Chunk *retChunk = GetTemporaryUncompressedChunk();
+    retChunk->num_samples = ei - si + 1;
+    if (retChunk->num_samples == 0) {
+        return NULL;
+    }
+
+    if (unlikely(reverse)) {
+        for (i = 0; i < retChunk->num_samples; ++i) {
+            retChunk->samples[i] = _chunk->samples[ei - i];
+        }
+    } else {
+        memcpy(retChunk->samples, _chunk->samples + si, retChunk->num_samples * sizeof(Sample));
+    }
+    retChunk->base_timestamp = _chunk->samples[0].timestamp;
+    return retChunk;
+}
+
 ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,
-                                           ChunkIterFuncs *retChunkIterClass) {
+                                           ChunkIterFuncs *retChunkIterClass,
+                                           uint64_t start,
+                                           uint64_t end) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->options = options;
     if (retChunkIterClass != NULL) {
@@ -256,9 +333,6 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
 
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
-        Uncompressed_FreeChunk(iter->chunk);
-    }
     free(iter);
 }
 
