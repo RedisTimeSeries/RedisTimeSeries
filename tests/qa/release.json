@@ -7,6 +7,7 @@
     "sut_environments": [],
     "tools_environment": {},
     "modules_version": "{{MODULE_VERSION}}",
+    "global_spot_instances": "ondemand",
     "test_names_modules": [
         "{{RS_MODULE}}"
     ],
