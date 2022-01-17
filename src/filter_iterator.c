@@ -81,25 +81,19 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->aggregationTimeDelta = aggregationTimeDelta;
     iter->aggregationContext = iter->aggregation->createContext();
     iter->aggregationLastTimestamp = 0;
-
-    iter->aggregationIsFirstSample = true;
-    iter->aggregationIsFinalized = false;
+    iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->initilized = false;
 
     return iter;
 }
 
-static bool finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
-    bool hasSample = false;
+static inline void finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
     double value;
-    if (self->aggregation->finalize(self->aggregationContext, &value) == TSDB_OK) {
-        currentSample->timestamp = self->aggregationLastTimestamp;
-        currentSample->value = value;
-        hasSample = TRUE;
-        self->aggregation->resetContext(self->aggregationContext);
-    }
-    return hasSample;
+    self->aggregation->finalize(self->aggregationContext, &value);
+    currentSample->timestamp = self->aggregationLastTimestamp;
+    currentSample->value = value;
+    self->aggregation->resetContext(self->aggregationContext);
 }
 
 // process C's modulo result to translate from a negative modulo to a positive
@@ -114,14 +108,29 @@ static timestamp_t calc_ts_bucket(timestamp_t ts,
 
 Chunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
+    Chunk *aux_chunk;
+    AggregationClass *aggregation = self->aggregation;
+    void *aggregationContext = self->aggregationContext;
 
     AbstractIterator *input = iter->input;
     Chunk *chunk = input->GetNext(input);
+    double value;
+    if (!chunk || chunk->num_samples == 0) {
+        if (self->hasUnFinalizedContext) {
+            goto _finalize;
+        } else {
+            return NULL;
+        }
+    }
+
+    self->hasUnFinalizedContext = true;
+
     size_t n_samples;
+    Sample sample;
 
     u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
     bool is_reserved = self->reverse;
-    if (chunk && !self->initilized) {
+    if (!self->initilized) {
         timestamp_t init_ts = chunk->samples[0].timestamp;
         self->aggregationLastTimestamp =
             calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
@@ -129,25 +138,25 @@ Chunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     }
 
     size_t agg_n_samples = 0;
-    AggregationClass *aggregation = self->aggregation;
     void (*appendValue)(void *, double) = aggregation->appendValue;
-    void *aggregationContext = self->aggregationContext;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     while (chunk) {
         n_samples = chunk->num_samples;
         for (size_t i = 0; i < n_samples; ++i) {
-            Sample sample = chunk->samples[i];
+            sample = chunk->samples[i]; // store sample cause we aggregate in place
+            // (1) aggregationTimeDelta > 0,
+            // (2) self->aggregationLastTimestamp > chunk->samples[0].timestamp -
+            // aggregationTimeDelta (3) self->aggregationLastTimestamp = chunk->samples[0].timestamp
+            // - mod where 0 <= mod from (1)+(2) contextScope > chunk->samples[0].timestamp from (3)
+            // chunk->samples[0].timestamp >= self->aggregationLastTimestamp so the following
+            // condition should always be false on the first iteration
             if ((is_reserved == FALSE && sample.timestamp >= contextScope) ||
                 (is_reserved == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
-                // update the last timestamp before because its relevant for first sample and others
-                if (self->aggregationIsFirstSample == FALSE) {
-                    finalizeBucket(&chunk->samples[agg_n_samples++], self);
-                }
+                finalizeBucket(&chunk->samples[agg_n_samples++], self);
                 self->aggregationLastTimestamp = calc_ts_bucket(
                     sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                 contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
             }
-            self->aggregationIsFirstSample = FALSE;
 
             appendValue(aggregationContext, sample.value);
         }
@@ -160,20 +169,15 @@ Chunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         chunk = input->GetNext(input);
     }
 
-    if (self->aggregationIsFinalized || self->aggregationIsFirstSample) {
-        return NULL;
-    } else {
-        double value;
-        Chunk *aux_chunk = GetTemporaryUncompressedChunk();
-        if (aggregation->finalize(aggregationContext, &value) == TSDB_OK) {
-            aux_chunk->samples[0].timestamp = self->aggregationLastTimestamp;
-            aux_chunk->samples[0].value = value;
-        }
-        self->aggregationIsFinalized = TRUE;
-        aux_chunk->num_samples = 1;
-        aux_chunk->base_timestamp = aux_chunk->samples[0].timestamp;
-        return aux_chunk;
-    }
+_finalize:
+    self->hasUnFinalizedContext = false;
+    aux_chunk = GetTemporaryUncompressedChunk();
+    aggregation->finalize(aggregationContext, &value);
+    aux_chunk->samples[0].timestamp = self->aggregationLastTimestamp;
+    aux_chunk->samples[0].value = value;
+    aux_chunk->num_samples = 1;
+    aux_chunk->base_timestamp = aux_chunk->samples[0].timestamp;
+    return aux_chunk;
 }
 
 void AggregationIterator_Close(struct AbstractIterator *iterator) {

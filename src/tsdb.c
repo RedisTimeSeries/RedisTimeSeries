@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
+#include <assert.h> // assert
 #include "rmutil/alloc.h"
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
@@ -999,14 +1000,18 @@ int SeriesCalcRange(Series *series,
     AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
     void *context = aggObject->createContext();
     bool _is_empty = true;
-    Chunk *chunk;
-
-    while ((chunk = SeriesIteratorGetNextChunk(iterator))) {
+    Chunk *chunk = SeriesIteratorGetNextChunk(iterator);
+    if (chunk && chunk->num_samples > 0) {
         _is_empty = false;
+    }
+
+    while (chunk) {
         for (size_t i = 0; i < chunk->num_samples; ++i) {
             aggObject->appendValue(context, chunk->samples[i].value);
         }
+        chunk = SeriesIteratorGetNextChunk(iterator);
     }
+
     if (is_empty) {
         *is_empty = _is_empty;
     }
@@ -1016,7 +1021,9 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
     } else {
-        aggObject->finalize(context, val);
+        if (!_is_empty) {
+            aggObject->finalize(context, val);
+        }
         aggObject->freeContext(context);
     }
     return TSDB_OK;

@@ -19,7 +19,7 @@ typedef struct AggregationClass
     void (*resetContext)(void *context);
     void (*writeContext)(void *context, RedisModuleIO *io);
     int (*readContext)(void *context, RedisModuleIO *io, int encver);
-    int (*finalize)(void *context, double *value);
+    void (*finalize)(void *context, double *value);
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);

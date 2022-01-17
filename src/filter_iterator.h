@@ -33,8 +33,7 @@ typedef struct AggregationIterator
     timestamp_t timestampAlignment;
     void *aggregationContext;
     timestamp_t aggregationLastTimestamp;
-    bool aggregationIsFirstSample;
-    bool aggregationIsFinalized;
+    bool hasUnFinalizedContext;
     bool reverse;
     bool initilized;
 } AggregationIterator;
