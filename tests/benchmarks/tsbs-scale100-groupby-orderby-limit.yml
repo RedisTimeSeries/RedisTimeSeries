@@ -1,5 +1,12 @@
 name: "tsbs-scale100_groupby-orderby-limit"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: groupby-orderby-limit
+  tsbs query detail: The last 5 aggregate readings (across time) before a randomly chosen endpoint
+  sample query: "TS.MREVRANGE" "-" "1451828519919" "COUNT" "5" "AGGREGATION" "MAX" "60000" "FILTER" "measurement=cpu" "fieldname=usage_user"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

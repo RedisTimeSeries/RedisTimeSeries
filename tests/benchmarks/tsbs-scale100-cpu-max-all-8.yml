@@ -1,5 +1,12 @@
 name: "tsbs-scale100_cpu-max-all-8"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: cpu-max-all-8
+  tsbs query detail: Aggregate across all CPU metrics per hour over 1 hour for eight hosts
+  sample query: "TS.MRANGE" "1451619133515" "1451647933515" "AGGREGATION" "MAX" "3600000" "FILTER" "measurement=cpu" "hostname=(host_99,host_84,host_23,host_20,host_30,host_47,host_43,host_4)" "GROUPBY" "fieldname" "REDUCE" "max"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5

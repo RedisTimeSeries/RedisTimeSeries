@@ -5,12 +5,18 @@ metadata:
     test_type: query
     includes_targets: "true"
 
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: groupby-orderby-limit
+  tsbs query detail: The last 5 aggregate readings (across time) before a randomly chosen endpoint
+  sample query: "TS.MREVRANGE" "-" "1451828519919" "COUNT" "5" "AGGREGATION" "MAX" "60000" "FILTER" "measurement=cpu" "fieldname=usage_user"
+  '
+
 remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
 
 setups:
-  - oss-cluster-05-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
@@ -21,6 +27,9 @@ dbconfig:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
   - check:
       keyspacelen: 1000
+  - module-configuration-parameters:
+      redistimeseries:
+        CHUNK_SIZE_BYTES: 128
 
 clientconfig:
   - benchmark_type: "read-only"

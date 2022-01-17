@@ -14,6 +14,7 @@
 
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
+extern bool isTrimming;
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
@@ -429,6 +430,7 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
         }
     }
 }
+
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count) {
@@ -462,6 +464,23 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     if (result == NULL) {
         return RedisModule_CreateDict(ctx);
     }
+
+    if (unlikely(isTrimming)) {
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+        RedisModuleString *currentKey;
+        int slot, firstSlot, lastSlot;
+        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
+        while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+            slot = RedisModule_ShardingGetKeySlot(currentKey);
+            if (firstSlot > slot || lastSlot < slot) {
+                RedisModule_DictDel(result, currentKey, NULL);
+                RedisModule_DictIteratorReseek(iter, ">", currentKey);
+            }
+            RedisModule_FreeString(NULL, currentKey);
+        }
+        RedisModule_DictIteratorStop(iter);
+    }
+
     return result;
 }
 
