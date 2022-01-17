@@ -147,6 +147,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else {
         TSGlobalConfig.numThreads = 3;
     }
+    TSGlobalConfig.numThreads = 6;
     RedisModule_Log(ctx,
                     "notice",
                     "Setting default series ENCODING to: %s",

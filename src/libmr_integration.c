@@ -249,7 +249,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     RedisModuleDict *result =
         QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
@@ -288,7 +288,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_list;
 }
@@ -306,7 +306,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     RedisModuleDict *result =
         QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
@@ -355,7 +355,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_list;
 }
@@ -368,7 +368,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     RedisModuleDict *result =
         QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
@@ -385,7 +385,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    // RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_list;
 }
