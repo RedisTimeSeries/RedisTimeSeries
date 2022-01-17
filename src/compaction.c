@@ -23,7 +23,6 @@ typedef struct MaxMinContext
 {
     double minValue;
     double maxValue;
-    char isResetted;
 } MaxMinContext;
 
 typedef struct SingleValueContext
@@ -59,13 +58,9 @@ void SingleValueReset(void *contextPtr) {
     context->isResetted = TRUE;
 }
 
-int SingleValueFinalize(void *contextPtr, double *val) {
+void SingleValueFinalize(void *contextPtr, double *val) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
-    if (context->isResetted == true) {
-        return TSDB_ERROR;
-    }
     *val = context->value;
-    return TSDB_OK;
 }
 
 void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
@@ -132,16 +127,13 @@ void AvgAddValue(void *contextPtr, double value) {
     }
 }
 
-int AvgFinalize(void *contextPtr, double *value) {
+void AvgFinalize(void *contextPtr, double *value) {
     AvgContext *context = (AvgContext *)contextPtr;
-    if (context->cnt == 0)
-        return TSDB_ERROR;
     if (unlikely(context->isOverflow)) {
         *value = context->val;
     } else {
         *value = context->val / context->cnt;
     }
-    return TSDB_OK;
 }
 
 void AvgReset(void *contextPtr) {
@@ -196,47 +188,32 @@ static inline double variance(double sum, double sum_2, double count) {
     return (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
 }
 
-int VarPopulationFinalize(void *contextPtr, double *value) {
+void VarPopulationFinalize(void *contextPtr, double *value) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    if (count == 0) {
-        return TSDB_ERROR;
-    }
     *value = variance(context->sum, context->sum_2, count);
-    return TSDB_OK;
 }
 
-int VarSamplesFinalize(void *contextPtr, double *value) {
+void VarSamplesFinalize(void *contextPtr, double *value) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    if (count == 0) {
-        return TSDB_ERROR;
-    } else if (count == 1) {
+    if (count == 1) {
         *value = 0;
     } else {
         *value = variance(context->sum, context->sum_2, count) * count / (count - 1);
     }
-    return TSDB_OK;
 }
 
-int StdPopulationFinalize(void *contextPtr, double *value) {
+void StdPopulationFinalize(void *contextPtr, double *value) {
     double val;
-    int rv = VarPopulationFinalize(contextPtr, &val);
-    if (rv != TSDB_OK) {
-        return rv;
-    }
+    VarPopulationFinalize(contextPtr, &val);
     *value = sqrt(val);
-    return TSDB_OK;
 }
 
-int StdSamplesFinalize(void *contextPtr, double *value) {
+void StdSamplesFinalize(void *contextPtr, double *value) {
     double val;
-    int rv = VarSamplesFinalize(contextPtr, &val);
-    if (rv != TSDB_OK) {
-        return rv;
-    }
+    VarSamplesFinalize(contextPtr, &val);
     *value = sqrt(val);
-    return TSDB_OK;
 }
 
 void StdReset(void *contextPtr) {
@@ -309,103 +286,66 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
 
 void *MaxMinCreateContext() {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
-    context->minValue = 0;
-    context->maxValue = 0;
-    context->isResetted = TRUE;
+    context->minValue = DBL_MAX;
+    context->maxValue = ((double)-1.0) * DBL_MAX;
     return context;
 }
 
 void MaxMinAppendValue(void *contextPtr, double value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (context->isResetted) {
-        context->isResetted = FALSE;
-        context->maxValue = value;
-        context->minValue = value;
-    } else {
-        if (value > context->maxValue) {
-            context->maxValue = value;
-        }
-        if (value < context->minValue) {
-            context->minValue = value;
-        }
-    }
+    context->maxValue = fmax(context->maxValue, value);
+    context->minValue = fmin(context->minValue, value);
 }
 
-int MaxFinalize(void *contextPtr, double *value) {
+void MaxFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (context->isResetted == TRUE) {
-        return TSDB_ERROR;
-    }
     *value = context->maxValue;
-    return TSDB_OK;
 }
 
-int MinFinalize(void *contextPtr, double *value) {
+void MinFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (context->isResetted == TRUE) {
-        return TSDB_ERROR;
-    }
     *value = context->minValue;
-    return TSDB_OK;
 }
 
-int RangeFinalize(void *contextPtr, double *value) {
+void RangeFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (context->isResetted == TRUE) {
-        return TSDB_ERROR;
-    }
     *value = context->maxValue - context->minValue;
-    return TSDB_OK;
 }
 
 void MaxMinReset(void *contextPtr) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    context->maxValue = 0;
-    context->minValue = 0;
-    context->isResetted = TRUE;
+    context->minValue = DBL_MAX;
+    context->maxValue = ((double)-1.0) * DBL_MAX;
 }
 
 void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     RedisModule_SaveDouble(io, context->maxValue);
     RedisModule_SaveDouble(io, context->minValue);
-    RedisModule_SaveStringBuffer(io, &context->isResetted, 1);
 }
 
 int MaxMinReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    char *sb = NULL;
-    size_t len = 1;
     context->maxValue = LoadDouble_IOError(io, goto err);
     context->minValue = LoadDouble_IOError(io, goto err);
-    sb = LoadStringBuffer_IOError(io, &len, goto err);
-    context->isResetted = sb[0];
-    RedisModule_Free(sb);
     return TSDB_OK;
-
 err:
-    if (sb) {
-        RedisModule_Free(sb);
-    }
     return TSDB_ERROR;
 }
 
 void SumAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value += value;
-    context->isResetted = FALSE;
 }
 
 void CountAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value++;
-    context->isResetted = FALSE;
 }
 
-int CountFinalize(void *contextPtr, double *val) {
+void CountFinalize(void *contextPtr, double *val) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     *val = context->value;
-    return TSDB_OK;
 }
 
 void FirstAppendValue(void *contextPtr, double value) {
@@ -419,7 +359,6 @@ void FirstAppendValue(void *contextPtr, double value) {
 void LastAppendValue(void *contextPtr, double value) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = value;
-    context->isResetted = FALSE;
 }
 
 static AggregationClass aggMax = { .createContext = MaxMinCreateContext,
