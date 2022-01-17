@@ -404,6 +404,9 @@ void CountAppendValue(void *contextPtr, double value) {
 
 int CountFinalize(void *contextPtr, double *val) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
+    if (context->isResetted) {
+        return TSDB_ERROR;
+    }
     *val = context->value;
     return TSDB_OK;
 }
