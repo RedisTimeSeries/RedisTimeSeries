@@ -145,7 +145,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
     } else {
-        TSGlobalConfig.numThreads = 3;
+        TSGlobalConfig.numThreads = 1;
     }
     RedisModule_Log(ctx,
                     "notice",
