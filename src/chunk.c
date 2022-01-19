@@ -11,10 +11,10 @@
 #include "rmutil/alloc.h"
 #include <math.h>
 
-static __thread Chunk _tlsUncompressedChunk; // Thread local storage uncompressed chunk.
-static __thread bool _tlsUncompressedChunk_is_init = false;
-static size_t tlsUncompressedChunk_size = 0;
-__thread Chunk _tlsAuxChunk; // utility chunk
+static __thread DomainChunk _tlsDomainChunk; // Thread local storage uncompressed chunk.
+static __thread bool _tlsDomainChunk_is_init = false;
+static size_t tlsDomainChunk_size = 0;
+__thread DomainChunk _tlsAuxDomainChunk; // utility chunk
 
 extern RedisModuleCtx *rts_staticCtx;
 
@@ -37,31 +37,30 @@ static inline void Uncompressed_ChunkInit(Chunk *chunk, size_t size, size_t alig
 }
 
 // mul by 4 cause the uncompressed chunk size is at most 4 time of the compressed
-void Update_tlsUncompressedChunk_size(size_t chunkSizeBytes) {
+void Update_tlsDomainChunk_size(size_t chunkSizeBytes) {
     size_t chunkSizeUpperLimit = chunkSizeBytes * ceil(SPLIT_FACTOR) * 4 * sizeof(Sample);
-    if (unlikely(chunkSizeUpperLimit > tlsUncompressedChunk_size)) {
-        tlsUncompressedChunk_size = chunkSizeUpperLimit;
+    if (unlikely(chunkSizeUpperLimit > tlsDomainChunk_size)) {
+        tlsDomainChunk_size = chunkSizeUpperLimit;
     }
 }
 
-Chunk *GetTemporaryUncompressedChunk(void) {
-    if (unlikely(!_tlsUncompressedChunk_is_init)) {
+DomainChunk *GetTemporaryDomainChunk(void) {
+    if (unlikely(!_tlsDomainChunk_is_init)) {
         // Set a new thread-local QueryCtx if one has not been created.
-        Uncompressed_ChunkInit(
-            &_tlsUncompressedChunk, tlsUncompressedChunk_size, getCPUCacheLineSize());
-        _tlsUncompressedChunk_is_init = true;
+        Uncompressed_ChunkInit(&_tlsDomainChunk.chunk, tlsDomainChunk_size, getCPUCacheLineSize());
+        _tlsDomainChunk_is_init = true;
     } else {
-        if (unlikely(_tlsUncompressedChunk.size < tlsUncompressedChunk_size)) {
-            free(_tlsUncompressedChunk.samples); // realloc is prohibited for aligned allocations
-            _tlsUncompressedChunk.size = tlsUncompressedChunk_size;
-            posix_memalign((void **)&(_tlsUncompressedChunk.samples),
+        if (unlikely(_tlsDomainChunk.chunk.size < tlsDomainChunk_size)) {
+            free(_tlsDomainChunk.chunk.samples); // realloc is prohibited for aligned allocations
+            _tlsDomainChunk.chunk.size = tlsDomainChunk_size;
+            posix_memalign((void **)&(_tlsDomainChunk.chunk.samples),
                            getCPUCacheLineSize(),
-                           _tlsUncompressedChunk.size);
+                           _tlsDomainChunk.chunk.size);
         }
-        _tlsUncompressedChunk.base_timestamp = 0;
-        _tlsUncompressedChunk.num_samples = 0;
+        _tlsDomainChunk.chunk.num_samples = 0;
     }
-    return &_tlsUncompressedChunk;
+    _tlsDomainChunk.rev = false;
+    return &_tlsDomainChunk;
 }
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
@@ -248,8 +247,38 @@ void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk
     }
 }
 
+static inline void reverseChunk(Chunk *chunk) {
+    Sample *first = chunk->samples;
+    Sample *last = &chunk->samples[chunk->num_samples - 1];
+    Sample c;
+    while (first < last) {
+        c = *first;
+        *first = *last;
+        *last = c;
+    }
+}
+
+// unused
+static inline void reverseChunk2(Chunk *chunk) {
+    const size_t ei = chunk->num_samples - 1;
+    Sample sample;
+    for (size_t i = 0; i < chunk->num_samples / 2; ++i) {
+        sample = chunk->samples[i];
+        chunk->samples[i] = chunk->samples[ei - i];
+        chunk->samples[ei - i] = sample;
+    }
+}
+
+void reverseDomainChunk(DomainChunk *domainChunk) {
+    reverseChunk(&domainChunk->chunk);
+    domainChunk->rev = true;
+}
+
 // TODO: can be optimized further using binary search
-Chunk *Uncompressed_ProcessChunk(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse) {
+DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                                       uint64_t start,
+                                       uint64_t end,
+                                       bool reverse) {
     const Chunk *_chunk = chunk;
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
                  _chunk->base_timestamp > end ||
@@ -279,20 +308,22 @@ Chunk *Uncompressed_ProcessChunk(const Chunk_t *chunk, uint64_t start, uint64_t 
         }
     }
 
-    Chunk *retChunk = GetTemporaryUncompressedChunk();
-    retChunk->num_samples = ei - si + 1;
-    if (retChunk->num_samples == 0) {
+    DomainChunk *retChunk = GetTemporaryDomainChunk();
+    retChunk->chunk.num_samples = ei - si + 1;
+    if (retChunk->chunk.num_samples == 0) {
         return NULL;
     }
 
     if (unlikely(reverse)) {
-        for (i = 0; i < retChunk->num_samples; ++i) {
-            retChunk->samples[i] = _chunk->samples[ei - i];
+        for (i = 0; i < retChunk->chunk.num_samples; ++i) {
+            retChunk->chunk.samples[i] = _chunk->samples[ei - i];
         }
+        retChunk->rev = true;
     } else {
-        memcpy(retChunk->samples, _chunk->samples + si, retChunk->num_samples * sizeof(Sample));
+        memcpy(retChunk->chunk.samples,
+               _chunk->samples + si,
+               retChunk->chunk.num_samples * sizeof(Sample));
     }
-    retChunk->base_timestamp = _chunk->samples[0].timestamp;
     return retChunk;
 }
 

@@ -15,13 +15,16 @@ typedef struct SeriesFilterIterator
     AbstractIterator base;
     FilterByValueArgs byValueArgs;
     FilterByTSArgs ByTsArgs;
+    size_t tsFilterIndex; // the index in the TS filter array in ByTsArgs
+    bool reverse;
 } SeriesFilterIterator;
 
 SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
                                                FilterByValueArgs byValue,
-                                               FilterByTSArgs ByTsArgs);
+                                               FilterByTSArgs ByTsArgs,
+                                               bool rev);
 
-Chunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base);
+DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base);
 
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator);
 
@@ -43,7 +46,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse);
-Chunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
+DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
 #endif // FILTER_ITERATOR_H

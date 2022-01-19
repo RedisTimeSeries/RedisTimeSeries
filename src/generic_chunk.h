@@ -33,6 +33,12 @@ typedef struct Chunk
     size_t size;
 } Chunk;
 
+typedef struct DomainChunk
+{
+    Chunk chunk;
+    bool rev;
+} DomainChunk;
+
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
@@ -70,7 +76,7 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    Chunk *(*ProcessChunk)(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
+    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);
@@ -90,7 +96,5 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len);
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
 ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);
-
-int timestamp_binary_search(const uint64_t *array, int size, uint64_t key);
 
 #endif // GENERIC__CHUNK_H

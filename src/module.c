@@ -1224,7 +1224,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     // mul by 4 cause the uncompressed chunk size is at most 4 time of the compressed
-    Update_tlsUncompressedChunk_size(TSGlobalConfig.chunkSizeBytes);
+    Update_tlsDomainChunk_size(TSGlobalConfig.chunkSizeBytes);
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
