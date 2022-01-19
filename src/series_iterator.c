@@ -13,7 +13,8 @@
 AbstractIterator *SeriesIterator_New(Series *series,
                                      timestamp_t start_ts,
                                      timestamp_t end_ts,
-                                     bool rev) {
+                                     bool rev,
+                                     bool rev_chunk) {
     SeriesIterator *iter = malloc(sizeof(SeriesIterator));
     iter->base.Close = SeriesIteratorClose;
     iter->base.GetNext = SeriesIteratorGetNextChunk;
@@ -24,6 +25,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->minTimestamp = start_ts;
     iter->maxTimestamp = end_ts;
     iter->reverse = rev;
+    iter->reverse_chunk = rev_chunk;
     iter->isFirstIteration = true;
 
     timestamp_t rax_key;
@@ -55,10 +57,10 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
 
 // Fills sample from chunk. If all samples were extracted from the chunk, we
 // move to the next chunk.
-Chunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
+DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
-    Chunk *ret = iter->series->funcs->ProcessChunk(
-        iter->currentChunk, iter->minTimestamp, iter->maxTimestamp, iter->reverse);
+    DomainChunk *ret = iter->series->funcs->ProcessChunk(
+        iter->currentChunk, iter->minTimestamp, iter->maxTimestamp, iter->reverse_chunk);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;
     }

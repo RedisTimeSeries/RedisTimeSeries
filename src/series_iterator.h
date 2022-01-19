@@ -20,6 +20,7 @@ typedef struct SeriesIterator
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
     bool reverse;
+    bool reverse_chunk;
     bool isFirstIteration;
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
@@ -27,9 +28,10 @@ typedef struct SeriesIterator
 struct AbstractIterator *SeriesIterator_New(Series *series,
                                             timestamp_t start_ts,
                                             timestamp_t end_ts,
-                                            bool rev);
+                                            bool rev,
+                                            bool rev_chunk);
 
-Chunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
+DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
 
 void SeriesIteratorClose(AbstractIterator *iterator);
 

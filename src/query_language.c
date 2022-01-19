@@ -99,7 +99,7 @@ int ParseChunkSize(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        Update_tlsUncompressedChunk_size(*chunkSizeBytes);
+        Update_tlsDomainChunk_size(*chunkSizeBytes);
     }
 
     return TSDB_OK;
@@ -381,6 +381,11 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                 break;
             }
         }
+        if (index == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: FILTER_BY_TS one or more arguments are missing");
+            return TSDB_ERROR;
+        }
+
         // We sort the provided timestamps in order to improve query time filtering
         qsort(args->values, index, sizeof(uint64_t), comp_uint64);
 

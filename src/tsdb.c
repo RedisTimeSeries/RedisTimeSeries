@@ -491,10 +491,13 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
-    Chunk *chunk;
-    while ((chunk = iterator->GetNext(iterator))) {
-        for (int i = 0; i < chunk->num_samples; ++i) {
-            SeriesUpsertSample(dest, chunk->samples[i].timestamp, chunk->samples[i].value, dp);
+    DomainChunk *domainChunk;
+    while ((domainChunk = iterator->GetNext(iterator))) {
+        for (int i = 0; i < domainChunk->chunk.num_samples; ++i) {
+            SeriesUpsertSample(dest,
+                               domainChunk->chunk.samples[i].timestamp,
+                               domainChunk->chunk.samples[i].value,
+                               dp);
         }
     }
     iterator->Close(iterator);
@@ -997,19 +1000,19 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     AggregationClass *aggObject = rule->aggClass;
 
-    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
+    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false, false);
     void *context = aggObject->createContext();
     bool _is_empty = true;
-    Chunk *chunk = SeriesIteratorGetNextChunk(iterator);
-    if (chunk && chunk->num_samples > 0) {
+    DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
+    if (domainChunk && domainChunk->chunk.num_samples > 0) {
         _is_empty = false;
     }
 
-    while (chunk) {
-        for (size_t i = 0; i < chunk->num_samples; ++i) {
-            aggObject->appendValue(context, chunk->samples[i].value);
+    while (domainChunk) {
+        for (size_t i = 0; i < domainChunk->chunk.num_samples; ++i) {
+            aggObject->appendValue(context, domainChunk->chunk.samples[i].value);
         }
-        chunk = SeriesIteratorGetNextChunk(iterator);
+        domainChunk = SeriesIteratorGetNextChunk(iterator);
     }
 
     if (is_empty) {
@@ -1049,20 +1052,20 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false);
+    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false, false);
 
-    Chunk *chunk = SeriesIteratorGetNextChunk(iterator);
+    DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
 
     bool found = false;
-    while (chunk && !found) {
-        for (i = 0; i < chunk->num_samples; ++i, ++count) {
-            if (chunk->samples[i].timestamp >= minTimestamp) {
-                sample = chunk->samples[i];
+    while (domainChunk && !found) {
+        for (i = 0; i < domainChunk->chunk.num_samples; ++i, ++count) {
+            if (domainChunk->chunk.samples[i].timestamp >= minTimestamp) {
+                sample = domainChunk->chunk.samples[i];
                 found = true;
                 break;
             }
         }
-        chunk = SeriesIteratorGetNextChunk(iterator);
+        domainChunk = SeriesIteratorGetNextChunk(iterator);
     }
 
     if (skipped != NULL) {
@@ -1081,12 +1084,15 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
                 ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
                 : args->startTimestamp;
     }
-    AbstractIterator *chain =
-        SeriesIterator_New(series, startTimestamp, args->endTimestamp, reverse);
+
+    // When there is a TS filter the filter itself will reverse if needed
+    bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
+    AbstractIterator *chain = SeriesIterator_New(
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
 
     if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
         chain = (AbstractIterator *)SeriesFilterIterator_New(
-            chain, args->filterByValueArgs, args->filterByTSArgs);
+            chain, args->filterByValueArgs, args->filterByTSArgs, reverse);
     }
 
     timestamp_t timestampAlignment;
