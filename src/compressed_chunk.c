@@ -337,18 +337,18 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
     if (lastTS > end) { // the range not include the whole chunk
         // 4 samples per iteration
         const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
-        for (; i < n; i += 4, samples_ptr += 4) {
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 1);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 2);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 3);
-            if (unlikely((samples_ptr + 3)->timestamp > end)) {
-                if ((samples_ptr + 2)->timestamp <= end) {
-                    samples_ptr = samples_ptr + 3;
+        for (; i < n; i += 4) {
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            if (unlikely((samples_ptr - 1)->timestamp > end)) {
+                if ((samples_ptr - 2)->timestamp <= end) {
+                    samples_ptr = samples_ptr - 1;
                 } else if ((samples_ptr + 1)->timestamp <= end) {
-                    samples_ptr = samples_ptr + 2;
+                    samples_ptr = samples_ptr - 2;
                 } else if (samples_ptr->timestamp <= end) {
-                    samples_ptr = samples_ptr + 1;
+                    samples_ptr = samples_ptr - 3;
                 } // else samples_ptr = samples_ptr
                 goto _done;
             }
@@ -363,16 +363,6 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
             samples_ptr++;
         }
     } else {
-        // 4 samples per iteration
-        const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
-        for (; i < n; i += 4, samples_ptr += 4) {
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 1);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 2);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr + 3);
-        }
-
-        // left-overs
         for (; i < numSamples; i++) {
             Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
         }
