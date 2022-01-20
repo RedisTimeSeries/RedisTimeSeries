@@ -410,6 +410,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
+
+        if(RedisModule_SetExpire(key, 3720000) == REDISMODULE_ERR) {
+            return;
+        }
+
         RedisModule_CloseKey(key);
     }
     rule->aggClass->appendValue(rule->aggContext, value);
@@ -495,9 +500,11 @@ static inline int add(RedisModuleCtx *ctx,
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
+        /* we don't want to reset expiry on non-agg ts since it's handle by prom adapter
         if(RedisModule_SetExpire(key, 3720000) == REDISMODULE_ERR) {
             return TSDB_ERROR;
         }
+        */
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
