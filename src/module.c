@@ -59,7 +59,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithArray(ctx, 13 * 2);
+        RedisModule_ReplyWithArray(ctx, 14 * 2);
     } else {
         RedisModule_ReplyWithArray(ctx, 12 * 2);
     }
@@ -119,6 +119,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
         Chunk_t *chunk = NULL;
         int chunkCount = 0;
+        RedisModule_ReplyWithSimpleString(ctx, "keySelfName");
+        RedisModule_ReplyWithString(ctx, series->keyName);
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
@@ -1113,6 +1115,7 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         return REDISMODULE_OK;
     }
 
+    // Will be called in replicaof or on load rdb on load time
     if (strcasecmp(event, "loaded") == 0) {
         IndexMetricFromName(ctx, key);
         return REDISMODULE_OK;
