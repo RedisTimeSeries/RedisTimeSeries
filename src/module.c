@@ -495,6 +495,9 @@ static inline int add(RedisModuleCtx *ctx,
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
+        if(RedisModule_SetExpire(key, 3720000) == REDISMODULE_ERR) {
+            return TSDB_ERROR;
+        }
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
@@ -573,6 +576,11 @@ int CreateTsKey(RedisModuleCtx *ctx,
     }
 
     RedisModule_RetainString(ctx, keyName);
+
+    if(RedisModule_SetExpire(*key, 3720000) == REDISMODULE_ERR) {
+        return TSDB_ERROR;
+    }
+
     *series = NewSeries(keyName, cCtx);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
