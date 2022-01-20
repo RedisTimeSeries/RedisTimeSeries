@@ -411,9 +411,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
 
-        if(RedisModule_SetExpire(key, 3720000) == REDISMODULE_ERR) {
-            return;
-        }
+        RedisModule_SetExpire(key, 3720000); 
 
         RedisModule_CloseKey(key);
     }
@@ -584,16 +582,14 @@ int CreateTsKey(RedisModuleCtx *ctx,
 
     RedisModule_RetainString(ctx, keyName);
 
-    if(RedisModule_SetExpire(*key, 3720000) == REDISMODULE_ERR) {
-        return TSDB_ERROR;
-    }
-
     *series = NewSeries(keyName, cCtx);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
 
     IndexMetric(keyName, (*series)->labels, (*series)->labelsCount);
+
+    RedisModule_SetExpire(*key, 3720000);
 
     return TSDB_OK;
 }
