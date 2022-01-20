@@ -8,6 +8,8 @@
 
 #include "consts.h"
 #include "generic_chunk.h"
+struct FilterByValueArgs;
+typedef struct FilterByValueArgs FilterByValueArgs;
 
 #include <sys/types.h>
 
@@ -63,7 +65,8 @@ void reverseDomainChunk(DomainChunk *domainChunk);
 DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
-                                       bool reverse);
+                                       bool reverse,
+                                       FilterByValueArgs *byValueArgs);
 
 ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,

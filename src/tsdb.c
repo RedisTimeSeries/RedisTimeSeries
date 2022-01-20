@@ -994,7 +994,7 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     AggregationClass *aggObject = rule->aggClass;
 
-    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false, false);
+    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false, false, NULL);
     void *context = aggObject->createContext();
     bool _is_empty = true;
     DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
@@ -1046,7 +1046,8 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false, false);
+    AbstractIterator *iterator =
+        SeriesIterator_New(series, 0, series->lastTimestamp, false, false, NULL);
 
     DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
 
@@ -1069,6 +1070,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     return sample.timestamp;
 }
 
+extern ChunkFuncs comprChunk;
 AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reverse) {
     // In case a retention is set shouldn't return chunks older than the retention
     timestamp_t startTimestamp = args->startTimestamp;
@@ -1081,12 +1083,23 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
 
     // When there is a TS filter the filter itself will reverse if needed
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
-    AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
+    bool is_compressed = &comprChunk == series->funcs;
+    bool is_filter_on_si = is_compressed && !reverse && args->filterByValueArgs.hasValue;
+    AbstractIterator *chain =
+        SeriesIterator_New(series,
+                           startTimestamp,
+                           args->endTimestamp,
+                           reverse,
+                           should_reverse_chunk,
+                           is_filter_on_si ? (RangeArgs *)&args->filterByValueArgs : NULL);
 
-    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
+    if (args->filterByTSArgs.hasValue || (!is_filter_on_si && args->filterByValueArgs.hasValue)) {
+        FilterByValueArgs filterByValueArgs = args->filterByValueArgs;
+        if (is_filter_on_si) {
+            filterByValueArgs.hasValue = false;
+        }
         chain = (AbstractIterator *)SeriesFilterIterator_New(
-            chain, args->filterByValueArgs, args->filterByTSArgs, reverse);
+            chain, filterByValueArgs, args->filterByTSArgs, reverse);
     }
 
     timestamp_t timestampAlignment;

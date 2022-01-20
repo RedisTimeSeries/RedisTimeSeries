@@ -10,6 +10,8 @@
 #include "LibMR/src/mr.h"
 #include "consts.h"
 #include "load_io_error_macros.h"
+struct FilterByValueArgs;
+typedef struct FilterByValueArgs FilterByValueArgs;
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -76,7 +78,11 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
+    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk,
+                                 uint64_t start,
+                                 uint64_t end,
+                                 bool reverse,
+                                 FilterByValueArgs *byValueArgs);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);

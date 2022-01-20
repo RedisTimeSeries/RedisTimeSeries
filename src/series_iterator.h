@@ -23,13 +23,15 @@ typedef struct SeriesIterator
     bool reverse_chunk;
     bool isFirstIteration;
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
+    FilterByValueArgs *byValueArgs;
 } SeriesIterator;
 
 struct AbstractIterator *SeriesIterator_New(Series *series,
                                             timestamp_t start_ts,
                                             timestamp_t end_ts,
                                             bool rev,
-                                            bool rev_chunk);
+                                            bool rev_chunk,
+                                            FilterByValueArgs *byValueArgs);
 
 DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
 

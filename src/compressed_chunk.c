@@ -9,6 +9,7 @@
 #include "LibMR/src/mr.h"
 #include "chunk.h"
 #include "generic_chunk.h"
+#include "query_language.h"
 
 #include <assert.h> // assert
 #include <limits.h>
@@ -303,12 +304,22 @@ _done:
     return &_tlsAuxDomainChunk;
 }
 
+static inline bool check_sample_value(Sample *sample, FilterByValueArgs *byValueArgs) {
+    if (sample->value >= byValueArgs->min && sample->value <= byValueArgs->max) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // decompress chunk
 static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChunk,
                                            uint64_t start,
-                                           uint64_t end) {
+                                           uint64_t end,
+                                           FilterByValueArgs *byValueArgs) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
+    bool filter_by_val = byValueArgs != NULL;
     DomainChunk *domainChunk = GetTemporaryDomainChunk();
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
@@ -325,31 +336,50 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
     Compressed_ChunkIteratorGetNext(iter, samples_ptr);
     while (samples_ptr->timestamp < start && i < numSamples) {
         Compressed_ChunkIteratorGetNext(iter, samples_ptr);
-        i++;
+        ++i;
+    }
+
+    // find the first sample which satisfy the filter
+    if (filter_by_val) {
+        while ((!check_sample_value(samples_ptr, byValueArgs)) && i < numSamples) {
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            ++i;
+        }
     }
 
     if (unlikely(samples_ptr->timestamp > end)) {
         // occurs when the are TS smaller than start and larger than end but nothing in the range.
         return domainChunk;
     }
-    samples_ptr++;
+
+    if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+        ++samples_ptr;
+    }
 
     if (lastTS > end) { // the range not include the whole chunk
         // 4 samples per iteration
         const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
         for (; i < n; i += 4) {
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
             if (unlikely((samples_ptr - 1)->timestamp > end)) {
-                if ((samples_ptr - 2)->timestamp <= end) {
-                    samples_ptr = samples_ptr - 1;
-                } else if ((samples_ptr + 1)->timestamp <= end) {
-                    samples_ptr = samples_ptr - 2;
-                } else if (samples_ptr->timestamp <= end) {
-                    samples_ptr = samples_ptr - 3;
-                } // else samples_ptr = samples_ptr
+                while ((samples_ptr - 1)->timestamp > end) {
+                    samples_ptr--;
+                }
                 goto _done;
             }
         }
@@ -360,11 +390,16 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
             if ((samples_ptr)->timestamp > end) {
                 goto _done;
             }
-            samples_ptr++;
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
         }
     } else {
         for (; i < numSamples; i++) {
-            Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
+            Compressed_ChunkIteratorGetNext(iter, samples_ptr);
+            if (!filter_by_val || check_sample_value(samples_ptr, byValueArgs)) {
+                ++samples_ptr;
+            }
         }
     }
 
@@ -415,7 +450,8 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
 DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
                                      uint64_t start,
                                      uint64_t end,
-                                     bool reverse) {
+                                     bool reverse,
+                                     FilterByValueArgs *byValueArgs) {
     if (unlikely(!chunk)) {
         return NULL;
     }
@@ -424,7 +460,7 @@ DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
     if (unlikely(reverse)) {
         domainChunk = decompressChunkReverse(compressedChunk, start, end);
     } else {
-        domainChunk = decompressChunk(compressedChunk, start, end);
+        domainChunk = decompressChunk(compressedChunk, start, end, byValueArgs);
     }
     if (unlikely(domainChunk->chunk.num_samples == 0)) {
         return NULL;

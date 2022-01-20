@@ -14,7 +14,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
                                      timestamp_t start_ts,
                                      timestamp_t end_ts,
                                      bool rev,
-                                     bool rev_chunk) {
+                                     bool rev_chunk,
+                                     FilterByValueArgs *byValueArgs) {
     SeriesIterator *iter = malloc(sizeof(SeriesIterator));
     iter->base.Close = SeriesIteratorClose;
     iter->base.GetNext = SeriesIteratorGetNextChunk;
@@ -27,6 +28,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->reverse = rev;
     iter->reverse_chunk = rev_chunk;
     iter->isFirstIteration = true;
+    iter->byValueArgs = byValueArgs;
 
     timestamp_t rax_key;
 
@@ -59,8 +61,11 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
 // move to the next chunk.
 DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
-    DomainChunk *ret = iter->series->funcs->ProcessChunk(
-        iter->currentChunk, iter->minTimestamp, iter->maxTimestamp, iter->reverse_chunk);
+    DomainChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
+                                                         iter->minTimestamp,
+                                                         iter->maxTimestamp,
+                                                         iter->reverse_chunk,
+                                                         iter->byValueArgs);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;
     }

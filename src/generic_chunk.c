@@ -36,7 +36,7 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
     .Reset = Uncompressed_ResetChunkIterator,
 };
 
-static ChunkFuncs comprChunk = {
+ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,

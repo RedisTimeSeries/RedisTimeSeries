@@ -27,7 +27,8 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
                                      uint64_t start,
                                      uint64_t end,
-                                     bool reverse);
+                                     bool reverse,
+                                     FilterByValueArgs *byValueArgs);
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk);

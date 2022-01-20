@@ -278,7 +278,8 @@ void reverseDomainChunk(DomainChunk *domainChunk) {
 DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
-                                       bool reverse) {
+                                       bool reverse,
+                                       FilterByValueArgs *byValueArgs) {
     const Chunk *_chunk = chunk;
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
                  _chunk->base_timestamp > end ||
