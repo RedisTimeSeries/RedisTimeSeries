@@ -155,8 +155,8 @@ def list_to_dict(aList):
     return {aList[i][0]: aList[i][1] for i in range(len(aList))}
 
 
-def _get_ts_info(redis, key):
-    return TSInfo(redis.execute_command('TS.INFO', key))
+def _get_ts_info(redis, key, *args):
+    return TSInfo(redis.execute_command('TS.INFO', key, *args))
 
 
 class TSInfo(object):
@@ -172,6 +172,7 @@ class TSInfo(object):
     chunk_size_bytes = None
     chunk_type = None
     chunks = None
+    key_SelfName = None
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
@@ -187,6 +188,7 @@ class TSInfo(object):
         if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
         if b'chunkType' in response: self.chunk_type = response[b'chunkType']
         if b'Chunks' in response: self.chunks = response[b'Chunks']
+        if b'keySelfName' in response: self.key_SelfName = response[b'keySelfName']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
@@ -200,4 +202,5 @@ class TSInfo(object):
                self.last_time_stamp == other.last_time_stamp and \
                self.first_time_stamp == other.first_time_stamp and \
                self.chunk_size_bytes == other.chunk_size_bytes and \
-               self.chunks == other.chunks
+               self.chunks == other.chunks and \
+               self.key_SelfName == other.key_SelfName
