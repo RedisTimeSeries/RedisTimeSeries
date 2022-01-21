@@ -909,6 +909,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 
         CreateCtx cCtx = {
             .retentionTime = rule->retentionSizeMillisec,
+            .expiryTime = TSGlobalConfig.expiryPolicy,
             .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
             .labelsCount = compactedRuleLabelCount,
             .labels = compactedLabels,
