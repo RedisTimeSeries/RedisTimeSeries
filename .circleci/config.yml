@@ -638,13 +638,11 @@ workflows:
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
-              ##@platform: [focal, bionic, xenial, centos7, centos8, bullseye]
-              platform: [xenial]
+              platform: [focal, bionic, xenial, centos7, centos8, bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
