@@ -16,6 +16,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [redis-py][redis-py-url] ([examples][redis-py-example-url])| Python | MIT | [RedisLabs][redis-py-author] | [![redis-py-stars]][redis-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
+| [node-redis][node-redis-url] | JavaScript | MIT | [Redis][node-redis-author] | [![node-redis-stars]][node-redis-url] |
 | [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] |
 | [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] |
 | [redis-modules-sdk][redis-modules-sdk-url] | Typescript | BSD-3-Clause | [Dani Tseitlin][redis-modules-sdk-author] |[![redis-modules-sdk-stars]][redis-modules-sdk-url]| 
@@ -52,6 +53,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [phpRedisTimeSeries-url]: https://github.com/palicao/phpRedisTimeSeries
 [phpRedisTimeSeries-author]: https://github.com/palicao
 [phpRedisTimeSeries-stars]: https://img.shields.io/github/stars/palicao/phpRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[node-redis-url]: https://github.com/redis/node-redis
+[node-redis-author]: https://redis.com
+[node-redis-stars]: https://img.shields.io/github/stars/redis/node-redis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redis-time-series-url]: https://github.com/averias/redis-time-series
 [redis-time-series-author]: https://github.com/averias
