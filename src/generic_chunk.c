@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include "rmutil/alloc.h"
 
-static ChunkFuncs regChunk = {
+static const ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
@@ -36,7 +36,7 @@ ChunkIterFuncs uncompressedChunkIteratorClass = {
     .Reset = Uncompressed_ResetChunkIterator,
 };
 
-static ChunkFuncs comprChunk = {
+static const ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,
@@ -94,7 +94,7 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
     }
 }
 
-ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
+const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     switch (chunkType) {
         case CHUNK_REGULAR:
             return &regChunk;
