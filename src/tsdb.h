@@ -39,7 +39,7 @@ typedef struct Series
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
-    ChunkFuncs *funcs;
+    const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
 } Series;

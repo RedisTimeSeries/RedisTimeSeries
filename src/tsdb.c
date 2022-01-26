@@ -577,7 +577,7 @@ int SeriesUpsertSample(Series *series,
                        DuplicatePolicy dp_override) {
     bool latestChunk = true;
     void *chunkKey = NULL;
-    ChunkFuncs *funcs = series->funcs;
+    const ChunkFuncs *funcs = series->funcs;
     Chunk_t *chunk = series->lastChunk;
     timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 

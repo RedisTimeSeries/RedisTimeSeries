@@ -94,7 +94,7 @@ const char *DuplicatePolicyToString(DuplicatePolicy policy);
 int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr);
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len);
 
-ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
+const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
 ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);
 
 #endif // GENERIC__CHUNK_H
