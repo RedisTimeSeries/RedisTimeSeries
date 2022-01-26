@@ -343,13 +343,9 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
             Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
             Compressed_ChunkIteratorGetNext(iter, samples_ptr++);
             if (unlikely((samples_ptr - 1)->timestamp > end)) {
-                if ((samples_ptr - 2)->timestamp <= end) {
-                    samples_ptr = samples_ptr - 1;
-                } else if ((samples_ptr + 1)->timestamp <= end) {
-                    samples_ptr = samples_ptr - 2;
-                } else if (samples_ptr->timestamp <= end) {
-                    samples_ptr = samples_ptr - 3;
-                } // else samples_ptr = samples_ptr
+                while ((samples_ptr - 1)->timestamp > end) {
+                    samples_ptr--;
+                }
                 goto _done;
             }
         }
