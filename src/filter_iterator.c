@@ -9,12 +9,8 @@
 #include "series_iterator.h"
 #include <assert.h>
 
-static bool check_sample_value(Sample sample, FilterByValueArgs byValueArgs) {
-    if (!byValueArgs.hasValue) {
-        return true;
-    }
-
-    if (sample.value >= byValueArgs.min && sample.value <= byValueArgs.max) {
+static inline bool check_sample_value(Sample sample, FilterByValueArgs *byValueArgs) {
+    if (sample.value >= byValueArgs->min && sample.value <= byValueArgs->max) {
         return true;
     } else {
         return false;
@@ -119,7 +115,7 @@ DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base) {
             assert(self->reverse == domainChunk->rev);
             chunk = &domainChunk->chunk;
             for (i = 0; i < chunk->num_samples; ++i) {
-                if (check_sample_value(chunk->samples[i], self->byValueArgs)) {
+                if (check_sample_value(chunk->samples[i], &self->byValueArgs)) {
                     chunk->samples[count++] = chunk->samples[i];
                 }
             }
