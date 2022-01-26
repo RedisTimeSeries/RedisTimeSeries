@@ -197,6 +197,12 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         return;
     }
 
+    // update self keyname cause on rdb_load we don't have the
+    // key name and the key might be loaded with different name
+    RedisModule_FreeString(NULL, series->keyName); // free old name allocated on rdb_load()
+    RedisModule_RetainString(NULL, keyname);
+    series->keyName = keyname;
+
     if (IsKeyIndexed(keyname)) {
         // Key is still in the index cause only free series being called, remove it for safety
         RemoveIndexedMetric(keyname);

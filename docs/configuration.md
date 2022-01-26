@@ -84,6 +84,19 @@ Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 $ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_TYPE COMPRESSED
 ```
 
+### NUM_THREADS
+The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
+
+#### Default
+
+`3`
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
+```
+
 ### DUPLICATE_POLICY
 
 Policy that will define handling of duplicate samples.
