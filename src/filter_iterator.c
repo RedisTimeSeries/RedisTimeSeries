@@ -7,7 +7,9 @@
 
 #include "abstract_iterator.h"
 #include "series_iterator.h"
+#include "utils/arr.h"
 #include <assert.h>
+#include <math.h> /* ceil */
 
 static inline bool check_sample_value(Sample sample, FilterByValueArgs *byValueArgs) {
     if (sample.value >= byValueArgs->min && sample.value <= byValueArgs->max) {
@@ -17,63 +19,99 @@ static inline bool check_sample_value(Sample sample, FilterByValueArgs *byValueA
     }
 }
 
-void filterSamples(Sample *samples,
-                   size_t si,
-                   size_t ei,
-                   const timestamp_t *tsVals,
-                   size_t values_si,
-                   size_t values_ei,
-                   const FilterByValueArgs *byValArgs,
-                   size_t *count) {
-    if (si == ei) {
-        for (size_t i = values_si; i <= values_ei; ++i) {
-            const Sample *sample = &samples[si];
-            if (sample->timestamp == tsVals[i]) {
-                if (!byValArgs ||
-                    (sample->value >= byValArgs->min && sample->value <= byValArgs->max)) {
-                    samples[(*count)++] = *sample;
+typedef struct dfs_stack_val
+{
+    size_t si;
+    size_t ei;
+    size_t values_si;
+    size_t values_ei;
+} dfs_stack_val;
+
+#define dfs_stack_val_init(_val, _si, _ei, _values_si, _values_ei)                                 \
+    do {                                                                                           \
+        (_val).si = (_si);                                                                         \
+        (_val).ei = (_ei);                                                                         \
+        (_val).values_si = (_values_si);                                                           \
+        (_val).values_ei = (_values_ei);                                                           \
+    } while (0)
+
+static void filterSamples(Sample *samples,
+                          size_t samples_size,
+                          const timestamp_t *tsVals,
+                          size_t values_si,
+                          size_t values_ei,
+                          const FilterByValueArgs *byValArgs,
+                          size_t *count) {
+    dfs_stack_val *dfs_stack = array_new(dfs_stack_val, ceil(log(sizeof(samples_size))));
+    dfs_stack_val first_frame = {
+        .si = 0, .ei = samples_size - 1, .values_si = values_si, .values_ei = values_ei
+    };
+    dfs_stack_val left_frame, right_frame;
+    array_append(dfs_stack, first_frame);
+    dfs_stack_val cur_frame;
+    bool found_left, found_right;
+    while (array_len(dfs_stack) > 0) {
+        cur_frame = array_pop(dfs_stack);
+        if (cur_frame.si == cur_frame.ei) {
+            for (size_t i = cur_frame.values_si; i <= cur_frame.values_ei; ++i) {
+                const Sample *sample = &samples[cur_frame.si];
+                if (sample->timestamp == tsVals[i]) {
+                    if (!byValArgs ||
+                        (sample->value >= byValArgs->min && sample->value <= byValArgs->max)) {
+                        samples[(*count)++] = *sample;
+                    }
+                    break;
                 }
-                return;
             }
+            continue;
         }
-        return;
-    }
 
-    const size_t mid = (si + ei) / 2;
+        const size_t mid = (cur_frame.si + cur_frame.ei) / 2;
 
-    // find tsVals that fit into left bucket
-    bool found = false;
-    size_t _siVals = values_si, _eiVals;
+        // find tsVals that fit into left bucket
+        found_left = false;
+        size_t _siVals = cur_frame.values_si, _eiVals;
 
-    while (_siVals <= values_ei && tsVals[_siVals] < samples[si].timestamp) {
-        ++_siVals;
-    }
+        while (_siVals <= cur_frame.values_ei &&
+               tsVals[_siVals] < samples[cur_frame.si].timestamp) {
+            ++_siVals;
+        }
 
-    _eiVals = _siVals;
-    while (_eiVals <= values_ei && tsVals[_eiVals] <= samples[mid].timestamp) {
-        found = true;
-        ++_eiVals;
-    }
+        _eiVals = _siVals;
+        while (_eiVals <= cur_frame.values_ei && tsVals[_eiVals] <= samples[mid].timestamp) {
+            found_left = true;
+            ++_eiVals;
+        }
 
-    if (found) {
-        filterSamples(samples, si, mid, tsVals, _siVals, _eiVals - 1, byValArgs, count);
-    }
+        if (found_left) {
+            dfs_stack_val_init(left_frame, cur_frame.si, mid, _siVals, _eiVals - 1);
+        }
 
-    // find tsVals that fit into right bucket
-    found = false;
-    _siVals = _eiVals;
-    while (_siVals <= values_ei && tsVals[_siVals] < samples[mid + 1].timestamp) {
-        ++_siVals;
-    }
+        // find tsVals that fit into right bucket
+        found_right = false;
+        _siVals = _eiVals;
+        while (_siVals <= cur_frame.values_ei && tsVals[_siVals] < samples[mid + 1].timestamp) {
+            ++_siVals;
+        }
 
-    _eiVals = _siVals;
-    while (_eiVals <= values_ei && tsVals[_eiVals] <= samples[ei].timestamp) {
-        found = true;
-        ++_eiVals;
-    }
+        _eiVals = _siVals;
+        while (_eiVals <= cur_frame.values_ei &&
+               tsVals[_eiVals] <= samples[cur_frame.ei].timestamp) {
+            found_right = true;
+            ++_eiVals;
+        }
 
-    if (found) {
-        filterSamples(samples, mid + 1, ei, tsVals, _siVals, _eiVals - 1, byValArgs, count);
+        if (found_right) {
+            dfs_stack_val_init(right_frame, mid + 1, cur_frame.ei, _siVals, _eiVals - 1);
+        }
+
+        if (found_right) {
+            array_append(dfs_stack, right_frame);
+        }
+
+        if (found_left) {
+            array_append(dfs_stack, left_frame);
+        }
     }
 
     return;
@@ -93,8 +131,7 @@ DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base) {
             assert(!domainChunk->rev); // the impl assumes that the chunk isn't reversed
             chunk = &domainChunk->chunk;
             filterSamples(chunk->samples,
-                          0,
-                          chunk->num_samples - 1,
+                          chunk->num_samples,
                           self->ByTsArgs.values,
                           self->tsFilterIndex,
                           self->ByTsArgs.count - 1,
