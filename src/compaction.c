@@ -291,10 +291,28 @@ void *MaxMinCreateContext() {
     return context;
 }
 
+void MaxAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    if (value > context->maxValue) {
+        context->maxValue = value;
+    }
+}
+
+void MinAppendValue(void *contextPtr, double value) {
+    MaxMinContext *context = (MaxMinContext *)contextPtr;
+    if (value < context->minValue) {
+        context->minValue = value;
+    }
+}
+
 void MaxMinAppendValue(void *contextPtr, double value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    context->maxValue = fmax(context->maxValue, value);
-    context->minValue = fmin(context->minValue, value);
+    if (value > context->maxValue) {
+        context->maxValue = value;
+    }
+    if (value < context->minValue) {
+        context->minValue = value;
+    }
 }
 
 void MaxFinalize(void *contextPtr, double *value) {
@@ -362,7 +380,7 @@ void LastAppendValue(void *contextPtr, double value) {
 }
 
 static AggregationClass aggMax = { .createContext = MaxMinCreateContext,
-                                   .appendValue = MaxMinAppendValue,
+                                   .appendValue = MaxAppendValue,
                                    .freeContext = rm_free,
                                    .finalize = MaxFinalize,
                                    .writeContext = MaxMinWriteContext,
@@ -370,7 +388,7 @@ static AggregationClass aggMax = { .createContext = MaxMinCreateContext,
                                    .resetContext = MaxMinReset };
 
 static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
-                                   .appendValue = MaxMinAppendValue,
+                                   .appendValue = MinAppendValue,
                                    .freeContext = rm_free,
                                    .finalize = MinFinalize,
                                    .writeContext = MaxMinWriteContext,
