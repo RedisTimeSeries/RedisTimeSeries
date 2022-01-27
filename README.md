@@ -93,7 +93,7 @@ Binary artifacts are placed under the ```bin``` directory.
 
 In your redis-server run: `loadmodule bin/redistimeseries.so`
 
-For more information about modules, go to the [redis official documentation](https://redis.io/topics/modules-intro).
+For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
 
 ## Give it a try
 
