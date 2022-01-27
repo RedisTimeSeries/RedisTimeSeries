@@ -27,8 +27,9 @@ def testRDB():
         r.execute_command('TS.ADD', 'ts1', 110, 500.5)
         dump = r.execute_command("dump", "ts1")
         assert r.execute_command("restore", "ts2", "0", dump)
-        info1 = r.execute_command('TS.INFO', 'ts1', 'DEBUG')
-        info2 = r.execute_command('TS.INFO', 'ts2', 'DEBUG')
+        info1 = _get_ts_info(r, 'ts1', 'DEBUG')
+        info2 = _get_ts_info(r, 'ts2', 'DEBUG')
+        info1.key_SelfName = b'ts2'
         assert info1 == info2
 
 def testRDBCompatibility():
