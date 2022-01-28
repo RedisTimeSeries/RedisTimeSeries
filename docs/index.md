@@ -23,7 +23,7 @@ Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C
 
 See the [Clients page](clients.md) for the full list.
 
-## Using with other tools metrics tools
+## Using with other tools metrics tools hey
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
