@@ -25,6 +25,12 @@ typedef struct Sample
     double value;
 } Sample;
 
+typedef struct Samples
+{
+    timestamp_t *timestamps; // array of timestamps
+    double *values;          // array of values
+} Samples;
+
 typedef struct Chunk
 {
     timestamp_t base_timestamp;
@@ -35,7 +41,9 @@ typedef struct Chunk
 
 typedef struct DomainChunk
 {
-    Chunk chunk; // base_timestamp and size aren't used
+    Samples samples;
+    unsigned int num_samples;
+    size_t size;
     bool rev;
 } DomainChunk;
 
