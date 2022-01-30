@@ -42,7 +42,8 @@ static void filterSamples(Sample *samples,
                           size_t values_ei,
                           const FilterByValueArgs *byValArgs,
                           size_t *count) {
-    dfs_stack_val *dfs_stack = array_new(dfs_stack_val, ceil(log(sizeof(samples_size))));
+    dfs_stack_val *dfs_stack =
+        array_new(dfs_stack_val, ceil(log(sizeof(samples_size))) + 1); // + 1 is for one left child
     dfs_stack_val first_frame = {
         .si = 0, .ei = samples_size - 1, .values_si = values_si, .values_ei = values_ei
     };
