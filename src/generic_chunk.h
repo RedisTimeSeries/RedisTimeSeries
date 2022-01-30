@@ -35,7 +35,7 @@ typedef struct Chunk
 
 typedef struct DomainChunk
 {
-    Chunk chunk;
+    Chunk chunk; // base_timestamp and size aren't used
     bool rev;
 } DomainChunk;
 
