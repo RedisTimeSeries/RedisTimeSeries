@@ -493,11 +493,9 @@ int MultiSerieReduce(Series *dest,
     }
     DomainChunk *domainChunk;
     while ((domainChunk = iterator->GetNext(iterator))) {
-        for (int i = 0; i < domainChunk->chunk.num_samples; ++i) {
-            SeriesUpsertSample(dest,
-                               domainChunk->chunk.samples[i].timestamp,
-                               domainChunk->chunk.samples[i].value,
-                               dp);
+        for (int i = 0; i < domainChunk->num_samples; ++i) {
+            SeriesUpsertSample(
+                dest, domainChunk->samples.timestamps[i], domainChunk->samples.values[i], dp);
         }
     }
     iterator->Close(iterator);
@@ -1004,13 +1002,13 @@ int SeriesCalcRange(Series *series,
     void *context = aggObject->createContext();
     bool _is_empty = true;
     DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
-    if (domainChunk && domainChunk->chunk.num_samples > 0) {
+    if (domainChunk && domainChunk->num_samples > 0) {
         _is_empty = false;
     }
 
     while (domainChunk) {
-        for (size_t i = 0; i < domainChunk->chunk.num_samples; ++i) {
-            aggObject->appendValue(context, domainChunk->chunk.samples[i].value);
+        for (size_t i = 0; i < domainChunk->num_samples; ++i) {
+            aggObject->appendValue(context, domainChunk->samples.values[i]);
         }
         domainChunk = SeriesIteratorGetNextChunk(iterator);
     }
@@ -1058,9 +1056,10 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
 
     bool found = false;
     while (domainChunk && !found) {
-        for (i = 0; i < domainChunk->chunk.num_samples; ++i, ++count) {
-            if (domainChunk->chunk.samples[i].timestamp >= minTimestamp) {
-                sample = domainChunk->chunk.samples[i];
+        for (i = 0; i < domainChunk->num_samples; ++i, ++count) {
+            if (domainChunk->samples.timestamps[i] >= minTimestamp) {
+                sample.timestamp = domainChunk->samples.timestamps[i];
+                sample.value = domainChunk->samples.values[i];
                 found = true;
                 break;
             }
