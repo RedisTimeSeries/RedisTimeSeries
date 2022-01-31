@@ -161,7 +161,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
 
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("RETENTION", argv, argc, "l", &cCtx->retentionTime) !=
-        REDISMODULE_OK) {
+            REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse RETENTION");
         goto err_exit;
     }
@@ -173,7 +173,7 @@ static int parseCreateArgs(RedisModuleCtx *ctx,
 
     if (RMUtil_ArgIndex("CHUNK_SIZE", argv, argc) > 0 &&
         RMUtil_ParseArgsAfter("CHUNK_SIZE", argv, argc, "l", &cCtx->chunkSizeBytes) !=
-        REDISMODULE_OK) {
+            REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
         goto err_exit;
     }
