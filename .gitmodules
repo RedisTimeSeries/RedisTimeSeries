@@ -11,3 +11,6 @@
 	path = deps/LibMR
 	url = https://github.com/RedisGears/LibMR.git
 
+[submodule "deps/cpu_features"]
+	path = deps/cpu_features
+	url = git@github.com:google/cpu_features.git

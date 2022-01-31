@@ -16,6 +16,9 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
+# The CMake executable.
+CMAKE_COMMAND = /usr/local/Cellar/cmake/3.20.1/bin/cmake
+
 #----------------------------------------------------------------------------------------------  
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
@@ -123,6 +126,7 @@ LD_LIBS += \
 	  $(LIBEVENT_LIBS) \
 	  $(HIREDIS) \
 	  $(RMUTIL) \
+	  $(CPU_FEATURES) \
 	  -lc -lm -lpthread -lstdc++
 
 ifeq ($(OS),linux)
@@ -208,12 +212,15 @@ endif
 ifeq ($(wildcard $(LIBMR)),)
 MISSING_DEPS += $(LIBMR)
 endif
+ifeq ($(wildcard $(CPU_FEATURES)),)
+MISSING_DEPS += $(CPU_FEATURES)
+endif
 
 ifneq ($(MISSING_DEPS),)
 DEPS=1
 endif
 
-DEPENDENCIES=rmutil libmr hiredis libevent fast_double_parser_c dragonbox
+DEPENDENCIES=rmutil libmr hiredis libevent fast_double_parser_c dragonbox cpu_features
 
 ifneq ($(filter all deps $(DEPENDENCIES) pack,$(MAKECMDGOALS)),)
 DEPS=1
@@ -233,9 +240,9 @@ include $(MK)/rules
 
 ifeq ($(DEPS),1)
 
-.PHONY: rmutil libmr hiredis dragonbox fast_double_parser_c
+.PHONY: rmutil libmr hiredis dragonbox fast_double_parser_c cpu_features
 
-deps: $(RMUTIL) $(LIBEVENT) $(HIREDIS) $(LIBMR) $(FAST_DOUBLE_PARSER_C) $(DRAGONBOX)
+deps: $(RMUTIL) $(LIBEVENT) $(HIREDIS) $(LIBMR) $(FAST_DOUBLE_PARSER_C) $(DRAGONBOX) $(CPU_FEATURES)
 
 rmutil: $(RMUTIL)
 
@@ -273,6 +280,12 @@ $(FAST_DOUBLE_PARSER_C):
 	@echo Building $@ ...
 	$(SHOW)$(MAKE)  --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG=''
 
+$(CPU_FEATURES):
+	@echo Building $@ ...
+	@$(CMAKE_COMMAND) -S$(ROOT)/deps/cpu_features/ -Bbuild -DBUILD_TESTING=OFF
+
+cpu_features: $(CPU_FEATURES)
+
 #----------------------------------------------------------------------------------------------
 
 else
@@ -297,6 +310,7 @@ ifdef ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/cpu_features clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 endif
 
