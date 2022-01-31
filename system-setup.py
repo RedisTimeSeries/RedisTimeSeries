@@ -45,6 +45,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install_gnu_utils()
 
     def common_last(self):
+        self.run("{PYTHON} {READIES}/bin/getcmake --usr".format(PYTHON=self.python, READIES=READIES))
         if self.dist != "arch":
             self.install("lcov")
         else:
