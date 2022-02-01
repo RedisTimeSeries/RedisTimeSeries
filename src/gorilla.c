@@ -189,7 +189,7 @@ static inline binary_t int2bin(int64_t x, u_int8_t l) {
 }
 
 // Converts `bin`, a binary of length `l` bits, into an int64
-static inline int64_t bin2int(binary_t bin, u_int8_t l) {
+static int64_t bin2int(binary_t bin, u_int8_t l) {
     if (!(bin & BIT(l - 1)))
         return bin;
     // return (int64_t) (bin | ~MASK(l)); // sign extend `bin`
@@ -321,7 +321,7 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
     return CR_OK;
 }
 
-static inline ChunkResult appendFloat(CompressedChunk *chunk, double value) {
+static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     union64bits val;
     val.d = value;
     u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;

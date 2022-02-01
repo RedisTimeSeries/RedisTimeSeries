@@ -12,7 +12,7 @@ from RLTest import Defaults
 from RLTest import Env
 import shutil
 import platform
-from test_helper_classes import SAMPLE_SIZE
+from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo
 from includes import *
 
 OS = os.getenv('OS')
@@ -470,6 +470,11 @@ def runShortRead(env, data, total_len):
         else:
             # Verify new data was loaded and the backup was discarded
             # TODO: How to verify internal backup was indeed discarded
+            info = env.execute_command('TS.INFO', 'shortread_t1')
+            response = dict(zip(info[::2], info[1::2]))
+            assert 'rules' in response
+            assert response['rules'] == [['shortread_t1_dst_avg', 2, 'AVG'], ['shortread_t1_dst_sum', 2, 'SUM'], ['shortread_t1_dst_count', 2, 'COUNT'], ['shortread_t1_dst_max', 2, 'MAX'], ['shortread_t1_dst_min', 2, 'MIN']]
+
             keys = env.execute_command('TS.QUERYINDEX', 'l1=(l1_value)')
             assert len(keys) == 2
             assert not any(str.endswith("_bakup") for str in keys)

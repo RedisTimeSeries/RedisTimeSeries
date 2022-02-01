@@ -5,6 +5,7 @@ import time
 from packaging import version
 from includes import *
 from utils import Env
+from test_helper_classes import TSInfo, _get_ts_info
 
 def init(env, r, compression="COMPRESSED"):
     assert r.execute_command('TS.CREATE', 't{1}', 'ENCODING', compression, 'LABELS', 'name', 'mush', 'fname', 'ox')
@@ -134,6 +135,16 @@ def test_restore():
                                               [b't{2}', [], []],
                                               [b't{1}_agg', [], []]
                                               ]))
+
+        tsinfo = _get_ts_info(r, 't{1}', 'DEBUG')
+        assert tsinfo.rules == []
+        assert tsinfo.key_SelfName == b't{1}'
+
+        assert r.execute_command('del', 't{1}')
+        assert r.execute_command('RESTORE', 't{4}', '0', serialized_val)
+        tsinfo = TSInfo(r.execute_command('TS.INFO', 't{4}', 'DEBUG'))
+        assert tsinfo.rules == []
+        assert tsinfo.key_SelfName == b't{4}'
 
 def test_rename():
     env = Env()
