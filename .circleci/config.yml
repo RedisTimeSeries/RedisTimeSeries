@@ -249,7 +249,7 @@ commands:
           command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
 
       - run:
-          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
+          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
@@ -502,7 +502,7 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-standalone"
-  
+
   performance-ci-automation-oss-cluster:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -516,7 +516,7 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-cluster"
           timeout: 90m
-  
+
   performance-ci-automation-oss-standalone-profiler:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
