@@ -111,7 +111,7 @@ CC_FLAGS = \
 	-Wall \
 	-fPIC \
 	-pedantic \
-	-std=gnu99 \
+	-std=gnu11 \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \

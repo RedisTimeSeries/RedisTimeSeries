@@ -45,7 +45,7 @@ CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
 
 CC_FLAGS += \
 	-fPIC \
-	-std=gnu99 \
+	-std=gnu11 \
 	-MMD -MF $(@:.o=.d) \
 	-I$(SRCDIR) \
 	-I$(BINDIR) \
