@@ -307,8 +307,8 @@ TS.REVRANGE key fromTimestamp toTimestamp
 ```
 
 - key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-- toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+- fromTimestamp - Start timestamp for the range query. `-`: the minimal possible timestamp (0).
+- toTimestamp - End timestamp for range query, `+`: the maximal possible timestamp.
 
 Optional parameters:
 
@@ -383,8 +383,8 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [GROUPBY <label> REDUCE <reducer>]
 ```
 
-* fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-* toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+* fromTimestamp - Start timestamp for the range query. `-`: the minimal possible timestamp (0).
+* toTimestamp - End timestamp for range query, `+`: the maximal possible timestamp.
 * filter - [See Filtering](#filtering)
 
 Optional parameters:
