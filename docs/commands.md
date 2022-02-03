@@ -137,7 +137,7 @@ Append a new sample to the series. If the series has not been created yet with `
 TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
-* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*`: automatic timestamp based on the server's clock.
 * value - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 The following arguments are optional because they can be set by TS.CREATE:
@@ -184,7 +184,7 @@ Append new samples to a list of series.
 TS.MADD key timestamp value [key timestamp value ...]
 ```
 
-* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* timestamp - UNIX timestamp of the sample. `*`: automatic timestamp based on the server's clock.
 * value - numeric data value of the sample (double). We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 #### Examples
@@ -224,7 +224,7 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
- * TIMESTAMP - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+ * TIMESTAMP - UNIX timestamp of the sample. `*`: automatic timestamp based on the server's clock.
  * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
@@ -307,7 +307,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
 ```
 
 - key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+- fromTimestamp - Start timestamp for the range query. `-`: automatic timestamp based on the server's clock.
 - toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional parameters:
