@@ -3,7 +3,7 @@ remote:
   - type: oss-standalone
   - setup: redistimeseries-m5
 dbconfig:
-  - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/devops-scale100-4days.rdb"
+  - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/devops-scale100-4days.v1.4.rdb"
 clientconfig:
   - tool: tsbs_run_queries_redistimeseries
   - parameters:
