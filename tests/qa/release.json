@@ -7,6 +7,7 @@
     "sut_environments": [],
     "tools_environment": {},
     "modules_version": "{{MODULE_VERSION}}",
+    "global_spot_instances": "ondemand",
     "test_names_modules": [
         "{{RS_MODULE}}"
     ],
@@ -20,6 +21,16 @@
         "teardown": true,
         "name": "bionic-amd64-aws",
         "concurrency": 1
+      },
+      {
+        "teardown": true,
+        "name": "rhel7.7-x86_64-aws",
+        "concurrency": 1,
+      },
+      {
+        "teardown": true,
+        "name": "rhel8-x86_64-aws",
+        "concurrency": 1,
       }
     ]
   }
