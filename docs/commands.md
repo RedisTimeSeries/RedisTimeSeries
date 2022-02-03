@@ -14,7 +14,7 @@ TS.CREATE key [RETENTION retentionTime] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CH
 
 Optional args:
 
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
+ * RETENTION - Maximum age for samples compared to last event time, in milliseconds
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * ENCODING - Specify the series samples encoding format.
@@ -137,7 +137,7 @@ Append a new sample to the series. If the series has not been created yet with `
 TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
-* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+* timestamp - (integer) UNIX timestamp of the sample, **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
 * value - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 The following arguments are optional because they can be set by TS.CREATE:
@@ -225,7 +225,7 @@ This command can be used as a counter or gauge that automatically gets history a
 Optional args:
 
  * TIMESTAMP - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
+ * RETENTION - Maximum age for samples compared to last event time, in milliseconds
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
@@ -248,13 +248,13 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 ```
 
 * sourceKey - Key name for source time series
 * destKey - Key name for destination time series
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-* timeBucket - Time bucket for aggregation in milliseconds
+* bucketDuration - Bucket duration for aggregation, in milliseconds
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -297,13 +297,13 @@ TS.RANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS TS1 TS2 ..]
          [FILTER_BY_VALUE min max]
          [COUNT count] [ALIGN value]
-         [AGGREGATION aggregationType timeBucket]
+         [AGGREGATION aggregationType bucketDuration]
 
 TS.REVRANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS TS1 TS2 ..]
          [FILTER_BY_VALUE min max]
          [COUNT count] [ALIGN value]
-         [AGGREGATION aggregationType timeBucket]
+         [AGGREGATION aggregationType bucketDuration]
 ```
 
 - key - Key name for timeseries
@@ -326,7 +326,7 @@ Optional parameters:
 
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-  * timeBucket - Time bucket for aggregation in milliseconds
+  * bucketDuration - Bucket duration for aggregation, in milliseconds
 
 #### Complexity
 
@@ -369,7 +369,7 @@ TS.MRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label1 ..]
           [COUNT count] [ALIGN value]
-          [AGGREGATION aggregationType timeBucket]
+          [AGGREGATION aggregationType bucketDuration]
           FILTER filter..
           [GROUPBY <label> REDUCE <reducer>]
 
@@ -378,7 +378,7 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label1 ..]
           [COUNT count] [ALIGN value]
-          [AGGREGATION aggregationType timeBucket]
+          [AGGREGATION aggregationType bucketDuration]
           FILTER filter..
           [GROUPBY <label> REDUCE <reducer>]
 ```
@@ -407,7 +407,7 @@ Optional parameters:
 
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-    * timeBucket - Time bucket for aggregation in milliseconds.
+    * bucketDuration - Bucket duration for aggregation, in milliseconds.
 
 * GROUPBY - Aggregate results across different time series, grouped by the provided label name.
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
