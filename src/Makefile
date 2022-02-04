@@ -181,13 +181,17 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
-	system_props.c
+	system_props.c \
+	utils/cpu_features.c
 
+_AVX512_SOURCES = compaction/compaction_avx512f.c
+AVX512_SOURCES = $(addprefix $(SRCDIR)/,$(_AVX512_SOURCES))
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
-HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
+HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$($(SOURCES) $(AVX512_SOURCES)))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
+AVX512_OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(AVX512_SOURCES))
 
-CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
+CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(AVX512_SOURCES) $(TEST_SOURCES))
 
 include $(MK)/defs
 
@@ -316,15 +320,22 @@ endif
 
 -include $(CC_DEPS)
 
-$(BINDIR)/%.o: $(SRCDIR)/%.c
+BINDIR_OBJECTS=$(filter %.c,$(SRCDIR))
+$(info VARS="$(BINDIR_OBJECTS)")
+BINDIR_OBJECTS_MINUS_AVX512_OBJECTS=$(filter-out2,$(AVX512_OBJECTS),$(BINDIR_OBJECTS))
+$(BINDIR_OBJECTS_MINUS_AVX512_OBJECTS): $(BINDIR)/%.o: %.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
-$(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
+$(filter $(AVX512_OBJECTS),$(BINDIR_OBJECTS)): $(BINDIR)/%.o: %.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
+
+$(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS) $(AVX512_OBJECTS)
 	@echo Linking $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(AVX512_OBJECTS) $(LD_LIBS)
 ifeq ($(OS),macos)
-	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(AVX512_OBJECTS) $(LD_LIBS)
 endif
 	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
@@ -332,7 +343,7 @@ endif
 
 NO_LINT_PATTERNS=endianconv
 
-LINT_SOURCES=$(call filter-out2,$(NO_LINT_PATTERNS),$(SOURCES) $(HEADERS))
+LINT_SOURCES=$(call filter-out2,$(NO_LINT_PATTERNS),$(SOURCES) $(AVX512_SOURCES) $(HEADERS))
 
 docker_lint:
 	$(SHOW)docker build -t llvm-toolset -f $(ROOT)/build/docker/llvm.Dockerfile .

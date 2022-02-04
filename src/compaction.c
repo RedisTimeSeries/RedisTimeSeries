@@ -9,6 +9,7 @@
 #include "rdb.h"
 
 #include "rmutil/alloc.h"
+#include "compaction/compaction_common.h"
 
 #include <ctype.h>
 #include <float.h>
@@ -18,12 +19,6 @@
 #ifdef _DEBUG
 #include "valgrind/valgrind.h"
 #endif
-
-typedef struct MaxMinContext
-{
-    double minValue;
-    double maxValue;
-} MaxMinContext;
 
 typedef struct SingleValueContext
 {
@@ -291,10 +286,14 @@ void *MaxMinCreateContext() {
     return context;
 }
 
-void MaxAppendValue(void *contextPtr, double value) {
+void MaxAppendValue(void *context, double value) {
+    _AssignIfGreater(&((MaxMinContext *)context)->maxValue, &value);
+}
+
+void MaxAppendValuesVec(void * __restrict__ context, double *__restrict__ values, size_t si, size_t ei) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    if (value > context->maxValue) {
-        context->maxValue = value;
+    for(int i=si; i<=ei; ++i) {
+        _AssignIfGreater(&context->maxValue, &values[i]);
     }
 }
 
@@ -381,6 +380,7 @@ void LastAppendValue(void *contextPtr, double value) {
 
 static AggregationClass aggMax = { .createContext = MaxMinCreateContext,
                                    .appendValue = MaxAppendValue,
+                                   .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = MaxFinalize,
                                    .writeContext = MaxMinWriteContext,
@@ -389,6 +389,7 @@ static AggregationClass aggMax = { .createContext = MaxMinCreateContext,
 
 static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .appendValue = MinAppendValue,
+                                   .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = MinFinalize,
                                    .writeContext = MaxMinWriteContext,
@@ -397,6 +398,7 @@ static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
 
 static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .appendValue = SumAppendValue,
+                                   .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = SingleValueFinalize,
                                    .writeContext = SingleValueWriteContext,
@@ -405,6 +407,7 @@ static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
 
 static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .appendValue = CountAppendValue,
+                                     .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = CountFinalize,
                                      .writeContext = SingleValueWriteContext,
@@ -434,6 +437,18 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .writeContext = MaxMinWriteContext,
                                      .readContext = MaxMinReadContext,
                                      .resetContext = MaxMinReset };
+
+
+void linkAppendValueVecFuncs() {
+    X86Features *features = getArchitectureOptimization();
+    aggMax.appendValueVec = MaxAppendValuesVec;
+    if(!features) { 
+        return;
+    } else if(features->avx512f) {
+        aggMax.appendValueVec = MaxAppendValuesAVX512F;
+        return;
+    }
+}
 
 int StringAggTypeToEnum(const char *agg_type) {
     return StringLenAggTypeToEnum(agg_type, strlen(agg_type));
