@@ -181,7 +181,9 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
-	system_props.c
+	system_props.c \
+	utils/arch_features.c \
+	compactions/compaction_avx512f.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
@@ -316,7 +318,15 @@ endif
 
 -include $(CC_DEPS)
 
-$(BINDIR)/%.o: $(SRCDIR)/%.c
+
+AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
+REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS),$(OBJECTS))
+
+$(AVX512F_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
+
+$(REGULAR_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
