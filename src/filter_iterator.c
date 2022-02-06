@@ -225,6 +225,33 @@ static timestamp_t calc_ts_bucket(timestamp_t ts,
     return ts - modulo(timestamp_diff, (int64_t)timedelta);
 }
 
+// assumes num of samples > si + 1, returns -1 when no such an index
+static int64_t findLastIndexbeforeTS(const DomainChunk *chunk, timestamp_t timestamp, int64_t si) {
+    timestamp_t *timestamps = chunk->samples.timestamps;
+    int64_t h = chunk->num_samples - 1;
+    if (unlikely(timestamps[si] >= timestamp)) {
+        // the first sample of the current chunk closes prev chunk bucket
+        assert(si == 0);
+        return -1;
+    }
+    if (timestamps[h] < timestamp) { // range of size 1 will be handled here
+        return h;
+    }
+
+    int64_t m, l = si;
+    assert(h > l);      // from here h > l
+    while (l < h - 1) { // if l == h-1 it means l has the result
+        m = (l + h) / 2;
+        if (timestamps[m] < timestamp) {
+            l = m;
+        } else {
+            h = m;
+        }
+    }
+
+    return l;
+}
+
 DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     DomainChunk *aux_chunk;
@@ -256,33 +283,64 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         self->initilized = true;
     }
 
+    extern AggregationClass aggMax;
     size_t agg_n_samples = 0;
     void (*appendValue)(void *, double) = aggregation->appendValue;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    int64_t si, ei;
     while (domainChunk) {
         // currently if the query reversed the chunk will be already revered here
         assert(self->reverse == domainChunk->rev);
         n_samples = domainChunk->num_samples;
-        for (size_t i = 0; i < n_samples; ++i) {
-            sample.timestamp =
-                domainChunk->samples.timestamps[i]; // store sample cause we aggregate in place
-            sample.value =
-                domainChunk->samples.values[i]; // store sample cause we aggregate in place
-            // (1) aggregationTimeDelta > 0,
-            // (2) self->aggregationLastTimestamp > chunk->samples.timestamp[0] -
-            // aggregationTimeDelta (3) self->aggregationLastTimestamp = samples.timestamps[0]
-            // - mod where 0 <= mod from (1)+(2) contextScope > chunk->samples.timestamps[0] from
-            // (3) chunk->samples.timestamps[0] >= self->aggregationLastTimestamp so the following
-            // condition should always be false on the first iteration
-            if ((is_reserved == FALSE && sample.timestamp >= contextScope) ||
-                (is_reserved == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
-                finalizeBucket(&domainChunk->samples, agg_n_samples++, self);
-                self->aggregationLastTimestamp = calc_ts_bucket(
-                    sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
-                contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+        if (self->aggregation == &aggMax &&
+            !is_reserved) { // Currently only implemented vectorization for specific case
+            si = 0;
+            while (si < n_samples) {
+                ei = findLastIndexbeforeTS(domainChunk, contextScope, si);
+                if (likely(ei >= 0)) {
+                    aggregation->appendValueVec(
+                        aggregationContext, domainChunk->samples.values, si, ei);
+                    si = ei + 1;
+                }
+                sample.timestamp =
+                    domainChunk->samples.timestamps[si]; // store sample cause we aggregate in place
+                sample.value =
+                    domainChunk->samples.values[si]; // store sample cause we aggregate in place
+                if (si <
+                    n_samples) { // if si == n_samples need to check next chunk for more samples
+                    assert(domainChunk->samples.timestamps[si] >= contextScope);
+                    finalizeBucket(&domainChunk->samples, agg_n_samples++, self);
+                    self->aggregationLastTimestamp = calc_ts_bucket(
+                        sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
+                    contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+                }
+                if (unlikely(ei < 0)) {
+                    appendValue(aggregationContext, sample.value);
+                    si++;
+                }
             }
+        } else {
+            for (size_t i = 0; i < n_samples; ++i) {
+                sample.timestamp =
+                    domainChunk->samples.timestamps[i]; // store sample cause we aggregate in place
+                sample.value =
+                    domainChunk->samples.values[i]; // store sample cause we aggregate in place
+                // (1) aggregationTimeDelta > 0,
+                // (2) self->aggregationLastTimestamp > chunk->samples.timestamp[0] -
+                // aggregationTimeDelta (3) self->aggregationLastTimestamp = samples.timestamps[0]
+                // - mod where 0 <= mod from (1)+(2) contextScope > chunk->samples.timestamps[0]
+                // from (3) chunk->samples.timestamps[0] >= self->aggregationLastTimestamp so the
+                // following condition should always be false on the first iteration
+                if ((is_reserved == FALSE && sample.timestamp >= contextScope) ||
+                    (is_reserved == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
+                    finalizeBucket(&domainChunk->samples, agg_n_samples++, self);
+                    self->aggregationLastTimestamp = calc_ts_bucket(
+                        sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
+                    contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+                }
 
-            appendValue(aggregationContext, sample.value);
+                appendValue(aggregationContext, sample.value);
+            }
         }
 
         if (agg_n_samples > 0) {

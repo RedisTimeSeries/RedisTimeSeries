@@ -15,10 +15,13 @@
 #include <sys/sysctl.h>
 
 size_t getCPUCacheLineSize() {
-    size_t lineSize = 0;
-    size_t sizeOfLineSize = sizeof(lineSize);
-    sysctlbyname("hw.cachelinesize", &lineSize, &sizeOfLineSize, 0, 0);
-    return lineSize;
+    static size_t chacheLineSize = 0;
+    if (chacheLineSize != 0) {
+        return chacheLineSize;
+    }
+    size_t sizeOfLineSize = sizeof(chacheLineSize);
+    sysctlbyname("hw.cachelinesize", &chacheLineSize, &sizeOfLineSize, 0, 0);
+    return chacheLineSize;
 }
 
 #elif defined(__linux__)
@@ -26,15 +29,20 @@ size_t getCPUCacheLineSize() {
 #include <stdio.h>
 
 size_t getCPUCacheLineSize() {
-    unsigned int lineSize = 0;
+    static size_t chacheLineSize = 0;
+    if (chacheLineSize != 0) {
+        return chacheLineSize;
+    }
 
+    unsigned int lineSize = 0;
     FILE *const f = fopen("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
     if (f) {
         fscanf(f, "%ul", &lineSize);
         fclose(f);
     }
 
-    return (size_t)lineSize;
+    chacheLineSize = (size_t)lineSize;
+    return chacheLineSize;
 }
 
 #else
