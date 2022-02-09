@@ -183,7 +183,8 @@ _SOURCES=\
 	series_iterator.c \
 	system_props.c \
 	utils/arch_features.c \
-	compactions/compaction_avx512f.c
+	compactions/compaction_avx512f.c \
+	sample_iterator.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))

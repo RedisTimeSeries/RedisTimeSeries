@@ -42,7 +42,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
         _count = args->count;
     }
 
-    AbstractIterator *iter = SeriesQuery(series, args, reverse);
+    AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
     DomainChunk *domainChunk;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 

@@ -12,6 +12,7 @@
 #include "indexer.h"
 #include "module.h"
 #include "series_iterator.h"
+#include "sample_iterator.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -478,7 +479,7 @@ int MultiSerieReduce(Series *dest,
                      MultiSeriesReduceOp op,
                      const RangeArgs *args,
                      bool reverse) {
-    AbstractIterator *iterator = SeriesQuery(source, args, reverse);
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(source, args, reverse, true);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -491,12 +492,9 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
-    DomainChunk *domainChunk;
-    while ((domainChunk = iterator->GetNext(iterator))) {
-        for (int i = 0; i < domainChunk->num_samples; ++i) {
-            SeriesUpsertSample(
-                dest, domainChunk->samples.timestamps[i], domainChunk->samples.values[i], dp);
-        }
+    Sample sample;
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
+        SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
     }
     iterator->Close(iterator);
     return 1;
@@ -996,28 +994,35 @@ int SeriesCalcRange(Series *series,
                     CompactionRule *rule,
                     double *val,
                     bool *is_empty) {
+    Sample sample;
     AggregationClass *aggObject = rule->aggClass;
+    const RangeArgs args = {
+        .startTimestamp = start_ts,
+        .endTimestamp = end_ts,
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+    };
 
-    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false, false);
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
+
     void *context = aggObject->createContext();
     bool _is_empty = true;
-    DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
-    if (domainChunk && domainChunk->num_samples > 0) {
+    ChunkResult res;
+
+    res = iterator->GetNext(iterator, &sample);
+    if (res == CR_OK) {
         _is_empty = false;
     }
-
-    while (domainChunk) {
-        for (size_t i = 0; i < domainChunk->num_samples; ++i) {
-            aggObject->appendValue(context, domainChunk->samples.values[i]);
-        }
-        domainChunk = SeriesIteratorGetNextChunk(iterator);
+    while (res == CR_OK) {
+        aggObject->appendValue(context, sample.value);
+        res = iterator->GetNext(iterator, &sample);
     }
 
     if (is_empty) {
         *is_empty = _is_empty;
     }
 
-    SeriesIteratorClose(iterator);
+    iterator->Close(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
@@ -1042,7 +1047,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         return 0;
     }
 
-    size_t i, count = 0;
+    size_t count = 0;
     Sample sample = { 0 };
 
     timestamp_t minTimestamp = 0;
@@ -1050,34 +1055,35 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false, false);
+    const RangeArgs args = {
+        .startTimestamp = 0,
+        .endTimestamp = series->lastTimestamp,
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+    };
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, false);
 
-    DomainChunk *domainChunk = SeriesIteratorGetNextChunk(iterator);
-
-    bool found = false;
-    while (domainChunk && !found) {
-        for (i = 0; i < domainChunk->num_samples; ++i, ++count) {
-            if (domainChunk->samples.timestamps[i] >= minTimestamp) {
-                sample.timestamp = domainChunk->samples.timestamps[i];
-                sample.value = domainChunk->samples.values[i];
-                found = true;
-                break;
-            }
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
+        if (sample.timestamp >= minTimestamp) {
+            break;
         }
-        domainChunk = SeriesIteratorGetNextChunk(iterator);
+        ++count;
     }
 
     if (skipped != NULL) {
         *skipped = count;
     }
-    SeriesIteratorClose(iterator);
+    iterator->Close(iterator);
     return sample.timestamp;
 }
 
-AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reverse) {
+AbstractIterator *SeriesQuery(Series *series,
+                              const RangeArgs *args,
+                              bool reverse,
+                              bool check_retention) {
     // In case a retention is set shouldn't return chunks older than the retention
     timestamp_t startTimestamp = args->startTimestamp;
-    if (series->retentionTime > 0) {
+    if (check_retention && series->retentionTime > 0) {
         startTimestamp =
             series->lastTimestamp > series->retentionTime
                 ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
@@ -1120,4 +1126,12 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
     }
 
     return chain;
+}
+
+AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
+                                                   const RangeArgs *args,
+                                                   bool reverse,
+                                                   bool check_retention) {
+    AbstractIterator *chain = SeriesQuery(series, args, reverse, check_retention);
+    return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
 }
