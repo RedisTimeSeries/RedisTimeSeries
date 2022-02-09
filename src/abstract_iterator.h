@@ -17,4 +17,12 @@ typedef struct AbstractIterator
     struct AbstractIterator *input;
 } AbstractIterator;
 
+typedef struct AbstractSampleIterator
+{
+    ChunkResult (*GetNext)(struct AbstractSampleIterator *iter, Sample *sample);
+    void (*Close)(struct AbstractSampleIterator *iter);
+
+    struct AbstractIterator *input;
+} AbstractSampleIterator;
+
 #endif //ABSTRACT_ITERATOR_H

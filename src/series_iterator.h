@@ -31,8 +31,4 @@ struct AbstractIterator *SeriesIterator_New(Series *series,
                                             bool rev,
                                             bool rev_chunk);
 
-DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
-
-void SeriesIteratorClose(AbstractIterator *iterator);
-
 #endif // REDIS_TIMESERIES_CLEAN_SERIES_ITERATOR_H

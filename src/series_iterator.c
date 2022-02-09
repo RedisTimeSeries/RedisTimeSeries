@@ -9,6 +9,10 @@
 #include "filter_iterator.h"
 #include "tsdb.h"
 
+DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
+
+void SeriesIteratorClose(AbstractIterator *iterator);
+
 // Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
 AbstractIterator *SeriesIterator_New(Series *series,
                                      timestamp_t start_ts,

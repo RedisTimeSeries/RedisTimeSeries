@@ -64,7 +64,14 @@ int GetSeries(RedisModuleCtx *ctx,
               bool shouldDeleteRefs,
               bool isSilent);
 
-AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
+AbstractIterator *SeriesQuery(Series *series,
+                              const RangeArgs *args,
+                              bool reserve,
+                              bool check_retention);
+AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
+                                                   const RangeArgs *args,
+                                                   bool reverse,
+                                                   bool check_retention);
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
