@@ -29,6 +29,11 @@ static inline void _AssignIfGreater(double *__restrict__ value, double *__restri
     }
 }
 
+void MaxAppendValuesVec(void *__restrict__ context,
+                        double *__restrict__ values,
+                        size_t si,
+                        size_t ei);
+
 static inline bool is_aligned(void *p, int N)
 {
     return (uintptr_t)p % N == 0;

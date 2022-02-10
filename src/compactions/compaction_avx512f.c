@@ -5,6 +5,10 @@ void MaxAppendValuesAVX512F(void *__restrict__ context,
                             double *__restrict__ values,
                             size_t si,
                             size_t ei) {
+    if (ei - si + 1 > VECTOR_SIZE * 3) {
+        MaxAppendValuesVec(context, values, si, ei);
+        return;
+    }
     double *res = &((MaxMinContext *)context)->maxValue;
     double vec[VECTOR_SIZE] __attribute__((aligned(CACHE_LINE_SIZE))) = {
         _DOUBLE_MOST_NEG, _DOUBLE_MOST_NEG, _DOUBLE_MOST_NEG, _DOUBLE_MOST_NEG,
