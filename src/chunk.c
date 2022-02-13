@@ -12,86 +12,20 @@
 #include <math.h>
 #include <assert.h>
 
-static __thread DomainChunk _tlsDomainChunk; // Thread local storage uncompressed chunk.
-static __thread bool _tlsDomainChunk_is_init = false;
-static size_t tlsDomainChunk_size = 0;
-__thread DomainChunk _tlsAuxDomainChunk; // utility chunk
-
-extern RedisModuleCtx *rts_staticCtx;
-
-static inline void DomainChunkInit(DomainChunk *chunk, size_t size, size_t alignment) {
-    assert(size % 2 == 0);
-    chunk->num_samples = 0;
-    chunk->size = size;
-    if (likely(!alignment)) {
-        chunk->samples.timestamps = (timestamp_t *)malloc(size / 2);
-        chunk->samples.values = (double *)malloc(size / 2);
-    } else {
-        int res = posix_memalign((void **)&chunk->samples.timestamps, alignment, size / 2);
-        if (unlikely(res)) {
-            RedisModule_Log(rts_staticCtx, "warning", "%s", "Failed to posix_memalign new chunk");
-        }
-        res = posix_memalign((void **)&chunk->samples.values, alignment, size / 2);
-        if (unlikely(res)) {
-            RedisModule_Log(rts_staticCtx, "warning", "%s", "Failed to posix_memalign new chunk");
-        }
-    }
-    return;
-}
-
-static inline void Uncompressed_ChunkInit(Chunk *chunk, size_t size, size_t alignment) {
+static inline void Uncompressed_ChunkInit(Chunk *chunk, size_t size) {
     chunk->base_timestamp = 0;
     chunk->num_samples = 0;
     chunk->size = size;
-    if (likely(!alignment)) {
-        chunk->samples = (Sample *)malloc(size);
-    } else {
-        int res = posix_memalign((void **)&chunk->samples, alignment, size);
-        if (unlikely(res)) {
-            RedisModule_Log(rts_staticCtx, "warning", "%s", "Failed to posix_memalign new chunk");
-        }
-    }
+    chunk->samples = (Sample *)malloc(size);
 #ifdef DEBUG
     memset(chunk->samples, 0, size);
 #endif
     return;
 }
 
-// mul by 4 cause the uncompressed chunk size is at most 4 time of the compressed
-void Update_tlsDomainChunk_size(size_t chunkSizeBytes) {
-    size_t chunkSizeUpperLimit = chunkSizeBytes * ceil(SPLIT_FACTOR) * 4 * sizeof(Sample);
-    if (unlikely(chunkSizeUpperLimit > tlsDomainChunk_size)) {
-        tlsDomainChunk_size = chunkSizeUpperLimit;
-    }
-}
-
-DomainChunk *GetTemporaryDomainChunk(void) {
-    if (unlikely(!_tlsDomainChunk_is_init)) {
-        // Set a new thread-local QueryCtx if one has not been created.
-        DomainChunkInit(&_tlsDomainChunk, tlsDomainChunk_size, getCPUCacheLineSize());
-        _tlsDomainChunk_is_init = true;
-    } else {
-        if (unlikely(_tlsDomainChunk.size < tlsDomainChunk_size)) {
-            free(_tlsDomainChunk.samples
-                     .timestamps);                // realloc is prohibited for aligned allocations
-            free(_tlsDomainChunk.samples.values); // realloc is prohibited for aligned allocations
-            _tlsDomainChunk.size = tlsDomainChunk_size;
-            posix_memalign((void **)&(_tlsDomainChunk.samples.timestamps),
-                           getCPUCacheLineSize(),
-                           _tlsDomainChunk.size);
-            posix_memalign((void **)&(_tlsDomainChunk.samples.values),
-                           getCPUCacheLineSize(),
-                           _tlsDomainChunk.size);
-        }
-        _tlsDomainChunk.num_samples = 0;
-    }
-    _tlsDomainChunk.rev = false;
-    return &_tlsDomainChunk;
-}
-
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
-    Uncompressed_ChunkInit(newChunk, size, 0);
+    Uncompressed_ChunkInit(newChunk, size);
 
     return newChunk;
 }
@@ -317,8 +251,11 @@ void reverseDomainChunk(DomainChunk *domainChunk) {
 DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
+                                       DomainChunk *domainChunk,
+                                       DomainChunk *domainChunkAux,
                                        bool reverse) {
     const Chunk *_chunk = chunk;
+    domainChunk->num_samples = 0;
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
                  _chunk->base_timestamp > end ||
                  _chunk->samples[_chunk->num_samples - 1].timestamp < start)) {
@@ -347,25 +284,24 @@ DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
         }
     }
 
-    DomainChunk *retChunk = GetTemporaryDomainChunk();
-    retChunk->num_samples = ei - si + 1;
-    if (retChunk->num_samples == 0) {
+    domainChunk->num_samples = ei - si + 1;
+    if (domainChunk->num_samples == 0) {
         return NULL;
     }
 
     if (unlikely(reverse)) {
-        for (i = 0; i < retChunk->num_samples; ++i) {
-            retChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
-            retChunk->samples.values[i] = _chunk->samples[ei - i].value;
+        for (i = 0; i < domainChunk->num_samples; ++i) {
+            domainChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
+            domainChunk->samples.values[i] = _chunk->samples[ei - i].value;
         }
-        retChunk->rev = true;
+        domainChunk->rev = true;
     } else {
-        for (i = 0; i < retChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
-            retChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
-            retChunk->samples.values[i] = _chunk->samples[i + si].value;
+        for (i = 0; i < domainChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
+            domainChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
+            domainChunk->samples.values[i] = _chunk->samples[i + si].value;
         }
     }
-    return retChunk;
+    return domainChunk;
 }
 
 ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,

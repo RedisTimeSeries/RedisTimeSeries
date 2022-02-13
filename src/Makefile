@@ -184,7 +184,8 @@ _SOURCES=\
 	system_props.c \
 	utils/arch_features.c \
 	compactions/compaction_avx512f.c \
-	sample_iterator.c
+	sample_iterator.c \
+	domain_chunk.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))

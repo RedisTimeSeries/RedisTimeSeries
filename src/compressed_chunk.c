@@ -220,11 +220,13 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 // decompress chunk reverse
 static inline DomainChunk *decompressChunkReverse(const CompressedChunk *compressedChunk,
                                                   uint64_t start,
-                                                  uint64_t end) {
+                                                  uint64_t end,
+                                                  DomainChunk *domainChunk,
+                                                  DomainChunk *domainChunkAux) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
-    DomainChunk *domainChunk = GetTemporaryDomainChunk();
+    domainChunk->num_samples = 0;
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
         return domainChunk;
@@ -290,25 +292,26 @@ static inline DomainChunk *decompressChunkReverse(const CompressedChunk *compres
     }
 
 _done:
-    _tlsAuxDomainChunk.samples.timestamps = timestamps_ptr + 1;
-    _tlsAuxDomainChunk.samples.values = values_ptr + 1;
-    _tlsAuxDomainChunk.num_samples =
-        domainChunk->samples.timestamps + numSamples - _tlsAuxDomainChunk.samples.timestamps;
-    _tlsAuxDomainChunk.rev = true;
+    domainChunkAux->samples.timestamps = timestamps_ptr + 1;
+    domainChunkAux->samples.values = values_ptr + 1;
+    domainChunkAux->num_samples =
+        domainChunk->samples.timestamps + numSamples - domainChunkAux->samples.timestamps;
+    domainChunkAux->rev = true;
 
     Compressed_FreeChunkIterator(iter);
 
-    return &_tlsAuxDomainChunk;
+    return domainChunkAux;
 }
 
 // decompress chunk
 static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChunk,
                                            uint64_t start,
-                                           uint64_t end) {
+                                           uint64_t end,
+                                           DomainChunk *domainChunk) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
-    DomainChunk *domainChunk = GetTemporaryDomainChunk();
+    domainChunk->num_samples = 0;
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
         return domainChunk;
@@ -420,21 +423,25 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
 DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
                                      uint64_t start,
                                      uint64_t end,
+                                     DomainChunk *domainChunk,
+                                     DomainChunk *domainChunkAux,
                                      bool reverse) {
     if (unlikely(!chunk)) {
         return NULL;
     }
     const CompressedChunk *compressedChunk = chunk;
-    DomainChunk *domainChunk;
+    DomainChunk *ret_domainChunk;
+
     if (unlikely(reverse)) {
-        domainChunk = decompressChunkReverse(compressedChunk, start, end);
+        ret_domainChunk =
+            decompressChunkReverse(compressedChunk, start, end, domainChunk, domainChunkAux);
     } else {
-        domainChunk = decompressChunk(compressedChunk, start, end);
+        ret_domainChunk = decompressChunk(compressedChunk, start, end, domainChunk);
     }
-    if (unlikely(domainChunk->num_samples == 0)) {
+    if (unlikely(ret_domainChunk->num_samples == 0)) {
         return NULL;
     }
-    return domainChunk;
+    return ret_domainChunk;
 }
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);

@@ -98,8 +98,6 @@ int ParseChunkSize(RedisModuleCtx *ctx,
         if (!ValidateChunkSize(ctx, *chunkSizeBytes)) {
             return TSDB_ERROR;
         }
-
-        Update_tlsDomainChunk_size(*chunkSizeBytes);
     }
 
     return TSDB_OK;

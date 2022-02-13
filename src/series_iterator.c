@@ -8,6 +8,7 @@
 #include "abstract_iterator.h"
 #include "filter_iterator.h"
 #include "tsdb.h"
+#include "domain_chunk.h"
 
 DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
 
@@ -24,7 +25,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->base.GetNext = SeriesIteratorGetNextChunk;
     iter->base.input = NULL;
     iter->currentChunk = NULL;
-
+    iter->domainChunk = allocateDomainChunk();
+    iter->domainChunkAux = allocateDomainChunk();
     iter->series = series;
     iter->minTimestamp = start_ts;
     iter->maxTimestamp = end_ts;
@@ -56,6 +58,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
 void SeriesIteratorClose(AbstractIterator *iterator) {
     SeriesIterator *self = (SeriesIterator *)iterator;
     RedisModule_DictIteratorStop(self->dictIter);
+    FreeDomainChunk(self->domainChunk, true);
+    FreeDomainChunk(self->domainChunkAux, false);
     free(iterator);
 }
 
@@ -63,8 +67,19 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
 // move to the next chunk.
 DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
-    DomainChunk *ret = iter->series->funcs->ProcessChunk(
-        iter->currentChunk, iter->minTimestamp, iter->maxTimestamp, iter->reverse_chunk);
+    if (!iter->currentChunk) {
+        return NULL;
+    }
+    u_int64_t n_samples = iter->series->funcs->GetNumOfSample(iter->currentChunk);
+    if (n_samples > iter->domainChunk->size) {
+        ReallocDomainChunk(iter->domainChunk, n_samples);
+    }
+    DomainChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
+                                                         iter->minTimestamp,
+                                                         iter->maxTimestamp,
+                                                         iter->domainChunk,
+                                                         iter->domainChunkAux,
+                                                         iter->reverse_chunk);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;
     }

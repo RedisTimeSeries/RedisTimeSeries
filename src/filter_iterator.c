@@ -205,7 +205,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->initilized = false;
-
+    iter->aux_chunk = allocateDomainChunk();
+    ReallocDomainChunk(iter->aux_chunk, 1);
     return iter;
 }
 
@@ -254,7 +255,6 @@ static int64_t findLastIndexbeforeTS(const DomainChunk *chunk, timestamp_t times
 
 DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
-    DomainChunk *aux_chunk;
     AggregationClass *aggregation = self->aggregation;
     void *aggregationContext = self->aggregationContext;
 
@@ -352,17 +352,17 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
 
 _finalize:
     self->hasUnFinalizedContext = false;
-    aux_chunk = GetTemporaryDomainChunk();
     aggregation->finalize(aggregationContext, &value);
-    aux_chunk->samples.timestamps[0] = self->aggregationLastTimestamp;
-    aux_chunk->samples.values[0] = value;
-    aux_chunk->num_samples = 1;
-    return aux_chunk;
+    self->aux_chunk->samples.timestamps[0] = self->aggregationLastTimestamp;
+    self->aux_chunk->samples.values[0] = value;
+    self->aux_chunk->num_samples = 1;
+    return self->aux_chunk;
 }
 
 void AggregationIterator_Close(struct AbstractIterator *iterator) {
     AggregationIterator *self = (AggregationIterator *)iterator;
     iterator->input->Close(iterator->input);
     self->aggregation->freeContext(self->aggregationContext);
+    FreeDomainChunk(self->aux_chunk, true);
     free(iterator);
 }
