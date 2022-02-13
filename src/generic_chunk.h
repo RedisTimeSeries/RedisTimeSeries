@@ -10,6 +10,7 @@
 #include "LibMR/src/mr.h"
 #include "consts.h"
 #include "load_io_error_macros.h"
+#include "domain_chunk.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -25,12 +26,6 @@ typedef struct Sample
     double value;
 } Sample;
 
-typedef struct Samples
-{
-    timestamp_t *timestamps; // array of timestamps
-    double *values;          // array of values
-} Samples;
-
 typedef struct Chunk
 {
     timestamp_t base_timestamp;
@@ -38,14 +33,6 @@ typedef struct Chunk
     unsigned int num_samples;
     size_t size;
 } Chunk;
-
-typedef struct DomainChunk
-{
-    Samples samples;
-    unsigned int num_samples;
-    size_t size;
-    bool rev;
-} DomainChunk;
 
 typedef void Chunk_t;
 typedef void ChunkIter_t;
@@ -84,7 +71,12 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk, uint64_t start, uint64_t end, bool reverse);
+    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk,
+                                 uint64_t start,
+                                 uint64_t end,
+                                 DomainChunk *domainChunk,
+                                 DomainChunk *domainChunkAux,
+                                 bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);

@@ -11,8 +11,6 @@
 
 #include <sys/types.h>
 
-extern __thread DomainChunk _tlsAuxDomainChunk; // utility chunk
-
 typedef struct ChunkIterator
 {
     Chunk *chunk;
@@ -22,9 +20,6 @@ typedef struct ChunkIterator
     int options;
 } ChunkIterator;
 
-void Update_tlsDomainChunk_size(size_t chunkSizeBytes);
-
-DomainChunk *GetTemporaryDomainChunk(void);
 Chunk_t *Uncompressed_NewChunk(size_t size);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
@@ -63,6 +58,8 @@ void reverseDomainChunk(DomainChunk *domainChunk);
 DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
+                                       DomainChunk *domainChunk,
+                                       DomainChunk *domainChunkAux,
                                        bool reverse);
 
 ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,

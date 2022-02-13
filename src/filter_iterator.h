@@ -39,6 +39,7 @@ typedef struct AggregationIterator
     bool hasUnFinalizedContext;
     bool reverse;
     bool initilized;
+    DomainChunk *aux_chunk; // auxiliary chunk for containing the final bucket
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
