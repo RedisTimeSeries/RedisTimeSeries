@@ -25,7 +25,7 @@ help() {
 		AOF=0|1             AOF persistency tests on standalone Redis
 		SLAVES=0|1          Replication tests on standalone Redis
 		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
-		SHARDS=n            Number of shards (default: 2)
+		SHARDS=n            Number of shards (default: 3)
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
@@ -164,7 +164,7 @@ GEN=${GEN:-1}
 SLAVES=${SLAVES:-1}
 AOF=${AOF:-1}
 OSS_CLUSTER=${OSS_CLUSTER:-0}
-SHARDS=${SHARDS:-2}
+SHARDS=${SHARDS:-3}
 RLEC=${RLEC:-0}
 
 [[ $EXT == 1 ]] && EXISTING_ENV=1
