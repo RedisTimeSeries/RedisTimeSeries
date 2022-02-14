@@ -11,6 +11,16 @@
 
 #include "rmutil/alloc.h"
 
+static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
+    size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
+    if (unlikely(len > 0)) {
+        RedisModule_ReplyWithError(rctx, "multi shard cmd failed: cluster problem");
+        return true;
+    }
+
+    return false;
+}
+
 // This function used for calling freeing the blocked client context
 // in the main thread. It's needed cause there is a bug in RoF when calling
 // RedisModule_FreeThreadSafeContext from thread which is not the main one, see:
@@ -23,6 +33,10 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
@@ -56,6 +70,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         }
     }
 
+__done:
     RedisModule_UnblockClient(bc, rctx);
 }
 
@@ -63,6 +78,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
 
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
@@ -146,6 +165,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     }
     array_foreach(tempSeries, x, FreeSeries(x));
     array_free(tempSeries);
+
+__done:
     MRangeArgs_Free(&data->args);
     free(data);
     RedisModule_UnblockClient(bc, rctx);
