@@ -66,7 +66,7 @@ make flow_tests    # run tests
   AOF=1            # run AOF persistency tests on a standalone Redis topology
   SLAVES=1         # run replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
-  SHARDS=num       # run OSS cluster with `num` shards (default: 2)
+  SHARDS=num       # run OSS cluster with `num` shards (default: 3)
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
