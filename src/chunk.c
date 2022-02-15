@@ -300,6 +300,7 @@ DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
             domainChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
             domainChunk->samples.values[i] = _chunk->samples[i + si].value;
         }
+        domainChunk->rev = false;
     }
     return domainChunk;
 }

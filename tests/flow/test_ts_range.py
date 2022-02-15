@@ -6,6 +6,7 @@ from RLTest import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
     _insert_agg_data
 from includes import *
+from utils import timeit
 
 
 def test_range_query():
@@ -363,6 +364,45 @@ def test_filter_by():
                                 'FILTER_BY_VALUE', 1022, 1025)
         env.assertEqual(res, [[start_ts + 1022, b'1022'], [start_ts + 1023, b'1023'], [start_ts + 1025, b'1025']])
 
+def test_filter_by_extensive():
+    env = Env()
+    #skip cause it takes too much time
+    env.skipOnCluster()
+    env.skipOnAOF()
+    env.skipOnSlave()
+    max_samples_count = 40
+    for ENCODING in ['uncompressed']:
+        for ev_odd in ['even', 'odd']:
+            if(ev_odd == 'even'):
+                start_ts = 2
+            else:
+                start_ts = 3
+            env.flush()
+            with env.getClusterConnectionIfNeeded() as r:
+                assert r.execute_command('TS.CREATE', 't1', ENCODING, 'RETENTION', '0', 'CHUNK_SIZE', '512')
+                # 32 samples in chunk, 40 samples: 2 chunk in total
+                # inset even numbers
+                for samples_count in range(0, max_samples_count + 1):
+                    last_ts = start_ts + samples_count*2
+                    r.execute_command('TS.ADD', 't1', last_ts, last_ts)
+
+                    for rev in [False, True]:
+                        query = 'ts.revrange' if rev else 'ts.range'
+                        for first_ts in range(0, last_ts + 3):
+                            str_first_ts = str(first_ts)
+                            for second_ts in range(first_ts, last_ts + 3):
+                                str_second_ts = str(second_ts)
+                                expected_res = []
+                                reminder = 0 if ev_odd == 'even' else 1
+                                if(first_ts%2 == reminder and first_ts >= start_ts and first_ts <= last_ts):
+                                    expected_res.append([first_ts, str_first_ts.encode()])
+                                if(first_ts != second_ts and second_ts%2 == reminder and second_ts >= start_ts and second_ts <= last_ts):
+                                    if(rev): #prepend
+                                        expected_res.insert(0, [second_ts, str_second_ts.encode()])
+                                    else:    # append
+                                        expected_res.append([second_ts, str_second_ts.encode()])
+                                res = r.execute_command(query, 't1', '-', '+', 'FILTER_BY_TS', first_ts, second_ts)
+                                env.assertEqual(res, expected_res)
 
 def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
     return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)

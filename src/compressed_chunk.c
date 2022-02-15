@@ -227,6 +227,7 @@ static inline DomainChunk *decompressChunkReverse(const CompressedChunk *compres
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
     domainChunk->num_samples = 0;
+    domainChunk->rev = true;
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
         return domainChunk;
@@ -312,6 +313,7 @@ static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChun
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
     domainChunk->num_samples = 0;
+    domainChunk->rev = false;
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
         return domainChunk;

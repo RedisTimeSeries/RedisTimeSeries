@@ -139,10 +139,12 @@ DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base) {
                           self->byValueArgs.hasValue ? &self->byValueArgs : NULL,
                           &count);
             if (count > 0) {
-                self->tsFilterIndex += count; // at least count samples consumed
                 domainChunk->num_samples = count;
                 if (unlikely(self->reverse)) {
                     reverseDomainChunk(domainChunk);
+                    self->ByTsArgs.count -= count;
+                } else {
+                    self->tsFilterIndex += count; // at least count samples consumed
                 }
                 return domainChunk;
             }
