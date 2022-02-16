@@ -4,7 +4,6 @@
  * This file is available under the Redis Labs Source Available License Agreement
  */
 
-#include "cpu_features/include/cpu_features_macros.h"
 #include "arch_features.h"
 
 static X86Features g_features = { 0 };

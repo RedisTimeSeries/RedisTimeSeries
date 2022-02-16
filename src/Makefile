@@ -100,6 +100,7 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 
 #----------------------------------------------------------------------------------------------
 
+ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
@@ -183,9 +184,13 @@ _SOURCES=\
 	series_iterator.c \
 	system_props.c \
 	utils/arch_features.c \
-	compactions/compaction_avx512f.c \
 	sample_iterator.c \
 	domain_chunk.c
+
+ifeq ($(ARCH), x86_64)
+_SOURCES_AVX512=compactions/compaction_avx512f.c
+_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512)
+endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))

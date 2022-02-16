@@ -453,12 +453,15 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
 void linkAppendValueVecFuncs() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
+#if defined(__x86_64__)
     if (!features) {
         return;
     } else if (features->avx512f) {
         aggMax.appendValueVec = MaxAppendValuesAVX512F;
         return;
     }
+#endif // __x86_64__
+    return;
 }
 
 int StringAggTypeToEnum(const char *agg_type) {
