@@ -1095,9 +1095,13 @@ AbstractIterator *SeriesQuery(Series *series,
     AbstractIterator *chain = SeriesIterator_New(
         series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
 
-    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
-        chain = (AbstractIterator *)SeriesFilterIterator_New(
-            chain, args->filterByValueArgs, args->filterByTSArgs, reverse);
+    if (args->filterByTSArgs.hasValue) {
+        chain =
+            (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs, reverse);
+    }
+
+    if (args->filterByValueArgs.hasValue) {
+        chain = (AbstractIterator *)SeriesFilterValIterator_New(chain, args->filterByValueArgs);
     }
 
     timestamp_t timestampAlignment;

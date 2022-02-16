@@ -10,23 +10,32 @@
 #ifndef FILTER_ITERATOR_H
 #define FILTER_ITERATOR_H
 
-typedef struct SeriesFilterIterator
+typedef struct SeriesFilterTSIterator
 {
     AbstractIterator base;
-    FilterByValueArgs byValueArgs;
     FilterByTSArgs ByTsArgs;
     size_t tsFilterIndex; // the index in the TS filter array in ByTsArgs
     bool reverse;
-} SeriesFilterIterator;
+} SeriesFilterTSIterator;
 
-SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
-                                               FilterByValueArgs byValue,
-                                               FilterByTSArgs ByTsArgs,
-                                               bool rev);
+SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
+                                                   FilterByTSArgs ByTsArgs,
+                                                   bool rev);
 
-DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base);
+DomainChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base);
 
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator);
+
+typedef struct SeriesFilterValIterator
+{
+    AbstractIterator base;
+    FilterByValueArgs byValueArgs;
+} SeriesFilterValIterator;
+
+SeriesFilterValIterator *SeriesFilterValIterator_New(AbstractIterator *input,
+                                                     FilterByValueArgs byValue);
+
+DomainChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base);
 
 typedef struct AggregationIterator
 {

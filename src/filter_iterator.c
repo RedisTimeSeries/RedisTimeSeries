@@ -35,13 +35,13 @@ typedef struct dfs_stack_val
         (_val).values_ei = (_values_ei);                                                           \
     } while (0)
 
-static void filterSamples(Samples *samples,
-                          size_t num_samples,
-                          const timestamp_t *tsVals,
-                          size_t values_si,
-                          size_t values_ei,
-                          const FilterByValueArgs *byValArgs,
-                          size_t *count) {
+// returns the number of matches
+static size_t filterSamples(Samples *samples,
+                            size_t num_samples,
+                            const timestamp_t *tsVals,
+                            size_t values_si,
+                            size_t values_ei) {
+    size_t count = 0;
     dfs_stack_val *dfs_stack =
         array_new(dfs_stack_val, ceil(log(num_samples)) + 1); // + 1 is for one left child
     dfs_stack_val first_frame = {
@@ -54,15 +54,14 @@ static void filterSamples(Samples *samples,
     while (array_len(dfs_stack) > 0) {
         cur_frame = array_pop(dfs_stack);
         if (cur_frame.si == cur_frame.ei) {
+            assert((num_samples <= 1) || cur_frame.values_ei == cur_frame.values_si);
             for (size_t i = cur_frame.values_si; i <= cur_frame.values_ei; ++i) {
                 const timestamp_t sample_ts = samples->timestamps[cur_frame.si];
                 if (sample_ts == tsVals[i]) {
                     double value = samples->values[cur_frame.si];
-                    if (!byValArgs || (value >= byValArgs->min && value <= byValArgs->max)) {
-                        samples->timestamps[*count] = sample_ts;
-                        samples->values[*count] = value;
-                        ++(*count);
-                    }
+                    samples->timestamps[count] = sample_ts;
+                    samples->values[count] = value;
+                    ++(count);
                     break;
                 }
             }
@@ -117,68 +116,47 @@ static void filterSamples(Samples *samples,
         }
     }
 
-    return;
+    return count;
 }
 
-DomainChunk *SeriesFilterIterator_GetNextChunk(struct AbstractIterator *base) {
-    SeriesFilterIterator *self = (SeriesFilterIterator *)base;
+DomainChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base) {
+    SeriesFilterTSIterator *self = (SeriesFilterTSIterator *)base;
     DomainChunk *domainChunk;
-    size_t i, count = 0;
+    size_t count = 0;
+    assert(self->ByTsArgs.hasValue);
 
-    if (self->ByTsArgs.hasValue) {
-        if (self->tsFilterIndex == self->ByTsArgs.count) {
-            return NULL;
-        }
-        while ((domainChunk = self->base.input->GetNext(self->base.input))) {
-            assert(!domainChunk->rev); // the impl assumes that the chunk isn't reversed
-            filterSamples(&domainChunk->samples,
-                          domainChunk->num_samples,
-                          self->ByTsArgs.values,
-                          self->tsFilterIndex,
-                          self->ByTsArgs.count - 1,
-                          self->byValueArgs.hasValue ? &self->byValueArgs : NULL,
-                          &count);
-            if (count > 0) {
-                domainChunk->num_samples = count;
-                if (unlikely(self->reverse)) {
-                    reverseDomainChunk(domainChunk);
-                    self->ByTsArgs.count -= count;
-                } else {
-                    self->tsFilterIndex += count; // at least count samples consumed
-                }
-                return domainChunk;
+    if (self->tsFilterIndex == self->ByTsArgs.count) {
+        return NULL;
+    }
+    while ((domainChunk = self->base.input->GetNext(self->base.input))) {
+        assert(!domainChunk->rev); // the impl assumes that the chunk isn't reversed
+        count = filterSamples(&domainChunk->samples,
+                              domainChunk->num_samples,
+                              self->ByTsArgs.values,
+                              self->tsFilterIndex,
+                              self->ByTsArgs.count - 1);
+        if (count > 0) {
+            domainChunk->num_samples = count;
+            if (unlikely(self->reverse)) {
+                reverseDomainChunk(domainChunk);
+                self->ByTsArgs.count -= count;
+            } else {
+                self->tsFilterIndex += count; // at least count samples consumed
             }
-        }
-    } else {
-        while ((domainChunk = self->base.input->GetNext(self->base.input))) {
-            // currently if the query reversed the chunk will be already reversed here
-            assert(self->reverse == domainChunk->rev);
-            for (i = 0; i < domainChunk->num_samples; ++i) {
-                if (check_sample_value(domainChunk->samples.values[i], &self->byValueArgs)) {
-                    domainChunk->samples.timestamps[count] = domainChunk->samples.timestamps[i];
-                    domainChunk->samples.values[count] = domainChunk->samples.values[i];
-                    ++count;
-                }
-            }
-            if (count > 0) {
-                domainChunk->num_samples = count;
-                return domainChunk;
-            }
+            return domainChunk;
         }
     }
 
     return NULL;
 }
 
-SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
-                                               FilterByValueArgs byValue,
-                                               FilterByTSArgs ByTsArgs,
-                                               bool rev) {
-    SeriesFilterIterator *newIter = malloc(sizeof(SeriesFilterIterator));
+SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
+                                                   FilterByTSArgs ByTsArgs,
+                                                   bool rev) {
+    SeriesFilterTSIterator *newIter = malloc(sizeof(SeriesFilterTSIterator));
     newIter->base.input = input;
-    newIter->base.GetNext = SeriesFilterIterator_GetNextChunk;
+    newIter->base.GetNext = SeriesFilterTSIterator_GetNextChunk;
     newIter->base.Close = SeriesFilterIterator_Close;
-    newIter->byValueArgs = byValue;
     newIter->ByTsArgs = ByTsArgs;
     newIter->tsFilterIndex = 0;
     newIter->reverse = rev;
@@ -188,6 +166,41 @@ SeriesFilterIterator *SeriesFilterIterator_New(AbstractIterator *input,
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator) {
     iterator->input->Close(iterator->input);
     free(iterator);
+}
+
+DomainChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base) {
+    SeriesFilterValIterator *self = (SeriesFilterValIterator *)base;
+    DomainChunk *domainChunk;
+    size_t i, count = 0;
+    assert(self->byValueArgs.hasValue);
+
+    while ((domainChunk = self->base.input->GetNext(self->base.input))) {
+        // currently if the query reversed the chunk will be already reversed here
+        // assert(self->reverse == domainChunk->rev);
+        for (i = 0; i < domainChunk->num_samples; ++i) {
+            if (check_sample_value(domainChunk->samples.values[i], &self->byValueArgs)) {
+                domainChunk->samples.timestamps[count] = domainChunk->samples.timestamps[i];
+                domainChunk->samples.values[count] = domainChunk->samples.values[i];
+                ++count;
+            }
+        }
+        if (count > 0) {
+            domainChunk->num_samples = count;
+            return domainChunk;
+        }
+    }
+
+    return NULL;
+}
+
+SeriesFilterValIterator *SeriesFilterValIterator_New(AbstractIterator *input,
+                                                     FilterByValueArgs byValue) {
+    SeriesFilterValIterator *newIter = malloc(sizeof(SeriesFilterValIterator));
+    newIter->base.input = input;
+    newIter->base.GetNext = SeriesFilterValIterator_GetNextChunk;
+    newIter->base.Close = SeriesFilterIterator_Close;
+    newIter->byValueArgs = byValue;
+    return newIter;
 }
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
