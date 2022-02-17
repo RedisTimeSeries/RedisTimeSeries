@@ -14,7 +14,11 @@
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
+        RedisModule_ReplyWithArray(rctx, len + 1);
         RedisModule_ReplyWithError(rctx, "multi shard cmd failed: cluster problem");
+        for (size_t i = 0; i < len; ++i) {
+            RedisModule_ReplyWithError(rctx, MR_ExecutionCtxGetError(eCtx, i));
+        }
         return true;
     }
 
