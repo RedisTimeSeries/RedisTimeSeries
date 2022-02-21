@@ -43,7 +43,6 @@ class RedisTimeSeriesSetup(paella.Setup):
 
     def macos(self):
         self.install_gnu_utils()
-        self.install("openssl@1.1")
 
     def common_last(self):
         if self.dist != "arch":
