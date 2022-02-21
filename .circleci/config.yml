@@ -639,8 +639,7 @@ workflows:
             parameters:
               redis_version: ["6.0", "6.2"]
       - test-rlec:
-          #@@<<: *on-any-branch
-          <<: *never
+          <<: *on-any-branch
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
@@ -656,8 +655,7 @@ workflows:
             parameters:
               platform: [focal, bionic]
       - build-macos:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - coverage:
           context: common
           <<: *on-any-branch
