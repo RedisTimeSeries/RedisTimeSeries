@@ -477,6 +477,3 @@ pack: $(TARGET)
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
 
 #----------------------------------------------------------------------------------------------
-
-docker:
-	$(SHOW)$(MAKE) -C $(ROOT)/build/docker
