@@ -3,6 +3,17 @@ import inspect
 from RLTest import Env as rltestEnv
 from includes import *
 
+def Refresh_Cluster(env):
+    for shard in range(0, env.shardsCount):
+        con = env.getConnection(shard)
+        try:
+            modules = con.execute_command('MODULE', 'LIST')
+        except Exception as e:
+            continue
+        if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
+            break
+        con.execute_command('timeseries.REFRESHCLUSTER')
+
 
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:
