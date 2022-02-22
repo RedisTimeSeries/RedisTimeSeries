@@ -58,6 +58,7 @@ CC_FLAGS += \
 	-I$(ROOT)/deps/LibMR/deps/hiredis/adapters \
 	-I$(ROOT)/deps/LibMR/deps/libevent/include \
 	-I$(LIBEVENT_BINDIR)/include \
+	-I$(LIBSSL_PREFIX)/include \
 	$(CC_FLAGS.coverage)
 
 ifeq ($(DEBUG),1)
