@@ -131,7 +131,7 @@ SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
-LD_LIBS += -L/usr/local/opt/openssl/lib/ -lssl -lcrypto
+LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
@@ -477,6 +477,3 @@ pack: $(TARGET)
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
 
 #----------------------------------------------------------------------------------------------
-
-docker:
-	$(SHOW)$(MAKE) -C $(ROOT)/build/docker
