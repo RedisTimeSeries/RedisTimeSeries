@@ -9,6 +9,7 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "chunk.h"
 
 #define QUERY_TOKEN_SIZE 9
 static const char *QUERY_TOKENS[] = {
@@ -355,6 +356,19 @@ int comp_uint64(const void *a, const void *b) {
     return (0);
 }
 
+// assumption: values sorted array
+// returns the new size
+static size_t values_remove_duplicates(timestamp_t *values, size_t size) {
+    size_t cur = 0, i;
+    for (i = cur + 1; i < size; ++i) {
+        if (values[cur] != values[i]) {
+            values[++cur] = values[i];
+        }
+    }
+
+    return cur + 1;
+}
+
 static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                                   RedisModuleString **argv,
                                   int argc,
@@ -378,8 +392,14 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
                 break;
             }
         }
+        if (index == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: FILTER_BY_TS one or more arguments are missing");
+            return TSDB_ERROR;
+        }
+
         // We sort the provided timestamps in order to improve query time filtering
         qsort(args->values, index, sizeof(uint64_t), comp_uint64);
+        index = values_remove_duplicates(args->values, index);
 
         args->hasValue = (index > 0);
         args->count = index;

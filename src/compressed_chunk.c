@@ -96,7 +96,7 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     // add samples in new chunks
     size_t i = 0;
     Sample sample;
-    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk, CHUNK_ITER_OP_NONE, NULL);
+    ChunkIter_t *iter = Compressed_NewChunkIterator(curChunk);
     CompressedChunk *newChunk1 = Compressed_NewChunk(curChunk->size);
     CompressedChunk *newChunk2 = Compressed_NewChunk(curChunk->size);
     for (; i < curNumSamples; ++i) {
@@ -127,7 +127,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
     size_t newSize = oldChunk->size;
 
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk);
     timestamp_t ts = uCtx->sample.timestamp;
     int numSamples = oldChunk->count;
 
@@ -196,7 +196,7 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     CompressedChunk *oldChunk = (CompressedChunk *)chunk;
     size_t newSize = oldChunk->size; // mem size
     CompressedChunk *newChunk = Compressed_NewChunk(newSize);
-    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk, CHUNK_ITER_OP_NONE, NULL);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk);
     size_t i = 0;
     size_t deleted_count = 0;
     Sample iterSample;
@@ -216,37 +216,174 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
     return deleted_count;
 }
 
-// decompress chunk
-static Chunk *decompressChunk(const CompressedChunk *compressedChunk) {
-    assert(compressedChunk != NULL);
-
+// TODO: convert to template and unify with decompressChunk when moving to RUST
+// decompress chunk reverse
+static inline DomainChunk *decompressChunkReverse(const CompressedChunk *compressedChunk,
+                                                  uint64_t start,
+                                                  uint64_t end,
+                                                  DomainChunk *domainChunk,
+                                                  DomainChunk *domainChunkAux) {
     uint64_t numSamples = compressedChunk->count;
-    Chunk *uncompressedChunk = Uncompressed_NewChunk(numSamples * SAMPLE_SIZE);
-    Sample *samples = uncompressedChunk->samples;
-
-    ChunkIter_t *iter = Compressed_NewChunkIterator(compressedChunk, CHUNK_ITER_OP_NONE, NULL);
-
-    // 4 samples per iteration
-    uint64_t i = 0;
-    const uint64_t n = numSamples / 4;
-    for (; i < n; i += 4) {
-        Compressed_ChunkIteratorGetNext(iter, samples + i);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 1);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 2);
-        Compressed_ChunkIteratorGetNext(iter, samples + i + 3);
+    uint64_t lastTS = compressedChunk->prevTimestamp;
+    Sample sample;
+    domainChunk->num_samples = 0;
+    domainChunk->rev = true;
+    if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
+                 lastTS < start)) {
+        return domainChunk;
     }
 
-    // left-overs
-    for (; i < numSamples; i++) {
-        Compressed_ChunkIteratorGetNext(iter, samples + i);
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
+    timestamp_t *timestamps_ptr = domainChunk->samples.timestamps + numSamples - 1;
+    double *values_ptr = domainChunk->samples.values + numSamples - 1;
+
+    // find the first sample which is greater than start
+    Compressed_ChunkIteratorGetNext(iter, &sample);
+    while (sample.timestamp < start && iter->count < numSamples) {
+        Compressed_ChunkIteratorGetNext(iter, &sample);
     }
 
-    uncompressedChunk->num_samples = numSamples;
-    uncompressedChunk->base_timestamp = uncompressedChunk->samples[0].timestamp;
+    if (unlikely(sample.timestamp > end)) {
+        // occurs when the are TS smaller than start and larger than end but nothing in the range.
+        return domainChunk;
+    }
+    *timestamps_ptr-- = sample.timestamp;
+    *values_ptr-- = sample.value;
+
+    if (lastTS > end) { // the range not include the whole chunk
+        // 4 samples per iteration
+        const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
+        while (iter->count < n) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+            if (unlikely(*(timestamps_ptr + 1) > end)) {
+                while (*(timestamps_ptr + 1) > end) {
+                    ++timestamps_ptr;
+                    ++values_ptr;
+                }
+                goto _done;
+            }
+        }
+
+        // left-overs
+        while (iter->count < numSamples) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            if (sample.timestamp > end) {
+                goto _done;
+            }
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+        }
+    } else {
+        while (iter->count < numSamples) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr-- = sample.timestamp;
+            *values_ptr-- = sample.value;
+        }
+    }
+
+_done:
+    domainChunkAux->samples.timestamps = timestamps_ptr + 1;
+    domainChunkAux->samples.values = values_ptr + 1;
+    domainChunkAux->num_samples =
+        domainChunk->samples.timestamps + numSamples - domainChunkAux->samples.timestamps;
+    domainChunkAux->rev = true;
 
     Compressed_FreeChunkIterator(iter);
 
-    return uncompressedChunk;
+    return domainChunkAux;
+}
+
+// decompress chunk
+static inline DomainChunk *decompressChunk(const CompressedChunk *compressedChunk,
+                                           uint64_t start,
+                                           uint64_t end,
+                                           DomainChunk *domainChunk) {
+    uint64_t numSamples = compressedChunk->count;
+    uint64_t lastTS = compressedChunk->prevTimestamp;
+    Sample sample;
+    domainChunk->num_samples = 0;
+    domainChunk->rev = false;
+    if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
+                 lastTS < start)) {
+        return domainChunk;
+    }
+
+    Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
+    timestamp_t *timestamps_ptr = domainChunk->samples.timestamps;
+    double *values_ptr = domainChunk->samples.values;
+
+    // find the first sample which is greater than start
+    Compressed_ChunkIteratorGetNext(iter, &sample);
+    while (sample.timestamp < start && iter->count < numSamples) {
+        Compressed_ChunkIteratorGetNext(iter, &sample);
+    }
+
+    if (unlikely(sample.timestamp > end)) {
+        // occurs when the are TS smaller than start and larger than end but nothing in the range.
+        return domainChunk;
+    }
+    *timestamps_ptr++ = sample.timestamp;
+    *values_ptr++ = sample.value;
+
+    if (lastTS > end) { // the range not include the whole chunk
+        // 4 samples per iteration
+        const size_t n = numSamples >= 4 ? numSamples - 4 : 0;
+        while (iter->count < n) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+            if (unlikely(*(timestamps_ptr - 1) > end)) {
+                while (*(timestamps_ptr - 1) > end) {
+                    --timestamps_ptr;
+                    --values_ptr;
+                }
+                goto _done;
+            }
+        }
+
+        // left-overs
+        while (iter->count < numSamples) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            if (sample.timestamp > end) {
+                goto _done;
+            }
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+        }
+    } else {
+        while (iter->count < numSamples) {
+            Compressed_ChunkIteratorGetNext(iter, &sample);
+            *timestamps_ptr++ = sample.timestamp;
+            *values_ptr++ = sample.value;
+        }
+    }
+
+_done:
+    domainChunk->num_samples = timestamps_ptr - domainChunk->samples.timestamps;
+
+    Compressed_FreeChunkIterator(iter);
+
+    return domainChunk;
 }
 
 /************************
@@ -258,10 +395,10 @@ u_int64_t getIterIdx(ChunkIter_t *iter) {
 }
 // LCOV_EXCL_STOP
 
-void Compressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
-    CompressedChunk *compressedChunk = chunk;
+void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) {
+    const CompressedChunk *compressedChunk = chunk;
     Compressed_Iterator *iter = (Compressed_Iterator *)iterator;
-    iter->chunk = compressedChunk;
+    iter->chunk = (CompressedChunk *)compressedChunk;
     iter->idx = 0;
     iter->count = 0;
 
@@ -274,28 +411,39 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     iterator = (ChunkIter_t *)iter;
 }
 
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
-                                         int options,
-                                         ChunkIterFuncs *retChunkIterClass) {
-    CompressedChunk *compressedChunk = chunk;
-
-    // for reverse iterator of compressed chunks
-    if (options & CHUNK_ITER_OP_REVERSE) {
-        int uncompressed_options = CHUNK_ITER_OP_REVERSE | CHUNK_ITER_OP_FREE_CHUNK;
-        Chunk *uncompressedChunk = decompressChunk(compressedChunk);
-        return Uncompressed_NewChunkIterator(
-            uncompressedChunk, uncompressed_options, retChunkIterClass);
-    }
+ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk) {
+    const CompressedChunk *compressedChunk = chunk;
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
     Compressed_ResetChunkIterator(iter, compressedChunk);
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_COMPRESSED);
-    }
     return (ChunkIter_t *)iter;
 }
 
 void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
     free(iter);
+}
+
+DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
+                                     uint64_t start,
+                                     uint64_t end,
+                                     DomainChunk *domainChunk,
+                                     DomainChunk *domainChunkAux,
+                                     bool reverse) {
+    if (unlikely(!chunk)) {
+        return NULL;
+    }
+    const CompressedChunk *compressedChunk = chunk;
+    DomainChunk *ret_domainChunk;
+
+    if (unlikely(reverse)) {
+        ret_domainChunk =
+            decompressChunkReverse(compressedChunk, start, end, domainChunk, domainChunkAux);
+    } else {
+        ret_domainChunk = decompressChunk(compressedChunk, start, end, domainChunk);
+    }
+    if (unlikely(ret_domainChunk->num_samples == 0)) {
+        return NULL;
+    }
+    return ret_domainChunk;
 }
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);

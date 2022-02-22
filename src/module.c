@@ -34,6 +34,7 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "chunk.h"
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
@@ -405,11 +406,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
-            RedisModule_NotifyKeyspaceEvent(
-                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
-        }
+        rule->aggClass->finalize(rule->aggContext, &aggVal);
+        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        RedisModule_NotifyKeyspaceEvent(
+            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
@@ -1225,6 +1225,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
         return REDISMODULE_ERR;
     }
+
+    linkAppendValueVecFuncs();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;

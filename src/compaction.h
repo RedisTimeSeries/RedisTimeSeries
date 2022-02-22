@@ -16,10 +16,14 @@ typedef struct AggregationClass
     void *(*createContext)();
     void (*freeContext)(void *context);
     void (*appendValue)(void *context, double value);
+    void (*appendValueVec)(void *__restrict__ context,
+                           double *__restrict__ values,
+                           size_t si,
+                           size_t ei);
     void (*resetContext)(void *context);
     void (*writeContext)(void *context, RedisModuleIO *io);
     int (*readContext)(void *context, RedisModuleIO *io, int encver);
-    int (*finalize)(void *context, double *value);
+    void (*finalize)(void *context, double *value);
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
@@ -27,5 +31,6 @@ int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
+void linkAppendValueVecFuncs();
 
 #endif

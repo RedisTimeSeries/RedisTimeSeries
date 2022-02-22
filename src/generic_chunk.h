@@ -10,6 +10,7 @@
 #include "LibMR/src/mr.h"
 #include "consts.h"
 #include "load_io_error_macros.h"
+#include "domain_chunk.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -25,15 +26,19 @@ typedef struct Sample
     double value;
 } Sample;
 
+typedef struct Chunk
+{
+    timestamp_t base_timestamp;
+    Sample *samples;
+    unsigned int num_samples;
+    size_t size;
+} Chunk;
+
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
 #define CHUNK_ITER_OP_NONE 0
 #define CHUNK_ITER_OP_REVERSE 1
-// This is supported *only* by uncompressed chunk, this is used when we reverse read a compressed
-// chunk by uncompressing it into a *un*compressed chunk and returning a reverse iterator on that
-// "temporary" uncompressed chunk.
-#define CHUNK_ITER_OP_FREE_CHUNK 1 << 2
 
 typedef enum CHUNK_TYPES_T
 {
@@ -52,7 +57,7 @@ typedef struct ChunkIterFuncs
     void (*Free)(ChunkIter_t *iter);
     ChunkResult (*GetNext)(ChunkIter_t *iter, Sample *sample);
     ChunkResult (*GetPrev)(ChunkIter_t *iter, Sample *sample);
-    void (*Reset)(ChunkIter_t *iter, Chunk_t *chunk);
+    void (*Reset)(ChunkIter_t *iter, const Chunk_t *chunk);
 } ChunkIterFuncs;
 
 typedef struct ChunkFuncs
@@ -66,9 +71,12 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    ChunkIter_t *(*NewChunkIterator)(Chunk_t *chunk,
-                                     int options,
-                                     ChunkIterFuncs *retChunkIterClass);
+    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk,
+                                 uint64_t start,
+                                 uint64_t end,
+                                 DomainChunk *domainChunk,
+                                 DomainChunk *domainChunkAux,
+                                 bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);
@@ -86,9 +94,7 @@ const char *DuplicatePolicyToString(DuplicatePolicy policy);
 int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr);
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len);
 
-ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
+const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
 ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);
-
-int timestamp_binary_search(const uint64_t *array, int size, uint64_t key);
 
 #endif // GENERIC__CHUNK_H

@@ -39,7 +39,7 @@ typedef struct Series
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
-    ChunkFuncs *funcs;
+    const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
 } Series;
@@ -64,7 +64,14 @@ int GetSeries(RedisModuleCtx *ctx,
               bool shouldDeleteRefs,
               bool isSilent);
 
-AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
+AbstractIterator *SeriesQuery(Series *series,
+                              const RangeArgs *args,
+                              bool reserve,
+                              bool check_retention);
+AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
+                                                   const RangeArgs *args,
+                                                   bool reverse,
+                                                   bool check_retention);
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);

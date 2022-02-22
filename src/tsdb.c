@@ -12,10 +12,12 @@
 #include "indexer.h"
 #include "module.h"
 #include "series_iterator.h"
+#include "sample_iterator.h"
 
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
+#include <assert.h> // assert
 #include "rmutil/alloc.h"
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
@@ -478,7 +480,7 @@ int MultiSerieReduce(Series *dest,
                      const RangeArgs *args,
                      bool reverse) {
     Sample sample;
-    AbstractIterator *iterator = SeriesQuery(source, args, reverse);
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(source, args, reverse, true);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -571,7 +573,7 @@ int SeriesUpsertSample(Series *series,
                        DuplicatePolicy dp_override) {
     bool latestChunk = true;
     void *chunkKey = NULL;
-    ChunkFuncs *funcs = series->funcs;
+    const ChunkFuncs *funcs = series->funcs;
     Chunk_t *chunk = series->lastChunk;
     timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
 
@@ -992,27 +994,42 @@ int SeriesCalcRange(Series *series,
                     CompactionRule *rule,
                     double *val,
                     bool *is_empty) {
+    Sample sample;
     AggregationClass *aggObject = rule->aggClass;
+    const RangeArgs args = {
+        .startTimestamp = start_ts,
+        .endTimestamp = end_ts,
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+    };
 
-    Sample sample = { 0 };
-    AbstractIterator *iterator = SeriesIterator_New(series, start_ts, end_ts, false);
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
+
     void *context = aggObject->createContext();
     bool _is_empty = true;
+    ChunkResult res;
 
-    while (SeriesIteratorGetNext(iterator, &sample) == CR_OK) {
-        aggObject->appendValue(context, sample.value);
+    res = iterator->GetNext(iterator, &sample);
+    if (res == CR_OK) {
         _is_empty = false;
     }
+    while (res == CR_OK) {
+        aggObject->appendValue(context, sample.value);
+        res = iterator->GetNext(iterator, &sample);
+    }
+
     if (is_empty) {
         *is_empty = _is_empty;
     }
 
-    SeriesIteratorClose(iterator);
+    iterator->Close(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
     } else {
-        aggObject->finalize(context, val);
+        if (!_is_empty) {
+            aggObject->finalize(context, val);
+        }
         aggObject->freeContext(context);
     }
     return TSDB_OK;
@@ -1030,7 +1047,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         return 0;
     }
 
-    size_t i = 0;
+    size_t count = 0;
     Sample sample = { 0 };
 
     timestamp_t minTimestamp = 0;
@@ -1038,37 +1055,53 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    AbstractIterator *iterator = SeriesIterator_New(series, 0, series->lastTimestamp, false);
+    const RangeArgs args = {
+        .startTimestamp = 0,
+        .endTimestamp = series->lastTimestamp,
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+    };
+    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, false);
 
-    ChunkResult result = SeriesIteratorGetNext(iterator, &sample);
-
-    while (result == CR_OK && sample.timestamp < minTimestamp) {
-        result = SeriesIteratorGetNext(iterator, &sample);
-        ++i;
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
+        if (sample.timestamp >= minTimestamp) {
+            break;
+        }
+        ++count;
     }
 
     if (skipped != NULL) {
-        *skipped = i;
+        *skipped = count;
     }
-    SeriesIteratorClose(iterator);
+    iterator->Close(iterator);
     return sample.timestamp;
 }
 
-AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reverse) {
+AbstractIterator *SeriesQuery(Series *series,
+                              const RangeArgs *args,
+                              bool reverse,
+                              bool check_retention) {
     // In case a retention is set shouldn't return chunks older than the retention
     timestamp_t startTimestamp = args->startTimestamp;
-    if (series->retentionTime > 0) {
+    if (check_retention && series->retentionTime > 0) {
         startTimestamp =
             series->lastTimestamp > series->retentionTime
                 ? max(args->startTimestamp, series->lastTimestamp - series->retentionTime)
                 : args->startTimestamp;
     }
-    AbstractIterator *chain =
-        SeriesIterator_New(series, startTimestamp, args->endTimestamp, reverse);
 
-    if (args->filterByValueArgs.hasValue || args->filterByTSArgs.hasValue) {
-        chain = (AbstractIterator *)SeriesFilterIterator_New(
-            chain, args->filterByValueArgs, args->filterByTSArgs);
+    // When there is a TS filter the filter itself will reverse if needed
+    bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
+    AbstractIterator *chain = SeriesIterator_New(
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
+
+    if (args->filterByTSArgs.hasValue) {
+        chain =
+            (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs, reverse);
+    }
+
+    if (args->filterByValueArgs.hasValue) {
+        chain = (AbstractIterator *)SeriesFilterValIterator_New(chain, args->filterByValueArgs);
     }
 
     timestamp_t timestampAlignment;
@@ -1097,4 +1130,12 @@ AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool revers
     }
 
     return chain;
+}
+
+AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
+                                                   const RangeArgs *args,
+                                                   bool reverse,
+                                                   bool check_retention) {
+    AbstractIterator *chain = SeriesQuery(series, args, reverse, check_retention);
+    return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
 }

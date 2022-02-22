@@ -8,16 +8,23 @@
 #include "libmr_integration.h"
 
 #include "rmutil/alloc.h"
+#include <math.h>
+#include <assert.h>
+
+static inline void Uncompressed_ChunkInit(Chunk *chunk, size_t size) {
+    chunk->base_timestamp = 0;
+    chunk->num_samples = 0;
+    chunk->size = size;
+    chunk->samples = (Sample *)malloc(size);
+#ifdef DEBUG
+    memset(chunk->samples, 0, size);
+#endif
+    return;
+}
 
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
-    newChunk->base_timestamp = 0;
-    newChunk->num_samples = 0;
-    newChunk->size = size;
-    newChunk->samples = (Sample *)malloc(size);
-#ifdef DEBUG
-    memset(newChunk->samples, 0, size);
-#endif
+    Uncompressed_ChunkInit(newChunk, size);
 
     return newChunk;
 }
@@ -189,9 +196,9 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     return deleted_count;
 }
 
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
+void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
-    iter->chunk = chunk;
+    iter->chunk = (Chunk_t *)chunk;
     if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
         iter->currentIndex = iter->chunk->num_samples - 1;
     } else { // iterate from first to last
@@ -199,9 +206,86 @@ void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
     }
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+#define __array_reverse_inplace(arr, len)                                                          \
+    __extension__({                                                                                \
+        const size_t ei = len - 1;                                                                 \
+        __typeof__(*arr) tmp;                                                                      \
+        for (size_t i = 0; i < len / 2; ++i) {                                                     \
+            tmp = arr[i];                                                                          \
+            arr[i] = arr[ei - i];                                                                  \
+            arr[ei - i] = tmp;                                                                     \
+        }                                                                                          \
+    })
+
+void reverseDomainChunk(DomainChunk *domainChunk) {
+    __array_reverse_inplace(domainChunk->samples.timestamps, domainChunk->num_samples);
+    __array_reverse_inplace(domainChunk->samples.values, domainChunk->num_samples);
+    domainChunk->rev = true;
+}
+
+// TODO: can be optimized further using binary search
+DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                                       uint64_t start,
+                                       uint64_t end,
+                                       DomainChunk *domainChunk,
+                                       DomainChunk *domainChunkAux,
+                                       bool reverse) {
+    const Chunk *_chunk = chunk;
+    domainChunk->num_samples = 0;
+    if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
+                 _chunk->base_timestamp > end ||
+                 _chunk->samples[_chunk->num_samples - 1].timestamp < start)) {
+        return NULL;
+    }
+
+    size_t si = _chunk->num_samples, ei = _chunk->num_samples - 1, i = 0;
+
+    // find start index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp >= start) {
+            si = i;
+            break;
+        }
+    }
+
+    if (si == _chunk->num_samples) { // all TS are smaller than start
+        return NULL;
+    }
+
+    // find end index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp > end) {
+            ei = i - 1;
+            break;
+        }
+    }
+
+    domainChunk->num_samples = ei - si + 1;
+    if (domainChunk->num_samples == 0) {
+        return NULL;
+    }
+
+    if (unlikely(reverse)) {
+        for (i = 0; i < domainChunk->num_samples; ++i) {
+            domainChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
+            domainChunk->samples.values[i] = _chunk->samples[ei - i].value;
+        }
+        domainChunk->rev = true;
+    } else {
+        for (i = 0; i < domainChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
+            domainChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
+            domainChunk->samples.values[i] = _chunk->samples[i + si].value;
+        }
+        domainChunk->rev = false;
+    }
+    return domainChunk;
+}
+
+ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,
-                                           ChunkIterFuncs *retChunkIterClass) {
+                                           ChunkIterFuncs *retChunkIterClass,
+                                           uint64_t start,
+                                           uint64_t end) {
     ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
     iter->options = options;
     if (retChunkIterClass != NULL) {
@@ -235,9 +319,6 @@ ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sam
 
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
     ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
-        Uncompressed_FreeChunk(iter->chunk);
-    }
     free(iter);
 }
 
