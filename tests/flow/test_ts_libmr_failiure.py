@@ -30,7 +30,7 @@ def testLibmrFail():
                                 'name=bob')
         assert(False)
     except Exception as e:
-        env.assertResponseError(e, "multi shard cmd failed: cluster problem")
+        env.assertResponseError(e, "multi shard cmd failed")
     
     env.envRunner.shards[2].startEnv()
     Refresh_Cluster(env)
