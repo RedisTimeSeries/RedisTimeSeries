@@ -6,6 +6,7 @@ from RLTest import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
     _insert_agg_data
 from includes import *
+from ctypes import *
 
 
 def test_range_query():
@@ -251,8 +252,7 @@ def test_agg_avg():
 
         # If this test fails in the future it means
         # it run on an OS/compiler that doesn't support long double need to remove the comment below
-        # if(VALGRIND || sizeof(c_longdouble) > 8):
-        if(VALGRIND):
+        if(VALGRIND or (sizeof(c_longdouble) == 8)):
             assert actual_result == [[0, b'1.7976931348623155E308']]
         else:
             assert actual_result == [[0, b'1.7976931348623157E308']]
@@ -265,7 +265,7 @@ def test_agg_avg():
 
         actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
         #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
-        if(VALGRIND):
+        if(VALGRIND or (sizeof(c_longdouble) == 8)):
             assert actual_result == [[0, b'-1.7976931348623155E308']]
         else:
             assert actual_result == [[0, b'-1.7976931348623157E308']]
