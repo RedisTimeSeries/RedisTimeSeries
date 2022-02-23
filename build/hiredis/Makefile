@@ -39,7 +39,7 @@ CC_FLAGS += \
 	-MMD -MF $(@:.o=.d) \
 	-I$(SRCDIR) \
 	-I$(BINDIR) \
-	-I/usr/local/opt/openssl/include \
+	-I$(LIBSSL_PREFIX)/include \
 	$(CC_FLAGS.coverage)
 
 ifeq ($(DEBUG),1)
@@ -66,11 +66,12 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 	$(SHOW)$(CC) $(CC_FLAGS) -fvisibility=hidden -c $< -o $@
 
 # $(SRCDIR)/.patched:
-#	cd $(ROOT)/deps/hiredis ;\
-#	patch -p1 -i $(ROOT)/build/hiredis/hiredis_patch
-#	touch $@
+# 	cd $(ROOT)/deps/hiredis ;\
+# 	patch -p1 -i $(ROOT)/build/hiredis/hiredis_patch
+# 	touch $@
+# 
+# $(TARGET): $(SRCDIR)/.patched $(OBJECTS)
 
-# $(SRCDIR)/.patched 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
 	$(SHOW)$(AR) rcs $@ $(OBJECTS)
