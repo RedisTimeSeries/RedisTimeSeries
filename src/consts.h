@@ -91,12 +91,8 @@ typedef enum {
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
-static inline u_int64_t max(u_int64_t a, u_int64_t b) {
-    return a > b ? a : b;
-}
+#define min(a,b) (((a)<(b))?(a):(b))
 
-static inline u_int64_t min(u_int64_t a, u_int64_t b) {
-    return a < b ? a : b;
-}
+#define max(a,b) (((a)>(b))?(a):(b))
 
 #endif
