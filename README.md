@@ -1,4 +1,4 @@
-[![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
+[![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?sort=semver&kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
 [![Dockerhub](https://img.shields.io/badge/dockerhub-redislabs%2Fredistimeseries-blue)](https://hub.docker.com/r/redislabs/redistimeseries/tags/)
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/RedisTimeSeries/RedisTimeSeries.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/RedisTimeSeries/RedisTimeSeries/context:cpp)
@@ -128,6 +128,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
+| [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  |
 | [redis-py][redis-py-url] | Python | MIT | [Redis][redis-py-author] | [![redis-py-stars]][redis-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [Redis][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
@@ -149,6 +150,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redistimeseries-go-url]: https://github.com/RedisTimeSeries/redistimeseries-go/
 [redistimeseries-go-author]: https://redis.com
 [redistimeseries-go-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-go.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[rueidis-url]: https://github.com/rueian/rueidis
+[rueidis-author]: https://github.com/rueian
+[rueidis-stars]: https://img.shields.io/github/stars/rueian/rueidis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redis-py-url]: https://github.com/redis/redis-py/
 [redis-py-author]: https://redis.com
