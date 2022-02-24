@@ -7,7 +7,8 @@ from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_inf
     _insert_agg_data
 from includes import *
 from ctypes import *
-
+import random
+from datetime import datetime
 
 def test_range_query():
     start_ts = 1488823384
@@ -367,6 +368,61 @@ def test_filter_by():
 def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
     return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
 
+
+def test_max_extensive():
+    env = Env()
+    #skip cause it takes too much time
+    env.skipOnCluster()
+    env.skipOnAOF()
+    env.skipOnSlave()
+    max_samples_count = 40
+    n_chunk_samples = 32
+    random_values = [None]*(max_samples_count*3)
+    seed = datetime.now()
+    random.seed(seed)
+    try:
+        for i in range(0, max_samples_count*3):
+            random_values[i] = random.uniform(0, max_samples_count)
+        max_val = random.uniform(max_samples_count, max_samples_count + 10)
+        for ENCODING in ['uncompressed', 'compressed']:
+            for ev_odd in ['even', 'odd']:
+                if(ev_odd == 'even'):
+                    start_ts = 2
+                else:
+                    start_ts = 3
+                env.flush()
+                with env.getClusterConnectionIfNeeded() as r:
+                    assert r.execute_command('TS.CREATE', 't1', ENCODING, 'RETENTION', '0', 'CHUNK_SIZE', '512')
+                    # 32 samples in chunk, 40 samples: 2 chunk in total
+                    # inset even numbers
+                    for samples_count in range(0, max_samples_count + 1):
+                        last_ts = start_ts + samples_count*2
+                        r.execute_command('TS.ADD', 't1', last_ts, random_values[samples_count])
+
+                        for rev in [False, True]:
+                            query = 'ts.revrange' if rev else 'ts.range'
+                            for bucket_size in [1, 2, 3, 5, 7, 10, n_chunk_samples - 1,
+                            n_chunk_samples, n_chunk_samples+1, (2*n_chunk_samples)-1,
+                            (2*n_chunk_samples), (2*n_chunk_samples)+1, (3*n_chunk_samples)-1,
+                            (3*n_chunk_samples), (3*n_chunk_samples)+1]:
+                                for alignment in [0, 2, 5, 7]:
+                                    normalized_alignment = alignment%bucket_size
+                                    for max_index in range(start_ts, last_ts + 1):
+                                        r.execute_command('TS.ADD', 't1', max_index, max_val, 'ON_DUPLICATE', 'last')
+                                        start_ts_bucket = (start_ts - normalized_alignment)//bucket_size
+                                        max_bucket_reply_index = (max_index - normalized_alignment)//bucket_size - start_ts_bucket
+                                        max_bucket_ts = max(0, max_index - ((max_index - normalized_alignment)%bucket_size))
+                                        res = r.execute_command(query, 't1', '-', '+', 'ALIGN', alignment, 'AGGREGATION', 'max', bucket_size)
+                                        if rev:
+                                            max_bucket_reply_index = len(res) - 1 - max_bucket_reply_index
+                                        expected_res = [max_bucket_ts, str(max_val).encode()]
+                                        env.assertEqual(res[max_bucket_reply_index], expected_res)
+
+                                        #restore to the old val
+                                        r.execute_command('TS.ADD', 't1', max_index, random_values[i], 'ON_DUPLICATE', 'last')
+    except Exception as e:
+        print(seed)
+        raise e
 
 def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     expected_data = []
