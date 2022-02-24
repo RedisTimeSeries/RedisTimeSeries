@@ -133,6 +133,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
     void (*appendValue)(void *, double) = aggregation->appendValue;
     void *aggregationContext = self->aggregationContext;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    self->aggregationLastTimestamp = max(0, (int64_t)self->aggregationLastTimestamp);
     while (result == CR_OK) {
         if ((is_reserved == FALSE && internalSample.timestamp >= contextScope) ||
             (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
@@ -143,6 +144,7 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             self->aggregationLastTimestamp = calc_ts_bucket(
                 internalSample.timestamp, aggregationTimeDelta, self->timestampAlignment);
             contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+            self->aggregationLastTimestamp = max(0, (int64_t)self->aggregationLastTimestamp);
         }
         self->aggregationIsFirstSample = FALSE;
 
