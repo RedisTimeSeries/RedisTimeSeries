@@ -110,10 +110,10 @@ TS.DEL complexity is O(N) where N is the number of data points that will be remo
 
 ### TS.ALTER
 
-Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
+Update the retention, chunk size, duplicate policy, and labels of an existing key. The parameters are the same as TS.CREATE.
 
 ```sql
-TS.ALTER key [RETENTION retentionTime] [LABELS label value..]
+TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
 #### Alter Example
