@@ -29,7 +29,7 @@ A Redis time series comprises:
   
   Duplication policy for samples with identical time tags can be set: block/first/last/min/max/sum.
   
-- A configurable **retention period**.
+- An optional configurable **retention period**.
 
   Raw samples older than the retention period (relative to the raw sample with the highest time tag) are discarded.
   
@@ -44,7 +44,7 @@ A Redis time series comprises:
   Each compaction is defined by:
   - A timeframe. E.g., 10 minutes
   - An Aggregator: min, max, sum, avg, …
-  - A retention period. E.g., 10 year
+  - An optional retention period. E.g., 10 year
 
   For example, the following compaction: {10 minutes; avg; 10 years} will store the average of the raw values measured in each 10-minutes time frame - for 10 years.
 
