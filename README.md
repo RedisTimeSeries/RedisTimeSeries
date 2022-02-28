@@ -43,14 +43,14 @@ A Redis time series comprises:
 
   Each compaction is defined by:
   - A timeframe. E.g., 10 minutes
-  - An Aggregator: min, max, sum, avg, …
+  - An aggregator: min, max, sum, avg, …
   - An optional retention period. E.g., 10 year
 
   For example, the following compaction: {10 minutes; avg; 10 years} will store the average of the raw values measured in each 10-minutes time frame - for 10 years.
 
 ## Examples of time series
 - Sensor data: e.g., temperatures or fan velocity for a server in a server farm
-- Historical prices of a Stock
+- Historical prices of a stock
 - Number of vehicles passing through a given road (count per 1-minute timeframes)
 
 ## Features
