@@ -92,6 +92,26 @@
                 "optional": true
             },
             {
+                "type": "integer",
+                "command": "CHUNK_SIZE",
+                "name": "size",
+                "optional": true
+            },
+            {
+                "type": "enum",
+                "command": "DUPLICATE_POLICY",
+                "name": "policy",
+                "enum": [
+                    "BLOCK",
+                    "FIRST",
+                    "LAST",
+                    "MIN",
+                    "MAX",
+                    "SUM"
+                ],
+                "optional": true
+            },
+            {
                 "command": "LABELS",
                 "name": [
                     "label",
