@@ -110,10 +110,10 @@ TS.DEL complexity is O(N) where N is the number of data points that will be remo
 
 ### TS.ALTER
 
-Update the retention, labels of an existing key. The parameters are the same as TS.CREATE.
+Update the retention, chunk size, duplicate policy, and labels of an existing key. The parameters are the same as TS.CREATE.
 
 ```sql
-TS.ALTER key [RETENTION retentionTime] [LABELS label value..]
+TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
 #### Alter Example
@@ -127,7 +127,8 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
   e.g. if labels are given but retention isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
-* Supplying the `LABELS` keyword without any labels will remove all existing labels.  
+* Supplying the `LABELS` keyword without any labels will remove all existing labels.
+* CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8.
 
 ### TS.ADD
 
@@ -255,6 +256,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
 * destKey - Key name for destination time series
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
 * timeBucket - Time bucket for aggregation in milliseconds
+* The alignment of the Time buckets is 0.
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
 
@@ -790,6 +792,8 @@ With `DEBUG`:
 ...
 23) rules
 24) (empty list or set)
+25) keySelfName
+26) "temperature:2:32"
 25) Chunks
 26) 1)  1) startTimestamp
         2) (integer) 1548149180
