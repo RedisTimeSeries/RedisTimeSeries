@@ -13,7 +13,7 @@
 
 typedef struct SimpleCompactionRule
 {
-    uint64_t timeBucket;
+    uint64_t bucketDuration;
     uint64_t retentionSizeMillisec;
     int aggType;
 } SimpleCompactionRule;
