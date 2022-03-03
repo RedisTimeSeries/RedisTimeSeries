@@ -165,7 +165,7 @@ It's important to point out that there is no data rewriting on the original time
 **NOTE:** You need to create the destination (the compacted) timeseries before creating the rule.
 
 ```
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 ```
 
 Example:
@@ -227,7 +227,7 @@ TS.MRANGE - +  FILTER_BY_TS 1626435230501 1626443276598 FILTER region=east
 ## Aggregation
 It's possible to combine values of one or more timeseries by leveraging aggregation functions:
 ```
-TS.RANGE ... AGGREGATION aggType timeBucket...
+TS.RANGE ... AGGREGATION aggType bucketDuration...
 ```
 
 For example, to find the average temperature per hour in our `sensor1` series we could run:

@@ -352,7 +352,7 @@
                 ]
             },
             {
-                "name": "timeBucket",
+                "name": "bucketDuration",
                 "type": "integer"
             }
         ],
@@ -445,7 +445,7 @@
                     ]
                   },
                   {
-                    "name": "timeBucket",
+                    "name": "bucketDuration",
                     "type": "integer"
                   }
                 ]
@@ -525,7 +525,7 @@
                     ]
                   },
                   {
-                    "name": "timeBucket",
+                    "name": "bucketDuration",
                     "type": "integer"
                   }
                 ]
@@ -613,7 +613,7 @@
                     ]
                   },
                   {
-                    "name": "timeBucket",
+                    "name": "bucketDuration",
                     "type": "integer"
                   }
                 ]
@@ -728,7 +728,7 @@
                     ]
                   },
                   {
-                    "name": "timeBucket",
+                    "name": "bucketDuration",
                     "type": "integer"
                   }
                 ]
