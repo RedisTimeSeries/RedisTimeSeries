@@ -23,19 +23,19 @@ MU_TEST(test_valid_policy) {
     mu_check(rulesCount == 5);
 
     mu_check(parsedRules[0].aggType == StringAggTypeToEnum("max"));
-    mu_assert_int_eq(parsedRules[0].timeBucket, 1);
+    mu_assert_int_eq(parsedRules[0].bucketDuration, 1);
 
     mu_check(parsedRules[1].aggType == StringAggTypeToEnum("min"));
-    mu_check(parsedRules[1].timeBucket == 10 * 1000);
+    mu_check(parsedRules[1].bucketDuration == 10 * 1000);
 
     mu_check(parsedRules[2].aggType == StringAggTypeToEnum("last"));
-    mu_check(parsedRules[2].timeBucket == 5 * 60 * 1000);
+    mu_check(parsedRules[2].bucketDuration == 5 * 60 * 1000);
 
     mu_check(parsedRules[3].aggType == StringAggTypeToEnum("avg"));
-    mu_check(parsedRules[3].timeBucket == 2 * 60 * 60 * 1000);
+    mu_check(parsedRules[3].bucketDuration == 2 * 60 * 60 * 1000);
 
     mu_check(parsedRules[4].aggType == StringAggTypeToEnum("avg"));
-    mu_check(parsedRules[4].timeBucket == 3 * 60 * 60 * 1000 * 24);
+    mu_check(parsedRules[4].bucketDuration == 3 * 60 * 60 * 1000 * 24);
     free(parsedRules);
 }
 
