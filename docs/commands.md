@@ -249,13 +249,13 @@ If this command is used to add data to an existing timeseries, `retentionTime` a
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 ```
 
 * sourceKey - Key name for source time series
 * destKey - Key name for destination time series
 * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-* timeBucket - Time bucket for aggregation in milliseconds
+* bucketDuration - Time bucket for aggregation in milliseconds
 * The alignment of the Time buckets is 0.
 
 DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
@@ -299,13 +299,13 @@ TS.RANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS TS1 TS2 ..]
          [FILTER_BY_VALUE min max]
          [COUNT count] [ALIGN value]
-         [AGGREGATION aggregationType timeBucket]
+         [AGGREGATION aggregationType bucketDuration]
 
 TS.REVRANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS TS1 TS2 ..]
          [FILTER_BY_VALUE min max]
          [COUNT count] [ALIGN value]
-         [AGGREGATION aggregationType timeBucket]
+         [AGGREGATION aggregationType bucketDuration]
 ```
 
 - key - Key name for timeseries
@@ -328,7 +328,7 @@ Optional parameters:
 
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-  * timeBucket - Time bucket for aggregation in milliseconds
+  * bucketDuration - Time bucket duration for aggregation in milliseconds
 
 #### Complexity
 
@@ -371,7 +371,7 @@ TS.MRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label1 ..]
           [COUNT count] [ALIGN value]
-          [AGGREGATION aggregationType timeBucket]
+          [AGGREGATION aggregationType bucketDuration]
           FILTER filter..
           [GROUPBY <label> REDUCE <reducer>]
 
@@ -380,7 +380,7 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label1 ..]
           [COUNT count] [ALIGN value]
-          [AGGREGATION aggregationType timeBucket]
+          [AGGREGATION aggregationType bucketDuration]
           FILTER filter..
           [GROUPBY <label> REDUCE <reducer>]
 ```
@@ -409,7 +409,7 @@ Optional parameters:
 
 * AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-    * timeBucket - Time bucket for aggregation in milliseconds.
+    * bucketDuration - Time bucket duration for aggregation in milliseconds.
 
 * GROUPBY - Aggregate results across different time series, grouped by the provided label name.
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
