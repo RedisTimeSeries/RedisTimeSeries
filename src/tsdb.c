@@ -535,7 +535,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
-        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
         if (upsertTimestamp >= curAggWindowStart) {
             // upsert in latest timebucket
@@ -700,7 +700,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
     CompactionRule *rule = series->rules;
 
     while (rule) {
-        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart =
             CalcWindowStart(series->lastTimestamp, ruleTimebucket);
 
@@ -846,8 +846,8 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,
                               Series *destSeries,
                               int aggType,
-                              uint64_t timeBucket) {
-    CompactionRule *rule = NewRule(destSeries->keyName, aggType, timeBucket);
+                              uint64_t bucketDuration) {
+    CompactionRule *rule = NewRule(destSeries->keyName, aggType, bucketDuration);
     if (rule == NULL) {
         return NULL;
     }
@@ -882,7 +882,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                            "%s_%s_%" PRIu64,
                                            RedisModule_StringPtrLen(keyName, &len),
                                            aggString,
-                                           rule->timeBucket);
+                                           rule->bucketDuration);
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
@@ -907,7 +907,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             RedisModule_CreateString(NULL, aggString, strlen(aggString));
         compactedLabels[labelsCount + 1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
         compactedLabels[labelsCount + 1].value =
-            RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->timeBucket);
+            RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->bucketDuration);
 
         int rules_options = TSGlobalConfig.options;
         rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
@@ -922,14 +922,14 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         SeriesSetSrcRule(ctx, compactedSeries, series->keyName);
-        SeriesAddRule(ctx, series, compactedSeries, rule->aggType, rule->timeBucket);
+        SeriesAddRule(ctx, series, compactedSeries, rule->aggType, rule->bucketDuration);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket) {
-    if (timeBucket == 0ULL) {
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucketDuration) {
+    if (bucketDuration == 0ULL) {
         return NULL;
     }
 
@@ -937,7 +937,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBu
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
-    rule->timeBucket = timeBucket;
+    rule->bucketDuration = bucketDuration;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
