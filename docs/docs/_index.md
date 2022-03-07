@@ -1,6 +1,10 @@
+---
+title: RedisTimeSeries - a time series data type for Redis
+linkTitle: RedisTimeSeries
+---
+
 <img src="images/logo.svg" alt="logo" width="200"/>
 
-# RedisTimeSeries
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
