@@ -78,7 +78,7 @@ elif [[ $OSNICK == centos8 ]]; then
 	OSNICK=rhel8
 elif [[ $OSNICK == ol8 ]]; then
 	OSNICK=rhel8
-elif [[ $OSNICK == rockyl8 ]]; then
+elif [[ $OSNICK == rocky8 ]]; then
 	OSNICK=rhel8	
 fi
 
