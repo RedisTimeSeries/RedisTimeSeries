@@ -1,4 +1,11 @@
-# A Quick Start Guide to RedisTimeSeries
+---
+title: "Quick Start Guide to RedisTimeSeries"
+linkTitle: "Quick Start Guide to RedisTimeSeries"
+type: docs
+weight: 1
+description: >
+    "Quick Start Guide to RedisTimeSeries"
+---
 
 ## Setup
 
