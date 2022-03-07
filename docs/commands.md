@@ -50,9 +50,9 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 ### DEL
 
-A series can be deleted using redis [`DEL`](https://redis.io/commands/del) command.
+A series can be deleted using the Redis [`DEL`](https://redis.io/commands/del) command.
 
-Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands/expire) command.
+Timeout can be set for a series using the Redis [`EXPIRE`](https://redis.io/commands/expire) command.
 
 
 ```sql
@@ -65,7 +65,7 @@ DEL key [key2 ...]
 
 DEL complexity is O(N) where N is the number of keys that will be removed.
 
-#### Delete Serie Example
+#### Delete Series Example
 
 ```sql
 DEL temperature:2:32
