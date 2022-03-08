@@ -1,3 +1,9 @@
+---
+title: RedisTimeSeries - a time series data type for Redis
+linkTitle: RedisTimeSeries
+type: docs
+---
+
 <img src="images/logo.svg" alt="logo" width="200"/>
 
 # RedisTimeSeries

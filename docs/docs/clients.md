@@ -1,4 +1,11 @@
-# RedisTimeSeries Client Libraries
+---
+title: "RedisTimeSeries Client Libraries"
+linkTitle: "RedisTimeSeries Client Libraries"
+type: docs
+weight: 1
+description: >
+    "RedisTimeSeries Client Libraries"
+---
 
 RedisTimeSeries has several client libraries, written by the module authors and community members - abstracting the API in different programming languages. 
 
