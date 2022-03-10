@@ -244,6 +244,7 @@ commands:
           name: Install remote benchmark tool dependencies
           command: |
             VERSION=0.14.8 ./deps/readies/bin/getterraform
+            apt-get install python-dev -y
             apt install libhdf5-dev -y
       - run:
           name: Install remote benchmark python dependencies
