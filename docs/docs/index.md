@@ -26,7 +26,7 @@ Read more about the v1.0 GA features [here](https://redislabs.com/blog/redistime
 
 Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C#, Rust, and PHP. 
 
-See the [Clients page](clients.md) for the full list.
+See the [Clients page](clients) for the full list.
 
 ## Using with other tools metrics tools
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
