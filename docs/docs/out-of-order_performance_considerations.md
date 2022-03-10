@@ -4,7 +4,7 @@ linkTitle: "Out-of-order / backfilled ingestion performance considerations"
 type: docs
 weight: 1
 description: >
-    "Out-of-order / backfilled ingestion performance considerations"
+    Out-of-order / backfilled ingestion performance considerations
 ---
 
 When an older timestamp is inserted into a time series, the chunk of memory corresponding to the new sample’s time frame will potentially have to be retrieved from the main memory (you can read more about these chunks [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/)). When this chunk is a compressed chunk, it will also have to be decoded before we can insert/update to it. These are memory-intensive—and in the case of decoding, compute-intensive—operations that will influence the overall achievable ingestion rate. 
