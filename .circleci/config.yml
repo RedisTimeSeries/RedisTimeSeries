@@ -244,9 +244,12 @@ commands:
           name: Install remote benchmark tool dependencies
           command: |
             VERSION=0.14.8 ./deps/readies/bin/getterraform
+            apt install python3-dev libhdf5-dev -y
       - run:
           name: Install remote benchmark python dependencies
-          command: python3 -m pip install -r ./tests/benchmarks/requirements.txt
+          command: |
+            python3 -m pip install --upgrade cython
+            python3 -m pip install -r ./tests/benchmarks/requirements.txt
 
       - run:
           name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
@@ -267,6 +270,7 @@ commands:
               --github_sha $CIRCLE_SHA1 \
               --github_branch $CIRCLE_BRANCH \
               --upload_results_s3 \
+              --fail_fast \
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
               --allowed-envs << parameters.allowed_envs >> \
