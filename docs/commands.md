@@ -39,7 +39,8 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 #### Errors
 
-* If a key already exists you get a normal Redis error reply _TSDB: key already exists_. You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
+* If a key already exists you get a normal Redis error reply _TSDB: key already exists_.
+  You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
 
 #### Notes
 
@@ -123,7 +124,7 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 
 #### Notes
 * The command only alters the elements that are given,
-  e.g. if`LABELS` is given but `RETENTION` isn't, then only the labels are altered.
+  e.g. if `LABELS` is given but `RETENTION` isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the `LABELS` keyword without any labels will remove all existing labels.
