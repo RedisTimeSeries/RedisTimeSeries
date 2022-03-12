@@ -1,4 +1,3 @@
-# RedisTimeSeries Commands
 
 ## Create
 
@@ -10,23 +9,23 @@ Create a new time-series.
 TS.CREATE key [RETENTION retentionTime] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value..]
 ```
 
-* key - Key name for timeseries
+* _key_ - Key name for timeseries
 
 Optional args:
 
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
-    * Default: The global retention secs configuration of the database (by default, `0`)
+ * `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds)
+    * Default: The global retention secs configuration of the database (by default, 0)
     * When set to 0, the series is not trimmed at all
- * ENCODING - Specify the series samples encoding format.
-    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
-    * UNCOMPRESSED: keep the raw samples in memory.
+ * `ENCODING` - Specify the series samples encoding format.
+    * `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * `UNCOMPRESSED`: keep the raw samples in memory.
    Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses. 
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
- * DUPLICATE_POLICY - configure what to do on duplicate sample.
+ * `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
+ * `DUPLICATE_POLICY` _policy_ - configure what to do on duplicate sample.
    When this is not set, the server-wide default will be used. 
    For further details: [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
- * labels - Set of label-value pairs that represent metadata labels of the key
+ * `LABELS` - Set of label-value pairs that represent metadata labels of the key
 
 #### Complexity
 
@@ -40,7 +39,9 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 #### Errors
 
-* If a key already exists you get a normal Redis error reply `TSDB: key already exists`. You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
+* If a key already exists you get a normal Redis error reply _TSDB: key already exists_.
+
+  You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
 
 #### Notes
 
@@ -59,11 +60,11 @@ Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands
 DEL key [key2 ...]
 ```
 
-* key - Key name for timeseries
+* _key_ - Key name for timeseries
 
 #### Complexity
 
-DEL complexity is O(N) where N is the number of keys that will be removed.
+DEL complexity is O(_n_) where _n_ is the number of keys that will be removed.
 
 #### Delete Serie Example
 
@@ -81,15 +82,15 @@ EXPIRE temperature:2:32 60
 
 Delete samples between two timestamps for a given key.
 
-The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
+The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the _fromTimestamp_ or _toTimestamp_ will also be deleted.
 
 ```sql
 TS.DEL key fromTimestamp toTimestamp
 ```
 
-* key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range deletion.
-- toTimestamp - End timestamp for the range deletion.
+- _key_ - Key name for timeseries
+- _fromTimestamp_ - Start timestamp for the range deletion.
+- _toTimestamp_ - End timestamp for the range deletion.
 
 #### Return value
 
@@ -97,7 +98,7 @@ Integer reply: The number of samples that were removed.
 
 #### Complexity
 
-TS.DEL complexity is O(N) where N is the number of data points that will be removed.
+TS.DEL complexity is O(_n_) where _n_ is the number of data points that will be removed.
 
 #### Delete range of data points example
 
@@ -123,12 +124,12 @@ TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
 ```
 
 #### Notes
-* The command only alters the labels that are given,
-  e.g. if labels are given but retention isn't, then only the labels are altered.
+* The command only alters the elements that are given,
+  e.g. if `LABELS` is given but `RETENTION` isn't, then only the labels are altered.
 * If the labels are altered, the given label-list is applied,
   i.e. labels that are not present in the given list are removed implicitly.
 * Supplying the `LABELS` keyword without any labels will remove all existing labels.
-* CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8.
+* `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8.
 
 ### TS.ADD
 
@@ -138,20 +139,20 @@ Append a new sample to the series. If the series has not been created yet with `
 TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value..]
 ```
 
-* timestamp - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
-* value - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
+* _timestamp_ - (integer) UNIX timestamp of the sample **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+* _value_ - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 The following arguments are optional because they can be set by TS.CREATE:
 
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds). Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
+ * `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds). Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * ENCODING - Specify the series samples encoding format.
-    * COMPRESSED: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
-    * UNCOMPRESSED: keep the raw samples in memory.
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
- * ON_DUPLICATE - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
- * LABELS - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
+ * `ENCODING` - Specify the series samples encoding format.
+    * `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
+    * `UNCOMPRESSED`: keep the raw samples in memory.
+ * `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
+ * `ON_DUPLICATE` _policy_ - overwrite key and database configuration for `DUPLICATE_POLICY`. [See Duplicate sample policy](configuration.md#DUPLICATE_POLICY)
+ * `LABELS` - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a timeseries that hasn't been previously created; when adding samples to an existing timeseries this argument is ignored.
 
 
 #### Examples
@@ -167,14 +168,14 @@ The following arguments are optional because they can be set by TS.CREATE:
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.ADD` performance might be reduced.
-The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rules or O(1) with no compaction.
+The complexity of `TS.ADD` is always O(_m_) when _m_ is the number of compaction rules or O(1) with no compaction.
 
 #### Notes
 
 - You can use this command to add data to an non existing timeseries in a single command.
-  This is the reason why `labels` and `retentionTime` are optional arguments.
-- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionTime`.
-  Setting the `labels` and `retentionTime` introduces additional time complexity.
+  This is the reason why `RETENTION` and `LABELS` are optional arguments.
+- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `RETENTION` and or `LABELS`.
+  Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 - Updating a sample in a trimmed window will update down-sampling aggregation based on the existing data.
 
 ### TS.MADD
@@ -185,8 +186,8 @@ Append new samples to a list of series.
 TS.MADD key timestamp value [key timestamp value ...]
 ```
 
-* timestamp - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
-* value - numeric data value of the sample (double). We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
+* _timestamp_ - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+* _value_ - numeric data value of the sample (double). We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 #### Examples
 ```sql
@@ -201,7 +202,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
-The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
+The complexity of `TS.MADD` is always O(_m_ * _n_) when _m_ is the number of series updated and _n_ is the number of compaction rules or O(_m_) with no compaction.
 
 ### TS.INCRBY/TS.DECRBY
 
@@ -220,27 +221,27 @@ TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSE
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
 
-* key - Key name for timeseries
-* value - numeric data value of the sample (double)
+* _key_ - Key name for timeseries
+* _value_ - numeric data value of the sample (double)
 
 Optional args:
 
- * TIMESTAMP - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
- * RETENTION - Maximum age for samples compared to last event time (in milliseconds)
+ * `TIMESTAMP` - UNIX timestamp of the sample. `*` can be used for automatic timestamp (using the system clock)
+ * `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds)
     * Default: The global retention secs configuration of the database (by default, `0`)
     * When set to 0, the series is not trimmed at all
- * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
- * CHUNK_SIZE - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
- * labels - Set of label-value pairs that represent metadata labels of the key
+ * `UNCOMPRESSED` - Changes data storage from compressed (by default) to uncompressed
+ * `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
+ * `LABELS` - Set of label-value pairs that represent metadata labels of the key
 
-If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
+If this command is used to add data to an existing timeseries, `RETENTION` and `LABELS` are ignored.
 
 #### Notes
 
 - You can use this command to add data to an non existing timeseries in a single command.
-  This is the reason why `labels` and `retentionTime` are optional arguments.
-- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `labels` and or `retentionTime`.
-  Setting the `labels` and `retentionTime` introduces additional time complexity.
+  This is the reason why `RETENTION` and `LABELS` are optional arguments.
+- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `RETENTION` and or `LABELS`.
+  Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 
 ## Aggregation, Compaction, Downsampling
 
@@ -252,13 +253,27 @@ Create a compaction rule.
 TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 ```
 
-* sourceKey - Key name for source time series
-* destKey - Key name for destination time series
-* aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-* bucketDuration - Time bucket for aggregation in milliseconds
-* The alignment of the Time buckets is 0.
+* _sourceKey_ - Key name for source time series
+* _destKey_ - Key name for destination time series
+* _aggregationType_ - Aggregation type: 
+  |Value  | Description                   |
+  |-------|-------------------------------|
+  |`avg`  | arithmetic mean               |
+  |`sum`  | sum                           |
+  |`min`  | minimum sample                |
+  |`max`  | maximum sample                |
+  |`range`| range                         |
+  |`count`| number of samples             |
+  |`first`| first sample                  |
+  |`last` | last sample                   |
+  |`std.p`| population standard deviation |
+  |`std.s`| sample standard deviation     |
+  |`var.p`| population variance           |
+  |`var.s`| sample variance               |
+* _bucketDuration_ - Bucket duration for aggregation, in milliseconds
+* The alignment of buckets start time is 0.
 
-DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+_destKey_ should be of a _timeseries_ type, and should be created before TS.CREATERULE is called.
 
 !!! info "Note on existing samples in the source time series"
         
@@ -273,8 +288,8 @@ Delete a compaction rule.
 TS.DELETERULE sourceKey destKey
 ```
 
-- sourceKey - Key name for source time series
-- destKey - Key name for destination time series
+- _sourceKey_ - Key name for source time series
+- _destKey_ - Key name for destination time series
 
 ## Query
 
@@ -308,38 +323,52 @@ TS.REVRANGE key fromTimestamp toTimestamp
          [AGGREGATION aggregationType bucketDuration]
 ```
 
-- key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-- toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+- _key_ - Key name for timeseries
+- _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+- _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional parameters:
 
-* FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
-* FILTER_BY_VALUE - Filter result by value using minimum and maximum.
+* `FILTER_BY_TS` - Followed by a list of timestamps to filter the result by specific timestamps
+* `FILTER_BY_VALUE` - Filter result by value using minimum and maximum.
 
-* COUNT - Maximum number of returned samples.
+* `COUNT` - Maximum number of returned samples.
 
-* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` - Bucket alignment control for AGGREGATION. This will control the buckets start time by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
-     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
+     * `start` or `-`: The reference timestamp will be the query start interval time (_fromTimestamp_).
+     * `end` or `+`: The reference timestamp will be the query end interval time (_toTimestamp_).
      * A specific timestamp: align the reference timestamp to a specific time.
-     * **Note:** when not provided alignment is set to `0`.
+     * **Note:** when not provided alignment is set to 0.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
-  * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-  * bucketDuration - Time bucket duration for aggregation in milliseconds
+* AGGREGATION - Aggregate result into buckets (the following aggregation parameters are mandtory)
+  * aggregationType - Aggregation type:
+    |Value  | Description                   |
+    |-------|-------------------------------|
+    |`avg`  | arithmetic mean               |
+    |`sum`  | sum                           |
+    |`min`  | minimum sample                |
+    |`max`  | maximum sample                |
+    |`range`| range                         |
+    |`count`| number of samples             |
+    |`first`| first sample                  |
+    |`last` | last sample                   |
+    |`std.p`| population standard deviation |
+    |`std.s`| sample standard deviation     |
+    |`var.p`| population variance           |
+    |`var.s`| sample variance               |
+  * bucketDuration - Aggregation bucket duration, in milliseconds
 
 #### Complexity
 
-TS.RANGE complexity is O(n/m+k).
+TS.RANGE complexity is O(_n_/_m_+_k_).
 
-n = Number of data points
-m = Chunk size (data points per chunk)
-k = Number of data points that are in the requested range
+_n_ - Number of data points
+_m_ - Chunk size (data points per chunk)
+_k_ - Number of data points that are in the requested range
 
-This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k*m).
-But because m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
+This can be improved in the future by using binary search to find the start of the range, which makes this O(log(_n_/_m_)+_k_ * _m_).
+But because _m_ is pretty small, we can neglect it and look at the operation as O(Log(_n_) + _k_).
 
 #### Aggregated Query Example
 
@@ -385,36 +414,50 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [GROUPBY <label> REDUCE <reducer>]
 ```
 
-* fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-* toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
-* filter - [See Filtering](#filtering)
+* _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+* _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+* `FILTER` _filter_ - [See Filtering](#filtering)
 
 Optional parameters:
 
-* FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
-* FILTER_BY_VALUE - Filter result by value using minimum and maximum.
+* `FILTER_BY_TS` - Followed by a list of timestamps to filter the result by specific timestamps
+* `FILTER_BY_VALUE` - Filter result by value using minimum and maximum.
 
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `WITHLABELS` - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `SELECTED_LABELS` - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* COUNT - Maximum number of returned samples per time series.
+* `COUNT` - Maximum number of returned samples per time series.
 
-* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` - Bucket alignment control for AGGREGATION. This will control the buckets start time by changing the reference timestamp on which a bucket is defined.
      Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
-     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
+     * `start` or `-`: The reference timestamp will be the query start interval time (_fromTimestamp_).
+     * `end` or `+`: The reference timestamp will be the query end interval time (_toTimestamp_).
      * A specific timestamp: align the reference timestamp to a specific time.
-     * **Note:** when not provided alignment is set to `0`.
+     * **Note:** when not provided alignment is set to 0.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
-    * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-    * bucketDuration - Time bucket duration for aggregation in milliseconds.
+* AGGREGATION - Aggregate result into buckets (the following aggregation parameters are mandtory)
+    * aggregationType - Aggregation type:
+      |Value  | Description                   |
+      |-------|-------------------------------|
+      |`avg`  | arithmetic mean               |
+      |`sum`  | sum                           |
+      |`min`  | minimum sample                |
+      |`max`  | maximum sample                |
+      |`range`| range                         |
+      |`count`| number of samples             |
+      |`first`| first sample                  |
+      |`last` | last sample                   |
+      |`std.p`| population standard deviation |
+      |`std.s`| sample standard deviation     |
+      |`var.p`| population variance           |
+      |`var.s`| sample variance               |
+    * bucketDuration - Aggregation bucket duration, in milliseconds
 
-* GROUPBY - Aggregate results across different time series, grouped by the provided label name.
+* `GROUPBY` - Aggregate results across different time series, grouped by the provided label name.
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
-    * label - label name to group series by.  A new series for each value will be produced.
-    * reducer - Reducer type used to aggregate series that share the same label value. Available reducers: sum, min, max.
+    * _label_ - label name to group series by.  A new series for each value will be produced.
+    * _reducer_ - Reducer type used to aggregate series that share the same label value. Available reducers: `sum`, `min`, `max`.
     * **Note:** The resulting series will contain 2 labels with the following label array structure:
          * `__reducer__=<reducer>` : containing the used reducer.
          * `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
@@ -472,7 +515,7 @@ If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array wi
          2) "20"
 ```
 
-##### Query by Filters Example with WITHLABELS option
+##### Query by Filters Example with `WITHLABELS` option
 
 ```sql
 127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
@@ -607,7 +650,7 @@ Get the last sample.
 TS.GET key
 ```
 
-* key - Key name for timeseries
+* _key_ - Key name for timeseries
 
 
 #### Return Value
@@ -646,13 +689,13 @@ Get the last samples matching the specific filter.
 ```sql
 TS.MGET [WITHLABELS | SELECTED_LABELS label1 ..] FILTER filter...
 ```
-* filter - [See Filtering](#filtering)
+* `FILTER` _filter_ - [See Filtering](#filtering)
 
 Optional args:
 
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `WITHLABELS` - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `SELECTED_LABELS` - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
 #### Return Value
 
@@ -668,9 +711,9 @@ If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array wi
 
 #### Complexity
 
-TS.MGET complexity is O(n).
+TS.MGET complexity is O(_n_).
 
-n = Number of time-series that match the filters
+_n_ - Number of time-series that match the filters
 
 #### Examples
 
@@ -687,7 +730,7 @@ n = Number of time-series that match the filters
       2) "29"
 ```
 
-##### MGET Example with WITHLABELS option
+##### MGET Example with `WITHLABELS` option
 ```sql
 127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"
@@ -721,8 +764,8 @@ Returns information and statistics on the time-series.
 
 #### Parameters
 
-* key - Key name of the time-series.
-* DEBUG - An optional flag to get a more detailed information about the chunks.
+* _key_ - Key name of the time-series.
+* `DEBUG` - An optional flag to get a more detailed information about the chunks.
 
 #### Complexity
 
@@ -815,7 +858,7 @@ Get all the keys matching the filter list.
 TS.QUERYINDEX filter...
 ```
 
-* filter - [See Filtering](#filtering)
+* _filter_ - [See Filtering](#filtering)
 
 ### Query index example
 ```sql
