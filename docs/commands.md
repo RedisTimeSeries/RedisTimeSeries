@@ -40,6 +40,7 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 #### Errors
 
 * If a key already exists you get a normal Redis error reply _TSDB: key already exists_.
+
   You can check for the existince of a key with Redis [EXISTS command](https://redis.io/commands/exists).
 
 #### Notes
@@ -63,7 +64,7 @@ DEL key [key2 ...]
 
 #### Complexity
 
-DEL complexity is O(N) where N is the number of keys that will be removed.
+DEL complexity is O(_n_) where _n_ is the number of keys that will be removed.
 
 #### Delete Serie Example
 
@@ -87,7 +88,7 @@ The given timestamp interval is closed (inclusive), meaning samples which timest
 TS.DEL key fromTimestamp toTimestamp
 ```
 
-* _key_ - Key name for timeseries
+- _key_ - Key name for timeseries
 - _fromTimestamp_ - Start timestamp for the range deletion.
 - _toTimestamp_ - End timestamp for the range deletion.
 
@@ -97,7 +98,7 @@ Integer reply: The number of samples that were removed.
 
 #### Complexity
 
-TS.DEL complexity is O(N) where N is the number of data points that will be removed.
+TS.DEL complexity is O(_n_) where _n_ is the number of data points that will be removed.
 
 #### Delete range of data points example
 
@@ -167,7 +168,7 @@ The following arguments are optional because they can be set by TS.CREATE:
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.ADD` performance might be reduced.
-The complexity of `TS.ADD` is always O(M) when M is the amount of compaction rules or O(1) with no compaction.
+The complexity of `TS.ADD` is always O(_m_) when _m_ is the number of compaction rules or O(1) with no compaction.
 
 #### Notes
 
@@ -201,7 +202,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 #### Complexity
 
 If a compaction rule exits on a timeseries, `TS.MADD` performance might be reduced.
-The complexity of `TS.MADD` is always O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
+The complexity of `TS.MADD` is always O(_m_ * _n_) when _m_ is the number of series updated and _n_ is the number of compaction rules or O(_m_) with no compaction.
 
 ### TS.INCRBY/TS.DECRBY
 
@@ -269,8 +270,8 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
   |`std.s`| sample standard deviation     |
   |`var.p`| population variance           |
   |`var.s`| sample variance               |
-* _bucketDuration_ - Time bucket for aggregation in milliseconds
-* The alignment of the Time buckets is 0.
+* _bucketDuration_ - Bucket duration for aggregation, in milliseconds
+* The alignment of buckets start time is 0.
 
 _destKey_ should be of a _timeseries_ type, and should be created before TS.CREATERULE is called.
 
@@ -333,14 +334,14 @@ Optional parameters:
 
 * `COUNT` - Maximum number of returned samples.
 
-* `ALIGN` - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` - Bucket alignment control for AGGREGATION. This will control the buckets start time by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (_fromTimestamp_).
      * `end` or `+`: The reference timestamp will be the query end interval time (_toTimestamp_).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to 0.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
+* AGGREGATION - Aggregate result into buckets (the following aggregation parameters are mandtory)
   * aggregationType - Aggregation type:
     |Value  | Description                   |
     |-------|-------------------------------|
@@ -356,18 +357,18 @@ Optional parameters:
     |`std.s`| sample standard deviation     |
     |`var.p`| population variance           |
     |`var.s`| sample variance               |
-  * bucketDuration - Time bucket duration for aggregation in milliseconds
+  * bucketDuration - Aggregation bucket duration, in milliseconds
 
 #### Complexity
 
-TS.RANGE complexity is O(n/m+k).
+TS.RANGE complexity is O(_n_/_m_+_k_).
 
-n = Number of data points
-m = Chunk size (data points per chunk)
-k = Number of data points that are in the requested range
+_n_ - Number of data points
+_m_ - Chunk size (data points per chunk)
+_k_ - Number of data points that are in the requested range
 
-This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k*m).
-But because m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
+This can be improved in the future by using binary search to find the start of the range, which makes this O(log(_n_/_m_)+_k_ * _m_).
+But because _m_ is pretty small, we can neglect it and look at the operation as O(Log(_n_) + _k_).
 
 #### Aggregated Query Example
 
@@ -428,14 +429,14 @@ Optional parameters:
 
 * `COUNT` - Maximum number of returned samples per time series.
 
-* `ALIGN` - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` - Bucket alignment control for AGGREGATION. This will control the buckets start time by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (_fromTimestamp_).
      * `end` or `+`: The reference timestamp will be the query end interval time (_toTimestamp_).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided alignment is set to 0.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
+* AGGREGATION - Aggregate result into buckets (the following aggregation parameters are mandtory)
     * aggregationType - Aggregation type:
       |Value  | Description                   |
       |-------|-------------------------------|
@@ -451,7 +452,7 @@ Optional parameters:
       |`std.s`| sample standard deviation     |
       |`var.p`| population variance           |
       |`var.s`| sample variance               |
-    * bucketDuration - Time bucket duration for aggregation in milliseconds.
+    * bucketDuration - Aggregation bucket duration, in milliseconds
 
 * `GROUPBY` - Aggregate results across different time series, grouped by the provided label name.
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
@@ -710,9 +711,9 @@ If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array wi
 
 #### Complexity
 
-TS.MGET complexity is O(n).
+TS.MGET complexity is O(_n_).
 
-n = Number of time-series that match the filters
+_n_ - Number of time-series that match the filters
 
 #### Examples
 
