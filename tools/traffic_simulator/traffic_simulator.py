@@ -29,7 +29,7 @@ def worker_func(args):
     redis_client = redis.Redis(host, port, decode_responses=True, retry_on_timeout=True, socket_connect_timeout=30,
                                socket_timeout=30)
     if check_only:
-        res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
+        res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange - 1)
         if len(res) != tsrange:
             return -1
         expected = [[int(start_ts + i), str(i)] for i in range(tsrange)]
