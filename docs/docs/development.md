@@ -1,6 +1,6 @@
 ---
-title: "Developing RedisTimeSeries"
-linkTitle: "Developing RedisTimeSeries"
+title: "Development"
+linkTitle: "Development"
 type: docs
 weight: 1
 description: >

@@ -1,6 +1,6 @@
 ---
-title: "RedisTimeSeries Client Libraries"
-linkTitle: "RedisTimeSeries Client Libraries"
+title: "Clients"
+linkTitle: "Clients"
 type: docs
 weight: 1
 description: >

@@ -1,6 +1,6 @@
 ---
-title: "Run-time configuration"
-linkTitle: "Run-time configuration"
+title: "Configuration"
+linkTitle: "Configuration"
 type: docs
 weight: 1
 description: >
