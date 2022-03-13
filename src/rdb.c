@@ -70,11 +70,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     for (int i = 0; i < rulesCount; i++) {
         destKey = LoadString_IOError(io, goto err);
-        uint64_t timeBucket = LoadUnsigned_IOError(io, goto err);
+        uint64_t bucketDuration = LoadUnsigned_IOError(io, goto err);
         uint64_t aggType = LoadUnsigned_IOError(io, goto err);
         timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
 
-        CompactionRule *rule = NewRule(destKey, aggType, timeBucket);
+        CompactionRule *rule = NewRule(destKey, aggType, bucketDuration);
         destKey = NULL;
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
@@ -197,7 +197,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         RedisModule_SaveString(io, rule->destKey);
-        RedisModule_SaveUnsigned(io, rule->timeBucket);
+        RedisModule_SaveUnsigned(io, rule->bucketDuration);
         RedisModule_SaveUnsigned(io, rule->aggType);
         RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
         rule->aggClass->writeContext(rule->aggContext, io);

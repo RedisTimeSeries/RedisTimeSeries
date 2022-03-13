@@ -234,7 +234,7 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         }
 
         if (temp_time_delta <= 0) {
-            RTS_ReplyGeneralError(ctx, "TSDB: timeBucket must be greater than zero");
+            RTS_ReplyGeneralError(ctx, "TSDB: bucketDuration must be greater than zero");
             return TSDB_ERROR;
         } else {
             *time_delta = (api_timestamp_t)temp_time_delta;
