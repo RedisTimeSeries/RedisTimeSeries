@@ -2,7 +2,7 @@
 title: "Development"
 linkTitle: "Development"
 type: docs
-weight: 1
+weight: 3
 description: >
     Developing RedisTimeSeries
 ---

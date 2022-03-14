@@ -2,7 +2,7 @@
 title: "Clients"
 linkTitle: "Clients"
 type: docs
-weight: 1
+weight: 4
 description: >
     RedisTimeSeries Client Libraries
 ---
