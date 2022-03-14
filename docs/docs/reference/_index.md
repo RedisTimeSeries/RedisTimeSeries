@@ -1,5 +1,8 @@
 ---
-title: RedisTimeSeries - a time series data type for Redis
-linkTitle: RedisTimeSeries
+title: "Reference"
+linkTitle: "Reference"
 type: docs
+weight: 4
+description: >
+    Reference
 ---
