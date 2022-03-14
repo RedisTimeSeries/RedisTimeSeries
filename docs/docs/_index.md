@@ -1,6 +1,6 @@
 ---
-title: RedisTimeSeries Documentation
-titleLink: RedisTimeSeries Documentation
+title: RedisTimeSeries - a time series data type for Redis
+titleLink: RedisTimeSeries
 type: docs
 ---
 
