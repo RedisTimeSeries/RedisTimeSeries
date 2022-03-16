@@ -385,6 +385,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
         rule->startCurrentTimeBucket = currentTimestamp;
+
+        if (rule->aggClass->addBucketParams) {
+            rule->aggClass->addBucketParams(
+                rule->aggContext, currentTimestamp, currentTimestamp + rule->bucketDuration);
+        }
     }
 
     if (currentTimestamp > rule->startCurrentTimeBucket) {
@@ -402,16 +407,33 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
 
+        if (rule->aggClass->addNextBucketFirstSample) {
+            rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
+        }
+
         double aggVal;
         rule->aggClass->finalize(rule->aggContext, &aggVal);
         SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
         RedisModule_NotifyKeyspaceEvent(
             ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        Sample last_sample;
+        if (rule->aggClass->addPrevBucketLastSample) {
+            rule->aggClass->getLastSample(rule->aggContext, &last_sample);
+        }
         rule->aggClass->resetContext(rule->aggContext);
+        if (rule->aggClass->addBucketParams) {
+            rule->aggClass->addBucketParams(
+                rule->aggContext, currentTimestamp, currentTimestamp + rule->bucketDuration);
+        }
+
+        if (rule->aggClass->addPrevBucketLastSample) {
+            rule->aggClass->addPrevBucketLastSample(
+                rule->aggContext, last_sample.value, last_sample.timestamp);
+        }
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
     }
-    rule->aggClass->appendValue(rule->aggContext, value);
+    rule->aggClass->appendValue(rule->aggContext, value, timestamp);
 }
 
 static int internalAdd(RedisModuleCtx *ctx,

@@ -127,7 +127,7 @@ def test_dump_trimmed_series(self):
 def test_empty_series():
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester')
-        agg_list = ['avg', 'sum', 'min', 'max', 'range', 'first', 'last',
+        agg_list = ['avg', 'wavg', 'sum', 'min', 'max', 'range', 'first', 'last',
                     'std.p', 'std.s', 'var.p', 'var.s']
         for agg in agg_list:
             assert [] == r.execute_command('TS.range', 'tester', '-', '+', 'aggregation', agg, 1000)
