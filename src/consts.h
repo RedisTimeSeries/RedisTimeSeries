@@ -25,6 +25,10 @@
 #define really_inline __attribute__((always_inline)) inline
 #endif // really_inline
 
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
+
 #define SAMPLE_SIZE sizeof(Sample)
 
 #define timestamp_t u_int64_t
@@ -49,6 +53,7 @@ typedef enum {
     TS_AGG_MAX,
     TS_AGG_SUM,
     TS_AGG_AVG,
+    TS_AGG_WAVG,
     TS_AGG_COUNT,
     TS_AGG_FIRST,
     TS_AGG_LAST,
@@ -93,10 +98,20 @@ typedef enum {
 #define UNCOMPRESSED_ARG_STR "uncompressed"
 #define COMPRESSED_GORILLA_ARG_STR "compressed"
 
+// DC - Don't Care (Arbitrary value) 
+#define DC 0
+
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
 #define max(a,b) (((a)>(b))?(a):(b))
+
+#define __SWAP(x,y) do {  \
+  typeof(x) _x = x;      \
+  typeof(y) _y = y;      \
+  x = _y;                \
+  y = _x;                \
+} while(0)
 
 #endif

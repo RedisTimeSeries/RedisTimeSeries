@@ -208,7 +208,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
-                                             bool reverse) {
+                                             bool reverse,
+                                             Series *series) {
     AggregationIterator *iter = malloc(sizeof(AggregationIterator));
     iter->base.GetNext = AggregationIterator_GetNextChunk;
     iter->base.Close = AggregationIterator_Close;
@@ -216,10 +217,11 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->aggregation = aggregation;
     iter->timestampAlignment = timestampAlignment;
     iter->aggregationTimeDelta = aggregationTimeDelta;
-    iter->aggregationContext = iter->aggregation->createContext();
+    iter->aggregationContext = iter->aggregation->createContext(reverse);
     iter->aggregationLastTimestamp = 0;
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
+    iter->series = series;
     iter->initilized = false;
     iter->aux_chunk = NewEnrichedChunk();
     ReallocEnrichedChunk(iter->aux_chunk, 1);
@@ -275,10 +277,14 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     AggregationClass *aggregation = self->aggregation;
     void *aggregationContext = self->aggregationContext;
+    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    bool is_reserved = self->reverse;
+    Sample sample;
 
     AbstractIterator *input = iter->input;
     EnrichedChunk *enrichedChunk = input->GetNext(input);
     double value;
+
     if (!enrichedChunk || enrichedChunk->num_samples == 0) {
         if (self->hasUnFinalizedContext) {
             goto _finalize;
@@ -290,20 +296,37 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     self->hasUnFinalizedContext = true;
 
     size_t n_samples;
-    Sample sample;
 
-    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
-    bool is_reserved = self->reverse;
     if (!self->initilized) {
         timestamp_t init_ts = enrichedChunk->samples.timestamps[0];
         self->aggregationLastTimestamp =
             calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
+        if (aggregation->addBucketParams) {
+            aggregation->addBucketParams(aggregationContext,
+                                         max(0, (int64_t)self->aggregationLastTimestamp),
+                                         self->aggregationLastTimestamp + aggregationTimeDelta);
+        }
+
+        if (aggregation->addPrevBucketLastSample && !((!is_reserved) && init_ts == 0)) {
+            RangeArgs args = { .aggregationArgs = { 0 },
+                               .filterByValueArgs = { 0 },
+                               .filterByTSArgs = { 0 },
+                               .startTimestamp = is_reserved ? init_ts + 1 : 0,
+                               .endTimestamp = is_reserved ? UINT64_MAX : init_ts - 1 };
+            AbstractSampleIterator *sample_iterator =
+                SeriesCreateSampleIterator(self->series, &args, !is_reserved, true);
+            if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+                aggregation->addPrevBucketLastSample(
+                    aggregationContext, sample.value, sample.timestamp);
+            }
+            sample_iterator->Close(sample_iterator);
+        }
     }
 
     extern AggregationClass aggMax;
     size_t agg_n_samples = 0;
-    void (*appendValue)(void *, double) = aggregation->appendValue;
+    void (*appendValue)(void *, double, timestamp_t) = aggregation->appendValue;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     self->aggregationLastTimestamp = max(0, (int64_t)self->aggregationLastTimestamp);
     int64_t si, ei;
@@ -337,7 +360,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         max(0, (int64_t)self->aggregationLastTimestamp);
 
                     // append sample and inc si cause we aggregate in place
-                    appendValue(aggregationContext, sample.value);
+                    appendValue(aggregationContext, sample.value, sample.timestamp);
                     si++;
                 }
             }
@@ -355,15 +378,33 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                 // following condition should always be false on the first iteration
                 if ((is_reserved == FALSE && sample.timestamp >= contextScope) ||
                     (is_reserved == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
+                    if (aggregation->addNextBucketFirstSample) {
+                        aggregation->addNextBucketFirstSample(
+                            aggregationContext, sample.value, sample.timestamp);
+                    }
+
+                    Sample last_sample;
+                    if (aggregation->addPrevBucketLastSample) {
+                        aggregation->getLastSample(aggregationContext, &last_sample);
+                    }
                     finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
                     self->aggregationLastTimestamp = calc_ts_bucket(
                         sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
                     self->aggregationLastTimestamp =
                         max(0, (int64_t)self->aggregationLastTimestamp);
+                    if (aggregation->addPrevBucketLastSample) {
+                        aggregation->addPrevBucketLastSample(
+                            aggregationContext, last_sample.value, last_sample.timestamp);
+                    }
+
+                    if (aggregation->addBucketParams) {
+                        aggregation->addBucketParams(
+                            aggregationContext, self->aggregationLastTimestamp, contextScope);
+                    }
                 }
 
-                appendValue(aggregationContext, sample.value);
+                appendValue(aggregationContext, sample.value, sample.timestamp);
             }
         }
 
@@ -376,7 +417,26 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
 
 _finalize:
     self->hasUnFinalizedContext = false;
-    aggregation->finalize(aggregationContext, &value);
+    if (aggregation->addNextBucketFirstSample) {
+        Sample last_sample;
+        aggregation->getLastSample(aggregationContext, &last_sample);
+        if (!(is_reserved && last_sample.timestamp == 0)) {
+            RangeArgs args = { .aggregationArgs = { 0 },
+                               .filterByValueArgs = { 0 },
+                               .filterByTSArgs = { 0 },
+                               .startTimestamp = is_reserved ? 0 : last_sample.timestamp + 1,
+                               .endTimestamp =
+                                   is_reserved ? last_sample.timestamp - 1 : UINT64_MAX };
+            AbstractSampleIterator *sample_iterator =
+                SeriesCreateSampleIterator(self->series, &args, is_reserved, true);
+            if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+                aggregation->addNextBucketFirstSample(
+                    aggregationContext, sample.value, sample.timestamp);
+            }
+            sample_iterator->Close(sample_iterator);
+        }
+    }
+    aggregation->finalize(aggregationContext, &value); // last bucket, no need to addBucketParams
     self->aux_chunk->samples.timestamps[0] = self->aggregationLastTimestamp;
     self->aux_chunk->samples.values[0] = value;
     self->aux_chunk->num_samples = 1;
