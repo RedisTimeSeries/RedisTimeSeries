@@ -522,7 +522,7 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build"
+          command: bash -l -c "make build DEBUG=1"
       - benchmark-automation:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
@@ -570,7 +570,7 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build PROFILE=1"
+          command: bash -l -c "make build PROFILE=1 DEBUG=1"
       - benchmark-automation:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
