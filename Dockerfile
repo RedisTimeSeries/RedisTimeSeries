@@ -1,6 +1,6 @@
 
 #----------------------------------------------------------------------------------------------
-FROM redis:bullseye AS redis
+FROM redis:6.2.6-bullseye AS redis
 FROM debian:bullseye-slim AS builder
 
 SHELL ["/bin/bash", "-l", "-c"]
@@ -16,7 +16,7 @@ RUN ./system-setup.py
 RUN make fetch build
 
 #----------------------------------------------------------------------------------------------
-FROM redis:bullseye
+FROM redis:6.2.6-bullseye
 
 WORKDIR /data
 RUN mkdir -p /usr/lib/redis/modules
