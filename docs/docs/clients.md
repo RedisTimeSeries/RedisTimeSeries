@@ -2,7 +2,7 @@
 title: "RedisTimeSeries Client Libraries"
 linkTitle: "RedisTimeSeries Client Libraries"
 type: docs
-weight: 3
+weight: 4
 description: >
     RedisTimeSeries Client Libraries
 ---

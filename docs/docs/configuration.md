@@ -2,7 +2,7 @@
 title: "Run-time configuration"
 linkTitle: "Run-time configuration"
 type: docs
-weight: 1
+weight: 2
 description: >
     Run-time configuration
 ---
