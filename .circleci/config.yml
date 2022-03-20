@@ -267,7 +267,6 @@ commands:
             export PROFILE=<< parameters.profile_env >>
             export BENCHMARK_GLOB=<< parameters.benchmark_glob >>
             export PERF_CALLGRAPH_MODE="dwarf"
-            export KEEP_ENV=1
             redisbench-admin run-remote \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
