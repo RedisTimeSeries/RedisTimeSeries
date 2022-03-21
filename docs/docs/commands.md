@@ -7,9 +7,9 @@ description: >
     Commands Overview
 ---
 
-### RedisJSON API
+### RedisTimeSeries API
 
-Details on module's [commands](/commands/?group=redistimeseries) can be filtered for a specific module or command, e.g., [`JSON`](/commands/?group=redistimeseries&name=ts.create).
+Details on module's [commands](/commands/?group=redistimeseries) can be filtered for a specific module or command, e.g., [`TS.CREATE`](/commands/?group=redistimeseries&name=ts.create).
 The details also include the syntax for the commands, where:
 
 *   Command and subcommand names are in uppercase, for example `TS.ADD`
