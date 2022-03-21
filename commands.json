@@ -4,76 +4,76 @@
         "complexity": "O(1)",
         "arguments": [
             {
-            "name": "key",
-            "type": "key"
+                "name": "key",
+                "type": "key"
             },
             {
-            "type": "integer",
-            "token": "RETENTION",
-            "name": "retentionTime",
-            "optional": true
+                "type": "integer",
+                "token": "RETENTION",
+                "name": "retentionTime",
+                "optional": true
             },
             {
-            "name": "encoding",
-            "token": "ENCODING",
-            "type": "oneof",
-            "arguments": [
-                {
-                    "name": "uncompressed",
-                    "type": "pure-token",
-                    "token": "UNCOMPRESSED"
-                },
-                {
-                    "name": "compressed",
-                    "type": "pure-token",
-                    "token": "COMPRESSED"
-                }
-            ],
-            "optional": true
+                "name": "encoding",
+                "token": "ENCODING",
+                "type": "oneof",
+                "arguments": [
+                    {
+                        "name": "uncompressed",
+                        "type": "pure-token",
+                        "token": "UNCOMPRESSED"
+                    },
+                    {
+                        "name": "compressed",
+                        "type": "pure-token",
+                        "token": "COMPRESSED"
+                    }
+                ],
+                "optional": true
             },
             {
-            "type": "integer",
-            "token": "CHUNK_SIZE",
-            "name": "size",
-            "optional": true
+                "type": "integer",
+                "token": "CHUNK_SIZE",
+                "name": "size",
+                "optional": true
             },
             {
-            "type": "oneof",
-            "token": "DUPLICATE_POLICY",
-            "name": "policy",
-            "arguments": [
-                {
-                    "name": "block",
-                    "type": "pure-token",
-                    "token": "BLOCK"
-                },
-                {
-                    "name": "first",
-                    "type": "pure-token",
-                    "token": "FIRST"
-                },
-                {
-                    "name": "last",
-                    "type": "pure-token",
-                    "token": "LAST"
-                },
-                {
-                    "name": "min",
-                    "type": "pure-token",
-                    "token": "MIN"
-                },
-                {
-                    "name": "max",
-                    "type": "pure-token",
-                    "token": "MAX"
-                },
-                {
-                    "name": "sum",
-                    "type": "pure-token",
-                    "token": "SUM"
-                }
-            ],
-            "optional": true
+                "type": "oneof",
+                "token": "DUPLICATE_POLICY",
+                "name": "policy",
+                "arguments": [
+                    {
+                        "name": "block",
+                        "type": "pure-token",
+                        "token": "BLOCK"
+                    },
+                    {
+                        "name": "first",
+                        "type": "pure-token",
+                        "token": "FIRST"
+                    },
+                    {
+                        "name": "last",
+                        "type": "pure-token",
+                        "token": "LAST"
+                    },
+                    {
+                        "name": "min",
+                        "type": "pure-token",
+                        "token": "MIN"
+                    },
+                    {
+                        "name": "max",
+                        "type": "pure-token",
+                        "token": "MAX"
+                    },
+                    {
+                        "name": "sum",
+                        "type": "pure-token",
+                        "token": "SUM"
+                    }
+                ],
+                "optional": true
             },
             {
                 "type": "block",
@@ -94,13 +94,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.DEL": {
         "summary": "Delete samples between two timestamps for a given key",
         "complexity": "O(N) where N is the number of data points that will be removed",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -114,13 +114,13 @@
             }
         ],
         "since": "1.6.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.ALTER": {
         "summary": "Update the retention, labels of an existing key",
         "complexity": "O(N) where N is the number of labels requested to update",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -193,13 +193,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.ADD": {
         "summary": "Append a new sample to the series. If the series has not been created yet with TS.CREATE it will be automatically created.",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -298,8 +298,7 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.MADD": {
         "summary": "Append new samples to a list of series",
@@ -326,31 +325,30 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.INCRBY": {
         "summary": "Creates a new sample that increments the latest sample's value",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
-            "name": "key",
-            "type": "key"
+                "name": "key",
+                "type": "key"
             },
             {
-            "name": "value",
-            "type": "double"
+                "name": "value",
+                "type": "double"
             },
             {
                 "name": "timestamp",
                 "type": "integer",
                 "optional": true
-            },            
+            },
             {
-            "type": "integer",
-            "token": "RETENTION",
-            "name": "retentionTime",
-            "optional": true
+                "type": "integer",
+                "token": "RETENTION",
+                "name": "retentionTime",
+                "optional": true
             },
             {
                 "name": "uncompressed",
@@ -359,10 +357,10 @@
                 "optional": true
             },
             {
-            "type": "integer",
-            "token": "CHUNK_SIZE",
-            "name": "size",
-            "optional": true
+                "type": "integer",
+                "token": "CHUNK_SIZE",
+                "name": "size",
+                "optional": true
             },
             {
                 "type": "block",
@@ -383,20 +381,19 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.DECRBY": {
         "summary": "Creates a new sample that decrements the latest sample's value",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
-            "name": "key",
-            "type": "key"
+                "name": "key",
+                "type": "key"
             },
             {
-            "name": "value",
-            "type": "double"
+                "name": "value",
+                "type": "double"
             },
             {
                 "name": "timestamp",
@@ -404,22 +401,22 @@
                 "optional": true
             },
             {
-            "type": "integer",
-            "token": "RETENTION",
-            "name": "retentionTime",
-            "optional": true
+                "type": "integer",
+                "token": "RETENTION",
+                "name": "retentionTime",
+                "optional": true
             },
             {
-            "name": "uncompressed",
-            "type": "pure-token",
-            "token": "UNCOMPRESSED",
-            "optional": true
+                "name": "uncompressed",
+                "type": "pure-token",
+                "token": "UNCOMPRESSED",
+                "optional": true
             },
             {
-            "type": "integer",
-            "token": "CHUNK_SIZE",
-            "name": "size",
-            "optional": true
+                "type": "integer",
+                "token": "CHUNK_SIZE",
+                "name": "size",
+                "optional": true
             },
             {
                 "type": "block",
@@ -440,13 +437,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.CREATERULE": {
         "summary": "Create a compaction rule",
         "complexity": "O(1)",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "sourceKey",
                 "type": "key"
             },
@@ -528,13 +525,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.DELETERULE": {
         "summary": "Delete a compaction rule",
         "complexity": "O(1)",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "sourceKey",
                 "type": "key"
             },
@@ -544,13 +541,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.RANGE": {
         "summary": "Query a range in forward direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -674,20 +671,20 @@
                         ]
                     },
                     {
-                    "name": "timeBucket",
-                    "type": "integer"
+                        "name": "timeBucket",
+                        "type": "integer"
                     }
                 ]
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.REVRANGE": {
         "summary": "Query a range in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -811,20 +808,20 @@
                         ]
                     },
                     {
-                    "name": "timeBucket",
-                    "type": "integer"
+                        "name": "timeBucket",
+                        "type": "integer"
                     }
                 ]
             }
         ],
         "since": "1.4.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.MRANGE": {
         "summary": "Query a range across multiple time-series by filters in forward direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -975,8 +972,8 @@
                         ]
                     },
                     {
-                    "name": "timeBucket",
-                    "type": "integer"
+                        "name": "timeBucket",
+                        "type": "integer"
                     }
                 ]
             },
@@ -1037,13 +1034,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.MREVRANGE": {
         "summary": "Query a range across multiple time-series by filters in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -1194,8 +1191,8 @@
                         ]
                     },
                     {
-                    "name": "timeBucket",
-                    "type": "integer"
+                        "name": "timeBucket",
+                        "type": "integer"
                     }
                 ]
             },
@@ -1256,25 +1253,25 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.GET": {
         "summary": "Get the last sample",
         "complexity": "O(1)",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.MGET": {
         "summary": "Get the last samples matching the specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
-        "arguments": [{
+        "arguments": [
+            {
                 "type": "oneof",
                 "optional": true,
                 "arguments": [
@@ -1334,13 +1331,13 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.INFO": {
         "summary": "Returns information and statistics on the time-series",
         "complexity": "O(1)",
-        "arguments": [{
+        "arguments": [
+            {
                 "name": "key",
                 "type": "key"
             },
@@ -1351,8 +1348,7 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     },
     "TS.QUERYINDEX": {
         "summary": "Get all the keys matching the filter list",
@@ -1390,7 +1386,6 @@
             }
         ],
         "since": "1.0.0",
-        "group": "module",
-        "module": "timeseries"
+        "group": "timeseries"
     }
 }
