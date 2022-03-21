@@ -1012,7 +1012,9 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
     } else {
-        aggObject->finalize(context, val);
+        if (!_is_empty) {
+            aggObject->finalize(context, val);
+        }
         aggObject->freeContext(context);
     }
     return TSDB_OK;
