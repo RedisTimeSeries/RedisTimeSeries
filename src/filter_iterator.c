@@ -88,16 +88,10 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     return iter;
 }
 
-static bool finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
-    bool hasSample = false;
-    double value;
-    if (self->aggregation->finalize(self->aggregationContext, &value) == TSDB_OK) {
-        currentSample->timestamp = self->aggregationLastTimestamp;
-        currentSample->value = value;
-        hasSample = TRUE;
-        self->aggregation->resetContext(self->aggregationContext);
-    }
-    return hasSample;
+static void finalizeBucket(Sample *currentSample, const AggregationIterator *self) {
+    self->aggregation->finalize(self->aggregationContext, &currentSample->value);
+    currentSample->timestamp = self->aggregationLastTimestamp;
+    self->aggregation->resetContext(self->aggregationContext);
 }
 
 // process C's modulo result to translate from a negative modulo to a positive
@@ -139,7 +133,8 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             (is_reserved == TRUE && internalSample.timestamp < self->aggregationLastTimestamp)) {
             // update the last timestamp before because its relevant for first sample and others
             if (self->aggregationIsFirstSample == FALSE) {
-                hasSample = finalizeBucket(currentSample, self);
+               finalizeBucket(currentSample, self);
+		hasSample = TRUE;
             }
             self->aggregationLastTimestamp = calc_ts_bucket(
                 internalSample.timestamp, aggregationTimeDelta, self->timestampAlignment);
@@ -160,10 +155,9 @@ ChunkResult AggregationIterator_GetNext(struct AbstractIterator *iter, Sample *c
             return CR_END;
         } else {
             double value;
-            if (aggregation->finalize(aggregationContext, &value) == TSDB_OK) {
-                currentSample->timestamp = self->aggregationLastTimestamp;
-                currentSample->value = value;
-            }
+            aggregation->finalize(aggregationContext, &value);
+            currentSample->timestamp = self->aggregationLastTimestamp;
+            currentSample->value = value;
             self->aggregationIsFinalized = TRUE;
             return CR_OK;
         }
