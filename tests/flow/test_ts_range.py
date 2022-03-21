@@ -360,6 +360,11 @@ def test_filter_by():
                               [start_ts + 1029, b'1029']])
 
         res = r.execute_command('ts.range', 'tester', start_ts, '+',
+                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1021, start_ts + 1022, start_ts + 1022, start_ts + 1025, start_ts + 1029, start_ts + 1029)
+        env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
+                              [start_ts + 1029, b'1029']])
+
+        res = r.execute_command('ts.range', 'tester', start_ts, '+',
                                 'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1023, start_ts + 1025,
                                 start_ts + 1029,
                                 'FILTER_BY_VALUE', 1022, 1025)
