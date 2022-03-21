@@ -239,6 +239,9 @@ commands:
       triggering_env:
         type: string
         default: "circleci"
+      benchmark_glob:
+        type: string
+        default: "*.yml"
     steps:
       - run:
           name: Install remote benchmark tool dependencies
@@ -262,6 +265,8 @@ commands:
             export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
             export EC2_PRIVATE_PEM=$PERFORMANCE_EC2_PRIVATE_PEM
             export PROFILE=<< parameters.profile_env >>
+            export BENCHMARK_GLOB=<< parameters.benchmark_glob >>
+            export PERF_CALLGRAPH_MODE="dwarf"
             redisbench-admin run-remote \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
@@ -507,7 +512,23 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-standalone"
   
-  performance-ci-automation-oss-cluster:
+  performance-ci-automation-oss-cluster-query:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build DEBUG=1"
+      - benchmark-automation:
+          allowed_envs: "oss-cluster"
+          allowed_setups: "oss-cluster-30-primaries"
+          timeout: 90m
+          benchmark_glob: "tsbs-scale100*.yml"
+
+  performance-ci-automation-oss-cluster-ingestion:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
     steps:
@@ -519,7 +540,9 @@ jobs:
           command: bash -l -c "make build"
       - benchmark-automation:
           allowed_envs: "oss-cluster"
+          allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
+          benchmark_glob: "tsbs-devops-ingestion*.yml"
   
   performance-ci-automation-oss-standalone-profiler:
     docker:
@@ -537,7 +560,25 @@ jobs:
           profile_env: "1"
           triggering_env: "circleci.profilers"
 
-  performance-ci-automation-oss-cluster-profiler:
+  performance-ci-automation-oss-cluster-profiler-query:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build PROFILE=1 DEBUG=1"
+      - benchmark-automation:
+          allowed_envs: "oss-cluster"
+          allowed_setups: "oss-cluster-30-primaries"
+          timeout: 90m
+          profile_env: "1"
+          triggering_env: "circleci.profilers"
+          benchmark_glob: "tsbs-scale100*.yml"
+
+  performance-ci-automation-oss-cluster-profiler-ingestion:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
     steps:
@@ -553,6 +594,7 @@ jobs:
           timeout: 90m
           profile_env: "1"
           triggering_env: "circleci.profilers"
+          benchmark_glob: "tsbs-devops-ingestion*.yml"
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -666,13 +708,19 @@ workflows:
       - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-perf-and-version-tags
-      - performance-ci-automation-oss-cluster:
+      - performance-ci-automation-oss-cluster-query:
+          context: common
+          <<: *on-perf-and-version-tags
+      - performance-ci-automation-oss-cluster-ingestion:
           context: common
           <<: *on-perf-and-version-tags
       - performance-ci-automation-oss-standalone-profiler:
           context: common
           <<: *on-perf-and-version-tags
-      - performance-ci-automation-oss-cluster-profiler:
+      - performance-ci-automation-oss-cluster-profiler-query:
+          context: common
+          <<: *on-perf-and-version-tags
+      - performance-ci-automation-oss-cluster-profiler-ingestion:
           context: common
           <<: *on-perf-and-version-tags
       - deploy-artifacts:
@@ -711,13 +759,13 @@ workflows:
           matrix:
             parameters:
               redis_version: ["6.0", "6.2", "7.0-rc1"]
-      - performance-ci-automation-oss-cluster:
+      - performance-ci-automation-oss-cluster-query:
+          context: common
+      - performance-ci-automation-oss-cluster-ingestion:
           context: common
       - performance-ci-automation-oss-standalone:
           context: common
       - performance-ci-automation-oss-standalone-profiler:
-          context: common
-      - performance-ci-automation-oss-cluster-profiler:
           context: common
 
   nightly-twice-a-week:
