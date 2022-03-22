@@ -1,7 +1,6 @@
 ---
 title: "Out-of-order / backfilled ingestion performance considerations"
 linkTitle: "Out-of-order / backfilled ingestion performance considerations"
-type: docs
 weight: 5
 description: >
     Out-of-order / backfilled ingestion performance considerations
