@@ -1,7 +1,6 @@
 ---
 title: "Quickstart"
 linkTitle: "Quickstart"
-type: docs
 weight: 2
 description: >
     Quick Start Guide to RedisTimeSeries
