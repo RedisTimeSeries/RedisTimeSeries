@@ -157,7 +157,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 RTS_RedisVersion RTS_currVersion;
 
 RTS_RedisVersion RTS_minSupportedVersion = {
-    .redisMajorVersion = 5,
+    .redisMajorVersion = 6,
     .redisMinorVersion = 0,
     .redisPatchVersion = 0,
 };
