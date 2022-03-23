@@ -219,10 +219,10 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 // TODO: convert to template and unify with decompressChunk when moving to RUST
 // decompress chunk reverse
 static inline EnrichedChunk *decompressChunkReverse(const CompressedChunk *compressedChunk,
-                                                  uint64_t start,
-                                                  uint64_t end,
-                                                  EnrichedChunk *enrichedChunk,
-                                                  EnrichedChunk *enrichedChunkAux) {
+                                                    uint64_t start,
+                                                    uint64_t end,
+                                                    EnrichedChunk *enrichedChunk,
+                                                    EnrichedChunk *enrichedChunkAux) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
@@ -306,9 +306,9 @@ _done:
 
 // decompress chunk
 static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedChunk,
-                                           uint64_t start,
-                                           uint64_t end,
-                                           EnrichedChunk *enrichedChunk) {
+                                             uint64_t start,
+                                             uint64_t end,
+                                             EnrichedChunk *enrichedChunk) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
@@ -424,11 +424,11 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
 }
 
 EnrichedChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
-                                     uint64_t start,
-                                     uint64_t end,
-                                     EnrichedChunk *enrichedChunk,
-                                     EnrichedChunk *enrichedChunkAux,
-                                     bool reverse) {
+                                       uint64_t start,
+                                       uint64_t end,
+                                       EnrichedChunk *enrichedChunk,
+                                       EnrichedChunk *enrichedChunkAux,
+                                       bool reverse) {
     if (unlikely(!chunk)) {
         return NULL;
     }

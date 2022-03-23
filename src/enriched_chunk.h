@@ -13,13 +13,13 @@ typedef struct Samples
 {
     timestamp_t *timestamps; // array of timestamps
     double *values;          // array of values
+    size_t size;             // num of maximal samples which can be contained
 } Samples;
 
 typedef struct EnrichedChunk
 {
     Samples samples;
     unsigned int num_samples;
-    size_t size; // num of maximal samples which can be contained
     bool rev;
 } EnrichedChunk;
 
