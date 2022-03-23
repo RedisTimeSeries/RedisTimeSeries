@@ -19,15 +19,6 @@ typedef struct Chunk
     size_t size;
 } Chunk;
 
-typedef struct ChunkIterator
-{
-    Chunk *chunk;
-    int currentIndex;
-    timestamp_t lastTimestamp;
-    int lastValue;
-    int options;
-} ChunkIterator;
-
 Chunk_t *Uncompressed_NewChunk(size_t size);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
@@ -69,17 +60,6 @@ DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        DomainChunk *domainChunk,
                                        DomainChunk *domainChunkAux,
                                        bool reverse);
-
-ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
-                                           int options,
-                                           ChunkIterFuncs *retChunkIterClass,
-                                           uint64_t start,
-                                           uint64_t end);
-__attribute__((unused)) void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator,
-                                                             const Chunk_t *chunk);
-ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
-ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);

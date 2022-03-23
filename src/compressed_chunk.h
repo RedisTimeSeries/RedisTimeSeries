@@ -33,11 +33,6 @@ DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk);
-ChunkIter_t *Compressed_NewUncompressedChunkIterator(const Chunk_t *chunk,
-                                                     int options,
-                                                     ChunkIterFuncs *retChunkIterClass,
-                                                     uint64_t start,
-                                                     uint64_t end);
 void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
