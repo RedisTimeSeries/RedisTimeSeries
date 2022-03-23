@@ -312,6 +312,7 @@ static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedCh
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
+    ChunkResult res;
     enrichedChunk->num_samples = 0;
     enrichedChunk->rev = false;
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
@@ -324,9 +325,9 @@ static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedCh
     double *values_ptr = enrichedChunk->samples.values;
 
     // find the first sample which is greater than start
-    Compressed_ChunkIteratorGetNext(iter, &sample);
-    while (sample.timestamp < start && iter->count < numSamples) {
-        Compressed_ChunkIteratorGetNext(iter, &sample);
+    res = Compressed_ChunkIteratorGetNext(iter, &sample);
+    while (sample.timestamp < start && res == CR_OK) {
+        res = Compressed_ChunkIteratorGetNext(iter, &sample);
     }
 
     if (unlikely(sample.timestamp > end)) {
