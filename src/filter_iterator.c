@@ -119,31 +119,31 @@ static size_t filterSamples(Samples *samples,
     return count;
 }
 
-DomainChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base) {
+EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base) {
     SeriesFilterTSIterator *self = (SeriesFilterTSIterator *)base;
-    DomainChunk *domainChunk;
+    EnrichedChunk *enrichedChunk;
     size_t count = 0;
     assert(self->ByTsArgs.hasValue);
 
     if (self->tsFilterIndex == self->ByTsArgs.count) {
         return NULL;
     }
-    while ((domainChunk = self->base.input->GetNext(self->base.input))) {
-        assert(!domainChunk->rev); // the impl assumes that the chunk isn't reversed
-        count = filterSamples(&domainChunk->samples,
-                              domainChunk->num_samples,
+    while ((enrichedChunk = self->base.input->GetNext(self->base.input))) {
+        assert(!enrichedChunk->rev); // the impl assumes that the chunk isn't reversed
+        count = filterSamples(&enrichedChunk->samples,
+                              enrichedChunk->num_samples,
                               self->ByTsArgs.values,
                               self->tsFilterIndex,
                               self->ByTsArgs.count - 1);
         if (count > 0) {
-            domainChunk->num_samples = count;
+            enrichedChunk->num_samples = count;
             if (unlikely(self->reverse)) {
-                reverseDomainChunk(domainChunk);
+                reverseEnrichedChunk(enrichedChunk);
                 self->ByTsArgs.count -= count;
             } else {
                 self->tsFilterIndex += count; // at least count samples consumed
             }
-            return domainChunk;
+            return enrichedChunk;
         }
     }
 
@@ -168,25 +168,25 @@ void SeriesFilterIterator_Close(struct AbstractIterator *iterator) {
     free(iterator);
 }
 
-DomainChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base) {
+EnrichedChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base) {
     SeriesFilterValIterator *self = (SeriesFilterValIterator *)base;
-    DomainChunk *domainChunk;
+    EnrichedChunk *enrichedChunk;
     size_t i, count = 0;
     assert(self->byValueArgs.hasValue);
 
-    while ((domainChunk = self->base.input->GetNext(self->base.input))) {
+    while ((enrichedChunk = self->base.input->GetNext(self->base.input))) {
         // currently if the query reversed the chunk will be already reversed here
-        // assert(self->reverse == domainChunk->rev);
-        for (i = 0; i < domainChunk->num_samples; ++i) {
-            if (check_sample_value(domainChunk->samples.values[i], &self->byValueArgs)) {
-                domainChunk->samples.timestamps[count] = domainChunk->samples.timestamps[i];
-                domainChunk->samples.values[count] = domainChunk->samples.values[i];
+        // assert(self->reverse == enrichedChunk->rev);
+        for (i = 0; i < enrichedChunk->num_samples; ++i) {
+            if (check_sample_value(enrichedChunk->samples.values[i], &self->byValueArgs)) {
+                enrichedChunk->samples.timestamps[count] = enrichedChunk->samples.timestamps[i];
+                enrichedChunk->samples.values[count] = enrichedChunk->samples.values[i];
                 ++count;
             }
         }
         if (count > 0) {
-            domainChunk->num_samples = count;
-            return domainChunk;
+            enrichedChunk->num_samples = count;
+            return enrichedChunk;
         }
     }
 
@@ -220,8 +220,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->initilized = false;
-    iter->aux_chunk = allocateDomainChunk();
-    ReallocDomainChunk(iter->aux_chunk, 1);
+    iter->aux_chunk = allocateEnrichedChunk();
+    ReallocEnrichedChunk(iter->aux_chunk, 1);
     return iter;
 }
 
@@ -242,7 +242,7 @@ static timestamp_t calc_ts_bucket(timestamp_t ts,
 }
 
 // assumes num of samples > si + 1, returns -1 when no such an index
-static int64_t findLastIndexbeforeTS(const DomainChunk *chunk, timestamp_t timestamp, int64_t si) {
+static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk, timestamp_t timestamp, int64_t si) {
     timestamp_t *timestamps = chunk->samples.timestamps;
     int64_t h = chunk->num_samples - 1;
     if (unlikely(timestamps[si] >= timestamp)) {
@@ -267,15 +267,15 @@ static int64_t findLastIndexbeforeTS(const DomainChunk *chunk, timestamp_t times
     return l;
 }
 
-DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
+EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     AggregationClass *aggregation = self->aggregation;
     void *aggregationContext = self->aggregationContext;
 
     AbstractIterator *input = iter->input;
-    DomainChunk *domainChunk = input->GetNext(input);
+    EnrichedChunk *enrichedChunk = input->GetNext(input);
     double value;
-    if (!domainChunk || domainChunk->num_samples == 0) {
+    if (!enrichedChunk || enrichedChunk->num_samples == 0) {
         if (self->hasUnFinalizedContext) {
             goto _finalize;
         } else {
@@ -291,7 +291,7 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
     bool is_reserved = self->reverse;
     if (!self->initilized) {
-        timestamp_t init_ts = domainChunk->samples.timestamps[0];
+        timestamp_t init_ts = enrichedChunk->samples.timestamps[0];
         self->aggregationLastTimestamp =
             calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
@@ -303,29 +303,29 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     self->aggregationLastTimestamp = max(0, (int64_t)self->aggregationLastTimestamp);
     int64_t si, ei;
-    while (domainChunk) {
+    while (enrichedChunk) {
         // currently if the query reversed the chunk will be already revered here
-        assert(self->reverse == domainChunk->rev);
-        n_samples = domainChunk->num_samples;
+        assert(self->reverse == enrichedChunk->rev);
+        n_samples = enrichedChunk->num_samples;
         if (self->aggregation == &aggMax &&
             !is_reserved) { // Currently only implemented vectorization for specific case
             si = 0;
             while (si < n_samples) {
-                ei = findLastIndexbeforeTS(domainChunk, contextScope, si);
+                ei = findLastIndexbeforeTS(enrichedChunk, contextScope, si);
                 if (likely(ei >= 0)) {
                     aggregation->appendValueVec(
-                        aggregationContext, domainChunk->samples.values, si, ei);
+                        aggregationContext, enrichedChunk->samples.values, si, ei);
                     si = ei + 1;
                 } // else ei < 0: only need to finalize the previous bucket and update contextScope
                 if (si <
                     n_samples) { // if si == n_samples need to check next chunk for more samples
                     sample.timestamp =
-                        domainChunk->samples
+                        enrichedChunk->samples
                             .timestamps[si]; // store sample cause we aggregate in place
                     sample.value =
-                        domainChunk->samples.values[si]; // store sample cause we aggregate in place
-                    assert(domainChunk->samples.timestamps[si] >= contextScope);
-                    finalizeBucket(&domainChunk->samples, agg_n_samples++, self);
+                        enrichedChunk->samples.values[si]; // store sample cause we aggregate in place
+                    assert(enrichedChunk->samples.timestamps[si] >= contextScope);
+                    finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
                     self->aggregationLastTimestamp = calc_ts_bucket(
                         sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
@@ -340,9 +340,9 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         } else {
             for (size_t i = 0; i < n_samples; ++i) {
                 sample.timestamp =
-                    domainChunk->samples.timestamps[i]; // store sample cause we aggregate in place
+                    enrichedChunk->samples.timestamps[i]; // store sample cause we aggregate in place
                 sample.value =
-                    domainChunk->samples.values[i]; // store sample cause we aggregate in place
+                    enrichedChunk->samples.values[i]; // store sample cause we aggregate in place
                 // (1) aggregationTimeDelta > 0,
                 // (2) self->aggregationLastTimestamp > chunk->samples.timestamp[0] -
                 // aggregationTimeDelta (3) self->aggregationLastTimestamp = samples.timestamps[0]
@@ -351,7 +351,7 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                 // following condition should always be false on the first iteration
                 if ((is_reserved == FALSE && sample.timestamp >= contextScope) ||
                     (is_reserved == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
-                    finalizeBucket(&domainChunk->samples, agg_n_samples++, self);
+                    finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
                     self->aggregationLastTimestamp = calc_ts_bucket(
                         sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
@@ -364,10 +364,10 @@ DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         }
 
         if (agg_n_samples > 0) {
-            domainChunk->num_samples = agg_n_samples;
-            return domainChunk;
+            enrichedChunk->num_samples = agg_n_samples;
+            return enrichedChunk;
         }
-        domainChunk = input->GetNext(input);
+        enrichedChunk = input->GetNext(input);
     }
 
 _finalize:
@@ -383,6 +383,6 @@ void AggregationIterator_Close(struct AbstractIterator *iterator) {
     AggregationIterator *self = (AggregationIterator *)iterator;
     iterator->input->Close(iterator->input);
     self->aggregation->freeContext(self->aggregationContext);
-    FreeDomainChunk(self->aux_chunk, true);
+    FreeEnrichedChunk(self->aux_chunk, true);
     free(iterator);
 }

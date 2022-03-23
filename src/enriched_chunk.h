@@ -6,8 +6,8 @@
 
 #include "consts.h"
 
-#ifndef DOMAIN_CHUNK_H
-#define DOMAIN_CHUNK_H
+#ifndef ENRICHED_CHUNK_H
+#define ENRICHED_CHUNK_H
 
 typedef struct Samples
 {
@@ -15,16 +15,16 @@ typedef struct Samples
     double *values;          // array of values
 } Samples;
 
-typedef struct DomainChunk
+typedef struct EnrichedChunk
 {
     Samples samples;
     unsigned int num_samples;
     size_t size; // num of maximal samples which can be contained
     bool rev;
-} DomainChunk;
+} EnrichedChunk;
 
-DomainChunk *allocateDomainChunk();
-void FreeDomainChunk(DomainChunk *chunk, bool free_samples);
-void ReallocDomainChunk(DomainChunk *chunk, size_t n_samples);
+EnrichedChunk *allocateEnrichedChunk();
+void FreeEnrichedChunk(EnrichedChunk *chunk, bool free_samples);
+void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples);
 
-#endif // DOMAIN_CHUNK_H
+#endif // ENRICHED_CHUNK_H
