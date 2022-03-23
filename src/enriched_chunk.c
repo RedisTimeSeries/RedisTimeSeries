@@ -10,7 +10,7 @@
 static inline void _init_enriched_chunk(EnrichedChunk *chunk) {
     chunk->num_samples = 0;
     chunk->rev = false;
-    chunk->size = 0;
+    chunk->samples.size = 0;
     chunk->samples.timestamps = NULL;
     chunk->samples.values = NULL;
 }
@@ -23,7 +23,7 @@ EnrichedChunk *allocateEnrichedChunk() {
 
 void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples) {
     _init_enriched_chunk(chunk);
-    chunk->size = n_samples;
+    chunk->samples.size = n_samples;
     chunk->samples.timestamps =
         (timestamp_t *)realloc(chunk->samples.timestamps, n_samples * sizeof(timestamp_t));
     chunk->samples.values = (double *)realloc(chunk->samples.values, n_samples * sizeof(double));

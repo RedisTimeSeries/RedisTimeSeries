@@ -208,11 +208,11 @@ void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
 
 // TODO: can be optimized further using binary search
 EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
-                                       uint64_t start,
-                                       uint64_t end,
-                                       EnrichedChunk *enrichedChunk,
-                                       EnrichedChunk *enrichedChunkAux,
-                                       bool reverse) {
+                                         uint64_t start,
+                                         uint64_t end,
+                                         EnrichedChunk *enrichedChunk,
+                                         EnrichedChunk *enrichedChunkAux,
+                                         bool reverse) {
     const Chunk *_chunk = chunk;
     enrichedChunk->num_samples = 0;
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
