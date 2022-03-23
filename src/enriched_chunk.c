@@ -5,9 +5,9 @@
  */
 
 #include "rmutil/alloc.h"
-#include "domain_chunk.h"
+#include "enriched_chunk.h"
 
-static inline void _init_domain_chunk(DomainChunk *chunk) {
+static inline void _init_enriched_chunk(EnrichedChunk *chunk) {
     chunk->num_samples = 0;
     chunk->rev = false;
     chunk->size = 0;
@@ -15,21 +15,21 @@ static inline void _init_domain_chunk(DomainChunk *chunk) {
     chunk->samples.values = NULL;
 }
 
-DomainChunk *allocateDomainChunk() {
-    DomainChunk *chunk = (DomainChunk *)malloc(sizeof(DomainChunk));
-    _init_domain_chunk(chunk);
+EnrichedChunk *allocateEnrichedChunk() {
+    EnrichedChunk *chunk = (EnrichedChunk *)malloc(sizeof(EnrichedChunk));
+    _init_enriched_chunk(chunk);
     return chunk;
 }
 
-void ReallocDomainChunk(DomainChunk *chunk, size_t n_samples) {
-    _init_domain_chunk(chunk);
+void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples) {
+    _init_enriched_chunk(chunk);
     chunk->size = n_samples;
     chunk->samples.timestamps =
         (timestamp_t *)realloc(chunk->samples.timestamps, n_samples * sizeof(timestamp_t));
     chunk->samples.values = (double *)realloc(chunk->samples.values, n_samples * sizeof(double));
 }
 
-void FreeDomainChunk(DomainChunk *chunk, bool free_samples) {
+void FreeEnrichedChunk(EnrichedChunk *chunk, bool free_samples) {
     if (free_samples && chunk->samples.timestamps) {
         free(chunk->samples.timestamps);
     }

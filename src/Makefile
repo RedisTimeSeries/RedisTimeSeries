@@ -178,7 +178,7 @@ _SOURCES=\
 	tsdb.c \
 	series_iterator.c \
 	sample_iterator.c \
-	domain_chunk.c
+	enriched_chunk.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))

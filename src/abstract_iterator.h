@@ -11,7 +11,7 @@
 
 typedef struct AbstractIterator
 {
-    DomainChunk *(*GetNext)(struct AbstractIterator *iter);
+    EnrichedChunk *(*GetNext)(struct AbstractIterator *iter);
     void (*Close)(struct AbstractIterator *iter);
 
     struct AbstractIterator *input;

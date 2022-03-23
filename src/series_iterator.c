@@ -8,9 +8,9 @@
 #include "abstract_iterator.h"
 #include "filter_iterator.h"
 #include "tsdb.h"
-#include "domain_chunk.h"
+#include "enriched_chunk.h"
 
-DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
+EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *iterator);
 
 void SeriesIteratorClose(AbstractIterator *iterator);
 
@@ -25,8 +25,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->base.GetNext = SeriesIteratorGetNextChunk;
     iter->base.input = NULL;
     iter->currentChunk = NULL;
-    iter->domainChunk = allocateDomainChunk();
-    iter->domainChunkAux = allocateDomainChunk();
+    iter->enrichedChunk = allocateEnrichedChunk();
+    iter->enrichedChunkAux = allocateEnrichedChunk();
     iter->series = series;
     iter->minTimestamp = start_ts;
     iter->maxTimestamp = end_ts;
@@ -58,27 +58,27 @@ AbstractIterator *SeriesIterator_New(Series *series,
 void SeriesIteratorClose(AbstractIterator *iterator) {
     SeriesIterator *self = (SeriesIterator *)iterator;
     RedisModule_DictIteratorStop(self->dictIter);
-    FreeDomainChunk(self->domainChunk, true);
-    FreeDomainChunk(self->domainChunkAux, false);
+    FreeEnrichedChunk(self->enrichedChunk, true);
+    FreeEnrichedChunk(self->enrichedChunkAux, false);
     free(iterator);
 }
 
 // Fills sample from chunk. If all samples were extracted from the chunk, we
 // move to the next chunk.
-DomainChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
+EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
     if (!iter->currentChunk) {
         return NULL;
     }
     u_int64_t n_samples = iter->series->funcs->GetNumOfSample(iter->currentChunk);
-    if (n_samples > iter->domainChunk->size) {
-        ReallocDomainChunk(iter->domainChunk, n_samples);
+    if (n_samples > iter->enrichedChunk->size) {
+        ReallocEnrichedChunk(iter->enrichedChunk, n_samples);
     }
-    DomainChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
+    EnrichedChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
                                                          iter->minTimestamp,
                                                          iter->maxTimestamp,
-                                                         iter->domainChunk,
-                                                         iter->domainChunkAux,
+                                                         iter->enrichedChunk,
+                                                         iter->enrichedChunkAux,
                                                          iter->reverse_chunk);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;

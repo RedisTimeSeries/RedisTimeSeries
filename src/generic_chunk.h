@@ -10,7 +10,7 @@
 #include "LibMR/src/mr.h"
 #include "consts.h"
 #include "load_io_error_macros.h"
-#include "domain_chunk.h"
+#include "enriched_chunk.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -52,11 +52,11 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    DomainChunk *(*ProcessChunk)(const Chunk_t *chunk,
+    EnrichedChunk *(*ProcessChunk)(const Chunk_t *chunk,
                                  uint64_t start,
                                  uint64_t end,
-                                 DomainChunk *domainChunk,
-                                 DomainChunk *domainChunkAux,
+                                 EnrichedChunk *enrichedChunk,
+                                 EnrichedChunk *enrichedChunkAux,
                                  bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
