@@ -11,10 +11,18 @@
 
 typedef struct AbstractIterator
 {
-    ChunkResult (*GetNext)(struct AbstractIterator *iter, Sample *currentSample);
+    DomainChunk *(*GetNext)(struct AbstractIterator *iter);
     void (*Close)(struct AbstractIterator *iter);
 
     struct AbstractIterator *input;
 } AbstractIterator;
+
+typedef struct AbstractSampleIterator
+{
+    ChunkResult (*GetNext)(struct AbstractSampleIterator *iter, Sample *sample);
+    void (*Close)(struct AbstractSampleIterator *iter);
+
+    struct AbstractIterator *input;
+} AbstractSampleIterator;
 
 #endif //ABSTRACT_ITERATOR_H

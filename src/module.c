@@ -1225,6 +1225,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
+    initGlobalCompactionFunctions();
+
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
