@@ -22,7 +22,7 @@ SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
                                                    FilterByTSArgs ByTsArgs,
                                                    bool rev);
 
-DomainChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base);
+EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base);
 
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator);
 
@@ -35,7 +35,7 @@ typedef struct SeriesFilterValIterator
 SeriesFilterValIterator *SeriesFilterValIterator_New(AbstractIterator *input,
                                                      FilterByValueArgs byValue);
 
-DomainChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base);
+EnrichedChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *base);
 
 typedef struct AggregationIterator
 {
@@ -48,7 +48,7 @@ typedef struct AggregationIterator
     bool hasUnFinalizedContext;
     bool reverse;
     bool initilized;
-    DomainChunk *aux_chunk; // auxiliary chunk for containing the final bucket
+    EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
@@ -56,7 +56,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse);
-DomainChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
+EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
 #endif // FILTER_ITERATOR_H

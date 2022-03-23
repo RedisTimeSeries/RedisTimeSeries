@@ -53,12 +53,12 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-void reverseDomainChunk(DomainChunk *domainChunk);
-DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
+void reverseEnrichedChunk(EnrichedChunk *enrichedChunk);
+EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
-                                       DomainChunk *domainChunk,
-                                       DomainChunk *domainChunkAux,
+                                       EnrichedChunk *enrichedChunk,
+                                       EnrichedChunk *enrichedChunkAux,
                                        bool reverse);
 
 // RDB

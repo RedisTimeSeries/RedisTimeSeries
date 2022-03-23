@@ -11,7 +11,7 @@
 typedef struct SeriesSampleIterator
 {
     AbstractSampleIterator base;
-    DomainChunk *chunk;
+    EnrichedChunk *chunk;
     size_t cur_index;
 } SeriesSampleIterator;
 

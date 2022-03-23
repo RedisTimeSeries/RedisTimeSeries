@@ -43,14 +43,14 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
     }
 
     AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
-    DomainChunk *domainChunk;
+    EnrichedChunk *enrichedChunk;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    while ((arraylen < _count) && (domainChunk = iter->GetNext(iter))) {
-        n = (unsigned int)min(_count - arraylen, domainChunk->num_samples);
+    while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
+        n = (unsigned int)min(_count - arraylen, enrichedChunk->num_samples);
         for (size_t i = 0; i < n; ++i) {
             ReplyWithSample(
-                ctx, domainChunk->samples.timestamps[i], domainChunk->samples.values[i]);
+                ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);
         }
         arraylen += n;
     }

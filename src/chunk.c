@@ -200,21 +200,21 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
         }                                                                                          \
     })
 
-void reverseDomainChunk(DomainChunk *domainChunk) {
-    __array_reverse_inplace(domainChunk->samples.timestamps, domainChunk->num_samples);
-    __array_reverse_inplace(domainChunk->samples.values, domainChunk->num_samples);
-    domainChunk->rev = true;
+void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
+    __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->num_samples);
+    __array_reverse_inplace(enrichedChunk->samples.values, enrichedChunk->num_samples);
+    enrichedChunk->rev = true;
 }
 
 // TODO: can be optimized further using binary search
-DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
+EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
                                        uint64_t start,
                                        uint64_t end,
-                                       DomainChunk *domainChunk,
-                                       DomainChunk *domainChunkAux,
+                                       EnrichedChunk *enrichedChunk,
+                                       EnrichedChunk *enrichedChunkAux,
                                        bool reverse) {
     const Chunk *_chunk = chunk;
-    domainChunk->num_samples = 0;
+    enrichedChunk->num_samples = 0;
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
                  _chunk->base_timestamp > end ||
                  _chunk->samples[_chunk->num_samples - 1].timestamp < start)) {
@@ -243,25 +243,25 @@ DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
         }
     }
 
-    domainChunk->num_samples = ei - si + 1;
-    if (domainChunk->num_samples == 0) {
+    enrichedChunk->num_samples = ei - si + 1;
+    if (enrichedChunk->num_samples == 0) {
         return NULL;
     }
 
     if (unlikely(reverse)) {
-        for (i = 0; i < domainChunk->num_samples; ++i) {
-            domainChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
-            domainChunk->samples.values[i] = _chunk->samples[ei - i].value;
+        for (i = 0; i < enrichedChunk->num_samples; ++i) {
+            enrichedChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
+            enrichedChunk->samples.values[i] = _chunk->samples[ei - i].value;
         }
-        domainChunk->rev = true;
+        enrichedChunk->rev = true;
     } else {
-        for (i = 0; i < domainChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
-            domainChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
-            domainChunk->samples.values[i] = _chunk->samples[i + si].value;
+        for (i = 0; i < enrichedChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
+            enrichedChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
+            enrichedChunk->samples.values[i] = _chunk->samples[i + si].value;
         }
-        domainChunk->rev = false;
+        enrichedChunk->rev = false;
     }
-    return domainChunk;
+    return enrichedChunk;
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
