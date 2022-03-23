@@ -24,11 +24,21 @@ ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
 
+DomainChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
+                                     uint64_t start,
+                                     uint64_t end,
+                                     DomainChunk *domainChunk,
+                                     DomainChunk *domainChunkAux,
+                                     bool reverse);
+
 // Read from compressed chunk using an iterator
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk,
-                                         int options,
-                                         ChunkIterFuncs *retChunkIterClass);
-void Compressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk);
+ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk);
+ChunkIter_t *Compressed_NewUncompressedChunkIterator(const Chunk_t *chunk,
+                                                     int options,
+                                                     ChunkIterFuncs *retChunkIterClass,
+                                                     uint64_t start,
+                                                     uint64_t end);
+void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous

@@ -28,7 +28,7 @@ typedef struct ChunkIterator
     int options;
 } ChunkIterator;
 
-Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
+Chunk_t *Uncompressed_NewChunk(size_t size);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
@@ -62,10 +62,21 @@ u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
+void reverseDomainChunk(DomainChunk *domainChunk);
+DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                                       uint64_t start,
+                                       uint64_t end,
+                                       DomainChunk *domainChunk,
+                                       DomainChunk *domainChunkAux,
+                                       bool reverse);
+
+ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
                                            int options,
-                                           ChunkIterFuncs *retChunkIterClass);
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk);
+                                           ChunkIterFuncs *retChunkIterClass,
+                                           uint64_t start,
+                                           uint64_t end);
+__attribute__((unused)) void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator,
+                                                             const Chunk_t *chunk);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter);
