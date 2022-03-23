@@ -29,9 +29,6 @@ typedef struct Sample
 typedef void Chunk_t;
 typedef void ChunkIter_t;
 
-#define CHUNK_ITER_OP_NONE 0
-#define CHUNK_ITER_OP_REVERSE 1
-
 typedef enum CHUNK_TYPES_T
 {
     CHUNK_REGULAR,
@@ -43,14 +40,6 @@ typedef struct UpsertCtx
     Sample sample;
     Chunk_t *inChunk; // original chunk
 } UpsertCtx;
-
-typedef struct ChunkIterFuncs
-{
-    void (*Free)(ChunkIter_t *iter);
-    ChunkResult (*GetNext)(ChunkIter_t *iter, Sample *sample);
-    ChunkResult (*GetPrev)(ChunkIter_t *iter, Sample *sample);
-    void (*Reset)(ChunkIter_t *iter, const Chunk_t *chunk);
-} ChunkIterFuncs;
 
 typedef struct ChunkFuncs
 {
@@ -87,6 +76,5 @@ int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr);
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len);
 
 const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
-ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType);
 
 #endif // GENERIC__CHUNK_H

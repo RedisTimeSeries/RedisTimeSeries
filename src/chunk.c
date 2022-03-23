@@ -189,16 +189,6 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     return deleted_count;
 }
 
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    iter->chunk = (Chunk_t *)chunk;
-    if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
-        iter->currentIndex = iter->chunk->num_samples - 1;
-    } else { // iterate from first to last
-        iter->currentIndex = 0;
-    }
-}
-
 #define __array_reverse_inplace(arr, len)                                                          \
     __extension__({                                                                                \
         const size_t ei = len - 1;                                                                 \
@@ -272,47 +262,6 @@ DomainChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
         domainChunk->rev = false;
     }
     return domainChunk;
-}
-
-ChunkIter_t *Uncompressed_NewChunkIterator(const Chunk_t *chunk,
-                                           int options,
-                                           ChunkIterFuncs *retChunkIterClass,
-                                           uint64_t start,
-                                           uint64_t end) {
-    ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
-    iter->options = options;
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
-    }
-    Uncompressed_ResetChunkIterator(iter, chunk);
-    return (ChunkIter_t *)iter;
-}
-
-ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->currentIndex < iter->chunk->num_samples) {
-        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
-        iter->currentIndex++;
-        return CR_OK;
-    } else {
-        return CR_END;
-    }
-}
-
-ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->currentIndex >= 0) {
-        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
-        iter->currentIndex--;
-        return CR_OK;
-    } else {
-        return CR_END;
-    }
-}
-
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    free(iter);
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
