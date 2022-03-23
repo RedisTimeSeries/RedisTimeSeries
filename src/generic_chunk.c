@@ -29,13 +29,6 @@ static const ChunkFuncs regChunk = {
     .MRDeserialize = Uncompressed_MRDeserialize,
 };
 
-ChunkIterFuncs uncompressedChunkIteratorClass = {
-    .Free = Uncompressed_FreeChunkIterator,
-    .GetNext = Uncompressed_ChunkIteratorGetNext,
-    .GetPrev = Uncompressed_ChunkIteratorGetPrev,
-    .Reset = Uncompressed_ResetChunkIterator,
-};
-
 static const ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
@@ -57,14 +50,6 @@ static const ChunkFuncs comprChunk = {
     .LoadFromRDB = Compressed_LoadFromRDB,
     .MRSerialize = Compressed_MRSerialize,
     .MRDeserialize = Compressed_MRDeserialize,
-};
-
-static ChunkIterFuncs compressedChunkIteratorClass = {
-    .Free = Compressed_FreeChunkIterator,
-    .GetNext = Compressed_ChunkIteratorGetNext,
-    /*** Reverse iteration is on temporary decompressed chunk ***/
-    .GetPrev = NULL,
-    .Reset = Compressed_ResetChunkIterator,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
@@ -100,16 +85,6 @@ const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
             return &regChunk;
         case CHUNK_COMPRESSED:
             return &comprChunk;
-    }
-    return NULL;
-}
-
-ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType) {
-    switch (chunkType) {
-        case CHUNK_REGULAR:
-            return &uncompressedChunkIteratorClass;
-        case CHUNK_COMPRESSED:
-            return &compressedChunkIteratorClass;
     }
     return NULL;
 }
