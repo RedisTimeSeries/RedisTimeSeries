@@ -165,9 +165,10 @@ OK
 
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
-| Project | Language | License | Author | Stars |
-| ------- | -------- | ------- | ------ | --- |
-| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
+| Project | Language | License | Author | Stars | Comment |
+| ------- | -------- | ------- | ------ | --- | --- |
+| [Jedis][Jedis-url] | Java | MIT | [Redis][Jedis-author] |  [![Jedis-stars]][Jedis-url] |
+| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] | Deprecated |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
 | [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  |
@@ -180,6 +181,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] |
 | [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] |
 | [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
+
+[Jedis-url]: https://github.com/redis/jedis/
+[Jedis-author]: https://redis.com
+[Jedis-stars]: https://img.shields.io/github/stars/redis/jedis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
 [JRedisTimeSeries-author]: https://redis.com
