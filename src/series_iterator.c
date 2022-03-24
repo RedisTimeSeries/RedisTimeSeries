@@ -75,11 +75,11 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
         ReallocEnrichedChunk(iter->enrichedChunk, n_samples);
     }
     EnrichedChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
-                                                         iter->minTimestamp,
-                                                         iter->maxTimestamp,
-                                                         iter->enrichedChunk,
-                                                         iter->enrichedChunkAux,
-                                                         iter->reverse_chunk);
+                                                           iter->minTimestamp,
+                                                           iter->maxTimestamp,
+                                                           iter->enrichedChunk,
+                                                           iter->enrichedChunkAux,
+                                                           iter->reverse_chunk);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;
     }

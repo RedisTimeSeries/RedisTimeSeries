@@ -242,7 +242,9 @@ static timestamp_t calc_ts_bucket(timestamp_t ts,
 }
 
 // assumes num of samples > si + 1, returns -1 when no such an index
-static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk, timestamp_t timestamp, int64_t si) {
+static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
+                                     timestamp_t timestamp,
+                                     int64_t si) {
     timestamp_t *timestamps = chunk->samples.timestamps;
     int64_t h = chunk->num_samples - 1;
     if (unlikely(timestamps[si] >= timestamp)) {
@@ -322,8 +324,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     sample.timestamp =
                         enrichedChunk->samples
                             .timestamps[si]; // store sample cause we aggregate in place
-                    sample.value =
-                        enrichedChunk->samples.values[si]; // store sample cause we aggregate in place
+                    sample.value = enrichedChunk->samples
+                                       .values[si]; // store sample cause we aggregate in place
                     assert(enrichedChunk->samples.timestamps[si] >= contextScope);
                     finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
                     self->aggregationLastTimestamp = calc_ts_bucket(
@@ -339,8 +341,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             }
         } else {
             for (size_t i = 0; i < n_samples; ++i) {
-                sample.timestamp =
-                    enrichedChunk->samples.timestamps[i]; // store sample cause we aggregate in place
+                sample.timestamp = enrichedChunk->samples
+                                       .timestamps[i]; // store sample cause we aggregate in place
                 sample.value =
                     enrichedChunk->samples.values[i]; // store sample cause we aggregate in place
                 // (1) aggregationTimeDelta > 0,
