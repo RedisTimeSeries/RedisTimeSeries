@@ -116,6 +116,7 @@ static size_t filterSamples(Samples *samples,
         }
     }
 
+    array_free(dfs_stack);
     return count;
 }
 
