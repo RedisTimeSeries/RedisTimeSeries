@@ -245,6 +245,7 @@ static inline EnrichedChunk *decompressChunkReverse(const CompressedChunk *compr
 
     if (unlikely(sample.timestamp > end)) {
         // occurs when the are TS smaller than start and larger than end but nothing in the range.
+        Compressed_FreeChunkIterator(iter);
         return enrichedChunk;
     }
     *timestamps_ptr-- = sample.timestamp;
@@ -332,6 +333,7 @@ static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedCh
 
     if (unlikely(sample.timestamp > end)) {
         // occurs when the are TS smaller than start and larger than end but nothing in the range.
+        Compressed_FreeChunkIterator(iter);
         return enrichedChunk;
     }
     *timestamps_ptr++ = sample.timestamp;
