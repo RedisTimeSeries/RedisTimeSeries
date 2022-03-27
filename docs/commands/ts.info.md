@@ -12,7 +12,7 @@ Returns information and statistics on the time series.
 #### Parameters
 
 * _key_ - Key name of the time series.
-* DEBUG - An optional flag to get a more detailed information about the chunks.
+* `DEBUG` - An optional flag to get a more detailed information about the chunks.
 
 #### Complexity
 
@@ -22,27 +22,27 @@ O(1)
 
 Array-reply, specifically:
 
-* totalSamples - Total number of samples in the time series.
-* memoryUsage - Total number of bytes allocated for the time series.
-* firstTimestamp - First timestamp present in the time series.
-* lastTimestamp - Last timestamp present in the time series.
-* retentionTime - Retention time, in milliseconds, for the time series.
-* chunkCount - Number of Memory Chunks used for the time series.
-* chunkSize - Amount of memory, in bytes, allocated for data.
-* chunkType - The chunk type, `compressed` or `uncompressed`.
-* duplicatePolicy - [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
-* labels - A nested array of label-value pairs that represent the metadata labels of the time series.
-* sourceKey - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
-* rules - A nested array of compaction [rules](#tscreaterule) of the time series.
+* `totalSamples` - Total number of samples in the time series.
+* `memoryUsage` - Total number of bytes allocated for the time series.
+* `firstTimestamp` - First timestamp present in the time series.
+* `lastTimestamp` - Last timestamp present in the time series.
+* `retentionTime` - Retention time, in milliseconds, for the time series.
+* `chunkCount` - Number of Memory Chunks used for the time series.
+* `chunkSize` - Amount of memory, in bytes, allocated for data.
+* `chunkType` - The chunk type, `compressed` or `uncompressed`.
+* `duplicatePolicy` - [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
+* `labels` - A nested array of label-value pairs that represent the metadata labels of the time series.
+* `sourceKey` - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
+* `rules` - A nested array of compaction [rules](#tscreaterule) of the time series.
 
 When `DEBUG` is passed, the response will contain an additional array field called `Chunks`.
 Each item (per chunk) will contain:
-* startTimestamp - First timestamp present in the chunk.
-* endTimestamp - Last timestamp present in the chunk.
-* samples - Total number of samples in the chunk.
-* size - The chunk *data* size in bytes (this is the exact size that used for data only inside the chunk, 
+* `startTimestamp` - First timestamp present in the chunk.
+* `endTimestamp` - Last timestamp present in the chunk.
+* `samples` - Total number of samples in the chunk.
+* `size` - The chunk *data* size in bytes (this is the exact size that used for data only inside the chunk, 
   doesn't include other overheads)
-* bytesPerSample - Ratio of `size` and `samples`
+* `bytesPerSample` - Ratio of `size` and `samples`
 
 #### `TS.INFO` Example
 
