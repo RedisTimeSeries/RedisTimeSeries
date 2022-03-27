@@ -14,8 +14,8 @@ TS.GET key
 Array-reply, specifically:
 
 The returned array will contain:
-- The last sample timestamp followed by the last sample value, when the time-series contains data. 
-- An empty array, when the time-series is empty.
+- The last sample timestamp followed by the last sample value, when the time series contains data. 
+- An empty array, when the time series is empty.
 
 
 #### Complexity
@@ -24,7 +24,7 @@ TS.GET complexity is O(1).
 
 #### Examples
 
-##### Get Example on time-series containing data
+##### Get Example on time series containing data
 
 ```sql
 127.0.0.1:6379> TS.GET temperature:2:32
@@ -32,7 +32,7 @@ TS.GET complexity is O(1).
 2) "23"
 ```
 
-##### Get Example on empty time-series 
+##### Get Example on empty time series 
 
 ```sql
 127.0.0.1:6379> redis-cli TS.GET empty_ts
