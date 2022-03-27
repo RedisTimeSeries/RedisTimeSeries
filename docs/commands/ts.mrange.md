@@ -1,17 +1,17 @@
 ### TS.MRANGE
 
-Query a range across multiple time-series by filters in forward direction.
+Query a range across multiple time series by filters in forward direction.
 
 ```sql
 TS.MRANGE fromTimestamp toTimestamp
-          [FILTER_BY_TS TS1 TS2 ..]
+          [FILTER_BY_TS TS...]
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
           [ALIGN value]
-          [AGGREGATION aggregationType bucketDuration]
+          [AGGREGATION aggregator bucketDuration]
           FILTER filter..
-          [GROUPBY <label> REDUCE <reducer>]
+          [GROUPBY label REDUCE reducer]
 ```
 
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
@@ -35,7 +35,7 @@ Optional parameters:
 
 * WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* SELECTED_LABELS _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is useful when you have a large number of labels per series but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
 * COUNT _count_ - Maximum number of returned samples per time series.
 
@@ -44,20 +44,46 @@ Optional parameters:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
-     * **Note:** when not provided alignment is set to `0`.
+     * **Note:** when not provided, alignment is set to `0`.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
-    * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-    * bucketDuration - Time bucket duration for aggregation in milliseconds.
+- AGGREGATION _aggregator_ _bucketDuration_
 
-* GROUPBY - Aggregate results across different time series, grouped by the provided label name.
+  Aggregate results into time buckets.
+  - _aggregator_ - Aggregation type: One of the following:
+    | aggregator | description                                         |
+    | ---------- | --------------------------------------------------- |
+    | `avg`      | arithmetic mean of all values                       |
+    | `sum`      | sum of all values                                   |
+    | `min`      | minimum value                                       |
+    | `max`      | maximum value                                       |
+    | `range`    | difference between the highest and the lowest value |
+    | `count`    | number of values                                    |
+    | `first`    | the value with the lowest timestamp in the bucket   |
+    | `last`     | the value with the highest timestamp in the bucket  |
+    | `std.p`    | population standard deviation of the values         |
+    | `std.s`    | sample standard deviation of the values             |
+    | `var.p`    | population variance of the values                   |
+    | `var.s`    | sample variance of the values                       |
+  - _bucketDuration_ - Time bucket for aggregation in milliseconds
+
+  The alignment of time buckets is 0.
+
+- GROUPBY _label_ REDUCE _reducer_
+
+  Aggregate results across different time series, grouped by the provided label name.
+  
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
-    * label - label name to group series by.  A new series for each value will be produced.
-    * reducer - Reducer type used to aggregate series that share the same label value. Available reducers: sum, min, max.
-    * **Note:** The resulting series will contain 2 labels with the following label array structure:
-         * `__reducer__=<reducer>` : containing the used reducer.
-         * `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
-    * **note** The produced series will be named `<label>=<groupbyvalue>`
+    - _label_ - label name to group series by.  A new series for each value will be produced.
+    - _reducer_ - Reducer type used to aggregate series that share the same label value. One of the following:
+      | reducer | description                        |
+      | ------- | ---------------------------------- |
+      | `sum`   | per label value: sum of all values |
+      | `min`   | per label value: minimum value     |
+      | `max`   | per label value: maximum value     |
+    - **Note:** The resulting series will contain 2 labels with the following label array structure:
+         - `__reducer__=<reducer>` : containing the used reducer.
+         - `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
+    - **note** The produced series will be named `<label>=<groupbyvalue>`
 
 
 #### Return Value
@@ -65,11 +91,11 @@ Optional parameters:
 Array-reply, specifically:
 
 The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels and all the samples that match the range are returned.
+The returned entries are complete, that means that the name, labels, and all the samples that match the range are returned.
 
 The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time series.
 
-If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array will be filled with label-value pairs that represent metadata labels of the time series.
+If the `WITHLABELS` or `SELECTED_LABELS` option is specified, the labels Array will be filled with label-value pairs that represent metadata labels of the time series.
 
 
 #### Examples
