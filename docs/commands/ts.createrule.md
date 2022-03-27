@@ -3,13 +3,13 @@
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
+TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
 ```
 
 - _sourceKey_ - Key name for source time series
 - _destKey_ - Key name for destination (compacted) time series
-- AGGREGATION _aggregationType_ _bucketDuration_
-  - _aggregationType_ - Aggregation type: One of the following:
+- AGGREGATION _aggregator_ _bucketDuration_
+  - _aggregator_ - Aggregation type: One of the following:
     | type    | description                                         |
     | ------- | --------------------------------------------------- |
     | `avg`   | arithmetic mean of all values                       |
