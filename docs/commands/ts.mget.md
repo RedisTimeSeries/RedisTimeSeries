@@ -2,15 +2,24 @@
 Get the last samples matching the specific filter.
 
 ```sql
-TS.MGET [WITHLABELS | SELECTED_LABELS label1 ..] FILTER filter...
+TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
-* filter - [See Filtering](#filtering)
+- FILTER _filter_...
+  For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
+  - _label_`=`_value_ - _label_ equals _value_
+  - _label_`!=`_value_ - label doesn't equal _value_
+  - _label_`=` - _key_ does not have the label _label_
+  - _label_`!=` - _key_ has label _label_
+  - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
+  - _lable_`!=(`_value11_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+
+  Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
 Optional args:
 
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+- WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+- SELECTED_LABELS _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
 #### Return Value
 
@@ -28,7 +37,7 @@ If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels Array wi
 
 TS.MGET complexity is O(n).
 
-n = Number of time-series that match the filters
+n = Number of time series that match the filters
 
 #### Examples
 
