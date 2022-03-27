@@ -64,7 +64,7 @@ Optional parameters:
     | `std.s`    | sample standard deviation of the values             |
     | `var.p`    | population variance of the values                   |
     | `var.s`    | sample variance of the values                       |
-  - _bucketDuration_ - Time bucket for aggregation in milliseconds
+  - _bucketDuration_ - duration of each bucket, in milliseconds
 
   The alignment of time buckets is 0.
 
