@@ -30,11 +30,10 @@ void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples) {
 }
 
 void FreeEnrichedChunk(EnrichedChunk *chunk, bool free_samples) {
-    if (free_samples && chunk->samples.timestamps) {
+    if (free_samples) {
         free(chunk->samples.timestamps);
-    }
-    if (free_samples && chunk->samples.values) {
         free(chunk->samples.values);
     }
+
     free(chunk);
 }
