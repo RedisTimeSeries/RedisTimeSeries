@@ -4,33 +4,50 @@ Query a range in reverse direction.
 
 ```sql
 TS.REVRANGE key fromTimestamp toTimestamp
-         [FILTER_BY_TS TS1 TS2 ..]
+         [FILTER_BY_TS TS...]
          [FILTER_BY_VALUE min max]
-         [COUNT count] [ALIGN value]
+         [COUNT count]
+         [ALIGN value]
          [AGGREGATION aggregationType bucketDuration]
 ```
 
-- key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-- toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+- _key_ - Key name for timeseries
+- _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+- _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional parameters:
 
-* FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
-* FILTER_BY_VALUE - Filter result by value using minimum and maximum.
+- FILTER_BY_TS _ts_... - a list of timestamps to filter the result by specific timestamps
+- FILTER_BY_VALUE _min_ _max_ - Filter result by value using minimum and maximum.
 
-* COUNT - Maximum number of returned samples.
+- COUNT _count_ - Maximum number of returned samples.
 
-* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* ALIGN _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
-     * **Note:** when not provided alignment is set to `0`.
+     * **Note:** when not provided, alignment is set to `0`.
 
-* AGGREGATION - Aggregate result into time buckets (the following aggregation parameters are mandtory)
-  * aggregationType - Aggregation type: avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s
-  * bucketDuration - Time bucket duration for aggregation in milliseconds
+- AGGREGATION _aggregationType_ _bucketDuration_
+  - _aggregationType_ - Aggregation type: One of the following:
+    | type    | description                                         |
+    | ------- | --------------------------------------------------- |
+    | `avg`   | arithmetic mean of all values                       |
+    | `sum`   | sum of all values                                   |
+    | `min`   | minimum value                                       |
+    | `max`   | maximum value                                       |
+    | `range` | difference between the highest and the lowest value |
+    | `count` | number of values                                    |
+    | `first` | the value with the lowest timestamp in the bucket   |
+    | `last`  | the value with the highest timestamp in the bucket  |
+    | `std.p` | population standard deviation of the values         |
+    | `std.s` | sample standard deviation of the values             |
+    | `var.p` | population variance of the values                   |
+    | `var.s` | sample variance of the values                       |
+  - _bucketDuration_ - Time bucket for aggregation in milliseconds
+
+  The alignment of time buckets is 0.
 
 #### Complexity
 
