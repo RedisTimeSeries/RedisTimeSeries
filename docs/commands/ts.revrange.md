@@ -51,7 +51,7 @@ Optional parameters:
 
 #### Complexity
 
-TS.RANGE complexity is O(n/m+k).
+TS.REVRANGE complexity is O(n/m+k).
 
 n = Number of data points
 m = Chunk size (data points per chunk)
