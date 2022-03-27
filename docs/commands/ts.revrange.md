@@ -17,19 +17,21 @@ TS.REVRANGE key fromTimestamp toTimestamp
 
 Optional parameters:
 
-- FILTER_BY_TS _ts_... - a list of timestamps to filter the result by specific timestamps
-- FILTER_BY_VALUE _min_ _max_ - Filter result by value using minimum and maximum.
+- `FILTER_BY_TS` _ts_... - a list of timestamps to filter the result by specific timestamps
+- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
 
-- COUNT _count_ - Maximum number of returned samples.
+- `COUNT` _count_ - Maximum number of returned samples.
 
-* ALIGN _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided, alignment is set to `0`.
 
-- AGGREGATION _aggregator_ _bucketDuration_
+- `AGGREGATION` _aggregator_ _bucketDuration_
+
+  Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
     | type    | description                                         |
     | ------- | --------------------------------------------------- |
@@ -45,7 +47,7 @@ Optional parameters:
     | `std.s` | sample standard deviation of the values             |
     | `var.p` | population variance of the values                   |
     | `var.s` | sample variance of the values                       |
-  - _bucketDuration_ - Time bucket for aggregation in milliseconds
+  - _bucketDuration_ - duration of each bucket, in milliseconds
 
   The alignment of time buckets is 0.
 
