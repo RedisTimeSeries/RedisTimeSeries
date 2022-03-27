@@ -24,29 +24,29 @@ TS.MREVRANGE fromTimestamp toTimestamp
   - _label_`=` - _key_ does not have the label _label_
   - _label_`!=` - _key_ has label _label_
   - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
-  - _lable_`!=(`_value11_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+  - _lable_`!=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
 
   Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
 Optional parameters:
 
-* FILTER_BY_TS _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
-* FILTER_BY_VALUE _min_ _max_ - Filter result by value using minimum and maximum.
+* `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
+* `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
 
-* WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `WITHLABELS` - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty array will be replied on the labels array position.
 
-* SELECTED_LABELS _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is useful when you have a large number of labels per series but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
+* `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is useful when you have a large number of labels per series but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty array will be replied on the labels array position.
 
-* COUNT _count_ - Maximum number of returned samples per time series.
+* `COUNT` _count_ - Maximum number of returned samples per time series.
 
-* ALIGN _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided, alignment is set to `0`.
 
-- AGGREGATION _aggregator_ _bucketDuration_
+- `AGGREGATION` _aggregator_ _bucketDuration_
 
   Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
@@ -68,7 +68,7 @@ Optional parameters:
 
   The alignment of time buckets is 0.
 
-- GROUPBY _label_ REDUCE _reducer_
+- `GROUPBY` _label_ `REDUCE` _reducer_
 
   Aggregate results across different time series, grouped by the provided label name.
   
@@ -93,9 +93,9 @@ Array-reply, specifically:
 The command returns the entries with labels matching the specified filter.
 The returned entries are complete, that means that the name, labels, and all the samples that match the range are returned.
 
-The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time series.
+The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty array for each of the returned time series.
 
-If the `WITHLABELS` or `SELECTED_LABELS` option is specified, the labels Array will be filled with label-value pairs that represent metadata labels of the time series.
+If the `WITHLABELS` or `SELECTED_LABELS` option is specified, the labels array will be filled with label-value pairs that represent metadata labels of the time series.
 
 
 #### Examples
