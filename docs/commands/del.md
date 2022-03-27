@@ -8,7 +8,7 @@ Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands
 
 
 ```sql
-DEL key [key2 ...]
+DEL key...
 ```
 
 * key - Key name for timeseries
