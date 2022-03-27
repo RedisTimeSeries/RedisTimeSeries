@@ -2,15 +2,15 @@
 
 Delete samples between two timestamps for a given key.
 
-The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the `fromTimestamp` or `toTimestamp` will also be deleted.
+The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the _fromTimestamp_ or _toTimestamp_ will also be deleted.
 
 ```sql
 TS.DEL key fromTimestamp toTimestamp
 ```
 
-* key - Key name for timeseries
-- fromTimestamp - Start timestamp for the range deletion.
-- toTimestamp - End timestamp for the range deletion.
+- _key_ - Key name for time series
+- _fromTimestamp_ - Start timestamp for the range deletion.
+- _toTimestamp_ - End timestamp for the range deletion.
 
 #### Return value
 
