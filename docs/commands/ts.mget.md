@@ -5,7 +5,8 @@ Get the last samples matching the specific filter.
 TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
 - FILTER _filter_...
-  For certain read commands a list of filters needs to be applied.  This is the list of possible filters:
+
+  This is the list of possible filters:
   - _label_`=`_value_ - _label_ equals _value_
   - _label_`!=`_value_ - label doesn't equal _value_
   - _label_`=` - _key_ does not have the label _label_
