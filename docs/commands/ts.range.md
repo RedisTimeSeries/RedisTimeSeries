@@ -30,22 +30,24 @@ Optional parameters:
      * **Note:** when not provided, alignment is set to `0`.
 
 - `AGGREGATION` _aggregator_ _bucketDuration_
+
+   Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
-    | type    | description                                         |
-    | ------- | --------------------------------------------------- |
-    | `avg`   | arithmetic mean of all values                       |
-    | `sum`   | sum of all values                                   |
-    | `min`   | minimum value                                       |
-    | `max`   | maximum value                                       |
-    | `range` | difference between the highest and the lowest value |
-    | `count` | number of values                                    |
-    | `first` | the value with the lowest timestamp in the bucket   |
-    | `last`  | the value with the highest timestamp in the bucket  |
-    | `std.p` | population standard deviation of the values         |
-    | `std.s` | sample standard deviation of the values             |
-    | `var.p` | population variance of the values                   |
-    | `var.s` | sample variance of the values                       |
-  - _bucketDuration_ - Time bucket for aggregation in milliseconds
+    | aggregator | description                                         |
+    | ---------- | --------------------------------------------------- |
+    | `avg`      | arithmetic mean of all values                       |
+    | `sum`      | sum of all values                                   |
+    | `min`      | minimum value                                       |
+    | `max`      | maximum value                                       |
+    | `range`    | difference between the highest and the lowest value |
+    | `count`    | number of values                                    |
+    | `first`    | the value with the lowest timestamp in the bucket   |
+    | `last`     | the value with the highest timestamp in the bucket  |
+    | `std.p`    | population standard deviation of the values         |
+    | `std.s`    | sample standard deviation of the values             |
+    | `var.p`    | population variance of the values                   |
+    | `var.s`    | sample variance of the values                       |
+  - _bucketDuration_ - duration of each bucket, in milliseconds
 
   The alignment of time buckets is 0.
 
