@@ -8,7 +8,7 @@ TS.RANGE key fromTimestamp toTimestamp
          [FILTER_BY_VALUE min max]
          [COUNT count] 
          [ALIGN value]
-         [AGGREGATION aggregationType bucketDuration]
+         [AGGREGATION aggregator bucketDuration]
 ```
 
 - key - Key name for time series
@@ -29,8 +29,8 @@ Optional parameters:
      * A specific timestamp: align the reference timestamp to a specific time.
      * **Note:** when not provided, alignment is set to `0`.
 
-- AGGREGATION _aggregationType_ _bucketDuration_
-  - _aggregationType_ - Aggregation type: One of the following:
+- AGGREGATION _aggregator_ _bucketDuration_
+  - _aggregator_ - Aggregation type: One of the following:
     | type    | description                                         |
     | ------- | --------------------------------------------------- |
     | `avg`   | arithmetic mean of all values                       |
