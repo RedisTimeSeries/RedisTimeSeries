@@ -6,7 +6,7 @@ Get the last sample.
 TS.GET key
 ```
 
-* key - Key name for timeseries
+* _key_ - Key name for time series
 
 
 #### Return Value
