@@ -6,29 +6,40 @@ Query a range across multiple time-series by filters in forward direction.
 TS.MRANGE fromTimestamp toTimestamp
           [FILTER_BY_TS TS1 TS2 ..]
           [FILTER_BY_VALUE min max]
-          [WITHLABELS | SELECTED_LABELS label1 ..]
-          [COUNT count] [ALIGN value]
+          [WITHLABELS | SELECTED_LABELS label...]
+          [COUNT count]
+          [ALIGN value]
           [AGGREGATION aggregationType bucketDuration]
           FILTER filter..
           [GROUPBY <label> REDUCE <reducer>]
 ```
 
-* fromTimestamp - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-* toTimestamp - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
-* filter - [See Filtering](#filtering)
+- _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
+- _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
+- FILTER _filter_...
+
+  This is the list of possible filters:
+  - _label_`=`_value_ - _label_ equals _value_
+  - _label_`!=`_value_ - label doesn't equal _value_
+  - _label_`=` - _key_ does not have the label _label_
+  - _label_`!=` - _key_ has label _label_
+  - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
+  - _lable_`!=(`_value11_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+
+  Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
 Optional parameters:
 
-* FILTER_BY_TS - Followed by a list of timestamps to filter the result by specific timestamps
-* FILTER_BY_VALUE - Filter result by value using minimum and maximum.
+* FILTER_BY_TS _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
+* FILTER_BY_VALUE _min_ _max_ - Filter result by value using minimum and maximum.
 
 * WITHLABELS - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
 * SELECTED_LABELS - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty Array will be replied on the labels array position.
 
-* COUNT - Maximum number of returned samples per time series.
+* COUNT _count_ - Maximum number of returned samples per time series.
 
-* ALIGN - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+* ALIGN _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`).
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`).
