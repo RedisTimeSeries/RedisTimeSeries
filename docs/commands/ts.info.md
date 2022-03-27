@@ -11,7 +11,7 @@ Returns information and statistics on the time series.
 
 #### Parameters
 
-* _key_ - Key name of the time series.
+* _key_ - Key name of the time series
 * `DEBUG` - An optional flag to get a more detailed information about the chunks.
 
 #### Complexity
