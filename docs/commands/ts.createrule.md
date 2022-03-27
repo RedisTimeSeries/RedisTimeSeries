@@ -8,7 +8,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
 
 - _sourceKey_ - Key name for source time series
 - _destKey_ - Key name for destination (compacted) time series
-- AGGREGATION _aggregator_ _bucketDuration_
+- `AGGREGATION` _aggregator_ _bucketDuration_
   - _aggregator_ - Aggregation type: One of the following:
     | type    | description                                         |
     | ------- | --------------------------------------------------- |
@@ -28,7 +28,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
 
   The alignment of time buckets is 0.
 
-DEST_KEY should be of a `timeseries` type, and should be created before TS.CREATERULE is called.
+DEST_KEY should be of a `timeseries` type, and should be created before `TS.CREATERULE` is called.
 
 !!! info "Note on existing samples in the source time series"
         
