@@ -25,7 +25,7 @@ The following arguments are optional because they can be set by TS.CREATE:
    * `MIN` - only override if the value is lower than the existing value
    * `MAX` - only override if the value is higher than the existing value
    * `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
- * LABELS {_label_ _value_...} - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a time series that hasn't been previously created; when adding samples to an existing time series, this argument is ignored.
+ * LABELS {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key. Relevant only when adding data to a time series that hasn't been previously created; when adding samples to an existing time series, this argument is ignored.
 
 #### Examples
 ```sql
