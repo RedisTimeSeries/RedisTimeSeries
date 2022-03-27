@@ -310,7 +310,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         // currently if the query reversed the chunk will be already revered here
         assert(self->reverse == enrichedChunk->rev);
         n_samples = enrichedChunk->num_samples;
-        if (self->aggregation == &aggMax &&
+        if (false && self->aggregation == &aggMax &&
             !is_reserved) { // Currently only implemented vectorization for specific case
             si = 0;
             while (si < n_samples) {
