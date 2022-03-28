@@ -2,11 +2,10 @@
 
 Decrease the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given decrement.
 
-If the time series does not exist - it will be automatically created.
-
 ```sql
 TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
 ```
+If the time series does not exist - it will be automatically created.
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
 
