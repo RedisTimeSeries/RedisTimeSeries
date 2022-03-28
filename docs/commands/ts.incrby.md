@@ -1,6 +1,6 @@
 ### TS.INCRBY
 
-Creates a new sample that increments the latest sample's value.
+Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp + a given increment.
 
 If the time series does not exist - it will be automatically created.
 
@@ -19,25 +19,27 @@ Optional args:
 
 - `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
 
+  _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is increased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp + _value_. If the time series is empty - the value would be set to _value_.
+
 - `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
 
-  Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+  Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
   When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
  
 - `UNCOMPRESSED` - Changes data storage from compressed (by default) to uncompressed
 
-  Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+  Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
 - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for data. Must be a multiple of 8.
 
-  Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+  Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
   If not specified: set to 4096.
 
 - `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
 
-  Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+  Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
 #### Notes
 
