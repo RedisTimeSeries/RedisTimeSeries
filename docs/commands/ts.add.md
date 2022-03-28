@@ -16,7 +16,7 @@ The following arguments are optional because they can be set by `TS.CREATE`:
 
  - `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
 
-    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+    Used only if a new time series is created. Ignored When adding samples to an existing time series.
   
     When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
     
@@ -24,11 +24,11 @@ The following arguments are optional because they can be set by `TS.CREATE`:
     - `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
     - `UNCOMPRESSED`: keep the raw samples in memory.
 
-    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+    Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
  - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for data. Must be a multiple of 8.
 
-    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+    Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
     If not specified: set to 4096.
 
@@ -42,7 +42,7 @@ The following arguments are optional because they can be set by `TS.CREATE`:
 
  - `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
 
-    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+    Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
 #### Examples
 ```sql
