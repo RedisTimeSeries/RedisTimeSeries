@@ -26,13 +26,13 @@ The following arguments are optional because they can be set by `TS.CREATE`:
 
     Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
 
- - `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
+ - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for data. Must be a multiple of 8.
 
     Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
 
     If not specified: set to 4096.
 
- - `ON_DUPLICATE` _policy_ - overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
+ - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
    - `BLOCK` - an error will occur for any out of order sample
    - `FIRST` - ignore any newly reported value
    - `LAST` - override with the newly reported value
