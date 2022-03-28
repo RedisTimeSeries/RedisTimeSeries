@@ -7,7 +7,7 @@ TS.INFO key [DEBUG]
 
 #### Description
 
-Returns information and statistics on the time series.
+Returns information and statistics for a time series.
 
 #### Parameters
 
