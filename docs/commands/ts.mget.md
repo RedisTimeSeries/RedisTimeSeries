@@ -1,5 +1,5 @@
 ### TS.MGET
-Get the last samples matching the specific filter.
+Get the last samples matching a specific filter.
 
 ```sql
 TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
