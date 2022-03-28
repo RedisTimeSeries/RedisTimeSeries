@@ -1,6 +1,6 @@
 ### TS.MADD
 
-Append new samples to a list of time series.
+Append new samples to one or more time series.
 
 ```sql
 TS.MADD {key timestamp value}...
