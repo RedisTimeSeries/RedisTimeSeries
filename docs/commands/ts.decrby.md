@@ -5,7 +5,7 @@ Decrease the value of the sample with the maximal existing timestamp, or create 
 If the time series does not exist - it will be automatically created.
 
 ```sql
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
 ```
 
 This command can be used as a counter or gauge that automatically gets history as a time series.
@@ -19,7 +19,7 @@ Optional args:
 
   _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is decreased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp minus _value_. If the time series is empty - the value would be set to _value_.
 
-- `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
+- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
 
   Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
