@@ -26,7 +26,7 @@ Array-reply, specifically:
 * `memoryUsage` - Total number of bytes allocated for this time series
 * `firstTimestamp` - First timestamp present in this time series
 * `lastTimestamp` - Last timestamp present in this time series
-* `retentionTime` - Retention time, in milliseconds, for this time series
+* `retentionTime` - The retention period, in milliseconds, for this time series
 * `chunkCount` - Number of Memory Chunks used for this time series
 * `chunkSize` - Memory size, in bytes, allocated for data
 * `chunkType` - The chunk type: `compressed` or `uncompressed`
