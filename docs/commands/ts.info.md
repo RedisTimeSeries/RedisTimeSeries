@@ -32,7 +32,7 @@ Array-reply, specifically:
 * `chunkType` - The chunk type: `compressed` or `uncompressed`
 * `duplicatePolicy` - The [duplicate policy](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
 * `labels` - A nested array of label-value pairs that represent the metadata labels of this time series
-* `sourceKey` - Key name for source time series in case the current series is a target of a [rule](#tscreaterule)
+* `sourceKey` - Key name for source time series in case the current series is a target of a [compaction rule](https://redis.io/commands/ts.createrule/)
 * `rules` - A nested array of the [compaction rules](https://redis.io/commands/ts.createrule/) defined in this time series
 
 When `DEBUG` is specified, the response will contain an additional array field called `Chunks`.
