@@ -1,6 +1,8 @@
 ### TS.ADD
 
-Append a new sample to the time series. If the time series has not been created yet with `TS.CREATE` - it will be automatically created. 
+Append a new sample to a time series. 
+
+If the time series does not exist - it will be automatically created. 
 
 ```sql
 TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
