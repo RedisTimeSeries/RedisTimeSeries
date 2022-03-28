@@ -1,11 +1,11 @@
 ### TS.ADD
 
-Append a new sample to a time series. 
+Append a sample to a time series. 
 
-If the time series does not exist - it will be automatically created. 
+If the time series does not exist - it will be automatically created.
 
 ```sql
-TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
+TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
 ```
 
 - _key_ - Key name for time series
@@ -14,7 +14,7 @@ TS.ADD key timestamp value [RETENTION retentionTime] [ENCODING [COMPRESSED|UNCOM
 
 The following arguments are optional because they can be set by `TS.CREATE`:
 
- - `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
+ - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
   
@@ -62,7 +62,11 @@ The complexity of `TS.ADD` is always O(M) when M is the number of compaction rul
 #### Notes
 
 - You can use this command to add data to a nonexisting time series in a single command.
-  This is why `RETENTION` and `LABELS` are optional arguments.
-- When specified and the key doesn't exist, RedisTimeSeries will create the key with the specified `RETENTION` and/or `LABELS`.
+  This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
+- When specified and the key doesn't exist, a new time series will be created.
   Setting `RETENTION` and `LABELS` introduces additional time complexity.
-- Updating a sample in a trimmed window will update down-sampling aggregation based on the existing data.
+- If _timestamp_ is older than the retention period (compared to maximal existing timestamp) - the sample will not be appended.
+- When adding a sample to a time series for which compaction rules are defined:
+  - If all the original samples for an affected aggregated time bucket are available - the compacted value will be recalculated based on the reported sample and the original samples.
+  - If only part of the original samples for an affected aggregated time bucket are available (due to trimming caused in accordance with the time series RETENTION policy) - the compacted value will be recalculated based on the reported sample and the available original samples.
+  - If the original samples for an affected aggregated time bucket are not available (due to trimming caused in accordance with the time series RETENTION policy) - the compacted value bucket will not be updated.  
