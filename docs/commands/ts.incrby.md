@@ -4,8 +4,6 @@ Increase the value of the sample with the maximal existing timestamp, or create 
 
 If the time series does not exist - it will be automatically created.
 
-> Note: TS.INCRBY support updates for the latest sample.
-
 ```sql
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
 ```
