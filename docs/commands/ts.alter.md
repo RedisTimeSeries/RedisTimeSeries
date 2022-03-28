@@ -5,14 +5,16 @@
 Update the retention, chunk size, duplicate policy, and labels of an existing time series.
 
 ```sql
-TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS [{label value}...]]
+TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS [{label value}...]]
 ```
 
 - _key_ - Key name for time series
-- `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds)
-   - Default: The global retention secs configuration of the database (by default, `0`)
+
+- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
    - When set to 0, the series is not trimmed at all
+
 - `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
+
 - `DUPLICATE_POLICY` _policy_ - Policy for handling samples with identical timestamps. One of the following values:
   - `BLOCK` - an error will occur for any out of order sample
   - `FIRST` - ignore any newly reported value
