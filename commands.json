@@ -1,6 +1,6 @@
 {
     "TS.CREATE": {
-        "summary": "Create a new time-series",
+        "summary": "Create a new time series",
         "complexity": "O(1)",
         "arguments": [
             {
@@ -97,7 +97,7 @@
         "group": "timeseries"
     },
     "TS.DEL": {
-        "summary": "Delete samples between two timestamps for a given key",
+        "summary": "Delete all samples between two timestamps for a given time series",
         "complexity": "O(N) where N is the number of data points that will be removed",
         "arguments": [
             {
@@ -117,7 +117,7 @@
         "group": "timeseries"
     },
     "TS.ALTER": {
-        "summary": "Update the retention, labels of an existing key",
+        "summary": "Update the retention, chunk size, duplicate policy, and labels of an existing time series",
         "complexity": "O(N) where N is the number of labels requested to update",
         "arguments": [
             {
@@ -196,7 +196,7 @@
         "group": "timeseries"
     },
     "TS.ADD": {
-        "summary": "Append a new sample to the series. If the series has not been created yet with TS.CREATE it will be automatically created.",
+        "summary": "Append a sample to a time series",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -301,7 +301,7 @@
         "group": "timeseries"
     },
     "TS.MADD": {
-        "summary": "Append new samples to a list of series",
+        "summary": "Append new samples to one or more time series",
         "complexity": "O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction",
         "arguments": [
             {
@@ -328,7 +328,7 @@
         "group": "timeseries"
     },
     "TS.INCRBY": {
-        "summary": "Creates a new sample that increments the latest sample's value",
+        "summary": "Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given increment",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -384,7 +384,7 @@
         "group": "timeseries"
     },
     "TS.DECRBY": {
-        "summary": "Creates a new sample that decrements the latest sample's value",
+        "summary": "Decrease the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given decrement",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -818,7 +818,7 @@
         "group": "timeseries"
     },
     "TS.MRANGE": {
-        "summary": "Query a range across multiple time-series by filters in forward direction",
+        "summary": "Query a range across multiple time series by filters in forward direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
         "arguments": [
             {
@@ -1268,7 +1268,7 @@
         "group": "timeseries"
     },
     "TS.MGET": {
-        "summary": "Get the last samples matching the specific filter",
+        "summary": "Get the last samples matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
@@ -1334,7 +1334,7 @@
         "group": "timeseries"
     },
     "TS.INFO": {
-        "summary": "Returns information and statistics on the time-series",
+        "summary": "Returns information and statistics for a time series",
         "complexity": "O(1)",
         "arguments": [
             {
@@ -1351,7 +1351,7 @@
         "group": "timeseries"
     },
     "TS.QUERYINDEX": {
-        "summary": "Get all the keys matching the filter list",
+        "summary": "Get all time series keys matching a filter list",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
