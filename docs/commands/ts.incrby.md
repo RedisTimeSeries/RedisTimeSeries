@@ -1,6 +1,9 @@
 ### TS.INCRBY
 
 Creates a new sample that increments the latest sample's value.
+
+If the time series does not exist - it will be automatically created.
+
 > Note: TS.INCRBY support updates for the latest sample.
 
 ```sql
