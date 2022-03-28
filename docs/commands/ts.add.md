@@ -16,14 +16,22 @@ The following arguments are optional because they can be set by `TS.CREATE`:
 
  - `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
 
-    Ignored When adding samples to an existing time series.
-    
-    Used only if a new time sereies is created. When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
+    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+  
+    When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
     
  - `ENCODING` _enc_ - Specify the series samples encoding format. One of the following values:
     - `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
     - `UNCOMPRESSED`: keep the raw samples in memory.
- - `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8, Default: 4096.
+
+    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+
+ - `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
+
+    Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
+
+    If not specified: set to 4096.
+
  - `ON_DUPLICATE` _policy_ - overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
    - `BLOCK` - an error will occur for any out of order sample
    - `FIRST` - ignore any newly reported value
@@ -31,6 +39,7 @@ The following arguments are optional because they can be set by `TS.CREATE`:
    - `MIN` - only override if the value is lower than the existing value
    - `MAX` - only override if the value is higher than the existing value
    - `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+
  - `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
 
     Used only if a new time sereies is created. Ignored When adding samples to an existing time series.
