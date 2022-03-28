@@ -1,6 +1,6 @@
 ### TS.DEL
 
-Delete samples between two timestamps for a given key.
+Delete samples between two timestamps for a given time series.
 
 The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the _fromTimestamp_ or _toTimestamp_ will also be deleted.
 
