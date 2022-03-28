@@ -23,7 +23,7 @@ Optional args:
    - `UNCOMPRESSED`: keep the raw samples in memory. Adding this flag will keep data in an uncompressed form. Compression not only saves
    memory but usually improve performance due to lower number of memory accesses.
 
-   When not specified: set to the global [CHUNK_TYPE](https://redis.io/docs/stack/timeseries/configuration/#chunk_type) configuration of the database (which, by default, is `COMPRESSED`).
+   When not specified: set to `COMPRESSED`.
 
 - `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
 
