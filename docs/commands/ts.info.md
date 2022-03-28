@@ -22,24 +22,24 @@ O(1)
 
 Array-reply, specifically:
 
-* `totalSamples` - Total number of samples in the time series.
-* `memoryUsage` - Total number of bytes allocated for the time series.
-* `firstTimestamp` - First timestamp present in the time series.
-* `lastTimestamp` - Last timestamp present in the time series.
-* `retentionTime` - Retention time, in milliseconds, for the time series.
-* `chunkCount` - Number of Memory Chunks used for the time series.
-* `chunkSize` - Amount of memory, in bytes, allocated for data.
-* `chunkType` - The chunk type, `compressed` or `uncompressed`.
-* `duplicatePolicy` - [Duplicate sample policy](configuration.md#DUPLICATE_POLICY).
-* `labels` - A nested array of label-value pairs that represent the metadata labels of the time series.
-* `sourceKey` - Key name for source time series in case the current series is a target of a [rule](#tscreaterule).
-* `rules` - A nested array of compaction [rules](#tscreaterule) of the time series.
+* `totalSamples` - Total number of samples in this time series
+* `memoryUsage` - Total number of bytes allocated for this time series
+* `firstTimestamp` - First timestamp present in this time series
+* `lastTimestamp` - Last timestamp present in this time series
+* `retentionTime` - Retention time, in milliseconds, for this time series
+* `chunkCount` - Number of Memory Chunks used for this time series
+* `chunkSize` - Memory size, in bytes, allocated for data
+* `chunkType` - The chunk type: `compressed` or `uncompressed`
+* `duplicatePolicy` - The [duplicate policy](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
+* `labels` - A nested array of label-value pairs that represent the metadata labels of this time series
+* `sourceKey` - Key name for source time series in case the current series is a target of a [rule](#tscreaterule)
+* `rules` - A nested array of the [compaction rules](https://redis.io/commands/ts.createrule/) defined in this time series
 
-When `DEBUG` is passed, the response will contain an additional array field called `Chunks`.
+When `DEBUG` is specified, the response will contain an additional array field called `Chunks`.
 Each item (per chunk) will contain:
-* `startTimestamp` - First timestamp present in the chunk.
-* `endTimestamp` - Last timestamp present in the chunk.
-* `samples` - Total number of samples in the chunk.
+* `startTimestamp` - First timestamp present in the chunk
+* `endTimestamp` - Last timestamp present in the chunk
+* `samples` - Total number of samples in the chunk
 * `size` - The chunk *data* size in bytes (this is the exact size that used for data only inside the chunk, 
   doesn't include other overheads)
 * `bytesPerSample` - Ratio of `size` and `samples`
