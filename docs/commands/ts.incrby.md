@@ -1,6 +1,6 @@
 ### TS.INCRBY
 
-Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp + a given increment.
+Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given increment.
 
 If the time series does not exist - it will be automatically created.
 
@@ -19,7 +19,7 @@ Optional args:
 
 - `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
 
-  _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is increased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp + _value_. If the time series is empty - the value would be set to _value_.
+  _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is increased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp plus _value_. If the time series is empty - the value would be set to _value_.
 
 - `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds).
 
