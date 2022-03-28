@@ -25,7 +25,7 @@ Optional args:
 
    When not specified: set to the global [CHUNK_TYPE](https://redis.io/docs/stack/timeseries/configuration/#chunk_type) configuration of the database (which, by default, is `COMPRESSED`).
 
-- `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8.
+- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
 
    When not specified: set to 4096.
 
