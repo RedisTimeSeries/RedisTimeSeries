@@ -13,7 +13,7 @@ TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY pol
 - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
    - When set to 0, the series is not trimmed at all
 
-- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for data. Must be a multiple of 8.
+- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8.
 
 - `DUPLICATE_POLICY` _policy_ - Policy for handling samples with identical timestamps. One of the following values:
   - `BLOCK` - an error will occur for any out of order sample
