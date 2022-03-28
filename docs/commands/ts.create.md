@@ -5,14 +5,14 @@
 Create a new time series. 
 
 ```sql
-TS.CREATE key [RETENTION retentionTime] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS {label value}...]
+TS.CREATE key [RETENTION retentionPeriod] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS {label value}...]
 ```
 
 - _key_ - Key name for time series
 
 Optional args:
 
-- `RETENTION` _retentionTime_ - Maximum age for samples compared to last event time (in milliseconds)
+- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to last event time (in milliseconds)
 
    When set to 0, the series is not trimmed.
 
