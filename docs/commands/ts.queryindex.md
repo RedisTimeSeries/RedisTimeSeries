@@ -1,6 +1,6 @@
 ### TS.QUERYINDEX
 
-Get all the keys matching the filter list.
+Get all time series keys matching a filter list.
 
 ```sql
 TS.QUERYINDEX filter...
