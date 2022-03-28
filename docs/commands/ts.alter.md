@@ -13,7 +13,7 @@ TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY polic
    - Default: The global retention secs configuration of the database (by default, `0`)
    - When set to 0, the series is not trimmed at all
 - `CHUNK_SIZE` _size_ - amount of memory, in bytes, allocated for data. Must be a multiple of 8. Default: 4096.
-- `DUPLICATE_POLICY` _policy_ - Policy for handling multiple samples with identical timestamps. One of the following values:
+- `DUPLICATE_POLICY` _policy_ - Policy for handling samples with identical timestamps. One of the following values:
   - `BLOCK` - an error will occur for any out of order sample
   - `FIRST` - ignore any newly reported value
   - `LAST` - override with the newly reported value
