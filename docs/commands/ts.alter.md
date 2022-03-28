@@ -2,7 +2,7 @@
 
 ### TS.ALTER
 
-Update the retention, chunk size, duplicate policy, and labels of an existing key.
+Update the retention, chunk size, duplicate policy, and labels of an existing time series.
 
 ```sql
 TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS [{label value}...]]
