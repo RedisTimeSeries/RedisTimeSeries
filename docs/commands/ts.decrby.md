@@ -1,6 +1,9 @@
 ### TS.DECRBY
 
 Creates a new sample that decrements the latest sample's value.
+
+If the time series does not exist - it will be automatically created.
+
 > Note: TS.DECRBY support updates for the latest sample.
 
 ```sql
