@@ -2,11 +2,11 @@
 
 Append a sample to a time series. 
 
-If the time series does not exist - it will be automatically created.
-
 ```sql
 TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
 ```
+
+If the time series does not exist - it will be automatically created.
 
 - _key_ - Key name for time series
 - _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
