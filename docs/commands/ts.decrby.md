@@ -4,8 +4,6 @@ Decrease the value of the sample with the maximal existing timestamp, or create 
 
 If the time series does not exist - it will be automatically created.
 
-> Note: TS.DECRBY support updates for the latest sample.
-
 ```sql
 TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
 ```
