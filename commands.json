@@ -454,7 +454,7 @@
             {
                 "type": "oneof",
                 "token": "AGGREGATION",
-                "name": "aggregationType",
+                "name": "aggregator",
                 "arguments": [
                     {
                         "name": "avg",
@@ -606,7 +606,7 @@
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
-                        "name": "aggregationType",
+                        "name": "aggregator",
                         "arguments": [
                             {
                                 "name": "avg",
@@ -743,7 +743,7 @@
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
-                        "name": "aggregationType",
+                        "name": "aggregator",
                         "arguments": [
                             {
                                 "name": "avg",
@@ -907,7 +907,7 @@
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
-                        "name": "aggregationType",
+                        "name": "aggregator",
                         "arguments": [
                             {
                                 "name": "avg",
@@ -1126,7 +1126,7 @@
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
-                        "name": "aggregationType",
+                        "name": "aggregator",
                         "arguments": [
                             {
                                 "name": "avg",
