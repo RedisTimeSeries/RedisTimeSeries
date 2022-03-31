@@ -22,7 +22,6 @@ EnrichedChunk *allocateEnrichedChunk() {
 }
 
 void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples) {
-    _init_enriched_chunk(chunk);
     chunk->samples.size = n_samples;
     chunk->samples.timestamps =
         (timestamp_t *)realloc(chunk->samples.timestamps, n_samples * sizeof(timestamp_t));
