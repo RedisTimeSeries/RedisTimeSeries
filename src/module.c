@@ -344,7 +344,6 @@ int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
-    RedisModule_AutoMemory(ctx);
 
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
