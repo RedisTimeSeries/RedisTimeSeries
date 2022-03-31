@@ -996,13 +996,11 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     Sample sample;
     AggregationClass *aggObject = rule->aggClass;
-    const RangeArgs args = {
-        .startTimestamp = start_ts,
-        .endTimestamp = end_ts,
-        .aggregationArgs = { 0 },
-        .filterByValueArgs = { 0 },
-        .filterByTSArgs = { 0 }
-    };
+    const RangeArgs args = { .startTimestamp = start_ts,
+                             .endTimestamp = end_ts,
+                             .aggregationArgs = { 0 },
+                             .filterByValueArgs = { 0 },
+                             .filterByTSArgs = { 0 } };
 
     AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
 
@@ -1056,13 +1054,11 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    const RangeArgs args = {
-        .startTimestamp = 0,
-        .endTimestamp = series->lastTimestamp,
-        .aggregationArgs = { 0 },
-        .filterByValueArgs = { 0 },
-        .filterByTSArgs = { 0 }
-    };
+    const RangeArgs args = { .startTimestamp = 0,
+                             .endTimestamp = series->lastTimestamp,
+                             .aggregationArgs = { 0 },
+                             .filterByValueArgs = { 0 },
+                             .filterByTSArgs = { 0 } };
     AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, false);
 
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
