@@ -323,6 +323,55 @@ def test_sanity_pipeline():
         actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
         assert expected_result == actual_result
 
+def test_large_compressed_range():
+    seed = datetime.now()
+    random.seed(seed)
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
+        _len = 400
+        n_samples_dict = {}
+        ts = random.randint(2, _len) # For taking more space and chunks
+        for i in range(_len):
+            r.execute_command('TS.ADD', 't1', ts , i)
+            n_samples_dict[ts] = i
+            ts += random.randint(2, _len) # For taking more space and chunks
+
+        res = r.execute_command('ts.range', 't1', '-', '+')
+        assert len(res) == _len
+
+        for key1, val1 in n_samples_dict.items():
+            for key2, val2 in n_samples_dict.items():
+                if(key2 < key1):
+                    continue
+                res = r.execute_command('ts.range', 't1', key1, key2)
+                assert len(res) == val2 - val1 + 1
+                res = r.execute_command('ts.range', 't1', key1 - 1, key2 + 1)
+                assert len(res) == val2 - val1 + 1
+
+def test_large_compressed_revrange():
+    seed = datetime.now()
+    random.seed(seed)
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
+        _len = 400
+        n_samples_dict = {}
+        ts = random.randint(2, _len) # For taking more space and chunks
+        for i in range(_len):
+            r.execute_command('TS.ADD', 't1', ts , i)
+            n_samples_dict[ts] = i
+            ts += random.randint(2, _len) # For taking more space and chunks
+
+        res = r.execute_command('ts.range', 't1', '-', '+')
+        assert len(res) == _len
+
+        for key1, val1 in n_samples_dict.items():
+            for key2, val2 in n_samples_dict.items():
+                if(key2 < key1):
+                    continue
+                res = r.execute_command('ts.revrange', 't1', key1, key2)
+                assert len(res) == val2 - val1 + 1
+                res = r.execute_command('ts.revrange', 't1', key1 - 1, key2 + 1)
+                assert len(res) == val2 - val1 + 1
 
 def test_issue358():
     filepath = "./issue358.txt"
