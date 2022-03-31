@@ -33,6 +33,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     ReplySeriesRange(ctx, s, args, rev);
     return REDISMODULE_OK;
 }
+#include <unistd.h>
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
     long long arraylen = 0;
@@ -41,7 +42,17 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
     if (args->count != -1) {
         _count = args->count;
     }
+/*
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
+    timestamp_t t = 1451723240000;
+    for(int i = 0; i < 2880; i++){
+        ReplyWithSample(
+            ctx, t, 96);
+        t++;
+    }
+    RedisModule_ReplySetArrayLength(ctx, 2880);
+    */
     AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
     EnrichedChunk *enrichedChunk;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -55,7 +66,6 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
         arraylen += n;
     }
     iter->Close(iter);
-
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
 }

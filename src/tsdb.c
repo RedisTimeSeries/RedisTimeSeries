@@ -1096,7 +1096,7 @@ AbstractIterator *SeriesQuery(Series *series,
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
         series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
-
+/*
     if (args->filterByTSArgs.hasValue) {
         chain =
             (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs, reverse);
@@ -1130,7 +1130,7 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             timestampAlignment,
                                                             reverse);
     }
-
+*/
     return chain;
 }
 
