@@ -1001,6 +1001,7 @@ int SeriesCalcRange(Series *series,
         .endTimestamp = end_ts,
         .aggregationArgs = { 0 },
         .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 }
     };
 
     AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
@@ -1060,6 +1061,7 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         .endTimestamp = series->lastTimestamp,
         .aggregationArgs = { 0 },
         .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 }
     };
     AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, false);
 
