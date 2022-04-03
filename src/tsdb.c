@@ -1006,15 +1006,10 @@ int SeriesCalcRange(Series *series,
 
     void *context = aggObject->createContext();
     bool _is_empty = true;
-    ChunkResult res;
 
-    res = iterator->GetNext(iterator, &sample);
-    if (res == CR_OK) {
-        _is_empty = false;
-    }
-    while (res == CR_OK) {
+    while (iterator->GetNext(iterator, &sample) == CR_OK) {
         aggObject->appendValue(context, sample.value);
-        res = iterator->GetNext(iterator, &sample);
+        _is_empty = false;
     }
 
     if (is_empty) {
