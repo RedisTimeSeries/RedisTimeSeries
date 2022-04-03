@@ -861,6 +861,7 @@
                 ]
             },
             {
+                "name": "labels",
                 "type": "oneof",
                 "arguments": [
                     {
@@ -978,6 +979,7 @@
                 ]
             },
             {
+                "name": "filter",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
