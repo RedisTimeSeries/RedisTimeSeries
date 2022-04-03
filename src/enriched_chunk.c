@@ -7,32 +7,33 @@
 #include "rmutil/alloc.h"
 #include "enriched_chunk.h"
 
-static inline void _init_enriched_chunk(EnrichedChunk *chunk) {
+void ResetEnrichedChunk(EnrichedChunk *chunk) {
+    chunk->num_samples = 0;
+    chunk->rev = false;
+    chunk->samples.timestamps = chunk->samples.og_timestamps;
+    chunk->samples.values = chunk->samples.og_values;
+}
+
+EnrichedChunk *NewEnrichedChunk() {
+    EnrichedChunk *chunk = (EnrichedChunk *)malloc(sizeof(EnrichedChunk));
     chunk->num_samples = 0;
     chunk->rev = false;
     chunk->samples.size = 0;
-    chunk->samples.timestamps = NULL;
-    chunk->samples.values = NULL;
-}
-
-EnrichedChunk *allocateEnrichedChunk() {
-    EnrichedChunk *chunk = (EnrichedChunk *)malloc(sizeof(EnrichedChunk));
-    _init_enriched_chunk(chunk);
+    chunk->samples.og_timestamps = NULL;
+    chunk->samples.og_values = NULL;
     return chunk;
 }
 
 void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples) {
     chunk->samples.size = n_samples;
-    chunk->samples.timestamps =
-        (timestamp_t *)realloc(chunk->samples.timestamps, n_samples * sizeof(timestamp_t));
-    chunk->samples.values = (double *)realloc(chunk->samples.values, n_samples * sizeof(double));
+    chunk->samples.og_timestamps =
+        (timestamp_t *)realloc(chunk->samples.og_timestamps, n_samples * sizeof(timestamp_t));
+    chunk->samples.og_values =
+        (double *)realloc(chunk->samples.og_values, n_samples * sizeof(double));
 }
 
-void FreeEnrichedChunk(EnrichedChunk *chunk, bool free_samples) {
-    if (free_samples) {
-        free(chunk->samples.timestamps);
-        free(chunk->samples.values);
-    }
-
+void FreeEnrichedChunk(EnrichedChunk *chunk) {
+    free(chunk->samples.og_timestamps);
+    free(chunk->samples.og_values);
     free(chunk);
 }
