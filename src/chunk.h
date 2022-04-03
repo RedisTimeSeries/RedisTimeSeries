@@ -54,12 +54,11 @@ timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
 
 void reverseEnrichedChunk(EnrichedChunk *enrichedChunk);
-EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
-                                         uint64_t start,
-                                         uint64_t end,
-                                         EnrichedChunk *enrichedChunk,
-                                         EnrichedChunk *enrichedChunkAux,
-                                         bool reverse);
+void Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                               uint64_t start,
+                               uint64_t end,
+                               EnrichedChunk *enrichedChunk,
+                               bool reverse);
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);

@@ -23,7 +23,6 @@ typedef struct SeriesIterator
     api_timestamp_t minTimestamp;
     bool reverse;
     bool reverse_chunk;
-    bool isFirstIteration;
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 

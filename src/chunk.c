@@ -207,18 +207,17 @@ void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
 }
 
 // TODO: can be optimized further using binary search
-EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
-                                         uint64_t start,
-                                         uint64_t end,
-                                         EnrichedChunk *enrichedChunk,
-                                         EnrichedChunk *enrichedChunkAux,
-                                         bool reverse) {
+void Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                               uint64_t start,
+                               uint64_t end,
+                               EnrichedChunk *enrichedChunk,
+                               bool reverse) {
     const Chunk *_chunk = chunk;
-    enrichedChunk->num_samples = 0;
+    ResetEnrichedChunk(enrichedChunk);
     if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
                  _chunk->base_timestamp > end ||
                  _chunk->samples[_chunk->num_samples - 1].timestamp < start)) {
-        return NULL;
+        return;
     }
 
     size_t si = _chunk->num_samples, ei = _chunk->num_samples - 1, i = 0;
@@ -232,7 +231,7 @@ EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
     }
 
     if (si == _chunk->num_samples) { // all TS are smaller than start
-        return NULL;
+        return;
     }
 
     // find end index
@@ -245,7 +244,7 @@ EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
 
     enrichedChunk->num_samples = ei - si + 1;
     if (enrichedChunk->num_samples == 0) {
-        return NULL;
+        return;
     }
 
     if (unlikely(reverse)) {
@@ -261,7 +260,7 @@ EnrichedChunk *Uncompressed_ProcessChunk(const Chunk_t *chunk,
         }
         enrichedChunk->rev = false;
     }
-    return enrichedChunk;
+    return;
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {

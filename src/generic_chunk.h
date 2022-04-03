@@ -52,12 +52,11 @@ typedef struct ChunkFuncs
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
     ChunkResult (*UpsertSample)(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 
-    EnrichedChunk *(*ProcessChunk)(const Chunk_t *chunk,
-                                   uint64_t start,
-                                   uint64_t end,
-                                   EnrichedChunk *enrichedChunk,
-                                   EnrichedChunk *enrichedChunkAux,
-                                   bool reverse);
+    void (*ProcessChunk)(const Chunk_t *chunk,
+                         uint64_t start,
+                         uint64_t end,
+                         EnrichedChunk *enrichedChunk,
+                         bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
     u_int64_t (*GetNumOfSample)(Chunk_t *chunk);
