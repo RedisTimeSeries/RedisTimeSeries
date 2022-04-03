@@ -1082,6 +1082,7 @@
                 ]
             },
             {
+                "name": "labels",
                 "type": "oneof",
                 "arguments": [
                     {
@@ -1199,6 +1200,7 @@
                 ]
             },
             {
+                "name": "filter",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1274,6 +1276,7 @@
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
+                "name": "labels",
                 "type": "oneof",
                 "optional": true,
                 "arguments": [
@@ -1301,6 +1304,7 @@
                 ]
             },
             {
+                "name": "filter",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1357,6 +1361,7 @@
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
+                "name": "filter",
                 "type": "oneof",
                 "arguments": [
                     {
