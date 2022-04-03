@@ -1088,7 +1088,9 @@ AbstractIterator *SeriesQuery(Series *series,
                 : args->startTimestamp;
     }
 
-    // When there is a TS filter the filter itself will reverse if needed
+    // When there is a TS filter because we wanted the logic to be one for both reverse and non
+    // reverse chunk, if the requested range should be reverse, we reverse it after the filter, and
+    // should_reverse_chunk point it out.
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
         series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);

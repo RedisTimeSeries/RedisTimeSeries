@@ -221,7 +221,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->initilized = false;
-    iter->aux_chunk = allocateEnrichedChunk();
+    iter->aux_chunk = NewEnrichedChunk();
     ReallocEnrichedChunk(iter->aux_chunk, 1);
     return iter;
 }
@@ -386,6 +386,6 @@ void AggregationIterator_Close(struct AbstractIterator *iterator) {
     AggregationIterator *self = (AggregationIterator *)iterator;
     iterator->input->Close(iterator->input);
     self->aggregation->freeContext(self->aggregationContext);
-    FreeEnrichedChunk(self->aux_chunk, true);
+    FreeEnrichedChunk(self->aux_chunk);
     free(iterator);
 }

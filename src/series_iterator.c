@@ -25,14 +25,12 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->base.GetNext = SeriesIteratorGetNextChunk;
     iter->base.input = NULL;
     iter->currentChunk = NULL;
-    iter->enrichedChunk = allocateEnrichedChunk();
-    iter->enrichedChunkAux = allocateEnrichedChunk();
+    iter->enrichedChunk = NewEnrichedChunk();
     iter->series = series;
     iter->minTimestamp = start_ts;
     iter->maxTimestamp = end_ts;
     iter->reverse = rev;
     iter->reverse_chunk = rev_chunk;
-    iter->isFirstIteration = true;
 
     timestamp_t rax_key;
 
@@ -58,8 +56,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
 void SeriesIteratorClose(AbstractIterator *iterator) {
     SeriesIterator *self = (SeriesIterator *)iterator;
     RedisModule_DictIteratorStop(self->dictIter);
-    FreeEnrichedChunk(self->enrichedChunk, true);
-    FreeEnrichedChunk(self->enrichedChunkAux, false);
+    FreeEnrichedChunk(self->enrichedChunk);
     free(iterator);
 }
 
@@ -70,25 +67,26 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     if (!iter->currentChunk) {
         return NULL;
     }
+    if (unlikely(!iter->reverse &&
+                 iter->series->funcs->GetLastTimestamp(iter->currentChunk) < iter->minTimestamp)) {
+        // In forward iterator it's possible that the minTimestamp is located between the 1st chunk
+        // and the 2nd in this case the first proces chunk will result in an empty result and we
+        // need to continue to process the 2nd chunk
+        return SeriesIteratorGetNextChunk(abstractIterator);
+    }
+
     u_int64_t n_samples = iter->series->funcs->GetNumOfSample(iter->currentChunk);
     if (n_samples > iter->enrichedChunk->samples.size) {
         ReallocEnrichedChunk(iter->enrichedChunk, n_samples);
     }
-    EnrichedChunk *ret = iter->series->funcs->ProcessChunk(iter->currentChunk,
-                                                           iter->minTimestamp,
-                                                           iter->maxTimestamp,
-                                                           iter->enrichedChunk,
-                                                           iter->enrichedChunkAux,
-                                                           iter->reverse_chunk);
+    iter->series->funcs->ProcessChunk(iter->currentChunk,
+                                      iter->minTimestamp,
+                                      iter->maxTimestamp,
+                                      iter->enrichedChunk,
+                                      iter->reverse_chunk);
     if (!iter->DictGetNext(iter->dictIter, NULL, (void *)&iter->currentChunk)) {
         iter->currentChunk = NULL;
     }
 
-    if (unlikely(iter->isFirstIteration && !ret && !iter->reverse)) {
-        // It is possible that start is larger than the first chunk - need to check the next one
-        iter->isFirstIteration = false;
-        return SeriesIteratorGetNextChunk(abstractIterator);
-    }
-
-    return ret;
+    return iter->enrichedChunk;
 }

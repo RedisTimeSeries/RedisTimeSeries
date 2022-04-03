@@ -218,19 +218,17 @@ size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endT
 
 // TODO: convert to template and unify with decompressChunk when moving to RUST
 // decompress chunk reverse
-static inline EnrichedChunk *decompressChunkReverse(const CompressedChunk *compressedChunk,
-                                                    uint64_t start,
-                                                    uint64_t end,
-                                                    EnrichedChunk *enrichedChunk,
-                                                    EnrichedChunk *enrichedChunkAux) {
+static inline void decompressChunkReverse(const CompressedChunk *compressedChunk,
+                                          uint64_t start,
+                                          uint64_t end,
+                                          EnrichedChunk *enrichedChunk) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
-    enrichedChunk->num_samples = 0;
-    enrichedChunk->rev = true;
+    ResetEnrichedChunk(enrichedChunk);
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
-        return enrichedChunk;
+        return;
     }
 
     Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
@@ -246,7 +244,7 @@ static inline EnrichedChunk *decompressChunkReverse(const CompressedChunk *compr
     if (unlikely(sample.timestamp > end)) {
         // occurs when the are TS smaller than start and larger than end but nothing in the range.
         Compressed_FreeChunkIterator(iter);
-        return enrichedChunk;
+        return;
     }
     *timestamps_ptr-- = sample.timestamp;
     *values_ptr-- = sample.value;
@@ -294,31 +292,30 @@ static inline EnrichedChunk *decompressChunkReverse(const CompressedChunk *compr
     }
 
 _done:
-    enrichedChunkAux->samples.timestamps = timestamps_ptr + 1;
-    enrichedChunkAux->samples.values = values_ptr + 1;
-    enrichedChunkAux->num_samples =
-        enrichedChunk->samples.timestamps + numSamples - enrichedChunkAux->samples.timestamps;
-    enrichedChunkAux->rev = true;
+    enrichedChunk->samples.timestamps = timestamps_ptr + 1;
+    enrichedChunk->samples.values = values_ptr + 1;
+    enrichedChunk->num_samples =
+        enrichedChunk->samples.timestamps + numSamples - enrichedChunk->samples.timestamps;
+    enrichedChunk->rev = true;
 
     Compressed_FreeChunkIterator(iter);
 
-    return enrichedChunkAux;
+    return;
 }
 
 // decompress chunk
-static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedChunk,
-                                             uint64_t start,
-                                             uint64_t end,
-                                             EnrichedChunk *enrichedChunk) {
+static inline void decompressChunk(const CompressedChunk *compressedChunk,
+                                   uint64_t start,
+                                   uint64_t end,
+                                   EnrichedChunk *enrichedChunk) {
     uint64_t numSamples = compressedChunk->count;
     uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
     ChunkResult res;
-    enrichedChunk->num_samples = 0;
-    enrichedChunk->rev = false;
+    ResetEnrichedChunk(enrichedChunk);
     if (unlikely(numSamples == 0 || end < start || compressedChunk->baseTimestamp > end ||
                  lastTS < start)) {
-        return enrichedChunk;
+        return;
     }
 
     Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
@@ -334,7 +331,7 @@ static inline EnrichedChunk *decompressChunk(const CompressedChunk *compressedCh
     if (unlikely(sample.timestamp > end)) {
         // occurs when the are TS smaller than start and larger than end but nothing in the range.
         Compressed_FreeChunkIterator(iter);
-        return enrichedChunk;
+        return;
     }
     *timestamps_ptr++ = sample.timestamp;
     *values_ptr++ = sample.value;
@@ -386,7 +383,7 @@ _done:
 
     Compressed_FreeChunkIterator(iter);
 
-    return enrichedChunk;
+    return;
 }
 
 /************************
@@ -425,28 +422,24 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter) {
     free(iter);
 }
 
-EnrichedChunk *Compressed_ProcessChunk(const Chunk_t *chunk,
-                                       uint64_t start,
-                                       uint64_t end,
-                                       EnrichedChunk *enrichedChunk,
-                                       EnrichedChunk *enrichedChunkAux,
-                                       bool reverse) {
+void Compressed_ProcessChunk(const Chunk_t *chunk,
+                             uint64_t start,
+                             uint64_t end,
+                             EnrichedChunk *enrichedChunk,
+                             bool reverse) {
     if (unlikely(!chunk)) {
-        return NULL;
+        return;
     }
     const CompressedChunk *compressedChunk = chunk;
     EnrichedChunk *ret_enrichedChunk;
 
     if (unlikely(reverse)) {
-        ret_enrichedChunk =
-            decompressChunkReverse(compressedChunk, start, end, enrichedChunk, enrichedChunkAux);
+        decompressChunkReverse(compressedChunk, start, end, enrichedChunk);
     } else {
-        ret_enrichedChunk = decompressChunk(compressedChunk, start, end, enrichedChunk);
+        decompressChunk(compressedChunk, start, end, enrichedChunk);
     }
-    if (unlikely(ret_enrichedChunk->num_samples == 0)) {
-        return NULL;
-    }
-    return ret_enrichedChunk;
+
+    return;
 }
 
 typedef void (*SaveUnsignedFunc)(void *, uint64_t);

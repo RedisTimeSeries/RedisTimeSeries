@@ -11,9 +11,11 @@
 
 typedef struct Samples
 {
-    timestamp_t *timestamps; // array of timestamps
-    double *values;          // array of values
-    size_t size;             // num of maximal samples which can be contained
+    timestamp_t *timestamps;    // array of timestamps
+    double *values;             // array of values
+    timestamp_t *og_timestamps; // The original buffer of timestamps
+    timestamp_t *og_values;     // The original buffer of values
+    size_t size;                // num of maximal samples which can be contained
 } Samples;
 
 typedef struct EnrichedChunk
@@ -23,8 +25,9 @@ typedef struct EnrichedChunk
     bool rev;
 } EnrichedChunk;
 
-EnrichedChunk *allocateEnrichedChunk();
-void FreeEnrichedChunk(EnrichedChunk *chunk, bool free_samples);
+EnrichedChunk *NewEnrichedChunk();
+void ResetEnrichedChunk(EnrichedChunk *chunk);
+void FreeEnrichedChunk(EnrichedChunk *chunk);
 void ReallocEnrichedChunk(EnrichedChunk *chunk, size_t n_samples);
 
 #endif // ENRICHED_CHUNK_H
