@@ -100,6 +100,7 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 
 #----------------------------------------------------------------------------------------------
 
+ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
@@ -181,8 +182,14 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
+	utils/arch_features.c \
 	sample_iterator.c \
 	enriched_chunk.c
+
+ifeq ($(ARCH), x86_64)
+_SOURCES_AVX512=compactions/compaction_avx512f.c
+_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512)
+endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
@@ -317,7 +324,15 @@ endif
 
 -include $(CC_DEPS)
 
-$(BINDIR)/%.o: $(SRCDIR)/%.c
+
+AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
+REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS),$(OBJECTS))
+
+$(AVX512F_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
+
+$(REGULAR_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <float.h>
 #include <stdint.h>
+#include "compaction_avx512f.h"
 
 #define CACHE_LINE_SIZE 64
 #define VECTOR_SIZE (CACHE_LINE_SIZE/sizeof(double))
