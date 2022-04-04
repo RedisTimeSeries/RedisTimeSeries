@@ -14,7 +14,7 @@ typedef struct Samples
     timestamp_t *timestamps;    // array of timestamps
     double *values;             // array of values
     timestamp_t *og_timestamps; // The original buffer of timestamps
-    timestamp_t *og_values;     // The original buffer of values
+    double *og_values;          // The original buffer of values
     size_t size;                // num of maximal samples which can be contained
 } Samples;
 

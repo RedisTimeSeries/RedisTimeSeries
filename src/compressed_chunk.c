@@ -431,7 +431,6 @@ void Compressed_ProcessChunk(const Chunk_t *chunk,
         return;
     }
     const CompressedChunk *compressedChunk = chunk;
-    EnrichedChunk *ret_enrichedChunk;
 
     if (unlikely(reverse)) {
         decompressChunkReverse(compressedChunk, start, end, enrichedChunk);
