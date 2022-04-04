@@ -10,6 +10,8 @@
 
 #include "rmutil/alloc.h"
 #include "compactions/compaction_common.h"
+#include "compactions/compaction_avx512f.h"
+#include "utils/arch_features.h"
 
 #include <ctype.h>
 #include <float.h>
@@ -453,7 +455,16 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .resetContext = MaxMinReset };
 
 void initGlobalCompactionFunctions() {
+    const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
+#if defined(__x86_64__)
+    if (!features) {
+        return;
+    } else if (features->avx512f) {
+        aggMax.appendValueVec = MaxAppendValuesAVX512F;
+        return;
+    }
+#endif // __x86_64__
     return;
 }
 
