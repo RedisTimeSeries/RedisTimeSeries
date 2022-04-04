@@ -18,6 +18,10 @@ remote:
 
 setups:
   - oss-standalone
+  - oss-cluster-02-primaries
+  - oss-cluster-03-primaries
+  - oss-cluster-05-primaries
+  - oss-cluster-09-primaries
   - oss-cluster-15-primaries
   - oss-cluster-30-primaries
 
