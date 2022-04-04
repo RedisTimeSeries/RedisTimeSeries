@@ -21,6 +21,10 @@
 #define TRUE 1
 #define FALSE 0
 
+#ifndef really_inline
+#define really_inline __attribute__((always_inline)) inline
+#endif // really_inline
+
 #define SAMPLE_SIZE sizeof(Sample)
 
 #define timestamp_t u_int64_t
