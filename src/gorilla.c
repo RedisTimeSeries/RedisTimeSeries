@@ -115,7 +115,7 @@
 #define CMPR_L5 32
 
 // The powers of 2 from 0 to 63
-static u_int64_t bittt[] = {
+static const u_int64_t bittt[] = {
     1ULL << 0,  1ULL << 1,  1ULL << 2,  1ULL << 3,  1ULL << 4,  1ULL << 5,  1ULL << 6,  1ULL << 7,
     1ULL << 8,  1ULL << 9,  1ULL << 10, 1ULL << 11, 1ULL << 12, 1ULL << 13, 1ULL << 14, 1ULL << 15,
     1ULL << 16, 1ULL << 17, 1ULL << 18, 1ULL << 19, 1ULL << 20, 1ULL << 21, 1ULL << 22, 1ULL << 23,
@@ -126,7 +126,7 @@ static u_int64_t bittt[] = {
     1ULL << 56, 1ULL << 57, 1ULL << 58, 1ULL << 59, 1ULL << 60, 1ULL << 61, 1ULL << 62, 1ULL << 63
 };
 
-static uint64_t bitmask[] = {
+static const uint64_t bitmask[] = {
     (1ULL << 0) - 1,  (1ULL << 1) - 1,  (1ULL << 2) - 1,  (1ULL << 3) - 1,  (1ULL << 4) - 1,
     (1ULL << 5) - 1,  (1ULL << 6) - 1,  (1ULL << 7) - 1,  (1ULL << 8) - 1,  (1ULL << 9) - 1,
     (1ULL << 10) - 1, (1ULL << 11) - 1, (1ULL << 12) - 1, (1ULL << 13) - 1, (1ULL << 14) - 1,
