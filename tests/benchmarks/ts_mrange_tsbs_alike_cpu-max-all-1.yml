@@ -1,0 +1,57 @@
+version: 0.2
+name: "ts_mrange_tsbs_alike_cpu-max-all-1"
+
+description: '
+  use case: tsbs devops scale 100 use-case
+  query: ALTERED cpu-max-all-1 to avoid using aggregation
+  tsbs query detail: Aggregate across all CPU metrics per hour over 1 hour for a single host
+  sample tsbs query: "TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "AGGREGATION" "MAX" "3600000" "FILTER" "measurement=cpu" "hostname=host_7"
+  the query we are using: "TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "FILTER" "measurement=cpu" "hostname=host_7"
+  '
+
+remote:
+ - type: oss-standalone
+ - setup: redistimeseries-m5
+
+setups:
+  - oss-standalone
+  - oss-cluster-03-primaries
+  - oss-cluster-05-primaries
+  - oss-cluster-09-primaries
+  - oss-cluster-15-primaries
+  - oss-cluster-30-primaries
+
+dbconfig:
+  - dataset_name: "data_redistimeseries_cpu-only_100"
+  - tool: tsbs_load_redistimeseries
+  - parameters:
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/data_redistimeseries_cpu-only_100.dat"
+  - check:
+      keyspacelen: 1000
+  - module-configuration-parameters:
+      redistimeseries:
+        CHUNK_SIZE_BYTES: 128
+
+clientconfig:
+  - tool: redis-benchmark
+  - min-tool-version: "6.2.0"
+  - parameters:
+    - clients: 16
+    - requests: 10000
+    - threads: 2
+    - pipeline: 1
+    - command: '"TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "FILTER" "measurement=cpu" "hostname=host_7"'
+exporter:
+  redistimeseries:
+    break_by:
+      - version
+      - commit
+    timemetric: "$.StartTime"
+    metrics:
+      - "$.Tests.Overall.rps"
+      - "$.Tests.Overall.avg_latency_ms"
+      - "$.Tests.Overall.p50_latency_ms"
+      - "$.Tests.Overall.p95_latency_ms"
+      - "$.Tests.Overall.p99_latency_ms"
+      - "$.Tests.Overall.max_latency_ms"
+      - "$.Tests.Overall.min_latency_ms"
