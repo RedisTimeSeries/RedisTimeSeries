@@ -73,7 +73,7 @@ MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("max") == TS_AGG_MAX);
     mu_check(StringAggTypeToEnum("sum") == TS_AGG_SUM);
     mu_check(StringAggTypeToEnum("avg") == TS_AGG_AVG);
-    mu_check(StringAggTypeToEnum("wavg") == TS_AGG_WAVG);
+    mu_check(StringAggTypeToEnum("aot") == TS_AGG_AOT);
     mu_check(StringAggTypeToEnum("count") == TS_AGG_COUNT);
     mu_check(StringAggTypeToEnum("first") == TS_AGG_FIRST);
     mu_check(StringAggTypeToEnum("last") == TS_AGG_LAST);
