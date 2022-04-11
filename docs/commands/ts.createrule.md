@@ -32,9 +32,9 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
 
 _destKey_ should be of a `timeseries` type, and should be created before `TS.CREATERULE` is called. 
 
-Calling TS.CREATERULE with a nonempty _destKey_ can result in an undefined behavior. Samples should not be explicitly added to _destKey_.
+Notes:
 
-!!! info "Note on existing samples in the source time series"
-        
-        Currently, only new samples that are added into the source series after the creation of the rule will be aggregated.
+- Calling `TS.CREATERULE` with a nonempty _destKey_ can result in an undefined behavior
+- Samples should not be explicitly added to _destKey_
+- Only new samples that are added into the source series after the creation of the rule will be aggregated
 
