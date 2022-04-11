@@ -51,12 +51,12 @@ typedef struct WeightData
     double weight_sum;
 } WeightData;
 
-typedef struct WAvgContext
+typedef struct AotContext
 {
     AvgContext avgContext;
     WeightData weightData;
     bool reverse;
-} WAvgContext;
+} AotContext;
 
 typedef struct StdContext
 {
@@ -185,7 +185,7 @@ err:
     return TSDB_ERROR;
 }
 
-static inline void _WAvginitContext(WAvgContext *context, bool reverse) {
+static inline void _AotinitContext(AotContext *context, bool reverse) {
     _AvgInitContext(&context->avgContext);
     context->weightData.weightSum = 0;
     context->weightData.prevPrevTS = DC;    // arbitrary value
@@ -201,16 +201,16 @@ static inline void _WAvginitContext(WAvgContext *context, bool reverse) {
     context->reverse = reverse;
 }
 
-void *WAvgCreateContext(bool reverse) {
-    WAvgContext *context = (WAvgContext *)malloc(sizeof(WAvgContext));
-    _WAvginitContext(context, reverse);
+void *AotCreateContext(bool reverse) {
+    AotContext *context = (AotContext *)malloc(sizeof(AotContext));
+    _AotinitContext(context, reverse);
     return context;
 }
 
-static inline void _update_wavgContext(WAvgContext *wcontext,
-                                       const double *value,
-                                       const timestamp_t *ts,
-                                       const double *weight) {
+static inline void _update_aotContext(AotContext *wcontext,
+                                      const double *value,
+                                      const timestamp_t *ts,
+                                      const double *weight) {
     wcontext->weightData.prevPrevTS = wcontext->weightData.prevTS;
     wcontext->weightData.prevValue = *value;
     wcontext->weightData.prevTS = *ts;
@@ -219,8 +219,8 @@ static inline void _update_wavgContext(WAvgContext *wcontext,
     }
 }
 
-void WAvgAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
-    WAvgContext *context = (WAvgContext *)contextPtr;
+void AotAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
+    AotContext *context = (AotContext *)contextPtr;
     if (context->reverse) {
         __SWAP(bucketStartTS, bucketEndTS);
     }
@@ -228,14 +228,14 @@ void WAvgAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_
     context->weightData.bucketEndTS = bucketEndTS;
 }
 
-void WAvgAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
-    _update_wavgContext(wcontext, &value, &ts, NULL);
+void AotAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
+    AotContext *wcontext = (AotContext *)contextPtr;
+    _update_aotContext(wcontext, &value, &ts, NULL);
     wcontext->weightData.is_first_bucket = false;
 }
 
-void WAvgAddValue(void *contextPtr, double value, timestamp_t ts) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
+void AotAddValue(void *contextPtr, double value, timestamp_t ts) {
+    AotContext *wcontext = (AotContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     const bool *rev = &wcontext->reverse;
     int64_t *iter = &wcontext->weightData.iteration;
@@ -271,7 +271,7 @@ void WAvgAddValue(void *contextPtr, double value, timestamp_t ts) {
         // assume the delta from the prev sample is same as the delta from next sample
         // will be handled on next sample
 
-        _update_wavgContext(wcontext, &value, &ts, &weight);
+        _update_aotContext(wcontext, &value, &ts, &weight);
         return;
     } else if (unlikely((*iter) == 2 && (*is_first_bucket))) {
         // 2nd sample in bucket and first bucket in the series
@@ -287,11 +287,11 @@ void WAvgAddValue(void *contextPtr, double value, timestamp_t ts) {
     wcontext->weightData.prevWeight = 0;
 
     // save cur value first weight
-    _update_wavgContext(wcontext, &value, &ts, &half_time_delta);
+    _update_aotContext(wcontext, &value, &ts, &half_time_delta);
 }
 
-void WAvgAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
+void AotAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
+    AotContext *wcontext = (AotContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     const bool *rev = &wcontext->reverse;
     int64_t *iter = &wcontext->weightData.iteration;
@@ -334,8 +334,8 @@ void WAvgAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts
     wcontext->weightData.is_last_ts_handled = true;
 }
 
-void WAvgFinalize(void *contextPtr, double *value) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
+void AotFinalize(void *contextPtr, double *value) {
+    AotContext *wcontext = (AotContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     int64_t *iter = &wcontext->weightData.iteration;
     ++(*iter);
@@ -373,19 +373,19 @@ void WAvgFinalize(void *contextPtr, double *value) {
     return;
 }
 
-void WAvgGetLastSample(void *contextPtr, Sample *sample) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
+void AotGetLastSample(void *contextPtr, Sample *sample) {
+    AotContext *wcontext = (AotContext *)contextPtr;
     sample->timestamp = wcontext->weightData.prevTS;
     sample->value = wcontext->weightData.prevValue;
 }
 
-void WAvgReset(void *contextPtr) {
-    WAvgContext *wcontext = (WAvgContext *)contextPtr;
-    _WAvginitContext(contextPtr, wcontext->reverse);
+void AotReset(void *contextPtr) {
+    AotContext *wcontext = (AotContext *)contextPtr;
+    _AotinitContext(contextPtr, wcontext->reverse);
 }
 
-void WAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
-    WAvgContext *context = (WAvgContext *)contextPtr;
+void AotWriteContext(void *contextPtr, RedisModuleIO *io) {
+    AotContext *context = (AotContext *)contextPtr;
     AvgWriteContext(&context->avgContext, io);
     RedisModule_SaveDouble(io, context->weightData.weightSum);
     RedisModule_SaveUnsigned(io, context->weightData.prevPrevTS);
@@ -401,8 +401,8 @@ void WAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->reverse);
 }
 
-int WAvgReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
-    WAvgContext *context = (WAvgContext *)contextPtr;
+int AotReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
+    AotContext *context = (AotContext *)contextPtr;
     if (AvgReadContext(&context->avgContext, io, encver) == TSDB_ERROR) {
         goto err;
     }
@@ -507,17 +507,17 @@ void rm_free(void *ptr) {
     free(ptr);
 }
 
-static AggregationClass waggAvg = { .createContext = WAvgCreateContext,
-                                    .appendValue = WAvgAddValue,
+static AggregationClass waggAvg = { .createContext = AotCreateContext,
+                                    .appendValue = AotAddValue,
                                     .freeContext = rm_free,
-                                    .finalize = WAvgFinalize,
-                                    .writeContext = WAvgWriteContext,
-                                    .readContext = WAvgReadContext,
-                                    .addBucketParams = WAvgAddBucketParams,
-                                    .addPrevBucketLastSample = WAvgAddPrevBucketLastSample,
-                                    .addNextBucketFirstSample = WAvgAddNextBucketFirstSample,
-                                    .getLastSample = WAvgGetLastSample,
-                                    .resetContext = WAvgReset };
+                                    .finalize = AotFinalize,
+                                    .writeContext = AotWriteContext,
+                                    .readContext = AotReadContext,
+                                    .addBucketParams = AotAddBucketParams,
+                                    .addPrevBucketLastSample = AotAddPrevBucketLastSample,
+                                    .addNextBucketFirstSample = AotAddNextBucketFirstSample,
+                                    .getLastSample = AotGetLastSample,
+                                    .resetContext = AotReset };
 
 static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .appendValue = AvgAddValue,
@@ -815,12 +815,12 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_SUM;
         } else if (strncmp(agg_type_lower, "avg", len) == 0) {
             result = TS_AGG_AVG;
+        } else if (strncmp(agg_type_lower, "aot", len) == 0) {
+            result = TS_AGG_AOT;
         }
     } else if (len == 4) {
         if (strncmp(agg_type_lower, "last", len) == 0) {
             result = TS_AGG_LAST;
-        } else if (strncmp(agg_type_lower, "wavg", len) == 0) {
-            result = TS_AGG_WAVG;
         }
     } else if (len == 5) {
         if (strncmp(agg_type_lower, "count", len) == 0) {
@@ -852,8 +852,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
-        case TS_AGG_WAVG:
-            return "WAVG";
+        case TS_AGG_AOT:
+            return "AOT";
         case TS_AGG_STD_P:
             return "STD.P";
         case TS_AGG_STD_S:
@@ -886,7 +886,7 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggMax;
         case TS_AGG_AVG:
             return &aggAvg;
-        case TS_AGG_WAVG:
+        case TS_AGG_AOT:
             return &waggAvg;
         case TS_AGG_STD_P:
             return &aggStdP;
