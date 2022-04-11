@@ -272,7 +272,7 @@ def test_agg_avg():
         else:
             assert actual_result == [[0, b'-1.7976931348623157E308']]
 
-def test_agg_wavg():
+def test_agg_aot():
     #https://redislabs.atlassian.net/jira/software/c/projects/PM/boards/263?modal=detail&selectedIssue=PM-1229
     with Env().getClusterConnectionIfNeeded() as r:
         #case 1:
@@ -288,9 +288,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/4.0
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts1', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts1', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts1', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts1', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 2:
@@ -305,9 +305,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/4.0
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts2', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts2', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts2', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts2', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 3:
@@ -322,9 +322,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/3.0
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts3', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts3', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts3', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts3', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 4:
@@ -335,9 +335,9 @@ def test_agg_wavg():
         assert r.execute_command('TS.ADD', 'ts4', 14, 14)
         assert r.execute_command('TS.ADD', 'ts4', 27, 27)
 
-        actual_result = r.execute_command('TS.RANGE', 'ts4', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts4', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts4', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts4', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 5:
@@ -352,9 +352,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/2.0
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts5', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts5', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts5', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts5', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 6:
@@ -365,9 +365,9 @@ def test_agg_wavg():
         assert r.execute_command('TS.ADD', 'ts6', 14, 14)
         assert r.execute_command('TS.ADD', 'ts6', 27, 27)
 
-        actual_result = r.execute_command('TS.RANGE', 'ts6', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts6', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts6', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts6', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 7:
@@ -381,9 +381,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/3.0
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts7', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts7', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts7', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts7', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 8:
@@ -396,9 +396,9 @@ def test_agg_wavg():
         res = (wsum//avgw)//1
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 9:
@@ -410,9 +410,9 @@ def test_agg_wavg():
         res = (wsum//avgw)//1
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts9', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts9', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts9', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts9', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 10:
@@ -424,9 +424,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/2
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts10', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts10', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts10', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts10', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 11:
@@ -438,9 +438,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/2
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts11', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts11', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts11', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts11', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 12:
@@ -452,9 +452,9 @@ def test_agg_wavg():
         res = (wsum//avgw)//1
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts12', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts12', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts12', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts12', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 13:
@@ -466,9 +466,9 @@ def test_agg_wavg():
         res = (wsum//avgw)//1
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts13', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts13', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts13', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts13', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 14:
@@ -478,9 +478,9 @@ def test_agg_wavg():
         res = 12
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts14', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts14', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts14', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts14', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 15:
@@ -492,9 +492,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/2
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts15', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts15', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts15', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts15', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 16:
@@ -503,9 +503,9 @@ def test_agg_wavg():
         res = 15
         expected_result = [10, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts16', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts16', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts16', 10, 19, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts16', 10, 19, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
         #case 17:
@@ -517,9 +517,9 @@ def test_agg_wavg():
         res = (wsum/avgw)/2
         expected_result = [0, str(res).encode('ascii')]
 
-        actual_result = r.execute_command('TS.RANGE', 'ts17', 0, 9, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.RANGE', 'ts17', 0, 9, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts17', 0, 9, 'AGGREGATION', 'wavg', 10)
+        actual_result = r.execute_command('TS.REVRANGE', 'ts17', 0, 9, 'AGGREGATION', 'aot', 10)
         assert actual_result[0] == expected_result
 
 def test_series_ordering():
