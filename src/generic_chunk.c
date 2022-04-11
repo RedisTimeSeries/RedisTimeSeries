@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include "rmutil/alloc.h"
 
-static ChunkFuncs regChunk = {
+static const ChunkFuncs regChunk = {
     .NewChunk = Uncompressed_NewChunk,
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
@@ -16,7 +16,7 @@ static ChunkFuncs regChunk = {
     .UpsertSample = Uncompressed_UpsertSample,
     .DelRange = Uncompressed_DelRange,
 
-    .NewChunkIterator = Uncompressed_NewChunkIterator,
+    .ProcessChunk = Uncompressed_ProcessChunk,
 
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
@@ -29,14 +29,7 @@ static ChunkFuncs regChunk = {
     .MRDeserialize = Uncompressed_MRDeserialize,
 };
 
-ChunkIterFuncs uncompressedChunkIteratorClass = {
-    .Free = Uncompressed_FreeChunkIterator,
-    .GetNext = Uncompressed_ChunkIteratorGetNext,
-    .GetPrev = Uncompressed_ChunkIteratorGetPrev,
-    .Reset = Uncompressed_ResetChunkIterator,
-};
-
-static ChunkFuncs comprChunk = {
+static const ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,
@@ -46,7 +39,7 @@ static ChunkFuncs comprChunk = {
     .UpsertSample = Compressed_UpsertSample,
     .DelRange = Compressed_DelRange,
 
-    .NewChunkIterator = Compressed_NewChunkIterator,
+    .ProcessChunk = Compressed_ProcessChunk,
 
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,
@@ -57,14 +50,6 @@ static ChunkFuncs comprChunk = {
     .LoadFromRDB = Compressed_LoadFromRDB,
     .MRSerialize = Compressed_MRSerialize,
     .MRDeserialize = Compressed_MRDeserialize,
-};
-
-static ChunkIterFuncs compressedChunkIteratorClass = {
-    .Free = Compressed_FreeChunkIterator,
-    .GetNext = Compressed_ChunkIteratorGetNext,
-    /*** Reverse iteration is on temporary decompressed chunk ***/
-    .GetPrev = NULL,
-    .Reset = Compressed_ResetChunkIterator,
 };
 
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
@@ -94,22 +79,12 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
     }
 }
 
-ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
+const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     switch (chunkType) {
         case CHUNK_REGULAR:
             return &regChunk;
         case CHUNK_COMPRESSED:
             return &comprChunk;
-    }
-    return NULL;
-}
-
-ChunkIterFuncs *GetChunkIteratorClass(CHUNK_TYPES_T chunkType) {
-    switch (chunkType) {
-        case CHUNK_REGULAR:
-            return &uncompressedChunkIteratorClass;
-        case CHUNK_COMPRESSED:
-            return &compressedChunkIteratorClass;
     }
     return NULL;
 }
@@ -166,28 +141,6 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
         }
     }
     return DP_INVALID;
-}
-int timestamp_binary_search(const uint64_t *array, int size, uint64_t key) {
-    int l = 0, r = size;
-    while (l <= r) {
-        const int m = l + (r - l) / 2;
-
-        // If we found it then we are done.
-        if (array[m] == key)
-            return m;
-
-        // Search the top half of the array if the query is larger.
-        if (array[m] < key) {
-            l = m + 1;
-        }
-
-        else {
-            // Search the bottom half of the array if the query is smaller.
-            r = m - 1;
-        }
-    }
-    // if we reach here, then element was not present
-    return -1;
 }
 
 // this is just a temporary wrapper function that ignores error in order to preserve the common api

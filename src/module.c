@@ -344,8 +344,6 @@ int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
-    RedisModule_AutoMemory(ctx);
-
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
     }
@@ -405,11 +403,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
-            RedisModule_NotifyKeyspaceEvent(
-                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
-        }
+        rule->aggClass->finalize(rule->aggContext, &aggVal);
+        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        RedisModule_NotifyKeyspaceEvent(
+            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
@@ -1225,6 +1222,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
         return REDISMODULE_ERR;
     }
+
+    initGlobalCompactionFunctions();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;

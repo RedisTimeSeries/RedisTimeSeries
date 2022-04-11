@@ -189,56 +189,78 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     return deleted_count;
 }
 
-void Uncompressed_ResetChunkIterator(ChunkIter_t *iterator, Chunk_t *chunk) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    iter->chunk = chunk;
-    if (iter->options & CHUNK_ITER_OP_REVERSE) { // iterate from last to first
-        iter->currentIndex = iter->chunk->num_samples - 1;
-    } else { // iterate from first to last
-        iter->currentIndex = 0;
-    }
+#define __array_reverse_inplace(arr, len)                                                          \
+    __extension__({                                                                                \
+        const size_t ei = len - 1;                                                                 \
+        __typeof__(*arr) tmp;                                                                      \
+        for (size_t i = 0; i < len / 2; ++i) {                                                     \
+            tmp = arr[i];                                                                          \
+            arr[i] = arr[ei - i];                                                                  \
+            arr[ei - i] = tmp;                                                                     \
+        }                                                                                          \
+    })
+
+void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
+    __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->num_samples);
+    __array_reverse_inplace(enrichedChunk->samples.values, enrichedChunk->num_samples);
+    enrichedChunk->rev = true;
 }
 
-ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk,
-                                           int options,
-                                           ChunkIterFuncs *retChunkIterClass) {
-    ChunkIterator *iter = (ChunkIterator *)calloc(1, sizeof(ChunkIterator));
-    iter->options = options;
-    if (retChunkIterClass != NULL) {
-        *retChunkIterClass = *GetChunkIteratorClass(CHUNK_REGULAR);
+// TODO: can be optimized further using binary search
+void Uncompressed_ProcessChunk(const Chunk_t *chunk,
+                               uint64_t start,
+                               uint64_t end,
+                               EnrichedChunk *enrichedChunk,
+                               bool reverse) {
+    const Chunk *_chunk = chunk;
+    ResetEnrichedChunk(enrichedChunk);
+    if (unlikely(!_chunk || _chunk->num_samples == 0 || end < start ||
+                 _chunk->base_timestamp > end ||
+                 _chunk->samples[_chunk->num_samples - 1].timestamp < start)) {
+        return;
     }
-    Uncompressed_ResetChunkIterator(iter, chunk);
-    return (ChunkIter_t *)iter;
-}
 
-ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->currentIndex < iter->chunk->num_samples) {
-        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
-        iter->currentIndex++;
-        return CR_OK;
+    size_t si = _chunk->num_samples, ei = _chunk->num_samples - 1, i = 0;
+
+    // find start index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp >= start) {
+            si = i;
+            break;
+        }
+    }
+
+    if (si == _chunk->num_samples) { // all TS are smaller than start
+        return;
+    }
+
+    // find end index
+    for (; i < _chunk->num_samples; i++) {
+        if (_chunk->samples[i].timestamp > end) {
+            ei = i - 1;
+            break;
+        }
+    }
+
+    enrichedChunk->num_samples = ei - si + 1;
+    if (enrichedChunk->num_samples == 0) {
+        return;
+    }
+
+    if (unlikely(reverse)) {
+        for (i = 0; i < enrichedChunk->num_samples; ++i) {
+            enrichedChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
+            enrichedChunk->samples.values[i] = _chunk->samples[ei - i].value;
+        }
+        enrichedChunk->rev = true;
     } else {
-        return CR_END;
+        for (i = 0; i < enrichedChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
+            enrichedChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
+            enrichedChunk->samples.values[i] = _chunk->samples[i + si].value;
+        }
+        enrichedChunk->rev = false;
     }
-}
-
-ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->currentIndex >= 0) {
-        *sample = *ChunkGetSample(iter->chunk, iter->currentIndex);
-        iter->currentIndex--;
-        return CR_OK;
-    } else {
-        return CR_END;
-    }
-}
-
-void Uncompressed_FreeChunkIterator(ChunkIter_t *iterator) {
-    ChunkIterator *iter = (ChunkIterator *)iterator;
-    if (iter->options & CHUNK_ITER_OP_FREE_CHUNK) {
-        Uncompressed_FreeChunk(iter->chunk);
-    }
-    free(iter);
+    return;
 }
 
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
