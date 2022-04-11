@@ -8,8 +8,7 @@ TS.MRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
-          [ALIGN value]
-          [AGGREGATION aggregator bucketDuration]
+          [[ALIGN value] AGGREGATION aggregator bucketDuration]
           FILTER filter..
           [GROUPBY label REDUCE reducer]
 ```
