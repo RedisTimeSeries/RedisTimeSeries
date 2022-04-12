@@ -749,9 +749,6 @@ workflows:
       - performance-ci-automation-oss-cluster-ingestion:
           context: common
           <<: *on-perf-and-version-tags
-      - performance-ci-automation-oss-cluster-scaling:
-          context: common
-          <<: *on-perf-and-version-tags
       - performance-ci-automation-oss-standalone-profiler:
           context: common
           <<: *on-perf-and-version-tags
