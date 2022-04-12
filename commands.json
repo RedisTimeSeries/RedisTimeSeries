@@ -516,8 +516,7 @@
                         "type": "pure-token",
                         "token": "VAR.S"
                     }
-                ],
-                "optional": true
+                ]
             },
             {
                 "name": "bucketDuration",
