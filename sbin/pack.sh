@@ -76,6 +76,10 @@ elif [[ $OSNICK == centos7 ]]; then
 	OSNICK=rhel7
 elif [[ $OSNICK == centos8 ]]; then
 	OSNICK=rhel8
+elif [[ $OSNICK == ol8 ]]; then
+	OSNICK=rhel8
+elif [[ $OSNICK == rocky8 ]]; then
+	OSNICK=rhel8	
 fi
 
 export PRODUCT=redistimeseries

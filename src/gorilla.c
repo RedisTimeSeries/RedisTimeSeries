@@ -257,7 +257,7 @@ static inline binary_t readBits(const binary_t *bins,
     return LSB(bins[start_pos / BINW] >> lbit, dataLen);
 }
 
-static bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
+static inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
     u_int64_t available = (chunk->size * 8) - chunk->idx;
     return size <= available;
 }

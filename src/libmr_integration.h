@@ -36,7 +36,7 @@ typedef struct SeriesRecord
 {
     Record base;
     CHUNK_TYPES_T chunkType;
-    ChunkFuncs *funcs;
+    const ChunkFuncs *funcs;
     RedisModuleString *keyName;
     Label *labels;
     size_t labelsCount;

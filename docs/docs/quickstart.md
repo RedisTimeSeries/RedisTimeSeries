@@ -1,4 +1,10 @@
-# A Quick Start Guide to RedisTimeSeries
+---
+title: "Quickstart"
+linkTitle: "Quickstart"
+weight: 2
+description: >
+    Quick Start Guide to RedisTimeSeries
+---
 
 ## Setup
 
@@ -90,7 +96,7 @@ OK
 
 
 ## Creating a timeseries
-A new timeseries can be created with the [`TS.CREATE`](commands.md#tscreate) command; for example, to create a timeseries named `sensor1` run the following:
+A new timeseries can be created with the `TS.CREATE` command; for example, to create a timeseries named `sensor1` run the following:
 
 ```
 TS.CREATE sensor1
@@ -105,7 +111,7 @@ This will create a timeseries called `sensor1` and trim it to values of up to on
 
 
 ## Adding data points
-For adding new data points to a timeseries we use the [`TS.ADD`](commands.md#tsadd) command:
+For adding new data points to a timeseries we use the `TS.ADD` command:
 
 ```
 TS.ADD key timestamp value
@@ -131,7 +137,7 @@ TS.MADD key timestamp value [key timestamp value ...]
 
 
 ## Deleting data points
-Data points between two timestamps (inclusive) can be deleted with the [`TS.DEL`](commands.md#tsdel) command:
+Data points between two timestamps (inclusive) can be deleted with the `TS.DEL` command:
 ```
 TS.DEL key fromTimestamp toTimestamp
 ```
@@ -158,14 +164,14 @@ TS.CREATE sensor1 LABELS region east
 
 
 ## Downsampling
-Another useful feature of RedisTimeSeries is compacting data by creating a rule for downsampling ([`TS.CREATERULE`](commands.md#tscreaterule)). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p and var.s`.
+Another useful feature of RedisTimeSeries is compacting data by creating a rule for downsampling (`TS.CREATERULE`). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p and var.s`.
  
 It's important to point out that there is no data rewriting on the original timeseries; the compaction happens in a new series, while the original one stays the same. In order to prevent the original timeseries from growing indefinitely, you can use the retention option, which will trim it down to a certain period of time.
 
 **NOTE:** You need to create the destination (the compacted) timeseries before creating the rule.
 
 ```
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 ```
 
 Example:
@@ -190,7 +196,7 @@ TS.MRANGE - + FILTER area_id=32
 
 This query will show data from all sensors (timeseries) that have a label of `area_id` with a value of `32`. The results will be grouped by timeseries.
 
-Or we can also use the [`TS.MGET`](commands.md#tsmget) command to get the last sample that matches the specific filter:
+Or we can also use the `TS.MGET` command to get the last sample that matches the specific filter:
 
 ```
 TS.MGET FILTER area_id=32
@@ -227,7 +233,7 @@ TS.MRANGE - +  FILTER_BY_TS 1626435230501 1626443276598 FILTER region=east
 ## Aggregation
 It's possible to combine values of one or more timeseries by leveraging aggregation functions:
 ```
-TS.RANGE ... AGGREGATION aggType timeBucket...
+TS.RANGE ... AGGREGATION aggType bucketDuration...
 ```
 
 For example, to find the average temperature per hour in our `sensor1` series we could run:

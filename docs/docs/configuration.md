@@ -1,4 +1,10 @@
-# Run-time configuration
+---
+title: "Configuration"
+linkTitle: "Configuration"
+weight: 3
+description: >
+    Run-time configuration
+---
 
 RedisTimeSeries supports a few run-time configuration options that should be determined when loading the module. In time more options will be added.
 
@@ -33,7 +39,7 @@ Default compaction/downsampling rules for newly created key with `TS.ADD`.
 Each rule is separated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
 
 * aggregation function - avg, sum, min, max, count, first, last
-* time bucket - number and the time representation (Example for 1 minute: 1M)
+* time bucket duration - number and the time representation (Example for 1 minute: 1M)
 
     * m - millisecond
     * M - minute

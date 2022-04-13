@@ -107,7 +107,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     while (rule != NULL) {
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithString(ctx, rule->destKey);
-        RedisModule_ReplyWithLongLong(ctx, rule->timeBucket);
+        RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
 
         rule = rule->nextRule;
@@ -344,8 +344,6 @@ int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
-    RedisModule_AutoMemory(ctx);
-
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
     }
@@ -360,11 +358,12 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     RangeArgs rangeArgs = { 0 };
     if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
         REDISMODULE_OK) {
-        return REDISMODULE_ERR;
+        goto _out;
     }
 
     ReplySeriesRange(ctx, series, &rangeArgs, rev);
 
+_out:
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -382,7 +381,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
-    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->timeBucket);
+    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->bucketDuration);
 
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
@@ -405,11 +404,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
-            RedisModule_NotifyKeyspaceEvent(
-                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
-        }
+        rule->aggClass->finalize(rule->aggContext, &aggVal);
+        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        RedisModule_NotifyKeyspaceEvent(
+            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         rule->aggClass->resetContext(rule->aggContext);
         rule->startCurrentTimeBucket = currentTimestamp;
         RedisModule_CloseKey(key);
@@ -721,7 +719,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /*
-TS.CREATERULE sourceKey destKey AGGREGATION aggregationType timeBucket
+TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 */
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -731,9 +729,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     // Validate aggregation arguments
-    api_timestamp_t timeBucket;
+    api_timestamp_t bucketDuration;
     int aggType;
-    const int result = _parseAggregationArgs(ctx, argv, argc, &timeBucket, &aggType);
+    const int result = _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
@@ -790,7 +788,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     SeriesSetSrcRule(ctx, destSeries, srcSeries->keyName);
 
     // Last add the rule to source
-    if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, timeBucket) == NULL) {
+    if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, bucketDuration) == NULL) {
         RedisModule_CloseKey(srcKey);
         RedisModule_CloseKey(destKey);
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
@@ -980,7 +978,7 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
     // Verify all compaction's buckets are in the retention period
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
-        const timestamp_t ruleTimebucket = rule->timeBucket;
+        const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart = CalcWindowStart(args->startTimestamp, ruleTimebucket);
         if (is_obsolete(curAggWindowStart, series->lastTimestamp, series->retentionTime)) {
             is_valid = false;
@@ -1225,6 +1223,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
         return REDISMODULE_ERR;
     }
+
+    initGlobalCompactionFunctions();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         return REDISMODULE_ERR;

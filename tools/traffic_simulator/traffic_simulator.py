@@ -31,9 +31,11 @@ def worker_func(args):
     if check_only:
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
+            print("# failed!!! key= " + key_format.format(index=key_index) + " len= " + str(len(res)) + " tsrange= " + str(tsrange))
             return -1
         expected = [[int(start_ts + i), str(i)] for i in range(tsrange)]
         if expected != res:
+            print("# failed!!! key= " + key_format.format(index=key_index) + " expected= " + str(expected) + " res= " + str(res))
             return -1
     else:
         count = 0

@@ -1,4 +1,10 @@
-# RedisTimeSeries Client Libraries
+---
+title: "Clients"
+linkTitle: "Clients"
+weight: 5
+description: >
+    RedisTimeSeries Client Libraries
+---
 
 RedisTimeSeries has several client libraries, written by the module authors and community members - abstracting the API in different programming languages. 
 
@@ -13,6 +19,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [RedisLabs][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [RedisLabs][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
+| [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  |
 | [redis-py][redis-py-url] ([examples][redis-py-example-url])| Python | MIT | [RedisLabs][redis-py-author] | [![redis-py-stars]][redis-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [RedisLabs][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
@@ -40,6 +47,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redistimeseries-go-url]: https://github.com/RedisTimeSeries/redistimeseries-go/
 [redistimeseries-go-author]: https://redislabs.com
 [redistimeseries-go-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-go.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[rueidis-url]: https://github.com/rueian/rueidis
+[rueidis-author]: https://github.com/rueian
+[rueidis-stars]: https://img.shields.io/github/stars/rueian/rueidis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redis-py-url]: https://github.com/redis/redis-py/
 [redis-py-example-url]: https://github.com/redis/redis-py/blob/master/tests/test_timeseries.py

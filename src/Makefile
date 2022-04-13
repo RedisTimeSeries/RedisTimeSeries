@@ -66,7 +66,7 @@ make flow_tests    # run tests
   AOF=1            # run AOF persistency tests on a standalone Redis topology
   SLAVES=1         # run replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
-  SHARDS=num       # run OSS cluster with `num` shards (default: 2)
+  SHARDS=num       # run OSS cluster with `num` shards (default: 3)
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
@@ -131,7 +131,7 @@ SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
-LD_LIBS += -L/usr/local/opt/openssl/lib/ -lssl -lcrypto
+LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
 SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
 DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
@@ -176,7 +176,9 @@ _SOURCES=\
 	short_read.c \
 	resultset.c \
 	tsdb.c \
-	series_iterator.c
+	series_iterator.c \
+	sample_iterator.c \
+	enriched_chunk.c
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
@@ -477,6 +479,3 @@ pack: $(TARGET)
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
 
 #----------------------------------------------------------------------------------------------
-
-docker:
-	$(SHOW)$(MAKE) -C $(ROOT)/build/docker

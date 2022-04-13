@@ -1,4 +1,4 @@
-[![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
+[![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?sort=semver&kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
 [![Dockerhub](https://img.shields.io/badge/dockerhub-redislabs%2Fredistimeseries-blue)](https://hub.docker.com/r/redislabs/redistimeseries/tags/)
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/RedisTimeSeries/RedisTimeSeries.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/RedisTimeSeries/RedisTimeSeries/context:cpp)
@@ -8,16 +8,58 @@
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
-RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
+RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
+
+RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
+
+## What is a Redis time series?
+
+A Redis time series comprises:
+
+- **Raw samples**: each raw sample is a {time tag, value} pair.
+  - Time tags are measured in milliseconds since January 1st, 1970, at 00:00:00.
+
+    Time tags can be specified by the client or filled automatically by the server.
+
+  - 64-bit floating-point values.
+  
+  The intervals between time tags can be constant or variable.
+  
+  Raw samples can be reported in-order or out-of-order.
+  
+  Duplication policy for samples with identical time tags can be set: block/first/last/min/max/sum.
+  
+- An optional configurable **retention period**.
+
+  Raw samples older than the retention period (relative to the raw sample with the highest time tag) are discarded.
+  
+- **Series Metadata**: a set of name-value pairs (e.g., room = 3; sensorType = ‘xyz’).
+
+  RedisTimeSeries supports cross-time-series commands. One can, for example, aggregate data over all sensors in the same room or all sensors of the same type.
+  
+- Zero or more **compactions**.
+
+  Compactions are an economical way to retain historical data.
+
+  Each compaction is defined by:
+  - A timeframe. E.g., 10 minutes
+  - An aggregator: min, max, sum, avg, …
+  - An optional retention period. E.g., 10 year
+
+  For example, the following compaction: {10 minutes; avg; 10 years} will store the average of the raw values measured in each 10-minutes time frame - for 10 years.
+
+## Examples of time series
+- Sensor data: e.g., temperatures or fan velocity for a server in a server farm
+- Historical prices of a stock
+- Number of vehicles passing through a given road (count per 1-minute timeframes)
 
 ## Features
-Read more about the v1.0 GA features [here](https://redis.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/).
 - High volume inserts, low latency reads
 - Query by start time and end-time
 - Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
 - Configurable maximum retention period
-- Downsampling/Compaction - automatically updated aggregated timeseries
-- Secondary index - each time series has labels (field value pairs) which will allows to query by labels
+- Compactions - automatically updated aggregated timeseries
+- Secondary index - each time series has labels (name-value pairs) which will allows to query by labels
 
 ## Using with other tools metrics tools
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
@@ -123,11 +165,13 @@ OK
 
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
-| Project | Language | License | Author | Stars |
-| ------- | -------- | ------- | ------ | --- |
-| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] |
+| Project | Language | License | Author | Stars | Comment |
+| ------- | -------- | ------- | ------ | --- | --- |
+| [Jedis][Jedis-url] | Java | MIT | [Redis][Jedis-author] |  [![Jedis-stars]][Jedis-url] |
+| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] | Deprecated |
 | [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
 | [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
+| [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  |
 | [redis-py][redis-py-url] | Python | MIT | [Redis][redis-py-author] | [![redis-py-stars]][redis-py-url] |
 | [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [Redis][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
@@ -137,6 +181,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] |
 | [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] |
 | [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
+
+[Jedis-url]: https://github.com/redis/jedis/
+[Jedis-author]: https://redis.com
+[Jedis-stars]: https://img.shields.io/github/stars/redis/jedis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
 [JRedisTimeSeries-author]: https://redis.com
@@ -149,6 +197,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redistimeseries-go-url]: https://github.com/RedisTimeSeries/redistimeseries-go/
 [redistimeseries-go-author]: https://redis.com
 [redistimeseries-go-stars]: https://img.shields.io/github/stars/RedisTimeSeries/redistimeseries-go.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[rueidis-url]: https://github.com/rueian/rueidis
+[rueidis-author]: https://github.com/rueian
+[rueidis-stars]: https://img.shields.io/github/stars/rueian/rueidis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [redis-py-url]: https://github.com/redis/redis-py/
 [redis-py-author]: https://redis.com

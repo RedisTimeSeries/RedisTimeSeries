@@ -17,7 +17,7 @@
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
-    timestamp_t timeBucket;
+    timestamp_t bucketDuration;
     AggregationClass *aggClass;
     TS_AGG_TYPES_T aggType;
     void *aggContext;
@@ -39,7 +39,7 @@ typedef struct Series
     RedisModuleString *keyName;
     size_t labelsCount;
     RedisModuleString *srcKey;
-    ChunkFuncs *funcs;
+    const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
 } Series;
@@ -64,7 +64,14 @@ int GetSeries(RedisModuleCtx *ctx,
               bool shouldDeleteRefs,
               bool isSilent);
 
-AbstractIterator *SeriesQuery(Series *series, const RangeArgs *args, bool reserve);
+AbstractIterator *SeriesQuery(Series *series,
+                              const RangeArgs *args,
+                              bool reserve,
+                              bool check_retention);
+AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
+                                                   const RangeArgs *args,
+                                                   bool reverse,
+                                                   bool check_retention);
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
@@ -83,7 +90,7 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,
                               Series *destSeries,
                               int aggType,
-                              uint64_t timeBucket);
+                              uint64_t bucketDuration);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                       RedisModuleString *keyName,
                                       Series *series,
@@ -109,7 +116,7 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 // retention
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
+CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucketDuration);
 
 // set/delete/replace a chunk in a dictionary
 typedef enum
