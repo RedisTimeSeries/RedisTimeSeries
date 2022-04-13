@@ -576,7 +576,7 @@ jobs:
           timeout: 90m
           benchmark_glob: "tsbs-devops-ingestion*.yml"
   
-  performance-ci-automation-oss-standalone-profiler:
+  performance-ci-automation-oss-standalone-tsbs-profiler:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
     steps:
@@ -591,6 +591,24 @@ jobs:
           timeout: 30m
           profile_env: "1"
           triggering_env: "circleci.profilers"
+          benchmark_glob: "tsbs-devops*.yml"
+
+  performance-ci-automation-oss-standalone-scaling-profiler:
+    docker:
+      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+    steps:
+      - early-return-for-forked-pull-requests
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          command: bash -l -c "make build PROFILE=1"
+      - benchmark-automation:
+          allowed_envs: "oss-standalone"
+          timeout: 30m
+          profile_env: "1"
+          triggering_env: "circleci.profilers"
+          benchmark_glob: "scaling-*.yml"
 
   performance-ci-automation-oss-cluster-profiler-query:
     docker:
@@ -749,7 +767,10 @@ workflows:
       - performance-ci-automation-oss-cluster-ingestion:
           context: common
           <<: *on-perf-and-version-tags
-      - performance-ci-automation-oss-standalone-profiler:
+      - performance-ci-automation-oss-standalone-scaling-profiler:
+          context: common
+          <<: *on-perf-and-version-tags
+      - performance-ci-automation-oss-standalone-tsbs-profiler:
           context: common
           <<: *on-perf-and-version-tags
       - performance-ci-automation-oss-cluster-profiler-query:
@@ -800,7 +821,9 @@ workflows:
           context: common
       - performance-ci-automation-oss-standalone:
           context: common
-      - performance-ci-automation-oss-standalone-profiler:
+      - performance-ci-automation-oss-standalone-tsbs-profiler:
+          context: common
+      - performance-ci-automation-oss-standalone-scaling-profiler:
           context: common
 
   nightly-twice-a-week:
