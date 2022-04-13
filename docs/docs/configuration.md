@@ -1,4 +1,10 @@
-# Run-time configuration
+---
+title: "Configuration"
+linkTitle: "Configuration"
+weight: 3
+description: >
+    Run-time configuration
+---
 
 RedisTimeSeries supports a few run-time configuration options that should be determined when loading the module. In time more options will be added.
 
