@@ -14,7 +14,7 @@ This command can be used as a counter or gauge that automatically gets history a
 
 Optional args:
 
-- `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+- `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the  server's clock.
 
   _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is decreased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp minus _value_. If the time series is empty - the value would be set to _value_.
 
