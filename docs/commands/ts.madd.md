@@ -7,7 +7,7 @@ TS.MADD {key timestamp value}...
 ```
 
 - _key_ - Key name for time series
-- _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the system clock.
+- _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the  server's clock.
 - _value_ - numeric data value of the sample (double). We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
 #### Examples
