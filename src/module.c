@@ -358,11 +358,12 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     RangeArgs rangeArgs = { 0 };
     if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
         REDISMODULE_OK) {
-        return REDISMODULE_ERR;
+        goto _out;
     }
 
     ReplySeriesRange(ctx, series, &rangeArgs, rev);
 
+_out:
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }

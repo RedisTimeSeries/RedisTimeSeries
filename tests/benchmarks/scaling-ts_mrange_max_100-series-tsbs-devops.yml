@@ -1,0 +1,42 @@
+name: "ts_mrange_max_100-series-tsbs-devops"
+
+metadata:
+  labels:
+    test_type: query
+
+description: '
+  uses tsbs generated time-series at scale 10 (100 series)
+  and issues TS.MRANGE with a filter that will reply with 1/10 of the entire dataset (10000) series.
+  On all replied series we are aggregating with a large aggregation window ( 60min ) 
+  which implies 6 samples per min * 60 minutes = 360 samples 
+  sample query: "TS.MRANGE" - + AGGREGATION MAX 3600000 FILTER "measurement=cpu" "hostname=host_9" fieldname=usage_nice
+  '
+
+remote:
+  - type: oss-standalone
+  - setup: redistimeseries-m5
+
+setups:
+  - oss-standalone
+  - oss-cluster-02-primaries
+  - oss-cluster-03-primaries
+  - oss-cluster-05-primaries
+  - oss-cluster-09-primaries
+  - oss-cluster-15-primaries
+  - oss-cluster-30-primaries
+
+dbconfig:
+  - dataset_name: "data_redistimeseries_cpu-only_10_2016-01-01T00:00:00Z_2016-01-02T00:00:00Z_10s_123.dat"
+  - tool: tsbs_load_redistimeseries
+  - parameters:
+    - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/devops/bulk_data_redistimeseries/data_redistimeseries_cpu-only_10_2016-01-01T00:00:00Z_2016-01-02T00:00:00Z_10s_123.dat"
+  - check:
+      keyspacelen: 100
+  - module-configuration-parameters:
+      redistimeseries:
+        CHUNK_SIZE_BYTES: 4096
+
+clientconfig:
+  benchmark_type: "read-only"
+  tool: memtier_benchmark
+  arguments: "--test-time 180 -c 32 -t 1 --hide-histogram --command 'TS.MRANGE - + AGGREGATION MAX 3600000 FILTER measurement=cpu fieldname=usage_nice'"
