@@ -2,9 +2,9 @@
 
 ### DEL
 
-A series can be deleted using redis [`DEL`](https://redis.io/commands/del) command.
+A time series can be deleted using Redis [`DEL`](https://redis.io/commands/del) command.
 
-Timeout can be set for a series using redis [`EXPIRE`](https://redis.io/commands/expire) command.
+The time series' expiration timeout can be set using Redis [`EXPIRE`](https://redis.io/commands/expire) command.
 
 
 ```sql
