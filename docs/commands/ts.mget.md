@@ -18,22 +18,20 @@ TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 
 Optional args:
 
-- `WITHLABELS` - Include in the reply the label-value pairs that represent metadata labels of the time series. 
-- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when you have a large number of labels per serie but are only interested in the value of some of the labels. 
+- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
  
-If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty array will be replied on the labels array position.
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
 #### Return Value
 
-Array-reply, specifically:
-
-The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels and all the last sample of the time serie.
-
-The returned array will contain _key1_, _labels1_, _lastsample1_, ... , _keyN_, _labelsN_, _lastsampleN_, with labels and lastsample being also of array data types. By default, the labels array will be an empty Array for each of the returned time series.
-
-If the `WITHLABELS` or `SELECTED_LABELS` option is specified the labels array will be filled with label-value pairs that represent metadata labels of the time series.
-
+For each time series matching the specified filters, the following is reported:
+- The key name
+- A list of label-value pairs
+  - By default, an empty list is reported
+  - If `WITHLABELS` is specified, all labels associated with this time series are reported
+  - If `SELECTED_LABELS` is specified, the specified labels are reported
+- The last sample's timetag-value pair
 
 #### Complexity
 
