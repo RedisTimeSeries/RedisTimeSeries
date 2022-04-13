@@ -29,16 +29,20 @@ TS.MREVRANGE fromTimestamp toTimestamp
 
 Optional parameters:
 
-* `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
-* `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
+- `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
+- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
 
-* `WITHLABELS` - Include in the reply the label-value pairs that represent metadata labels of the time series. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty array will be replied on the labels array position.
+- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
 
-* `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is useful when you have a large number of labels per series but are only interested in the value of some of the labels. If `WITHLABELS` or `SELECTED_LABELS` are not set, by default, an empty array will be replied on the labels array position.
+  If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-* `COUNT` _count_ - Maximum number of returned samples per time series.
+- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
+ 
+  If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-* `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+- `COUNT` _count_ - Maximum number of returned samples per time series.
+
+- `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
@@ -79,23 +83,20 @@ Optional parameters:
       | `sum`   | per label value: sum of all values |
       | `min`   | per label value: minimum value     |
       | `max`   | per label value: maximum value     |
-    - **Note:** The resulting series will contain 2 labels with the following label array structure:
-         - `__reducer__=<reducer>` : containing the used reducer.
-         - `__source__=key1,key2,key3` : containing the source time series used to compute the grouped serie.
-    - **note** The produced series will be named `<label>=<groupbyvalue>`
-
+    - **Note:** The produced time series will be named `<label>=<groupbyvalue>`
+    - **Note:** The produced time series will contain 2 labels with the following label array structure:
+         - `__reducer__` : the reducer used
+         - `__source__` : the time series keys used to compute the grouped series ("key1,key2,key3,...")
 
 #### Return Value
 
-Array-reply, specifically:
-
-The command returns the entries with labels matching the specified filter.
-The returned entries are complete, that means that the name, labels, and all the samples that match the range are returned.
-
-The returned array will contain key1,labels1,lastsample1,...,keyN,labelsN,lastsampleN, with labels and lastsample being also of array data types. By default, the labels array will be an empty array for each of the returned time series.
-
-If the `WITHLABELS` or `SELECTED_LABELS` option is specified, the labels array will be filled with label-value pairs that represent metadata labels of the time series.
-
+For each time series matching the specified filters, the following is reported:
+- The key name
+- A list of label-value pairs
+  - By default, an empty list is reported
+  - If `WITHLABELS` is specified, all labels associated with this time series are reported
+  - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
+- timestamp-value pairs for all samples/aggregations matching the range
 
 #### Examples
 
