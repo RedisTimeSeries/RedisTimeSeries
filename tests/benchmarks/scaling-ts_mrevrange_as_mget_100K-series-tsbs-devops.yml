@@ -1,4 +1,4 @@
-name: "ts_queryindex_100K-series-tsbs-devops"
+name: "ts_mrevrange_as_mget_100K-series-tsbs-devops"
 
 metadata:
   labels:
@@ -6,8 +6,8 @@ metadata:
 
 description: '
   uses tsbs generated time-series at scale 10000 (100K series)
-  and issues TS.QUERYINDEX with a filter that will reply with only 10 series.
-  sample query: "TS.QUERYINDEX" "measurement=cpu" "hostname=host_7"
+  and issues a TS.MREVRANGE that mimics TS.MGET with a filter that will reply with 1/10 of the entire dataset (10000) series.
+  sample query: "TS.MREVRANGE" - + COUNT 1 FILTER "measurement=cpu" "hostname=host_9" "fieldname=usage_nice"
   '
 
 remote:
@@ -24,6 +24,7 @@ setups:
   - oss-cluster-30-primaries
 
 dbconfig:
+  - dataset_name: "data_redistimeseries_cpu-only_10000_2016-01-01T00:00:00Z_2016-01-01T00:01:00Z_10s_123.dat"
   - tool: tsbs_load_redistimeseries
   - parameters:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/devops/bulk_data_redistimeseries/data_redistimeseries_cpu-only_10000_2016-01-01T00:00:00Z_2016-01-01T00:01:00Z_10s_123.dat"
@@ -31,9 +32,9 @@ dbconfig:
       keyspacelen: 100000
   - module-configuration-parameters:
       redistimeseries:
-        CHUNK_SIZE_BYTES: 128
+        CHUNK_SIZE_BYTES: 4096
 
 clientconfig:
   benchmark_type: "read-only"
   tool: memtier_benchmark
-  arguments: "--test-time 180 -c 32 -t 1 --hide-histogram --command 'TS.QUERYINDEX measurement=cpu hostname=host_7'"
+  arguments: "--test-time 180 -c 32 -t 1 --hide-histogram --command 'TS.MREVRANGE - + COUNT 1 FILTER measurement=cpu fieldname=usage_nice'"
