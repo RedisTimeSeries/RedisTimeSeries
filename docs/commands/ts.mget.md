@@ -30,7 +30,7 @@ For each time series matching the specified filters, the following is reported:
 - A list of label-value pairs
   - By default, an empty list is reported
   - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS` is specified, the specified labels are reported
+  - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
 - The last sample's timetag-value pair
 
 #### Complexity
