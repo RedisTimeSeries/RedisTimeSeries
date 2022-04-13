@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - master-newdocs
+    paths:
+      - 'mkdocs.yml'
+      - 'docs/**'      
 
 jobs:
   trigger:
