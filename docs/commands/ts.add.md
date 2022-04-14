@@ -26,7 +26,7 @@ The following arguments are optional because they can be set by `TS.CREATE`:
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
- - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk. Must be a multiple of 8.
+ - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
