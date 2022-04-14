@@ -62,8 +62,8 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
 }
 
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
-    if (chunkSizeBytes <= 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 0");
+    if (chunkSizeBytes < 128) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE, input must be above 127");
         return false;
     }
 
