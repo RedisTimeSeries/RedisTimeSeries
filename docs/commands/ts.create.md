@@ -25,7 +25,7 @@ Optional args:
 
    When not specified: set to `COMPRESSED`.
 
-- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8.
+- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
 
    When not specified: set to 4096.
 
