@@ -67,7 +67,7 @@ find projects that help you integrate RedisTimeSeries with other tools, includin
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
 2. [Grafana](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redis.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
-3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
+3. [Telegraf](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
 ## Memory model
