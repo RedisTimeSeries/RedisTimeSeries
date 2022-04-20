@@ -1,4 +1,11 @@
-# Out-of-order / backfilled ingestion performance considerations
+---
+title: "Out-of-order / backfilled ingestion performance considerations"
+linkTitle: "Out-of-order / backfilled ingestion performance considerations"
+weight: 5
+description: >
+    Out-of-order / backfilled ingestion performance considerations
+---
+
 When an older timestamp is inserted into a time series, the chunk of memory corresponding to the new sample’s time frame will potentially have to be retrieved from the main memory (you can read more about these chunks [here](https://redislabs.com/blog/redistimeseries-ga-making-4th-dimension-truly-immersive/)). When this chunk is a compressed chunk, it will also have to be decoded before we can insert/update to it. These are memory-intensive—and in the case of decoding, compute-intensive—operations that will influence the overall achievable ingestion rate. 
 
 
@@ -28,11 +35,11 @@ The graphs and tables below make these key points:
 
 - We've observed a maximum 95% drop in the achievable ops/sec even at 99% out-of-order ingestion. (Again, reducing the chunk size can cut the impact in half.)
 
-<img src="../images/compressed-overall-ops-sec-vs-out-of-order-percentage.png" alt="compressed-overall-ops-sec-vs-out-of-order-percentage"/>
+<img src="images/compressed-overall-ops-sec-vs-out-of-order-percentage.png" alt="compressed-overall-ops-sec-vs-out-of-order-percentage"/>
 
-<img src="../images/compressed-overall-p50-lat-vs-out-of-order-percentage.png" alt="compressed-overall-p50-lat-vs-out-of-order-percentage"/>
+<img src="images/compressed-overall-p50-lat-vs-out-of-order-percentage.png" alt="compressed-overall-p50-lat-vs-out-of-order-percentage"/>
 
-<img src="../images/compressed-out-of-order-overhead-table.png" alt="compressed-out-of-order-overhead-table"/>
+<img src="images/compressed-out-of-order-overhead-table.png" alt="compressed-out-of-order-overhead-table"/>
 
 ## Uncompressed chunks out-of-order/backfilled impact analysis
 
@@ -45,8 +52,8 @@ Apart from that, we can observe the following key take-aways:
 
 - We've observed a maximum 45% drop in the achievable ops/sec, even at 99% out-of-order ingestion.
 
-<img src="../images/uncompressed-overall-ops-sec-vs-out-of-order-percentage.png" alt="uncompressed-overall-ops-sec-vs-out-of-order-percentage"/>
+<img src="images/uncompressed-overall-ops-sec-vs-out-of-order-percentage.png" alt="uncompressed-overall-ops-sec-vs-out-of-order-percentage"/>
 
-<img src="../images/uncompressed-overall-p50-lat-vs-out-of-order-percentage.png" alt="uncompressed-overall-p50-lat-vs-out-of-order-percentage"/>
+<img src="images/uncompressed-overall-p50-lat-vs-out-of-order-percentage.png" alt="uncompressed-overall-p50-lat-vs-out-of-order-percentage"/>
 
-<img src="../images/uncompressed-out-of-order-overhead-table.png" alt="uncompressed-out-of-order-overhead-table"/>
+<img src="images/uncompressed-out-of-order-overhead-table.png" alt="uncompressed-out-of-order-overhead-table"/>

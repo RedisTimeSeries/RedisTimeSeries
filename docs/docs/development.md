@@ -1,4 +1,10 @@
-# Developing RedisTimeSeries
+---
+title: "Development"
+linkTitle: "Development"
+weight: 4
+description: >
+    Developing RedisTimeSeries
+---
 
 Developing RedisTimeSeries involves setting up the development environment (which can be either Linux-based or macOS-based), building RedisTimeSeries, running tests and benchmarks, and debugging both the RedisTimeSeries module and its tests.
 
