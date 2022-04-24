@@ -12,8 +12,8 @@ def test_ooo(self):
         quantity = 50001
         type_list = ['', 'UNCOMPRESSED']
         for chunk_type in type_list:
-            r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 104, 'DUPLICATE_POLICY', 'BLOCK')
-            r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 104, 'DUPLICATE_POLICY', 'LAST')
+            r.execute_command('ts.create', 'no_ooo', chunk_type, 'CHUNK_SIZE', 136, 'DUPLICATE_POLICY', 'BLOCK')
+            r.execute_command('ts.create', 'ooo', chunk_type, 'CHUNK_SIZE', 136, 'DUPLICATE_POLICY', 'LAST')
             for i in range(0, quantity, 5):
                 r.execute_command('ts.add', 'no_ooo', i, i)
             for i in range(0, quantity, 10):
@@ -46,7 +46,7 @@ def test_ooo_with_retention(self):
     with Env().getClusterConnectionIfNeeded() as r:
         retention = 13
         batch = 100
-        r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 8, 'RETENTION', retention, 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('ts.create', 'ooo', 'CHUNK_SIZE', 128, 'RETENTION', retention, 'DUPLICATE_POLICY', 'LAST')
         for i in range(batch):
             assert r.execute_command('ts.add', 'ooo', i, i) == i
         assert r.execute_command('ts.range', 'ooo' ,0, batch - retention - 2) == []

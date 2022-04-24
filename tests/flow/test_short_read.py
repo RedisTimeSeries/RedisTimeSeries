@@ -61,7 +61,7 @@ def create_rdb(env, name):
     return
 
 def create_timeseries(env, is_backup):
-    chunk_size = 2 * SAMPLE_SIZE
+    chunk_size = 8 * SAMPLE_SIZE
     rules = ['avg', 'sum', 'count', 'max', 'min']
 
     env.execute_command('ts.create', 'shortread_t1' + ['', '_bakup'][is_backup], 'UNCOMPRESSED', 'CHUNK_SIZE', chunk_size, "LABELS", "l1", "l1_value", "l2", "l2_value")
