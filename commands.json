@@ -821,10 +821,6 @@
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
         "arguments": [
             {
-                "name": "key",
-                "type": "key"
-            },
-            {
                 "name": "fromTimestamp",
                 "type": "integer"
             },
@@ -1041,10 +1037,6 @@
         "summary": "Query a range across multiple time-series by filters in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
         "arguments": [
-            {
-                "name": "key",
-                "type": "key"
-            },
             {
                 "name": "fromTimestamp",
                 "type": "integer"
