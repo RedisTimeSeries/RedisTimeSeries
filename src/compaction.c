@@ -457,14 +457,16 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
-#if defined(__x86_64__)
-    if (!features) {
-        return;
-    } else if (features->avx512f) {
-        aggMax.appendValueVec = MaxAppendValuesAVX512F;
-        return;
-    }
-#endif // __x86_64__
+    /* remove this comment to enable avx512
+    #if defined(__x86_64__)
+        if (!features) {
+            return;
+        } else if (features->avx512f) {
+            aggMax.appendValueVec = MaxAppendValuesAVX512F;
+            return;
+        }
+    #endif // __x86_64__
+    */
     return;
 }
 
