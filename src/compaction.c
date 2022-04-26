@@ -51,12 +51,12 @@ typedef struct WeightData
     double weight_sum;
 } WeightData;
 
-typedef struct AotContext
+typedef struct TwaContext
 {
     AvgContext avgContext;
     WeightData weightData;
     bool reverse;
-} AotContext;
+} TwaContext;
 
 typedef struct StdContext
 {
@@ -185,7 +185,7 @@ err:
     return TSDB_ERROR;
 }
 
-static inline void _AotinitContext(AotContext *context, bool reverse) {
+static inline void _TwainitContext(TwaContext *context, bool reverse) {
     _AvgInitContext(&context->avgContext);
     context->weightData.weightSum = 0;
     context->weightData.prevPrevTS = DC;    // arbitrary value
@@ -201,13 +201,13 @@ static inline void _AotinitContext(AotContext *context, bool reverse) {
     context->reverse = reverse;
 }
 
-void *AotCreateContext(bool reverse) {
-    AotContext *context = (AotContext *)malloc(sizeof(AotContext));
-    _AotinitContext(context, reverse);
+void *TwaCreateContext(bool reverse) {
+    TwaContext *context = (TwaContext *)malloc(sizeof(TwaContext));
+    _TwainitContext(context, reverse);
     return context;
 }
 
-static inline void _update_aotContext(AotContext *wcontext,
+static inline void _update_twaContext(TwaContext *wcontext,
                                       const double *value,
                                       const timestamp_t *ts,
                                       const double *weight) {
@@ -219,8 +219,8 @@ static inline void _update_aotContext(AotContext *wcontext,
     }
 }
 
-void AotAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
-    AotContext *context = (AotContext *)contextPtr;
+void TwaAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
+    TwaContext *context = (TwaContext *)contextPtr;
     if (context->reverse) {
         __SWAP(bucketStartTS, bucketEndTS);
     }
@@ -228,14 +228,14 @@ void AotAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t
     context->weightData.bucketEndTS = bucketEndTS;
 }
 
-void AotAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
-    AotContext *wcontext = (AotContext *)contextPtr;
-    _update_aotContext(wcontext, &value, &ts, NULL);
+void TwaAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    _update_twaContext(wcontext, &value, &ts, NULL);
     wcontext->weightData.is_first_bucket = false;
 }
 
-void AotAddValue(void *contextPtr, double value, timestamp_t ts) {
-    AotContext *wcontext = (AotContext *)contextPtr;
+void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     const bool *rev = &wcontext->reverse;
     int64_t *iter = &wcontext->weightData.iteration;
@@ -271,7 +271,7 @@ void AotAddValue(void *contextPtr, double value, timestamp_t ts) {
         // assume the delta from the prev sample is same as the delta from next sample
         // will be handled on next sample
 
-        _update_aotContext(wcontext, &value, &ts, &weight);
+        _update_twaContext(wcontext, &value, &ts, &weight);
         return;
     } else if (unlikely((*iter) == 2 && (*is_first_bucket))) {
         // 2nd sample in bucket and first bucket in the series
@@ -287,11 +287,11 @@ void AotAddValue(void *contextPtr, double value, timestamp_t ts) {
     wcontext->weightData.prevWeight = 0;
 
     // save cur value first weight
-    _update_aotContext(wcontext, &value, &ts, &half_time_delta);
+    _update_twaContext(wcontext, &value, &ts, &half_time_delta);
 }
 
-void AotAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
-    AotContext *wcontext = (AotContext *)contextPtr;
+void TwaAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     const bool *rev = &wcontext->reverse;
     int64_t *iter = &wcontext->weightData.iteration;
@@ -334,8 +334,8 @@ void AotAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts)
     wcontext->weightData.is_last_ts_handled = true;
 }
 
-void AotFinalize(void *contextPtr, double *value) {
-    AotContext *wcontext = (AotContext *)contextPtr;
+void TwaFinalize(void *contextPtr, double *value) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
     AvgContext *context = &wcontext->avgContext;
     int64_t *iter = &wcontext->weightData.iteration;
     ++(*iter);
@@ -373,19 +373,19 @@ void AotFinalize(void *contextPtr, double *value) {
     return;
 }
 
-void AotGetLastSample(void *contextPtr, Sample *sample) {
-    AotContext *wcontext = (AotContext *)contextPtr;
+void TwaGetLastSample(void *contextPtr, Sample *sample) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
     sample->timestamp = wcontext->weightData.prevTS;
     sample->value = wcontext->weightData.prevValue;
 }
 
-void AotReset(void *contextPtr) {
-    AotContext *wcontext = (AotContext *)contextPtr;
-    _AotinitContext(contextPtr, wcontext->reverse);
+void TwaReset(void *contextPtr) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    _TwainitContext(contextPtr, wcontext->reverse);
 }
 
-void AotWriteContext(void *contextPtr, RedisModuleIO *io) {
-    AotContext *context = (AotContext *)contextPtr;
+void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
+    TwaContext *context = (TwaContext *)contextPtr;
     AvgWriteContext(&context->avgContext, io);
     RedisModule_SaveDouble(io, context->weightData.weightSum);
     RedisModule_SaveUnsigned(io, context->weightData.prevPrevTS);
@@ -401,8 +401,8 @@ void AotWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->reverse);
 }
 
-int AotReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
-    AotContext *context = (AotContext *)contextPtr;
+int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
+    TwaContext *context = (TwaContext *)contextPtr;
     if (AvgReadContext(&context->avgContext, io, encver) == TSDB_ERROR) {
         goto err;
     }
@@ -507,17 +507,18 @@ void rm_free(void *ptr) {
     free(ptr);
 }
 
-static AggregationClass waggAvg = { .createContext = AotCreateContext,
-                                    .appendValue = AotAddValue,
+// time weighted avg
+static AggregationClass waggAvg = { .createContext = TwaCreateContext,
+                                    .appendValue = TwaAddValue,
                                     .freeContext = rm_free,
-                                    .finalize = AotFinalize,
-                                    .writeContext = AotWriteContext,
-                                    .readContext = AotReadContext,
-                                    .addBucketParams = AotAddBucketParams,
-                                    .addPrevBucketLastSample = AotAddPrevBucketLastSample,
-                                    .addNextBucketFirstSample = AotAddNextBucketFirstSample,
-                                    .getLastSample = AotGetLastSample,
-                                    .resetContext = AotReset };
+                                    .finalize = TwaFinalize,
+                                    .writeContext = TwaWriteContext,
+                                    .readContext = TwaReadContext,
+                                    .addBucketParams = TwaAddBucketParams,
+                                    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
+                                    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
+                                    .getLastSample = TwaGetLastSample,
+                                    .resetContext = TwaReset };
 
 static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .appendValue = AvgAddValue,
@@ -817,8 +818,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_SUM;
         } else if (strncmp(agg_type_lower, "avg", len) == 0) {
             result = TS_AGG_AVG;
-        } else if (strncmp(agg_type_lower, "aot", len) == 0) {
-            result = TS_AGG_AOT;
+        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
+            result = TS_AGG_TWA;
         }
     } else if (len == 4) {
         if (strncmp(agg_type_lower, "last", len) == 0) {
@@ -839,6 +840,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_VAR_P;
         } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
             result = TS_AGG_VAR_S;
+        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
+            result = TS_AGG_VAR_S;
         }
     }
     return result;
@@ -854,8 +857,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
-        case TS_AGG_AOT:
-            return "AOT";
+        case TS_AGG_TWA:
+            return "TWA";
         case TS_AGG_STD_P:
             return "STD.P";
         case TS_AGG_STD_S:
@@ -888,7 +891,7 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggMax;
         case TS_AGG_AVG:
             return &aggAvg;
-        case TS_AGG_AOT:
+        case TS_AGG_TWA:
             return &waggAvg;
         case TS_AGG_STD_P:
             return &aggStdP;
