@@ -53,7 +53,7 @@ typedef enum {
     TS_AGG_MAX,
     TS_AGG_SUM,
     TS_AGG_AVG,
-    TS_AGG_AOT,
+    TS_AGG_TWA,
     TS_AGG_COUNT,
     TS_AGG_FIRST,
     TS_AGG_LAST,

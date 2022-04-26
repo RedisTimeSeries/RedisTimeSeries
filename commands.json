@@ -515,6 +515,11 @@
                         "name": "var.s",
                         "type": "pure-token",
                         "token": "VAR.S"
+                    },
+                    {
+                        "name": "twa",
+                        "type": "pure-token",
+                        "token": "TWA"
                     }
                 ]
             },
@@ -666,6 +671,11 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
@@ -803,6 +813,11 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
@@ -964,6 +979,11 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
@@ -1181,6 +1201,11 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
