@@ -35,6 +35,21 @@ typedef struct dfs_stack_val
         (_val).values_ei = (_values_ei);                                                           \
     } while (0)
 
+static inline timestamp_t calc_bucket_ts(BucketTimestamp bucketTS,
+                                         timestamp_t ts,
+                                         int64_t TimeDelta) {
+    switch (bucketTS) {
+        case BucketStartTimestamp:
+            return ts;
+        case BucketMidTimestamp:
+            return ts + TimeDelta / 2;
+        case BucketEndTimestamp:
+            return ts + TimeDelta;
+        default:
+            assert(false);
+    }
+}
+
 // returns the number of matches
 static size_t filterSamples(Samples *samples,
                             const timestamp_t *tsVals,
@@ -209,6 +224,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              timestamp_t timestampAlignment,
                                              bool reverse,
                                              bool empty,
+                                             BucketTimestamp bucketTS,
                                              Series *series) {
     AggregationIterator *iter = malloc(sizeof(AggregationIterator));
     iter->base.GetNext = AggregationIterator_GetNextChunk;
@@ -224,6 +240,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->series = series;
     iter->initilized = false;
     iter->empty = empty;
+    iter->bucketTS = bucketTS;
     iter->aux_chunk = NewEnrichedChunk();
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
@@ -232,7 +249,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
 
 static inline void finalizeBucket(Samples *samples, size_t index, const AggregationIterator *self) {
     self->aggregation->finalize(self->aggregationContext, &samples->values[index]);
-    samples->timestamps[index] = self->aggregationLastTimestamp;
+    samples->timestamps[index] =
+        calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     self->aggregation->resetContext(self->aggregationContext);
 }
 
@@ -329,7 +347,8 @@ static void fillEmptyBuckets(Samples *samples,
     timestamp_t cur_ts = (reversed) ? end_bucket_ts : first_bucket_ts;
     for (size_t i = 0; i < n_empty_buckets; ++i) {
         self->aggregation->finalizeEmpty(&samples->values[*write_index]);
-        samples->timestamps[*write_index] = cur_ts;
+        samples->timestamps[*write_index] =
+            calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
         if (reversed) {
             cur_ts -= agg_time_delta;
         } else {
@@ -524,7 +543,8 @@ _finalize:
         }
     }
     aggregation->finalize(aggregationContext, &value); // last bucket, no need to addBucketParams
-    self->aux_chunk->samples.timestamps[0] = self->aggregationLastTimestamp;
+    self->aux_chunk->samples.timestamps[0] =
+        calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     self->aux_chunk->samples.values[0] = value;
     self->aux_chunk->samples.num_samples = 1;
     return self->aux_chunk;
