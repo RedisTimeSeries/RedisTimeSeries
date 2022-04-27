@@ -753,7 +753,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // Validate aggregation arguments
     api_timestamp_t bucketDuration;
     int aggType;
-    const int result = _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType);
+    const int result = _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType, NULL);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }

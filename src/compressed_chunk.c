@@ -294,7 +294,7 @@ static inline void decompressChunkReverse(const CompressedChunk *compressedChunk
 _done:
     enrichedChunk->samples.timestamps = timestamps_ptr + 1;
     enrichedChunk->samples.values = values_ptr + 1;
-    enrichedChunk->num_samples =
+    enrichedChunk->samples.num_samples =
         enrichedChunk->samples.og_timestamps + numSamples - enrichedChunk->samples.timestamps;
     enrichedChunk->rev = true;
 
@@ -379,7 +379,7 @@ static inline void decompressChunk(const CompressedChunk *compressedChunk,
     }
 
 _done:
-    enrichedChunk->num_samples = timestamps_ptr - enrichedChunk->samples.timestamps;
+    enrichedChunk->samples.num_samples = timestamps_ptr - enrichedChunk->samples.timestamps;
 
     Compressed_FreeChunkIterator(iter);
 
