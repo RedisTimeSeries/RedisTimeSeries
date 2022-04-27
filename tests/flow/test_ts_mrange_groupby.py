@@ -167,3 +167,30 @@ def test_filterby():
                                     "AGGREGATION", "count", 3600000,
                                     "filter", "metric=temperature", "groupby", "country", "reduce", "sum")
         assert_results(results, specific_days)
+
+def test_empty():
+    agg_size = 10
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
+        assert r.execute_command('TS.add', 't1', 15, 1)
+        assert r.execute_command('TS.add', 't1', 17, 4)
+        assert r.execute_command('TS.add', 't1', 51, 3)
+        assert r.execute_command('TS.add', 't1', 73, 5)
+        assert r.execute_command('TS.add', 't1', 75, 3)
+        assert r.execute_command('TS.CREATE', 't2', 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
+        assert r.execute_command('TS.add', 't2', 3, 1)
+        assert r.execute_command('TS.add', 't2', 4, 2)
+        assert r.execute_command('TS.add', 't2', 51, 3)
+        assert r.execute_command('TS.add', 't2', 60, 9)
+        #expected_agg_t1 = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
+        #expected_agg_t2 = [[0, '2'], [10, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, '9']]
+        exp_samples = [[0, '2'], [10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '6'], [60, '9'], [70, '5']]
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        exp_samples.reverse()
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+

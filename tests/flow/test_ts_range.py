@@ -813,3 +813,28 @@ def test_aggreataion_alignment():
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
     assert expected_data == \
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+
+def test_empty():
+    agg_size = 10
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1')
+        assert r.execute_command('TS.add', 't1', 15, 1)
+        assert r.execute_command('TS.add', 't1', 17, 4)
+        assert r.execute_command('TS.add', 't1', 51, 3)
+        assert r.execute_command('TS.add', 't1', 73, 5)
+        assert r.execute_command('TS.add', 't1', 75, 3)
+        expected_data = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+
+        expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
+
