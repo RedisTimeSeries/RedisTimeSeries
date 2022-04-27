@@ -194,3 +194,53 @@ def test_empty():
         assert expected_data == \
         decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 
+def test_bucket_timestamp():
+    agg_size = 10
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
+        assert r.execute_command('TS.add', 't1', 15, 1)
+        assert r.execute_command('TS.add', 't1', 17, 4)
+        assert r.execute_command('TS.add', 't1', 51, 3)
+        assert r.execute_command('TS.add', 't1', 73, 5)
+        assert r.execute_command('TS.add', 't1', 75, 3)
+        assert r.execute_command('TS.CREATE', 't2', 'LABELS', 'metric_family', 'cpu', 'metric_name', 'user')
+        assert r.execute_command('TS.add', 't2', 3, 1)
+        assert r.execute_command('TS.add', 't2', 4, 2)
+        assert r.execute_command('TS.add', 't2', 51, 3)
+        assert r.execute_command('TS.add', 't2', 60, 9)
+
+        #expected_agg_t1 = [[10, '4'], [50, '3'], [70, '5']]
+        #expected_agg_t2 = [[0, '2'], [50, '3'], [60, '9']]
+        exp_samples = [[0, '2'], [10, '4'], [50, '6'], [60, '9'], [70, '5']]
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        exp_samples.reverse()
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+
+
+        #expected_agg_t1 = [[15, '4'], [55, '3'], [75, '5']]
+        #expected_agg_t2 = [[5, '2'], [55, '3'], [65, '9']]
+        exp_samples = [[5, '2'], [15, '4'], [55, '6'], [65, '9'], [75, '5']]
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        exp_samples.reverse()
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+
+        #expected_agg_t1 = [[20, '4'], [60, '3'], [80, '5']]
+        #expected_agg_t2 = [[10, '2'], [60, '3'], [70, '9']]
+        exp_samples = [[10, '2'], [20, '4'], [60, '6'], [70, '9'], [80, '5']]
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        exp_samples.reverse()
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+

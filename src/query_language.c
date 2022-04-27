@@ -208,12 +208,52 @@ int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, i
     return TSDB_OK;
 }
 
+static int _parseBucketTS(RedisModuleCtx *ctx,
+                          RedisModuleString **argv,
+                          int argc,
+                          BucketTimestamp *bucketTS,
+                          int AggregationOffset) {
+    *bucketTS = BucketStartTimestamp;
+    int bucketTS_offset = RMUtil_ArgIndex("BUCKETTIMESTAMP", argv, argc);
+    if (bucketTS_offset > 0) {
+        if (bucketTS_offset != AggregationOffset + 3 && bucketTS_offset != AggregationOffset + 4) {
+            RTS_ReplyGeneralError(
+                ctx,
+                "TSDB: BUCKETTIMESTAMP flag should be the 3rd or 4th flag after AGGREGATION flag");
+            return TSDB_ERROR;
+        }
+
+        if (bucketTS_offset + 1 >= argc) {
+            RedisModule_WrongArity(ctx);
+            return TSDB_ERROR;
+        }
+
+        const char *bucketTSStr = RedisModule_StringPtrLen(argv[bucketTS_offset + 1], NULL);
+        if (strcasecmp(bucketTSStr, "start") == 0 || strcasecmp(bucketTSStr, "-") == 0) {
+            *bucketTS = BucketStartTimestamp;
+            return TSDB_OK;
+        } else if (strcasecmp(bucketTSStr, "end") == 0 || strcasecmp(bucketTSStr, "+") == 0) {
+            *bucketTS = BucketEndTimestamp;
+            return TSDB_OK;
+        } else if (strcasecmp(bucketTSStr, "mid") == 0 || strcasecmp(bucketTSStr, "~") == 0) {
+            *bucketTS = BucketMidTimestamp;
+            return TSDB_OK;
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: unknown BUCKETTIMESTAMP parameter");
+            return TSDB_ERROR;
+        }
+    }
+
+    return TSDB_OK;
+}
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
                           int *agg_type,
-                          bool *empty) {
+                          bool *empty,
+                          BucketTimestamp *bucketTS) {
     RedisModuleString *aggTypeStr = NULL;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -246,9 +286,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         if (empty) {
             int empty_offset = RMUtil_ArgIndex("EMPTY", argv, argc);
             if (empty_offset > 0) {
-                if (empty_offset != offset + 3) {
+                if (empty_offset != offset + 3 && empty_offset != offset + 5) {
                     RTS_ReplyGeneralError(
-                        ctx, "TSDB: EMPTY flag should be the 3rd flag after AGGREGATION flag");
+                        ctx,
+                        "TSDB: EMPTY flag should be the 3rd or 5th flag after AGGREGATION flag");
                     return TSDB_ERROR;
                 }
                 RedisModuleString *emptyStr = NULL;
@@ -263,6 +304,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             }
         }
 
+        if (bucketTS) {
+            _parseBucketTS(ctx, argv, argc, bucketTS, offset);
+        }
+
         return TSDB_OK;
     }
 
@@ -275,8 +320,13 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          AggregationArgs *out) {
     int agg_type;
     AggregationArgs aggregationArgs = { 0 };
-    int result = _parseAggregationArgs(
-        ctx, argv, argc, &aggregationArgs.timeDelta, &agg_type, &aggregationArgs.empty);
+    int result = _parseAggregationArgs(ctx,
+                                       argv,
+                                       argc,
+                                       &aggregationArgs.timeDelta,
+                                       &agg_type,
+                                       &aggregationArgs.empty,
+                                       &aggregationArgs.bucketTS);
     if (result == TSDB_OK) {
         aggregationArgs.aggregationClass = GetAggClass(agg_type);
         if (aggregationArgs.aggregationClass == NULL) {

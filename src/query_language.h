@@ -17,10 +17,18 @@
 #ifndef REDISTIMESERIES_QUERY_LANGUAGE_H
 #define REDISTIMESERIES_QUERY_LANGUAGE_H
 
+typedef enum BucketTimestamp
+{
+    BucketStartTimestamp = 0,
+    BucketMidTimestamp,
+    BucketEndTimestamp // 2
+} BucketTimestamp;
+
 typedef struct AggregationArgs
 {
     bool empty; // Should return empty buckets
     api_timestamp_t timeDelta;
+    BucketTimestamp bucketTS;
     AggregationClass *aggregationClass;
 } AggregationArgs;
 
@@ -122,7 +130,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           int argc,
                           api_timestamp_t *time_delta,
                           int *agg_type,
-                          bool *empty);
+                          bool *empty,
+                          BucketTimestamp *bucketTS);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,
