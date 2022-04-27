@@ -684,6 +684,12 @@
                         "type": "integer"
                     },
                     {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
@@ -830,6 +836,12 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
                     },
                     {
                         "name": "empty",
@@ -1002,6 +1014,12 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
                     },
                     {
                         "name": "empty",
@@ -1230,6 +1248,12 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
                     },
                     {
                         "name": "empty",
