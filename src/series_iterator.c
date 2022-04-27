@@ -71,7 +71,7 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
 
     u_int64_t n_samples = iter->series->funcs->GetNumOfSample(curChunk);
     if (n_samples > iter->enrichedChunk->samples.size) {
-        ReallocEnrichedChunk(iter->enrichedChunk, n_samples);
+        ReallocSamplesArray(&iter->enrichedChunk->samples, n_samples);
     }
     iter->series->funcs->ProcessChunk(
         curChunk, iter->minTimestamp, iter->maxTimestamp, iter->enrichedChunk, iter->reverse_chunk);
