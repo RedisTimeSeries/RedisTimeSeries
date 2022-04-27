@@ -19,6 +19,7 @@
 
 typedef struct AggregationArgs
 {
+    bool empty; // Should return empty buckets
     api_timestamp_t timeDelta;
     AggregationClass *aggregationClass;
 } AggregationArgs;
@@ -120,7 +121,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type);
+                          int *agg_type,
+                          bool *empty);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,

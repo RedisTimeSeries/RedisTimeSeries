@@ -201,8 +201,8 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     })
 
 void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
-    __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->num_samples);
-    __array_reverse_inplace(enrichedChunk->samples.values, enrichedChunk->num_samples);
+    __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->samples.num_samples);
+    __array_reverse_inplace(enrichedChunk->samples.values, enrichedChunk->samples.num_samples);
     enrichedChunk->rev = true;
 }
 
@@ -242,19 +242,20 @@ void Uncompressed_ProcessChunk(const Chunk_t *chunk,
         }
     }
 
-    enrichedChunk->num_samples = ei - si + 1;
-    if (enrichedChunk->num_samples == 0) {
+    enrichedChunk->samples.num_samples = ei - si + 1;
+    if (enrichedChunk->samples.num_samples == 0) {
         return;
     }
 
     if (unlikely(reverse)) {
-        for (i = 0; i < enrichedChunk->num_samples; ++i) {
+        for (i = 0; i < enrichedChunk->samples.num_samples; ++i) {
             enrichedChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
             enrichedChunk->samples.values[i] = _chunk->samples[ei - i].value;
         }
         enrichedChunk->rev = true;
     } else {
-        for (i = 0; i < enrichedChunk->num_samples; ++i) { // use memcpy once chunk becomes columned
+        for (i = 0; i < enrichedChunk->samples.num_samples;
+             ++i) { // use memcpy once chunk becomes columned
             enrichedChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
             enrichedChunk->samples.values[i] = _chunk->samples[i + si].value;
         }

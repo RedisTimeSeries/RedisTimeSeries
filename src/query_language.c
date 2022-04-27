@@ -6,6 +6,7 @@
 #include "query_language.h"
 
 #include <limits.h>
+#include <ctype.h>
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
@@ -211,7 +212,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type) {
+                          int *agg_type,
+                          bool *empty) {
     RedisModuleString *aggTypeStr = NULL;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -241,6 +243,26 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             *time_delta = (api_timestamp_t)temp_time_delta;
         }
 
+        if (empty) {
+            int empty_offset = RMUtil_ArgIndex("EMPTY", argv, argc);
+            if (empty_offset > 0) {
+                if (empty_offset != offset + 3) {
+                    RTS_ReplyGeneralError(
+                        ctx, "TSDB: EMPTY flag should be the 3rd flag after AGGREGATION flag");
+                    return TSDB_ERROR;
+                }
+                RedisModuleString *emptyStr = NULL;
+                if (RMUtil_ParseArgs(argv, argc, empty_offset, "s", &emptyStr) != REDISMODULE_OK) {
+                    RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse EMPTY flag");
+                    return TSDB_ERROR;
+                }
+                *empty = false;
+                if (emptyStr && !RMStringStrCmpUpper(emptyStr, "EMPTY")) {
+                    *empty = true;
+                }
+            }
+        }
+
         return TSDB_OK;
     }
 
@@ -253,7 +275,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          AggregationArgs *out) {
     int agg_type;
     AggregationArgs aggregationArgs = { 0 };
-    int result = _parseAggregationArgs(ctx, argv, argc, &aggregationArgs.timeDelta, &agg_type);
+    int result = _parseAggregationArgs(
+        ctx, argv, argc, &aggregationArgs.timeDelta, &agg_type, &aggregationArgs.empty);
     if (result == TSDB_OK) {
         aggregationArgs.aggregationClass = GetAggClass(agg_type);
         if (aggregationArgs.aggregationClass == NULL) {
