@@ -247,13 +247,37 @@ static int _parseBucketTS(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+static int _parseAlignmentTS(RedisModuleCtx *ctx,
+                             RedisModuleString **argv,
+                             int argc,
+                             timestamp_t *alignmentTS,
+                             int AggregationOffset) {
+    *alignmentTS = 0; // the default alignment is 0
+    if (argc == 7) {
+        int alignmentTS_offset = AggregationOffset + 3;
+
+        if (parseTimestamp(argv[alignmentTS_offset], alignmentTS) != REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse alignTimestamp");
+            return TSDB_ERROR;
+        }
+
+        if ((int64_t)(*alignmentTS) < 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: alignTimestamp should be greater or equal to 0");
+            return TSDB_ERROR;
+        }
+    }
+
+    return TSDB_OK;
+}
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
                           int *agg_type,
                           bool *empty,
-                          BucketTimestamp *bucketTS) {
+                          BucketTimestamp *bucketTS,
+                          timestamp_t *alignmetTS) {
     RedisModuleString *aggTypeStr = NULL;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -304,6 +328,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             }
         }
 
+        if (alignmetTS) {
+            _parseAlignmentTS(ctx, argv, argc, alignmetTS, offset);
+        }
+
         if (bucketTS) {
             _parseBucketTS(ctx, argv, argc, bucketTS, offset);
         }
@@ -326,7 +354,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                                        &aggregationArgs.timeDelta,
                                        &agg_type,
                                        &aggregationArgs.empty,
-                                       &aggregationArgs.bucketTS);
+                                       &aggregationArgs.bucketTS,
+                                       NULL);
     if (result == TSDB_OK) {
         aggregationArgs.aggregationClass = GetAggClass(agg_type);
         if (aggregationArgs.aggregationClass == NULL) {

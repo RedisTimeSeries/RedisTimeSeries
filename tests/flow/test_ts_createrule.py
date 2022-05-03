@@ -284,6 +284,37 @@ def test_downsampling_rules(self):
                        _get_series_value(actual_result) == [1]
 
 
+def test_downsampling_alignment(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1{1}')
+        assert r.execute_command('TS.CREATE', 't2{1}')
+        assert r.execute_command('TS.CREATERULE', 't1{1}', 't2{1}', 'AGGREGATION', 'sum', 10, 5)
+        r.execute_command('TS.ADD', 't1{1}', 3, 4)
+        r.execute_command('TS.ADD', 't1{1}', 9, 8)
+
+        # test regular add
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 4, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 4)
+        assert expected_result == actual_result
+        r.execute_command('TS.ADD', 't1{1}', 16, 8)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 9, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 9)
+        assert expected_result == actual_result
+
+        # test upsert
+        r.execute_command('TS.ADD', 't1{1}', 2, 8)
+        r.execute_command('TS.ADD', 't1{1}', 6, 3)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 9, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 9)
+        assert expected_result == actual_result
+
+        # test upsert in latest bucket
+        r.execute_command('TS.ADD', 't1{1}', 15, 9)
+        r.execute_command('TS.ADD', 't1{1}', 30, 7)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 24, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 24)
+        assert expected_result == actual_result
+
 def test_backfill_downsampling(self):
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:

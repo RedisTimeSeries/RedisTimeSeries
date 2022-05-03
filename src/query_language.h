@@ -131,7 +131,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           api_timestamp_t *time_delta,
                           int *agg_type,
                           bool *empty,
-                          BucketTimestamp *bucketTS);
+                          BucketTimestamp *bucketTS,
+                          timestamp_t *alignmetTS);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,
