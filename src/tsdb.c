@@ -538,11 +538,13 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
-        const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
-        if (upsertTimestamp >= curAggWindowStart) {
+        const timestamp_t curAggWindowStart =
+            CalcBucketStart(seriesLastTimestamp, ruleTimebucket, rule->timestampAlignment);
+        const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
+        if (upsertTimestamp >= curAggWindowStartNormalized) {
             // upsert in latest timebucket
             const int rv = SeriesCalcRange(series,
-                                           curAggWindowStart,
+                                           curAggWindowStartNormalized,
                                            curAggWindowStart + ruleTimebucket - 1,
                                            rule,
                                            NULL,
@@ -553,18 +555,20 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                 continue;
             }
         } else {
-            const timestamp_t start = CalcWindowStart(upsertTimestamp, ruleTimebucket);
+            const timestamp_t start =
+                CalcBucketStart(upsertTimestamp, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t startNormalized = BucketStartNormalize(start);
             // ensure last include/exclude
             double val = 0;
-            const int rv =
-                SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val, NULL);
+            const int rv = SeriesCalcRange(
+                series, startNormalized, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, start, val)) {
+            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startNormalized, val)) {
                 continue;
             }
         }
@@ -709,12 +713,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
     while (rule) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart =
-            CalcWindowStart(series->lastTimestamp, ruleTimebucket);
+            CalcBucketStart(series->lastTimestamp, ruleTimebucket, rule->timestampAlignment);
+        const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
 
-        if (start_ts >= curAggWindowStart) {
+        if (start_ts >= curAggWindowStartNormalized) {
             // All deletion range in latest timebucket - only update the context on the rule
             const int rv = SeriesCalcRange(series,
-                                           curAggWindowStart,
+                                           curAggWindowStartNormalized,
                                            curAggWindowStart + ruleTimebucket - 1,
                                            rule,
                                            NULL,
@@ -725,8 +730,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                 continue;
             }
         } else {
-            const timestamp_t startTSWindowStart = CalcWindowStart(start_ts, ruleTimebucket);
-            const timestamp_t endTSWindowStart = CalcWindowStart(end_ts, ruleTimebucket);
+            const timestamp_t startTSWindowStart =
+                CalcBucketStart(start_ts, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t startTSWindowStartNormalized =
+                BucketStartNormalize(startTSWindowStart);
+            const timestamp_t endTSWindowStart =
+                CalcBucketStart(end_ts, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t endTSWindowStartNormalized = BucketStartNormalize(endTSWindowStart);
             timestamp_t continuous_deletion_start;
             timestamp_t continuous_deletion_end;
             double val = 0;
@@ -736,7 +746,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // ---- handle start bucket ----
 
             rv = SeriesCalcRange(series,
-                                 startTSWindowStart,
+                                 startTSWindowStartNormalized,
                                  startTSWindowStart + ruleTimebucket - 1,
                                  rule,
                                  &val,
@@ -749,32 +759,33 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
             if (is_empty) {
                 // first bucket should be deleted
-                continuous_deletion_start = startTSWindowStart;
+                continuous_deletion_start = startTSWindowStartNormalized;
             } else { // first bucket needs update
                 // continuous deletion starts one bucket after startTSWindowStart
                 continuous_deletion_start = startTSWindowStart + ruleTimebucket;
-                if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startTSWindowStart, val)) {
+                if (!RuleSeriesUpsertSample(
+                        rts_staticCtx, series, rule, startTSWindowStartNormalized, val)) {
                     continue;
                 }
             }
 
             // ---- handle end bucket ----
 
-            if (end_ts >= curAggWindowStart) {
+            if (end_ts >= curAggWindowStartNormalized) {
                 // deletion in latest timebucket
-                const int rv =
-                    SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+                const int rv = SeriesCalcRange(
+                    series, curAggWindowStartNormalized, UINT64_MAX, rule, NULL, NULL);
                 if (rv == TSDB_ERROR) {
                     RedisModule_Log(
                         rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
                 // continuous deletion ends one bucket before endTSWindowStart
-                continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+                continuous_deletion_end = BucketStartNormalize(endTSWindowStart - ruleTimebucket);
             } else {
                 // deletion in old timebucket
                 rv = SeriesCalcRange(series,
-                                     endTSWindowStart,
+                                     endTSWindowStartNormalized,
                                      endTSWindowStart + ruleTimebucket - 1,
                                      rule,
                                      &val,
@@ -787,12 +798,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
                 if (is_empty) {
                     // continuous deletion ends in end timebucket
-                    continuous_deletion_end = endTSWindowStart;
+                    continuous_deletion_end = endTSWindowStartNormalized;
                 } else { // update in end timebucket
                     // continuous deletion ends one bucket before endTSWindowStart
-                    continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+                    continuous_deletion_end =
+                        BucketStartNormalize(endTSWindowStart - ruleTimebucket);
                     if (!RuleSeriesUpsertSample(
-                            rts_staticCtx, series, rule, endTSWindowStart, val)) {
+                            rts_staticCtx, series, rule, endTSWindowStartNormalized, val)) {
                         continue;
                     }
                 }
@@ -858,8 +870,10 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,
                               Series *destSeries,
                               int aggType,
-                              uint64_t bucketDuration) {
-    CompactionRule *rule = NewRule(destSeries->keyName, aggType, bucketDuration);
+                              uint64_t bucketDuration,
+                              timestamp_t timestampAlignment) {
+    CompactionRule *rule =
+        NewRule(destSeries->keyName, aggType, bucketDuration, timestampAlignment);
     if (rule == NULL) {
         return NULL;
     }
@@ -934,13 +948,21 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         SeriesSetSrcRule(ctx, compactedSeries, series->keyName);
-        SeriesAddRule(ctx, series, compactedSeries, rule->aggType, rule->bucketDuration);
+        SeriesAddRule(ctx,
+                      series,
+                      compactedSeries,
+                      rule->aggType,
+                      rule->bucketDuration,
+                      rule->timestampAlignment);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucketDuration) {
+CompactionRule *NewRule(RedisModuleString *destKey,
+                        int aggType,
+                        uint64_t bucketDuration,
+                        uint64_t timestampAlignment) {
     if (bucketDuration == 0ULL) {
         return NULL;
     }
@@ -950,6 +972,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucket
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);
     rule->bucketDuration = bucketDuration;
+    rule->timestampAlignment = timestampAlignment;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
@@ -1059,10 +1082,6 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(context);
     }
     return TSDB_OK;
-}
-
-timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
-    return timestamp - (timestamp % window);
 }
 
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
