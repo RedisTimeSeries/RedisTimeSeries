@@ -381,19 +381,22 @@ static void handleCompaction(RedisModuleCtx *ctx,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
-    timestamp_t currentTimestamp = CalcWindowStart(timestamp, rule->bucketDuration);
+    timestamp_t currentTimestamp =
+        CalcBucketStart(timestamp, rule->bucketDuration, rule->timestampAlignment);
+    timestamp_t currentTimestampNormalized = BucketStartNormalize(currentTimestamp);
 
     if (rule->startCurrentTimeBucket == -1LL) {
         // first sample, lets init the startCurrentTimeBucket
-        rule->startCurrentTimeBucket = currentTimestamp;
+        rule->startCurrentTimeBucket = currentTimestampNormalized;
 
         if (rule->aggClass->addBucketParams) {
-            rule->aggClass->addBucketParams(
-                rule->aggContext, currentTimestamp, currentTimestamp + rule->bucketDuration);
+            rule->aggClass->addBucketParams(rule->aggContext,
+                                            currentTimestampNormalized,
+                                            currentTimestamp + rule->bucketDuration);
         }
     }
 
-    if (currentTimestamp > rule->startCurrentTimeBucket) {
+    if (currentTimestampNormalized > rule->startCurrentTimeBucket) {
         Series *destSeries;
         RedisModuleKey *key;
         int status = GetSeries(ctx,
@@ -423,15 +426,16 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
         rule->aggClass->resetContext(rule->aggContext);
         if (rule->aggClass->addBucketParams) {
-            rule->aggClass->addBucketParams(
-                rule->aggContext, currentTimestamp, currentTimestamp + rule->bucketDuration);
+            rule->aggClass->addBucketParams(rule->aggContext,
+                                            currentTimestampNormalized,
+                                            currentTimestamp + rule->bucketDuration);
         }
 
         if (rule->aggClass->addPrevBucketLastSample) {
             rule->aggClass->addPrevBucketLastSample(
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }
-        rule->startCurrentTimeBucket = currentTimestamp;
+        rule->startCurrentTimeBucket = currentTimestampNormalized;
         RedisModule_CloseKey(key);
     }
     rule->aggClass->appendValue(rule->aggContext, value, timestamp);
@@ -746,15 +750,16 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 6) {
+    if (argc != 6 && argc != 7) {
         return RedisModule_WrongArity(ctx);
     }
 
     // Validate aggregation arguments
     api_timestamp_t bucketDuration;
     int aggType;
+    timestamp_t alignmentTS;
     const int result =
-        _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType, NULL, NULL);
+        _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType, NULL, NULL, &alignmentTS);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
@@ -811,7 +816,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     SeriesSetSrcRule(ctx, destSeries, srcSeries->keyName);
 
     // Last add the rule to source
-    if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, bucketDuration) == NULL) {
+    if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, bucketDuration, alignmentTS) == NULL) {
         RedisModule_CloseKey(srcKey);
         RedisModule_CloseKey(destKey);
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
@@ -1002,7 +1007,8 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
-        const timestamp_t curAggWindowStart = CalcWindowStart(args->startTimestamp, ruleTimebucket);
+        const timestamp_t curAggWindowStart = BucketStartNormalize(
+            CalcBucketStart(args->startTimestamp, ruleTimebucket, rule->timestampAlignment));
         if (is_obsolete(curAggWindowStart, series->lastTimestamp, series->retentionTime)) {
             is_valid = false;
         }

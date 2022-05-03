@@ -526,6 +526,11 @@
             {
                 "name": "bucketDuration",
                 "type": "integer"
+            },
+            {
+                "name": "alignTimestamp",
+                "type": "integer",
+                "optional": true
             }
         ],
         "since": "1.0.0",
