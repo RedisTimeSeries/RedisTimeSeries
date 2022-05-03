@@ -15,9 +15,9 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
         RedisModule_ReplyWithError(rctx, "multi shard cmd failed");
-        RedisModule_Log(rctx, "verbose", "got libmr error:");
+        RedisModule_Log(rctx, "warning", "got libmr error:");
         for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "verbose", MR_ExecutionCtxGetError(eCtx, i));
+            RedisModule_Log(rctx, "warning", MR_ExecutionCtxGetError(eCtx, i));
         }
         return true;
     }
