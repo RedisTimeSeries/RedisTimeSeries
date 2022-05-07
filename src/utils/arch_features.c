@@ -6,7 +6,7 @@
 
 #include "arch_features.h"
 
-static X86Features g_features = { 0 };
+static X86Features g_features = { 0, 0 };
 
 const X86Features *getArchitectureOptimization() {
 #ifdef CPU_FEATURES_ARCH_X86_64
