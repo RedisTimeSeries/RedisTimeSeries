@@ -42,7 +42,8 @@ void replyResultSet(RedisModuleCtx *ctx,
 void ResultSet_Free(TS_ResultSet *r);
 
 int MultiSerieReduce(Series *dest,
-                     Series *source,
+                     Series **series,
+                     size_t n_series,
                      MultiSeriesReduceOp op,
                      const RangeArgs *args,
                      bool reverse);

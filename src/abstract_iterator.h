@@ -25,4 +25,20 @@ typedef struct AbstractSampleIterator
     struct AbstractIterator *input;
 } AbstractSampleIterator;
 
+typedef struct AbstractMultiSeriesSampleIterator
+{
+    ChunkResult (*GetNext)(struct AbstractMultiSeriesSampleIterator *iter, Sample *sample);
+    void (*Close)(struct AbstractMultiSeriesSampleIterator *iter);
+
+    struct AbstractSampleIterator **input; // array of iterators
+} AbstractMultiSeriesSampleIterator;
+
+typedef struct AbstractMultiSeriesAggDupSampleIterator
+{
+    ChunkResult (*GetNext)(struct AbstractMultiSeriesAggDupSampleIterator *iter, Sample *sample);
+    void (*Close)(struct AbstractMultiSeriesAggDupSampleIterator *iter);
+
+    struct AbstractMultiSeriesSampleIterator *input;
+} AbstractMultiSeriesAggDupSampleIterator;
+
 #endif //ABSTRACT_ITERATOR_H
