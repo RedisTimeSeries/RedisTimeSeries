@@ -184,9 +184,12 @@ void GroupList_ApplyReducer(TS_GroupList *group,
     Series *reduced = NewSeries(RedisModule_CreateString(NULL, serie_name, serie_name_len), &cCtx);
 
     Series *source = NULL;
+
+    MultiSerieReduce(reduced, group->list, group->count, reducerOp, args, reverse);
+
+    // prepare labels
     for (int i = 0; i < group->count; i++) {
         source = group->list[i];
-        MultiSerieReduce(reduced, source, reducerOp, args, reverse);
 
         size_t keyLen = 0;
         const char *keyname = RedisModule_StringPtrLen(source->keyName, &keyLen);
