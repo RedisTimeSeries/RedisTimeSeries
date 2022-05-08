@@ -91,6 +91,19 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
                                                    bool reverse,
                                                    bool check_retention);
 
+AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
+                                                                   size_t n_series,
+                                                                   const RangeArgs *args,
+                                                                   bool reverse,
+                                                                   bool check_retention);
+
+AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
+                                                              size_t n_series,
+                                                              const RangeArgs *args,
+                                                              bool reverse,
+                                                              bool check_retention,
+                                                              DuplicatePolicy *dp);
+
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 
