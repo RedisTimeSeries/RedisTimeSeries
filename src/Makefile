@@ -184,7 +184,11 @@ _SOURCES=\
 	series_iterator.c \
 	utils/arch_features.c \
 	sample_iterator.c \
-	enriched_chunk.c
+	enriched_chunk.c \
+	utils/heap.c \
+	multiseries_sample_iterator.c \
+	multiseries_agg_dup_sample_iterator.c
+
 
 ifeq ($(ARCH), x86_64)
 _SOURCES_AVX512=compactions/compaction_avx512f.c

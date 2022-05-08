@@ -13,6 +13,8 @@
 #include "module.h"
 #include "series_iterator.h"
 #include "sample_iterator.h"
+#include "multiseries_sample_iterator.h"
+#include "multiseries_agg_dup_sample_iterator.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -475,12 +477,11 @@ size_t SeriesGetNumSamples(const Series *series) {
 }
 
 int MultiSerieReduce(Series *dest,
-                     Series *source,
+                     Series **series,
+                     size_t n_series,
                      MultiSeriesReduceOp op,
                      const RangeArgs *args,
                      bool reverse) {
-    Sample sample;
-    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(source, args, reverse, true);
     DuplicatePolicy dp = DP_INVALID;
     switch (op) {
         case MultiSeriesReduceOp_Max:
@@ -493,8 +494,11 @@ int MultiSerieReduce(Series *dest,
             dp = DP_SUM;
             break;
     }
+    Sample sample;
+    AbstractSampleIterator *iterator =
+        MultiSeriesCreateAggDupSampleIterator(series, n_series, args, reverse, true, &dp);
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
-        SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
+        SeriesAddSample(dest, sample.timestamp, sample.value);
     }
     iterator->Close(iterator);
     return 1;
@@ -1187,4 +1191,30 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
                                                    bool check_retention) {
     AbstractIterator *chain = SeriesQuery(series, args, reverse, check_retention);
     return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
+}
+
+// returns sample iterator over multiple series
+AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
+                                                                   size_t n_series,
+                                                                   const RangeArgs *args,
+                                                                   bool reverse,
+                                                                   bool check_retention) {
+    size_t i;
+    AbstractSampleIterator *iters[n_series];
+    for (i = 0; i < n_series; ++i) {
+        iters[i] = SeriesCreateSampleIterator(series[i], args, reverse, check_retention);
+    }
+    return (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(iters, n_series);
+}
+
+// returns sample iterator over multiple series
+AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
+                                                              size_t n_series,
+                                                              const RangeArgs *args,
+                                                              bool reverse,
+                                                              bool check_retention,
+                                                              DuplicatePolicy *dp) {
+    AbstractMultiSeriesSampleIterator *chain =
+        MultiSeriesCreateSampleIterator(series, n_series, args, check_retention, reverse);
+    return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, dp);
 }
