@@ -152,7 +152,7 @@ def test_downsampling_current():
         key = 'src{a}'
         agg_key = 'dest{a}'
         type_list = ['', 'uncompressed']
-        agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
+        agg_list = ['avg', 'twa', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                     'var.s']  # more
         for chunk_type in type_list:
             for agg_type in agg_list:
@@ -205,7 +205,7 @@ def test_downsampling_extensive():
         toTS = 10000
         type_list = ['', 'uncompressed']
         for chunk_type in type_list:
-            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
+            agg_list = ['avg', 'twa', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                         'var.s']  # more
             for agg in agg_list:
                 agg_key = _insert_agg_data(r, key, agg, chunk_type, fromTS, toTS,
@@ -225,7 +225,7 @@ def test_downsampling_extensive():
                 assert expected_result2 == actual_result2
 
                 # remove aggs with identical results
-                compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
+                compare_list = ['avg', 'twa', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
                 if agg in compare_list:
                     assert expected_result1 != expected_result2
                     assert actual_result1 != actual_result2
