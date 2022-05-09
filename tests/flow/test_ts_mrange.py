@@ -80,11 +80,8 @@ def test_range_by_labels():
                                             'FILTER', 'generation=x')
             assert [[1511885905, b'1']] == actual_result[0][2][:1]
             assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
-                                            'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
-                                            'COUNT', 3, 'FILTER', 'generation=x')
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3,
+                                            'FILTER', 'generation=x')
             assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                             'FILTER', 'generation=x')
