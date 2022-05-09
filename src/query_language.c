@@ -671,20 +671,22 @@ QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
     return queries;
 }
 
-int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
-    if (strncasecmp(reducerstr, "sum", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Sum;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Max;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Min;
-        return TSDB_OK;
+int parseMultiSeriesReduceArgs(RedisModuleCtx *ctx,
+                               RedisModuleString *reducerstr,
+                               ReducerArgs *reducerArgs) {
+    TS_AGG_TYPES_T agg_type = RMStringLenAggTypeToEnum(reducerstr);
+    if (agg_type == TS_AGG_FIRST || agg_type == TS_AGG_LAST || agg_type == TS_AGG_TWA ||
+        agg_type == TS_AGG_INVALID || agg_type == TS_AGG_NONE) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Invalid reducer type");
+        return TSDB_ERROR;
     }
-    return TSDB_ERROR;
+    reducerArgs->aggregationClass = GetAggClass(agg_type);
+    if (reducerArgs->aggregationClass == NULL) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve reducer class");
+        return TSDB_ERROR;
+    }
+    reducerArgs->agg_type = agg_type;
+    return TSDB_OK;
 }
 
 int parseLabelQuery(RedisModuleCtx *ctx,
@@ -853,9 +855,8 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }
-        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
-                                     &args.gropuByReducerOp) != TSDB_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+        if (parseMultiSeriesReduceArgs(ctx, argv[reduce_location + 1], &args.gropuByReducerArgs) !=
+            TSDB_OK) {
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }

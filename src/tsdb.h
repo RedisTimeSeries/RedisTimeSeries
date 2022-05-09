@@ -102,7 +102,7 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               const RangeArgs *args,
                                                               bool reverse,
                                                               bool check_retention,
-                                                              DuplicatePolicy *dp);
+                                                              const ReducerArgs *reducerArgs);
 
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);

@@ -479,24 +479,11 @@ size_t SeriesGetNumSamples(const Series *series) {
 int MultiSerieReduce(Series *dest,
                      Series **series,
                      size_t n_series,
-                     MultiSeriesReduceOp op,
-                     const RangeArgs *args,
-                     bool reverse) {
-    DuplicatePolicy dp = DP_INVALID;
-    switch (op) {
-        case MultiSeriesReduceOp_Max:
-            dp = DP_MAX;
-            break;
-        case MultiSeriesReduceOp_Min:
-            dp = DP_MIN;
-            break;
-        case MultiSeriesReduceOp_Sum:
-            dp = DP_SUM;
-            break;
-    }
+                     const ReducerArgs *gropuByReducerArgs,
+                     RangeArgs *args) {
     Sample sample;
-    AbstractSampleIterator *iterator =
-        MultiSeriesCreateAggDupSampleIterator(series, n_series, args, reverse, true, &dp);
+    AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
+        series, n_series, args, false, true, gropuByReducerArgs);
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
         SeriesAddSample(dest, sample.timestamp, sample.value);
     }
@@ -1214,8 +1201,8 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               const RangeArgs *args,
                                                               bool reverse,
                                                               bool check_retention,
-                                                              DuplicatePolicy *dp) {
+                                                              const ReducerArgs *reducerArgs) {
     AbstractMultiSeriesSampleIterator *chain =
         MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
-    return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, dp);
+    return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
 }

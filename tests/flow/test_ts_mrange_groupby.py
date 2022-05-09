@@ -5,7 +5,7 @@ import pytest
 import redis
 import create_test_rdb_file
 from includes import *
-
+import statistics
 
 def test_groupby_reduce_errors():
     env = Env()
@@ -79,6 +79,58 @@ def test_groupby_reduce():
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100']])
+
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'COUNT', 1, 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, [[1, b'100']])
+
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'avg')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, [[1, b'100'], [2, b'75']])
+
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'count')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, [[1, b'1'], [2, b'2']])
+
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'range')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, [[1, b'0'], [2, b'40']])
+
+        expected_res = [[1, b'0'], [2, str(statistics.pvariance([55, 95])).encode('ascii')]]
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.p')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, expected_res)
+
+        expected_res = [[1, b'0'], [2, str(statistics.variance([55, 95])).encode('ascii')]]
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.s')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, expected_res)
+
+        expected_res = [[1, b'0'], [2, str(int(statistics.pstdev([55, 95]))).encode('ascii')]]
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.p')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, expected_res)
+
+        expected_res = [[1, b'0'], [2, str(statistics.stdev([55, 95])).encode('ascii')]]
+        actual_result = r.execute_command(
+            'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.s')
+        serie2 = actual_result[1]
+        serie2_values = serie2[2]
+        env.assertEqual(serie2_values, expected_res)
 
 def test_groupby_reduce_empty():
     env = Env()
