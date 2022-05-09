@@ -907,6 +907,42 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
     return "Unknown";
 }
 
+const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
+    switch (aggType) {
+        case TS_AGG_MIN:
+            return "min";
+        case TS_AGG_MAX:
+            return "max";
+        case TS_AGG_SUM:
+            return "sum";
+        case TS_AGG_AVG:
+            return "avg";
+        case TS_AGG_TWA:
+            return "twa";
+        case TS_AGG_STD_P:
+            return "std.p";
+        case TS_AGG_STD_S:
+            return "std.s";
+        case TS_AGG_VAR_P:
+            return "var.p";
+        case TS_AGG_VAR_S:
+            return "var.s";
+        case TS_AGG_COUNT:
+            return "count";
+        case TS_AGG_FIRST:
+            return "first";
+        case TS_AGG_LAST:
+            return "last";
+        case TS_AGG_RANGE:
+            return "range";
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+            break;
+    }
+    return "unknown";
+}
+
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
         case TS_AGG_MIN:

@@ -43,6 +43,7 @@ int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
+const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType);
 void initGlobalCompactionFunctions();
 
 #endif

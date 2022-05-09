@@ -231,7 +231,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     // todo: this is duplicated in resultset.c
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, &args->rangeArgs, args->gropuByReducerOp, args->reverse);
+    ResultSet_ApplyReducer(resultset, &args->rangeArgs, &args->gropuByReducerArgs);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     RangeArgs minimizedArgs = args->rangeArgs;
