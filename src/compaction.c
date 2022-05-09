@@ -459,19 +459,19 @@ void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
 
-    #if defined(__x86_64__)
-        if (!features) {
-            return;
-        /* remove this comment to enable avx512 
-	 } else if (features->avx512f) {
+#if defined(__x86_64__)
+    if (!features) {
+        return;
+        /* remove this comment to enable avx512
+     } else if (features->avx512f) {
             aggMax.appendValueVec = MaxAppendValuesAVX512F;
             return;
         }*/
-        } else if (features->avx2) {
-	    aggMax.appendValueVec = MaxAppendValuesAVX2;
-            return;
-        }
-    #endif // __x86_64__
+    } else if (features->avx2) {
+        aggMax.appendValueVec = MaxAppendValuesAVX2;
+        return;
+    }
+#endif // __x86_64__
     return;
 }
 
