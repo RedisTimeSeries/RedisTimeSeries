@@ -24,10 +24,11 @@ int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
 int ResultSet_ApplyReducer(TS_ResultSet *r,
                            const RangeArgs *args,
-                           MultiSeriesReduceOp reducerOp,
-                           bool reverse);
+                           const ReducerArgs *gropuByReducerArgs);
 
-int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp);
+int parseMultiSeriesReduceArgs(RedisModuleCtx *ctx,
+                               RedisModuleString *reducerstr,
+                               ReducerArgs *reducerArgs);
 
 int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name);
 
@@ -44,8 +45,7 @@ void ResultSet_Free(TS_ResultSet *r);
 int MultiSerieReduce(Series *dest,
                      Series **series,
                      size_t n_series,
-                     MultiSeriesReduceOp op,
-                     const RangeArgs *args,
-                     bool reverse);
+                     const ReducerArgs *gropuByReducerArgs,
+                     const RangeArgs *args);
 
 #endif // REDISTIMESERIES_RESULTSET_H

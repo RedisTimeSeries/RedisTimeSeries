@@ -147,7 +147,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
-        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp, data->args.reverse);
+        ResultSet_ApplyReducer(resultset, &args, &data->args.gropuByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
@@ -155,6 +155,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.endTimestamp = UINT64_MAX;
         minimizedArgs.aggregationArgs.aggregationClass = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;
 
         replyResultSet(rctx,
