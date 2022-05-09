@@ -273,6 +273,13 @@ static int parseCountArgument(RedisModuleCtx *ctx,
                               long long *count) {
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
+        int groupby_offset = RMUtil_ArgIndex("GROUPBY", argv, argc);
+        int agg_offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
+        if ((agg_offset > 0 && offset > agg_offset) ||
+            (groupby_offset > 0 && offset > groupby_offset)) {
+            // In this case the count is aggregation type
+            return TSDB_OK;
+        }
         if (offset + 1 == argc) {
             RTS_ReplyGeneralError(ctx, "TSDB: COUNT argument is missing");
             return TSDB_ERROR;
