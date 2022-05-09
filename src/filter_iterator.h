@@ -49,13 +49,15 @@ typedef struct AggregationIterator
     bool reverse;
     bool initilized;
     EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket
+    Series *series;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
-                                             bool reverse);
+                                             bool reverse,
+                                             Series *series);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
