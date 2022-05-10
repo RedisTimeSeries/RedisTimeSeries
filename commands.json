@@ -597,16 +597,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -739,16 +739,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -905,16 +905,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -1127,16 +1127,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
