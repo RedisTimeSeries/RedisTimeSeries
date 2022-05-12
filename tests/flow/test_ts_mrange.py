@@ -80,11 +80,8 @@ def test_range_by_labels():
                                             'FILTER', 'generation=x')
             assert [[1511885905, b'1']] == actual_result[0][2][:1]
             assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
-                                            'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
-                                            'COUNT', 3, 'FILTER', 'generation=x')
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION', 'COUNT', 3,
+                                            'FILTER', 'generation=x')
             assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                             'FILTER', 'generation=x')
@@ -366,3 +363,20 @@ def test_mrange_align():
         assert expected_groupby_end_result == decode_if_needed(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
                                                                   'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
                                                                   'GROUPBY', 'generation', 'REDUCE', 'max'))
+
+def test_mrange_partial_range():
+    start_ts = 0
+    samples_count = 50
+
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
+        assert r.execute_command('TS.CREATE', 'tester2{3}', 'LABELS', 'name', 'fabi')
+        _insert_data(r, 'tester1{1}', start_ts, samples_count, 5)
+        _insert_data(r, 'tester2{3}', start_ts, samples_count, 15)
+        exp = [['tester1{1}', [], [[0, '2'], [2, '2'], [4, '2'], [6, '2'], [8, '2'], [10, '1']]]]
+        res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
+        'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=bob')))
+        exp = [['tester2{3}', [], [[0, '2'], [2, '2'], [4, '2'], [6, '2'], [8, '2'], [10, '1']]]]
+        res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
+        'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=fabi')))
+        assert res == exp

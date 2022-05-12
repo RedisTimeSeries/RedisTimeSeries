@@ -210,7 +210,7 @@ def test_range_count():
         assert count_results == full_results[:10]
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, b'AGGREGATION', 'COUNT', 4)
         assert len(count_results) == 10
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == math.ceil(samples_count / 3.0)
@@ -272,6 +272,255 @@ def test_agg_avg():
         else:
             assert actual_result == [[0, b'-1.7976931348623157E308']]
 
+def test_agg_twa():
+    #https://redislabs.atlassian.net/jira/software/c/projects/PM/boards/263?modal=detail&selectedIssue=PM-1229
+    with Env().getClusterConnectionIfNeeded() as r:
+        #case 1:
+        assert r.execute_command('TS.CREATE', 'ts1')
+        assert r.execute_command('TS.ADD', 'ts1', 8, 8)
+        assert r.execute_command('TS.ADD', 'ts1', 9, 9)
+        assert r.execute_command('TS.ADD', 'ts1', 10, 10)
+        assert r.execute_command('TS.ADD', 'ts1', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts1', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts1', 23, 23)
+        wsum = (10*1.5 + 13*2.0 + 14*5 + 23*1.5)
+        avgw = (1.5 + 2.0 + 5 + 1.5)/4
+        res = (wsum/avgw)/4.0
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts1', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts1', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 2:
+        assert r.execute_command('TS.CREATE', 'ts2')
+        assert r.execute_command('TS.ADD', 'ts2', 8, 8)
+        assert r.execute_command('TS.ADD', 'ts2', 9, 9)
+        assert r.execute_command('TS.ADD', 'ts2', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts2', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts2', 23, 23)
+        wsum = (9*1 + 13*2.5 + 14*5 + 23*1.5)
+        avgw = (1 + 2.5 + 5 + 1.5)/4.0
+        res = (wsum/avgw)/4.0
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts2', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts2', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 3:
+        assert r.execute_command('TS.CREATE', 'ts3')
+        assert r.execute_command('TS.ADD', 'ts3', 8, 8)
+        assert r.execute_command('TS.ADD', 'ts3', 9, 9)
+        assert r.execute_command('TS.ADD', 'ts3', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts3', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts3', 26, 26)
+        wsum = (9*1 + 13*2.5 + 14*6.5)
+        avgw = (1 + 2.5 + 6.5)/3.0
+        res = (wsum/avgw)/3.0
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts3', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts3', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 4:
+        assert r.execute_command('TS.CREATE', 'ts4')
+        assert r.execute_command('TS.ADD', 'ts4', 8, 8)
+        assert r.execute_command('TS.ADD', 'ts4', 9, 9)
+        assert r.execute_command('TS.ADD', 'ts4', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts4', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts4', 27, 27)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts4', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts4', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 5:
+        assert r.execute_command('TS.CREATE', 'ts5')
+        assert r.execute_command('TS.ADD', 'ts5', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts5', 7, 7)
+        assert r.execute_command('TS.ADD', 'ts5', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts5', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts5', 27, 27)
+        wsum = (13*3.5 + 14*6.5)
+        avgw = (3.5 + 6.5)/2.0
+        res = (wsum/avgw)/2.0
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts5', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts5', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 6:
+        assert r.execute_command('TS.CREATE', 'ts6')
+        assert r.execute_command('TS.ADD', 'ts6', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts6', 6, 6)
+        assert r.execute_command('TS.ADD', 'ts6', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts6', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts6', 27, 27)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts6', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts6', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 7:
+        assert r.execute_command('TS.CREATE', 'ts7')
+        assert r.execute_command('TS.ADD', 'ts7', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts7', 9, 9)
+        assert r.execute_command('TS.ADD', 'ts7', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts7', 22, 22)
+        wsum = (9*1.0 + 13*6.5 + 22*2.5)
+        avgw = (1 + 6.5 + 2.5)/3.0
+        res = (wsum/avgw)/3.0
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts7', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts7', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 8:
+        assert r.execute_command('TS.CREATE', 'ts8')
+        assert r.execute_command('TS.ADD', 'ts8', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts8', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts8', 28, 28)
+        wsum = 13*10
+        avgw = 10
+        res = (wsum//avgw)//1
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 9:
+        assert r.execute_command('TS.CREATE', 'ts9')
+        assert r.execute_command('TS.ADD', 'ts9', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts9', 28, 28)
+        wsum = 13*10
+        avgw = 10
+        res = (wsum//avgw)//1
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts9', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts9', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 10:
+        assert r.execute_command('TS.CREATE', 'ts10')
+        assert r.execute_command('TS.ADD', 'ts10', 13, 13)
+        assert r.execute_command('TS.ADD', 'ts10', 21, 21)
+        wsum = (13*7.0 + 21*3.0)
+        avgw = (7.0 + 3.0)/2
+        res = (wsum/avgw)/2
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts10', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts10', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 11:
+        assert r.execute_command('TS.CREATE', 'ts11')
+        assert r.execute_command('TS.ADD', 'ts11', 17, 17)
+        assert r.execute_command('TS.ADD', 'ts11', 21, 21)
+        wsum = (17*4.0 + 21*1.0)
+        avgw = (4.0 + 1.0)/2
+        res = (wsum/avgw)/2
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts11', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts11', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 12:
+        assert r.execute_command('TS.CREATE', 'ts12')
+        assert r.execute_command('TS.ADD', 'ts12', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts12', 17, 17)
+        wsum = (17*10)
+        avgw = (10)//1
+        res = (wsum//avgw)//1
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts12', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts12', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 13:
+        assert r.execute_command('TS.CREATE', 'ts13')
+        assert r.execute_command('TS.ADD', 'ts13', 3, 3)
+        assert r.execute_command('TS.ADD', 'ts13', 17, 17)
+        wsum = (17*10)
+        avgw = (10)//1
+        res = (wsum//avgw)//1
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts13', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts13', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 14:
+        assert r.execute_command('TS.CREATE', 'ts14')
+        assert r.execute_command('TS.ADD', 'ts14', 5, 5)
+        assert r.execute_command('TS.ADD', 'ts14', 12, 12)
+        res = 12
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts14', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts14', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 15:
+        assert r.execute_command('TS.CREATE', 'ts15')
+        assert r.execute_command('TS.ADD', 'ts15', 7, 7)
+        assert r.execute_command('TS.ADD', 'ts15', 15, 15)
+        wsum = (7*1 + 15*8)
+        avgw = (1 + 8)/2
+        res = (wsum/avgw)/2
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts15', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts15', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 16:
+        assert r.execute_command('TS.CREATE', 'ts16')
+        assert r.execute_command('TS.ADD', 'ts16', 15, 15)
+        res = 15
+        expected_result = [10, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts16', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts16', 10, 19, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
+        #case 17:
+        assert r.execute_command('TS.CREATE', 'ts17')
+        assert r.execute_command('TS.ADD', 'ts17', 0, 5) == 0
+        assert r.execute_command('TS.ADD', 'ts17', 9, 12)
+        wsum = (5*4.5 + 12*5.5)
+        avgw = (4.5 + 5.5)/2
+        res = (wsum/avgw)/2
+        expected_result = [0, str(res).encode('ascii')]
+
+        actual_result = r.execute_command('TS.RANGE', 'ts17', 0, 9, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts17', 0, 9, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
 
 def test_series_ordering():
     with Env().getClusterConnectionIfNeeded() as r:
@@ -564,3 +813,61 @@ def test_aggreataion_alignment():
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
     assert expected_data == \
            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+
+def test_empty():
+    agg_size = 10
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1')
+        assert r.execute_command('TS.add', 't1', 15, 1)
+        assert r.execute_command('TS.add', 't1', 17, 4)
+        assert r.execute_command('TS.add', 't1', 51, 3)
+        assert r.execute_command('TS.add', 't1', 73, 5)
+        assert r.execute_command('TS.add', 't1', 75, 3)
+        expected_data = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+
+        expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
+
+def test_bucket_timestamp():
+    agg_size = 10
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1')
+        assert r.execute_command('TS.add', 't1', 15, 1)
+        assert r.execute_command('TS.add', 't1', 17, 4)
+        assert r.execute_command('TS.add', 't1', 51, 3)
+        assert r.execute_command('TS.add', 't1', 73, 5)
+        assert r.execute_command('TS.add', 't1', 75, 3)
+
+        expected_data = [[10, '4'], [50, '3'], [70, '5']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
+
+        expected_data = [[15, '4'], [55, '3'], [75, '5']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
+
+        expected_data = [[20, '4'], [60, '3'], [80, '5']]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
+        expected_data.reverse()
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
+
+

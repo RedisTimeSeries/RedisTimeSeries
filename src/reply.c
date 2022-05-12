@@ -47,7 +47,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
-        n = (unsigned int)min(_count - arraylen, enrichedChunk->num_samples);
+        n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
         for (size_t i = 0; i < n; ++i) {
             ReplyWithSample(
                 ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);

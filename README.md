@@ -56,7 +56,7 @@ A Redis time series comprises:
 ## Features
 - High volume inserts, low latency reads
 - Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 - Configurable maximum retention period
 - Compactions - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (name-value pairs) which will allows to query by labels
@@ -67,7 +67,7 @@ find projects that help you integrate RedisTimeSeries with other tools, includin
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
 2. [Grafana](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redis.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
-3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
+3. [Telegraf](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
 ## Memory model

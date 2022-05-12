@@ -541,7 +541,12 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
         const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
         if (upsertTimestamp >= curAggWindowStart) {
             // upsert in latest timebucket
-            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+            const int rv = SeriesCalcRange(series,
+                                           curAggWindowStart,
+                                           curAggWindowStart + ruleTimebucket - 1,
+                                           rule,
+                                           NULL,
+                                           NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
@@ -708,7 +713,12 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
         if (start_ts >= curAggWindowStart) {
             // All deletion range in latest timebucket - only update the context on the rule
-            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+            const int rv = SeriesCalcRange(series,
+                                           curAggWindowStart,
+                                           curAggWindowStart + ruleTimebucket - 1,
+                                           rule,
+                                           NULL,
+                                           NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
@@ -938,7 +948,7 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucket
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
-    rule->aggContext = rule->aggClass->createContext();
+    rule->aggContext = rule->aggClass->createContext(false);
     rule->bucketDuration = bucketDuration;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
@@ -996,27 +1006,49 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     Sample sample;
     AggregationClass *aggObject = rule->aggClass;
-    const RangeArgs args = { .startTimestamp = start_ts,
-                             .endTimestamp = end_ts,
-                             .aggregationArgs = { 0 },
-                             .filterByValueArgs = { 0 },
-                             .filterByTSArgs = { 0 } };
-
-    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
-
-    void *context = aggObject->createContext();
+    void *context = aggObject->createContext(false);
     bool _is_empty = true;
+    AbstractSampleIterator *iterator;
+    RangeArgs args = { .aggregationArgs = { 0 },
+                       .filterByValueArgs = { 0 },
+                       .filterByTSArgs = { 0 } };
+
+    if (aggObject->addBucketParams) {
+        aggObject->addBucketParams(context, start_ts, end_ts + 1);
+    }
+
+    if (aggObject->addPrevBucketLastSample && start_ts > 0) {
+        args.startTimestamp = 0, args.endTimestamp = start_ts - 1,
+        iterator = SeriesCreateSampleIterator(series, &args, true, true);
+        if (iterator->GetNext(iterator, &sample) == CR_OK) {
+            aggObject->addPrevBucketLastSample(context, sample.value, sample.timestamp);
+        }
+        iterator->Close(iterator);
+    }
+
+    args.startTimestamp = start_ts;
+    args.endTimestamp = end_ts;
+    iterator = SeriesCreateSampleIterator(series, &args, false, true);
 
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
-        aggObject->appendValue(context, sample.value);
+        aggObject->appendValue(context, sample.value, sample.timestamp);
         _is_empty = false;
+    }
+    iterator->Close(iterator);
+
+    if (aggObject->addNextBucketFirstSample) {
+        args.startTimestamp = end_ts + 1, args.endTimestamp = UINT64_MAX,
+        iterator = SeriesCreateSampleIterator(series, &args, false, true);
+        if (iterator->GetNext(iterator, &sample) == CR_OK) {
+            aggObject->addNextBucketFirstSample(context, sample.value, sample.timestamp);
+        }
+        iterator->Close(iterator);
     }
 
     if (is_empty) {
         *is_empty = _is_empty;
     }
 
-    iterator->Close(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
@@ -1121,7 +1153,10 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
-                                                            reverse);
+                                                            reverse,
+                                                            args->aggregationArgs.empty,
+                                                            args->aggregationArgs.bucketTS,
+                                                            series);
     }
 
     return chain;

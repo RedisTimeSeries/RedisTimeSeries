@@ -48,14 +48,20 @@ typedef struct AggregationIterator
     bool hasUnFinalizedContext;
     bool reverse;
     bool initilized;
+    bool empty; // should report empty buckets
+    BucketTimestamp bucketTS;
     EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket
+    Series *series;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
-                                             bool reverse);
+                                             bool reverse,
+                                             bool empty,
+                                             BucketTimestamp bucketTS,
+                                             Series *series);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
