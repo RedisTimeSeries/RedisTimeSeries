@@ -682,6 +682,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -824,6 +836,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -990,6 +1014,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },
@@ -1212,6 +1248,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },

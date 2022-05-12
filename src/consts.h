@@ -6,9 +6,13 @@
 #ifndef CONSTS_H
 #define CONSTS_H
 
+#include "redismodule.h"
+
+
 #include <sys/types.h>
 #include <stdbool.h>
-
+#include <string.h>
+#include <ctype.h>
 
   #if defined(__GNUC__)
 #define likely(x)       __builtin_expect((x),1)
@@ -53,7 +57,6 @@ typedef enum {
     TS_AGG_MAX,
     TS_AGG_SUM,
     TS_AGG_AVG,
-    TS_AGG_TWA,
     TS_AGG_COUNT,
     TS_AGG_FIRST,
     TS_AGG_LAST,
@@ -62,6 +65,7 @@ typedef enum {
     TS_AGG_STD_S,
     TS_AGG_VAR_P,
     TS_AGG_VAR_S,
+    TS_AGG_TWA,
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
@@ -113,5 +117,16 @@ typedef enum {
   x = _y;                \
   y = _x;                \
 } while(0)
+
+static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str) {
+    size_t str_len;
+    const char *rm_str_cstr = RedisModule_StringPtrLen(rm_str, &str_len);
+    char input_upper[str_len + 1];
+    for (int i = 0; i < str_len; i++) {
+        input_upper[i] = toupper(rm_str_cstr[i]);
+    }
+    input_upper[str_len] = '\0';
+    return strcmp(input_upper, str);
+}
 
 #endif

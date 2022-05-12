@@ -7,7 +7,7 @@ TS.RANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS ts...]
          [FILTER_BY_VALUE min max]
          [COUNT count] 
-         [[ALIGN value] AGGREGATION aggregator bucketDuration]
+         [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
 
 - key - Key name for time series

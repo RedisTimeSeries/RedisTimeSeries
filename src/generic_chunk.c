@@ -4,6 +4,7 @@
 #include "compressed_chunk.h"
 
 #include <ctype.h>
+#include <math.h>
 #include "rmutil/alloc.h"
 
 static const ChunkFuncs regChunk = {
@@ -55,6 +56,15 @@ static const ChunkFuncs comprChunk = {
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
 // will contain the data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
+    bool has_NAN = isnan(oldSample.value) || isnan(newSample->value);
+    if (has_NAN && policy != DP_BLOCK) {
+        // take the valid sample regardless of policy
+        if (isnan(newSample->value)) {
+            newSample->value = oldSample.value;
+        }
+        return CR_OK;
+    }
+
     switch (policy) {
         case DP_BLOCK:
             return CR_ERR;

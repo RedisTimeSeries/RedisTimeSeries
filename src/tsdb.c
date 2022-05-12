@@ -1154,6 +1154,8 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
                                                             reverse,
+                                                            args->aggregationArgs.empty,
+                                                            args->aggregationArgs.bucketTS,
                                                             series);
     }
 
