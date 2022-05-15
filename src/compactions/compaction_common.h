@@ -14,7 +14,9 @@
 #include "compaction_avx512f.h"
 
 #define CACHE_LINE_SIZE 64
+#define ALIGN_SIZE_AVX2 32
 #define VECTOR_SIZE (CACHE_LINE_SIZE/sizeof(double))
+#define VECTOR_SIZE_AVX2 (ALIGN_SIZE_AVX2/sizeof(double))
 
 #define _DOUBLE_MIN (((double)-1.0) * DBL_MAX)
 
