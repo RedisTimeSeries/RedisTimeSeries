@@ -7,7 +7,7 @@ TS.RANGE key fromTimestamp toTimestamp
          [FILTER_BY_TS ts...]
          [FILTER_BY_VALUE min max]
          [COUNT count] 
-         [[ALIGN value] AGGREGATION aggregator bucketDuration]
+         [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
 
 - key - Key name for time series
@@ -46,6 +46,7 @@ Optional parameters:
     | `std.s`    | sample standard deviation of the values             |
     | `var.p`    | population variance of the values                   |
     | `var.s`    | sample variance of the values                       |
+    | `twa`      | time-weighted average of all values                 |
   - _bucketDuration_ - duration of each bucket, in milliseconds
 
   The alignment of time buckets is 0.

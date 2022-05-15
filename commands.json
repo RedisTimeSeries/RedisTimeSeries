@@ -515,6 +515,11 @@
                         "name": "var.s",
                         "type": "pure-token",
                         "token": "VAR.S"
+                    },
+                    {
+                        "name": "twa",
+                        "type": "pure-token",
+                        "token": "TWA"
                     }
                 ]
             },
@@ -592,16 +597,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -666,12 +671,29 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -729,16 +751,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -803,12 +825,29 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -820,10 +859,6 @@
         "summary": "Query a range across multiple time series by filters in forward direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
         "arguments": [
-            {
-                "name": "key",
-                "type": "key"
-            },
             {
                 "name": "fromTimestamp",
                 "type": "integer"
@@ -894,16 +929,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -968,12 +1003,29 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },
@@ -1042,10 +1094,6 @@
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
         "arguments": [
             {
-                "name": "key",
-                "type": "key"
-            },
-            {
                 "name": "fromTimestamp",
                 "type": "integer"
             },
@@ -1115,16 +1163,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -1189,12 +1237,29 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },
