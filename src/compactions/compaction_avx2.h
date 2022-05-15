@@ -6,5 +6,9 @@
 #ifndef COMPACTION_AVX2_H
 #define COMPACTION_AVX2_H
 
+void MaxAppendValuesAVX2(void *__restrict__ context,
+                         double *__restrict__ values,
+                         size_t si,
+                         size_t ei);
 
-#endif //COMPACTION_AVX2_H
+#endif // COMPACTION_AVX2_H
