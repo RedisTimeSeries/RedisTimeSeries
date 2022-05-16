@@ -105,6 +105,7 @@ typedef struct CreateCtx
     int options;
     DuplicatePolicy duplicatePolicy;
     bool skipChunkCreation;
+    long long expiryTime;
 } CreateCtx;
 
 int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);

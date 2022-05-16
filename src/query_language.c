@@ -131,6 +131,7 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
 
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx) {
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
+    cCtx->expiryTime = TSGlobalConfig.expiryPolicy;
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx->labelsCount = 0;
     cCtx->labels = NULL;

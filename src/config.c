@@ -77,6 +77,21 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
     }
 
+    if (argc > 1 && RMUtil_ArgIndex("EXPIRY_POLICY", argv, argc) >= 0) {
+        if (RMUtil_ParseArgsAfter(
+                "EXPIRY_POLICY", argv, argc, "l", &TSGlobalConfig.expiryPolicy) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after EXPIRY_POLICY");
+            return TSDB_ERROR;
+        }
+
+        RedisModule_Log(
+            ctx, "notice", "loaded default expiry policy: %lld", TSGlobalConfig.expiryPolicy);
+        TSGlobalConfig.hasGlobalConfig = TRUE;
+    } else {
+        TSGlobalConfig.expiryPolicy = EXPIRY_TIME_DEFAULT;
+    }
+
     if (!ValidateChunkSize(ctx, Chunk_SIZE_BYTES_SECS)) {
         return TSDB_ERROR;
     }

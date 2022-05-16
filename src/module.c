@@ -432,6 +432,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }
         rule->startCurrentTimeBucket = currentTimestamp;
+
+        if(TSGlobalConfig.expiryPolicy > 0) { 
+            RedisModule_SetExpire(key, TSGlobalConfig.expiryPolicy);
+        }
+
         RedisModule_CloseKey(key);
     }
     rule->aggClass->appendValue(rule->aggContext, value, timestamp);
@@ -517,6 +522,11 @@ static inline int add(RedisModuleCtx *ctx,
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
     } else {
+
+        if(TSGlobalConfig.expiryPolicy > 0) { 
+            RedisModule_SetExpire(key, TSGlobalConfig.expiryPolicy);
+        }
+
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
@@ -595,12 +605,17 @@ int CreateTsKey(RedisModuleCtx *ctx,
     }
 
     RedisModule_RetainString(ctx, keyName);
+
     *series = NewSeries(keyName, cCtx);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
 
     IndexMetric(keyName, (*series)->labels, (*series)->labelsCount);
+
+    if(cCtx->expiryTime > 0) {
+        RedisModule_SetExpire(*key, cCtx->expiryTime);
+    }
 
     return TSDB_OK;
 }

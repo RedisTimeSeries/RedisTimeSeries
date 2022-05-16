@@ -21,6 +21,7 @@ typedef struct
     int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
     long long numThreads; // number of threads used by libMR
+    long long expiryPolicy;
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
