@@ -11,6 +11,7 @@
 #include "rmutil/alloc.h"
 #include "compactions/compaction_common.h"
 #include "compactions/compaction_avx512f.h"
+#include "compactions/compaction_avx2.h"
 #include "utils/arch_features.h"
 
 #include <ctype.h>
@@ -64,6 +65,14 @@ typedef struct StdContext
     double sum_2; // sum of (values^2)
     u_int64_t cnt;
 } StdContext;
+
+void finalize_empty_with_NAN(double *value) {
+    *value = NAN;
+}
+
+void finalize_empty_with_ZERO(double *value) {
+    *value = 0;
+}
 
 void *SingleValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
@@ -512,6 +521,7 @@ static AggregationClass waggAvg = { .createContext = TwaCreateContext,
                                     .appendValue = TwaAddValue,
                                     .freeContext = rm_free,
                                     .finalize = TwaFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = TwaWriteContext,
                                     .readContext = TwaReadContext,
                                     .addBucketParams = TwaAddBucketParams,
@@ -525,6 +535,7 @@ static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = AvgFinalize,
+                                   .finalizeEmpty = finalize_empty_with_NAN,
                                    .writeContext = AvgWriteContext,
                                    .readContext = AvgReadContext,
                                    .addBucketParams = NULL,
@@ -538,6 +549,7 @@ static AggregationClass aggStdP = { .createContext = StdCreateContext,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = StdPopulationFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
                                     .addBucketParams = NULL,
@@ -551,6 +563,7 @@ static AggregationClass aggStdS = { .createContext = StdCreateContext,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = StdSamplesFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
                                     .addBucketParams = NULL,
@@ -564,6 +577,7 @@ static AggregationClass aggVarP = { .createContext = StdCreateContext,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = VarPopulationFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
                                     .addBucketParams = NULL,
@@ -577,6 +591,7 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = VarSamplesFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
                                     .addBucketParams = NULL,
@@ -691,6 +706,7 @@ AggregationClass aggMax = { .createContext = MaxMinCreateContext,
                             .appendValueVec = NULL, /* determined on run time */
                             .freeContext = rm_free,
                             .finalize = MaxFinalize,
+                            .finalizeEmpty = finalize_empty_with_NAN,
                             .writeContext = MaxMinWriteContext,
                             .readContext = MaxMinReadContext,
                             .addBucketParams = NULL,
@@ -704,6 +720,7 @@ static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = MinFinalize,
+                                   .finalizeEmpty = finalize_empty_with_NAN,
                                    .writeContext = MaxMinWriteContext,
                                    .readContext = MaxMinReadContext,
                                    .addBucketParams = NULL,
@@ -717,6 +734,7 @@ static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = SingleValueFinalize,
+                                   .finalizeEmpty = finalize_empty_with_ZERO,
                                    .writeContext = SingleValueWriteContext,
                                    .readContext = SingleValueReadContext,
                                    .addBucketParams = NULL,
@@ -730,6 +748,7 @@ static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = CountFinalize,
+                                     .finalizeEmpty = finalize_empty_with_ZERO,
                                      .writeContext = SingleValueWriteContext,
                                      .readContext = SingleValueReadContext,
                                      .addBucketParams = NULL,
@@ -743,6 +762,7 @@ static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = SingleValueFinalize,
+                                     .finalizeEmpty = finalize_empty_with_NAN,
                                      .writeContext = SingleValueWriteContext,
                                      .readContext = SingleValueReadContext,
                                      .addBucketParams = NULL,
@@ -756,6 +776,7 @@ static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = SingleValueFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = SingleValueWriteContext,
                                     .readContext = SingleValueReadContext,
                                     .addBucketParams = NULL,
@@ -769,6 +790,7 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = RangeFinalize,
+                                     .finalizeEmpty = finalize_empty_with_NAN,
                                      .writeContext = MaxMinWriteContext,
                                      .readContext = MaxMinReadContext,
                                      .addBucketParams = NULL,
@@ -780,16 +802,20 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
-    /* remove this comment to enable avx512
-    #if defined(__x86_64__)
-        if (!features) {
-            return;
-        } else if (features->avx512f) {
+
+#if defined(__x86_64__)
+    if (!features) {
+        return;
+        /* remove this comment to enable avx512
+     } else if (features->avx512f) {
             aggMax.appendValueVec = MaxAppendValuesAVX512F;
             return;
-        }
-    #endif // __x86_64__
-    */
+        }*/
+    } else if (features->avx2) {
+        aggMax.appendValueVec = MaxAppendValuesAVX2;
+        return;
+    }
+#endif // __x86_64__
     return;
 }
 
@@ -840,8 +866,6 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_VAR_P;
         } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
             result = TS_AGG_VAR_S;
-        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
-            result = TS_AGG_VAR_S;
         }
     }
     return result;
@@ -881,6 +905,42 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             break;
     }
     return "Unknown";
+}
+
+const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
+    switch (aggType) {
+        case TS_AGG_MIN:
+            return "min";
+        case TS_AGG_MAX:
+            return "max";
+        case TS_AGG_SUM:
+            return "sum";
+        case TS_AGG_AVG:
+            return "avg";
+        case TS_AGG_TWA:
+            return "twa";
+        case TS_AGG_STD_P:
+            return "std.p";
+        case TS_AGG_STD_S:
+            return "std.s";
+        case TS_AGG_VAR_P:
+            return "var.p";
+        case TS_AGG_VAR_S:
+            return "var.s";
+        case TS_AGG_COUNT:
+            return "count";
+        case TS_AGG_FIRST:
+            return "first";
+        case TS_AGG_LAST:
+            return "last";
+        case TS_AGG_RANGE:
+            return "range";
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+            break;
+    }
+    return "unknown";
 }
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {

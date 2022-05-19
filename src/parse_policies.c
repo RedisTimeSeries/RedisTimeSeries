@@ -39,13 +39,11 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *token;
     char *token_iter_ptr;
     char agg_type[20];
+    rule->timestampAlignment = 0; // the default alignment is 0
 
     token = strtok_r(policy, ":", &token_iter_ptr);
-    for (int i = 0; i < 3; i++) {
-        if (token == NULL) {
-            return FALSE;
-        }
-
+    int i = 0;
+    while (token) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
         } else if (i == 1) { // the 2nd param is the bucket
@@ -56,11 +54,19 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
             if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec) == FALSE) {
                 return FALSE;
             }
+        } else if (i == 3) {
+            if (parse_string_to_millisecs(token, &rule->timestampAlignment) == FALSE) {
+                return FALSE;
+            }
         } else {
             return FALSE;
         }
 
+        i++;
         token = strtok_r(NULL, ":", &token_iter_ptr);
+    }
+    if (i < 3) {
+        return FALSE;
     }
     int agg_type_index = StringAggTypeToEnum(agg_type);
     if (agg_type_index == TS_AGG_INVALID) {

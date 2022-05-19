@@ -8,7 +8,7 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
-          [[ALIGN value] AGGREGATION aggregator bucketDuration]
+          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
           FILTER filter..
           [GROUPBY label REDUCE reducer]
 ```
@@ -79,11 +79,18 @@ Optional parameters:
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
     - _label_ - label name to group series by.  A new series for each value will be produced.
     - _reducer_ - Reducer type used to aggregate series that share the same label value. One of the following:
-      | reducer | description                        |
-      | ------- | ---------------------------------- |
-      | `sum`   | per label value: sum of all values |
-      | `min`   | per label value: minimum value     |
-      | `max`   | per label value: maximum value     |
+      | reducer | description                                                          |
+      | ------- | -------------------------------------------------------------------- |
+      | `avg`   | per label value: arithmetic mean of all values                       |
+      | `sum`   | per label value: sum of all values                                   |
+      | `min`   | per label value: minimum value                                       |
+      | `max`   | per label value: maximum value                                       |
+      | `range` | per label value: difference between the highest and the lowest value |
+      | `count` | per label value: number of values                                    |
+      | `std.p` | per label value: population standard deviation of the values         |
+      | `std.s` | per label value: sample standard deviation of the values             |
+      | `var.p` | per label value: population variance of the values                   |
+      | `var.s` | per label value: sample variance of the values                       |
     - **Note:** The produced time series will be named `<label>=<groupbyvalue>`
     - **Note:** The produced time series will contain 2 labels with the following label array structure:
          - `__reducer__` : the reducer used

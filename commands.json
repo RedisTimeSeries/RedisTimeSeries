@@ -526,6 +526,11 @@
             {
                 "name": "bucketDuration",
                 "type": "integer"
+            },
+            {
+                "name": "alignTimestamp",
+                "type": "integer",
+                "optional": true
             }
         ],
         "since": "1.0.0",
@@ -597,16 +602,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -682,6 +687,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -739,16 +756,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -824,6 +841,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             }
@@ -905,16 +934,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -990,6 +1019,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },
@@ -1127,16 +1168,16 @@
                 "optional": true
             },
             {
-                "token": "ALIGN",
-                "name": "value",
-                "type": "integer",
-                "optional": true
-            },
-            {
                 "name": "aggregation",
                 "type": "block",
                 "optional": true,
                 "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
                     {
                         "type": "oneof",
                         "token": "AGGREGATION",
@@ -1212,6 +1253,18 @@
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true
                     }
                 ]
             },

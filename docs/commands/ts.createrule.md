@@ -3,7 +3,7 @@
 Create a compaction rule.
 
 ```sql
-TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
 ```
 
 - _sourceKey_ - Key name for source time series
@@ -28,6 +28,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
     | `var.s`    | sample variance of the values                       |
     | `twa`      | time-weighted average of all values                 |
   - _bucketDuration_ - duration of each bucket, in milliseconds
+  - _alignTimestamp_ - alignment of the compacted buckets start times
 
   The alignment of time buckets is 0.
 

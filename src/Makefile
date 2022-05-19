@@ -184,11 +184,16 @@ _SOURCES=\
 	series_iterator.c \
 	utils/arch_features.c \
 	sample_iterator.c \
-	enriched_chunk.c
+	enriched_chunk.c \
+	utils/heap.c \
+	multiseries_sample_iterator.c \
+	multiseries_agg_dup_sample_iterator.c
+
 
 ifeq ($(ARCH), x86_64)
 _SOURCES_AVX512=compactions/compaction_avx512f.c
-_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512)
+_SOURCES_AVX2=compactions/compaction_avx2.c
+_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512) $(_SOURCES_AVX2)
 endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
@@ -326,11 +331,16 @@ endif
 
 
 AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
-REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS),$(OBJECTS))
+AVX2_OBJECTS=$(filter %avx2.o,$(OBJECTS))
+REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS) $(AVX2_OBJECTS),$(OBJECTS))
 
 $(AVX512F_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
+
+$(AVX2_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx2 -c $< -o $@
 
 $(REGULAR_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
 	@echo Compiling $<...

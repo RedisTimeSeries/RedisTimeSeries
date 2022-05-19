@@ -35,6 +35,7 @@ typedef struct AggregationClass
     void (*getLastSample)(void *contextPtr,
                           Sample *sample); // Returns the last sample appended to the context
     void (*finalize)(void *context, double *value);
+    void (*finalizeEmpty)(double *value); // assigns empty value to value
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
@@ -42,6 +43,7 @@ int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
+const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType);
 void initGlobalCompactionFunctions();
 
 #endif
