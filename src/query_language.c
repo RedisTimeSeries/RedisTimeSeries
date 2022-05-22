@@ -375,24 +375,29 @@ static int parseCountArgument(RedisModuleCtx *ctx,
                               long long *count) {
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
-        int groupby_offset = RMUtil_ArgIndex("GROUPBY", argv, argc);
+        int reduce_offset = RMUtil_ArgIndex("REDUCE", argv, argc);
         int agg_offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
-        if ((agg_offset > 0 && offset > agg_offset) ||
-            (groupby_offset > 0 && offset > groupby_offset)) {
-            // In this case the count is aggregation type
-            return TSDB_OK;
+        if (agg_offset > 0 && offset == agg_offset + 1) {
+            offset = RMUtil_ArgIndex("COUNT", argv + agg_offset + 2, argc - agg_offset - 2);
+            if (offset < 0) {
+                // In this case the count was aggregation type
+                return TSDB_OK;
+            }
+            offset += agg_offset + 2;
         }
+
+        if (reduce_offset > 0 && offset == reduce_offset + 1) {
+            offset = RMUtil_ArgIndex("COUNT", argv + reduce_offset + 2, argc - reduce_offset - 2);
+            if (offset < 0) {
+                // In this case the count was REDUCE type
+                return TSDB_OK;
+            }
+            offset += reduce_offset + 2;
+        }
+
         if (offset + 1 == argc) {
             RTS_ReplyGeneralError(ctx, "TSDB: COUNT argument is missing");
             return TSDB_ERROR;
-        }
-        if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
-            int second_offset =
-                offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset || second_offset + 1 >= argc) {
-                return TSDB_OK;
-            }
-            offset = second_offset;
         }
         if (RedisModule_StringToLongLong(argv[offset + 1], count) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse COUNT");
