@@ -113,9 +113,10 @@ CC_FLAGS = \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
-	-DREDISMODULE_EXPERIMENTAL_API
+	-DREDISMODULE_EXPERIMENTAL_API \
+	-g -ggdb
 
-LD_FLAGS += 
+LD_FLAGS += -g -ggdb
 LD_LIBS += \
 	  $(LIBMR) \
 	  $(FAST_DOUBLE_PARSER_C) \
@@ -137,11 +138,11 @@ DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
 
 ifeq ($(PROFILE),1)
-CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+CC_FLAGS += -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0 -DDEBUG -D_DEBUG
+CC_FLAGS += -O0 -DDEBUG -D_DEBUG
 LD_FLAGS += -g
 
 ifeq ($(VALGRIND),1)
