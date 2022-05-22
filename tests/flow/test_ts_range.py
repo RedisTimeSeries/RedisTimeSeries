@@ -210,6 +210,8 @@ def test_range_count():
         assert count_results == full_results[:10]
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
         assert len(count_results) == 10
+        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
+        assert len(count_results) == 10
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, b'AGGREGATION', 'COUNT', 4)
         assert len(count_results) == 10
         count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 3)
