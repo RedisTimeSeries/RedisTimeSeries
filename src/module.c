@@ -186,6 +186,15 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            return REDISMODULE_OK;
+        }
         TSDB_queryindex_RG(ctx, queries);
         QueryPredicateList_Free(queries);
     } else {
@@ -330,6 +339,15 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            return REDISMODULE_OK;
+        }
         return TSDB_mrange_RG(ctx, argv, argc, false);
     }
 
@@ -338,6 +356,15 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            return REDISMODULE_OK;
+        }
         return TSDB_mrange_RG(ctx, argv, argc, true);
     }
     return TSDB_generic_mrange(ctx, argv, argc, true);
@@ -900,6 +927,15 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            return REDISMODULE_OK;
+        }
         return TSDB_mget_RG(ctx, argv, argc);
     }
 

@@ -25,6 +25,22 @@ def test_mrange_with_expire_cmd():
             assert(len(reply)>=0 and len(reply)<=3)
         assert r.execute_command("PING")
 
+def testWithMultiExec(env):
+    env = Env()
+    if env.shardsCount < 2:
+        env.skip()
+    if(not env.isCluster):
+        env.skip()
+    with env.getConnection() as r:
+        r.execute_command('multi', )
+        r.execute_command('TS.mrange', '-', '+', 'FILTER', 'name=bob')
+        if(is_rlec()):
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('exec')
+        else:
+            res = r.execute_command('exec')
+            assert type(res[0]) is redis.ResponseError
+
 def test_mrange_expire_issue549():
     Env().skipOnDebugger()
     env = Env()
