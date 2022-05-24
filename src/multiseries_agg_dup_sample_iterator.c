@@ -54,7 +54,9 @@ ChunkResult MultiSeriesAggDupSampleIterator_GetNext(
 
 void MultiSeriesAggDupSampleIterator_Close(
     struct AbstractMultiSeriesAggDupSampleIterator *iterator) {
+    MultiSeriesAggDupSampleIterator *self = (MultiSeriesAggDupSampleIterator *)iterator;
     iterator->input->Close(iterator->input);
+    self->aggregation->freeContext(self->aggregationContext);
     free(iterator);
 }
 

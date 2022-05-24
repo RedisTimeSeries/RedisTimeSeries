@@ -34,6 +34,7 @@ void MultiSeriesSampleIterator_Close(struct AbstractMultiSeriesSampleIterator *i
     for (size_t i = 0; i < iter->n_series; ++i) {
         iter->base.input[i]->Close(iter->base.input[i]);
     }
+    free(iter->base.input);
     MSSample *sample;
     while ((sample = heap_peek(iter->samples_heap))) {
         free(sample);
@@ -75,6 +76,8 @@ MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator 
         if (sample_iter->GetNext(sample_iter, &sample->sample) == CR_OK) {
             sample->iter = sample_iter;
             assert(heap_offer(&newIter->samples_heap, sample) == 0);
+        } else {
+            free(sample);
         }
     }
     return newIter;
