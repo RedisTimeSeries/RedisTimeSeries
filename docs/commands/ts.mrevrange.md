@@ -106,6 +106,8 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
 - timestamp-value pairs for all samples/aggregations matching the range
 
+Note: MREVRANGE command can't be part of transaction when running on Redis cluster.
+
 #### Examples
 
 ##### Query by Filters Example
