@@ -18,6 +18,7 @@ TS.QUERYINDEX filter...
 
   Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
+Note: QUERYINDEX command can't be part of transaction when running on Redis cluster.
 
 ### Query index example
 ```sql
