@@ -519,7 +519,8 @@
                     {
                         "name": "twa",
                         "type": "pure-token",
-                        "token": "TWA"
+                        "token": "TWA",
+                        "since": "1.8.0"
                     }
                 ]
             },
@@ -530,7 +531,8 @@
             {
                 "name": "alignTimestamp",
                 "type": "integer",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             }
         ],
         "since": "1.0.0",
@@ -680,7 +682,8 @@
                             {
                                 "name": "twa",
                                 "type": "pure-token",
-                                "token": "TWA"
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
@@ -692,13 +695,15 @@
                         "name": "buckettimestamp",
                         "type": "pure-token",
                         "token": "BUCKETTIMESTAMP",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             }
@@ -834,7 +839,8 @@
                             {
                                 "name": "twa",
                                 "type": "pure-token",
-                                "token": "TWA"
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
@@ -846,13 +852,15 @@
                         "name": "buckettimestamp",
                         "type": "pure-token",
                         "token": "BUCKETTIMESTAMP",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             }
@@ -1012,7 +1020,8 @@
                             {
                                 "name": "twa",
                                 "type": "pure-token",
-                                "token": "TWA"
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
@@ -1024,13 +1033,15 @@
                         "name": "buckettimestamp",
                         "type": "pure-token",
                         "token": "BUCKETTIMESTAMP",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             },
@@ -1246,7 +1257,8 @@
                             {
                                 "name": "twa",
                                 "type": "pure-token",
-                                "token": "TWA"
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
@@ -1258,13 +1270,15 @@
                         "name": "buckettimestamp",
                         "type": "pure-token",
                         "token": "BUCKETTIMESTAMP",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             },
