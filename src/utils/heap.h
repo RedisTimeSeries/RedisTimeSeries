@@ -73,6 +73,15 @@ void heap_replace(heap_t *h, void *item);
 void *heap_peek(const heap_t *hp);
 
 /**
+ * Free all items.
+ *
+ * NOTE:
+ *  Doesn't free the heap itself.
+ *  The size of the heap will be set to 0.
+ * */
+void heap_clear_free_items(heap_t *h, void (*free_func)(void *));
+
+/**
  * Clear all items
  *
  * NOTE:
