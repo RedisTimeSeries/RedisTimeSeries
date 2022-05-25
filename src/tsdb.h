@@ -27,6 +27,8 @@ typedef struct CompactionRule
                                         // matter the alignment
 } CompactionRule;
 
+typedef struct Compaction Compaction; // forward declaration
+
 typedef struct Series
 {
     RedisModuleDict *chunks;
@@ -35,6 +37,7 @@ typedef struct Series
     long long chunkSizeBytes;
     short options;
     CompactionRule *rules;
+    Compaction *compactions; // array of compactions
     timestamp_t lastTimestamp;
     double lastValue;
     Label *labels;
@@ -45,6 +48,22 @@ typedef struct Series
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
 } Series;
+
+struct Compaction
+{
+    Series series;
+    timestamp_t bucketDuration;
+    timestamp_t timestampAlignment;
+    AggregationClass *aggClass;
+    TS_AGG_TYPES_T aggType;
+    void *aggContext;
+    struct CompactionRule *nextRule;
+    timestamp_t startCurrentTimeBucket; // Beware that the first bucket is alway starting in 0 no
+                                        // matter the alignment
+    struct CompactionRule rule;
+    uint64_t retentionTime; // needs to be multiple of bucketDuration
+    char *id;               // compaction id, used by the user for referencing the compaction
+};
 
 // process C's modulo result to translate from a negative modulo to a positive
 #define modulo(x, N) ((x % N + N) % N)

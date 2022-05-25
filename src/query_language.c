@@ -129,6 +129,11 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+int parseCompactArgs(RedisModuleCtx *ctx,
+                     RedisModuleString **argv,
+                     int argc,
+                     DuplicatePolicy *policy, ) {}
+
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx) {
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
