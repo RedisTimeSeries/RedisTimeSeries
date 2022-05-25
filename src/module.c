@@ -516,20 +516,25 @@ static inline int add(RedisModuleCtx *ctx,
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
     const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
-    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL))
-        return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
+    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL)) {
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
+        return REDISMODULE_ERR;
+    }
 
     long long timestampValue;
     if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
-        if (RMUtil_StringEqualsC(timestampStr, "*"))
+        if (RMUtil_StringEqualsC(timestampStr, "*")) {
             timestampValue = RedisModule_Milliseconds();
-        else
-            return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+            return REDISMODULE_ERR;
+        }
     }
 
     if (timestampValue < 0) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+        return REDISMODULE_ERR;
     }
     api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
@@ -546,7 +551,8 @@ static inline int add(RedisModuleCtx *ctx,
         CreateTsKey(ctx, keyName, &cCtx, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
+        RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
+        return REDISMODULE_ERR;
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
@@ -609,7 +615,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *valueStr = argv[3];
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
-    RedisModule_ReplicateVerbatim(ctx);
+    if (result == REDISMODULE_OK) {
+        RedisModule_ReplicateVerbatim(ctx);
+    }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
 
