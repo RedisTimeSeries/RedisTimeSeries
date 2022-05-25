@@ -35,10 +35,7 @@ void MultiSeriesSampleIterator_Close(struct AbstractMultiSeriesSampleIterator *i
         iter->base.input[i]->Close(iter->base.input[i]);
     }
     free(iter->base.input);
-    MSSample *sample;
-    while ((sample = heap_peek(iter->samples_heap))) {
-        free(sample);
-    }
+    heap_clear_free_items(iter->samples_heap, free);
     heap_free(iter->samples_heap);
     free(iterator);
 }
