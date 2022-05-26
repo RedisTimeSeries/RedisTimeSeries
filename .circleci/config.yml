@@ -128,7 +128,7 @@ commands:
         default: ""
       test_params:
         type: string
-        default: ""
+        default: "AOF=0 SLAVES=0 AOF_SLAVES=1"
     steps:
       - early-returns
       - checkout-all
