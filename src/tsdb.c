@@ -567,6 +567,17 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     }
 }
 
+// update chunk in dictionary if first timestamp changed
+static inline update_chunk_in_dict(RedisModuleDict *chunks,
+                                   Chunk_t *chunk,
+                                   timestamp_t chunkOrigFirstTS,
+                                   timestamp_t chunkFirstTSAfterOp) {
+    if (dictOperator(chunks, NULL, chunkOrigFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
+        dictOperator(chunks, NULL, 0, DICT_OP_DEL); // The first chunk is a special case
+    }
+    dictOperator(chunks, chunk, chunkFirstTSAfterOp, DICT_OP_SET);
+}
+
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
@@ -638,11 +649,7 @@ int SeriesUpsertSample(Series *series,
         }
         timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
         if (chunkFirstTSAfterOp != chunkFirstTS) {
-            // update chunk in dictionary if first timestamp changed
-            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
-                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
-            }
-            dictOperator(series->chunks, uCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
+            update_chunk_in_dict(series->chunks, uCtx.inChunk, chunkFirstTS, chunkFirstTSAfterOp);
         }
 
         upsertCompaction(series, &uCtx);
@@ -837,7 +844,13 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
                                currentChunk != series->lastChunk;
 
         if (!ts_delCondition) {
+            timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(currentChunk);
             deletedSamples += funcs->DelRange(currentChunk, start_ts, end_ts);
+            timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(currentChunk);
+            if (chunkFirstTSAfterOp != chunkFirstTS) {
+                update_chunk_in_dict(
+                    series->chunks, currentChunk, chunkFirstTS, chunkFirstTSAfterOp);
+            }
             continue;
         }
 

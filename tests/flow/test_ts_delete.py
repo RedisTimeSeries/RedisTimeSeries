@@ -3,7 +3,7 @@ import pytest
 import redis
 from test_helper_classes import _get_ts_info
 from includes import *
-
+import random
 
 def test_ts_del_uncompressed():
     # total samples = 101
@@ -22,6 +22,28 @@ def test_ts_del_uncompressed():
         r.execute_command('ts.del', 'test_key', 0, 100)
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         assert len(res) == 0
+
+#bug https://github.com/RedisTimeSeries/RedisTimeSeries/issues/1176
+def test_ts_del_first_sample_in_chunk():
+    _from = 1
+    _to = 300
+    del_from = 101
+    del_to = 258
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 't1{1}', 'uncompressed', "DUPLICATE_POLICY", "LAST")
+        for i in range(_from, _to + 1):
+            r.execute_command("ts.add", 't1{1}', i, random.uniform(0, 1))
+        range1 = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert r.execute_command("ts.del", 't1{1}', del_from, del_to)
+        add_str = []
+        add_str.append("ts.madd")
+        for i in range(_from, del_to + 1):
+            add_str.append("t1{1}")
+            add_str.append(str(i))
+            add_str.append(str(random.uniform(0, 1)))
+        assert r.execute_command(*add_str)
+        range2 = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert len(range2) == len(range1)
 
 
 def test_ts_del_uncompressed_in_range():
