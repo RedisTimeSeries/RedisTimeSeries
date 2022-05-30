@@ -53,7 +53,10 @@ ChunkResult MultiSeriesSampleIterator_GetNext(struct AbstractMultiSeriesSampleIt
     *sample = hsample->sample;
     if (hsample->iter->GetNext(hsample->iter, &hsample->sample) == CR_OK) {
         heap_offer(&iter->samples_heap, hsample);
+    } else { // the series is exhausted free it's sample
+        free(hsample);
     }
+
     return CR_OK;
 }
 
