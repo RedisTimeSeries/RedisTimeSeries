@@ -566,10 +566,10 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
 }
 
 // update chunk in dictionary if first timestamp changed
-static inline update_chunk_in_dict(RedisModuleDict *chunks,
-                                   Chunk_t *chunk,
-                                   timestamp_t chunkOrigFirstTS,
-                                   timestamp_t chunkFirstTSAfterOp) {
+static inline void update_chunk_in_dict(RedisModuleDict *chunks,
+                                        Chunk_t *chunk,
+                                        timestamp_t chunkOrigFirstTS,
+                                        timestamp_t chunkFirstTSAfterOp) {
     if (dictOperator(chunks, NULL, chunkOrigFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
         dictOperator(chunks, NULL, 0, DICT_OP_DEL); // The first chunk is a special case
     }
@@ -835,6 +835,11 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             if (chunkFirstTSAfterOp != chunkFirstTS) {
                 update_chunk_in_dict(
                     series->chunks, currentChunk, chunkFirstTS, chunkFirstTSAfterOp);
+                // reseek iterator since we modified the dict,
+                // go to first element that is bigger than current key
+                timestamp_t rax_key;
+                seriesEncodeTimestamp(&rax_key, chunkFirstTSAfterOp);
+                RedisModule_DictIteratorReseekC(iter, ">", &rax_key, sizeof(rax_key));
             }
             continue;
         }
