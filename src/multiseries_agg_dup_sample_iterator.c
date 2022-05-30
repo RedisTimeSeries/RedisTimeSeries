@@ -73,7 +73,6 @@ MultiSeriesAggDupSampleIterator *MultiSeriesAggDupSampleIterator_New(
     newIter->has_next_sample = true;
     if (res != CR_OK) {
         assert(res != CR_ERR); // we don't handle errors in this function currently
-        assert(!isnan(newIter->next_sample.value));
         newIter->has_next_sample = false;
     }
     return newIter;
