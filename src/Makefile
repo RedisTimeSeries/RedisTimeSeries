@@ -188,7 +188,8 @@ _SOURCES=\
 	enriched_chunk.c \
 	utils/heap.c \
 	multiseries_sample_iterator.c \
-	multiseries_agg_dup_sample_iterator.c
+	multiseries_agg_dup_sample_iterator.c \
+	utils/blocked_client.c
 
 
 ifeq ($(ARCH), x86_64)
