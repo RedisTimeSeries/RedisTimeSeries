@@ -8,6 +8,7 @@
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
+#include "utils/blocked_client.h"
 
 #include "rmutil/alloc.h"
 
@@ -75,7 +76,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     }
 
 __done:
-    RedisModule_UnblockClient(bc, rctx);
+    RTS_UnblockClient(bc, rctx);
 }
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
@@ -174,7 +175,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 __done:
     MRangeArgs_Free(&data->args);
     free(data);
-    RedisModule_UnblockClient(bc, rctx);
+    RTS_UnblockClient(bc, rctx);
 }
 
 int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -212,7 +213,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
@@ -259,7 +260,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
@@ -297,7 +298,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
