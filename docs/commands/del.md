@@ -17,7 +17,7 @@ DEL key...
 
 DEL complexity is O(N) where N is the number of keys that will be removed.
 
-#### Delete Serie Example
+#### Delete Series Example
 
 ```sql
 DEL temperature:2:32

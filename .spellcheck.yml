@@ -1,0 +1,12 @@
+files:
+  - docs/**/*.md
+no-suggestions: true
+dictionaries:
+  - wordlist  
+quiet: true
+plugins:
+  - spell
+  - indefinite-article
+  - syntax-mentions
+  - frontmatter
+  - syntax-urls
