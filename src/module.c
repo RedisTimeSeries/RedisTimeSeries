@@ -1188,6 +1188,15 @@ void ReplicaBackupCallback(RedisModuleCtx *ctx,
     }
 }
 
+bool CheckVersionForBlockedClientMeasureTime() {
+    // Minimal versions: 6.2.0
+    if (RTS_currVersion.redisMajorVersion >= 6 && RTS_currVersion.redisMinorVersion >= 2) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 int CheckVersionForShortRead() {
     // Minimal versions: 6.2.5
     // (6.0.15 is not supporting the required event notification for modules)
