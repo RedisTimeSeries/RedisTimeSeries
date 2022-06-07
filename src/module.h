@@ -20,4 +20,6 @@ int CreateTsKey(RedisModuleCtx *ctx,
                 Series **series,
                 RedisModuleKey **key);
 
+bool CheckVersionForBlockedClientMeasureTime();
+
 #endif
