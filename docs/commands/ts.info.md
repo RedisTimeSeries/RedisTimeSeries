@@ -47,6 +47,7 @@ Each item (per chunk) will contain:
 #### `TS.INFO` Example
 
 ```sql
+
 TS.INFO temperature:2:32
  1) totalSamples
  2) (integer) 100
@@ -74,18 +75,24 @@ TS.INFO temperature:2:32
 21) sourceKey
 22) (nil)
 23) rules
-24) (empty list or set)
+24) 1) 1) "t1_MAX_1000_500"
+       2) (integer) 1000
+       3) "MAX"
+       4) (integer) 500
 ```
 
 With `DEBUG`:
 ```
 ...
 23) rules
-24) (empty list or set)
+24) 1) 1) "t1_MAX_1000_500"
+       2) (integer) 1000
+       3) "MAX"
+       4) (integer) 500
 25) keySelfName
 26) "temperature:2:32"
-25) Chunks
-26) 1)  1) startTimestamp
+27) Chunks
+28) 1)  1) startTimestamp
         2) (integer) 1548149180
         3) endTimestamp
         4) (integer) 1548149279
