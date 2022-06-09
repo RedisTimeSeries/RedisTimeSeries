@@ -912,12 +912,22 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
     for (i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
-        RedisModuleString *destKey =
-            RedisModule_CreateStringPrintf(ctx,
-                                           "%s_%s_%" PRIu64,
-                                           RedisModule_StringPtrLen(keyName, &len),
-                                           aggString,
-                                           rule->bucketDuration);
+        RedisModuleString *destKey;
+        if (rule->timestampAlignment != 0) {
+            destKey = RedisModule_CreateStringPrintf(ctx,
+                                                     "%s_%s_%" PRIu64 "_%" PRIu64,
+                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     aggString,
+                                                     rule->bucketDuration,
+                                                     rule->timestampAlignment);
+        } else {
+            destKey = RedisModule_CreateStringPrintf(ctx,
+                                                     "%s_%s_%" PRIu64,
+                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     aggString,
+                                                     rule->bucketDuration);
+        }
+
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?

@@ -105,10 +105,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CompactionRule *rule = series->rules;
     int ruleCount = 0;
     while (rule != NULL) {
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, 4);
         RedisModule_ReplyWithString(ctx, rule->destKey);
         RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
+        RedisModule_ReplyWithLongLong(ctx, rule->timestampAlignment);
 
         rule = rule->nextRule;
         ruleCount++;
