@@ -53,24 +53,48 @@ Optional parameters:
 
   Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
-    | aggregator | description                                         |
-    | ---------- | --------------------------------------------------- |
-    | `avg`      | arithmetic mean of all values                       |
-    | `sum`      | sum of all values                                   |
-    | `min`      | minimum value                                       |
-    | `max`      | maximum value                                       |
-    | `range`    | difference between the highest and the lowest value |
-    | `count`    | number of values                                    |
-    | `first`    | the value with the lowest timestamp in the bucket   |
-    | `last`     | the value with the highest timestamp in the bucket  |
-    | `std.p`    | population standard deviation of the values         |
-    | `std.s`    | sample standard deviation of the values             |
-    | `var.p`    | population variance of the values                   |
-    | `var.s`    | sample variance of the values                       |
-    | `twa`      | time-weighted average of all values                 |
+    | _aggregator_ | description                                                      |
+    | ------------ | ---------------------------------------------------------------- |
+    | `avg`        | arithmetic mean of all values                                    |
+    | `sum`        | sum of all values                                                |
+    | `min`        | minimum value                                                    |
+    | `max`        | maximum value                                                    |
+    | `range`      | difference between the highest and the lowest value              |
+    | `count`      | number of values                                                 |
+    | `first`      | the value with the lowest timestamp in the bucket                |
+    | `last`       | the value with the highest timestamp in the bucket               |
+    | `std.p`      | population standard deviation of the values                      |
+    | `std.s`      | sample standard deviation of the values                          |
+    | `var.p`      | population variance of the values                                |
+    | `var.s`      | sample variance of the values                                    |
+    | `twa`        | time-weighted average of all values (since RedisTimeSeries v1.8) |
+
   - _bucketDuration_ - duration of each bucket, in milliseconds
 
-  The alignment of time buckets is 0.
+  - [BUCKETTIMESTAMP _bt_] (since RedisTimeSeries v1.8)
+
+    Controls how bucket timestamps are reported.
+
+    | _bt_         | description                                                                             |
+    | ------------ | --------------------------------------------------------------------------------------- |
+    | `-` or `low` | The timestamp reported for each bucket is its start time (default)                      |
+    | `+` or `high`| The timestamp reported for each bucket is its end time                                  |
+    | `~` or `mid` | The timestamp reported for each bucket is its mid time (rounded down if not an integer) |
+
+  - [EMPTY] (since RedisTimeSeries v1.8)
+
+    When this flag is specified, aggregations are reported for empty buckets as well:
+
+    | _aggregator_         | Value reported for each empty bucket |
+    | -------------------- | ------------------------------------ |
+    | sum, count           | 0                                    |
+    | min, max, range, avg | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time - calculate the min/max/range/avg within the bucket; NaN if there is no values before or after the bucket       |
+    | first                | The last value before the bucket’s start time; NaN if there is no such value     |
+    | last                 | The first value on or after the bucket’s end time; NaN if there is no such value |
+    | std.p, std.s         | NaN                                                                              |
+    | twa                  | Based on linear interpolation or extrapolation; NaN when cannot interpolate or extrapolate |
+
+    Regardless of the values of fromTimestamp and toTimestamp, no data will be reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 
 - `GROUPBY` _label_ `REDUCE` _reducer_
 
@@ -79,18 +103,18 @@ Optional parameters:
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
     - _label_ - label name to group series by.  A new series for each value will be produced.
     - _reducer_ - Reducer type used to aggregate series that share the same label value. One of the following:
-      | reducer | description                                                          |
-      | ------- | -------------------------------------------------------------------- |
-      | `avg`   | per label value: arithmetic mean of all values                       |
-      | `sum`   | per label value: sum of all values                                   |
-      | `min`   | per label value: minimum value                                       |
-      | `max`   | per label value: maximum value                                       |
-      | `range` | per label value: difference between the highest and the lowest value |
-      | `count` | per label value: number of values                                    |
-      | `std.p` | per label value: population standard deviation of the values         |
-      | `std.s` | per label value: sample standard deviation of the values             |
-      | `var.p` | per label value: population variance of the values                   |
-      | `var.s` | per label value: sample variance of the values                       |
+      | _reducer_ | description                                                                                       |
+      | --------- | ------------------------------------------------------------------------------------------------- |
+      | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)                       |
+      | `sum`     | per label value: sum of all values                                                                |
+      | `min`     | per label value: minimum value                                                                    |
+      | `max`     | per label value: maximum value                                                                    |
+      | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+      | `count`   | per label value: number of values (since RedisTimeSeries v1.8)                                    |
+      | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8)         |
+      | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
+      | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
+      | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
     - **Note:** The produced time series will be named `<label>=<groupbyvalue>`
     - **Note:** The produced time series will contain 2 labels with the following label array structure:
          - `__reducer__` : the reducer used
