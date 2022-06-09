@@ -76,7 +76,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of several fields
 Examples:
 
 - `max:1M:1h` - Aggregate using max over one minute and retain the last hour
-- `twa:1d:0:360M` - Daily aggregating using time-weighted average [06:00 .. 06:00); no expiration
+- `twa:1d:0:360M` - Aggregate daily [06:00 .. 06:00) using time-weighted average; no expiration
 
 #### Default
 
