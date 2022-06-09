@@ -53,21 +53,21 @@ Optional parameters:
 
   Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
-    | aggregator | description                                         |
-    | ---------- | --------------------------------------------------- |
-    | `avg`      | arithmetic mean of all values                       |
-    | `sum`      | sum of all values                                   |
-    | `min`      | minimum value                                       |
-    | `max`      | maximum value                                       |
-    | `range`    | difference between the highest and the lowest value |
-    | `count`    | number of values                                    |
-    | `first`    | the value with the lowest timestamp in the bucket   |
-    | `last`     | the value with the highest timestamp in the bucket  |
-    | `std.p`    | population standard deviation of the values         |
-    | `std.s`    | sample standard deviation of the values             |
-    | `var.p`    | population variance of the values                   |
-    | `var.s`    | sample variance of the values                       |
-    | `twa`      | time-weighted average of all values                 |
+    | aggregator | description                                                      |
+    | ---------- | ---------------------------------------------------------------- |
+    | `avg`      | arithmetic mean of all values                                    |
+    | `sum`      | sum of all values                                                |
+    | `min`      | minimum value                                                    |
+    | `max`      | maximum value                                                    |
+    | `range`    | difference between the highest and the lowest value              |
+    | `count`    | number of values                                                 |
+    | `first`    | the value with the lowest timestamp in the bucket                |
+    | `last`     | the value with the highest timestamp in the bucket               |
+    | `std.p`    | population standard deviation of the values                      |
+    | `std.s`    | sample standard deviation of the values                          |
+    | `var.p`    | population variance of the values                                |
+    | `var.s`    | sample variance of the values                                    |
+    | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
   - _bucketDuration_ - duration of each bucket, in milliseconds
 
   The alignment of time buckets is 0.
