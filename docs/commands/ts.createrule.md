@@ -27,10 +27,12 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTime
     | `var.p`    | population variance of the values                                |
     | `var.s`    | sample variance of the values                                    |
     | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
-  - _bucketDuration_ - duration of each bucket, in milliseconds
-  - _alignTimestamp_ - alignment of the compacted buckets start times
+    
+  - _bucketDuration_ - Duration of each bucket, in milliseconds
 
-  The alignment of time buckets is 0.
+  - _alignTimestamp_ (since RedisTimeSeries v1.8)
+
+    Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Units: milliseconds. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours (24 * 3600 * 1000), setting _alignTimestamp_ to 6 hours after the epoch (6 * 3600 * 1000) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
 
 _destKey_ should be of a `timeseries` type, and should be created before `TS.CREATERULE` is called. 
 
