@@ -254,16 +254,6 @@ static inline void finalizeBucket(Samples *samples, size_t index, const Aggregat
     self->aggregation->resetContext(self->aggregationContext);
 }
 
-// process C's modulo result to translate from a negative modulo to a positive
-#define modulo(x, N) ((x % N + N) % N)
-
-static timestamp_t calc_ts_bucket(timestamp_t ts,
-                                  u_int64_t timedelta,
-                                  timestamp_t timestampAlignment) {
-    const int64_t timestamp_diff = ts - timestampAlignment;
-    return ts - modulo(timestamp_diff, (int64_t)timedelta);
-}
-
 // assumes num of samples > si + 1, returns -1 when no such an index
 static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
                                      timestamp_t timestamp,
@@ -385,11 +375,11 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     if (!self->initilized) {
         timestamp_t init_ts = enrichedChunk->samples.timestamps[0];
         self->aggregationLastTimestamp =
-            calc_ts_bucket(init_ts, aggregationTimeDelta, self->timestampAlignment);
+            CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
         if (aggregation->addBucketParams) {
             aggregation->addBucketParams(aggregationContext,
-                                         max(0, (int64_t)self->aggregationLastTimestamp),
+                                         BucketStartNormalize(self->aggregationLastTimestamp),
                                          self->aggregationLastTimestamp + aggregationTimeDelta);
         }
 
@@ -413,7 +403,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     size_t agg_n_samples = 0;
     void (*appendValue)(void *, double, timestamp_t) = aggregation->appendValue;
     u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
-    self->aggregationLastTimestamp = max(0, (int64_t)self->aggregationLastTimestamp);
+    self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
     int64_t si, ei;
     while (enrichedChunk) {
         // currently if the query reversed the chunk will be already revered here
@@ -438,7 +428,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                        .values[si]; // store sample cause we aggregate in place
                     assert(enrichedChunk->samples.timestamps[si] >= contextScope);
                     finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
-                    self->aggregationLastTimestamp = calc_ts_bucket(
+                    self->aggregationLastTimestamp = CalcBucketStart(
                         sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                     if (self->empty) {
                         fillEmptyBuckets(&enrichedChunk->samples,
@@ -452,7 +442,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
                     self->aggregationLastTimestamp =
-                        max(0, (int64_t)self->aggregationLastTimestamp);
+                        BucketStartNormalize(self->aggregationLastTimestamp);
 
                     // append sample and inc si cause we aggregate in place
                     appendValue(aggregationContext, sample.value, sample.timestamp);
@@ -483,7 +473,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         aggregation->getLastSample(aggregationContext, &last_sample);
                     }
                     finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
-                    self->aggregationLastTimestamp = calc_ts_bucket(
+                    self->aggregationLastTimestamp = CalcBucketStart(
                         sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
                     if (self->empty) {
                         fillEmptyBuckets(&enrichedChunk->samples,
@@ -497,7 +487,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
                     self->aggregationLastTimestamp =
-                        max(0, (int64_t)self->aggregationLastTimestamp);
+                        BucketStartNormalize(self->aggregationLastTimestamp);
                     if (aggregation->addPrevBucketLastSample) {
                         aggregation->addPrevBucketLastSample(
                             aggregationContext, last_sample.value, last_sample.timestamp);

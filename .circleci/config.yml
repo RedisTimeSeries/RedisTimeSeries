@@ -128,7 +128,7 @@ commands:
         default: ""
       test_params:
         type: string
-        default: ""
+        default: "AOF=0 SLAVES=0 AOF_SLAVES=1"
     steps:
       - early-returns
       - checkout-all
@@ -255,7 +255,7 @@ commands:
             python3 -m pip install -r ./tests/benchmarks/requirements.txt
 
       - run:
-          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >> 
+          name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
@@ -512,7 +512,7 @@ jobs:
       - benchmark-automation:
           allowed_envs: "oss-standalone"
           benchmark_glob: "tsbs-scale100*.yml"
-  
+
   performance-ci-automation-oss-cluster-query:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -575,7 +575,7 @@ jobs:
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
           benchmark_glob: "tsbs-devops-ingestion*.yml"
-  
+
   performance-ci-automation-oss-standalone-tsbs-profiler:
     docker:
       - image: redisfab/rmbuilder:6.2.5-x64-bullseye
@@ -814,7 +814,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.0", "6.2", "7.0-rc1"]
+              redis_version: ["6.0", "6.2", "7.0"]
       - performance-ci-automation-oss-cluster-query:
           context: common
       - performance-ci-automation-oss-cluster-ingestion:

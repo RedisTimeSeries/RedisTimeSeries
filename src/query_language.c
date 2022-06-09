@@ -247,13 +247,37 @@ static int _parseBucketTS(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+static int _parseAlignmentTS(RedisModuleCtx *ctx,
+                             RedisModuleString **argv,
+                             int argc,
+                             timestamp_t *alignmentTS,
+                             int AggregationOffset) {
+    *alignmentTS = 0; // the default alignment is 0
+    if (argc == 7) {
+        int alignmentTS_offset = AggregationOffset + 3;
+
+        if (parseTimestamp(argv[alignmentTS_offset], alignmentTS) != REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse alignTimestamp");
+            return TSDB_ERROR;
+        }
+
+        if ((int64_t)(*alignmentTS) < 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: alignTimestamp should be greater or equal to 0");
+            return TSDB_ERROR;
+        }
+    }
+
+    return TSDB_OK;
+}
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
                           int *agg_type,
                           bool *empty,
-                          BucketTimestamp *bucketTS) {
+                          BucketTimestamp *bucketTS,
+                          timestamp_t *alignmetTS) {
     RedisModuleString *aggTypeStr = NULL;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -304,6 +328,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             }
         }
 
+        if (alignmetTS) {
+            _parseAlignmentTS(ctx, argv, argc, alignmetTS, offset);
+        }
+
         if (bucketTS) {
             _parseBucketTS(ctx, argv, argc, bucketTS, offset);
         }
@@ -326,7 +354,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                                        &aggregationArgs.timeDelta,
                                        &agg_type,
                                        &aggregationArgs.empty,
-                                       &aggregationArgs.bucketTS);
+                                       &aggregationArgs.bucketTS,
+                                       NULL);
     if (result == TSDB_OK) {
         aggregationArgs.aggregationClass = GetAggClass(agg_type);
         if (aggregationArgs.aggregationClass == NULL) {
@@ -346,24 +375,29 @@ static int parseCountArgument(RedisModuleCtx *ctx,
                               long long *count) {
     int offset = RMUtil_ArgIndex("COUNT", argv, argc);
     if (offset > 0) {
-        int groupby_offset = RMUtil_ArgIndex("GROUPBY", argv, argc);
+        int reduce_offset = RMUtil_ArgIndex("REDUCE", argv, argc);
         int agg_offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
-        if ((agg_offset > 0 && offset > agg_offset) ||
-            (groupby_offset > 0 && offset > groupby_offset)) {
-            // In this case the count is aggregation type
-            return TSDB_OK;
+        if (agg_offset > 0 && offset == agg_offset + 1) {
+            offset = RMUtil_ArgIndex("COUNT", argv + agg_offset + 2, argc - agg_offset - 2);
+            if (offset < 0) {
+                // In this case the count was aggregation type
+                return TSDB_OK;
+            }
+            offset += agg_offset + 2;
         }
+
+        if (reduce_offset > 0 && offset == reduce_offset + 1) {
+            offset = RMUtil_ArgIndex("COUNT", argv + reduce_offset + 2, argc - reduce_offset - 2);
+            if (offset < 0) {
+                // In this case the count was REDUCE type
+                return TSDB_OK;
+            }
+            offset += reduce_offset + 2;
+        }
+
         if (offset + 1 == argc) {
             RTS_ReplyGeneralError(ctx, "TSDB: COUNT argument is missing");
             return TSDB_ERROR;
-        }
-        if (strcasecmp(RedisModule_StringPtrLen(argv[offset - 1], NULL), "AGGREGATION") == 0) {
-            int second_offset =
-                offset + 1 + RMUtil_ArgIndex("COUNT", argv + offset + 1, argc - offset - 1);
-            if (offset == second_offset || second_offset + 1 >= argc) {
-                return TSDB_OK;
-            }
-            offset = second_offset;
         }
         if (RedisModule_StringToLongLong(argv[offset + 1], count) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse COUNT");
@@ -642,20 +676,22 @@ QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
     return queries;
 }
 
-int parseMultiSeriesReduceOp(const char *reducerstr, MultiSeriesReduceOp *reducerOp) {
-    if (strncasecmp(reducerstr, "sum", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Sum;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "max", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Max;
-        return TSDB_OK;
-
-    } else if (strncasecmp(reducerstr, "min", 3) == 0) {
-        *reducerOp = MultiSeriesReduceOp_Min;
-        return TSDB_OK;
+int parseMultiSeriesReduceArgs(RedisModuleCtx *ctx,
+                               RedisModuleString *reducerstr,
+                               ReducerArgs *reducerArgs) {
+    TS_AGG_TYPES_T agg_type = RMStringLenAggTypeToEnum(reducerstr);
+    if (agg_type == TS_AGG_FIRST || agg_type == TS_AGG_LAST || agg_type == TS_AGG_TWA ||
+        agg_type == TS_AGG_INVALID || agg_type == TS_AGG_NONE) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Invalid reducer type");
+        return TSDB_ERROR;
     }
-    return TSDB_ERROR;
+    reducerArgs->aggregationClass = GetAggClass(agg_type);
+    if (reducerArgs->aggregationClass == NULL) {
+        RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve reducer class");
+        return TSDB_ERROR;
+    }
+    reducerArgs->agg_type = agg_type;
+    return TSDB_OK;
 }
 
 int parseLabelQuery(RedisModuleCtx *ctx,
@@ -824,9 +860,8 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }
-        if (parseMultiSeriesReduceOp(RedisModule_StringPtrLen(argv[reduce_location + 1], NULL),
-                                     &args.gropuByReducerOp) != TSDB_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: failed parsing reducer");
+        if (parseMultiSeriesReduceArgs(ctx, argv[reduce_location + 1], &args.gropuByReducerArgs) !=
+            TSDB_OK) {
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }

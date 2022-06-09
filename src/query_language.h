@@ -32,6 +32,13 @@ typedef struct AggregationArgs
     AggregationClass *aggregationClass;
 } AggregationArgs;
 
+// GroupBy reducer args
+typedef struct ReducerArgs
+{
+    AggregationClass *aggregationClass;
+    TS_AGG_TYPES_T agg_type;
+} ReducerArgs;
+
 typedef struct FilterByValueArgs
 {
     bool hasValue;
@@ -68,13 +75,6 @@ typedef struct RangeArgs
     timestamp_t timestampAlignment;
 } RangeArgs;
 
-typedef enum MultiSeriesReduceOp
-{
-    MultiSeriesReduceOp_Min,
-    MultiSeriesReduceOp_Max,
-    MultiSeriesReduceOp_Sum,
-} MultiSeriesReduceOp;
-
 #define LIMIT_LABELS_SIZE 50
 typedef struct MRangeArgs
 {
@@ -84,7 +84,7 @@ typedef struct MRangeArgs
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
-    MultiSeriesReduceOp gropuByReducerOp;
+    ReducerArgs gropuByReducerArgs;
     bool reverse;
 } MRangeArgs;
 
@@ -131,7 +131,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           api_timestamp_t *time_delta,
                           int *agg_type,
                           bool *empty,
-                          BucketTimestamp *bucketTS);
+                          BucketTimestamp *bucketTS,
+                          timestamp_t *alignmetTS);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,

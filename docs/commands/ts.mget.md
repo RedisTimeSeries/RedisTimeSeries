@@ -33,6 +33,8 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
 - The last sample's timetag-value pair
 
+Note: MGET command can't be part of transaction when running on Redis cluster.
+
 #### Complexity
 
 TS.MGET complexity is O(n).
