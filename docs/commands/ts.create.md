@@ -12,7 +12,7 @@ TS.CREATE key [RETENTION retentionPeriod] [ENCODING [UNCOMPRESSED|COMPRESSED]] [
 
 Optional args:
 
-- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to last event time (in milliseconds)
+- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to last event time (in milliseconds).
 
    When set to 0, the series is not trimmed.
 
