@@ -48,7 +48,7 @@ Optional args:
 
   When not specified: set to the global [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) configuration of the database (which, by default, is `BLOCK`).
 
-- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key, and serve as a secondary index.
+- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
 
   The [TS.MGET](https://redis.io/commands/ts.mget/), [TS.MRANGE](https://redis.io/commands/ts.mrange/), and [TS.MREVRANGE](https://redis.io/commands/ts.mrevrange/) commands operate on multiple time series - based on their labels. The [TS.QUERYINDEX](https://redis.io/commands/ts.queryindex/) command returns all time series keys matching a given filter - based on their labels.
 
