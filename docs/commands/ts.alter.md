@@ -24,7 +24,7 @@ TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY pol
 
   See `DUPLICATE_POLICY` in [TS.CREATE](https://redis.io/commands/ts.create/)
 
-- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key
+- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
 
   If `LABELS` is specified, the given label-list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs will remove all existing labels.
   
