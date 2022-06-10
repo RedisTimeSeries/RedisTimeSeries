@@ -19,27 +19,38 @@ Optional args:
    When not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
 
 - `ENCODING` _enc_ - Specify the series samples encoding format. One of the following values:
-   - `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
-   - `UNCOMPRESSED`: keep the raw samples in memory. Adding this flag will keep data in an uncompressed form. Compression not only saves
-   memory but usually improve performance due to lower number of memory accesses.
+   - `COMPRESSED`: apply compression to the series samples.
+   - `UNCOMPRESSED`: keep the raw samples in memory. Adding this flag will keep data in an uncompressed form. 
+
+   `COMPRESSED` (explained [here](https://redis.com/blog/redistimeseries-version-1-2-is-here/)) is almost always the right choice. Compression not only saves memory but usually improve performance due to lower number of memory accesses. You will usually gain about 90% memory reduction. The exception may be highly irregular (almost random) timestamps or values, which is rarely the case.
 
    When not specified: set to `COMPRESSED`.
 
 - `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
 
-   When not specified: set to 4096.
+   When not specified: set to 4096 bytes (a single memory page).
+
+   The data in each key is stored in chunks. Each chunk contains data in a given timeframe. We keep an index of all chucks. Then, inside each chunk - we iterate. There are tradeoffs for having smaller or larger sizes of chunks - depending on your usage:
+
+   - Insert performance: Smaller chunks result in slower inserts (more chunks need to be created).
+   - Query performance: Queries for a small subset when the chunks are very large - are slower, as we need to iterate over the chunk to find the data.
+   - Larger chunks take more memory. if you have a very large number of keys and very few samples per key - smaller chunks can save memory.
+
+   If you are unsure about your use case, you should stick with the default.
 
 - `DUPLICATE_POLICY` _policy_ - Policy for handling multiple samples with identical timestamps. One of the following values:
-  - `BLOCK` - an error will occur for any out of order sample
-  - `FIRST` - ignore any newly reported value
-  - `LAST` - override with the newly reported value
-  - `MIN` - only override if the value is lower than the existing value
-  - `MAX` - only override if the value is higher than the existing value
-  - `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+  - `BLOCK`: an error will occur for any out of order sample
+  - `FIRST`: ignore any newly reported value
+  - `LAST`: override with the newly reported value
+  - `MIN`: only override if the value is lower than the existing value
+  - `MAX`: only override if the value is higher than the existing value
+  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
 
   When not specified: set to the global [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) configuration of the database (which, by default, is `BLOCK`).
 
-- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key
+- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key, and serve as a secondary index.
+
+  The [TS.MGET](https://redis.io/commands/ts.mget/), [TS.MRANGE](https://redis.io/commands/ts.mrange/), and [TS.MREVRANGE](https://redis.io/commands/ts.mrevrange/) commands operate on multiple time series - based on their labels. The [TS.QUERYINDEX](https://redis.io/commands/ts.queryindex/) command returns all time series keys matching a given filter - based on their labels.
 
 #### Complexity
 
