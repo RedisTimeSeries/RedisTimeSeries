@@ -12,27 +12,27 @@ If the time series does not exist - it will be automatically created.
 - _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the server's clock.
 - _value_ - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
-The following arguments are optional because they can be set by [TS.CREATE](https://redis.io/commands/ts.create/):
+The following arguments are optional because they can be set by [TS.CREATE](/commands/ts.create/):
 
  - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
   
-    See `RETENTION` in [TS.CREATE](https://redis.io/commands/ts.create/)
+    See `RETENTION` in [TS.CREATE](/commands/ts.create/)
     
  - `ENCODING` _enc_ - Specify the series samples encoding format.
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
-    See `ENCODING` in [TS.CREATE](https://redis.io/commands/ts.create/)
+    See `ENCODING` in [TS.CREATE](/commands/ts.create/)
 
  - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
-    See `CHUNK_SIZE` in [TS.CREATE](https://redis.io/commands/ts.create/)
+    See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
 
- - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
+ - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
    - `BLOCK` - an error will occur for any out of order sample
    - `FIRST` - ignore any newly reported value
    - `LAST` - override with the newly reported value
@@ -44,7 +44,7 @@ The following arguments are optional because they can be set by [TS.CREATE](http
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
-    See `LABELS` in [TS.CREATE](https://redis.io/commands/ts.create/)
+    See `LABELS` in [TS.CREATE](/commands/ts.create/)
 
 #### Examples
 ```sql
