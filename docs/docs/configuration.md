@@ -1,40 +1,61 @@
 ---
-title: "Configuration"
+title: "Configuration Parameters"
 linkTitle: "Configuration"
 weight: 3
 description: >
-    Run-time configuration
+    RedisTimeSeries supports multiple module configuration parameters. All of these parameters can only be set at load-time.
 ---
 
-RedisTimeSeries supports a few run-time configuration options that should be determined when loading the module. In time more options will be added.
+## Setting load-time configuration parameters on module load
 
-## Passing Configuration Options During Loading
-
-In general, passing configuration options is done by appending arguments after the `--loadmodule` argument in the command line, `loadmodule` configuration directive in a Redis config file, or the `MODULE LOAD` command. For example:
+Setting configuration parameters at load-time is done by appending arguments after the `--loadmodule` argument when starting a server from the command line or after the `loadmodule` directive in a Redis config file. For example:
 
 In redis.conf:
 
-```
-loadmodule redistimeseries.so OPT1 OPT2
+```sh
+loadmodule ./redistimeseries.so [OPT VAL]...
 ```
 
 From redis-cli:
 
 ```
-127.0.0.6379> MODULE load redistimeseries.so OPT1 OPT2
+127.0.0.6379> MODULE load redistimeseries.so [OPT VAL]...
 ```
 
-From command line:
+From the command line:
+
+```sh
+$ redis-server --loadmodule ./redistimeseries.so [OPT VAL]...
+```
+
+## RedisTimeSeries configuration parameters
+
+The following table summerizes which configuration parameters can be set at module load-time and which can be set on run-time:
+
+| Configuration Parameter                 | Load-time          | Run-time             |
+| :-------                                | :-----             | :-----------         |
+| [NUM_THREADS](#num_threads)             | :white_check_mark: | :white_large_square: |
+| [COMPACTION_POLICY](#compaction_policy) | :white_check_mark: | :white_large_square: |
+| [RETENTION_POLICY](#retention_policy)   | :white_check_mark: | :white_large_square: |
+| [DUPLICATE_POLICY](#duplicate_policy)   | :white_check_mark: | :white_large_square: |
+| [CHUNK_TYPE](#chunk_type)               | :white_check_mark: | :white_large_square: |
+
+### NUM_THREADS
+The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
+
+#### Default
+
+`3`
+
+#### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so OPT1 OPT2
+$ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
 ```
 
-## RedisTimeSeries configuration options
+### COMPACTION_POLICY
 
-### COMPACTION_POLICY {policy}
-
-Default compaction/downsampling rules for newly created key with `TS.ADD`.
+Default compaction rules for newly created key with `TS.ADD`.
 
 Each rule is separated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
 
@@ -103,34 +124,6 @@ the default retention for newly created keys that do not have a an override.
 $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 ```
 
-### CHUNK_TYPE
-Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
-Possible values: `COMPRESSED`, `UNCOMPRESSED`.
-
-
-#### Default
-
-`COMPRESSED`
-
-#### Example
-
-```
-$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_TYPE COMPRESSED
-```
-
-### NUM_THREADS
-The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
-
-#### Default
-
-`3`
-
-#### Example
-
-```
-$ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
-```
-
 ### DUPLICATE_POLICY
 
 Policy that will define handling of duplicate samples.
@@ -157,4 +150,19 @@ The default policy for database-wide is `BLOCK`, new and pre-existing keys will 
 
 ```
 $ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
+```
+
+### CHUNK_TYPE
+Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
+Possible values: `COMPRESSED`, `UNCOMPRESSED`.
+
+
+#### Default
+
+`COMPRESSED`
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_TYPE COMPRESSED
 ```
