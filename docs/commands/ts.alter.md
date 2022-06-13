@@ -14,21 +14,21 @@ TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY pol
 
 - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
 
-  See `RETENTION` in [TS.CREATE](https://redis.io/commands/ts.create/)
+  See `RETENTION` in [TS.CREATE](/commands/ts.create/)
 
 - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
 
-  See `CHUNK_SIZE` in [TS.CREATE](https://redis.io/commands/ts.create/)
+  See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
 
 - `DUPLICATE_POLICY` _policy_ - Policy for handling multiple samples with identical timestamps.
 
-  See `DUPLICATE_POLICY` in [TS.CREATE](https://redis.io/commands/ts.create/)
+  See `DUPLICATE_POLICY` in [TS.CREATE](/commands/ts.create/)
 
 - `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
 
   If `LABELS` is specified, the given label-list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs will remove all existing labels.
   
-  See `LABELS` in [TS.CREATE](https://redis.io/commands/ts.create/)
+  See `LABELS` in [TS.CREATE](/commands/ts.create/)
 
 #### Alter Example
 

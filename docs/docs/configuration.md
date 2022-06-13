@@ -57,7 +57,7 @@ $ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
 
 Default compaction rules for newly created key with `TS.ADD`.
 
-Each rule is separated by a semicolon (`;`), the rule consists of several fields that are separated by a colon (`:`):
+Each rule is separated by a semicolon (`;`), the rule consists of multiple fields that are separated by a colon (`:`):
 
 * Aggregation type: One of the following:
   | aggregator | description                                                      |
@@ -85,7 +85,9 @@ Each rule is separated by a semicolon (`;`), the rule consists of several fields
 
 * Retention time - in milliseconds
 
-* Optional: Time bucket alignment - number and the time representation (Example for 1 minute: 1M)
+* (since RedisTimeSeries v1.8):
+
+  Optional: Time bucket alignment - number and the time representation (Example for 1 minute: 1M)
 
     * m - millisecond
     * M - minute
@@ -93,6 +95,16 @@ Each rule is separated by a semicolon (`;`), the rule consists of several fields
     * d - day
 
   Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Units: milliseconds. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours (24 * 3600 * 1000), setting _alignTimestamp_ to 6 hours after the epoch (6 * 3600 * 1000) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
+  
+When a compaction policy is defined, compaction rules will be created automatically for newly created time series, and their key would be set to:
+  
+* Before RedisTimeSeries v1.8:
+
+   _key_dur_agg_ where _key_ is the key of the source time series, _dur_ is the bucket duration, and _agg_ is the aggregator.
+     
+* Since RedisTimeSeries v1.8:
+
+   _key_dur_agg_aln_ where _key_ is the key of the source time series, _dur_ is the bucket duration, _agg_ is the aggregator, and _aln_ is the alignment timestamp.
 
 Examples:
 
