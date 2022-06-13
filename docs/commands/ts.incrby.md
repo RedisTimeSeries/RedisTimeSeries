@@ -22,21 +22,25 @@ Optional args:
 
   Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
-  When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
+  See `RETENTION` in [TS.CREATE](/commands/ts.create/)
  
 - `UNCOMPRESSED` - Changes data storage from compressed (by default) to uncompressed
 
   Used only if a new time series is created. Ignored When adding samples to an existing time series.
+  
+  See `ENCODING` in [TS.CREATE](/commands/ts.create/)
 
-- `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
-
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
-
-  If not specified: set to 4096.
-
-- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
+- `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
 
   Used only if a new time series is created. Ignored When adding samples to an existing time series.
+
+  See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
+
+- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+
+  Used only if a new time series is created. Ignored When adding samples to an existing time series.
+  
+  See `LABELS` in [TS.CREATE](/commands/ts.create/)
 
 #### Notes
 
