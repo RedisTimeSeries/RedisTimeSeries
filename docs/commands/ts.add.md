@@ -9,30 +9,30 @@ TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING [COMPRESSED|UNC
 If the time series does not exist - it will be automatically created.
 
 - _key_ - Key name for time series
-- _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the server's clock.
+- _timestamp_ - (integer) UNIX sample timestamp **in milliseconds** or `*` to set the timestamp based on the server's clock.
 - _value_ - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
 
-The following arguments are optional because they can be set by `TS.CREATE`:
+The following arguments are optional because they can be set by [TS.CREATE](/commands/ts.create/):
 
  - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
   
-    When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
+    See `RETENTION` in [TS.CREATE](/commands/ts.create/)
     
- - `ENCODING` _enc_ - Specify the series samples encoding format. One of the following values:
-    - `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
-    - `UNCOMPRESSED`: keep the raw samples in memory.
+ - `ENCODING` _enc_ - Specify the series samples encoding format.
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
- - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
+    See `ENCODING` in [TS.CREATE](/commands/ts.create/)
+
+ - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
 
-    If not specified: set to 4096.
+    See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
 
- - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
+ - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
    - `BLOCK` - an error will occur for any out of order sample
    - `FIRST` - ignore any newly reported value
    - `LAST` - override with the newly reported value
@@ -43,6 +43,8 @@ The following arguments are optional because they can be set by `TS.CREATE`:
  - `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
 
     Used only if a new time series is created. Ignored When adding samples to an existing time series.
+
+    See `LABELS` in [TS.CREATE](/commands/ts.create/)
 
 #### Examples
 ```sql
