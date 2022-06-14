@@ -68,4 +68,4 @@ TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id
 
 #### Notes
 
-`TS.ADD` can also create a new time-series if called with a key that does not exist.
+* The following commands will also create a new time-series when called with a key that does not exist: [TS.ADD](/commands/ts.add/), [TS.INCRBY](/commands/ts.incrby/), and [TS.DECRBY](/commands/ts.decrby/)
