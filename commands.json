@@ -342,6 +342,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
@@ -398,6 +399,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
