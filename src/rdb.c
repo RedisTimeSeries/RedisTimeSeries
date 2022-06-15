@@ -8,12 +8,16 @@
 #include "consts.h"
 #include "endianconv.h"
 #include "load_io_error_macros.h"
+#include "module.h"
 
 #include <inttypes.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
+int last_rdb_load_version;
+
 void *series_rdb_load(RedisModuleIO *io, int encver) {
+    last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -183,7 +187,9 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
-    if (series->srcKey != NULL) {
+    if ((series->srcKey != NULL) &&
+        (persistence_in_progress >
+         0)) { // on dump command (restore) we don't keep the cross references
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
     } else {
@@ -196,17 +202,22 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
         RedisModule_SaveString(io, series->labels[i].value);
     }
 
-    RedisModule_SaveUnsigned(io, countRules(series));
+    if (persistence_in_progress == 0) {
+        // on dump command (restore) we don't keep the cross references
+        RedisModule_SaveUnsigned(io, 0);
+    } else {
+        RedisModule_SaveUnsigned(io, countRules(series));
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        RedisModule_SaveString(io, rule->destKey);
-        RedisModule_SaveUnsigned(io, rule->bucketDuration);
-        RedisModule_SaveUnsigned(io, rule->timestampAlignment);
-        RedisModule_SaveUnsigned(io, rule->aggType);
-        RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
-        rule->aggClass->writeContext(rule->aggContext, io);
-        rule = rule->nextRule;
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            RedisModule_SaveString(io, rule->destKey);
+            RedisModule_SaveUnsigned(io, rule->bucketDuration);
+            RedisModule_SaveUnsigned(io, rule->timestampAlignment);
+            RedisModule_SaveUnsigned(io, rule->aggType);
+            RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
+            rule->aggClass->writeContext(rule->aggContext, io);
+            rule = rule->nextRule;
+        }
     }
 
     Chunk_t *chunk;
