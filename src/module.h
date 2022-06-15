@@ -22,4 +22,6 @@ int CreateTsKey(RedisModuleCtx *ctx,
 
 bool CheckVersionForBlockedClientMeasureTime();
 
+extern int persistence_in_progress;
+
 #endif
