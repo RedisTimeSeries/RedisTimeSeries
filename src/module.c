@@ -1093,6 +1093,26 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
     }
 }
 
+int persistence_in_progress = 0;
+
+void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (memcmp(&eid, &RedisModuleEvent_Persistence, sizeof(eid)) != 0) {
+        return;
+    }
+
+    if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_AOF_START) {
+        persistence_in_progress++;
+    } else if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_ENDED ||
+               subevent == REDISMODULE_SUBEVENT_PERSISTENCE_FAILED) {
+        persistence_in_progress--;
+    }
+
+    return;
+}
+
 void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     /**
      * On sharding event we need to do couple of things depends on the subevent given:
@@ -1345,6 +1365,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
 
     Initialize_RdbNotifications(ctx);
 

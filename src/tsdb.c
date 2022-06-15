@@ -12,6 +12,7 @@
 #include "indexer.h"
 #include "module.h"
 #include "series_iterator.h"
+#include "rdb.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -209,19 +210,24 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
 
-    // Remove references to other keys
-    if (series->srcKey) {
-        RedisModule_FreeString(NULL, series->srcKey);
-        series->srcKey = NULL;
-    }
+    if (last_rdb_load_version < TS_REPLICAOF_SUPPORT_VER) {
+        // In versions greater than TS_REPLICAOF_SUPPORT_VER we delete the reference on the dump
+        // stage
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        CompactionRule *nextRule = rule->nextRule;
-        FreeCompactionRule(rule);
-        rule = nextRule;
+        // Remove references to other keys
+        if (series->srcKey) {
+            RedisModule_FreeString(NULL, series->srcKey);
+            series->srcKey = NULL;
+        }
+
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            CompactionRule *nextRule = rule->nextRule;
+            FreeCompactionRule(rule);
+            rule = nextRule;
+        }
+        series->rules = NULL;
     }
-    series->rules = NULL;
 
     RedisModule_CloseKey(key);
 }
