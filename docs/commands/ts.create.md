@@ -12,9 +12,11 @@ TS.CREATE key [RETENTION retentionPeriod] [ENCODING [UNCOMPRESSED|COMPRESSED]] [
 
 Optional args:
 
-- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to last event time (in milliseconds).
+- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to highest reported timestamp (in milliseconds).
 
-   When set to 0, the series is not trimmed.
+   Samples are expired based solely on the difference between their timestamp and the timestamps passed to [TS.ADD](/commands/ts.add/), [TS.MADD](/commands/ts.madd/), [TS.INCRBY](/commands/ts.incrby/), and [TS.DECRBY](/commands/ts.decrby/). When none of these functions are called - samples won't expire.
+
+   When set to 0: samples will never expire.
 
    When not specified: set to the global [RETENTION_POLICY](/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
 
