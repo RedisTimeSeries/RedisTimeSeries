@@ -14,7 +14,7 @@ Optional args:
 
 - `RETENTION` _retentionPeriod_ - Maximum age for samples compared to highest reported timestamp (in milliseconds).
 
-   Samples are expired based solely on the difference between their timestamp and the timestamps passed to [TS.ADD](/commands/ts.add/), [TS.MADD](/commands/ts.madd/), [TS.INCRBY](/commands/ts.incrby/), and [TS.DECRBY](/commands/ts.decrby/). When none of these functions are called - samples won't expire.
+   Samples are expired based solely on the difference between their timestamp and the timestamps passed to [TS.ADD](/commands/ts.add/), [TS.MADD](/commands/ts.madd/), [TS.INCRBY](/commands/ts.incrby/), and [TS.DECRBY](/commands/ts.decrby/). When none of these functions is called - samples would not expire.
 
    When set to 0: samples will never expire.
 
