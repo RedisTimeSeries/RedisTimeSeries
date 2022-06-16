@@ -37,7 +37,9 @@ Optional parameters:
 
   Filter result by value using minimum and maximum.
 
-- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+- `WITHLABELS`
+
+  Include in the reply all label-value pairs representing metadata labels of the time series. 
 
   If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
