@@ -12,7 +12,6 @@
 #include "query_language.h"
 #include "tsdb.h"
 
-#include <assert.h>
 #include "rmutil/alloc.h"
 
 #define SeriesRecordName "SeriesRecord"
@@ -663,6 +662,10 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     Chunk_t *chunk = NULL;
     int index = 0;
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
+        if (series->funcs->GetNumOfSample(chunk) == 0) {
+            RedisModule_Assert(series->totalSamples == 0);
+            break;
+        }
         if (series->funcs->GetLastTimestamp(chunk) > startTimestamp) {
             if (series->funcs->GetFirstTimestamp(chunk) > endTimestamp) {
                 break;

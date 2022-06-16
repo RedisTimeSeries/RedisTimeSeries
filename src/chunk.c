@@ -81,15 +81,20 @@ static Sample *ChunkGetSample(Chunk *chunk, int index) {
 }
 
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
-    if (((Chunk *)chunk)->num_samples == 0) {
-        return -1;
-    }
+    RedisModule_Assert(((Chunk *)chunk)->num_samples > 0); // empty chunks are being removed
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
+}
+
+double Uncompressed_GetLastValue(Chunk_t *chunk) {
+    RedisModule_Assert(((Chunk *)chunk)->num_samples > 0); // empty chunks are being removed
+    return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->value;
 }
 
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
     if (((Chunk *)chunk)->num_samples == 0) {
-        return -1;
+        // When the chunk is empty it first TS is used for the chunk dict key
+        // Only the first chunk can be empty since we delete empty chunks
+        return 0;
     }
     return ChunkGetSample(chunk, 0)->timestamp;
 }
