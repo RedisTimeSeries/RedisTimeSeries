@@ -25,6 +25,7 @@
 #include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
+#include "utils/arr.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -114,6 +115,22 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         rule = rule->nextRule;
         ruleCount++;
     }
+
+    RedisModule_ReplySetArrayLength(ctx, ruleCount);
+
+    ruleCount = 0;
+    Compaction *compactions = series->compactions;
+    for (int i = 0; i < array_len(compactions); i++) {
+        RedisModule_ReplyWithArray(ctx, 5);
+        RedisModule_ReplyWithCString(ctx, compactions[i].id);
+        RedisModule_ReplyWithLongLong(ctx, compactions[i].rule.bucketDuration);
+        RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(compactions[i].rule.aggType));
+        RedisModule_ReplyWithLongLong(ctx, compactions[i].rule.timestampAlignment);
+        RedisModule_ReplyWithLongLong(ctx, compactions[i].retentionTime);
+
+        ruleCount++;
+    }
+
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
 
     if (is_debug) {
@@ -405,7 +422,6 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 static void handleCompaction(RedisModuleCtx *ctx,
-                             Series *series,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
@@ -469,6 +485,57 @@ static void handleCompaction(RedisModuleCtx *ctx,
     rule->aggClass->appendValue(rule->aggContext, value, timestamp);
 }
 
+static void compactionAppend(RedisModuleCtx *ctx,
+                             Compaction *compaction,
+                             api_timestamp_t timestamp,
+                             double value) {
+    Series *compactionSeries = &compaction->series;
+    timestamp_t lastTS = compactionSeries->lastTimestamp;
+    assert(timestamp < lastTS);
+    timestamp_t currentTimestamp =
+        CalcBucketStart(timestamp, compaction->bucketDuration, compaction->timestampAlignment);
+    timestamp_t currentTimestampNormalized = BucketStartNormalize(currentTimestamp);
+
+    if (compaction->startCurrentTimeBucket == -1LL) {
+        // first sample, lets init the startCurrentTimeBucket
+        compaction->startCurrentTimeBucket = currentTimestampNormalized;
+
+        if (compaction->aggClass->addBucketParams) {
+            compaction->aggClass->addBucketParams(compaction->aggContext,
+                                                  currentTimestampNormalized,
+                                                  currentTimestamp + compaction->bucketDuration);
+        }
+    }
+
+    if (currentTimestampNormalized > compaction->startCurrentTimeBucket) {
+        if (compaction->aggClass->addNextBucketFirstSample) {
+            compaction->aggClass->addNextBucketFirstSample(
+                compaction->aggContext, value, timestamp);
+        }
+
+        double aggVal;
+        compaction->aggClass->finalize(compaction->aggContext, &aggVal);
+        SeriesAddSample(compactionSeries, compaction->startCurrentTimeBucket, aggVal);
+        Sample last_sample;
+        if (compaction->aggClass->addPrevBucketLastSample) {
+            compaction->aggClass->getLastSample(compaction->aggContext, &last_sample);
+        }
+        compaction->aggClass->resetContext(compaction->aggContext);
+        if (compaction->aggClass->addBucketParams) {
+            compaction->aggClass->addBucketParams(compaction->aggContext,
+                                                  currentTimestampNormalized,
+                                                  currentTimestamp + compaction->bucketDuration);
+        }
+
+        if (compaction->aggClass->addPrevBucketLastSample) {
+            compaction->aggClass->addPrevBucketLastSample(
+                compaction->aggContext, last_sample.value, last_sample.timestamp);
+        }
+        compaction->startCurrentTimeBucket = currentTimestampNormalized;
+    }
+    compaction->aggClass->appendValue(compaction->aggContext, value, timestamp);
+}
+
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
@@ -500,8 +567,13 @@ static int internalAdd(RedisModuleCtx *ctx,
         }
         CompactionRule *rule = series->rules;
         while (rule != NULL) {
-            handleCompaction(ctx, series, rule, timestamp, value);
+            handleCompaction(ctx, rule, timestamp, value);
             rule = rule->nextRule;
+        }
+
+        Compaction *compactions = series->compactions;
+        for (int i = 0; i < array_len(compactions); i++) {
+            compactionAppend(ctx, &compactions[i], timestamp, value);
         }
     }
     RedisModule_ReplyWithLongLong(ctx, timestamp);

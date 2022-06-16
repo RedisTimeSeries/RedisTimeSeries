@@ -15,6 +15,7 @@
 #include "sample_iterator.h"
 #include "multiseries_sample_iterator.h"
 #include "multiseries_agg_dup_sample_iterator.h"
+#include "utils/arr.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -125,6 +126,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->retentionTime = cCtx->retentionTime;
     newSeries->srcKey = NULL;
     newSeries->rules = NULL;
+    newSeries->compactions = array_new(Compaction, 0);
     newSeries->lastTimestamp = 0;
     newSeries->lastValue = 0;
     newSeries->totalSamples = 0;
