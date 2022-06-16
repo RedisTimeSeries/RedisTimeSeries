@@ -96,7 +96,7 @@ Optional parameters:
 
     Regardless of the values of fromTimestamp and toTimestamp, no data will be reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 
-- `GROUPBY` _label_ `REDUCE` _reducer_
+- `GROUPBY` _label_ `REDUCE` _reducer_ (since RedisTimeSeries v1.6)
 
   Aggregate results across different time series, grouped by the provided label name.
   
