@@ -16,8 +16,13 @@ TS.RANGE key fromTimestamp toTimestamp
 
 Optional parameters:
 
-- `FILTER_BY_TS` _ts_... - a list of timestamps to filter the result by specific timestamps
-- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
+- `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
+
+  Followed by a list of timestamps to filter the result by specific timestamps.
+
+- `FILTER_BY_VALUE` _min_ _max_ (since RedisTimeSeries v1.6)
+
+  Filter result by value using minimum and maximum.
 
 - `COUNT` _count_ - Maximum number of returned samples.
 

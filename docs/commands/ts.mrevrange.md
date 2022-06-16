@@ -29,20 +29,33 @@ TS.MREVRANGE fromTimestamp toTimestamp
 
 Optional parameters:
 
-- `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
-- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
+- `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
 
-- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+  Followed by a list of timestamps to filter the result by specific timestamps.
+
+- `FILTER_BY_VALUE` _min_ _max_ (since RedisTimeSeries v1.6)
+
+  Filter result by value using minimum and maximum.
+
+- `WITHLABELS`
+
+  Include in the reply all label-value pairs representing metadata labels of the time series. 
 
   If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
+- `SELECTED_LABELS` _label_... (since RedisTimeSeries v1.6)
+
+  Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
  
   If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-- `COUNT` _count_ - Maximum number of returned samples per time series.
+- `COUNT` _count_
 
-- `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+  Maximum number of returned samples per time series.
+
+- `ALIGN` _value_ (since RedisTimeSeries v1.6)
+
+  Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
@@ -96,7 +109,7 @@ Optional parameters:
 
     Regardless of the values of fromTimestamp and toTimestamp, no data will be reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 
-- `GROUPBY` _label_ `REDUCE` _reducer_
+- `GROUPBY` _label_ `REDUCE` _reducer_ (since RedisTimeSeries v1.6)
 
   Aggregate results across different time series, grouped by the provided label name.
   
