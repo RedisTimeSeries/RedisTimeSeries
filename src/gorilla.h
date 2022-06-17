@@ -59,6 +59,11 @@ typedef struct Compressed_Iterator
     u_int8_t leading;
     u_int8_t trailing;
     u_int8_t blocksize;
+
+    // bit cache performance optimization
+    u_int64_t cache; 
+    u_int64_t cache_idx; 
+
 } Compressed_Iterator;
 
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);

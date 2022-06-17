@@ -41,6 +41,60 @@ MU_TEST(test_compressed_upsert) {
     }
 }
 
+MU_TEST(test_compressed_upsert_decompress) {
+    srand((unsigned int)time(NULL));
+    int total_data_points = 500;
+    size_t max_chunk_size = 8192;
+    int total_upserts = 0;
+    int size = 0;
+    float minV = 0.0;
+    float maxV = 100.0;
+    double sum_in = 0.0; 
+    double sum_out = 0.0; 
+    for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size += 64) {
+        CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+        mu_assert(chunk != NULL, "create compressed chunk");
+
+        //FILE *fp1, *fp2;
+        //fp1 = fopen("/tmp/compressed.txt", "w+");
+        //fp2 = fopen("/tmp/decompressed.txt", "w+");
+        
+        for (size_t i = 1; i <= total_data_points; i++) {
+            float value = minV + (float)rand() / ((float)RAND_MAX / maxV);
+            Sample sample = { .timestamp = i, .value = value };
+            total_upserts++;
+            UpsertCtx uCtx = {
+                .inChunk = chunk,
+                .sample = sample,
+            };
+            Compressed_UpsertSample(&uCtx, &size, DP_LAST);
+            sum_in += value; 
+           // fprintf(fp1, "value_in: %lf\n", value);
+        }  
+        uint64_t total_samples = Compressed_ChunkNumOfSample(chunk);
+        mu_assert_int_eq(total_data_points, total_samples);
+        
+        EnrichedChunk *enriched_chunk = NewEnrichedChunk(); 
+        if(total_samples > enriched_chunk->samples.size){
+            ReallocSamplesArray(&enriched_chunk->samples, total_samples);
+        }
+        Compressed_ProcessChunk(chunk, 1, total_data_points, enriched_chunk, false); 
+        for (size_t i = 0; i < total_data_points; i++) {
+            //fprintf(fp2, "value_out: %lf\n", enriched_chunk->samples.values[i]);
+            sum_out += enriched_chunk->samples.values[i]; 
+        }
+        //printf("samples.values[0]: %lf\n", enriched_chunk->samples.values[0]); 
+        //printf("sum_in: %lf, sum_out: %lf\n", sum_in, sum_out); 
+        mu_assert(sum_in == sum_out, "Compressed data same as decompressed"); 
+        
+        //fclose(fp1);
+        //fclose(fp2);
+        Compressed_FreeChunk(chunk);
+        FreeEnrichedChunk(enriched_chunk); 
+    }
+}
+
+
 MU_TEST(test_compressed_fail_appendInteger) {
     // either Compressed_UpsertSample or Compressed_SplitChunk
     // ensureAddSample -> Compressed_AddSample -> Compressed_Append -> appendInteger
@@ -198,6 +252,7 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
 
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
+    MU_RUN_TEST(test_compressed_upsert_decompress);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
     MU_RUN_TEST(test_Compressed_SplitChunk_empty);
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);

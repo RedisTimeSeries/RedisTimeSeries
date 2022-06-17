@@ -217,8 +217,27 @@ static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
-static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+//static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
+//    return !(bins[bit / BINW] & BIT(localbit(bit)));
+//}
+
+
+// Performance optimization
+// When scanning the compressed data buffer, we index into it using iter->idx / BINW. 
+// However, in many cases ( greater than 90% according to the Facebook paper) 
+// the timestamps and values are compressed to a single bit, and thus iter-idx is advancing by a single bit. 
+// Therefore, we could end up repeatedly going to memory to read the same u_int64_t from the compressed data buffer. 
+// Instead of going to memory every time, we save the value read, until the iter->idx advances past it. 
+static inline bool Bins_bitoff(const u_int64_t *bins, Compressed_Iterator *iter) {
+    
+    globalbit_t bit = iter->idx; 
+    u_int64_t new_cache_idx = bit / BINW; 
+    if(new_cache_idx != iter->cache_idx){
+        iter->cache_idx = new_cache_idx; 
+        iter->cache = bins[new_cache_idx]; 
+    }
+    iter->idx++; 
+    return !(iter->cache & BIT(localbit(bit)));
 }
 
 // unused:
@@ -414,19 +433,19 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * using `prevTS` and `prevDelta`.
  */
 static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
-    if (Bins_bitoff(bins, iter->idx++)) {
+    if (Bins_bitoff(bins, iter)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
         iter->idx += CMPR_L2;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
         iter->idx += CMPR_L3;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
         iter->idx += CMPR_L4;
-    } else if (Bins_bitoff(bins, iter->idx++)) {
+    } else if (Bins_bitoff(bins, iter)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
         iter->idx += CMPR_L5;
     } else {
@@ -455,7 +474,7 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
     // many trailing zeros as with the previous value
     // use  the previous block  information and
     // just read the meaningful XORed value
-    if (Bins_bitoff(data, iter->idx++)) {
+    if (Bins_bitoff(data, iter)) {
 #ifdef DEBUG
         assert(iter->leading + iter->trailing <= BINW);
 #endif
@@ -498,6 +517,8 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         return CR_OK;
     }
     const u_int64_t *bins = iter->chunk->data;
+
+    /*
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //
@@ -509,5 +530,19 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // control bit ‘0’ (case a)
     sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
     iter->count++;
+    */
+
+    // We're fast checking the control bits for the cases in which the delta is 0
+    // This avoids the call to expensive readInteger and readFloat functions
+    //
+    // control bit ‘0’
+    // Read stored double delta value
+    sample->timestamp = iter->prevTS +=
+        Bins_bitoff(bins, iter) ? iter->prevDelta : readInteger(iter, bins);
+    // Check if value was changed
+    // control bit ‘0’ (case a)
+    sample->value = Bins_bitoff(bins, iter) ? iter->prevValue.d : readFloat(iter, bins);
+    iter->count++;
+
     return CR_OK;
 }
