@@ -534,7 +534,7 @@ static inline int add(RedisModuleCtx *ctx,
     }
 
     if (timestampValue < 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
         return REDISMODULE_ERR;
     }
     api_timestamp_t timestamp = (u_int64_t)timestampValue;
