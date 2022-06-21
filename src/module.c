@@ -125,14 +125,16 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
+            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
             RedisModule_ReplyWithArray(ctx, 5 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetFirstTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetLastTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "samples");
-            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             RedisModule_ReplyWithLongLong(ctx, numOfSamples);
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
