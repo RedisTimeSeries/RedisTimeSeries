@@ -663,7 +663,10 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     int index = 0;
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
         if (series->funcs->GetNumOfSample(chunk) == 0) {
-            RedisModule_Assert(series->totalSamples == 0);
+            if (unlikely(series->totalSamples != 0)) { // empty chunks are being removed
+                RedisModule_Log(
+                    mr_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+            }
             break;
         }
         if (series->funcs->GetLastTimestamp(chunk) > startTimestamp) {

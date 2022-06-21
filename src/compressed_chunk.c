@@ -186,12 +186,16 @@ timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk) {
 }
 
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
-    RedisModule_Assert(((CompressedChunk *)chunk)->count > 0); // empty chunks are being removed
+    if (unlikely(((CompressedChunk *)chunk)->count == 0)) { // empty chunks are being removed
+        RedisModule_Log(mr_staticCtx, "error", "Trying to get the last timestamp of empty chunk");
+    }
     return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
 double Compressed_GetLastValue(Chunk_t *chunk) {
-    RedisModule_Assert(((CompressedChunk *)chunk)->count > 0); // empty chunks are being removed
+    if (unlikely(((CompressedChunk *)chunk)->count == 0)) { // empty chunks are being removed
+        RedisModule_Log(mr_staticCtx, "error", "Trying to get the last value of empty chunk");
+    }
     return ((CompressedChunk *)chunk)->prevValue.d;
 }
 
