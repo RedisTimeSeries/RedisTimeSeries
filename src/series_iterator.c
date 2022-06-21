@@ -100,6 +100,7 @@ ChunkResult SeriesIteratorGetNext(AbstractIterator *abstractIterator, Sample *cu
             res = SeriesGetNext(iterator, currentSample);
             if (unlikely(res == CR_END)) { // Reached the end of the chunk
                 if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
+                    (funcs->GetNumOfSample(currentChunk) == 0) ||
                     funcs->GetFirstTimestamp(currentChunk) > itt_max_ts ||
                     funcs->GetLastTimestamp(currentChunk) < itt_min_ts) {
                     return CR_END; // No more chunks or they out of range
