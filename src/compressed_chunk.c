@@ -178,11 +178,25 @@ u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
 }
 
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk) {
+    if (((CompressedChunk *)chunk)->count ==
+        0) { // When the chunk is empty it first TS is used for the chunk dict key
+        return 0;
+    }
     return ((CompressedChunk *)chunk)->baseTimestamp;
 }
 
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
+    if (unlikely(((CompressedChunk *)chunk)->count == 0)) { // empty chunks are being removed
+        RedisModule_Log(mr_staticCtx, "error", "Trying to get the last timestamp of empty chunk");
+    }
     return ((CompressedChunk *)chunk)->prevTimestamp;
+}
+
+double Compressed_GetLastValue(Chunk_t *chunk) {
+    if (unlikely(((CompressedChunk *)chunk)->count == 0)) { // empty chunks are being removed
+        RedisModule_Log(mr_staticCtx, "error", "Trying to get the last value of empty chunk");
+    }
+    return ((CompressedChunk *)chunk)->prevValue.d;
 }
 
 size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {

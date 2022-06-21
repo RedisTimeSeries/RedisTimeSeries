@@ -20,13 +20,22 @@ static const timestamp_t lookup_intervals[] = { ['m'] = 1,
                                                 ['h'] = 1000 * 60 * 60,
                                                 ['d'] = 1000 * 60 * 60 * 24 };
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out) {
+static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
-    if (sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty) != 2) {
+    int ret;
+    ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
+    bool valid_state = (ret == 2) || (timeSize == 0 && ret == 1);
+    if (!valid_state) {
         return FALSE;
     }
+
+    if (canBeZero && timeSize == 0) {
+        *out = 0;
+        return TRUE;
+    }
+
     timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
     if (interval_in_millisecs == 0) {
         return FALSE;
@@ -47,15 +56,15 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
         } else if (i == 1) { // the 2nd param is the bucket
-            if (parse_string_to_millisecs(token, &rule->bucketDuration) == FALSE) {
+            if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == FALSE) {
                 return FALSE;
             }
         } else if (i == 2) {
-            if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec) == FALSE) {
+            if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == FALSE) {
                 return FALSE;
             }
         } else if (i == 3) {
-            if (parse_string_to_millisecs(token, &rule->timestampAlignment) == FALSE) {
+            if (parse_string_to_millisecs(token, &rule->timestampAlignment, false) == FALSE) {
                 return FALSE;
             }
         } else {
