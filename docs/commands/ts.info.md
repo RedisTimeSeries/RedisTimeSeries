@@ -30,10 +30,16 @@ Array-reply, specifically:
 * `chunkCount` - Number of Memory Chunks used for this time series
 * `chunkSize` - Memory size, in bytes, allocated for data
 * `chunkType` - The chunk type: `compressed` or `uncompressed`
-* `duplicatePolicy` - The [duplicate policy](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
+* `duplicatePolicy` - The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
 * `labels` - A nested array of label-value pairs that represent the metadata labels of this time series
-* `sourceKey` - Key name for source time series in case the current series is a target of a [compaction rule](https://redis.io/commands/ts.createrule/)
-* `rules` - A nested array of the [compaction rules](https://redis.io/commands/ts.createrule/) defined in this time series
+* `sourceKey` - Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
+* `rules` - A nested array of the [compaction rules](/commands/ts.createrule/) defined in this time series
+
+   For each rule:
+   - The compaction key
+   - The bucket duration
+   - The aggregator
+   - The alignment timestamp (since RedisTimeSeries v1.8)
 
 When `DEBUG` is specified, the response will contain an additional array field called `Chunks`.
 Each item (per chunk) will contain:
@@ -47,6 +53,7 @@ Each item (per chunk) will contain:
 #### `TS.INFO` Example
 
 ```sql
+
 TS.INFO temperature:2:32
  1) totalSamples
  2) (integer) 100
@@ -74,18 +81,24 @@ TS.INFO temperature:2:32
 21) sourceKey
 22) (nil)
 23) rules
-24) (empty list or set)
+24) 1) 1) "t1_MAX_1000_500"
+       2) (integer) 1000
+       3) "MAX"
+       4) (integer) 500
 ```
 
 With `DEBUG`:
 ```
 ...
 23) rules
-24) (empty list or set)
+24) 1) 1) "t1_MAX_1000_500"
+       2) (integer) 1000
+       3) "MAX"
+       4) (integer) 500
 25) keySelfName
 26) "temperature:2:32"
-25) Chunks
-26) 1)  1) startTimestamp
+27) Chunks
+28) 1)  1) startTimestamp
         2) (integer) 1548149180
         3) endTimestamp
         4) (integer) 1548149279

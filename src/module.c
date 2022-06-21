@@ -105,10 +105,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CompactionRule *rule = series->rules;
     int ruleCount = 0;
     while (rule != NULL) {
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, 4);
         RedisModule_ReplyWithString(ctx, rule->destKey);
         RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
+        RedisModule_ReplyWithLongLong(ctx, rule->timestampAlignment);
 
         rule = rule->nextRule;
         ruleCount++;
@@ -124,14 +125,16 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
+            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
             RedisModule_ReplyWithArray(ctx, 5 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetFirstTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetLastTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "samples");
-            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             RedisModule_ReplyWithLongLong(ctx, numOfSamples);
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
@@ -533,7 +536,7 @@ static inline int add(RedisModuleCtx *ctx,
     }
 
     if (timestampValue < 0) {
-        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
         return REDISMODULE_ERR;
     }
     api_timestamp_t timestamp = (u_int64_t)timestampValue;
@@ -1119,6 +1122,26 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
     }
 }
 
+int persistence_in_progress = 0;
+
+void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (memcmp(&eid, &RedisModuleEvent_Persistence, sizeof(eid)) != 0) {
+        return;
+    }
+
+    if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_AOF_START) {
+        persistence_in_progress++;
+    } else if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_ENDED ||
+               subevent == REDISMODULE_SUBEVENT_PERSISTENCE_FAILED) {
+        persistence_in_progress--;
+    }
+
+    return;
+}
+
 void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     /**
      * On sharding event we need to do couple of things depends on the subevent given:
@@ -1373,6 +1396,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
 
     Initialize_RdbNotifications(ctx);
 

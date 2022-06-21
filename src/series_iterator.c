@@ -65,7 +65,11 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
 EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
     Chunk_t *curChunk = iter->currentChunk;
-    if (!curChunk) {
+    if (!curChunk || iter->series->funcs->GetNumOfSample(curChunk) == 0) {
+        if (unlikely(curChunk && iter->series->funcs->GetNumOfSample(curChunk) > 0 &&
+                     iter->series->totalSamples == 0)) { // empty chunks are being removed
+            RedisModule_Log(mr_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+        }
         return NULL;
     }
 
