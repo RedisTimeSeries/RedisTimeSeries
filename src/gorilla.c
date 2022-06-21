@@ -221,18 +221,6 @@ static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
     return !(bins[bit / BINW] & BIT(localbit(bit)));
 }
 
-static inline u_int64_t Bins_getIndex(const u_int64_t *bins, globalbit_t bit) {
-    return bit / BINW; 
-}
-
-static inline u_int64_t Bins_getCache(const u_int64_t *bins, globalbit_t bit) {
-    return bins[bit / BINW]; 
-}
-
-static inline bool Bins_bitoffCache(const u_int64_t bitcache, globalbit_t bit) {
-    return !(bitcache & BIT(localbit(bit)));
-}
-
 // unused:
 // static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
 //    return !Bins_bitoff(bins, bit);
@@ -515,21 +503,11 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     //
     // control bit ‘0’
     // Read stored double delta value
-
-    u_int64_t bitindex = Bins_getIndex(bins, iter->idx); 
-    u_int64_t bitcache = Bins_getCache(bins, iter->idx); 
-
     sample->timestamp = iter->prevTS +=
-        Bins_bitoffCache(bitcache, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
-
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
-    if(Bins_getIndex(bins, iter->idx) == bitindex){
-        sample->value = Bins_bitoffCache(bitcache, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
-    }
-    else{
-        sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
-    }
+    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
     iter->count++;
     return CR_OK;
 }
