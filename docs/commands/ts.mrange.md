@@ -10,7 +10,7 @@ Query a range across multiple time series by filters in forward direction
 TS.MRANGE fromTimestamp toTimestamp
           [FILTER_BY_TS TS...]
           [FILTER_BY_VALUE min max]
-          [WITHLABELS] | [SELECTED_LABELS label...]
+          [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
           [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
           FILTER filter..
