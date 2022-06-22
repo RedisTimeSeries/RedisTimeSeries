@@ -63,6 +63,17 @@ def test_ts_del_last_chunk():
         assert len(info.chunks) > 1
         res = r.execute_command("ts.get", 't1{1}')
         assert res[0] == del_from - 1
+        res = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert res[len(res) - 1][0] == del_from - 1
+        assert r.execute_command("ts.del", 't1{1}', 0, del_from - 1)
+        info = TSInfo(r.execute_command("ts.info", 't1{1}', 'DEBUG'))
+        assert len(info.chunks) == 1
+        r.execute_command("ts.add", 't1{1}', 5, random.uniform(0, 1))
+        res = r.execute_command("ts.get", 't1{1}')
+        assert res[0] == 5
+        res = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert len(res) == 1
+        assert res[len(res) - 1][0] == 5
 
 def test_ts_del_last_sample_in_series():
     with Env().getClusterConnectionIfNeeded() as r:
