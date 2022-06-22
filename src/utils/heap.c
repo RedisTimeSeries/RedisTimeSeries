@@ -185,6 +185,15 @@ void heap_clear(heap_t *h) {
     h->count = 0;
 }
 
+void heap_clear_free_items(heap_t *h, void (*free_func)(void *)) {
+    size_t n = heap_count(h);
+    for (size_t i = 0; i < n; ++i) {
+        free_func(h->array[i]);
+    }
+
+    h->count = 0;
+}
+
 /**
  * @return item's index on the heap's array; otherwise -1 */
 static int __item_get_idx(const heap_t *h, const void *item) {

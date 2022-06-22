@@ -1,9 +1,9 @@
 from RLTest import Env
 import pytest
 import redis
-from test_helper_classes import _get_ts_info
+from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
-
+import random
 
 def test_ts_del_uncompressed():
     # total samples = 101
@@ -23,6 +23,59 @@ def test_ts_del_uncompressed():
         res = r.execute_command('ts.range', 'test_key', 0, 100)
         assert len(res) == 0
 
+#bug https://github.com/RedisTimeSeries/RedisTimeSeries/issues/1176
+def test_ts_del_first_sample_in_chunk():
+    _from = 1
+    _to = 300
+    del_from = 101
+    del_to = 258
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 't1{1}', 'uncompressed', "DUPLICATE_POLICY", "LAST")
+        for i in range(_from, _to + 1):
+            r.execute_command("ts.add", 't1{1}', i, random.uniform(0, 1))
+        range1 = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert r.execute_command("ts.del", 't1{1}', del_from, del_to)
+        add_str = []
+        add_str.append("ts.madd")
+        for i in range(_from, del_to + 1):
+            add_str.append("t1{1}")
+            add_str.append(str(i))
+            add_str.append(str(random.uniform(0, 1)))
+        assert r.execute_command(*add_str)
+        range2 = r.execute_command("ts.range", 't1{1}', '-', '+')
+        assert len(range2) == len(range1)
+
+def test_ts_del_last_chunk():
+    _from = 1
+    _to = 500
+    del_from = 101
+    del_to = 500
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1{1}', 'compressed', 'CHUNK_SIZE', '128')
+        for i in range(_from, _to + 1):
+            r.execute_command("ts.add", 't1{1}', i, random.uniform(0, 1))
+        info = TSInfo(r.execute_command("ts.info", 't1{1}', 'DEBUG'))
+        n_chunks = len(info.chunks)
+        assert(n_chunks > 1)
+        assert r.execute_command("ts.del", 't1{1}', del_from, del_to)
+        info = TSInfo(r.execute_command("ts.info", 't1{1}', 'DEBUG'))
+        assert len(info.chunks) < n_chunks
+        assert len(info.chunks) > 1
+        res = r.execute_command("ts.get", 't1{1}')
+        assert res[0] == del_from - 1
+
+def test_ts_del_last_sample_in_series():
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 't1{1}', "DUPLICATE_POLICY", "LAST")
+        assert r.execute_command("ts.get", 't1{1}') == []
+        assert r.execute_command("ts.del", 't1{1}', '0', '10') == 0
+        assert r.execute_command("ts.get", 't1{1}') == []
+        r.execute_command("ts.add", 't1{1}', 1, 2)
+        r.execute_command("ts.add", 't1{1}', 5, 10)
+        assert r.execute_command("ts.del", 't1{1}', '5', '5')
+        assert r.execute_command("ts.get", 't1{1}') == [1, b'2']
+        assert r.execute_command("ts.del", 't1{1}', '1', '1')
+        assert r.execute_command("ts.get", 't1{1}') == []
 
 def test_ts_del_uncompressed_in_range():
     sample_len = 101

@@ -166,7 +166,7 @@ def test_rename():
         assert r.execute_command('RENAME', 't{1}_agg', 't{1}')
         res = r.execute_command('ts.info', 't{1}_renamed')
         index = res.index(b'rules')
-        env.assertEqual(res[index+1], [[b't{1}', 10, b'AVG']])
+        env.assertEqual(res[index+1], [[b't{1}', 10, b'AVG', 0]])
 
 
 def test_renamenx():
@@ -187,7 +187,7 @@ def test_renamenx():
         assert r.execute_command('RENAMENX', 't{1}_agg', 't{1}_agg_renamed')
         res = r.execute_command('ts.info', 't{1}_renamed')
         index = res.index(b'rules')
-        env.assertEqual(res[index+1], [[b't{1}_agg_renamed', 10, b'AVG']])
+        env.assertEqual(res[index+1], [[b't{1}_agg_renamed', 10, b'AVG', 0]])
 
 
 def test_copy_compressed_uncompressed():

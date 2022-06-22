@@ -183,16 +183,3 @@
     fun:connSocketEventHandler
     fun:aeProcessEvents
 }
-
-{
-    <redis_get_context_superssions>
-    Memcheck:Leak
-    fun:malloc
-    fun:ztrymalloc_usable (zmalloc.c:101)
-    fun:zmalloc (zmalloc.c:119)
-    fun:RM_GetDetachedThreadSafeContext (module.c:5811)
-    fun:???
-    fun:moduleLoad (module.c:8594)
-    fun:moduleLoadFromQueue (module.c:8521)
-    fun:main (server.c:6414)
-}

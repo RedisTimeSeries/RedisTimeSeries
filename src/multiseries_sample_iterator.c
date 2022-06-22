@@ -34,10 +34,8 @@ void MultiSeriesSampleIterator_Close(struct AbstractMultiSeriesSampleIterator *i
     for (size_t i = 0; i < iter->n_series; ++i) {
         iter->base.input[i]->Close(iter->base.input[i]);
     }
-    MSSample *sample;
-    while ((sample = heap_peek(iter->samples_heap))) {
-        free(sample);
-    }
+    free(iter->base.input);
+    heap_clear_free_items(iter->samples_heap, free);
     heap_free(iter->samples_heap);
     free(iterator);
 }
@@ -55,7 +53,10 @@ ChunkResult MultiSeriesSampleIterator_GetNext(struct AbstractMultiSeriesSampleIt
     *sample = hsample->sample;
     if (hsample->iter->GetNext(hsample->iter, &hsample->sample) == CR_OK) {
         heap_offer(&iter->samples_heap, hsample);
+    } else { // the series is exhausted free it's sample
+        free(hsample);
     }
+
     return CR_OK;
 }
 
@@ -75,6 +76,8 @@ MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator 
         if (sample_iter->GetNext(sample_iter, &sample->sample) == CR_OK) {
             sample->iter = sample_iter;
             assert(heap_offer(&newIter->samples_heap, sample) == 0);
+        } else {
+            free(sample);
         }
     }
     return newIter;

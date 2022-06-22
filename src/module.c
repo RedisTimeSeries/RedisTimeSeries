@@ -105,10 +105,11 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CompactionRule *rule = series->rules;
     int ruleCount = 0;
     while (rule != NULL) {
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, 4);
         RedisModule_ReplyWithString(ctx, rule->destKey);
         RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
+        RedisModule_ReplyWithLongLong(ctx, rule->timestampAlignment);
 
         rule = rule->nextRule;
         ruleCount++;
@@ -124,14 +125,16 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
+            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
             RedisModule_ReplyWithArray(ctx, 5 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetFirstTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
-            RedisModule_ReplyWithLongLong(ctx, series->funcs->GetLastTimestamp(chunk));
+            RedisModule_ReplyWithLongLong(
+                ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "samples");
-            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             RedisModule_ReplyWithLongLong(ctx, numOfSamples);
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
@@ -516,20 +519,25 @@ static inline int add(RedisModuleCtx *ctx,
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
     const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
-    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL))
-        return RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
+    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL)) {
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
+        return REDISMODULE_ERR;
+    }
 
     long long timestampValue;
     if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
-        if (RMUtil_StringEqualsC(timestampStr, "*"))
+        if (RMUtil_StringEqualsC(timestampStr, "*")) {
             timestampValue = RedisModule_Milliseconds();
-        else
-            return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+        } else {
+            RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+            return REDISMODULE_ERR;
+        }
     }
 
     if (timestampValue < 0) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be positive number");
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
+        return REDISMODULE_ERR;
     }
     api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
@@ -546,7 +554,8 @@ static inline int add(RedisModuleCtx *ctx,
         CreateTsKey(ctx, keyName, &cCtx, &series, &key);
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
+        RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
+        return REDISMODULE_ERR;
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
@@ -609,7 +618,9 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *valueStr = argv[3];
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
-    RedisModule_ReplicateVerbatim(ctx);
+    if (result == REDISMODULE_OK) {
+        RedisModule_ReplicateVerbatim(ctx);
+    }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
 
@@ -1111,6 +1122,26 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
     }
 }
 
+int persistence_in_progress = 0;
+
+void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (memcmp(&eid, &RedisModuleEvent_Persistence, sizeof(eid)) != 0) {
+        return;
+    }
+
+    if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_RDB_START ||
+        subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_AOF_START) {
+        persistence_in_progress++;
+    } else if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_ENDED ||
+               subevent == REDISMODULE_SUBEVENT_PERSISTENCE_FAILED) {
+        persistence_in_progress--;
+    }
+
+    return;
+}
+
 void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     /**
      * On sharding event we need to do couple of things depends on the subevent given:
@@ -1203,6 +1234,15 @@ void ReplicaBackupCallback(RedisModuleCtx *ctx,
         case REDISMODULE_SUBEVENT_REPL_BACKUP_DISCARD:
             Discard_Globals_Backup();
             break;
+    }
+}
+
+bool CheckVersionForBlockedClientMeasureTime() {
+    // Minimal versions: 6.2.0
+    if (RTS_currVersion.redisMajorVersion >= 6 && RTS_currVersion.redisMinorVersion >= 2) {
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -1356,6 +1396,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
     RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
 
     Initialize_RdbNotifications(ctx);
 

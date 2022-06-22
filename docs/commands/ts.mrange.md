@@ -29,20 +29,33 @@ TS.MRANGE fromTimestamp toTimestamp
 
 Optional parameters:
 
-- `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
-- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
+- `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
 
-- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+  Followed by a list of timestamps to filter the result by specific timestamps.
+
+- `FILTER_BY_VALUE` _min_ _max_ (since RedisTimeSeries v1.6)
+
+  Filter result by value using minimum and maximum.
+
+- `WITHLABELS`
+
+  Include in the reply all label-value pairs representing metadata labels of the time series. 
 
   If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
+- `SELECTED_LABELS` _label_... (since RedisTimeSeries v1.6)
+
+  Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
  
   If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-- `COUNT` _count_ - Maximum number of returned samples per time series.
+- `COUNT` _count_
+   
+  Maximum number of returned samples per time series.
 
-- `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+- `ALIGN` _value_ (since RedisTimeSeries v1.6)
+
+  Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
      Possible values:
      * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
      * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
@@ -53,44 +66,68 @@ Optional parameters:
 
   Aggregate results into time buckets.
   - _aggregator_ - Aggregation type: One of the following:
-    | aggregator | description                                         |
-    | ---------- | --------------------------------------------------- |
-    | `avg`      | arithmetic mean of all values                       |
-    | `sum`      | sum of all values                                   |
-    | `min`      | minimum value                                       |
-    | `max`      | maximum value                                       |
-    | `range`    | difference between the highest and the lowest value |
-    | `count`    | number of values                                    |
-    | `first`    | the value with the lowest timestamp in the bucket   |
-    | `last`     | the value with the highest timestamp in the bucket  |
-    | `std.p`    | population standard deviation of the values         |
-    | `std.s`    | sample standard deviation of the values             |
-    | `var.p`    | population variance of the values                   |
-    | `var.s`    | sample variance of the values                       |
-    | `twa`      | time-weighted average of all values                 |
+    | _aggregator_ | description                                                      |
+    | ------------ | ---------------------------------------------------------------- |
+    | `avg`        | arithmetic mean of all values                                    |
+    | `sum`        | sum of all values                                                |
+    | `min`        | minimum value                                                    |
+    | `max`        | maximum value                                                    |
+    | `range`      | difference between the highest and the lowest value              |
+    | `count`      | number of values                                                 |
+    | `first`      | the value with the lowest timestamp in the bucket                |
+    | `last`       | the value with the highest timestamp in the bucket               |
+    | `std.p`      | population standard deviation of the values                      |
+    | `std.s`      | sample standard deviation of the values                          |
+    | `var.p`      | population variance of the values                                |
+    | `var.s`      | sample variance of the values                                    |
+    | `twa`        | time-weighted average of all values (since RedisTimeSeries v1.8) |
+
   - _bucketDuration_ - duration of each bucket, in milliseconds
 
-  The alignment of time buckets is 0.
+  - [BUCKETTIMESTAMP _bt_] (since RedisTimeSeries v1.8)
 
-- `GROUPBY` _label_ `REDUCE` _reducer_
+    Controls how bucket timestamps are reported.
+
+    | _bt_         | description                                                                             |
+    | ------------ | --------------------------------------------------------------------------------------- |
+    | `-` or `low` | The timestamp reported for each bucket is its start time (default)                      |
+    | `+` or `high`| The timestamp reported for each bucket is its end time                                  |
+    | `~` or `mid` | The timestamp reported for each bucket is its mid time (rounded down if not an integer) |
+
+  - [EMPTY] (since RedisTimeSeries v1.8)
+
+    When this flag is specified, aggregations are reported for empty buckets as well:
+
+    | _aggregator_         | Value reported for each empty bucket |
+    | -------------------- | ------------------------------------ |
+    | sum, count           | 0                                    |
+    | min, max, range, avg | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time - calculate the min/max/range/avg within the bucket; NaN if there is no values before or after the bucket       |
+    | first                | The last value before the bucket’s start time; NaN if there is no such value     |
+    | last                 | The first value on or after the bucket’s end time; NaN if there is no such value |
+    | std.p, std.s         | NaN                                                                              |
+    | twa                  | Based on linear interpolation or extrapolation; NaN when cannot interpolate or extrapolate |
+
+    Regardless of the values of fromTimestamp and toTimestamp, no data will be reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
+
+- `GROUPBY` _label_ `REDUCE` _reducer_ (since RedisTimeSeries v1.6)
 
   Aggregate results across different time series, grouped by the provided label name.
   
   When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
     - _label_ - label name to group series by.  A new series for each value will be produced.
     - _reducer_ - Reducer type used to aggregate series that share the same label value. One of the following:
-      | reducer | description                                                          |
-      | ------- | -------------------------------------------------------------------- |
-      | `avg`   | per label value: arithmetic mean of all values                       |
-      | `sum`   | per label value: sum of all values                                   |
-      | `min`   | per label value: minimum value                                       |
-      | `max`   | per label value: maximum value                                       |
-      | `range` | per label value: difference between the highest and the lowest value |
-      | `count` | per label value: number of values                                    |
-      | `std.p` | per label value: population standard deviation of the values         |
-      | `std.s` | per label value: sample standard deviation of the values             |
-      | `var.p` | per label value: population variance of the values                   |
-      | `var.s` | per label value: sample variance of the values                       |
+      | _reducer_ | description                                                                                       |
+      | --------- | ------------------------------------------------------------------------------------------------- |
+      | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)                       |
+      | `sum`     | per label value: sum of all values                                                                |
+      | `min`     | per label value: minimum value                                                                    |
+      | `max`     | per label value: maximum value                                                                    |
+      | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+      | `count`   | per label value: number of values (since RedisTimeSeries v1.8)                                    |
+      | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8)         |
+      | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
+      | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
+      | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
     - **Note:** The produced time series will be named `<label>=<groupbyvalue>`
     - **Note:** The produced time series will contain 2 labels with the following label array structure:
          - `__reducer__` : the reducer used
