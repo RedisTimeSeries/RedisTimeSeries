@@ -8,7 +8,7 @@ Query a range across multiple time series by filters in forward direction
 
 ```
 TS.MRANGE fromTimestamp toTimestamp
-          [FILTER_BY_TS TS...]
+          [FILTER_BY_TS ts...]
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
@@ -17,7 +17,7 @@ TS.MRANGE fromTimestamp toTimestamp
           [GROUPBY label REDUCE reducer]
 ```
 
-## Description
+## Arguments
 
 `fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 
@@ -32,22 +32,19 @@ TS.MRANGE fromTimestamp toTimestamp
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
 
-  > **NOTE:** When you use filters, apply a minimum of one `label = value` filter.
+  > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
-## Arguments
-
-`FILTER_BY_TS TS...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
+`FILTER_BY_TS ts...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
 
 `FILTER_BY_VALUE min max` (since RedisTimeSeries v1.6) filters results by minimum and maximum values.
 
 `WITHLABELS` includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
-`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. Use when a large number of labels exists per series, but only the values of some of the labels are required.
- 
-  **NOTE:** If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. Use when a large number of labels exists per series, but only the values of some of the labels are required. 
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
-`COUNT count` returns maximum number of samples per time series.
+`COUNT count` limits the number of returned samples.
 
 `ALIGN value` (since RedisTimeSeries v1.6) is a time bucket alignment control for `AGGREGATION`. 
 It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
@@ -57,7 +54,7 @@ Values include:
    - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
    - A specific timestamp: align the reference timestamp to a specific time
    
-  > **NOTE:** when not provided, alignment is set to `0`
+  > **NOTE:** When not provided, alignment is set to `0`.
 
 `AGGREGATION aggregator bucketDuration` aggregates results into time buckets, where:
 
