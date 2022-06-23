@@ -246,6 +246,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+    queryArg->latest = args.rangeArgs.latest;
 
     MRError *err = NULL;
 

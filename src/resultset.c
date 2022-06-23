@@ -12,6 +12,7 @@
 #include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
+#include "module.h"
 
 #include "rmutil/alloc.h"
 
@@ -155,6 +156,58 @@ int ResultSet_ApplyReducer(TS_ResultSet *r,
 
     return TSDB_OK;
 }
+
+extern RedisModuleCtx *rts_staticCtx; // global redis ctx
+typedef struct Series_Key
+{
+    RedisModuleKey *key;
+    Series *series;
+} Series_Key;
+
+static inline void handle_latest_flag_on_series_list(Series **series,
+                                                     size_t len,
+                                                     Series_Key opened_series[len],
+                                                     api_timestamp_t endTimestamp) {
+    Series *dst;
+    RedisModuleKey *srcKey;
+    Series *srcSeries;
+    bool should_finalize_last_bucket;
+    for (int i = 0; i < len; i++) {
+        dst = series[i];
+        should_finalize_last_bucket = dst->srcKey && endTimestamp > dst->lastTimestamp;
+        if (should_finalize_last_bucket) {
+            // temporarily close the last bucket of the src series and write it to dest
+            const int status = GetSeries(
+                rts_staticCtx, dst->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+            if (!status) {
+                // LATEST is ignored for a series that is not a compaction.
+                opened_series[i].key = NULL;
+            } else {
+                opened_series[i].key = srcKey;
+                opened_series[i].series = srcSeries;
+                finalize_last_bucket(srcSeries, dst);
+            }
+        }
+    }
+}
+
+static inline void undo_latest_flag_additions_on_series_list(Series **series,
+                                                             size_t len,
+                                                             Series_Key opened_series[len]) {
+    for (int i = 0; i < len; i++) {
+        if (opened_series[i].key != NULL) {
+            Series *dstSeries = series[i];
+            Series *srcSeries = opened_series[i].series;
+            if (srcSeries->totalSamples > 0) {
+                CompactionRule *rule = find_rule(srcSeries->rules, dstSeries->keyName);
+                SeriesDelRange(
+                    dstSeries, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
+            }
+            RedisModule_CloseKey(opened_series[i].key);
+        }
+    }
+}
+
 void GroupList_ApplyReducer(TS_GroupList *group,
                             char *labelKey,
                             const RangeArgs *args,
@@ -174,7 +227,20 @@ void GroupList_ApplyReducer(TS_GroupList *group,
 
     Series *source = NULL;
 
+    Series_Key *opened_series = NULL;
+    if (args->latest) {
+        opened_series = (Series_Key *)malloc(sizeof(Series_Key) * group->count);
+        handle_latest_flag_on_series_list(
+            group->list, group->count, opened_series, args->endTimestamp);
+    }
+
     MultiSerieReduce(reduced, group->list, group->count, gropuByReducerArgs, args);
+
+    // undo the latest additions
+    if (args->latest) {
+        undo_latest_flag_additions_on_series_list(group->list, group->count, opened_series);
+        free(opened_series);
+    }
 
     // prepare labels
     for (int i = 0; i < group->count; i++) {

@@ -522,6 +522,17 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest) {
+    int offset = RMUtil_ArgIndex("LATEST", argv, argc);
+    if (offset > 0) {
+        *latest = true;
+    } else {
+        *latest = false;
+    }
+
+    return REDISMODULE_OK;
+}
+
 int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
@@ -558,6 +569,10 @@ int parseRangeArguments(RedisModuleCtx *ctx,
             RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
             return REDISMODULE_ERR;
         }
+    }
+
+    if (parseLatestArg(ctx, argv, argc, &args.latest) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
     }
 
     args.count = -1;
