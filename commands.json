@@ -573,6 +573,11 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -730,6 +735,11 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -881,6 +891,11 @@
             {
                 "name": "toTimestamp",
                 "type": "integer"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
             },
             {
                 "token": "FILTER_BY_TS",
@@ -1120,6 +1135,11 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -1351,6 +1371,11 @@
             {
                 "name": "key",
                 "type": "key"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
             }
         ],
         "since": "1.0.0",

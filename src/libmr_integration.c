@@ -278,9 +278,36 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
+        bool should_finalize_last_bucket = false;
+        RedisModuleKey *srcKey;
+        Series *srcSeries;
+
+        // LATEST is ignored for a series that is not a compaction.
+        should_finalize_last_bucket = predicates->latest && series->srcKey &&
+                                      predicates->endTimestamp > series->lastTimestamp;
+        if (should_finalize_last_bucket) {
+            // temporarily close the last bucket of the src series and write it to dest
+            const int status = GetSeries(
+                rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+            if (!status) {
+                // LATEST is ignored for a series that is not a compaction.
+                should_finalize_last_bucket = false;
+            } else {
+                finalize_last_bucket(srcSeries, series);
+            }
+        }
+
         ListRecord_Add(
             series_list,
             SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
+
+        if (should_finalize_last_bucket) {
+            if (srcSeries->totalSamples > 0) {
+                CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+                SeriesDelRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
+            }
+            RedisModule_CloseKey(srcKey);
+        }
 
         RedisModule_CloseKey(key);
     }

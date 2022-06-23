@@ -399,3 +399,77 @@ def test_mrange_partial_range():
         res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
         'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=fabi')))
         assert res == exp
+
+def test_latest_flag_mrange():
+    env = Env(decodeResponses=True)
+    key1 = 't1{1}'
+    key2 = 't2{1}'
+    key3 = 't3{1}'
+    key4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key1)
+        assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATE', key3)
+        assert r.execute_command('TS.CREATE', key4, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.add', key1, 1, 1)
+        assert r.execute_command('TS.add', key1, 2, 3)
+        assert r.execute_command('TS.add', key1, 11, 7)
+        assert r.execute_command('TS.add', key1, 13, 1)
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert r.execute_command('TS.add', key3, 1, 1)
+        assert r.execute_command('TS.add', key3, 2, 3)
+        assert r.execute_command('TS.add', key3, 11, 7)
+        assert r.execute_command('TS.add', key3, 13, 1)
+        res = r.execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]]
+        res = r.execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4'], [10, '8']]], ['t4{1}', [], [[0, '4'], [10, '8']]]]
+        res = r.execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8']]]]
+        res = r.execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8'], [10, '16']]]]
+
+        # make sure LATEST haven't changed anything in the keys
+        res = r.execute_command('TS.range', key2, 0, 10)
+        assert res == [[0, '4']]
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']]
+
+def test_latest_flag_mrevrange():
+    env = Env(decodeResponses=True)
+    key1 = 't1{1}'
+    key2 = 't2{1}'
+    key3 = 't3{1}'
+    key4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key1)
+        assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATE', key3)
+        assert r.execute_command('TS.CREATE', key4, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.add', key1, 1, 1)
+        assert r.execute_command('TS.add', key1, 2, 3)
+        assert r.execute_command('TS.add', key1, 11, 7)
+        assert r.execute_command('TS.add', key1, 13, 1)
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert r.execute_command('TS.add', key3, 1, 1)
+        assert r.execute_command('TS.add', key3, 2, 3)
+        assert r.execute_command('TS.add', key3, 11, 7)
+        assert r.execute_command('TS.add', key3, 13, 1)
+        res = r.execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]]
+        res = r.execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[10, '8'], [0, '4']]], ['t4{1}', [], [[10, '8'], [0, '4']]]]
+        res = r.execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8']]]]
+        res = r.execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[10, '16'], [0, '8']]]]
+
+        # make sure LATEST haven't changed anything in the keys
+        res = r.execute_command('TS.range', key2, 0, 10)
+        assert res == [[0, '4']]
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']]

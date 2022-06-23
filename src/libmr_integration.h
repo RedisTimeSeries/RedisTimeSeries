@@ -17,6 +17,7 @@ typedef struct QueryPredicates_Arg
     bool withLabels;
     unsigned short limitLabelsSize;
     RedisModuleString **limitLabels;
+    bool latest;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord
