@@ -1,8 +1,4 @@
-import os
 import random
-import shutil
-import subprocess
-import sys
 import redis
 
 NUM_KEYS = 1000
