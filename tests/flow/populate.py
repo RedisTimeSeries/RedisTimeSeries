@@ -1,11 +1,12 @@
 import random
+import sys
 import redis
 
 NUM_KEYS = 1000
 NUM_SAMPLES = 4096
 PORT = 6379
 
-def main():
+def main(encoding):
  
     print("Attempting to connect to Redis server...")
     try:
@@ -24,7 +25,7 @@ def main():
         print("Polulating Samples...")
         for k in range(1, NUM_KEYS):
             key = "key" + str(k)
-            redis_conn.execute_command('ts.create', key)
+            redis_conn.execute_command('ts.create', key, 'ENCODING', encoding, 'LABELS', 'region', 'phoenix')
             print("Created time-series " + key)
             for i in range(1, NUM_SAMPLES):
                 assert redis_conn.execute_command('ts.add', key, i, random.uniform(1.0, 10000.0)) == i
@@ -36,4 +37,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1])
