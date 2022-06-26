@@ -1386,6 +1386,11 @@
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true
+            },
+            {
                 "name": "labels",
                 "type": "oneof",
                 "optional": true,
