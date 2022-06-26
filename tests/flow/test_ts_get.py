@@ -5,7 +5,7 @@ from utils import Env, set_hertz
 from includes import *
 
 
-def test_latest_flag_range():
+def test_latest_flag_get():
     env = Env(decodeResponses=True)
     key1 = 't1{1}'
     key2 = 't2{1}'

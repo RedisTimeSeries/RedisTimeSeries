@@ -95,6 +95,7 @@ typedef struct MGetArgs
     unsigned short numLimitLabels;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
+    bool latest;
 } MGetArgs;
 
 typedef struct CreateCtx

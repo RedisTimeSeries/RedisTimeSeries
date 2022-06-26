@@ -200,6 +200,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+    queryArg->latest = args.latest;
 
     MRError *err = NULL;
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);

@@ -361,6 +361,25 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
+        // Handle latest param
+        bool latest = false;
+        RedisModuleKey *srcKey;
+        Series *srcSeries;
+
+        // LATEST is ignored for a series that is not a compaction.
+        bool should_finalize_last_bucket = predicates->latest && series->srcKey;
+        if (should_finalize_last_bucket) {
+            // temporarily close the last bucket of the src series and write it to dest
+            const int status = GetSeries(
+                rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+            if (!status) {
+                // LATEST is ignored for a series that is not a compaction.
+                should_finalize_last_bucket = false;
+            } else {
+                finalize_last_bucket(srcSeries, series);
+            }
+        }
+
         Record *key_record = ListRecord_Create(3);
         ListRecord_Add(key_record,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
@@ -375,6 +394,14 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             ListRecord_Add(key_record, ListRecord_Create(0));
         }
         ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series));
+
+        if (should_finalize_last_bucket) {
+            if (srcSeries->totalSamples > 0) {
+                CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+                SeriesDelRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
+            }
+            RedisModule_CloseKey(srcKey);
+        }
         RedisModule_CloseKey(key);
         ListRecord_Add(series_list, key_record);
     }

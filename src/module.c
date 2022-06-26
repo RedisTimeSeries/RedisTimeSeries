@@ -1133,6 +1133,26 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                             currentKey);
             continue;
         }
+
+        // Handle latest param
+        bool latest = false;
+        RedisModuleKey *srcKey;
+        Series *srcSeries;
+
+        // LATEST is ignored for a series that is not a compaction.
+        bool should_finalize_last_bucket = args.latest && series->srcKey;
+        if (should_finalize_last_bucket) {
+            // temporarily close the last bucket of the src series and write it to dest
+            const int status = GetSeries(
+                rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+            if (!status) {
+                // LATEST is ignored for a series that is not a compaction.
+                should_finalize_last_bucket = false;
+            } else {
+                finalize_last_bucket(srcSeries, series);
+            }
+        }
+
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         if (args.withLabels) {
@@ -1143,6 +1163,15 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_ReplyWithArray(ctx, 0);
         }
         ReplyWithSeriesLastDatapoint(ctx, series);
+
+        // undo latest sample on LATEST param
+        if (should_finalize_last_bucket) {
+            if (srcSeries->totalSamples > 0) {
+                CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+                SeriesDelRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
+            }
+            RedisModule_CloseKey(srcKey);
+        }
         replylen++;
         RedisModule_CloseKey(key);
     }

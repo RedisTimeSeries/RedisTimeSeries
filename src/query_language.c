@@ -785,6 +785,10 @@ int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MG
         return REDISMODULE_ERR;
     }
 
+    if (parseLatestArg(ctx, argv, argc, &args.latest) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
     if (filter_location == -1) {
         RedisModule_WrongArity(ctx);
