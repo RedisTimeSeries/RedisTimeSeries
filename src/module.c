@@ -1098,6 +1098,7 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
 int persistence_in_progress = 0;
 
 void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    RedisModule_Log(rts_staticCtx, "warning", "Persist event called");
     if (memcmp(&eid, &RedisModuleEvent_Persistence, sizeof(eid)) != 0) {
         return;
     }
@@ -1106,9 +1107,17 @@ void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subeven
         subevent == REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START ||
         subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_RDB_START ||
         subevent == REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_AOF_START) {
+        RedisModule_Log(rts_staticCtx,
+                        "warning",
+                        "Incrementing persist counter count=%d",
+                        persistence_in_progress);
         persistence_in_progress++;
     } else if (subevent == REDISMODULE_SUBEVENT_PERSISTENCE_ENDED ||
                subevent == REDISMODULE_SUBEVENT_PERSISTENCE_FAILED) {
+        RedisModule_Log(rts_staticCtx,
+                        "warning",
+                        "Decrementing persist counter count=%d",
+                        persistence_in_progress);
         persistence_in_progress--;
     }
 

@@ -210,9 +210,18 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
 
+    RedisModule_Log(rts_staticCtx,
+                    "warning",
+                    "in restore keysapce notification last_rdb_load_version=%d",
+                    last_rdb_load_version);
     if (last_rdb_load_version < TS_REPLICAOF_SUPPORT_VER) {
         // In versions greater than TS_REPLICAOF_SUPPORT_VER we delete the reference on the dump
         // stage
+
+        RedisModule_Log(rts_staticCtx,
+                        "warning",
+                        "in restore keysapce notification removing rules last_rdb_load_version=%d",
+                        last_rdb_load_version);
 
         // Remove references to other keys
         if (series->srcKey) {

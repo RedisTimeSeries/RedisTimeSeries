@@ -18,6 +18,7 @@ int last_rdb_load_version;
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
+    RedisModule_Log(rts_staticCtx, "warning", "rdb loading version=%d", last_rdb_load_version);
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -186,9 +187,11 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     if ((series->srcKey != NULL) &&
         (persistence_in_progress >
          0)) { // on dump command (restore) we don't keep the cross references
+        RedisModule_Log(rts_staticCtx, "warning", "rdb saving src");
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
     } else {
+        RedisModule_Log(rts_staticCtx, "warning", "rdb not saving src");
         RedisModule_SaveUnsigned(io, FALSE);
     }
 
@@ -199,9 +202,11 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     }
 
     if (persistence_in_progress == 0) {
+        RedisModule_Log(rts_staticCtx, "warning", "rdb not saving rules");
         // on dump command (restore) we don't keep the cross references
         RedisModule_SaveUnsigned(io, 0);
     } else {
+        RedisModule_Log(rts_staticCtx, "warning", "rdb saving rules");
         RedisModule_SaveUnsigned(io, countRules(series));
 
         CompactionRule *rule = series->rules;
