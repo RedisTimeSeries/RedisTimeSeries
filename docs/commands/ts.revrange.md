@@ -102,7 +102,7 @@ But because m is pretty small, we can neglect it and look at the operation as O(
 
 #### Notes
 
-- When the time series is a compaction: the last compacted sample may aggregate values with timestamp beyond _toTimestamp_. This is because _toTimestamp_ only limits the timestamp of the compacted sample, which is the timestamp of the raw bucket start time.
+- When the time series is a compaction: the last compacted value may aggregate raw values with timestamp beyond _toTimestamp_. This is because _toTimestamp_ only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.
 
 #### Aggregated Query Example
 
