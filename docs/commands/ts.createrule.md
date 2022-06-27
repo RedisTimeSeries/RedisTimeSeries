@@ -36,7 +36,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTime
 
 _destKey_ should be of a `timeseries` type, and should be created before `TS.CREATERULE` is called. 
 
-Notes:
+#### Notes
 
 - Calling `TS.CREATERULE` with a nonempty _destKey_ can result in an undefined behavior
 - Samples should not be explicitly added to _destKey_
