@@ -11,11 +11,13 @@ TS.RANGE key fromTimestamp toTimestamp
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
 
+#### Mandatory parameters
+
 - key - Key name for time series
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
-Optional parameters:
+#### Optional parameters
 
 - `LATEST` (since RedisTimeSeries v1.8)
 
