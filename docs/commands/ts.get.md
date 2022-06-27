@@ -6,9 +6,13 @@ Get the last sample.
 TS.GET key [LATEST]
 ```
 
+#### Arguments
+
+#### Mandatory arguments
+
 * _key_ - Key name for time series
 
-#### Optional parameters
+#### Optional arguments
 
 * `LATEST` (since RedisTimeSeries v1.8)
 
