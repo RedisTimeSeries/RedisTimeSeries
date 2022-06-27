@@ -4,6 +4,7 @@ Query a range in forward direction.
 
 ```sql
 TS.RANGE key fromTimestamp toTimestamp
+         [LATEST]
          [FILTER_BY_TS ts...]
          [FILTER_BY_VALUE min max]
          [COUNT count] 
@@ -15,6 +16,12 @@ TS.RANGE key fromTimestamp toTimestamp
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
 Optional parameters:
+
+- [LATEST] (since RedisTimeSeries v1.8)
+
+  When the time series is a compaction: With LATEST, TS.RANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start times falls within [fromTimestamp, toTimestamp] and that the bucket is not empty). Without LATEST, TS.RANGE will not report the latest (possibly partial) bucket. When the series is not a compaction: LATEST is ignored.
+  
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. When so, LATEST can be used.
 
 - `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
 
