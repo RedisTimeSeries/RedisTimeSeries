@@ -10,14 +10,15 @@ TS.REVRANGE key fromTimestamp toTimestamp
          [COUNT count]
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
+## Arguments
 
-#### Mandatory parameters
+#### Mandatory arguments
 
 - _key_ - Key name for timeseries
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
-#### Optional parameters
+#### Optional arguments
 
 - `LATEST` (since RedisTimeSeries v1.8)
 
