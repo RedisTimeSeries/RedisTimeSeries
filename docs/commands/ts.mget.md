@@ -4,7 +4,7 @@ Get the last samples matching a specific filter.
 ```sql
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
-## Arguments
+### Arguments
 
 #### Mandatory arguments
 
@@ -34,7 +34,7 @@ TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
  
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-#### Return Value
+### Return Value
 
 For each time series matching the specified filters, the following is reported:
 - The key name
@@ -46,15 +46,15 @@ For each time series matching the specified filters, the following is reported:
 
 Note: MGET command can't be part of transaction when running on Redis cluster.
 
-#### Complexity
+### Complexity
 
 TS.MGET complexity is O(n).
 
 n = Number of time series that match the filters
 
-#### Examples
+### Examples
 
-##### MGET Example with default behaviour
+#### MGET Example with default behaviour
 ```sql
 127.0.0.1:6379> TS.MGET FILTER area_id=32
 1) 1) "temperature:2:32"
@@ -67,7 +67,7 @@ n = Number of time series that match the filters
       2) "29"
 ```
 
-##### MGET Example with WITHLABELS option
+#### MGET Example with WITHLABELS option
 ```sql
 127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"
