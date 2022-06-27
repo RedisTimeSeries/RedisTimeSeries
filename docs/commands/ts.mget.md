@@ -2,8 +2,15 @@
 Get the last samples matching a specific filter.
 
 ```sql
-TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
+TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
+
+- [LATEST]
+
+  When the time series is a compaction: With LATEST, TS.MGET will report the compacted value of the latest (possibly partial) raw bucket. Without LATEST, TS.MGET will report the compacted value of the last 'closed' bucket. When the series is not a compaction: LATEST is ignored.
+  
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. LATEST can be used when this is required.  
+
 - FILTER _filter_...
 
   This is the list of possible filters:
