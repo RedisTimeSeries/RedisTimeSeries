@@ -67,6 +67,29 @@ def test_dump_restore_dst_rule():
         assert _get_ts_info(r, key2).sourceKey == None
         assert len(_get_ts_info(r, key2).rules) == 0
 
+# test for version problems in dump restore
+def test_dump_restore_dst_rule_force_save_refs():
+    Env().skipOnCluster()
+    skip_on_rlec()
+    with Env(moduleArgs='FORCE_SAVE_CROSS_REF enable').getClusterConnectionIfNeeded() as r:
+        key1 = 'ts1{a}'
+        key2 = 'ts2{a}'
+        r.execute_command('TS.CREATE', key1)
+        r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
+
+        assert _get_ts_info(r, key2).sourceKey.decode() == key1
+        assert len(_get_ts_info(r, key1).rules) == 1
+
+        data = r.execute_command('DUMP', key2)
+        r.execute_command('DEL', key2)
+        r.execute_command('restore', key2, 0, data)
+
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) != 0
+        assert _get_ts_info(r, key2).sourceKey != None
+        assert len(_get_ts_info(r, key2).rules) == 0
+
 def test_dump_restore_dst_rule_old_version():
     with Env().getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
