@@ -8,11 +8,13 @@ TS.GET key [LATEST]
 
 * _key_ - Key name for time series
 
-* [LATEST] (since RedisTimeSeries v1.8)
+Optional parameters:
 
-  When the time series is a compaction: With LATEST, TS.GET will report the compacted value of the latest (possibly partial) raw bucket. Without LATEST, TS.GET will report the compacted value of the last 'closed' bucket. When the series is not a compaction: LATEST is ignored.
+* `LATEST` (since RedisTimeSeries v1.8)
+
+  When the time series is a compaction: With `LATEST`, TS.GET will report the compacted value of the latest (possibly partial) raw bucket. Without `LATEST`, TS.GET will report the compacted value of the last 'closed' bucket. When the series is not a compaction: `LATEST` is ignored.
   
-  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. LATEST can be used when this is required.
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. `LATEST` can be used when this is required.
 
 #### Return Value
 
