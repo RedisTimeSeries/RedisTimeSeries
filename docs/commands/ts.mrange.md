@@ -20,7 +20,7 @@ TS.MRANGE fromTimestamp toTimestamp
 
 ## Arguments
 
-#### Mandatory arguments
+### Mandatory arguments
 
 `fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 
@@ -37,13 +37,11 @@ TS.MRANGE fromTimestamp toTimestamp
 
   > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
-#### Optional arguments
+### Optional arguments
 
-- `LATEST` (since RedisTimeSeries v1.8)
-
-  When a time series is a compaction: With `LATEST`, TS.MRANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start time falls within [fromTimestamp, toTimestamp]). Without `LATEST`, TS.MRANGE will not report the latest (possibly partial) bucket. When a time series is not a compaction: `LATEST` is ignored.
+`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
-  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. When so, `LATEST` can be used.
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 
 `FILTER_BY_TS ts...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
 
@@ -52,7 +50,8 @@ TS.MRANGE fromTimestamp toTimestamp
 `WITHLABELS` includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
-`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. Use when a large number of labels exists per series, but only the values of some of the labels are required. 
+`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. 
+Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
 `COUNT count` limits the number of returned samples.
@@ -61,11 +60,11 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
 Values include:
    
-   - `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
-   - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
-   - A specific timestamp: align the reference timestamp to a specific time
+ - `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
+ - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
+ - A specific timestamp: align the reference timestamp to a specific time
    
-  > **NOTE:** When not provided, alignment is set to `0`.
+> **NOTE:** When not provided, alignment is set to `0`.
 
 `AGGREGATION aggregator bucketDuration` aggregates results into time buckets, where:
 
@@ -91,24 +90,24 @@ Values include:
 
 `[BUCKETTIMESTAMP bt]` (since RedisTimeSeries v1.8) controls how bucket timestamps are reported.
 
-    | `bt`         | Description                                                |
-    | ------------ | ---------------------------------------------------------- |
-    | `-` or `low` | Timestamp is the start time (default)                      |
-    | `+` or `high`| Timestamp is the end time                                  |
-    | `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
+| `bt`         | Description                                                |
+| ------------ | ---------------------------------------------------------- |
+| `-` or `low` | Timestamp is the start time (default)                      |
+| `+` or `high`| Timestamp is the end time                                  |
+| `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
 
 `[EMPTY]` (since RedisTimeSeries v1.8) is a flag, which, when specified, reports aggregations for empty buckets.
 
-    | `aggregator`         | Value reported for each empty bucket |
-    | -------------------- | ------------------------------------ |
-    | `sum`, `count`       | `0`                                  |
-    | `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
-    | `first`                | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
-    | `last`                 | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-    | `std.p`, `std.s`         | `NaN`                                                    |
-    | `twa`                  | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
+| `aggregator`         | Value reported for each empty bucket |
+| -------------------- | ------------------------------------ |
+| `sum`, `count`       | `0`                                  |
+| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
+| `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
+| `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
+| `std.p`, `std.s`         | `NaN` |
+| `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
 
-    Regardless of the values of fromTimestamp and toTimestamp, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
+Regardless of the values of fromTimestamp and toTimestamp, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 
 `GROUPBY label REDUCE reducer` (since RedisTimeSeries v1.6) aggregates results across different time series, grouped by the provided label name. 
 When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
@@ -128,11 +127,12 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
       | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
       | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
       | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
-      > **NOTES:** 
-        - The produced time series is named `<label>=<groupbyvalue>`
-        - The produced time series contains two labels with these label array structures:
-         - `reducer`, the reducer used
-         - `source`, the time series keys used to compute the grouped series ("key1,key2,key3,...")
+
+> **NOTES:** 
+  - The produced time series is named `<label>=<groupbyvalue>`
+  - The produced time series contains two labels with these label array structures:
+    - `reducer`, the reducer used
+    - `source`, the time series keys used to compute the grouped series ("key1,key2,key3,...")
 
 ## Return value
 
@@ -144,7 +144,7 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS label...` is specified, the selected labels are reported
 - timestamp-value pairs for all samples/aggregations matching the range
 
- > **NOTE:** The `MRANGE` command cannot be part of transaction when running on a Redis cluster.
+> **NOTE:** The `MRANGE` command cannot be part of transaction when running on a Redis cluster.
 
 ## Examples
 
