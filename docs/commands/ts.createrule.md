@@ -42,5 +42,5 @@ _destKey_ should be of a `timeseries` type, and should be created before `TS.CRE
 - Samples should not be explicitly added to _destKey_
 - Only new samples that are added into the source series after the creation of the rule will be aggregated
 - If no samples were added to the source time series during a bucket period - no 'compacted sample' would be added to the destination time series
-- The timestamp of compacted samples added to the destination time series would be set to the start timestamp of each bucket (e.g., for 10-minutes compaction bucket with no alignment - the compacted samples timestamps would be x:00, x:10, x:20, ...) 
+- The timestamp of a 'compacted sample' added to the destination time series would be set to the start timestamp the appropriate bucket (e.g., for 10-minutes compaction bucket with no alignment - the 'compacted samples' timestamps would be x:00, x:10, x:20, ...) 
 
