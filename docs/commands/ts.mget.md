@@ -5,7 +5,7 @@ Get the last samples matching a specific filter.
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
 
-- [LATEST]
+- [LATEST] (since RedisTimeSeries v1.8)
 
   When the time series is a compaction: With LATEST, TS.MGET will report the compacted value of the latest (possibly partial) raw bucket. Without LATEST, TS.MGET will report the compacted value of the last 'closed' bucket. When the series is not a compaction: LATEST is ignored.
   
