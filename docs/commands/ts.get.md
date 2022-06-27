@@ -3,7 +3,7 @@
 Get the last sample.
 
 ```sql
-TS.GET key [LATEST}
+TS.GET key [LATEST]
 ```
 
 * _key_ - Key name for time series
