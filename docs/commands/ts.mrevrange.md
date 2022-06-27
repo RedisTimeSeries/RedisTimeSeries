@@ -13,6 +13,8 @@ TS.MREVRANGE fromTimestamp toTimestamp
           [GROUPBY label REDUCE reducer]
 ```
 
+#### Mandatory parameters
+
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 - FILTER _filter_...
