@@ -22,7 +22,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
 
 - `LATEST` (since RedisTimeSeries v1.8)
 
-  When the time series is a compaction: With `LATEST`, TS.REVRANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start times falls within [fromTimestamp, toTimestamp] and that the bucket is not empty). Without `LATEST`, TS.REVRANGE will not report the latest (possibly partial) bucket. When the series is not a compaction: `LATEST` is ignored.
+  When the time series is a compaction: With `LATEST`, TS.REVRANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start time falls within [fromTimestamp, toTimestamp]). Without `LATEST`, TS.REVRANGE will not report the latest (possibly partial) bucket. When the series is not a compaction: `LATEST` is ignored.
   
   The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. When so, `LATEST` can be used.
 
