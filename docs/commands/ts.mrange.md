@@ -19,6 +19,8 @@ TS.MRANGE fromTimestamp toTimestamp
 
 ## Arguments
 
+#### Mandatory arguments
+
 `fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 
 `toTimestamp` is end timestamp for range query. Use `+` to express the maximum possible timestamp.
@@ -33,6 +35,8 @@ TS.MRANGE fromTimestamp toTimestamp
   - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
 
   > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
+
+#### Optional arguments
 
 `FILTER_BY_TS ts...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
 

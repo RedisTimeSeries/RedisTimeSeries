@@ -3,7 +3,7 @@
 Query a range across multiple time series by filters in reverse direction.
 
 ```sql
-TS.MREVRANGE fromTimestamp toTimestamp
+TS.MREVRANGE fromTimestamp toTimestamp          
           [FILTER_BY_TS TS...]
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
@@ -12,6 +12,9 @@ TS.MREVRANGE fromTimestamp toTimestamp
           FILTER filter..
           [GROUPBY label REDUCE reducer]
 ```
+## Arguments
+
+#### Mandatory arguments
 
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
@@ -27,7 +30,7 @@ TS.MREVRANGE fromTimestamp toTimestamp
 
   Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
-Optional parameters:
+#### Optional arguments
 
 - `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
 

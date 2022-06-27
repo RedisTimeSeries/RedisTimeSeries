@@ -2,8 +2,12 @@
 Get the last samples matching a specific filter.
 
 ```sql
-TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
+TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 ```
+### Arguments
+
+#### Mandatory arguments
+
 - FILTER _filter_...
 
   This is the list of possible filters:
@@ -16,14 +20,21 @@ TS.MGET [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 
   Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
 
-Optional args:
+#### Optional Arguments
+
+- `LATEST` (since RedisTimeSeries v1.8)
+
+  When a time series is a compaction: With `LATEST`, TS.MGET will report the compacted value of the latest (possibly partial) raw bucket. Without `LATEST`, TS.MGET will report the compacted value of the last 'closed' bucket. When a series is not a compaction: `LATEST` is ignored.
+  
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. `LATEST` can be used when this is required.  
 
 - `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+
 - `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
  
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
 
-#### Return Value
+### Return Value
 
 For each time series matching the specified filters, the following is reported:
 - The key name
@@ -35,15 +46,15 @@ For each time series matching the specified filters, the following is reported:
 
 Note: MGET command can't be part of transaction when running on Redis cluster.
 
-#### Complexity
+### Complexity
 
 TS.MGET complexity is O(n).
 
 n = Number of time series that match the filters
 
-#### Examples
+### Examples
 
-##### MGET Example with default behaviour
+#### MGET Example with default behaviour
 ```sql
 127.0.0.1:6379> TS.MGET FILTER area_id=32
 1) 1) "temperature:2:32"
@@ -56,7 +67,7 @@ n = Number of time series that match the filters
       2) "29"
 ```
 
-##### MGET Example with WITHLABELS option
+#### MGET Example with WITHLABELS option
 ```sql
 127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
 1) 1) "temperature:2:32"

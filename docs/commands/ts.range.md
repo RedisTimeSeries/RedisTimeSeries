@@ -4,17 +4,27 @@ Query a range in forward direction.
 
 ```sql
 TS.RANGE key fromTimestamp toTimestamp
+         [LATEST]
          [FILTER_BY_TS ts...]
          [FILTER_BY_VALUE min max]
          [COUNT count] 
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
+### Arguments
+
+#### Mandatory arguments
 
 - key - Key name for time series
 - _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
 - _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
 
-Optional parameters:
+#### Optional arguments
+
+- `LATEST` (since RedisTimeSeries v1.8)
+
+  When the time series is a compaction: With `LATEST`, TS.RANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start times falls within [fromTimestamp, toTimestamp] and that the bucket is not empty). Without `LATEST`, TS.RANGE will not report the latest (possibly partial) bucket. When the series is not a compaction: `LATEST` is ignored.
+  
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. When so, `LATEST` can be used.
 
 - `FILTER_BY_TS` _ts_... (since RedisTimeSeries v1.6)
 
@@ -80,7 +90,7 @@ Optional parameters:
 
     Regardless of the values of fromTimestamp and toTimestamp, no data will be reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 
-#### Complexity
+### Complexity
 
 TS.RANGE complexity is O(n/m+k).
 
@@ -91,7 +101,11 @@ k = Number of data points that are in the requested range
 This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k*m).
 But because m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
 
-#### Aggregated Query Example
+### Notes
+
+- When the time series is a compaction: the last compacted value may aggregate raw values with timestamp beyond _toTimestamp_. This is because _toTimestamp_ only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.
+
+### Aggregated Query Example
 
 ```sql
 127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
