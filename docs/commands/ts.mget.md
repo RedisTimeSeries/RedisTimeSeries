@@ -24,7 +24,7 @@ TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 
 - `LATEST` (since RedisTimeSeries v1.8)
 
-  When a time series is a compaction: With `LATEST`, TS.MGET will report the compacted value of the latest (possibly partial) raw bucket. Without `LATEST`, TS.MGET will report the compacted value of the last 'closed' bucket. When a series is not a compaction: `LATEST` is ignored.
+  When a time series is a compaction: With `LATEST`, TS.MGET will report the compacted value of the latest (possibly partial) bucket. Without `LATEST`, TS.MGET will report the compacted value of the last 'closed' bucket. When a series is not a compaction: `LATEST` is ignored.
   
   The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. `LATEST` can be used when this is required.  
 
