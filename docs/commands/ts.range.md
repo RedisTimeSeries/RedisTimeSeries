@@ -100,6 +100,10 @@ k = Number of data points that are in the requested range
 This can be improved in the future by using binary search to find the start of the range, which makes this O(Log(n/m)+k*m).
 But because m is pretty small, we can neglect it and look at the operation as O(Log(n) + k).
 
+#### Notes
+
+- When the time series is a compaction: the last compacted sample may aggregate values with timestamp beyond _toTimestamp_. This is because _toTimestamp_ only limits the timestamp of the compacted sample, which is the timestamp of the raw bucket start time.
+
 #### Aggregated Query Example
 
 ```sql
