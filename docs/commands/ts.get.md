@@ -6,7 +6,7 @@ Get the last sample.
 TS.GET key [LATEST]
 ```
 
-## Arguments
+### Arguments
 
 #### Mandatory arguments
 
@@ -20,7 +20,7 @@ TS.GET key [LATEST]
   
   The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. `LATEST` can be used when this is required.
 
-## Return Value
+### Return Value
 
 Array-reply, specifically:
 
@@ -28,12 +28,11 @@ The returned array will contain:
 - The last sample timestamp, followed by the last sample value - when the time series contains data. 
 - An empty array - when the time series is empty.
 
-
-## Complexity
+### Complexity
 
 TS.GET complexity is O(1).
 
-## Examples
+### Examples
 
 #### Get Example on time series containing data
 
