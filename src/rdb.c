@@ -184,8 +184,9 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->totalSamples);
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
     if ((series->srcKey != NULL) &&
-        (persistence_in_progress >
-         0)) { // on dump command (restore) we don't keep the cross references
+        ((persistence_in_progress > 0) ||
+         (TSGlobalConfig.forceSaveCrossRef))) { // on dump command (restore) we don't keep the cross
+                                                // references
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
     } else {
@@ -198,7 +199,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
         RedisModule_SaveString(io, series->labels[i].value);
     }
 
-    if (persistence_in_progress == 0) {
+    if (persistence_in_progress == 0 && (!TSGlobalConfig.forceSaveCrossRef)) {
         // on dump command (restore) we don't keep the cross references
         RedisModule_SaveUnsigned(io, 0);
     } else {

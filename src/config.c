@@ -147,6 +147,23 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else {
         TSGlobalConfig.numThreads = 1;
     }
+    TSGlobalConfig.forceSaveCrossRef = false;
+    if (argc > 1 && RMUtil_ArgIndex("FORCE_SAVE_CROSS_REF", argv, argc) >= 0) {
+        RedisModuleString *forceSaveCrossRef;
+        if (RMUtil_ParseArgsAfter("FORCE_SAVE_CROSS_REF", argv, argc, "s", &forceSaveCrossRef) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after FORCE_SAVE_CROSS_REF");
+            return TSDB_ERROR;
+        }
+        size_t forceSaveCrossRef_len;
+        const char *forceSaveCrossRef_cstr =
+            RedisModule_StringPtrLen(forceSaveCrossRef, &forceSaveCrossRef_len);
+        if (!strcasecmp(forceSaveCrossRef_cstr, "enable")) {
+            TSGlobalConfig.forceSaveCrossRef = true;
+        } else if (!strcasecmp(forceSaveCrossRef_cstr, "disable")) {
+            TSGlobalConfig.forceSaveCrossRef = false;
+        }
+    }
     RedisModule_Log(ctx,
                     "notice",
                     "Setting default series ENCODING to: %s",
