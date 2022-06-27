@@ -8,7 +8,7 @@ TS.GET key [LATEST}
 
 * _key_ - Key name for time series
 
-* [LATEST]
+* [LATEST] (since RedisTimeSeries v1.8)
 
   When the time series is a compaction: With LATEST, TS.GET will report the compacted value of the latest (possibly partial) raw bucket. Without LATEST, TS.GET will report the compacted value of the last 'closed' bucket. When the series is not a compaction: LATEST is ignored.
   
