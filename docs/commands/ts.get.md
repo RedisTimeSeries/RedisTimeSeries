@@ -8,7 +8,7 @@ TS.GET key [LATEST]
 
 * _key_ - Key name for time series
 
-#### Optional parameters:
+#### Optional parameters
 
 * `LATEST` (since RedisTimeSeries v1.8)
 
