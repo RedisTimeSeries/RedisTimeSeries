@@ -8,6 +8,7 @@ Query a range across multiple time series by filters in forward direction
 
 ```
 TS.MRANGE fromTimestamp toTimestamp
+          [LATEST]
           [FILTER_BY_TS ts...]
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
@@ -37,6 +38,12 @@ TS.MRANGE fromTimestamp toTimestamp
   > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
 #### Optional arguments
+
+- `LATEST` (since RedisTimeSeries v1.8)
+
+  When a time series is a compaction: With `LATEST`, TS.RANGE will also report the compacted value of the latest (possibly partial) bucket (given that that bucket start time falls within [fromTimestamp, toTimestamp]). Without `LATEST`, TS.RANGE will not report the latest (possibly partial) bucket. When a time series is not a compaction: `LATEST` is ignored.
+  
+  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. When so, `LATEST` can be used.
 
 `FILTER_BY_TS ts...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
 
