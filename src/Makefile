@@ -118,9 +118,9 @@ CC_FLAGS = \
 	-DREDIS_MODULE_TARGET \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
 	-DREDISMODULE_EXPERIMENTAL_API \
-	-g -ggdb
+	-g -ggdb 
 
-LD_FLAGS += -g -ggdb
+LD_FLAGS += -g -ggdb -msse2 
 LD_LIBS += \
 	  $(LIBMR) \
 	  $(FAST_DOUBLE_PARSER_C) \

@@ -88,7 +88,11 @@
  * t=trailing, l=leading, p=use of previous params, 0=xor equal zero
  */
 
+
 #include "gorilla.h"
+
+#include <immintrin.h>
+#include <x86intrin.h>
 
 #include <assert.h>
 
@@ -218,7 +222,12 @@ static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
 }
 
 static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+    u_int64_t a = bins[bit / BINW] & BIT(localbit(bit)); 
+    u_int64_t b = _bittest64(bins, bit);   // This instruction is available on SandyBridge or newer. AMD? 
+
+    assert(a==b); 
+    return !a;
+    //return !(_bittest64(bins, bit)); 
 }
 
 // unused:
