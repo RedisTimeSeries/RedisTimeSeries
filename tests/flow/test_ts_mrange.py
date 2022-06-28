@@ -423,4 +423,5 @@ def test_latest_flag_mrange():
         assert r.execute_command('TS.add', key3, 11, 7)
         assert r.execute_command('TS.add', key3, 13, 1)
         res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true')
-        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]]
+        # needs the or operator because for some reason on RLEC it returns in this format
+        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]] or [[b't2{1}', [], [[0, b'4']]], [b't4{1}', [], [[0, b'4']]]]
