@@ -103,6 +103,7 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->limitLabelsSize, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->startTimestamp, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->endTimestamp, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->latest, error);
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         SerializationCtxWriteRedisString(sctx, predicate_list->limitLabels[i], error);
     }
@@ -148,6 +149,7 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->limitLabelsSize = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->startTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->endTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->latest = MR_SerializationCtxReadeLongLong(sctx, error);
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof(char **));
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
