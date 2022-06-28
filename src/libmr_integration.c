@@ -669,7 +669,7 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
             }
             break;
         }
-        if (series->funcs->GetLastTimestamp(chunk) > startTimestamp) {
+        if (series->funcs->GetLastTimestamp(chunk) >= startTimestamp) {
             if (series->funcs->GetFirstTimestamp(chunk) > endTimestamp) {
                 break;
             }
