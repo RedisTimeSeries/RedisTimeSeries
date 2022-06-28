@@ -1135,7 +1135,6 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
 
         // Handle latest param
-        bool latest = false;
         RedisModuleKey *srcKey;
         Series *srcSeries;
 

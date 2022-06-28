@@ -422,13 +422,13 @@ def test_latest_flag_mrange():
         assert r.execute_command('TS.add', key3, 2, 3)
         assert r.execute_command('TS.add', key3, 11, 7)
         assert r.execute_command('TS.add', key3, 13, 1)
-        res = r.execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true')
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]]
-        res = r.execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [[0, '4'], [10, '8']]], ['t4{1}', [], [[0, '4'], [10, '8']]]]
-        res = r.execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
         assert res == [['is_compaction=true', [], [[0, '8']]]]
-        res = r.execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
         assert res == [['is_compaction=true', [], [[0, '8'], [10, '16']]]]
 
         # make sure LATEST haven't changed anything in the keys
@@ -459,13 +459,13 @@ def test_latest_flag_mrevrange():
         assert r.execute_command('TS.add', key3, 2, 3)
         assert r.execute_command('TS.add', key3, 11, 7)
         assert r.execute_command('TS.add', key3, 13, 1)
-        res = r.execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true')
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]]
-        res = r.execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [[10, '8'], [0, '4']]], ['t4{1}', [], [[10, '8'], [0, '4']]]]
-        res = r.execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
         assert res == [['is_compaction=true', [], [[0, '8']]]]
-        res = r.execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
         assert res == [['is_compaction=true', [], [[10, '16'], [0, '8']]]]
 
         # make sure LATEST haven't changed anything in the keys

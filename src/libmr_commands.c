@@ -148,6 +148,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
+        args.latest = false; // we already handled the latest flag in the client side
         ResultSet_ApplyReducer(resultset, &args, &data->args.gropuByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
@@ -158,6 +159,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;
+        minimizedArgs.latest = false;
 
         replyResultSet(rctx,
                        resultset,
