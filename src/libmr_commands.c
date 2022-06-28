@@ -190,6 +190,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
+    queryArg->latest = args.latest;
     // moving ownership of queries to QueryPredicates_Arg
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -200,7 +201,6 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-    queryArg->latest = args.latest;
 
     MRError *err = NULL;
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
@@ -237,6 +237,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
+    queryArg->latest = args.rangeArgs.latest;
     args.queryPredicates->ref++;
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -247,7 +248,6 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-    queryArg->latest = args.rangeArgs.latest;
 
     MRError *err = NULL;
 
