@@ -112,21 +112,22 @@ Regardless of the values of fromTimestamp and toTimestamp, no data is reported f
 `GROUPBY label REDUCE reducer` (since RedisTimeSeries v1.6) aggregates results across different time series, grouped by the provided label name. 
 When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
 
-    - `label` is label name to group series by. A new series for each value is produced.
+    - `label` is label name to group a series by. A new series for each value is produced.
+
     - `reducer` is reducer type used to aggregate series that share the same label value.
 
-      | `reducer` | Description                 |
-      | --------- | --------------------------- |
-      | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)                       |
-      | `sum`     | per label value: sum of all values                                                                |
-      | `min`     | per label value: minimum value                                                                    |
-      | `max`     | per label value: maximum value                                                                    |
-      | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
-      | `count`   | per label value: number of values (since RedisTimeSeries v1.8)                                    |
-      | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8)         |
-      | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
-      | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
-      | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
+        | `reducer` | Description                 |
+        | --------- | --------------------------- |
+        | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)                       |
+        | `sum`     | per label value: sum of all values  |
+        | `min`     | per label value: minimum value      |
+        | `max`     | per label value: maximum value      |
+        | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+        | `count`   | per label value: number of values (since RedisTimeSeries v1.8)                                    |
+        | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8)         |
+        | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
+        | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
+        | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
 
 > **NOTES:** 
   - The produced time series is named `<label>=<groupbyvalue>`
