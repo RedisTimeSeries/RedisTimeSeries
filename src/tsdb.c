@@ -847,10 +847,13 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             break;
         }
 
+        bool is_only_chunk =
+            ((funcs->GetNumOfSample(currentChunk) + deletedSamples) == series->totalSamples);
         // Should we delete the all chunk?
-        bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
-                                funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
-                               currentChunk != series->lastChunk;
+        bool ts_delCondition =
+            (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
+             funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
+            (!is_only_chunk); // We assume at least one allocated chunk in the series
 
         if (!ts_delCondition) {
             timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(currentChunk);
@@ -868,10 +871,7 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             continue;
         }
 
-        bool isLastChunkDeleted = false;
-        if (currentChunk == series->lastChunk) {
-            isLastChunkDeleted = true;
-        }
+        bool isLastChunkDeleted = (currentChunk == series->lastChunk);
         RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
         deletedSamples += funcs->GetNumOfSample(currentChunk);
         funcs->FreeChunk(currentChunk);
@@ -907,6 +907,7 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             series->lastTimestamp = funcs->GetLastTimestamp(currentChunk);
             series->lastValue = funcs->GetLastValue(currentChunk);
         }
+        RedisModule_DictIteratorStop(iter);
     }
     return deletedSamples;
 }
