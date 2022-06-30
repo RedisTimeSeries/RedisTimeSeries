@@ -509,6 +509,30 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
     return iter->prevDelta;
 }
 
+static inline u_int64_t readIntegerTS(Compressed_Iterator *iter, const uint64_t *bins) {
+    if (Bins_bitoff(bins, iter->idx_ts++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx_ts, CMPR_L1), CMPR_L1);
+        iter->idx_ts += CMPR_L1;
+    } else if (Bins_bitoff(bins, iter->idx_ts++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx_ts, CMPR_L2), CMPR_L2);
+        iter->idx_ts += CMPR_L2;
+    } else if (Bins_bitoff(bins, iter->idx_ts++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx_ts, CMPR_L3), CMPR_L3);
+        iter->idx_ts += CMPR_L3;
+    } else if (Bins_bitoff(bins, iter->idx_ts++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx_ts, CMPR_L4), CMPR_L4);
+        iter->idx_ts += CMPR_L4;
+    } else if (Bins_bitoff(bins, iter->idx_ts++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx_ts, CMPR_L5), CMPR_L5);
+        iter->idx_ts += CMPR_L5;
+    } else {
+        iter->prevDelta += readBits(bins, iter->idx_ts, 64);
+        iter->idx_ts += 64;
+    }
+    return iter->prevDelta;
+}
+
+
 /*
  * This function decodes values inserted by appendFloat.
  *
@@ -563,6 +587,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
 #endif
     if (unlikely(iter->count >= iter->chunk->count))
         return CR_END;
+
     // First sample
     if (unlikely(iter->count == 0)) {
         sample->timestamp = iter->chunk->baseTimestamp;
@@ -570,27 +595,63 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         iter->count++;
         return CR_OK;
     }
+
     const u_int64_t *bins = iter->chunk->data;
     const u_int64_t *bins_ts = iter->chunk->data_ts;
     const u_int64_t *bins_values = iter->chunk->data_values;
     Sample sample_check; 
+
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //
     // control bit ‘0’
     // Read stored double delta value
-    sample->timestamp = iter->prevTS +=
-        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+    //sample->timestamp = iter->prevTS +=
+    //    Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
 
-    sample_check.timestamp = Bins_bitoff(bins_ts, iter->idx_ts++) ? iter->prevDelta : readInteger(iter, bins_ts);
+    u_int64_t prevDeltaBackup = iter->prevDelta; 
+    u_int64_t prevTSBackup = iter->prevTS; 
+    bool bit = Bins_bitoff(bins, iter->idx); 
+    if(bit){
+        iter->idx++; 
+        iter->prevTS += iter->prevDelta; 
+    }
+    else{
+        iter->idx++; 
+        iter->prevTS += readInteger(iter, bins); 
+    }
+    sample->timestamp = iter->prevTS; 
+    u_int64_t newDeltaBackup = iter->prevDelta; 
+    u_int64_t newTSBackup = iter->prevTS;
+
+    iter->prevDelta = prevDeltaBackup; 
+    iter->prevTS = prevTSBackup; 
+    bit = Bins_bitoff(bins_ts, iter->idx_ts); 
+    if(bit){
+        iter->idx_ts++; 
+        iter->prevTS += iter->prevDelta; 
+    }
+    else{
+        iter->idx_ts++; 
+        iter->prevTS += readIntegerTS(iter, bins_ts); 
+    }
+
 
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
-    sample_check.value = Bins_bitoff(bins_values, iter->idx_values++) ? iter->prevValue.d : readFloat(iter, bins_values);
-
-    assert(sample_check.timestamp == sample->timestamp); 
-    assert(sample_check.value == sample->value);
+    //sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    if(Bins_bitoff(bins, iter->idx)){
+        iter->idx++; 
+        sample->value = iter->prevValue.d; 
+    }
+    else{
+        iter->idx++; 
+        sample->value = readFloat(iter, bins); 
+    }
+     
+    
+    //assert(sample_check.timestamp == sample->timestamp); 
+    //assert(sample_check.value == sample->value);
 
     iter->count++;
     return CR_OK;
