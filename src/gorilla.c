@@ -103,6 +103,15 @@
     if (!isSpaceAvailable((chunk), (x)))                                                           \
         return CR_ERR;
 
+#define CHECKSPACE_TS(chunk, x)                                                                    \
+    if (!isSpaceAvailableTs((chunk), (x)))                                                         \
+        return CR_ERR;
+
+#define CHECKSPACE_VALUES(chunk, x)                                                                \
+    if (!isSpaceAvailableValues((chunk), (x)))                                                     \
+        return CR_ERR;
+
+
 #define LeadingZeros64(x) __builtin_clzll(x)
 #define TrailingZeros64(x) __builtin_ctzll(x)
 
@@ -261,6 +270,16 @@ static inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
     return size <= available;
 }
 
+static inline bool isSpaceAvailableTs(CompressedChunk *chunk, u_int8_t size) {
+    u_int64_t available = (chunk->size * 8) - chunk->idx_ts;
+    return size <= available;
+}
+
+static inline bool isSpaceAvailableValues(CompressedChunk *chunk, u_int8_t size) {
+    u_int64_t available = (chunk->size * 8) - chunk->idx_values;
+    return size <= available;
+}
+
 /***************************** APPEND ********************************/
 static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
 #ifdef DEBUG
@@ -317,6 +336,40 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
     }
     chunk->prevTimestampDelta = curDelta;
     chunk->prevTimestamp = timestamp;
+
+    // ---------------------------------------------------------------
+
+    bins = chunk->data_ts;
+    bit = &chunk->idx_ts;
+    if (doubleDelta.i == 0) {
+        CHECKSPACE_TS(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
+        appendBits(bins, bit, 0x00, 1);
+    } else if (Bin_InRange(doubleDelta.i, CMPR_L1)) {
+        CHECKSPACE_TS(chunk, 2 + CMPR_L1 + 1);
+        appendBits(bins, bit, 0x01, 2);
+        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L1), CMPR_L1);
+    } else if (Bin_InRange(doubleDelta.i, CMPR_L2)) {
+        CHECKSPACE_TS(chunk, 3 + CMPR_L2 + 1);
+        appendBits(bins, bit, 0x03, 3);
+        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L2), CMPR_L2);
+    } else if (Bin_InRange(doubleDelta.i, CMPR_L3)) {
+        CHECKSPACE_TS(chunk, 4 + CMPR_L3 + 1);
+        appendBits(bins, bit, 0x07, 4);
+        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L3), CMPR_L3);
+    } else if (Bin_InRange(doubleDelta.i, CMPR_L4)) {
+        CHECKSPACE_TS(chunk, 5 + CMPR_L4 + 1);
+        appendBits(bins, bit, 0x0f, 5);
+        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L4), CMPR_L4);
+    } else if (Bin_InRange(doubleDelta.i, CMPR_L5)) {
+        CHECKSPACE_TS(chunk, 6 + CMPR_L5 + 1);
+        appendBits(bins, bit, 0x1f, 6);
+        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L5), CMPR_L5);
+    } else {
+        CHECKSPACE_TS(chunk, 6 + 64 + 1);
+        appendBits(bins, bit, 0x3f, 6);
+        appendBits(bins, bit, doubleDelta.u, 64);
+    }
+
     return CR_OK;
 }
 
@@ -327,14 +380,19 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
 
     binary_t *bins = chunk->data;
     globalbit_t *bit = &chunk->idx;
+    binary_t *bins_values = chunk->data_values;
+    globalbit_t *bit_values = &chunk->idx_values;
 
     // CHECKSPACE already checked for 1 extra bit availability in appendInteger.
     // Current value is identical to previous value. 1 bit used to encode.
     if (xorWithPrevious == 0) {
         appendBits(bins, bit, 0, 1);
+        appendBits(bins_values, bit_values, 0, 1);
         return CR_OK;
     }
     appendBits(bins, bit, 1, 1);
+    appendBits(bins_values, bit_values, 1, 1);
+
 
     u_int64_t leading = LeadingZeros64(xorWithPrevious);
     u_int64_t trailing = TrailingZeros64(xorWithPrevious);
@@ -368,16 +426,27 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
         CHECKSPACE(chunk, prevBlockInfoSize + 1);
         appendBits(bins, bit, 0, 1);
         appendBits(bins, bit, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
+
+        CHECKSPACE_VALUES(chunk, prevBlockInfoSize + 1);
+        appendBits(bins_values, bit_values, 0, 1);
+        appendBits(bins_values, bit_values, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
     } else {
         CHECKSPACE(chunk, expectedSize + 1);
         appendBits(bins, bit, 1, 1);
         appendBits(bins, bit, leading, DOUBLE_LEADING);
         appendBits(bins, bit, blockSize - DOUBLE_BLOCK_ADJUST, DOUBLE_BLOCK_SIZE);
         appendBits(bins, bit, xorWithPrevious >> trailing, blockSize);
+
+        CHECKSPACE_VALUES(chunk, expectedSize + 1);
+        appendBits(bins_values, bit_values, 1, 1);
+        appendBits(bins_values, bit_values, leading, DOUBLE_LEADING);
+        appendBits(bins_values, bit_values, blockSize - DOUBLE_BLOCK_ADJUST, DOUBLE_BLOCK_SIZE);
+        appendBits(bins_values, bit_values, xorWithPrevious >> trailing, blockSize);
         chunk->prevLeading = leading;
         chunk->prevTrailing = trailing;
     }
     chunk->prevValue.d = value;
+
     return CR_OK;
 }
 
@@ -392,10 +461,14 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         chunk->prevTimestampDelta = 0;
     } else {
         u_int64_t idx = chunk->idx;
+        u_int64_t idx_ts = chunk->idx_ts;
+        u_int64_t idx_values = chunk->idx_values;
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
         if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
             chunk->idx = idx;
+            chunk->idx_ts = idx_ts;
+            chunk->idx_values = idx_values;
             chunk->prevTimestamp = prevTimestamp;
             chunk->prevTimestampDelta = prevTimestampDelta;
             return CR_END;
@@ -498,6 +571,9 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         return CR_OK;
     }
     const u_int64_t *bins = iter->chunk->data;
+    const u_int64_t *bins_ts = iter->chunk->data_ts;
+    const u_int64_t *bins_values = iter->chunk->data_values;
+    Sample sample_check; 
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //
@@ -505,9 +581,17 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // Read stored double delta value
     sample->timestamp = iter->prevTS +=
         Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+
+    sample_check.timestamp = Bins_bitoff(bins_ts, iter->idx_ts++) ? iter->prevDelta : readInteger(iter, bins_ts);
+
     // Check if value was changed
     // control bit ‘0’ (case a)
     sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    sample_check.value = Bins_bitoff(bins_values, iter->idx_values++) ? iter->prevValue.d : readFloat(iter, bins_values);
+
+    assert(sample_check.timestamp == sample->timestamp); 
+    assert(sample_check.value == sample->value);
+
     iter->count++;
     return CR_OK;
 }
