@@ -1,10 +1,17 @@
 import random
+import os
 import sys
 import redis
+import shutil
 
 NUM_KEYS = 1000
 NUM_SAMPLES = 4096
 PORT = 6379
+
+WORK_DIR = '/software_dev/redis'
+OUTPUT_RDB = 'dump.rdb'
+RDB_PATH = os.path.join(WORK_DIR, OUTPUT_RDB)
+VERSION = "1.6.14"
 
 def main(encoding):
  
@@ -32,7 +39,12 @@ def main(encoding):
        
         print("Finished polulating Samples...")
 
-    except:
+        print("Create rdb.")
+        redis_conn.save()
+        redis_conn.ping()
+        shutil.copyfile(RDB_PATH, os.path.join('rdbs', "{}.rdb".format(VERSION)))
+
+    finally:
         print("Done")
 
 

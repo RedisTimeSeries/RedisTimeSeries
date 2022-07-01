@@ -632,44 +632,21 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         return CR_OK;
     }
 
-    //const u_int64_t *bins = iter->chunk->data;
     const u_int64_t *bins_ts = iter->chunk->data_ts;
     const u_int64_t *bins_values = iter->chunk->data_values;
-    //Sample sample_check; 
-
+   
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //
     // control bit ‘0’
     // Read stored double delta value
-    /*u_int64_t prevDeltaBackup = iter->prevDelta; 
-    u_int64_t prevTSBackup = iter->prevTS; 
-    sample->timestamp = iter->prevTS +=
-        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
-
-    iter->prevDelta = prevDeltaBackup; 
-    iter->prevTS = prevTSBackup; */
     sample->timestamp = iter->prevTS += 
         Bins_bitoff(bins_ts, iter->idx_ts++) ? iter->prevDelta : readIntegerNew(iter, bins_ts);
 
 
     // Check if value was changed
     // control bit ‘0’ (case a)
-    /*u_int8_t blocksizeBackup = iter->blocksize; 
-    u_int8_t leadingBackup = iter->leading; 
-    u_int8_t trailingBackup = iter->trailing;
-    union64bits prevValueBackup = iter->prevValue; 
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
-       
-    iter->blocksize = blocksizeBackup; 
-    iter->leading = leadingBackup; 
-    iter->trailing = trailingBackup; 
-    iter->prevValue = prevValueBackup; */
     sample->value = Bins_bitoff(bins_values, iter->idx_values++) ? iter->prevValue.d : readFloatNew(iter, bins_values);
-
-
-    //assert(sample_check.timestamp == sample->timestamp); 
-    //assert(sample_check.value == sample->value);
 
     iter->count++;
     return CR_OK;
