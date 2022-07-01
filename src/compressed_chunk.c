@@ -26,11 +26,13 @@
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
-    chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
+    //chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->data_ts = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->data_values = (u_int64_t *)calloc(chunk->size, sizeof(char));
 #ifdef DEBUG
-    memset(chunk->data, 0, chunk->size);
+    //memset(chunk->data, 0, chunk->size);
+    memset(chunk->data_ts, 0, chunk->size);
+    memset(chunk->data_values, 0, chunk->size);
 #endif
     chunk->prevLeading = 32;
     chunk->prevTrailing = 32;
@@ -40,10 +42,10 @@ Chunk_t *Compressed_NewChunk(size_t size) {
 
 void Compressed_FreeChunk(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
-    if (cmpChunk->data) {
+    /*if (cmpChunk->data) {
         free(cmpChunk->data);
     }
-    cmpChunk->data = NULL;
+    cmpChunk->data = NULL;*/
     if (cmpChunk->data_ts) {
         free(cmpChunk->data_ts);
     }
@@ -59,10 +61,10 @@ Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
     memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
-    newChunk->data = malloc(newChunk->size);
+    //newChunk->data = malloc(newChunk->size);
     newChunk->data_ts = malloc(newChunk->size);
     newChunk->data_values = malloc(newChunk->size);
-    memcpy(newChunk->data, oldChunk->data, oldChunk->size);
+    //memcpy(newChunk->data, oldChunk->data, oldChunk->size);
     memcpy(newChunk->data_ts, oldChunk->data_ts, oldChunk->size);
     memcpy(newChunk->data_values, oldChunk->data_values, oldChunk->size);
     return newChunk;
@@ -79,10 +81,10 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += CHUNK_RESIZE_STEP;
-        chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
+        //chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         chunk->data_ts = (u_int64_t *)realloc(chunk->data_ts, chunk->size * sizeof(char));
         chunk->data_values = (u_int64_t *)realloc(chunk->data_values, chunk->size * sizeof(char));
-        memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
+        //memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
         memset((char *)chunk->data_ts + oldsize, 0, CHUNK_RESIZE_STEP);
         memset((char *)chunk->data_values + oldsize, 0, CHUNK_RESIZE_STEP);
         // printf("Chunk extended to %lu \n", chunk->size);
@@ -91,8 +93,9 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     }
 }
 
-static void trimChunk(CompressedChunk *chunk) {
-    int excess = (chunk->size * BIT - chunk->idx) / BIT;
+/*
+static void trimChunkTS(CompressedChunk *chunk) {
+    int excess = (chunk->size * BIT - chunk->idx_ts) / BIT; 
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
@@ -101,13 +104,31 @@ static void trimChunk(CompressedChunk *chunk) {
         // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
         // each write happens in 8 bytes blocks.
         newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
-        chunk->data = realloc(chunk->data, newSize);
+        //chunk->data = realloc(chunk->data, newSize);
         chunk->data_ts = realloc(chunk->data_ts, newSize);
-        chunk->data_values = realloc(chunk->data_values, newSize);
+        //chunk->data_values = realloc(chunk->data_values, newSize);
         chunk->size = newSize;
     }
 }
 
+static void trimChunkValues(CompressedChunk *chunk) {
+    int excess = (chunk->size * BIT - chunk->idx_values) / BIT;
+
+    assert(excess >= 0); // else we have written beyond allocated memory
+
+    if (excess > 1) {
+        size_t newSize = chunk->size - excess + 1;
+        // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
+        // each write happens in 8 bytes blocks.
+        newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
+        //chunk->data = realloc(chunk->data, newSize);
+        //chunk->data_ts = realloc(chunk->data_ts, newSize);
+        chunk->data_values = realloc(chunk->data_values, newSize);
+        chunk->size = newSize;
+    }
+}*/
+
+/*
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
     size_t split = curChunk->count / 2;
@@ -128,15 +149,19 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
         ensureAddSample(newChunk2, &sample);
     }
 
-    trimChunk(newChunk1);
-    trimChunk(newChunk2);
+
+    trimChunkTS(newChunk1);
+    trimChunkValues(newChunk1); 
+    trimChunkTS(newChunk2);
+    trimChunkValues(newChunk2); 
+    
     swapChunks(curChunk, newChunk1);
 
     Compressed_FreeChunkIterator(iter);
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
-}
+} */
 
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
     *size = 0;
@@ -181,7 +206,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
             nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         }
     }
-
+ 
     swapChunks(newChunk, oldChunk);
 
     Compressed_FreeChunkIterator(iter);
@@ -424,9 +449,9 @@ _done:
  *  Iterator functions  *
  ************************/
 // LCOV_EXCL_START - used for debug
-u_int64_t getIterIdx(ChunkIter_t *iter) {
-    return ((Compressed_Iterator *)iter)->idx;
-}
+//u_int64_t getIterIdx(ChunkIter_t *iter) {
+//    return ((Compressed_Iterator *)iter)->idx;
+//}
 u_int64_t getIterIdxTs(ChunkIter_t *iter) {
     return ((Compressed_Iterator *)iter)->idx_ts;
 }
@@ -439,7 +464,7 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) 
     const CompressedChunk *compressedChunk = chunk;
     Compressed_Iterator *iter = (Compressed_Iterator *)iterator;
     iter->chunk = (CompressedChunk *)compressedChunk;
-    iter->idx = 0;
+    //iter->idx = 0;
     iter->idx_ts = 0;
     iter->idx_values = 0;
     iter->count = 0;
@@ -496,7 +521,8 @@ static void Compressed_Serialize(Chunk_t *chunk,
 
     saveUnsigned(ctx, compchunk->size);
     saveUnsigned(ctx, compchunk->count);
-    saveUnsigned(ctx, compchunk->idx);
+    saveUnsigned(ctx, compchunk->idx_ts);
+    saveUnsigned(ctx, compchunk->idx_values);
     saveUnsigned(ctx, compchunk->baseValue.u);
     saveUnsigned(ctx, compchunk->baseTimestamp);
     saveUnsigned(ctx, compchunk->prevTimestamp);
@@ -504,7 +530,7 @@ static void Compressed_Serialize(Chunk_t *chunk,
     saveUnsigned(ctx, compchunk->prevValue.u);
     saveUnsigned(ctx, compchunk->prevLeading);
     saveUnsigned(ctx, compchunk->prevTrailing);
-    saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
+    //saveStringBuffer(ctx, (char *)compchunk->data, compchunk->size);
     saveStringBuffer(ctx, (char *)compchunk->data_ts, compchunk->size);
     saveStringBuffer(ctx, (char *)compchunk->data_values, compchunk->size);
 }
@@ -513,10 +539,12 @@ static void Compressed_Serialize(Chunk_t *chunk,
     do {                                                                                           \
         CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));                \
                                                                                                    \
-        compchunk->data = NULL;                                                                    \
+        compchunk->data_ts = NULL;                                                                 \
+        compchunk->data_values = NULL;                                                             \
         compchunk->size = readUnsigned(ctx, ##__VA_ARGS__);                                        \
         compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                                       \
-        compchunk->idx = readUnsigned(ctx, ##__VA_ARGS__);                                         \
+        compchunk->idx_ts = readUnsigned(ctx, ##__VA_ARGS__);                                      \
+        compchunk->idx_values = readUnsigned(ctx, ##__VA_ARGS__);                                  \
         compchunk->baseValue.u = readUnsigned(ctx, ##__VA_ARGS__);                                 \
         compchunk->baseTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
         compchunk->prevTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                               \
@@ -526,7 +554,6 @@ static void Compressed_Serialize(Chunk_t *chunk,
         compchunk->prevTrailing = readUnsigned(ctx, ##__VA_ARGS__);                                \
                                                                                                    \
         size_t len;                                                                                \
-        compchunk->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);                  \
         compchunk->data_ts = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);               \
         compchunk->data_values = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);           \
         *chunk = (Chunk_t *)compchunk;                                                             \
