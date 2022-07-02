@@ -90,9 +90,11 @@ typedef enum DuplicatePolicy {
 
 /* Chunk enum */
 typedef enum {
-  CR_OK = 0,    // RM_OK
-  CR_ERR = 1,   // RM_ERR
-  CR_END = 2,   // END_OF_CHUNK
+  CR_OK = 0,          // RM_OK
+  CR_ERR_TS = 1,      // Error inserting time stamps
+  CR_ERR_VALUES = 2,  // Error inserting values
+  CR_ERR = 3,         // RM_ERR
+  CR_END = 4,         // END_OF_CHUNK
 } ChunkResult;
 
 /* parsing */

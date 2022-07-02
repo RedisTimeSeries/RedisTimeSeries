@@ -106,11 +106,11 @@
 */
 #define CHECKSPACE_TS(chunk, x)                                                                    \
     if (!isSpaceAvailableTs((chunk), (x)))                                                         \
-        return CR_ERR;
+        return CR_ERR_TS;
 
 #define CHECKSPACE_VALUES(chunk, x)                                                                \
     if (!isSpaceAvailableValues((chunk), (x)))                                                     \
-        return CR_ERR;
+        return CR_ERR_VALUES;
 
 
 #define LeadingZeros64(x) __builtin_clzll(x)
@@ -267,12 +267,12 @@ static inline binary_t readBits(const binary_t *bins,
 }
 
 static inline bool isSpaceAvailableTs(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx_ts;
+    u_int64_t available = (chunk->size_ts * 8) - chunk->idx_ts;
     return size <= available;
 }
 
 static inline bool isSpaceAvailableValues(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx_values;
+    u_int64_t available = (chunk->size_values * 8) - chunk->idx_values;
     return size <= available;
 }
 
@@ -416,12 +416,16 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         u_int64_t idx_values = chunk->idx_values;
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
-        if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
+
+        ChunkResult result = appendInteger(chunk, timestamp); 
+        result += appendFloat(chunk, value); 
+
+        if(result != CR_OK){
             chunk->idx_ts = idx_ts;
             chunk->idx_values = idx_values;
             chunk->prevTimestamp = prevTimestamp;
             chunk->prevTimestampDelta = prevTimestampDelta;
-            return CR_END;
+            return result;
         }
     }
     chunk->count++;

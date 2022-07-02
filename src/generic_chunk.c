@@ -35,7 +35,7 @@ static const ChunkFuncs comprChunk = {
     .NewChunk = Compressed_NewChunk,
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,
-    //.SplitChunk = Compressed_SplitChunk,
+    .SplitChunk = Compressed_SplitChunk,
 
     .AddSample = Compressed_AddSample,
     .UpsertSample = Compressed_UpsertSample,

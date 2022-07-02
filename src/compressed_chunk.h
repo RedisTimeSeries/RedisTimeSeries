@@ -14,10 +14,10 @@
 #include <sys/types.h> // u_int_t
 
 // Initialize compressed chunk
-Chunk_t *Compressed_NewChunk(size_t size);
+Chunk_t *Compressed_NewChunk(size_t size_ts, size_t size_values);
 void Compressed_FreeChunk(Chunk_t *chunk);
 Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk);
-//Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
+Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);

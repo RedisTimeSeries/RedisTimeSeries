@@ -23,7 +23,7 @@ MU_TEST(test_compressed_upsert) {
     float minV = 0.0;
     float maxV = 100.0;
     for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size += 64) {
-        CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+        CompressedChunk *chunk = Compressed_NewChunk(chunk_size, chunk_size);
         mu_assert(chunk != NULL, "create compressed chunk");  
         for (size_t i = 1; i <= total_data_points; i++) {
             float value = minV + (float)rand() / ((float)RAND_MAX / maxV);
@@ -52,7 +52,7 @@ MU_TEST(test_compressed_upsert_decompress) {
     double sum_in = 0.0; 
     double sum_out = 0.0; 
     for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size += 64) {
-        CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+        CompressedChunk *chunk = Compressed_NewChunk(chunk_size, chunk_size);
         mu_assert(chunk != NULL, "create compressed chunk");
  
         for (size_t i = 1; i <= total_data_points; i++) {
@@ -193,20 +193,21 @@ MU_TEST(test_Compressed_SplitChunk_odd) {/*
 
 MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     srand((unsigned int)time(NULL));
-    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    const size_t chunk_size_ts = 4096; // 4096 bytes (data) chunck
+    const size_t chunk_size_values = 4096; // 4096 bytes (data) chunck
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size_ts, chunk_size_values);
     mu_assert(chunk != NULL, "create compressed chunk");
     ChunkResult rv = CR_OK;
     int64_t ts = 1;
     int64_t total_added_samples = 0;
 
     // adding 1,3,5....
-    while (rv != CR_END) {
+    while (rv == CR_OK) {
         double tsv = ts * 1.0;
         Sample s1 = { .timestamp = ts, .value = tsv };
         rv = Compressed_AddSample(chunk, &s1);
-        mu_assert(rv == CR_OK || rv == CR_END, "add sample");
-        if (rv != CR_END) {
+        mu_assert(rv == CR_OK || rv == CR_ERR_TS || rv == CR_ERR_VALUES || rv == CR_ERR, "add sample");
+        if (rv == CR_OK) {
             ts++;
             total_added_samples++;
             mu_assert_int_eq(total_added_samples, chunk->count);
@@ -214,8 +215,8 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     }
     const size_t chunk_current_size = Compressed_GetChunkSize(chunk, false);
 
-    mu_assert_int_eq(chunk_size, chunk_current_size);
-    mu_assert_int_eq(chunk_size, chunk->size);
+    mu_assert_int_eq(chunk_size_ts + chunk_size_values, chunk_current_size);
+    mu_assert_int_eq(chunk_size_ts + chunk_size_values, chunk->size_ts + chunk->size_values);
 
     // Now we're at the max of the chunck's capacity
     Sample s3 = { .timestamp = 2, .value = 10.0 };
@@ -228,7 +229,7 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
 
     // We're forcing the chunk to grow
     rv = Compressed_UpsertSample(&uCtxS3, &size, DP_BLOCK);
-    mu_assert(rv == CR_ERR, "Upsert should fail");
+    mu_assert(rv == CR_ERR_TS || rv == CR_ERR_VALUES || rv == CR_ERR, "Upsert should fail");
     rv = Compressed_UpsertSample(&uCtxS3, &size, DP_LAST);
     mu_assert(rv == CR_OK, "upserted existing sample");
 
@@ -237,7 +238,6 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     mu_assert(rv == CR_OK, "upsert non existing sample");
     total_added_samples++;
     mu_assert_int_eq(total_added_samples, chunk->count);
-    mu_assert_int_eq(chunk_size + 32, chunk->size);
 
     Compressed_FreeChunk(chunk);
 }
@@ -248,5 +248,5 @@ MU_TEST_SUITE(compressed_chunk_test_suite) {
     //MU_RUN_TEST(test_compressed_fail_appendInteger);
     //MU_RUN_TEST(test_Compressed_SplitChunk_empty);
     //MU_RUN_TEST(test_Compressed_SplitChunk_odd);
-    //MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
+    MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
 }

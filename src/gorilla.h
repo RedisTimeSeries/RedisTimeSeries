@@ -27,18 +27,15 @@ typedef union
 
 typedef struct CompressedChunk
 {
-    u_int64_t size;
-    //u_int64_t size_ts;
-    //u_int64_t size_values;
+    u_int64_t size_ts;
+    u_int64_t size_values;
     u_int64_t count;
-    //u_int64_t idx;
     u_int64_t idx_ts; 
     u_int64_t idx_values; 
 
     union64bits baseValue;
     u_int64_t baseTimestamp;
 
-    //u_int64_t *data;
     u_int64_t *data_ts; 
     u_int64_t *data_values; 
 
@@ -53,7 +50,6 @@ typedef struct CompressedChunk
 typedef struct Compressed_Iterator
 {
     CompressedChunk *chunk;
-    //u_int64_t idx;
     u_int64_t idx_ts;
     u_int64_t idx_values;
     u_int64_t count;
