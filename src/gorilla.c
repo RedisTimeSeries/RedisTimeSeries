@@ -99,10 +99,11 @@
 #define DOUBLE_BLOCK_SIZE 6
 #define DOUBLE_BLOCK_ADJUST 1
 
+/*
 #define CHECKSPACE(chunk, x)                                                                       \
     if (!isSpaceAvailable((chunk), (x)))                                                           \
         return CR_ERR;
-
+*/
 #define CHECKSPACE_TS(chunk, x)                                                                    \
     if (!isSpaceAvailableTs((chunk), (x)))                                                         \
         return CR_ERR;
@@ -265,11 +266,6 @@ static inline binary_t readBits(const binary_t *bins,
     }
 }
 
-/*tatic inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx;
-    return size <= available;
-}*/
-
 static inline bool isSpaceAvailableTs(CompressedChunk *chunk, u_int8_t size) {
     u_int64_t available = (chunk->size * 8) - chunk->idx_ts;
     return size <= available;
@@ -304,41 +300,7 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
        * The second value is a compressed representation of the value with the `length`
          encoded by the first value. Compression is done using `int2bin`.
      */
-    /*
-    binary_t *bins = chunk->data;
-    globalbit_t *bit = &chunk->idx;
-    if (doubleDelta.i == 0) {
-        CHECKSPACE(chunk, 1 + 1); // CHECKSPACE adds 1 as minimum for double space
-        appendBits(bins, bit, 0x00, 1);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L1)) {
-        CHECKSPACE(chunk, 2 + CMPR_L1 + 1);
-        appendBits(bins, bit, 0x01, 2);
-        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L1), CMPR_L1);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L2)) {
-        CHECKSPACE(chunk, 3 + CMPR_L2 + 1);
-        appendBits(bins, bit, 0x03, 3);
-        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L2), CMPR_L2);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L3)) {
-        CHECKSPACE(chunk, 4 + CMPR_L3 + 1);
-        appendBits(bins, bit, 0x07, 4);
-        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L3), CMPR_L3);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L4)) {
-        CHECKSPACE(chunk, 5 + CMPR_L4 + 1);
-        appendBits(bins, bit, 0x0f, 5);
-        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L4), CMPR_L4);
-    } else if (Bin_InRange(doubleDelta.i, CMPR_L5)) {
-        CHECKSPACE(chunk, 6 + CMPR_L5 + 1);
-        appendBits(bins, bit, 0x1f, 6);
-        appendBits(bins, bit, int2bin(doubleDelta.i, CMPR_L5), CMPR_L5);
-    } else {
-        CHECKSPACE(chunk, 6 + 64 + 1);
-        appendBits(bins, bit, 0x3f, 6);
-        appendBits(bins, bit, doubleDelta.u, 64);
-    } */
-   
-
-    // ---------------------------------------------------------------
-
+ 
     binary_t *bins = chunk->data_ts;
     globalbit_t *bit = &chunk->idx_ts;
     if (doubleDelta.i == 0) {
@@ -380,21 +342,17 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     val.d = value;
     u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
 
-    //binary_t *bins = chunk->data;
-    //globalbit_t *bit = &chunk->idx;
-    binary_t *bins_values = chunk->data_values;
-    globalbit_t *bit_values = &chunk->idx_values;
+    binary_t *bins = chunk->data_values;
+    globalbit_t *bit = &chunk->idx_values;
 
     // Current value is identical to previous value. 1 bit used to encode.
     if (xorWithPrevious == 0) {
-        //appendBits(bins, bit, 0, 1);
         CHECKSPACE_VALUES(chunk, 1);
-        appendBits(bins_values, bit_values, 0, 1);
+        appendBits(bins, bit, 0, 1);
         return CR_OK;
     }
-    //appendBits(bins, bit, 1, 1);
     CHECKSPACE_VALUES(chunk, 1);
-    appendBits(bins_values, bit_values, 1, 1);
+    appendBits(bins, bit, 1, 1);
 
 
     u_int64_t leading = LeadingZeros64(xorWithPrevious);
@@ -426,25 +384,16 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
      */
     if (leading >= chunk->prevLeading && trailing >= chunk->prevTrailing &&
         expectedSize > prevBlockInfoSize) {
-        //CHECKSPACE(chunk, prevBlockInfoSize + 1);
-        //appendBits(bins, bit, 0, 1);
-        //appendBits(bins, bit, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
 
         CHECKSPACE_VALUES(chunk, prevBlockInfoSize + 1);
-        appendBits(bins_values, bit_values, 0, 1);
-        appendBits(bins_values, bit_values, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
+        appendBits(bins, bit, 0, 1);
+        appendBits(bins, bit, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
     } else {
-        //CHECKSPACE(chunk, expectedSize + 1);
-        //appendBits(bins, bit, 1, 1);
-        //appendBits(bins, bit, leading, DOUBLE_LEADING);
-        //appendBits(bins, bit, blockSize - DOUBLE_BLOCK_ADJUST, DOUBLE_BLOCK_SIZE);
-        //appendBits(bins, bit, xorWithPrevious >> trailing, blockSize);
-
         CHECKSPACE_VALUES(chunk, expectedSize + 1);
-        appendBits(bins_values, bit_values, 1, 1);
-        appendBits(bins_values, bit_values, leading, DOUBLE_LEADING);
-        appendBits(bins_values, bit_values, blockSize - DOUBLE_BLOCK_ADJUST, DOUBLE_BLOCK_SIZE);
-        appendBits(bins_values, bit_values, xorWithPrevious >> trailing, blockSize);
+        appendBits(bins, bit, 1, 1);
+        appendBits(bins, bit, leading, DOUBLE_LEADING);
+        appendBits(bins, bit, blockSize - DOUBLE_BLOCK_ADJUST, DOUBLE_BLOCK_SIZE);
+        appendBits(bins, bit, xorWithPrevious >> trailing, blockSize);
         chunk->prevLeading = leading;
         chunk->prevTrailing = trailing;
     }
@@ -463,13 +412,11 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
         chunk->prevTimestampDelta = 0;
     } else {
-        //u_int64_t idx = chunk->idx;
         u_int64_t idx_ts = chunk->idx_ts;
         u_int64_t idx_values = chunk->idx_values;
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
         if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
-            //chunk->idx = idx;
             chunk->idx_ts = idx_ts;
             chunk->idx_values = idx_values;
             chunk->prevTimestamp = prevTimestamp;

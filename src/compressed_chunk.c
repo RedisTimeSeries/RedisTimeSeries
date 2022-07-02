@@ -26,11 +26,9 @@
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
-    //chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->data_ts = (u_int64_t *)calloc(chunk->size, sizeof(char));
     chunk->data_values = (u_int64_t *)calloc(chunk->size, sizeof(char));
 #ifdef DEBUG
-    //memset(chunk->data, 0, chunk->size);
     memset(chunk->data_ts, 0, chunk->size);
     memset(chunk->data_values, 0, chunk->size);
 #endif
@@ -42,10 +40,6 @@ Chunk_t *Compressed_NewChunk(size_t size) {
 
 void Compressed_FreeChunk(Chunk_t *chunk) {
     CompressedChunk *cmpChunk = chunk;
-    /*if (cmpChunk->data) {
-        free(cmpChunk->data);
-    }
-    cmpChunk->data = NULL;*/
     if (cmpChunk->data_ts) {
         free(cmpChunk->data_ts);
     }
@@ -61,10 +55,8 @@ Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
     memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
-    //newChunk->data = malloc(newChunk->size);
     newChunk->data_ts = malloc(newChunk->size);
     newChunk->data_values = malloc(newChunk->size);
-    //memcpy(newChunk->data, oldChunk->data, oldChunk->size);
     memcpy(newChunk->data_ts, oldChunk->data_ts, oldChunk->size);
     memcpy(newChunk->data_values, oldChunk->data_values, oldChunk->size);
     return newChunk;
@@ -81,13 +73,10 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += CHUNK_RESIZE_STEP;
-        //chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         chunk->data_ts = (u_int64_t *)realloc(chunk->data_ts, chunk->size * sizeof(char));
         chunk->data_values = (u_int64_t *)realloc(chunk->data_values, chunk->size * sizeof(char));
-        //memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
         memset((char *)chunk->data_ts + oldsize, 0, CHUNK_RESIZE_STEP);
         memset((char *)chunk->data_values + oldsize, 0, CHUNK_RESIZE_STEP);
-        // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);
     }
