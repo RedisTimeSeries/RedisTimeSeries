@@ -86,12 +86,11 @@ MU_TEST(test_compressed_upsert_decompress) {
 
 
 MU_TEST(test_compressed_fail_appendInteger) {
-    /*
     // either Compressed_UpsertSample or Compressed_SplitChunk
     // ensureAddSample -> Compressed_AddSample -> Compressed_Append -> appendInteger
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size, chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
     Sample s1 = { .timestamp = 10, .value = 5.0 };
     Sample s2 = { .timestamp = 6, .value = 10.0 };
@@ -143,14 +142,14 @@ MU_TEST(test_compressed_fail_appendInteger) {
     mu_assert_int_eq(1, Compressed_GetFirstTimestamp(chunk));
     mu_assert_int_eq(6, Compressed_GetLastTimestamp(chunk));
     Compressed_FreeChunk(chunk);
-    Compressed_FreeChunk(chunk2);*/
+    Compressed_FreeChunk(chunk2);
 }
 
 
-MU_TEST(test_Compressed_SplitChunk_empty) {/*
+MU_TEST(test_Compressed_SplitChunk_empty) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size, chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
 
     CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
@@ -159,13 +158,13 @@ MU_TEST(test_Compressed_SplitChunk_empty) {/*
     mu_assert_int_eq(0, Compressed_ChunkNumOfSample(chunk2));
 
     Compressed_FreeChunk(chunk);
-    Compressed_FreeChunk(chunk2);*/
+    Compressed_FreeChunk(chunk2);
 }
 
-MU_TEST(test_Compressed_SplitChunk_odd) {/*
+MU_TEST(test_Compressed_SplitChunk_odd) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
+    CompressedChunk *chunk = Compressed_NewChunk(chunk_size, chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
 
     Sample s1 = { .timestamp = 4, .value = 5.0 };
@@ -188,7 +187,7 @@ MU_TEST(test_Compressed_SplitChunk_odd) {/*
     mu_assert_int_eq(1, Compressed_ChunkNumOfSample(chunk2));
 
     Compressed_FreeChunk(chunk);
-    Compressed_FreeChunk(chunk2);*/
+    Compressed_FreeChunk(chunk2);
 }
 
 MU_TEST(test_Compressed_SplitChunk_force_realloc) {
@@ -244,9 +243,9 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
 
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
-    //MU_RUN_TEST(test_compressed_upsert_decompress);
-    //MU_RUN_TEST(test_compressed_fail_appendInteger);
-    //MU_RUN_TEST(test_Compressed_SplitChunk_empty);
-    //MU_RUN_TEST(test_Compressed_SplitChunk_odd);
+    MU_RUN_TEST(test_compressed_upsert_decompress);
+    MU_RUN_TEST(test_compressed_fail_appendInteger);
+    MU_RUN_TEST(test_Compressed_SplitChunk_empty);
+    MU_RUN_TEST(test_Compressed_SplitChunk_odd);
     MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
 }
