@@ -120,7 +120,7 @@ CC_FLAGS = \
 	-DREDISMODULE_EXPERIMENTAL_API \
 	-g -ggdb 
 
-LD_FLAGS += -g -ggdb -msse2 
+LD_FLAGS += -g -ggdb
 LD_LIBS += \
 	  $(LIBMR) \
 	  $(FAST_DOUBLE_PARSER_C) \

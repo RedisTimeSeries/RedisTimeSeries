@@ -1,3 +1,5 @@
+# A utility to populate a time-series either compressed or uncompressed. 
+
 import random
 import os
 import sys
