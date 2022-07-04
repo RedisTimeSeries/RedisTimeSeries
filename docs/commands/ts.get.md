@@ -45,6 +45,6 @@ TS.GET complexity is O(1).
 #### Get Example on empty time series 
 
 ```sql
-127.0.0.1:6379> redis-cli TS.GET empty_ts
+127.0.0.1:6379> TS.GET empty_ts
 (empty array)
 ```
