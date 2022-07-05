@@ -37,7 +37,7 @@ TS.MRANGE fromTimestamp toTimestamp
 
   > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
-## Options
+## Optional arguments
 
 `LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
