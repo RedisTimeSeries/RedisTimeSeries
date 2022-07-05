@@ -18,6 +18,8 @@ TS.MRANGE fromTimestamp toTimestamp
           [GROUPBY label REDUCE reducer]
 ```
 
+[**Examples**](#examples)
+
 ## Required arguments
 
 `fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
