@@ -43,7 +43,7 @@ typedef struct UpsertCtx
 
 typedef struct ChunkFuncs
 {
-    Chunk_t *(*NewChunk)(size_t sampleCount);
+    Chunk_t *(*NewChunk)(size_t sampleCountTS, size_t sampleCountValues);
     void (*FreeChunk)(Chunk_t *chunk);
     Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
