@@ -1,5 +1,5 @@
 ---
-syntax: "TS.MRANGE"
+syntax: 
 ---
 
 Query a range across multiple time series by filters in forward direction
@@ -18,9 +18,9 @@ TS.MRANGE fromTimestamp toTimestamp
           [GROUPBY label REDUCE reducer]
 ```
 
-## Arguments
+[**Examples**](#examples)
 
-### Mandatory arguments
+## Required arguments
 
 `fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 
@@ -37,7 +37,7 @@ TS.MRANGE fromTimestamp toTimestamp
 
   > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
-### Optional arguments
+## Optional arguments
 
 `LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
@@ -112,22 +112,22 @@ Regardless of the values of fromTimestamp and toTimestamp, no data is reported f
 `GROUPBY label REDUCE reducer` (since RedisTimeSeries v1.6) aggregates results across different time series, grouped by the provided label name. 
 When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
 
-    - `label` is label name to group a series by. A new series for each value is produced.
+  - `label` is label name to group a series by. A new series for each value is produced.
 
-    - `reducer` is reducer type used to aggregate series that share the same label value.
+  - `reducer` is reducer type used to aggregate series that share the same label value.
 
-        | `reducer` | Description                 |
-        | --------- | --------------------------- |
-        | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)                       |
-        | `sum`     | per label value: sum of all values  |
-        | `min`     | per label value: minimum value      |
-        | `max`     | per label value: maximum value      |
-        | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
-        | `count`   | per label value: number of values (since RedisTimeSeries v1.8)                                    |
-        | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8)         |
-        | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8)             |
-        | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8)                   |
-        | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8)                       |
+    | `reducer` | Description                         |
+    | --------- | ----------------------------------- |
+    | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)  |
+    | `sum`     | per label value: sum of all values  |
+    | `min`     | per label value: minimum value      |
+    | `max`     | per label value: maximum value      |
+    | `range`   | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+    | `count`   | per label value: number of values (since RedisTimeSeries v1.8) |
+    | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8) |
+    | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8) |
+    | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8) |
+    | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
 
 > **NOTES:** 
   - The produced time series is named `<label>=<groupbyvalue>`
@@ -143,7 +143,7 @@ For each time series matching the specified filters, the following is reported:
   - By default, an empty list is reported
   - If `WITHLABELS` is specified, all labels associated with this time series are reported
   - If `SELECTED_LABELS label...` is specified, the selected labels are reported
-- timestamp-value pairs for all samples/aggregations matching the range
+- Timestamp-value pairs for all samples/aggregations matching the range
 
 > **NOTE:** The `MRANGE` command cannot be part of transaction when running on a Redis cluster.
 
@@ -318,6 +318,10 @@ Query a time series using metric=cpu, but only reply the team label.
    3) 1) 1) (integer) 1548149180000
          2) 99
 ```
+
+## See also
+
+`TS.RANGE`|`TS.MREVRANGE`
 
 ## Related topics
 
