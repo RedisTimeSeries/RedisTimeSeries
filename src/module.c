@@ -1031,7 +1031,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2 && argc != 3) {
+    if (argc < 2 || argc > 3) {
         return RedisModule_WrongArity(ctx);
     }
 
