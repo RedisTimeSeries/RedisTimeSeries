@@ -13,6 +13,8 @@ TS.RANGE key fromTimestamp toTimestamp
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ```
 
+[**Examples**](#examples)
+
 ## Required arguments
 
 `key` is the key name for the time series.
