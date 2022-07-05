@@ -1,4 +1,8 @@
 # A utility to populate a time-series either compressed or uncompressed. 
+# To run: 
+# python3 populate.py compressed
+# or
+# python3 populate.py uncompressed
 
 import random
 import os
