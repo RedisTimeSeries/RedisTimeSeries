@@ -28,8 +28,10 @@ Chunk_t *Compressed_NewChunk(size_t size_ts, size_t size_values) {
     
     // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
     // each write happens in 8 bytes blocks.
-    size_ts += sizeof(binary_t) - (size_ts % sizeof(binary_t));
-    size_values += sizeof(binary_t) - (size_values % sizeof(binary_t));
+    if(size_ts % sizeof(binary_t) != 0)
+        size_ts += sizeof(binary_t) - (size_ts % sizeof(binary_t));
+    if(size_values % sizeof(binary_t) != 0)
+        size_values += sizeof(binary_t) - (size_values % sizeof(binary_t));
     chunk->size_ts = size_ts;
     chunk->size_values = size_values;
     chunk->data_ts = (u_int64_t *)calloc(chunk->size_ts, sizeof(char));
