@@ -27,7 +27,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
 
 ## Optional arguments
 
-`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
+`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.REVRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.REVRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 
@@ -82,7 +82,7 @@ Values include:
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
+| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
 | `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
 | `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
 | `std.p`, `std.s`         | `NaN` |
