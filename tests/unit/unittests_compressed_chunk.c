@@ -147,7 +147,7 @@ MU_TEST(test_Compressed_SplitChunk_odd) {
 
 MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     srand((unsigned int)time(NULL));
-    size_t chunk_size = 4096; // 4096 bytes (data) chunck
+    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
     CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
     ChunkResult rv = CR_OK;
