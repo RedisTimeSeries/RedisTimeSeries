@@ -25,6 +25,11 @@
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
+    
+    // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
+    // each write happens in 8 bytes blocks.
+    if(size % sizeof(binary_t) != 0)
+        size += sizeof(binary_t) - (size % sizeof(binary_t));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
 #ifdef DEBUG
