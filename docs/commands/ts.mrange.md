@@ -6,7 +6,7 @@ Query a range across multiple time series by filters in forward direction
 
 ## Syntax
 
-```
+{{< highlight bash >}}
 TS.MRANGE fromTimestamp toTimestamp
           [LATEST]
           [FILTER_BY_TS ts...]
@@ -16,7 +16,7 @@ TS.MRANGE fromTimestamp toTimestamp
           [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
           FILTER filter..
           [GROUPBY label REDUCE reducer]
-```
+{{< / highlight >}}
 
 [**Examples**](#examples)
 
@@ -101,7 +101,7 @@ Values include:
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
+| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
 | `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
 | `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
 | `std.p`, `std.s`         | `NaN` |
@@ -149,99 +149,111 @@ For each time series matching the specified filters, the following is reported:
 
 ## Examples
 
-### Query by filters
+### Retrieve maximum stock price per timestamp
 
-```
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
-1) 1) "temperature:2:32"
-   2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
-         2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
-         2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
-         2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
-         2) "24"
-      5) 1) (integer) 1548149200000
-         2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
-         2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
-         2) "21"
-2) 1) "temperature:3:32"
-   2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
-         2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
-         2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
-         2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
-         2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
-         2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
-         2) "28"
-      7) 1) (integer) 1548149210000
-         2) "20"
-```
+Create two stocks and add their prices at three different timestamps.
 
-### Query by filters using WITHLABELS
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+{{< / highlight >}}
 
-```
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
-1) 1) "temperature:2:32"
-   2) 1) 1) "sensor_id"
-         2) "2"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) 1) (integer) 1548149180000
-         2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
-         2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
-         2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
-         2) "24"
-      5) 1) (integer) 1548149200000
-         2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
-         2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
-         2) "21"
-2) 1) "temperature:3:32"
-   2) 1) 1) "sensor_id"
-         2) "3"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) 1) (integer) 1548149180000
-         2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
-         2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
-         2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
-         2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
-         2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
-         2) "28"
-      7) 1) (integer) 1548149210000
-         2) "20"
-```
+You can now retrieve the maximum stock price per timestamp.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER type=stock GROUPBY type REDUCE max
+1) 1) "type=stock"
+   2) 1) 1) "type"
+         2) "stock"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "stock:A,stock:B"
+   3) 1) 1) (integer) 1000
+         2) 120
+      2) 1) (integer) 1010
+         2) 110
+      3) 1) (integer) 1020
+         2) 120
+{{< / highlight >}}
+
+The `FILTER type=stock` clause returns a single time series representing stock prices. The `GROUPBY type REDUCE max` clause splits the time series into groups with identical type values, and then, for each timestamp, aggregates all series that share the same type value using the max aggregator.
+
+### Calculate average stock price and retrieve maximum average 
+
+Create two stocks and add their prices at nine different timestamps.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:A 2000 200 stock:A 2010 210 stock:A 2020 220
+1) (integer) 2000
+2) (integer) 2010
+3) (integer) 2020
+127.0.0.1:6379> TS.MADD stock:B 2000 220 stock:B 2010 210 stock:B 2020 200
+1) (integer) 2000
+2) (integer) 2010
+3) (integer) 2020
+127.0.0.1:6379> TS.MADD stock:A 3000 300 stock:A 3010 310 stock:A 3020 320
+1) (integer) 3000
+2) (integer) 3010
+3) (integer) 3020
+127.0.0.1:6379> TS.MADD stock:B 3000 320 stock:B 3010 310 stock:B 3020 300
+1) (integer) 3000
+2) (integer) 3010
+3) (integer) 3020
+{{< / highlight >}}
+
+Now, for each stock, calculate the average stock price per a 1000-millisecond timeframe, and then retrieve the stock with the maximum average for that timeframe.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS AGGREGATION avg 1000 FILTER type=stock GROUPBY type REDUCE max
+1) 1) "type=stock"
+   2) 1) 1) "type"
+         2) "stock"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "stock:A,stock:B"
+   3) 1) 1) (integer) 1000
+         2) 110
+      2) 1) (integer) 2000
+         2) 210
+      3) 1) (integer) 3000
+         2) 310
+{{< / highlight >}}
 
 ### Group query results
 
-Query a time series using metric=cpu, then group results by `metric_name REDUCE max`.
+Query a time series using `metric=cpu`, then group results by `metric_name REDUCE max`.
 
-```
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER metric=cpu GROUPBY metric_name REDUCE max
 1) 1) "metric_name=system"
    2) 1) 1) "metric_name"
@@ -263,19 +275,19 @@ Query a time series using metric=cpu, then group results by `metric_name REDUCE 
          2) "ts2"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
 
 ### Filter query by value
 
-Query a time series using metric=cpu, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
+Query a time series using `metric=cpu`, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
 
-```
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + FILTER_BY_VALUE 90 100 WITHLABELS FILTER metric=cpu
 1) 1) "ts1"
    2) 1) 1) "metric"
@@ -291,19 +303,19 @@ Query a time series using metric=cpu, then filter values larger or equal to 90.0
          2) "user"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
 
 ### Query using a label
 
-Query a time series using metric=cpu, but only reply the team label.
+Query a time series using `metric=cpu`, but only return the team label.
 
-```
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system team NY
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user team SF
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + SELECTED_LABELS team FILTER metric=cpu
 1) 1) "ts1"
    2) 1) 1) "team"
@@ -317,11 +329,11 @@ Query a time series using metric=cpu, but only reply the team label.
          2) "SF"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
 
 ## See also
 
-`TS.RANGE`|`TS.MREVRANGE`
+`TS.RANGE` | `TS.MREVRANGE` | `TS.REVRANGE`
 
 ## Related topics
 
