@@ -149,6 +149,46 @@ For each time series matching the specified filters, the following is reported:
 
 ## Examples
 
+### Retrieve maximum stock price per timestamp
+
+Create two stocks and add their prices at three different timestamps.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+{{< / highlight >}}
+
+You can now retrieve the maximum stock price per timestamp.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MREVRANGE - + WITHLABELS FILTER type=stock GROUPBY type REDUCE max
+1) 1) "type=stock"
+   2) 1) 1) "type"
+         2) "stock"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "stock:A,stock:B"
+   3) 1) 1) (integer) 1020
+         2) 120
+      2) 1) (integer) 1010
+         2) 110
+      3) 1) (integer) 1000
+         2) 120
+{{< / highlight >}}
+
+The `FILTER type=stock` clause returns a single time series representing stock prices. The `GROUPBY type REDUCE max` clause splits the time series into groups with identical type values, and then, for each timestamp, aggregates all series that share the same type value using the max aggregator.
+
 ### Calculate average stock price and retrieve maximum average 
 
 Create two stocks and add their prices at nine different timestamps.
