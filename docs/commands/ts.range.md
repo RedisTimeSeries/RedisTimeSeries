@@ -139,7 +139,7 @@ TS.RANGE temp:TLV - + FILTER_BY_VALUE -100 100 AGGREGATION avg 1000
 
 ### Align aggregation buckets
 
-To demonstrate alignment, let’s create a stock and add prices at three different timestamps.
+To demonstrate alignment, let’s create a stock and add prices at nine different timestamps.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
