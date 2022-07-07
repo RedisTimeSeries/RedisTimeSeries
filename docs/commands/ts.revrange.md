@@ -4,14 +4,16 @@ syntax:
 
 Query a range in reverse direction.
 
-```
+## Syntax
+
+{{< highlight bash >}}
 TS.REVRANGE key fromTimestamp toTimestamp
          [LATEST]
          [FILTER_BY_TS TS...]
          [FILTER_BY_VALUE min max]
          [COUNT count]
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-```
+{{< / highlight >}}
 
 [**Examples**](#examples)
 
@@ -23,7 +25,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
 
 `toTimestamp` is end timestamp for range query. Use `+` to express the maximum possible timestamp.
 
-    > **NOTE:** When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.
+> **NOTE:** When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.
 
 ## Optional arguments
 
@@ -104,25 +106,116 @@ But, because `m` is small, you can disregard it and look at the operation as O(L
 
 ## Examples
 
-### Aggregated query
+### Filter results by timestamp or sample value
 
-```
-127.0.0.1:6379> TS.RANGE temperature:3:32 1548149180000 1548149210000 AGGREGATION avg 5000
-1) 1) (integer) 1548149180000
-   2) "26.199999999999999"
-2) 1) (integer) 1548149185000
-   2) "27.399999999999999"
-3) 1) (integer) 1548149190000
-   2) "24.800000000000001"
-4) 1) (integer) 1548149195000
-   2) "23.199999999999999"
-5) 1) (integer) 1548149200000
-   2) "25.199999999999999"
-6) 1) (integer) 1548149205000
-   2) "28"
-7) 1) (integer) 1548149210000
-   2) "20"
-```
+Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temp:TLV LABELS type temp location TLV
+OK
+127.0.0.1:6379> TS.MADD temp:TLV 1000 30 temp:TLV 1010 35 temp:TLV 1020 9999 temp:TLV 1030 40
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+4) (integer) 1030
+{{< / highlight >}}
+
+Now, retrieve all values except out-of-range values.
+
+{{< highlight bash >}}
+TS.REVRANGE temp:TLV - + FILTER_BY_VALUE -100 100
+1) 1) (integer) 1030
+   2) 40
+2) 1) (integer) 1010
+   2) 35
+3) 1) (integer) 1000
+   2) 30
+{{< / highlight >}}
+
+Now, retrieve the average value, while ignoring out-of-range values.
+
+{{< highlight bash >}}
+TS.REVRANGE temp:TLV - + FILTER_BY_VALUE -100 100 AGGREGATION avg 1000
+1) 1) (integer) 1000
+   2) 35
+{{< / highlight >}}
+
+### Align aggregation buckets
+
+To demonstrate alignment, let’s create a stock and add prices at three different timestamps.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:A 2000 200 stock:A 2010 210 stock:A 2020 220
+1) (integer) 2000
+2) (integer) 2010
+3) (integer) 2020
+127.0.0.1:6379> TS.MADD stock:A 3000 300 stock:A 3010 310 stock:A 3020 320
+1) (integer) 3000
+2) (integer) 3010
+3) (integer) 3020
+{{< / highlight >}}
+
+Next, aggregate without using `ALIGN`, defaulting to alignment 0.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.REVRANGE stock:A - + AGGREGATION min 20
+1) 1) (integer) 3020
+   2) 320
+2) 1) (integer) 3000
+   2) 300
+3) 1) (integer) 2020
+   2) 220
+4) 1) (integer) 2000
+   2) 200
+5) 1) (integer) 1020
+   2) 120
+6) 1) (integer) 1000
+   2) 100
+{{< / highlight >}}
+
+And now set `ALIGN` to 10 to have a bucket start at time 10, and align all the buckets with a 20 milliseconds duration.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.REVRANGE stock:A - + ALIGN 10 AGGREGATION min 20
+1) 1) (integer) 3010
+   2) 310
+2) 1) (integer) 2990
+   2) 300
+3) 1) (integer) 2010
+   2) 210
+4) 1) (integer) 1990
+   2) 200
+5) 1) (integer) 1010
+   2) 110
+6) 1) (integer) 990
+   2) 100
+{{< / highlight >}}
+
+When the start timestamp for the range query is explicitly stated (not `-`), you can set ALIGN to that time by setting align to `-` or to `start`.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.REVRANGE stock:A 5 + ALIGN - AGGREGATION min 20
+1) 1) (integer) 3005
+   2) 310
+2) 1) (integer) 2985
+   2) 300
+3) 1) (integer) 2005
+   2) 210
+4) 1) (integer) 1985
+   2) 200
+5) 1) (integer) 1005
+   2) 110
+6) 1) (integer) 985
+   2) 100
+{{< / highlight >}}
+
+Similarly, when the end timestamp for the range query is explicitly stated, you can set ALIGN to that time by setting align to `+` or to `end`.
 
 ## See also
 
