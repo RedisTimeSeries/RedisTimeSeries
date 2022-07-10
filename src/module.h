@@ -21,8 +21,6 @@ int CreateTsKey(RedisModuleCtx *ctx,
                 RedisModuleKey **key);
 
 bool CheckVersionForBlockedClientMeasureTime();
-CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
-void finalize_last_bucket(Series *srcSeries, Series *dstSeries);
 
 extern int persistence_in_progress;
 

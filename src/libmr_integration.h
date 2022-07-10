@@ -55,7 +55,10 @@ MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
 size_t ListRecord_GetLen(ListRecord *record);
-Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t endTimestamp);
+Record *SeriesRecord_New(Series *series,
+                         timestamp_t startTimestamp,
+                         timestamp_t endTimestamp,
+                         const QueryPredicates_Arg *predicates);
 void SeriesRecord_ObjectFree(void *series);
 void SeriesRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
 void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);

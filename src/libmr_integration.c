@@ -242,6 +242,10 @@ Record *ListWithSeriesLastDatapoint(const Series *series) {
     }
 }
 
+// LATEST is ignored for a series that is not a compaction.
+#define should_finalize_last_bucket(pred, series)                                                  \
+    ((pred)->latest && (series)->srcKey && (pred)->endTimestamp > (series)->lastTimestamp)
+
 Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     QueryPredicates_Arg *predicates = arg;
 
@@ -280,36 +284,10 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
-        bool should_finalize_last_bucket = false;
-        RedisModuleKey *srcKey;
-        Series *srcSeries;
-
-        // LATEST is ignored for a series that is not a compaction.
-        should_finalize_last_bucket = predicates->latest && series->srcKey &&
-                                      predicates->endTimestamp > series->lastTimestamp;
-        if (should_finalize_last_bucket) {
-            // temporarily close the last bucket of the src series and write it to dest
-            const int status = GetSeries(
-                rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
-            if (!status) {
-                // LATEST is ignored for a series that is not a compaction.
-                should_finalize_last_bucket = false;
-            } else {
-                finalize_last_bucket(srcSeries, series);
-            }
-        }
-
         ListRecord_Add(
             series_list,
-            SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
-
-        if (should_finalize_last_bucket) {
-            if (srcSeries->totalSamples > 0) {
-                CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
-                SeriesDelRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
-            }
-            RedisModule_CloseKey(srcKey);
-        }
+            SeriesRecord_New(
+                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
 
         RedisModule_CloseKey(key);
     }
@@ -363,24 +341,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
-        // Handle latest param
-        RedisModuleKey *srcKey;
-        Series *srcSeries;
-
-        // LATEST is ignored for a series that is not a compaction.
-        bool should_finalize_last_bucket = predicates->latest && series->srcKey;
-        if (should_finalize_last_bucket) {
-            // temporarily close the last bucket of the src series and write it to dest
-            const int status = GetSeries(
-                rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
-            if (!status) {
-                // LATEST is ignored for a series that is not a compaction.
-                should_finalize_last_bucket = false;
-            } else {
-                finalize_last_bucket(srcSeries, series);
-            }
-        }
-
         Record *key_record = ListRecord_Create(3);
         ListRecord_Add(key_record,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
@@ -394,15 +354,23 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         } else {
             ListRecord_Add(key_record, ListRecord_Create(0));
         }
-        ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series));
 
-        if (should_finalize_last_bucket) {
-            if (srcSeries->totalSamples > 0) {
-                CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
-                SeriesDelRange(series, rule->startCurrentTimeBucket, rule->startCurrentTimeBucket);
+        Record *record;
+        if (should_finalize_last_bucket_get(predicates->latest, series)) {
+            Sample sample;
+            Sample *sample_ptr = &sample;
+            calculate_latest_sample(&sample_ptr, series);
+            if (sample_ptr) {
+                record = ListWithSample(sample.timestamp, sample.value);
+            } else {
+                record = ListWithSeriesLastDatapoint(series);
             }
-            RedisModule_CloseKey(srcKey);
+        } else {
+            record = ListWithSeriesLastDatapoint(series);
         }
+
+        ListRecord_Add(key_record, record);
+
         RedisModule_CloseKey(key);
         ListRecord_Add(series_list, key_record);
     }
@@ -695,7 +663,10 @@ static void *ListRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **erro
     return r;
 }
 
-Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t endTimestamp) {
+Record *SeriesRecord_New(Series *series,
+                         timestamp_t startTimestamp,
+                         timestamp_t endTimestamp,
+                         const QueryPredicates_Arg *predicates) {
     SeriesRecord *out = (SeriesRecord *)MR_RecordCreate(SeriesRecordType, sizeof(*out));
     out->keyName = RedisModule_CreateStringFromString(NULL, series->keyName);
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
@@ -712,7 +683,8 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     }
 
     // clone chunks
-    out->chunks = calloc(RedisModule_DictSize(series->chunks), sizeof(Chunk_t *));
+    out->chunks = calloc(RedisModule_DictSize(series->chunks) + 1,
+                         sizeof(Chunk_t *)); // + 1 in case of latest flag
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk_t *chunk = NULL;
     int index = 0;
@@ -730,6 +702,17 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
             }
 
             out->chunks[index] = out->funcs->CloneChunk(chunk);
+            index++;
+        }
+    }
+
+    if (should_finalize_last_bucket(predicates, series)) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr && (sample.timestamp <= endTimestamp)) {
+            out->chunks[index] = out->funcs->NewChunk(128);
+            series->funcs->AddSample(out->chunks[index], &sample);
             index++;
         }
     }
