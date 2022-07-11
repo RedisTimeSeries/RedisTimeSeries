@@ -165,6 +165,6 @@ CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
 
 #define should_finalize_last_bucket_get(latest, series) ((latest) && (series)->srcKey)
 
-void calculate_latest_sample(Sample **sample, Series *series);
+void calculate_latest_sample(Sample **sample, const Series *series);
 
 #endif /* TSDB_H */

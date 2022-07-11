@@ -1287,7 +1287,7 @@ CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName) {
     return rules;
 }
 
-void calculate_latest_sample(Sample **sample, Series *series) {
+void calculate_latest_sample(Sample **sample, const Series *series) {
     RedisModuleKey *srcKey = NULL;
     Series *srcSeries;
     const int status = GetSeries(

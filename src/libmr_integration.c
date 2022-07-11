@@ -234,7 +234,16 @@ Record *ListWithSample(u_int64_t timestamp, double value) {
     return r;
 }
 
-Record *ListWithSeriesLastDatapoint(const Series *series) {
+Record *ListWithSeriesLastDatapoint(const Series *series, bool latest) {
+    if (should_finalize_last_bucket_get(latest, series)) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr) {
+            return ListWithSample(sample.timestamp, sample.value);
+        }
+    }
+
     if (SeriesGetNumSamples(series) == 0) {
         return ListRecord_Create(0);
     } else {
@@ -355,21 +364,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             ListRecord_Add(key_record, ListRecord_Create(0));
         }
 
-        Record *record;
-        if (should_finalize_last_bucket_get(predicates->latest, series)) {
-            Sample sample;
-            Sample *sample_ptr = &sample;
-            calculate_latest_sample(&sample_ptr, series);
-            if (sample_ptr) {
-                record = ListWithSample(sample.timestamp, sample.value);
-            } else {
-                record = ListWithSeriesLastDatapoint(series);
-            }
-        } else {
-            record = ListWithSeriesLastDatapoint(series);
-        }
-
-        ListRecord_Add(key_record, record);
+        ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series, predicates->latest));
 
         RedisModule_CloseKey(key);
         ListRecord_Add(series_list, key_record);
