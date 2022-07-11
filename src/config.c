@@ -145,7 +145,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
     } else {
-        TSGlobalConfig.numThreads = 3;
+        TSGlobalConfig.numThreads = 1;
     }
     TSGlobalConfig.forceSaveCrossRef = false;
     if (argc > 1 && RMUtil_ArgIndex("DEUBG_FORCE_RULE_DUMP", argv, argc) >= 0) {
