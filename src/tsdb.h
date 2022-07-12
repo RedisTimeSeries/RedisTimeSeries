@@ -44,6 +44,7 @@ typedef struct Series
     const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    bool in_ram; // false if the key is on flash (relevant only for RoF)
 } Series;
 
 // process C's modulo result to translate from a negative modulo to a positive
