@@ -1,87 +1,98 @@
-### TS.MGET
+---
+syntax: 
+---
+
 Get the last samples matching a specific filter.
 
-```sql
+{{< highlight bash >}}
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
-```
-### Arguments
+{{< / highlight >}}
 
-#### Mandatory arguments
+[**Examples**](#examples)
 
-- FILTER _filter_...
+## Required arguments
 
-  This is the list of possible filters:
-  - _label_`=`_value_ - _label_ equals _value_
-  - _label_`!=`_value_ - label doesn't equal _value_
-  - _label_`=` - _key_ does not have the label _label_
-  - _label_`!=` - _key_ has label _label_
-  - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
-  - _lable_`!=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+`FILTER filter..` uses these filters:
 
-  Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
+  - `label = value`, where `label` equals `value`
+  - `label != value`, where `label` does not equal `value`
+  - `label = `, where `key` does not have label `label`
+  - `label != `, where `key` has label `label`
+  - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
 
-#### Optional Arguments
+  > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
 
-- `LATEST` (since RedisTimeSeries v1.8)
+## Optional arguments
 
-  When a time series is a compaction: With `LATEST`, TS.MGET will report the compacted value of the latest (possibly partial) bucket. Without `LATEST`, TS.MGET will report the compacted value of the last 'closed' bucket. When a series is not a compaction: `LATEST` is ignored.
+`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.RANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
-  The data in the latest bucket of a compaction is possibly partial. A bucket is 'closed' and compacted only upon arrival of a new sample that 'opens' a 'new latest' bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is required instead of the compacted value of the last 'closed' bucket. `LATEST` can be used when this is required.  
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 
-- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+`WITHLABELS` includes in the reply all label-value pairs representing metadata labels of the time series. 
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
-- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
- 
-If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
+`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. 
+Use when a large number of labels exists per series, but only the values of some of the labels are required. 
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 
-### Return Value
+## Return value
 
 For each time series matching the specified filters, the following is reported:
 - The key name
 - A list of label-value pairs
   - By default, an empty list is reported
   - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
-- The last sample's timetag-value pair
+  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
+- Timestamp-value pairs for all samples/aggregations matching the range
 
-Note: MGET command can't be part of transaction when running on Redis cluster.
+> **NOTE:** The `MGET` command cannot be part of transaction when running on a Redis cluster.
 
-### Complexity
+## Examples
 
-TS.MGET complexity is O(n).
+### Select labels to retrieve
 
-n = Number of time series that match the filters
+Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
 
-### Examples
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temp:TLV LABELS type temp location TLV
+OK
+127.0.0.1:6379> TS.MADD temp:TLV 1000 30 temp:TLV 1010 35 temp:TLV 1020 9999 temp:TLV 1030 40
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+4) (integer) 1030
+{{< / highlight >}}
 
-#### MGET Example with default behaviour
-```sql
-127.0.0.1:6379> TS.MGET FILTER area_id=32
-1) 1) "temperature:2:32"
-   2) (empty list or set)
-   3) 1) (integer) 1548149181000
-      2) "30"
-2) 1) "temperature:3:32"
-   2) (empty list or set)
-   3) 1) (integer) 1548149181000
-      2) "29"
-```
+Get all the labels associated with the time series.
 
-#### MGET Example with WITHLABELS option
-```sql
-127.0.0.1:6379> TS.MGET WITHLABELS FILTER area_id=32
-1) 1) "temperature:2:32"
-   2) 1) 1) "sensor_id"
-         2) "2"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) (integer) 1548149181000
-      2) "30"
-2) 1) "temperature:3:32"
-   2) 1) 1) "sensor_id"
-         2) "2"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) (integer) 1548149181000
-      2) "29"
-```
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MGET WITHLABELS FILTER type=temp
+1) 1) "temp:TLV"
+   2) 1) 1) "type"
+         2) "temp"
+      2) 1) "location"
+         2) "TLV"
+   3) 1) (integer) 1030
+      2) 40
+{{< / highlight >}}
+
+To get the location only, use `SELECTED_LABELS`.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MGET SELECTED_LABELS location FILTER type=temp
+1) 1) "temp:TLV"
+   2) 1) 1) "location"
+         2) "TLV"
+   3) 1) (integer) 1030
+      2) 40
+{{< / highlight >}}
+
+## See also
+
+`TS.MRANGE` | `TS.RANGE` | `TS.MREVRANGE` | `TS.REVRANGE`
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)
+
