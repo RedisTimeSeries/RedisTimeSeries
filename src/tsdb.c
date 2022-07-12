@@ -129,6 +129,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->in_ram = true;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -378,6 +379,8 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
+
+    dst->in_ram = src->in_ram;
     return dst;
 }
 
