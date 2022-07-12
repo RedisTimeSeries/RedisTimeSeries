@@ -177,6 +177,9 @@ unsigned int countRules(Series *series) {
     return count;
 }
 
+#define should_save_cross_references(series)                                                       \
+    ((persistence_in_progress > 0) || (TSGlobalConfig.forceSaveCrossRef) || (!(series)->in_ram))
+
 void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
@@ -187,10 +190,8 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
-    if ((series->srcKey != NULL) &&
-        ((persistence_in_progress > 0) ||
-         (TSGlobalConfig.forceSaveCrossRef))) { // on dump command (restore) we don't keep the cross
-                                                // references
+    if ((series->srcKey != NULL) && (should_save_cross_references(series))) {
+        // on dump command (restore) we don't keep the cross references
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
     } else {
@@ -203,10 +204,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
         RedisModule_SaveString(io, series->labels[i].value);
     }
 
-    if (persistence_in_progress == 0 && (!TSGlobalConfig.forceSaveCrossRef)) {
-        // on dump command (restore) we don't keep the cross references
-        RedisModule_SaveUnsigned(io, 0);
-    } else {
+    if (should_save_cross_references(series)) {
         RedisModule_SaveUnsigned(io, countRules(series));
 
         CompactionRule *rule = series->rules;
@@ -219,6 +217,9 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
             rule->aggClass->writeContext(rule->aggContext, io);
             rule = rule->nextRule;
         }
+    } else {
+        // on dump command (restore) we don't keep the cross references
+        RedisModule_SaveUnsigned(io, 0);
     }
 
     Chunk_t *chunk;
