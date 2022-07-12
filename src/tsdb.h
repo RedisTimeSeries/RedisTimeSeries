@@ -42,6 +42,7 @@ typedef struct Series
     ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    bool in_ram; // false if the key is on flash (relevant only for RoF)
 } Series;
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);

@@ -1095,6 +1095,26 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
     }
 }
 
+void keyAddedToDbDict(RedisModuleCtx *ctx,
+                      RedisModuleString *key,
+                      void *value,
+                      int swap_key_metadata) {
+    Series *series = (Series *)value;
+    series->in_ram = true;
+}
+
+int keyRemovedFromDbDict(RedisModuleCtx *ctx,
+                         RedisModuleString *key,
+                         void *value,
+                         int swap_key_metadata,
+                         int writing_to_swap) {
+    Series *series = (Series *)value;
+    if (!!writing_to_swap) {
+        series->in_ram = false;
+    }
+    return 0;
+}
+
 int persistence_in_progress = 0;
 
 void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
@@ -1244,6 +1264,11 @@ void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
     }
 }
 
+__attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
+    RedisModuleCtx *ctx,
+    RedisModuleType *mt,
+    RedisModuleTypeExtMethods *typemethods) REDISMODULE_ATTR = NULL;
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1317,6 +1342,17 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
+
+    RedisModuleTypeExtMethods etm = { .version = REDISMODULE_TYPE_EXT_METHOD_VERSION,
+                                      .key_added_to_db_dict = keyAddedToDbDict,
+                                      .removing_key_from_db_dict = keyRemovedFromDbDict,
+                                      .get_key_metadata_for_rdb = NULL };
+    if (RedisModule_SetDataTypeExtensions != NULL) {
+        if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    }
+
     IndexInit();
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.alter", TSDB_alter);
