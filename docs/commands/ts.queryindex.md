@@ -1,28 +1,69 @@
-### TS.QUERYINDEX
+---
+syntax: 
+---
 
 Get all time series keys matching a filter list.
 
-```sql
+## Syntax
+
+{{< highlight bash >}}
 TS.QUERYINDEX filter...
-```
+{{< / highlight >}}
 
-- _filter_...
+[**Examples**](#examples)
 
-  This is the list of possible filters:
-  - _label_`=`_value_ - _label_ equals _value_
-  - _label_`!=`_value_ - label doesn't equal _value_
-  - _label_`=` - _key_ does not have the label _label_
-  - _label_`!=` - _key_ has label _label_
-  - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
-  - _lable_`!=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+## Required arguments
 
-  Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
+FILTER filter..` uses these filters:
 
-Note: QUERYINDEX command can't be part of transaction when running on Redis cluster.
+  - `label = value`, where `label` equals `value`
+  - `label != value`, where `label` does not equal `value`
+  - `label = `, where `key` does not have label `label`
+  - `label != `, where `key` has label `label`
+  - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
 
-### Query index example
-```sql
-127.0.0.1:6379> TS.QUERYINDEX sensor_id=2
-1) "temperature:2:32"
-2) "temperature:2:33"
-```
+**NOTES:** 
+ - When using filters, apply a minimum of one `label = value` filter. 
+ - `QUERYINDEX` cannot be part of a transaction that runs on a Redis cluster.
+
+## Examples
+
+### Find keys by location and sensor type
+
+Create a set of sensors to measure temperature and humidity in your office and kitchen.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE telemetry:office:temperature LABELS room office type temperature
+OK
+127.0.0.1:6379> TS.CREATE telemetry:office:humidity LABELS room office type humidity
+OK
+127.0.0.1:6379> TS.CREATE telemetry:kitchen:temperature LABELS room kitchen type temperature
+OK
+127.0.0.1:6379> TS.CREATE telemetry:kitchen:humidity LABELS room kitchen type humidity
+OK
+{{< / highlight >}}
+
+Query the sensors in the kitchen to find all the keys associated with that room. 
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.QUERYINDEX room=kitchen
+1) "telemetry:kitchen:humidity"
+2) "telemetry:kitchen:temperature"
+{{< / highlight >}}
+
+To monitor all the keys for temperature, use this query:
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.QUERYINDEX type=temperature
+1) "telemetry:kitchen:temperature"
+2) "telemetry:office:temperature"
+{{< / highlight >}}
+
+## See also
+
+`TS.CREATE` | `TS.MRANGE` | `TS.MREVRANGE` | `MGET`
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)
