@@ -14,7 +14,7 @@ TS.QUERYINDEX filter...
 
 ## Required arguments
 
-FILTER filter..` uses these filters:
+`FILTER filter..` returns results for the time series that pass these filtering criteria:
 
   - `label = value`, where `label` equals `value`
   - `label != value`, where `label` does not equal `value`
@@ -31,12 +31,12 @@ FILTER filter..` uses these filters:
 
 ### Find keys by location and sensor type
 
-Create a set of sensors to measure temperature and humidity in your office and kitchen.
+Create a set of sensors to measure temperature and humidity in your study and kitchen.
 
 {{< highlight bash >}}
-127.0.0.1:6379> TS.CREATE telemetry:office:temperature LABELS room office type temperature
+127.0.0.1:6379> TS.CREATE telemetry:study:temperature LABELS room office type temperature
 OK
-127.0.0.1:6379> TS.CREATE telemetry:office:humidity LABELS room office type humidity
+127.0.0.1:6379> TS.CREATE telemetry:study:humidity LABELS room office type humidity
 OK
 127.0.0.1:6379> TS.CREATE telemetry:kitchen:temperature LABELS room kitchen type temperature
 OK
@@ -57,7 +57,7 @@ To monitor all the keys for temperature, use this query:
 {{< highlight bash >}}
 127.0.0.1:6379> TS.QUERYINDEX type=temperature
 1) "telemetry:kitchen:temperature"
-2) "telemetry:office:temperature"
+2) "telemetry:study:temperature"
 {{< / highlight >}}
 
 ## See also
