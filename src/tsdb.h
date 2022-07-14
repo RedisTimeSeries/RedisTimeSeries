@@ -161,4 +161,10 @@ int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
 
 void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
 
+CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
+
+#define should_finalize_last_bucket_get(latest, series) ((latest) && (series)->srcKey)
+
+void calculate_latest_sample(Sample **sample, const Series *series);
+
 #endif /* TSDB_H */

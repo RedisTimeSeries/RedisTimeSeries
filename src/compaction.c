@@ -81,6 +81,12 @@ void *SingleValueCreateContext(__unused bool reverse) {
     return context;
 }
 
+void *SingleValueCloneContext(void *contextPtr) {
+    SingleValueContext *buf = (SingleValueContext *)malloc(sizeof(SingleValueContext));
+    memcpy(buf, contextPtr, sizeof(SingleValueContext));
+    return buf;
+}
+
 void SingleValueReset(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
@@ -119,6 +125,12 @@ void *AvgCreateContext(__unused bool reverse) {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     _AvgInitContext(context);
     return context;
+}
+
+void *AvgCloneContext(void *contextPtr) {
+    AvgContext *buf = (AvgContext *)malloc(sizeof(AvgContext));
+    memcpy(buf, contextPtr, sizeof(AvgContext));
+    return buf;
 }
 
 // Except valgrind it's equivalent to sizeof(long double) > 8
@@ -208,6 +220,12 @@ static inline void _TwainitContext(TwaContext *context, bool reverse) {
     context->weightData.prevWeight = 0;
     context->weightData.weight_sum = 0;
     context->reverse = reverse;
+}
+
+void *TwaCloneContext(void *contextPtr) {
+    TwaContext *buf = (TwaContext *)malloc(sizeof(TwaContext));
+    memcpy(buf, contextPtr, sizeof(TwaContext));
+    return buf;
 }
 
 void *TwaCreateContext(bool reverse) {
@@ -441,6 +459,12 @@ void *StdCreateContext(__unused bool reverse) {
     return context;
 }
 
+void *StdCloneContext(void *contextPtr) {
+    StdContext *buf = (StdContext *)malloc(sizeof(StdContext));
+    memcpy(buf, contextPtr, sizeof(StdContext));
+    return buf;
+}
+
 void StdAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     StdContext *context = (StdContext *)contextPtr;
     ++context->cnt;
@@ -528,7 +552,8 @@ static AggregationClass waggAvg = { .createContext = TwaCreateContext,
                                     .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
                                     .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
                                     .getLastSample = TwaGetLastSample,
-                                    .resetContext = TwaReset };
+                                    .resetContext = TwaReset,
+                                    .cloneContext = TwaCloneContext };
 
 static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .appendValue = AvgAddValue,
@@ -542,7 +567,8 @@ static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .addPrevBucketLastSample = NULL,
                                    .addNextBucketFirstSample = NULL,
                                    .getLastSample = NULL,
-                                   .resetContext = AvgReset };
+                                   .resetContext = AvgReset,
+                                   .cloneContext = AvgCloneContext };
 
 static AggregationClass aggStdP = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
@@ -556,7 +582,8 @@ static AggregationClass aggStdP = { .createContext = StdCreateContext,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = StdReset };
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggStdS = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
@@ -570,7 +597,8 @@ static AggregationClass aggStdS = { .createContext = StdCreateContext,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = StdReset };
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggVarP = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
@@ -584,7 +612,8 @@ static AggregationClass aggVarP = { .createContext = StdCreateContext,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = StdReset };
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
@@ -598,13 +627,20 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = StdReset };
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 void *MaxMinCreateContext(__unused bool reverse) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = DBL_MAX;
     context->maxValue = _DOUBLE_MIN;
     return context;
+}
+
+void *MaxMinCloneContext(void *contextPtr) {
+    MaxMinContext *buf = (MaxMinContext *)malloc(sizeof(MaxMinContext));
+    memcpy(buf, contextPtr, sizeof(MaxMinContext));
+    return buf;
 }
 
 void MaxAppendValue(void *context, double value, __attribute__((unused)) timestamp_t ts) {
@@ -713,7 +749,8 @@ AggregationClass aggMax = { .createContext = MaxMinCreateContext,
                             .addPrevBucketLastSample = NULL,
                             .addNextBucketFirstSample = NULL,
                             .getLastSample = NULL,
-                            .resetContext = MaxMinReset };
+                            .resetContext = MaxMinReset,
+                            .cloneContext = MaxMinCloneContext };
 
 static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .appendValue = MinAppendValue,
@@ -727,7 +764,8 @@ static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .addPrevBucketLastSample = NULL,
                                    .addNextBucketFirstSample = NULL,
                                    .getLastSample = NULL,
-                                   .resetContext = MaxMinReset };
+                                   .resetContext = MaxMinReset,
+                                   .cloneContext = MaxMinCloneContext };
 
 static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .appendValue = SumAppendValue,
@@ -741,7 +779,8 @@ static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .addPrevBucketLastSample = NULL,
                                    .addNextBucketFirstSample = NULL,
                                    .getLastSample = NULL,
-                                   .resetContext = SingleValueReset };
+                                   .resetContext = SingleValueReset,
+                                   .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .appendValue = CountAppendValue,
@@ -755,7 +794,8 @@ static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .addPrevBucketLastSample = NULL,
                                      .addNextBucketFirstSample = NULL,
                                      .getLastSample = NULL,
-                                     .resetContext = SingleValueReset };
+                                     .resetContext = SingleValueReset,
+                                     .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
                                      .appendValue = FirstAppendValue,
@@ -769,7 +809,8 @@ static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
                                      .addPrevBucketLastSample = NULL,
                                      .addNextBucketFirstSample = NULL,
                                      .getLastSample = NULL,
-                                     .resetContext = SingleValueReset };
+                                     .resetContext = SingleValueReset,
+                                     .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .appendValue = LastAppendValue,
@@ -783,7 +824,8 @@ static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = SingleValueReset };
+                                    .resetContext = SingleValueReset,
+                                    .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .appendValue = MaxMinAppendValue,
@@ -797,7 +839,8 @@ static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .addPrevBucketLastSample = NULL,
                                      .addNextBucketFirstSample = NULL,
                                      .getLastSample = NULL,
-                                     .resetContext = MaxMinReset };
+                                     .resetContext = MaxMinReset,
+                                     .cloneContext = MaxMinCloneContext };
 
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();

@@ -35,7 +35,8 @@ typedef struct AggregationClass
     void (*getLastSample)(void *contextPtr,
                           Sample *sample); // Returns the last sample appended to the context
     void (*finalize)(void *context, double *value);
-    void (*finalizeEmpty)(double *value); // assigns empty value to value
+    void (*finalizeEmpty)(double *value);    // assigns empty value to value
+    void *(*cloneContext)(void *contextPtr); // return cloned context
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
