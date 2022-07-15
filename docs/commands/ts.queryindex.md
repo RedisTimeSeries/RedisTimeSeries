@@ -10,33 +10,39 @@ Get all time series keys matching a filter list.
 TS.QUERYINDEX filter...
 {{< / highlight >}}
 
-[**Examples**](#examples)
+[:arrow_down_small:**Examples**](#examples)
 
 ## Required arguments
 
-`FILTER filter..` returns results for the time series that pass these filtering criteria:
+<details>
+<summary><code>FILTER filter..</code></summary>
+returns results for the time series that pass these filtering criteria:
 
   - `label = value`, where `label` equals `value`
   - `label != value`, where `label` does not equal `value`
   - `label = `, where `key` does not have label `label`
   - `label != `, where `key` has label `label`
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
-  - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
+  - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
-**NOTES:** 
+<note><b>NOTES:</b>
  - When using filters, apply a minimum of one `label = value` filter. 
  - `QUERYINDEX` cannot be part of a transaction that runs on a Redis cluster.
+ - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+ </note>
+ </details>
 
 ## Examples
 
-### Find keys by location and sensor type
+<details>
+<summary><b>Find keys by location and sensor type</b></summary>
 
 Create a set of sensors to measure temperature and humidity in your study and kitchen.
 
 {{< highlight bash >}}
-127.0.0.1:6379> TS.CREATE telemetry:study:temperature LABELS room office type temperature
+127.0.0.1:6379> TS.CREATE telemetry:study:temperature LABELS room study type temperature
 OK
-127.0.0.1:6379> TS.CREATE telemetry:study:humidity LABELS room office type humidity
+127.0.0.1:6379> TS.CREATE telemetry:study:humidity LABELS room study type humidity
 OK
 127.0.0.1:6379> TS.CREATE telemetry:kitchen:temperature LABELS room kitchen type temperature
 OK
@@ -59,6 +65,7 @@ To monitor all the keys for temperature, use this query:
 1) "telemetry:kitchen:temperature"
 2) "telemetry:study:temperature"
 {{< / highlight >}}
+</details>
 
 ## See also
 

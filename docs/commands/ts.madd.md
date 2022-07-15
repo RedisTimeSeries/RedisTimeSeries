@@ -8,24 +8,35 @@ Append new samples to one or more time series
 TS.MADD {key timestamp value}...
 {{< / highlight >}}
 
-[**Examples**](#examples)
+[:arrow_down_small:**Examples**](#examples)
 
 ## Required arguments
 
-`key` is the key name for the time series.
+<details>
+<summary><code>key</code></summary> 
+is the key name for the time series.
 
-`timestamp` is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp to the server clock.
+</details>
 
-`value` is numeric data value of the sample (double). The double number should follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). The parser rejects overly large values that would not fit in binary64. It does not accept NaN or infinite values.
+<details>
+<summary><code>timestamp</code></summary>
+is (integer) UNIX sample timestamp in milliseconds or <code>*</code> to set the timestamp to the server clock.
+</details>
+
+<details>
+<summary><code>value</code></summary>
+is numeric data value of the sample (double). The double number should follow <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> (a JSON standard). The parser rejects overly large values that would not fit in binary64. It does not accept NaN or infinite values.
+</details>
 
 ## Complexity
 
-If a compaction rule exits on a time series, `TS.MADD` performance might be reduced.
-The complexity of `TS.MADD` is always O(N*M), where N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction.
+If a compaction rule exits on a time series, TS.MADD performance might be reduced.
+The complexity of TS.MADD is always `O(N*M)`, where `N` is the amount of series updated and `M` is the amount of compaction rules or `O(N)` with no compaction.
 
 ## Examples
 
-### Add stock prices at different timestamps
+<details>
+<summary><b>Add stock prices at different timestamps</b></summary>
 
 Create two stocks and add their prices at three different timestamps.
 
@@ -43,6 +54,7 @@ OK
 2) (integer) 1010
 3) (integer) 1020
 {{< / highlight >}}
+</details>
 
 ## See also
 
