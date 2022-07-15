@@ -8,11 +8,11 @@ Get the last samples matching a specific filter.
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 {{< / highlight >}}
 
-[:arrow_down_small:**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-<details>
+<details open>
 <summary><code>FILTER filter..</code></summary> 
 
 uses these filters:
@@ -30,7 +30,7 @@ uses these filters:
 
 ## Optional arguments
 
-<details>
+<details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary> 
 
 is used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MGET does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
@@ -38,14 +38,14 @@ is used when a time series is a compaction. With `LATEST`, TS.MGET also reports 
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 </details>
 
-<details>
+<details open>
 <summary><code>WITHLABELS</code></summary> 
 
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 </details>
 
-<details>
+<details open>
 <summary><code>SELECTED_LABELS label...</code> (since RedisTimeSeries v1.6)</summary> 
 
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
@@ -67,7 +67,7 @@ For each time series matching the specified filters, the following is reported:
 
 ## Examples
 
-<details>
+<details open>
 <summary><b>Select labels to retrieve</b></summary>
 
 Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.

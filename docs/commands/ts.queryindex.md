@@ -10,11 +10,11 @@ Get all time series keys matching a filter list.
 TS.QUERYINDEX filter...
 {{< / highlight >}}
 
-[:arrow_down_small:**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-<details>
+<details open>
 <summary><code>FILTER filter..</code></summary>
 returns results for the time series that pass these filtering criteria:
 
@@ -34,7 +34,7 @@ returns results for the time series that pass these filtering criteria:
 
 ## Examples
 
-<details>
+<details open>
 <summary><b>Find keys by location and sensor type</b></summary>
 
 Create a set of sensors to measure temperature and humidity in your study and kitchen.
