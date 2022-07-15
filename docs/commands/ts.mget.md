@@ -8,11 +8,14 @@ Get the last samples matching a specific filter.
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 {{< / highlight >}}
 
-[**Examples**](#examples)
+[:arrow_down_small:**Examples**](#examples)
 
 ## Required arguments
 
-`FILTER filter..` uses these filters:
+<details>
+<summary><code>FILTER filter..</code></summary> 
+
+uses these filters:
 
   - `label = value`, where `label` equals `value`
   - `label != value`, where `label` does not equal `value`
@@ -21,20 +24,34 @@ TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
 
-  > **NOTE:** When using filters, apply a minimum of one `label = value` filter.
+  <note><b>NOTE:</b> When using filters, apply a minimum of one `label = value` filter.</note>
+
+  </details>
 
 ## Optional arguments
 
-`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.RANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
+<details>
+<summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary> 
+
+is used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MGET does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
+</details>
 
-`WITHLABELS` includes in the reply all label-value pairs representing metadata labels of the time series. 
+<details>
+<summary><code>WITHLABELS</code></summary> 
+
+includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+</details>
 
-`SELECTED_LABELS label...` (since RedisTimeSeries v1.6) returns a subset of the label-value pairs that represent metadata labels of the time series. 
+<details>
+<summary><code>SELECTED_LABELS label...</code> (since RedisTimeSeries v1.6)</summary> 
+
+returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+</details>
 
 ## Return value
 
@@ -46,11 +63,12 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS label...` is specified, the selected labels are reported
 - Timestamp-value pairs for all samples/aggregations matching the range
 
-> **NOTE:** The `MGET` command cannot be part of transaction when running on a Redis cluster.
+<note><b>NOTE:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Examples
 
-### Select labels to retrieve
+<details>
+<summary><b>Select labels to retrieve</b></summary>
 
 Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
 
@@ -87,6 +105,7 @@ To get the location only, use `SELECTED_LABELS`.
    3) 1) (integer) 1030
       2) 40
 {{< / highlight >}}
+</details>
 
 ## See also
 
