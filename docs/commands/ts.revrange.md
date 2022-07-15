@@ -15,23 +15,23 @@ TS.REVRANGE key fromTimestamp toTimestamp
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 {{< / highlight >}}
 
-[:arrow_down_small:**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-<details>
+<details open>
 <summary><code>key</code></summary>
 is the key name for the time series.
 </details>
 
-<details>
+<details open>
 <summary><code>fromTimestamp</code></summary>
 
 is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 
 </details>
 
-<details>
+<details open>
 <summary><code>toTimestamp</code></summary>
 
 is end timestamp for range query. Use `+` to express the maximum possible timestamp.
@@ -42,7 +42,7 @@ is end timestamp for range query. Use `+` to express the maximum possible timest
 
 ## Optional arguments
 
-<details>
+<details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
 
 is used when a time series is a compaction. With `LATEST`, TS.REVRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.REVRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
@@ -50,22 +50,22 @@ is used when a time series is a compaction. With `LATEST`, TS.REVRANGE also repo
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 </details>
 
-<details>
+<details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
 followed by a list of timestamps filters results by specific timestamps.
 </details>
 
-<details>
+<details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary> filters results by minimum and maximum values.
 </details>
 
-<details>
+<details open>
 <summary><code>COUNT count</code></summary>
 limits the number of returned samples.
 </details>
 
-<details>
+<details open>
 <summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
 is a time bucket alignment control for `AGGREGATION`. It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
 Values include:
@@ -78,7 +78,7 @@ Values include:
 
 </details>
 
-<details>
+<details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary>
 aggregates results into time buckets, where:
 
@@ -103,7 +103,7 @@ aggregates results into time buckets, where:
   - `bucketDuration` is duration of each bucket, in milliseconds.
 </details>
 
-<details>
+<details open>
 <summary><code>[BUCKETTIMESTAMP bt]</code> (since RedisTimeSeries v1.8)</summary>
 controls how bucket timestamps are reported.
 
@@ -114,7 +114,7 @@ controls how bucket timestamps are reported.
 | `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
 </details>
 
-<details>
+<details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary>
 is a flag, which, when specified, reports aggregations for empty buckets.
 
@@ -137,7 +137,7 @@ But, because `m` is small, you can disregard it and look at the operation as `O(
 
 ## Examples
 
-<details>
+<details open>
 <summary><b>Filter results by timestamp or sample value</b></summary>
 
 Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
@@ -173,7 +173,7 @@ TS.REVRANGE temp:TLV - + FILTER_BY_VALUE -100 100 AGGREGATION avg 1000
 {{< / highlight >}}
 </details>
 
-<details>
+<details open>
 <summary><b>Align aggregation buckets</b></summary>
 
 To demonstrate alignment, let’s create a stock and add prices at three different timestamps.

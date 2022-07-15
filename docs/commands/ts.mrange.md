@@ -18,21 +18,21 @@ TS.MRANGE fromTimestamp toTimestamp
           [GROUPBY label REDUCE reducer]
 {{< / highlight >}}
 
-[:arrow_down_small:**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-<details>
+<details open>
 <summary><code>fromTimestamp</code></summary>
 is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
 </details>
 
-<details>
+<details open>
 <summary><code>toTimestamp</code></summary>
 is end timestamp for range query. Use `+` to express the maximum possible timestamp.
 </details>
 
-<details>
+<details open>
 <summary><code>FILTER filter..</code></summary>
 uses these filters:
 
@@ -48,42 +48,42 @@ uses these filters:
 
 ## Optional arguments
 
-<details>
+<details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
 is used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 </details>
 
-<details>
+<details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 followed by a list of timestamps filters results by specific timestamps.
 </details>
 
-<details>
+<details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
 filters results by minimum and maximum values.
 </details>
 
-<details>
+<details open>
 <summary><code>WITHLABELS</code></summary>
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 </details>
 
-<details>
+<details open>
 <summary><code>SELECTED_LABELS label...</code> (since RedisTimeSeries v1.6)</summary>
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 </details>
 
-<details>
+<details open>
 <summary><code>COUNT count</code></summary>
 limits the number of returned samples.
 </details>
 
-<details>
+<details open>
 <summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
 is a time bucket alignment control for `AGGREGATION`. 
 It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
@@ -97,7 +97,7 @@ Values include:
 <note><b>NOTE:</b> When not provided, alignment is set to `0`.</note>
 </details>
 
-<details>
+<details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary>
 aggregates results into time buckets, where:
 
@@ -122,7 +122,7 @@ aggregates results into time buckets, where:
   - `bucketDuration` is duration of each bucket, in milliseconds.
 </details>
 
-<details>
+<details open>
 <summary><code>[BUCKETTIMESTAMP bt]></code> (since RedisTimeSeries v1.8)</summary>
 controls how bucket timestamps are reported.
 
@@ -133,7 +133,7 @@ controls how bucket timestamps are reported.
 | `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
 </details>
 
-<details>
+<details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary>
 is a flag, which, when specified, reports aggregations for empty buckets.
 
@@ -149,7 +149,7 @@ is a flag, which, when specified, reports aggregations for empty buckets.
 Regardless of the values of fromTimestamp and toTimestamp, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
 </details>
 
-<details>
+<details open>
 <summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
 aggregates results across different time series, grouped by the provided label name. 
 When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
@@ -193,7 +193,7 @@ For each time series matching the specified filters, the following is reported:
 
 ## Examples
 
-<details>
+<details open>
 <summary><b>Retrieve maximum stock price per timestamp</b></summary>
 
 Create two stocks and add their prices at three different timestamps.
@@ -235,7 +235,7 @@ You can now retrieve the maximum stock price per timestamp.
 The `FILTER type=stock` clause returns a single time series representing stock prices. The `GROUPBY type REDUCE max` clause splits the time series into groups with identical type values, and then, for each timestamp, aggregates all series that share the same type value using the max aggregator.
 </details>
 
-<details>
+<details open>
 <summary><b>Calculate average stock price and retrieve maximum average</b></summary> 
 
 Create two stocks and add their prices at nine different timestamps.
@@ -291,7 +291,7 @@ Now, for each stock, calculate the average stock price per a 1000-millisecond ti
 {{< / highlight >}}
 </details>
 
-<details>
+<details open>
 <summary><b>Group query results</b></summary>
 
 Query a time series using `metric=cpu`, then group results by `metric_name REDUCE max`.
@@ -327,7 +327,7 @@ Query a time series using `metric=cpu`, then group results by `metric_name REDUC
 {{< / highlight >}}
 </details>
 
-<details>
+<details open>
 <summary><b>Filter query by value</b></summary>
 
 Query a time series using `metric=cpu`, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
@@ -357,7 +357,7 @@ Query a time series using `metric=cpu`, then filter values larger or equal to 90
 {{< / highlight >}}
 </details>
 
-<details>
+<details open>
 <summary><b>Query using a label</b></summary>
 
 Query a time series using `metric=cpu`, but only return the team label.

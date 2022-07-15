@@ -8,22 +8,22 @@ Append new samples to one or more time series
 TS.MADD {key timestamp value}...
 {{< / highlight >}}
 
-[:arrow_down_small:**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-<details>
+<details open>
 <summary><code>key</code></summary> 
 is the key name for the time series.
 
 </details>
 
-<details>
+<details open>
 <summary><code>timestamp</code></summary>
 is (integer) UNIX sample timestamp in milliseconds or <code>*</code> to set the timestamp to the server clock.
 </details>
 
-<details>
+<details open>
 <summary><code>value</code></summary>
 is numeric data value of the sample (double). The double number should follow <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> (a JSON standard). The parser rejects overly large values that would not fit in binary64. It does not accept NaN or infinite values.
 </details>
@@ -35,7 +35,7 @@ The complexity of TS.MADD is always `O(N*M)`, where `N` is the amount of series 
 
 ## Examples
 
-<details>
+<details open>
 <summary><b>Add stock prices at different timestamps</b></summary>
 
 Create two stocks and add their prices at three different timestamps.
