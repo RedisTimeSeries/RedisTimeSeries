@@ -16,7 +16,7 @@ TS.QUERYINDEX filter...
 
 <details open>
 <summary><code>FILTER filter..</code></summary>
-returns results for the time series that pass these filtering criteria:
+filters time series based on their labels and label values, with these options:
 
   - `label = value`, where `label` equals `value`
   - `label != value`, where `label` does not equal `value`
@@ -50,7 +50,7 @@ OK
 OK
 {{< / highlight >}}
 
-Query the sensors in the kitchen to find all the keys associated with that room. 
+Retrieve keys of all time series representing sensors located in the kitchen. 
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.QUERYINDEX room=kitchen
@@ -58,7 +58,7 @@ Query the sensors in the kitchen to find all the keys associated with that room.
 2) "telemetry:kitchen:temperature"
 {{< / highlight >}}
 
-To monitor all the keys for temperature, use this query:
+To retrieve the keys of all time series representing sensors that measure temperature, use this query:
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.QUERYINDEX type=temperature

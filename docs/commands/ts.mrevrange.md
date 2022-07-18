@@ -46,7 +46,10 @@ uses these filters:
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
-  <note><b>NOTE:</b> When using filters, apply a minimum of one `label = value` filter.</note>
+ <note><b>NOTES:</b> 
+   - When using filters, apply a minimum of one `label = value` filter.
+   - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+   </note>
 </details>
 
 ## Optional arguments
@@ -309,7 +312,7 @@ Now, for each stock, calculate the average stock price per a 1000-millisecond ti
 <details open>
 <summary><b>Group query results</b></summary>
 
-Query a time series using `metric=cpu`, then group results by `metric_name REDUCE max`.
+Query all time series with the metric label equal to `cpu`, then group the time series by the value of their `metric_name` label value and for each group return the maximum value and the time series keys (_source_) with that value.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
@@ -345,7 +348,7 @@ Query a time series using `metric=cpu`, then group results by `metric_name REDUC
 <details open>
 <summary><b>Filter query by value</b></summary>
 
-Query a time series using `metric=cpu`, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
+Query all time series with the metric label equal to `cpu`, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
@@ -375,7 +378,7 @@ Query a time series using `metric=cpu`, then filter values larger or equal to 90
 <details open>
 <summary><b>Query using a label</b></summary>
 
-Query a time series using `metric=cpu`, but only return the team label.
+Query all time series with the metric label equal to `cpu`, but only return the team label.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system team NY

@@ -45,14 +45,13 @@ Create two stocks and add their prices at three different timestamps.
 OK
 127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
 OK
-127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120 stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
 1) (integer) 1000
 2) (integer) 1010
 3) (integer) 1020
-127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
-1) (integer) 1000
-2) (integer) 1010
-3) (integer) 1020
+4) (integer) 1000
+5) (integer) 1010
+6) (integer) 1020
 {{< / highlight >}}
 </details>
 

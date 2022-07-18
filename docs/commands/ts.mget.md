@@ -15,16 +15,19 @@ TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
 <details open>
 <summary><code>FILTER filter..</code></summary> 
 
-uses these filters:
+filters time series based on their labels and label values, with these options:
 
   - `label = value`, where `label` equals `value`
   - `label != value`, where `label` does not equal `value`
   - `label = `, where `key` does not have label `label`
   - `label != `, where `key` has label `label`
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
-  - `label != (value1,value2,...)` is key with label `label` that does not equal any of the values in the list
+  - `label != (value1,value2,...)` where key with label `label` does not equal any of the values in the list
 
-  <note><b>NOTE:</b> When using filters, apply a minimum of one `label = value` filter.</note>
+  <note><b>NOTES:</b> 
+   - When using filters, apply a minimum of one `label = value` filter.
+   - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+   </note>
 
   </details>
 
@@ -70,7 +73,7 @@ For each time series matching the specified filters, the following is reported:
 <details open>
 <summary><b>Select labels to retrieve</b></summary>
 
-Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
+Create a time series for temperature in Tel Aviv, then add different temperature samples.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.CREATE temp:TLV LABELS type temp location TLV
@@ -82,7 +85,7 @@ OK
 4) (integer) 1030
 {{< / highlight >}}
 
-Get all the labels associated with the time series.
+Get all the labels associated with the last sample.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.MGET WITHLABELS FILTER type=temp
@@ -95,7 +98,7 @@ Get all the labels associated with the time series.
       2) 40
 {{< / highlight >}}
 
-To get the location only, use `SELECTED_LABELS`.
+To get the location of the last sample, use `SELECTED_LABELS`.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.MGET SELECTED_LABELS location FILTER type=temp
