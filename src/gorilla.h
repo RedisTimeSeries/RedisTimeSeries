@@ -60,10 +60,11 @@ typedef struct Compressed_Iterator
 
     // timestamp vars
     u_int64_t prevTS;
-    int64_t prevDelta;
+    int64_t prevDelta1;
 
     // value vars
     union64bits prevValue;
+    int64_t prevDelta2;
     u_int8_t leading;
     u_int8_t trailing;
     u_int8_t blocksize;

@@ -466,27 +466,50 @@ ChunkResult IntCompressed_Append(CompressedChunk *chunk, timestamp_t timestamp, 
  * then decodes the value back to an int64 and calculate the original value
  * using `prevTS` and `prevDelta`.
  */
-static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
+static inline u_int64_t readInteger1(Compressed_Iterator *iter, const uint64_t *bins) {
     if (Bins_bitoff(bins, iter->idx++)) {
-        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
+        iter->prevDelta1 += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
+        iter->prevDelta1 += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
         iter->idx += CMPR_L2;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
+        iter->prevDelta1 += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
         iter->idx += CMPR_L3;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
+        iter->prevDelta1 += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
         iter->idx += CMPR_L4;
     } else if (Bins_bitoff(bins, iter->idx++)) {
-        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
+        iter->prevDelta1 += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
         iter->idx += CMPR_L5;
     } else {
-        iter->prevDelta += readBits(bins, iter->idx, 64);
+        iter->prevDelta1 += readBits(bins, iter->idx, 64);
         iter->idx += 64;
     }
-    return iter->prevDelta;
+    return iter->prevDelta1;
+}
+
+static inline u_int64_t readInteger2(Compressed_Iterator *iter, const uint64_t *bins) {
+    if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta2 += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
+        iter->idx += CMPR_L1;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta2 += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
+        iter->idx += CMPR_L2;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta2 += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
+        iter->idx += CMPR_L3;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta2 += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
+        iter->idx += CMPR_L4;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta2 += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
+        iter->idx += CMPR_L5;
+    } else {
+        iter->prevDelta2 += readBits(bins, iter->idx, 64);
+        iter->idx += 64;
+    }
+    return iter->prevDelta2;
 }
 
 /*
@@ -557,10 +580,11 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // control bit ‘0’
     // Read stored double delta value
     sample->timestamp = iter->prevTS +=
-        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta1 : readInteger1(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    sample->value = iter->prevValue.i +=
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta2 : readInteger2(iter, bins);
     iter->count++;
     return CR_OK;
 }
