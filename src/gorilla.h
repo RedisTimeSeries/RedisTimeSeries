@@ -40,8 +40,16 @@ typedef struct CompressedChunk
     int64_t prevTimestampDelta;
 
     union64bits prevValue;
-    u_int8_t prevLeading;
-    u_int8_t prevTrailing;
+    union {
+        struct {
+            u_int8_t prevLeading;
+            u_int8_t prevTrailing;
+        };
+        struct {
+            uint64_t prevValueDelta : 60;
+            uint64_t factor : 4;
+        };
+    };
 } CompressedChunk;
 
 typedef struct Compressed_Iterator

@@ -262,14 +262,7 @@ static inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
 }
 
 /***************************** APPEND ********************************/
-static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) {
-#ifdef DEBUG
-    assert(timestamp >= chunk->prevTimestamp);
-#endif
-    timestamp_t curDelta = timestamp - chunk->prevTimestamp;
-
-    union64bits doubleDelta;
-    doubleDelta.i = curDelta - chunk->prevTimestampDelta;
+static ChunkResult appendInteger(CompressedChunk *chunk, union64bits doubleDelta) {
     /*
      * Before any insertion the code `CHECKSPACE` ensures there is enough space to
      * encode timestamp and one additional bit which the minimum to encode the value.
@@ -315,12 +308,43 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
         appendBits(bins, bit, 0x3f, 6);
         appendBits(bins, bit, doubleDelta.u, 64);
     }
+    return CR_OK;
+}
+
+static ChunkResult appendTimestamp(CompressedChunk *chunk, timestamp_t timestamp) {
+#ifdef DEBUG
+    assert(timestamp >= chunk->prevTimestamp);
+#endif
+    timestamp_t curDelta = timestamp - chunk->prevTimestamp;
+
+    union64bits doubleDelta;
+    doubleDelta.i = curDelta - chunk->prevTimestampDelta;
+    
+    if (appendInteger(chunk, doubleDelta) != CR_OK) {
+        return CR_ERR;
+    }
+
     chunk->prevTimestampDelta = curDelta;
     chunk->prevTimestamp = timestamp;
     return CR_OK;
 }
 
-static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
+// does value needs double delta?
+static ChunkResult appendIntValue(CompressedChunk *chunk, int64_t value) {
+    int64_t curDelta = value - chunk->prevValue.i;
+    union64bits doubleDelta;
+    doubleDelta.i = curDelta - chunk->prevValueDelta;
+    
+    if (appendInteger(chunk, doubleDelta) != CR_OK) {
+        return CR_ERR;
+    }
+
+    chunk->prevValueDelta = curDelta;
+    chunk->prevValue.i = value;
+    return CR_OK;
+}
+
+static ChunkResult appendFloatValue(CompressedChunk *chunk, double value) {
     union64bits val;
     val.d = value;
     u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
@@ -394,10 +418,39 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         u_int64_t idx = chunk->idx;
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
-        if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
+        if (appendTimestamp(chunk, timestamp) != CR_OK || appendFloatValue(chunk, value) != CR_OK) {
             chunk->idx = idx;
             chunk->prevTimestamp = prevTimestamp;
             chunk->prevTimestampDelta = prevTimestampDelta;
+            return CR_END;
+        }
+    }
+    chunk->count++;
+    return CR_OK;
+}
+
+
+ChunkResult IntCompressed_Append(CompressedChunk *chunk, timestamp_t timestamp, int64_t value) {
+#ifdef DEBUG
+    assert(chunk);
+#endif
+
+    if (chunk->count == 0) {
+        chunk->baseValue.i = chunk->prevValue.i = value;
+        chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
+        chunk->prevTimestampDelta = 0;
+    } else {
+        u_int64_t idx = chunk->idx;
+        u_int64_t prevTimestamp = chunk->prevTimestamp;
+        int64_t prevTimestampDelta = chunk->prevTimestampDelta;
+        int64_t prevValue = chunk->prevValue.i;
+        int64_t prevValueDelta = chunk->prevValueDelta;
+        if (appendTimestamp(chunk, timestamp) != CR_OK || appendIntValue(chunk, value) != CR_OK) {
+            chunk->idx = idx;
+            chunk->prevTimestamp = prevTimestamp;
+            chunk->prevTimestampDelta = prevTimestampDelta;
+            chunk->prevValue.i = prevValue;
+            chunk->prevValueDelta = prevValueDelta;
             return CR_END;
         }
     }
@@ -437,7 +490,7 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
 }
 
 /*
- * This function decodes values inserted by appendFloat.
+ * This function decodes values inserted by appendFloatValue.
  *
  * If first bit if OFF, the value hasn't changed from previous sample.
  *
