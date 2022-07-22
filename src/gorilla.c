@@ -437,6 +437,7 @@ ChunkResult IntCompressed_Append(CompressedChunk *chunk, timestamp_t timestamp, 
 
     if (chunk->count == 0) {
         chunk->baseValue.i = chunk->prevValue.i = value;
+        chunk->prevValueDelta = 0;
         chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
         chunk->prevTimestampDelta = 0;
     } else {
@@ -447,10 +448,10 @@ ChunkResult IntCompressed_Append(CompressedChunk *chunk, timestamp_t timestamp, 
         int64_t prevValueDelta = chunk->prevValueDelta;
         if (appendTimestamp(chunk, timestamp) != CR_OK || appendIntValue(chunk, value) != CR_OK) {
             chunk->idx = idx;
-            chunk->prevTimestamp = prevTimestamp;
-            chunk->prevTimestampDelta = prevTimestampDelta;
             chunk->prevValue.i = prevValue;
             chunk->prevValueDelta = prevValueDelta;
+            chunk->prevTimestamp = prevTimestamp;
+            chunk->prevTimestampDelta = prevTimestampDelta;
             return CR_END;
         }
     }
@@ -569,7 +570,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     // First sample
     if (unlikely(iter->count == 0)) {
         sample->timestamp = iter->chunk->baseTimestamp;
-        sample->value = iter->chunk->baseValue.d;
+        sample->value = iter->chunk->baseValue.i;
         iter->count++;
         return CR_OK;
     }

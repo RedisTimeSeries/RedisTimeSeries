@@ -40,16 +40,16 @@ typedef struct CompressedChunk
     int64_t prevTimestampDelta;
 
     union64bits prevValue;
-    union {
-        struct {
+    //union {
+        //struct {
             u_int8_t prevLeading;
             u_int8_t prevTrailing;
-        };
-        struct {
-            uint64_t prevValueDelta : 60;
-            uint64_t factor : 4;
-        };
-    };
+        //};
+        //struct {
+            uint64_t prevValueDelta;// : 60;
+            uint64_t factor;// : 4;
+        //};
+    //};
 } CompressedChunk;
 
 typedef struct Compressed_Iterator
@@ -71,6 +71,7 @@ typedef struct Compressed_Iterator
 } Compressed_Iterator;
 
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
+ChunkResult IntCompressed_Append(CompressedChunk *chunk, timestamp_t timestamp, int64_t value);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample);
 
 #endif
