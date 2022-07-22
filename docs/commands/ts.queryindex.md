@@ -2,7 +2,7 @@
 syntax: 
 ---
 
-Get all time series keys matching a filter list.
+Get all time series keys matching a filter list
 
 ## Syntax
 
@@ -25,7 +25,7 @@ filters time series based on their labels and label values, with these options:
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
-<note><b>NOTES:</b>
+<note><b>Notes:</b>
  - When using filters, apply a minimum of one `label = value` filter. 
  - `QUERYINDEX` cannot be part of a transaction that runs on a Redis cluster.
  - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.

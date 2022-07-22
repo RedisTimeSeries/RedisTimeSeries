@@ -2,7 +2,7 @@
 syntax: 
 ---
 
-Query a range across multiple time series by filters in reverse direction.
+Query a range across multiple time series by filters in reverse direction
 
 ## Syntax
 
@@ -45,12 +45,12 @@ uses these filters:
   - `label != `, where `key` has label `label`
   - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
+</details>
 
- <note><b>NOTES:</b> 
+<note><b>Notes:</b> 
    - When using filters, apply a minimum of one `label = value` filter.
    - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
    </note>
-</details>
 
 ## Optional arguments
 
@@ -107,7 +107,7 @@ Values include:
  - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
  - A specific timestamp: align the reference timestamp to a specific time
    
-<note><b>NOTE:</b> When not provided, alignment is set to `0`.</note>
+<note><b>Note:</b> When not provided, alignment is set to `0`.</note>
 </details>
 
 <details open>
@@ -189,7 +189,7 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
     | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8) |
     | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
 
-<note><b>NOTES:</b> 
+<note><b>Notes:</b> 
   - The produced time series is named `<label>=<groupbyvalue>`
   - The produced time series contains two labels with these label array structures:
     - `reducer`, the reducer used
@@ -207,7 +207,7 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS label...` is specified, the selected labels are reported
 - Timestamp-value pairs for all samples/aggregations matching the range
 
-<note><b>NOTE:</b> The `MREVRANGE` command cannot be part of transaction when running on a Redis cluster.</note>
+<note><b>Note:</b> The `MREVRANGE` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Examples
 

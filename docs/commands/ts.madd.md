@@ -4,6 +4,8 @@ syntax:
 
 Append new samples to one or more time series
 
+## Syntax
+
 {{< highlight bash >}}
 TS.MADD {key timestamp value}...
 {{< / highlight >}}
@@ -14,17 +16,19 @@ TS.MADD {key timestamp value}...
 
 <details open>
 <summary><code>key</code></summary> 
-is the key name for the time series.
 
+is the key name for the time series.
 </details>
 
 <details open>
 <summary><code>timestamp</code></summary>
+
 is (integer) UNIX sample timestamp in milliseconds or <code>*</code> to set the timestamp to the server clock.
 </details>
 
 <details open>
 <summary><code>value</code></summary>
+
 is numeric data value of the sample (double). The double number should follow <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> (a JSON standard). The parser rejects overly large values that would not fit in binary64. It does not accept NaN or infinite values.
 </details>
 

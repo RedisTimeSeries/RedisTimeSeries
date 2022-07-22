@@ -2,7 +2,9 @@
 syntax: 
 ---
 
-Get the last samples matching a specific filter.
+Get the last samples matching a specific filter
+
+## Syntax
 
 {{< highlight bash >}}
 TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
@@ -66,7 +68,7 @@ For each time series matching the specified filters, the following is reported:
   - If `SELECTED_LABELS label...` is specified, the selected labels are reported
 - Timestamp-value pairs for all samples/aggregations matching the range
 
-<note><b>NOTE:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
+<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Examples
 
@@ -85,7 +87,7 @@ OK
 2) (integer) 1010
 3) (integer) 1020
 4) (integer) 1030
-127.0.0.1:6379> TS.MADD temp:JLM 1005 30 temp:JLM 1015 35 temp:TLM 1025 9999 temp:JLM 1035 40
+127.0.0.1:6379> TS.MADD temp:JLM 1005 30 temp:JLM 1015 35 temp:JLM 1025 9999 temp:JLM 1035 40
 1) (integer) 1005
 2) (integer) 1015
 3) (integer) 1025
