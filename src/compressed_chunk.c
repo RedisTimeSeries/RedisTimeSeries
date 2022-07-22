@@ -422,7 +422,6 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) 
     iter->leading = 32;
     iter->trailing = 32;
     iter->blocksize = 0;
-    iterator = (ChunkIter_t *)iter;
 }
 
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk) {
