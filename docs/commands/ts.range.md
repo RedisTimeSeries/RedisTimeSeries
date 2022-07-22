@@ -2,7 +2,9 @@
 syntax: 
 ---
 
-Query a range in forward direction.
+Query a range in forward direction
+
+## Syntax
 
 {{< highlight bash >}}
 TS.RANGE key fromTimestamp toTimestamp
@@ -36,7 +38,7 @@ is start timestamp for the range query. Use `-` to express the minimum possible 
 
 is end timestamp for the range query. Use `+` to express the maximum possible timestamp.
 
-<note><b>NOTE:</b>    When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
+<note><b>Note:</b>    When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
 
 </details>
 
@@ -83,7 +85,7 @@ Values include:
  - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
  - A specific timestamp: align the reference timestamp to a specific time
    
-<note><b>NOTE:</b> When not provided, alignment is set to `0`.</note>
+<note><b>Note:</b> When not provided, alignment is set to `0`.</note>
 
 </details>
 
