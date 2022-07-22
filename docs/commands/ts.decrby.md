@@ -1,52 +1,80 @@
-### TS.DECRBY
+---
+syntax: 
+---
 
-Decrease the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given decrement.
+Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
 
-```sql
+## Syntax
+
+{{< highlight bash >}}
 TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
-```
-If the time series does not exist - it will be automatically created.
+{{< / highlight >}}
 
-This command can be used as a counter or gauge that automatically gets history as a time series.
+## Required arguments
 
-- _key_ - Key name for time series
-- _value_ - numeric data value of the sample (double)
+<details open><summary><code>key</code></summary> 
 
-Optional args:
+is key name for the time series.
+</details>
 
-- `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds** or `*` to set the timestamp based on the server's clock.
+<details open><summary><code>value</code></summary> 
 
-  _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is decreased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp minus _value_. If the time series is empty - the value would be set to _value_.
+is numeric data value of the sample (double)
+</details>
 
-  When not specified: set the timestamp based on the server's clock.
+<note><b>Notes</b>
 
-- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
+ - If the time series does not exist, it is automatically created.
+ - You can use this command as a counter or gauge that automatically gets history as a time series.
+</note>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
+## Optional arguments
 
-  See `RETENTION` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>TIMESTAMP timestamp</code></summary> 
+
+is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp to the server clock.
+</details>
+
+<details open><summary><code>timestamp</code></summary> 
+
+must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
+
+If the time series is empty, the value is set to `value`. When not specified, set the timestamp to the server clock.
+</details>
+
+<details open><summary><code>RETENTION retentionPeriod</code></summmary> 
+
+is maximum retention period, compared to the maximum existing timestamp, in milliseconds. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
+</details>
+
  
-- `UNCOMPRESSED` - Changes data storage from compressed (by default) to uncompressed
+<details open><summary><code>UNCOMPRESSED</code></summary>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
-  
-  See `ENCODING` in [TS.CREATE](/commands/ts.create/)
+changes data storage from compressed (default) to uncompressed. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
+</details>
 
-- `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
+<details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
+is memory size, in bytes, allocated for each data chunk. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
+</details>
 
-  See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>LABELS [{label value}...]</code></summary> 
 
-- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
+</details>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
-  
-  See `LABELS` in [TS.CREATE](/commands/ts.create/)
+<note><b>Notes</b>
 
-#### Notes
-
-- You can use this command to add data to a nonexisting time series in a single command.
+ - You can use this command to add data to a nonexisting time series in a single command.
   This is why `RETENTION`, `UNCOMPRESSED`,  `CHUNK_SIZE`, and `LABELS` are optional arguments.
-- When specified and the key doesn't exist, a new time series is created.
+ - When specified and the key doesn't exist, a new time series is created.
   Setting the `RETENTION` and `LABELS` introduces additional time complexity.
+</note>
+
+## See also
+
+`TS.INCRBY` | `TS.CREATE` 
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)
