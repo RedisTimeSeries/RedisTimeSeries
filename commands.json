@@ -575,7 +575,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -737,7 +738,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -895,7 +897,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -1137,7 +1140,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -1375,7 +1379,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             }
         ],
         "since": "1.0.0",
@@ -1388,7 +1393,8 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "name": "labels",
