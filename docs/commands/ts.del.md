@@ -1,30 +1,74 @@
-### TS.DEL
+---
+syntax: 
+---
 
-(since RedisTimeSeries v1.6)
+Delete all samples between two timestamps for a given time series
 
-Delete all samples between two timestamps for a given time series.
+## Syntax
 
-The given timestamp interval is closed (inclusive), meaning samples which timestamp eqauls the _fromTimestamp_ or _toTimestamp_ will also be deleted.
-
-```sql
+{{< highlight bash >}}
 TS.DEL key fromTimestamp toTimestamp
-```
+{{< / highlight >}}
 
-- _key_ - Key name for time series
-- _fromTimestamp_ - Start timestamp for the range deletion.
-- _toTimestamp_ - End timestamp for the range deletion.
+[Examples](#examples)
 
-#### Return value
+## Required arguments
+
+<details open><summary><code>key</code></summary> 
+
+is key name for the time series.
+</details>
+
+<details open><summary><code>fromTimestamp</code></summary> 
+
+is start timestamp for the range deletion.
+</details>
+
+<details open><summary><code>toTimestamp</code></summary>
+
+is end timestamp for the range deletion.
+
+The given timestamp interval is closed (inclusive), meaning that samples whose timestamp eqauls the `fromTimestamp` or `toTimestamp` are also deleted.
+
+## Return value
 
 Integer reply: The number of samples that were removed.
 
-#### Complexity
+## Examples 
 
-TS.DEL complexity is O(N) where N is the number of data points that will be removed.
+<details open><summary><b>Delete range of data points</b></summary>
 
-#### Delete range of data points example
+Create time series for temperature in Tel Aviv and Jerusalem, then add different temperature samples.
 
-```sql
-127.0.0.1:6379>TS.DEL temperature:2:32 1548149180000 1548149183000
-(integer) 150
-```
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temp:TLV LABELS type temp location TLV
+OK
+127.0.0.1:6379> TS.CREATE temp:JLM LABELS type temp location JLM
+OK
+127.0.0.1:6379> TS.MADD temp:TLV 1000 30 temp:TLV 1010 35 temp:TLV 1020 9999 temp:TLV 1030 40
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+4) (integer) 1030
+127.0.0.1:6379> TS.MADD temp:JLM 1005 30 temp:JLM 1015 35 temp:JLM 1025 9999 temp:JLM 1035 40
+1) (integer) 1005
+2) (integer) 1015
+3) (integer) 1025
+4) (integer) 1035
+{{< / highlight >}}
+
+Delete the range of data points for temperature in Tel Aviv.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.DEL temp:TLV 1000 1030
+(integer) 4
+{{< / highlight >}}
+</details>
+
+## See also
+
+`TS.ADD` 
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)
