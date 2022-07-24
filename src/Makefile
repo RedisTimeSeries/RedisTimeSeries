@@ -138,8 +138,8 @@ endif
 
 ifeq ($(OS),macos)
 LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
-DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS) -static
+DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS) -static
 endif
 
 ifeq ($(PROFILE),1)
