@@ -166,6 +166,7 @@ _SOURCES=\
 	chunk.c \
 	compaction.c \
 	compressed_chunk.c \
+	header_chunk.c \
 	config.c \
 	endianconv.c \
 	filter_iterator.c \

@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "compressed_chunk.h"
+#include "header_chunk.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -55,6 +56,30 @@ static const ChunkFuncs comprChunk = {
     .MRDeserialize = Compressed_MRDeserialize,
 };
 
+static const ChunkFuncs headerChunk = {
+    .NewChunk = Header_NewChunk,
+    .FreeChunk = Header_FreeChunk,
+    .CloneChunk = Header_CloneChunk,
+    .SplitChunk = Header_SplitChunk,
+
+    .AddSample = Header_AddSample,
+    .UpsertSample = Header_UpsertSample,
+    .DelRange = Header_DelRange,
+
+    .ProcessChunk = Header_ProcessChunk,
+
+    .GetChunkSize = Header_GetChunkSize,
+    .GetNumOfSample = Header_ChunkNumOfSample,
+    .GetLastTimestamp = Header_GetLastTimestamp,
+    .GetLastValue = Header_GetLastValue,
+    .GetFirstTimestamp = Header_GetFirstTimestamp,
+
+    .SaveToRDB = Header_SaveToRDB,
+    .LoadFromRDB = Header_LoadFromRDB,
+    .MRSerialize = Header_MRSerialize,
+    .MRDeserialize = Header_MRDeserialize,
+};
+
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
 // will contain the data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
@@ -96,7 +121,9 @@ const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
         case CHUNK_REGULAR:
             return &regChunk;
         case CHUNK_COMPRESSED:
-            return &comprChunk;
+            //return &comprChunk;
+        case CHUNK_HEADER:
+            return &headerChunk;
     }
     return NULL;
 }

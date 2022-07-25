@@ -4,8 +4,8 @@
  * This file is available under the Redis Labs Source Available License Agreement
  */
 
-#ifndef COMPRESSED_CHUNK_H
-#define COMPRESSED_CHUNK_H
+#ifndef HEADER_CHUNK_H
+#define HEADER_CHUNK_H
 
 #include "generic_chunk.h"
 
@@ -49,7 +49,4 @@ int Header_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
 void Header_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
 int Header_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
-/* Used in tests */
-u_int64_t getIterIdx(ChunkIter_t *iter);
-
-#endif // COMPRESSED_CHUNK_H
+#endif // HEADER_CHUNK_H

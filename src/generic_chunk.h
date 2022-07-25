@@ -32,7 +32,8 @@ typedef void ChunkIter_t;
 typedef enum CHUNK_TYPES_T
 {
     CHUNK_REGULAR,
-    CHUNK_COMPRESSED
+    CHUNK_COMPRESSED,
+    CHUNK_HEADER,
 } CHUNK_TYPES_T;
 
 typedef struct UpsertCtx
