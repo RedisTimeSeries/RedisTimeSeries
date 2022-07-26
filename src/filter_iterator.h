@@ -54,6 +54,9 @@ typedef struct AggregationIterator
     Series *series;
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
+    bool handled_twa_empty_prefix;
+    bool handled_twa_empty_suffix;
+    timestamp_t prev_ts;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
