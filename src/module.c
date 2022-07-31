@@ -387,8 +387,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     RangeArgs rangeArgs = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
-        REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &rangeArgs) != REDISMODULE_OK) {
         goto _out;
     }
 
@@ -1116,7 +1115,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RangeArgs args = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 

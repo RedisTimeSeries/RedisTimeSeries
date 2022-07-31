@@ -146,6 +146,15 @@ def test_ts_del_multi_chunk():
             e.assertEqual(len(res), 1)
         e.flush()
 
+def test_ts_del_with_plus():
+    e = Env()
+    with e.getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", 't{1}')
+        r.execute_command("ts.add", 't{1}', 1, 2)
+        r.execute_command("ts.add", 't{1}', 100, 10)
+        r.execute_command("ts.del", 't{1}', '-', '+')
+        res = r.execute_command("ts.range", 't{1}', '-', '+')
+        assert res == []
 
 def test_ts_del_compressed_out_range():
     sample_len = 101
