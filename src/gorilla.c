@@ -207,7 +207,7 @@ static inline int64_t Bin_MinVal(u_int8_t nbits) {
 // `bit` is a global bit (can be out of scope of a single binary_t)
 
 static inline u_int8_t localbit(const globalbit_t bit) {
-    return bit % BINW;
+    return bit & 0x3f;
 }
 
 // return `true` if `x` is in [-(2^(n-1)), 2^(n-1)-1]
@@ -218,7 +218,7 @@ static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
 }
 
 static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+    return !(bins[bit >> 6] & BIT(localbit(bit)));
 }
 
 // unused:
@@ -248,10 +248,10 @@ static inline binary_t readBits(const binary_t *bins,
     const localbit_t lbit = localbit(start_pos);
     const localbit_t available = BINW - lbit;
     if (available >= dataLen) {
-        return LSB(bins[start_pos / BINW] >> lbit, dataLen);
+        return LSB(bins[start_pos >> 6] >> lbit, dataLen);
     } else {
-        binary_t bin = LSB(bins[start_pos / BINW] >> lbit, available);
-        bin |= LSB(bins[(start_pos / BINW) + 1], dataLen - available) << available;
+        binary_t bin = LSB(bins[start_pos >> 6] >> lbit, available);
+        bin |= LSB(bins[(start_pos >> 6) + 1], dataLen - available) << available;
         return bin;
     }
 }
