@@ -11,6 +11,7 @@
 #include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
+#include "ll2string.h"
 
 #include "rmutil/alloc.h"
 
@@ -34,6 +35,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
+#define PAGE 4096
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
     long long arraylen = 0;
     long long _count = LLONG_MAX;
@@ -46,15 +48,36 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
     EnrichedChunk *enrichedChunk;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
+    char buf[PAGE];
+    int bufCount = 0;
+
     while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
-        n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
+        n = enrichedChunk->samples.num_samples;
         for (size_t i = 0; i < n; ++i) {
-            ReplyWithSample(
-                ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);
+            if (bufCount > PAGE - 30) {
+                RedisModule_ReplyWithStringBuffer(ctx, buf, bufCount);
+                bufCount = 0;
+                arraylen++;
+            }
+            buf[bufCount++] = '[';
+            bufCount += ll2string(buf + bufCount, PAGE - bufCount, enrichedChunk->samples.timestamps[i]);
+            buf[bufCount++] = ',';
+
+            char dblbuf[20];
+            dragonbox_double_to_chars(enrichedChunk->samples.values[i], dblbuf);
+            int len = strlen(dblbuf);
+            memcpy(buf + bufCount, dblbuf, len);
+            bufCount += len;
+            //bufCount += snprintf(buf + bufCount, PAGE - bufCount, "%.17g",enrichedChunk->samples.values[i]);
+            buf[bufCount++] = ']';
         }
-        arraylen += n;
     }
     iter->Close(iter);
+
+    if (bufCount > 0) {
+        RedisModule_ReplyWithStringBuffer(ctx, buf, bufCount);
+        arraylen++;
+    }
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
