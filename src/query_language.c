@@ -63,15 +63,15 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
 }
 
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
-    if (chunkSizeBytes < 128) {
+    if (chunkSizeBytes < 64) {
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
     if (chunkSizeBytes > 1048576) {
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
@@ -79,7 +79,7 @@ bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
         // Currently the gorilla algorithm implementation can only handle chunks of size
         // multiplication of 8
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
