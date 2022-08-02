@@ -59,17 +59,22 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
                 bufCount = 0;
                 arraylen++;
             }
-            buf[bufCount++] = '[';
+            buf[bufCount++] = '+';  // array type
+            buf[bufCount++] = '2';  // array len
+            buf[bufCount++] = '$';  // int type
             bufCount += ll2string(buf + bufCount, PAGE - bufCount, enrichedChunk->samples.timestamps[i]);
-            buf[bufCount++] = ',';
+            buf[bufCount++] = '\n\r';
 
+            buf[bufCount++] = ',';  // double type
             char dblbuf[20];
             dragonbox_double_to_chars(enrichedChunk->samples.values[i], dblbuf);
             int len = strlen(dblbuf);
             memcpy(buf + bufCount, dblbuf, len);
             bufCount += len;
             //bufCount += snprintf(buf + bufCount, PAGE - bufCount, "%.17g",enrichedChunk->samples.values[i]);
-            buf[bufCount++] = ']';
+            buf[bufCount++] = '\n\r';
+            buf[bufCount++] = '^';  // on the house
+            buf[bufCount++] = '~';  // feeling good
         }
     }
     iter->Close(iter);
