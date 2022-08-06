@@ -28,7 +28,7 @@ filters time series based on their labels and label values, with these options:
 
   <note><b>NOTES:</b> 
    - When using filters, apply a minimum of one `label=value` filter.
-   - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    </note>
 
   </details>
