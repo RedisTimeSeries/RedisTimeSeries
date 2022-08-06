@@ -39,16 +39,16 @@ is end timestamp for range query. Use `+` to express the maximum possible timest
 
 uses these filters:
 
-  - `label = value`, where `label` equals `value`
-  - `label != value`, where `label` does not equal `value`
-  - `label = `, where `key` does not have label `label`
-  - `label != `, where `key` has label `label`
-  - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
-  - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
+  - `label=value`, where `label` equals `value`
+  - `label!=value`, where `label` does not equal `value`
+  - `label=`, where `key` does not have label `label`
+  - `label!=`, where `key` has label `label`
+  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 </details>
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label = value` filter.
+   - When using filters, apply a minimum of one `label=value` filter.
    - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
    </note>
 
