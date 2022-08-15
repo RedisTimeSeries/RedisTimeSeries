@@ -21,3 +21,4 @@ venv/
 /tests/tests_report.xml
 site/
 /tests/benchmarks/profile_*
+wordlist.dic
