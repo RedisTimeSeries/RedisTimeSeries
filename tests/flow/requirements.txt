@@ -1,4 +1,4 @@
 RLTest~=0.5.4
-ramp-packer~=2.2.1
+ramp-packer~=2.3.0
 statistics
 hiredis==2.0.0
