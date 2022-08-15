@@ -388,7 +388,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                .filterByValueArgs = { 0 },
                                .filterByTSArgs = { 0 },
                                .startTimestamp = is_reserved ? init_ts + 1 : 0,
-                               .endTimestamp = is_reserved ? UINT64_MAX : init_ts - 1 };
+                               .endTimestamp = is_reserved ? UINT64_MAX : init_ts - 1,
+                               .latest = false };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, !is_reserved, true);
             if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
@@ -521,8 +522,8 @@ _finalize:
                                .filterByValueArgs = { 0 },
                                .filterByTSArgs = { 0 },
                                .startTimestamp = is_reserved ? 0 : last_sample.timestamp + 1,
-                               .endTimestamp =
-                                   is_reserved ? last_sample.timestamp - 1 : UINT64_MAX };
+                               .endTimestamp = is_reserved ? last_sample.timestamp - 1 : UINT64_MAX,
+                               .latest = false };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, is_reserved, true);
             if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {

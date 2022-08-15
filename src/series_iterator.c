@@ -19,7 +19,8 @@ AbstractIterator *SeriesIterator_New(Series *series,
                                      timestamp_t start_ts,
                                      timestamp_t end_ts,
                                      bool rev,
-                                     bool rev_chunk) {
+                                     bool rev_chunk,
+                                     bool latest) {
     SeriesIterator *iter = malloc(sizeof(SeriesIterator));
     iter->base.Close = SeriesIteratorClose;
     iter->base.GetNext = SeriesIteratorGetNextChunk;
@@ -31,6 +32,7 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->maxTimestamp = end_ts;
     iter->reverse = rev;
     iter->reverse_chunk = rev_chunk;
+    iter->latest = latest;
 
     timestamp_t rax_key;
 
@@ -60,12 +62,34 @@ void SeriesIteratorClose(AbstractIterator *iterator) {
     free(iterator);
 }
 
+extern RedisModuleCtx *rts_staticCtx; // global redis ctx
+
+// LATEST is ignored for a series that is not a compaction.
+#define should_finalize_last_bucket(iter)                                                          \
+    ((iter)->latest && (iter)->series->srcKey &&                                                   \
+     (iter)->maxTimestamp > (iter)->series->lastTimestamp)
+
 // Fills sample from chunk. If all samples were extracted from the chunk, we
 // move to the next chunk.
 EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
+    Sample sample;
+    Sample *sample_ptr = &sample;
     SeriesIterator *iter = (SeriesIterator *)abstractIterator;
     Chunk_t *curChunk = iter->currentChunk;
-    if (!curChunk) {
+
+    if (unlikely(iter->reverse && should_finalize_last_bucket(iter))) {
+        goto _handle_latest;
+    }
+
+    if (!curChunk || iter->series->funcs->GetNumOfSample(curChunk) == 0) {
+        if (unlikely(curChunk && iter->series->funcs->GetNumOfSample(curChunk) > 0 &&
+                     iter->series->totalSamples == 0)) { // empty chunks are being removed
+            RedisModule_Log(rts_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+        }
+        if (should_finalize_last_bucket(iter)) {
+            iter->enrichedChunk->samples.num_samples = 0;
+            goto _handle_latest;
+        }
         return NULL;
     }
 
@@ -87,5 +111,24 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
         return SeriesIteratorGetNextChunk(abstractIterator);
     }
 
+    if (iter->enrichedChunk->samples.num_samples > 0 || (!should_finalize_last_bucket(iter))) {
+        goto _out;
+    }
+
+_handle_latest:
+    calculate_latest_sample(&sample_ptr, iter->series);
+    if (sample_ptr && (sample.timestamp <= iter->maxTimestamp)) {
+        if (iter->enrichedChunk->samples.size == 0) {
+            ReallocSamplesArray(&iter->enrichedChunk->samples, 1);
+        }
+        ResetEnrichedChunk(iter->enrichedChunk);
+        iter->enrichedChunk->rev = iter->reverse_chunk;
+        iter->enrichedChunk->samples.num_samples = 1;
+        *iter->enrichedChunk->samples.timestamps = sample.timestamp;
+        *iter->enrichedChunk->samples.values = sample.value;
+    }
+    iter->latest = false;
+
+_out:
     return iter->enrichedChunk;
 }

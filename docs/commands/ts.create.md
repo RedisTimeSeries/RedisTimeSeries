@@ -1,44 +1,66 @@
-## Create
+---
+syntax: 
+---
 
-### TS.CREATE
+Create a new time series
 
-Create a new time series. 
+## Syntax
 
-```sql
+{{< highlight bash >}}
 TS.CREATE key [RETENTION retentionPeriod] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS {label value}...]
-```
+{{< / highlight >}}
 
-- _key_ - Key name for time series
+[Examples](#examples)
 
-Optional args:
+## Required arguments
 
-- `RETENTION` _retentionPeriod_ - Maximum age for samples compared to last event time (in milliseconds).
+<details open><summary><code>key</code></summary> 
 
-   When set to 0, the series is not trimmed.
+is key name for the time series.
+</details>
 
-   When not specified: set to the global [RETENTION_POLICY](/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
+<note><b>Notes:</b>
 
-- `ENCODING` _enc_ - Specify the series samples encoding format. One of the following values:
-   - `COMPRESSED`: apply compression to the series samples.
-   - `UNCOMPRESSED`: keep the raw samples in memory. Adding this flag will keep data in an uncompressed form. 
+- If a key already exists, you get a Redis error reply, `TSDB: key already exists`. You can check for the existence of a key with the `EXISTS` command.
+- Other commands that also create a new time series when called with a key that does not exist are `TS.ADD`, `TS.INCRBY`, and `TS.DECRBY`.
+</note>
 
-   `COMPRESSED` (explained [here](https://redis.com/blog/redistimeseries-version-1-2-is-here/)) is almost always the right choice. Compression not only saves memory but usually improve performance due to lower number of memory accesses. You will usually gain about 90% memory reduction. The exception may be highly irregular (almost random) timestamps or values, which is rarely the case.
+## Optional arguments
 
-   When not specified: set to `COMPRESSED`.
+<details open><summary><code>RETENTION retentionPeriod</code></summary> 
 
-- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
+is maximum age for samples compared to the highest reported timestamp, in milliseconds. Samples are expired based solely on the difference between their timestamp and the timestamps passed to subsequent `TS.ADD`, `TS.MADD`, `TS.INCRBY`, and `TS.DECRBY` calls.
 
-   When not specified: set to 4096 bytes (a single memory page).
+When set to 0, samples never expire. When not specified, the option is set to the global [RETENTION_POLICY](/docs/stack/timeseries/configuration/#retention_policy) configuration of the database, which by default is 0.
+</details>
 
-   The data in each key is stored in chunks. Each chunk contains data in a given timeframe. We keep an index of all chucks. Then, inside each chunk - we iterate. There are tradeoffs for having smaller or larger sizes of chunks - depending on your usage:
+<details open><summary><code>ENCODING enc</code></summary> 
 
-   - Insert performance: Smaller chunks result in slower inserts (more chunks need to be created).
-   - Query performance: Queries for a small subset when the chunks are very large - are slower, as we need to iterate over the chunk to find the data.
-   - Larger chunks take more memory. if you have a very large number of keys and very few samples per key - smaller chunks can save memory.
+specifies the series samples encoding format as one of the following values:
+ - `COMPRESSED`, applies compression to the series samples.
+ - `UNCOMPRESSED`, keeps the raw samples in memory. Adding this flag keeps data in an uncompressed form. 
 
-   If you are unsure about your use case, you should stick with the default.
+`COMPRESSED` is almost always the right choice. Compression not only saves memory but usually improves performance due to a lower number of memory accesses. It can result in about 90% memory reduction. The exception are highly irregular timestamps or values, which occur rarely.
 
-- `DUPLICATE_POLICY` _policy_ - Policy for handling multiple samples with identical timestamps. One of the following values:
+When not specified, the option is set to `COMPRESSED`.
+</details>
+
+<details open><summary><code>CHUNK_SIZE size</code></summary> 
+
+is memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576]. When not specified, it is set to 4096 bytes (a single memory page).
+
+The data in each key is stored in chunks. Each chunk contains data in a given timeframe. An index contains all chunks. Iterations occur inside each chunk. Depending on your use case, consider these tradeoffs for having smaller or larger sizes of chunks:
+
+  - Insert performance: Smaller chunks result in slower inserts (more chunks need to be created).
+  - Query performance: Queries for a small subset when the chunks are very large are slower, as we need to iterate over the chunk to find the data.
+  - Larger chunks take more memory: If you have a very large number of keys and very few samples per key, smaller chunks can save memory.
+
+ If you are unsure about your use case, select the default.
+</details>
+
+<details open><summary><code>DUPLICATE_POLICY policy</code></summary> 
+
+is policy for handling multiple samples with identical timestamps, with one of the following values:
   - `BLOCK`: an error will occur for any out of order sample
   - `FIRST`: ignore any newly reported value
   - `LAST`: override with the newly reported value
@@ -47,25 +69,30 @@ Optional args:
   - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
 
   When not specified: set to the global [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy) configuration of the database (which, by default, is `BLOCK`).
+</details>
 
-- `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+<details open><summary><code>LABELS {label value}...</code></summary> 
 
-  The [TS.MGET](/commands/ts.mget/), [TS.MRANGE](/commands/ts.mrange/), and [TS.MREVRANGE](/commands/ts.mrevrange/) commands operate on multiple time series - based on their labels. The [TS.QUERYINDEX](/commands/ts.queryindex/) command returns all time series keys matching a given filter - based on their labels.
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
 
-#### Complexity
+The `TS.MGET`, `TS.MRANGE`, and `TS.MREVRANGE` commands operate on multiple time series based on their labels. The `TS.QUERYINDEX` command returns all time series keys matching a given filter based on their labels.
+</details>
 
-TS.CREATE complexity is O(1).
+## Examples 
 
-#### Create Example
+<details open><summary><b>Create a temperature time series</b></summary>
 
-```sql
-TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
-```
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
+OK
+{{< / highlight >}}
+</details>
 
-#### Errors
+## See also
 
-* If a key already exists, you get a normal Redis error reply `TSDB: key already exists`. You can check for the existence of a key with Redis [EXISTS command](/commands/exists).
+`TS.ADD` | `TS.INCRBY` | `TS.DECRBY` | `TS.MGET` | `TS.MRANGE` | `TS.MREVRANGE` | `TS.QUERYINDEX`
 
-#### Notes
+## Related topics
 
-`TS.ADD` can also create a new time-series if called with a key that does not exist.
+- [RedisTimeSeries](/docs/stack/timeseries)
+- [RedisTimeSeries Version 1.2 Is Here!](https://redis.com/blog/redistimeseries-version-1-2-is-here/)

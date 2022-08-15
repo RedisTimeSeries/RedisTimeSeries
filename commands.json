@@ -342,6 +342,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
@@ -398,6 +399,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
@@ -571,6 +573,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -728,6 +736,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -879,6 +893,12 @@
             {
                 "name": "toTimestamp",
                 "type": "integer"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -1118,6 +1138,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -1349,6 +1375,12 @@
             {
                 "name": "key",
                 "type": "key"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
             }
         ],
         "since": "1.0.0",
@@ -1358,6 +1390,12 @@
         "summary": "Get the last samples matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
             {
                 "name": "labels",
                 "type": "oneof",

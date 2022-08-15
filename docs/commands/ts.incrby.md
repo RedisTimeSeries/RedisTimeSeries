@@ -1,50 +1,119 @@
-### TS.INCRBY
+---
+syntax: 
+---
 
-Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given increment.
+Increase the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given increment
 
-```sql
+## Syntax
+
+{{< highlight bash >}}
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
-```
-If the time series does not exist - it will be automatically created.
+{{< / highlight >}}
 
-This command can be used as a counter or gauge that automatically gets history as a time series.
+[Examples](#examples)
 
-- _key_ - Key name for time series
-- _value_ - numeric data value of the sample (double)
+## Required arguments
 
-Optional args:
+<details open><summary><code>key</code></summary> 
 
-- `TIMESTAMP` _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the  server's clock.
+is key name for the time series.
+</details>
 
-  _timestamp_ must be equal to or higher than the maximal existing timestamp. When equal, the value of the sample with the maximal existing timestamp is increased. When higher, a new sample with a timestamp set to _timestamp_ will be created, and its value will be set to the value of the sample with the maximal existing timestamp plus _value_. If the time series is empty - the value would be set to _value_.
+<details open><summary><code>value</code></summary> 
 
-- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
+is numeric data value of the sample (double)
+</details>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
+<note><b>Notes</b>
 
-  See `RETENTION` in [TS.CREATE](/commands/ts.create/)
+ - If the time series does not exist, it is automatically created.
+ - You can use this command as a counter or gauge that automatically gets history as a time series.
+</note>
+
+## Optional arguments
+
+<details open><summary><code>TIMESTAMP timestamp</code></summary> 
+
+is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp to the server clock.
+</details>
+
+<details open><summary><code>timestamp</code></summary> 
+
+must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
+
+If the time series is empty, the value is set to `value`. When not specified, set the timestamp to the server clock.
+</details>
+
+<details open><summary><code>RETENTION retentionPeriod</code></summmary> 
+
+is maximum retention period, compared to the maximum existing timestamp, in milliseconds. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
+</details>
+
  
-- `UNCOMPRESSED` - Changes data storage from compressed (by default) to uncompressed
+<details open><summary><code>UNCOMPRESSED</code></summary>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
-  
-  See `ENCODING` in [TS.CREATE](/commands/ts.create/)
+changes data storage from compressed (default) to uncompressed. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
+</details>
 
-- `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
+<details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
+is memory size, in bytes, allocated for each data chunk. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
+</details>
 
-  See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>LABELS [{label value}...]</code></summary> 
 
-- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
+</details>
 
-  Used only if a new time series is created. Ignored When adding samples to an existing time series.
-  
-  See `LABELS` in [TS.CREATE](/commands/ts.create/)
+<note><b>Notes</b>
 
-#### Notes
-
-- You can use this command to add data to a nonexisting time series in a single command.
+ - You can use this command to add data to a nonexisting time series in a single command.
   This is why `RETENTION`, `UNCOMPRESSED`,  `CHUNK_SIZE`, and `LABELS` are optional arguments.
-- When specified and the key doesn't exist, a new time series is created.
+ - When specified and the key doesn't exist, a new time series is created.
   Setting the `RETENTION` and `LABELS` introduces additional time complexity.
+</note>
+
+## Examples
+
+<details open><summary><b>Store sum of data from several sources</b></summary> 
+
+Suppose you are getting number of orders or total income per minute from several points of sale, and you want to store only the combined value. Call TS.INCRBY for each point-of-sale report.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.INCRBY a 232 TIMESTAMP 1657811829000		// point-of-sale #1
+(integer) 1657811829000
+127.0.0.1:6379> TS.INCRBY a 157 TIMESTAMP 1657811829000		// point-of-sale #2
+(integer) 1657811829000
+127.0.0.1:6379> TS.INCRBY a 432 TIMESTAMP 1657811829000		// point-of-sale #3
+(integer) 1657811829000
+{{< / highlight >}}
+
+Note that the timestamps must arrive in non-decreasing order.
+
+{{< highlight bash >}}
+127.0.0.1:6379> ts.incrby a 100 TIMESTAMP 50
+(error) TSDB: for incrby/decrby, timestamp should be newer than the lastest one
+{{< / highlight >}}
+
+You can achieve similar results without such protection using `TS.ADD key timestamp value ON_DUPLICATE sum`.
+</details>
+
+<details open><summary><b>Count sensor captures</b></summary>
+
+Supose a sensor ticks whenever a car is passed on a road, and you want to count occurrences. Whenever you get a tick from the sensor you can simply call:
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.INCRBY a 1
+(integer) 1658431553109
+{{< / highlight >}}
+
+The timestamp is filled automatically. 
+</details>
+
+## See also
+
+`TS.DECRBY` | `TS.CREATE` 
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)

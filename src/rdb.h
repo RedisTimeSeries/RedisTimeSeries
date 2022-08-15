@@ -14,10 +14,13 @@
 #define TS_SIZE_RDB_VER 2
 #define TS_IS_RESSETED_DUP_POLICY_RDB_VER 3
 #define TS_OVERFLOW_RDB_VER 4
-#define TS_ALIGNMENT_TS_VER 5
+#define TS_REPLICAOF_SUPPORT_VER 5
+#define TS_ALIGNMENT_TS_VER 6
 
 // This flag should be updated whenever a new rdb version is introduced
 #define TS_LATEST_ENCVER TS_ALIGNMENT_TS_VER
+
+extern int last_rdb_load_version;
 
 void *series_rdb_load(RedisModuleIO *io, int encver);
 void series_rdb_save(RedisModuleIO *io, void *value);

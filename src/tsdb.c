@@ -15,6 +15,7 @@
 #include "sample_iterator.h"
 #include "multiseries_sample_iterator.h"
 #include "multiseries_agg_dup_sample_iterator.h"
+#include "rdb.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -132,6 +133,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->in_ram = true;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -213,19 +215,24 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
 
-    // Remove references to other keys
-    if (series->srcKey) {
-        RedisModule_FreeString(NULL, series->srcKey);
-        series->srcKey = NULL;
-    }
+    if (last_rdb_load_version < TS_REPLICAOF_SUPPORT_VER) {
+        // In versions greater than TS_REPLICAOF_SUPPORT_VER we delete the reference on the dump
+        // stage
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        CompactionRule *nextRule = rule->nextRule;
-        FreeCompactionRule(rule);
-        rule = nextRule;
+        // Remove references to other keys
+        if (series->srcKey) {
+            RedisModule_FreeString(NULL, series->srcKey);
+            series->srcKey = NULL;
+        }
+
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            CompactionRule *nextRule = rule->nextRule;
+            FreeCompactionRule(rule);
+            rule = nextRule;
+        }
+        series->rules = NULL;
     }
-    series->rules = NULL;
 
     RedisModule_CloseKey(key);
 }
@@ -376,6 +383,8 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
+
+    dst->in_ram = src->in_ram;
     return dst;
 }
 
@@ -835,13 +844,19 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         // We deleted the latest samples, no more chunks/samples to delete or cur chunk start_ts is
         // larger than end_ts
-        if (!currentKey || funcs->GetFirstTimestamp(currentChunk) > end_ts)
+        if (!currentKey || (funcs->GetNumOfSample(currentChunk) == 0) ||
+            funcs->GetFirstTimestamp(currentChunk) > end_ts) {
+            // Having empty chunk means the series is empty
             break;
+        }
 
+        bool is_only_chunk =
+            ((funcs->GetNumOfSample(currentChunk) + deletedSamples) == series->totalSamples);
         // Should we delete the all chunk?
-        bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
-                                funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
-                               currentChunk != series->lastChunk;
+        bool ts_delCondition =
+            (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
+             funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
+            (!is_only_chunk); // We assume at least one allocated chunk in the series
 
         if (!ts_delCondition) {
             timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(currentChunk);
@@ -859,9 +874,19 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             continue;
         }
 
+        bool isLastChunkDeleted = (currentChunk == series->lastChunk);
         RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
         deletedSamples += funcs->GetNumOfSample(currentChunk);
         funcs->FreeChunk(currentChunk);
+
+        if (isLastChunkDeleted) {
+            Chunk_t *lastChunk;
+            RedisModuleDictIter *lastChunkIter =
+                RedisModule_DictIteratorStartC(series->chunks, "$", NULL, 0);
+            RedisModule_DictNextC(lastChunkIter, NULL, (void *)&lastChunk);
+            series->lastChunk = lastChunk;
+            RedisModule_DictIteratorStop(lastChunkIter);
+        }
 
         // reseek iterator since we modified the dict,
         // go to first element that is bigger than current key
@@ -872,6 +897,21 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     RedisModule_DictIteratorStop(iter);
 
     CompactionDelRange(series, start_ts, end_ts);
+
+    // Check if last timestamp deleted
+    if (end_ts >= series->lastTimestamp && start_ts <= series->lastTimestamp) {
+        iter = RedisModule_DictIteratorStartC(series->chunks, "$", NULL, 0);
+        currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk);
+        if (!currentKey || (funcs->GetNumOfSample(currentChunk) == 0)) {
+            // No samples in the series
+            series->lastTimestamp = 0;
+            series->lastValue = 0;
+        } else {
+            series->lastTimestamp = funcs->GetLastTimestamp(currentChunk);
+            series->lastValue = funcs->GetLastValue(currentChunk);
+        }
+        RedisModule_DictIteratorStop(iter);
+    }
     return deletedSamples;
 }
 
@@ -1158,7 +1198,7 @@ AbstractIterator *SeriesQuery(Series *series,
     // should_reverse_chunk point it out.
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
         chain =
@@ -1233,4 +1273,44 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
     AbstractMultiSeriesSampleIterator *chain =
         MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
     return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+}
+
+CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName) {
+    bool ruleFound = false;
+    // find the rule which matches dstSeries
+    while (rules) {
+        if (RedisModule_StringCompare(keyName, rules->destKey) == 0) {
+            ruleFound = true;
+            break;
+        }
+        rules = rules->nextRule;
+    }
+
+    RedisModule_Assert(ruleFound);
+    return rules;
+}
+
+void calculate_latest_sample(Sample **sample, const Series *series) {
+    RedisModuleKey *srcKey = NULL;
+    Series *srcSeries;
+    const int status = GetSeries(
+        rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+    if (!status || srcSeries->totalSamples == 0) {
+        // LATEST is ignored for a series that is not a compaction.
+        *sample = NULL;
+    } else {
+        CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+        void *clonedContext = rule->aggClass->cloneContext(rule->aggContext);
+
+        double aggVal;
+        rule->aggClass->finalize(clonedContext, &aggVal);
+        (*sample)->timestamp = rule->startCurrentTimeBucket;
+        (*sample)->value = aggVal;
+
+        free(clonedContext);
+    }
+
+    if (srcKey) {
+        RedisModule_CloseKey(srcKey);
+    }
 }

@@ -246,7 +246,7 @@ The module includes a basic set of unit tests and integration tests.
 
 To run all unit tests, follow these steps:
 
-    $ make unittests
+    $ make unit_tests
 
 
 **Integration tests**
