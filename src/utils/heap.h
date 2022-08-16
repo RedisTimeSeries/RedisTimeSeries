@@ -12,7 +12,7 @@ typedef struct heap_s heap_t;
  * @param[in] cmp Callback used to get an item's priority
  * @param[in] udata User data passed through to cmp callback
  * @return initialised heap */
-heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata);
+heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata, size_t *cap);
 
 /**
  * Initialise heap. Use memory passed by user.

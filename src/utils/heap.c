@@ -46,13 +46,14 @@ void heap_init(heap_t *h,
     h->count = 0;
 }
 
-heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata) {
-    heap_t *h = malloc(heap_sizeof(DEFAULT_CAPACITY));
+heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata, size_t *cap) {
+    size_t _cap = (!cap) ? DEFAULT_CAPACITY : *cap;
+    heap_t *h = malloc(heap_sizeof(_cap));
 
     if (!h)
         return NULL;
 
-    heap_init(h, cmp, udata, DEFAULT_CAPACITY);
+    heap_init(h, cmp, udata, _cap);
 
     return h;
 }

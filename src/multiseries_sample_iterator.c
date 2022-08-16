@@ -69,7 +69,7 @@ MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator 
     newIter->base.GetNext = MultiSeriesSampleIterator_GetNext;
     newIter->base.Close = MultiSeriesSampleIterator_Close;
     newIter->n_series = n_series;
-    newIter->samples_heap = heap_new(reverse ? heap_cmp_func_reverse : heap_cmp_func, NULL);
+    newIter->samples_heap = heap_new(reverse ? heap_cmp_func_reverse : heap_cmp_func, NULL, NULL);
     for (size_t i = 0; i < newIter->n_series; ++i) {
         AbstractSampleIterator *sample_iter = newIter->base.input[i];
         MSSample *sample = malloc(sizeof(MSSample));
