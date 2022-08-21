@@ -25,13 +25,13 @@ TS.MREVRANGE fromTimestamp toTimestamp
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query. Use `-` to denote the timestamp of the earliest sample in the time series.
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for range query. Use `+` to denote the timestamp of the latest sample in the time series.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 </details>
 
 <details open>
