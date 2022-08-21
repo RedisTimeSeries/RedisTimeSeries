@@ -22,7 +22,7 @@ is key name for the time series.
 
 <details open><summary><code>timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp to the server clock.
+is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
 </details>
 
 <details open><summary><code>value</code></summary> 
