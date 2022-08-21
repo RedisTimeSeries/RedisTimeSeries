@@ -27,14 +27,13 @@ is the key name for the time series.
 <details open>
 <summary><code>fromTimestamp</code></summary>
 
-is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
-
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary>
 
-is end timestamp for range query. Use `+` to express the maximum possible timestamp.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 
 <note><b>Note:</b>  When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` limits only the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
 
@@ -53,11 +52,13 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
-followed by a list of timestamps filters results by specific timestamps.
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
 </details>
 
 <details open>
-<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary> filters results by minimum and maximum values.
+<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
+
+filters samples by minimum and maximum values.
 </details>
 
 <details open>

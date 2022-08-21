@@ -23,23 +23,20 @@ TS.RANGE key fromTimestamp toTimestamp
 <summary><code>key</code></summary> 
 
 is the key name for the time series.
-
 </details>
 
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
-
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for the range query. Use `+` to express the maximum possible timestamp.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 
 <note><b>Note:</b>    When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
-
 </details>
 
 ## Optional arguments
@@ -50,28 +47,24 @@ is end timestamp for the range query. Use `+` to express the maximum possible ti
 is used when a time series is a compaction. With `LATEST`, TS.RANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.RANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
-
 </details>
 
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary> 
 
-followed by a list of timestamps filters results by specific timestamps.
-
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary> 
 
-filters results by minimum and maximum values.
-
+filters samples by minimum and maximum values.
 </details>
 
 <details open>
 <summary><code>COUNT count</code></summary> 
 
 limits the number of returned samples.
-
 </details>
 
 <details open>
@@ -86,7 +79,6 @@ Values include:
  - A specific timestamp: align the reference timestamp to a specific time
    
 <note><b>Note:</b> When not provided, alignment is set to `0`.</note>
-
 </details>
 
 <details open>
@@ -124,7 +116,7 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Description                                                |
 | ---------------- | ---------------------------------------------------------- |
-| `-` or `low`   `&nbsp; &nbsp; &nbsp;   | Timestamp is the start time (default)                      |
+| `-` or `low`     | Timestamp is the start time (default)                      |
 | `+` or `high`    | Timestamp is the end time                                  |
 | `~` or `mid`     | Timestamp is the mid time (rounded down if not an integer) |
 
@@ -141,7 +133,7 @@ is a flag, which, when specified, reports aggregations for empty buckets.
 | `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
 | `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
 | `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`    &nbsp; &nbsp; &nbsp;      | `NaN` |
+| `std.p`, `std.s`     | `NaN` |
 | `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
 
 
