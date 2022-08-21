@@ -57,7 +57,9 @@ filters samples by a list of specific timestamps. A sample passes the filter if 
 </details>
 
 <details open>
-<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary> filters results by minimum and maximum values.
+<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
+
+filters samples by minimum and maximum values.
 </details>
 
 <details open>
