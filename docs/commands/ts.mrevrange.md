@@ -25,13 +25,13 @@ TS.MREVRANGE fromTimestamp toTimestamp
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
+is start timestamp for the range query. Use `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for range query. Use `+` to express the maximum possible timestamp.
+is end timestamp for range query. Use `+` to denote the timestamp of the latest sample in the time series.
 </details>
 
 <details open>
@@ -65,7 +65,7 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary> 
 
-followed by a list of timestamps filters results by specific timestamps.
+followed by a list of timestamps filters results by specific timestamps. For each specified timestamp, a result is reported if the timestamp falls within `[fromTimestamp, toTimestamp]` and there is a sample with that exact timestamp.
 </details>
 
 <details open>
