@@ -32,9 +32,9 @@ is numeric data value of the sample (double)
 
 <details open><summary><code>TIMESTAMP timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp to the server clock.
+is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
 
-`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
+`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `value`. 
 
 If the time series is empty, the value is set to `value`. When not specified, set the timestamp to the server clock.
 </details>
