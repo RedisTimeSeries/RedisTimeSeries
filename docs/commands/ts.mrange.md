@@ -38,6 +38,7 @@ is end timestamp for range query. Use `+` to denote the timestamp of the latest 
 
 <details open>
 <summary><code>FILTER filter..</code></summary>
+
 filters time series based on their labels and label values, with these options:
 
   - `label=value`, where `label` equals `value`
@@ -57,8 +58,9 @@ filters time series based on their labels and label values, with these options:
 
 <details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
+
 is used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
-  
+
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 </details>
 
