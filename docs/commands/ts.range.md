@@ -125,7 +125,7 @@ controls how bucket timestamps are reported.
 <details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary> 
 
-is a flag, which, when specified, reports aggregations for empty buckets.
+is a flag, which, when specified, reports aggregations also for empty buckets.
 
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
