@@ -123,7 +123,7 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
 | `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
-| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate or extrapolate. |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
