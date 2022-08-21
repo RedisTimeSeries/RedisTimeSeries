@@ -65,7 +65,7 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary> 
 
-followed by a list of timestamps filters results by specific timestamps. For each specified timestamp, a result is reported if the timestamp falls within `[fromTimestamp, toTimestamp]` and there is a sample with that exact timestamp.
+filters results by a list of specific timestamps. For each specified timestamp, a result is reported if the timestamp falls within `[fromTimestamp, toTimestamp]` and there is a sample with that exact timestamp.
 </details>
 
 <details open>
