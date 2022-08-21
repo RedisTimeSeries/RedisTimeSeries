@@ -151,18 +151,15 @@ controls how bucket timestamps are reported.
 <details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary> 
 
-is a flag, which, when specified, reports aggregations for empty buckets.
+is a flag, which, when specified, reports aggregations also for empty buckets.
 
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` &nbsp; &nbsp; &nbsp; | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
-| `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
-| `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`         | `NaN` |
-| `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
+| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
 
-Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
+Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
 
 <details open>
