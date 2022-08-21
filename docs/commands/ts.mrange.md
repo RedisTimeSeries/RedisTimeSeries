@@ -68,14 +68,12 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
-
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by minimum and maximum values.
-
 </details>
 
 <details open>
@@ -83,7 +81,6 @@ filters samples by minimum and maximum values.
 
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
-
 </details>
 
 <details open>
@@ -92,14 +89,12 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
-
 </details>
 
 <details open>
 <summary><code>COUNT count</code></summary>
 
 limits the number of returned samples.
-
 </details>
 
 <details open>
