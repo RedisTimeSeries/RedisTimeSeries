@@ -124,7 +124,7 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Description                                                |
 | ---------------- | ---------------------------------------------------------- |
-| `-` or `low`   `&nbsp; &nbsp; &nbsp;   | Timestamp is the start time (default)                      |
+| `-` or `low`     | Timestamp is the start time (default)                      |
 | `+` or `high`    | Timestamp is the end time                                  |
 | `~` or `mid`     | Timestamp is the mid time (rounded down if not an integer) |
 
@@ -141,7 +141,7 @@ is a flag, which, when specified, reports aggregations for empty buckets.
 | `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end tim, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
 | `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
 | `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`    &nbsp; &nbsp; &nbsp;      | `NaN` |
+| `std.p`, `std.s`     | `NaN` |
 | `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
 
 
