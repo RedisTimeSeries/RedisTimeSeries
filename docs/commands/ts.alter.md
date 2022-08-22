@@ -30,7 +30,7 @@ is maximum retention period, compared to the maximum existing timestamp, in mill
 
 <details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-is memory size, in bytes, allocated for each data chunk. See `CHUNK_SIZE` in `TS.CREATE`.
+The initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. See `CHUNK_SIZE` in `TS.CREATE`. Changing this value does not affect existing chunks.
 </details>
 
 <details open><summary><code>DUPLICATE_POLICY policy</code></summary> 
