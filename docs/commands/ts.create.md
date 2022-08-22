@@ -53,11 +53,11 @@ Must be a multiple of 8 in the range [64 .. 1048576]. When not specified, it is 
 
 Note: the minimal value was 128 between versions 1.6.10 and 1.6.17, and in version 1.8.0.
 
-The data in each key is stored in chunks. Each chunk contains an header and the data in a given timeframe. An index contains all chunks. Iterations occur inside each chunk. Depending on your use case, consider these tradeoffs for having smaller or larger sizes of chunks:
+The data in each key is stored in chunks. Each chunk contains header and data for a given timeframe. An index contains all chunks. Iterations occur inside each chunk. Depending on your use case, consider these tradeoffs for having smaller or larger sizes of chunks:
 
   - Insert performance: Smaller chunks result in slower inserts (more chunks need to be created).
   - Query performance: Queries for a small subset when the chunks are very large are slower, as we need to iterate over the chunk to find the data.
-  - Larger chunks may take more memory when you have a very large number of keys and very few samples per key.
+  - Larger chunks may take more memory when you have a very large number of keys and very few samples per key, or less memory when you have many samples per key.
 
  If you are unsure about your use case, select the default.
 </details>
