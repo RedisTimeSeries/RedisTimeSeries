@@ -1,42 +1,73 @@
-## Update
+---
+syntax: 
+---
 
-### TS.ALTER
+Update the retention, chunk size, duplicate policy, and labels of an existing time series
 
-Update the retention, chunk size, duplicate policy, and labels of an existing time series.
+## Syntax
 
-```sql
+{{< highlight bash >}}
 TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS [{label value}...]]
-```
+{{< / highlight >}}
 
-- _key_ - Key name for time series
+[Examples](#examples)
 
-- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
-   - When set to 0, the series is not trimmed at all
+## Required arguments
 
-- `CHUNK_SIZE` _size_ - memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
+<details open><summary><code>key</code></summary> 
 
-- `DUPLICATE_POLICY` _policy_ - Policy for handling samples with identical timestamps. One of the following values:
-  - `BLOCK` - an error will occur for any out of order sample
-  - `FIRST` - ignore any newly reported value
-  - `LAST` - override with the newly reported value
-  - `MIN` - only override if the value is lower than the existing value
-  - `MAX` - only override if the value is higher than the existing value
-  - `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+is key name for the time series.
+</details>
 
-  When not specified, the server-wide default will be used.
+<note><b>Note:</b> This command alters only the specified element. For example, if you specify only `RETENTION` and `LABELS`, the chunk size and the duplicate policy are not altered. </note>
 
-- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key
+## Optional arguments
 
-  If `LABELS` is specified, the given label-list is applied. Labels that are not present in the given list are removed implicitly.  
+<details open><summary><code>RETENTION retentionPeriod</code></summary>
 
-  Specifying `LABELS` with no label-value pairs will remove all existing labels.
-  
+is maximum retention period, compared to the maximum existing timestamp, in milliseconds. See `RETENTION` in `TS.CREATE`.
+</details>
 
-#### Alter Example
+<details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-```sql
-TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
-```
+is the initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. See `CHUNK_SIZE` in `TS.CREATE`. Changing this value does not affect existing chunks.
+</details>
 
-#### Notes
-* This command alters only the given element. E.g., if `LABELS` is specified, but `RETENTION` isn't, only the labels are altered.
+<details open><summary><code>DUPLICATE_POLICY policy</code></summary> 
+
+is policy for handling multiple samples with identical timestamps. See `DUPLICATE_POLICY` in `TS.CREATE`.
+</details>
+
+<details open><summary><code>LABELS [{label value}...]</code></summary> 
+
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+
+If `LABELS` is specified, the given label list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs removes all existing labels. See `LABELS` in `TS.CREATE`.
+</details>
+
+## Examples
+
+<details open><summary><b>Alter a temperature time series</b></summary>
+
+Create a temperature time series.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
+OK
+{{< / highlight >}}
+
+Alter the labels in the time series.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
+OK
+{{< / highlight >}}
+</details>
+
+## See also
+
+`TS.CREATE` 
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)

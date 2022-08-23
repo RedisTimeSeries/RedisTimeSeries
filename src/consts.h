@@ -6,9 +6,13 @@
 #ifndef CONSTS_H
 #define CONSTS_H
 
+#include "redismodule.h"
+
+
 #include <sys/types.h>
 #include <stdbool.h>
-
+#include <string.h>
+#include <ctype.h>
 
   #if defined(__GNUC__)
 #define likely(x)       __builtin_expect((x),1)
@@ -24,6 +28,10 @@
 #ifndef really_inline
 #define really_inline __attribute__((always_inline)) inline
 #endif // really_inline
+
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
 
 #define SAMPLE_SIZE sizeof(Sample)
 
@@ -57,6 +65,7 @@ typedef enum {
     TS_AGG_STD_S,
     TS_AGG_VAR_P,
     TS_AGG_VAR_S,
+    TS_AGG_TWA,
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
@@ -93,10 +102,31 @@ typedef enum {
 #define UNCOMPRESSED_ARG_STR "uncompressed"
 #define COMPRESSED_GORILLA_ARG_STR "compressed"
 
+// DC - Don't Care (Arbitrary value) 
+#define DC 0
+
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
 #define max(a,b) (((a)>(b))?(a):(b))
+
+#define __SWAP(x,y) do {  \
+  typeof(x) _x = x;      \
+  typeof(y) _y = y;      \
+  x = _y;                \
+  y = _x;                \
+} while(0)
+
+static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str) {
+    size_t str_len;
+    const char *rm_str_cstr = RedisModule_StringPtrLen(rm_str, &str_len);
+    char input_upper[str_len + 1];
+    for (int i = 0; i < str_len; i++) {
+        input_upper[i] = toupper(rm_str_cstr[i]);
+    }
+    input_upper[str_len] = '\0';
+    return strcmp(input_upper, str);
+}
 
 #endif

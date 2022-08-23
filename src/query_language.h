@@ -17,11 +17,27 @@
 #ifndef REDISTIMESERIES_QUERY_LANGUAGE_H
 #define REDISTIMESERIES_QUERY_LANGUAGE_H
 
+typedef enum BucketTimestamp
+{
+    BucketStartTimestamp = 0,
+    BucketMidTimestamp,
+    BucketEndTimestamp // 2
+} BucketTimestamp;
+
 typedef struct AggregationArgs
 {
+    bool empty; // Should return empty buckets
     api_timestamp_t timeDelta;
+    BucketTimestamp bucketTS;
     AggregationClass *aggregationClass;
 } AggregationArgs;
+
+// GroupBy reducer args
+typedef struct ReducerArgs
+{
+    AggregationClass *aggregationClass;
+    TS_AGG_TYPES_T agg_type;
+} ReducerArgs;
 
 typedef struct FilterByValueArgs
 {
@@ -51,6 +67,7 @@ typedef struct RangeArgs
 {
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
+    bool latest;     // get also the latest unfinalized bucket from the src series
     long long count; // AKA limit
     AggregationArgs aggregationArgs;
     FilterByValueArgs filterByValueArgs;
@@ -58,13 +75,6 @@ typedef struct RangeArgs
     RangeAlignment alignment;
     timestamp_t timestampAlignment;
 } RangeArgs;
-
-typedef enum MultiSeriesReduceOp
-{
-    MultiSeriesReduceOp_Min,
-    MultiSeriesReduceOp_Max,
-    MultiSeriesReduceOp_Sum,
-} MultiSeriesReduceOp;
 
 #define LIMIT_LABELS_SIZE 50
 typedef struct MRangeArgs
@@ -75,7 +85,7 @@ typedef struct MRangeArgs
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
-    MultiSeriesReduceOp gropuByReducerOp;
+    ReducerArgs gropuByReducerArgs;
     bool reverse;
 } MRangeArgs;
 
@@ -85,6 +95,7 @@ typedef struct MGetArgs
     unsigned short numLimitLabels;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
+    bool latest;
 } MGetArgs;
 
 typedef struct CreateCtx
@@ -120,7 +131,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type);
+                          int *agg_type,
+                          bool *empty,
+                          BucketTimestamp *bucketTS,
+                          timestamp_t *alignmetTS);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,
@@ -153,5 +167,6 @@ void MRangeArgs_Free(MRangeArgs *args);
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
+int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

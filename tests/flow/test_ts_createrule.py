@@ -34,7 +34,7 @@ def test_compaction_rules(self):
         assert len(actual_result) == samples_count / 10
 
         info = _get_ts_info(r, key_name)
-        assert info.rules == [[agg_key_name.encode('ascii'), 10, b'AVG']]
+        assert info.rules == [[agg_key_name.encode('ascii'), 10, b'AVG', 0]]
 
 
 def test_create_compaction_rule_with_wrong_aggregation():
@@ -144,7 +144,7 @@ def test_delete_key():
 
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 12)
-        assert _get_ts_info(r, key_name).rules == [[agg_key_name.encode('ascii'), 12, b'AVG']]
+        assert _get_ts_info(r, key_name).rules == [[agg_key_name.encode('ascii'), 12, b'AVG', 0]]
 
 
 def test_downsampling_current():
@@ -152,7 +152,7 @@ def test_downsampling_current():
         key = 'src{a}'
         agg_key = 'dest{a}'
         type_list = ['', 'uncompressed']
-        agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
+        agg_list = ['avg', 'twa', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                     'var.s']  # more
         for chunk_type in type_list:
             for agg_type in agg_list:
@@ -205,7 +205,7 @@ def test_downsampling_extensive():
         toTS = 10000
         type_list = ['', 'uncompressed']
         for chunk_type in type_list:
-            agg_list = ['avg', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
+            agg_list = ['avg', 'twa', 'sum', 'min', 'max', 'count', 'range', 'first', 'last', 'std.p', 'std.s', 'var.p',
                         'var.s']  # more
             for agg in agg_list:
                 agg_key = _insert_agg_data(r, key, agg, chunk_type, fromTS, toTS,
@@ -225,7 +225,7 @@ def test_downsampling_extensive():
                 assert expected_result2 == actual_result2
 
                 # remove aggs with identical results
-                compare_list = ['avg', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
+                compare_list = ['avg', 'twa', 'sum', 'min', 'range', 'std.p', 'std.s', 'var.p', 'var.s']
                 if agg in compare_list:
                     assert expected_result1 != expected_result2
                     assert actual_result1 != actual_result2
@@ -283,6 +283,37 @@ def test_downsampling_rules(self):
                 assert _get_series_value(actual_result) == [7.77] or \
                        _get_series_value(actual_result) == [1]
 
+
+def test_downsampling_alignment(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1{1}')
+        assert r.execute_command('TS.CREATE', 't2{1}')
+        assert r.execute_command('TS.CREATERULE', 't1{1}', 't2{1}', 'AGGREGATION', 'sum', 10, 5)
+        r.execute_command('TS.ADD', 't1{1}', 3, 4)
+        r.execute_command('TS.ADD', 't1{1}', 9, 8)
+
+        # test regular add
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 4, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 4)
+        assert expected_result == actual_result
+        r.execute_command('TS.ADD', 't1{1}', 16, 8)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 9, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 9)
+        assert expected_result == actual_result
+
+        # test upsert
+        r.execute_command('TS.ADD', 't1{1}', 2, 8)
+        r.execute_command('TS.ADD', 't1{1}', 6, 3)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 9, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 9)
+        assert expected_result == actual_result
+
+        # test upsert in latest bucket
+        r.execute_command('TS.ADD', 't1{1}', 15, 9)
+        r.execute_command('TS.ADD', 't1{1}', 30, 7)
+        expected_result = r.execute_command('TS.RANGE', 't1{1}', 0, 24, 'ALIGN', 5, 'AGGREGATION', 'sum', 10)
+        actual_result = r.execute_command('TS.RANGE', 't2{1}', 0, 24)
+        assert expected_result == actual_result
 
 def test_backfill_downsampling(self):
     env = Env()

@@ -1,72 +1,122 @@
-### TS.ADD
+---
+syntax: 
+---
 
-Append a sample to a time series. 
+Append a sample to a time series
 
-```sql
+
+## Syntax
+
+{{< highlight bash >}}
 TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
-```
+{{< / highlight >}}
 
-If the time series does not exist - it will be automatically created.
+[Examples](#examples)
 
-- _key_ - Key name for time series
-- _timestamp_ - (integer) UNIX sample timestamp **in milliseconds**. `*` can be used for an automatic timestamp from the server's clock.
-- _value_ - (double) numeric data value of the sample. We expect the double number to follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser will reject overly large values that would not fit in binary64. It will not accept NaN or infinite values.
+## Required arguments
 
-The following arguments are optional because they can be set by `TS.CREATE`:
+<details open><summary><code>key</code></summary> 
 
- - `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
+is key name for the time series.
+</details>
 
-    Used only if a new time series is created. Ignored When adding samples to an existing time series.
-  
-    When set to 0, the series is not trimmed. If not specified: set to the global [RETENTION_POLICY](https://redis.io/docs/stack/timeseries/configuration/#retention_policy) configuration of the database (which, by default, is 0).
+<details open><summary><code>timestamp</code></summary> 
+
+is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
+</details>
+
+<details open><summary><code>value</code></summary> 
+
+is (double) numeric data value of the sample. The double number should follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser rejects overly large values that do not fit in binary64. It does not accept NaN or infinite values.
+</details>
+
+<note><b>Note:</b> If the time series does not exist, it is automatically created.</note>
+
+## Optional arguments
+
+The following arguments are optional because they can be set by `TS.CREATE`.
+
+<details open><summary><code>RETENTION retentionPeriod</code></summary> 
+ 
+ is maximum retention period, compared to the maximum existing timestamp, in milliseconds.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
+</details>
     
- - `ENCODING` _enc_ - Specify the series samples encoding format. One of the following values:
-    - `COMPRESSED`: apply the DoubleDelta compression to the series samples, meaning compression of Delta of Deltas between timestamps and compression of values via XOR encoding.
-    - `UNCOMPRESSED`: keep the raw samples in memory.
+<details open><summary><code>ENCODING enc</code></summary> 
 
-    Used only if a new time series is created. Ignored When adding samples to an existing time series.
+specifies the series sample's encoding format.
 
- - `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk. Must be a multiple of 8 in the range [128 .. 1048576].
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
+</details>
 
-    Used only if a new time series is created. Ignored When adding samples to an existing time series.
+<details open><summary><code>CHUNK_SIZE size</code></summary> is memory size, in bytes, allocated for each data chunk.
 
-    If not specified: set to 4096.
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
+</details>
 
- - `ON_DUPLICATE` _policy_ - Overwrite key and database configuration for [DUPLICATE_POLICY](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy) (policy for handling samples with identical timestamps). One of the following values:
-   - `BLOCK` - an error will occur for any out of order sample
-   - `FIRST` - ignore any newly reported value
-   - `LAST` - override with the newly reported value
-   - `MIN` - only override if the value is lower than the existing value
-   - `MAX` - only override if the value is higher than the existing value
-   - `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+<details open><summary><code>ON_DUPLICATE_policy</code></summary> 
 
- - `LABELS` {_label_ _value_}... - Set of label-value pairs that represent metadata labels of the time series.
+is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps. It is used with one of the following values:
+   - `BLOCK` - An error occurs for any out-of-order sample.
+   - `FIRST` - Ignores any newly reported value.
+   - `LAST` - Overrides with the newly reported value.
+   - `MIN` - Overrides only if the value is lower than the existing value.
+   - `MAX` - Overrides only if the value is higher than the existing value.
+   - `SUM` - If a previous sample exists, adds the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, it sets the updated value equal to the new value.
+</details>
 
-    Used only if a new time series is created. Ignored When adding samples to an existing time series.
+<details open><summary><code>LABELS {label value}...</code></summary> 
 
-#### Examples
-```sql
+is set of label-value pairs that represent metadata labels of the time series.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
+</details>
+
+<note><b>Notes:</b>
+- You can use this command to add data to a nonexisting time series in a single command.
+  This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
+- When specified key does not exist, a new time series is created.
+  Setting `RETENTION` and `LABELS` introduces additional time complexity.
+- If `timestamp` is older than the retention period compared to the maximum existing timestamp, the sample is appended.
+- When adding a sample to a time series for which compaction rules are defined:
+  - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
+  - If only a part of the original samples for an affected aggregated time bucket is available due to trimming caused in accordance with the time series RETENTION policy, the compacted value is recalculated based on the reported sample and the available original samples.
+  - If the original samples for an affected aggregated time bucket are not available due to trimming caused in accordance with the time series RETENTION policy, the compacted value bucket is not updated.
+  </note>
+
+## Complexity
+
+If a compaction rule exits on a time series, the performance of `TS.ADD` can be reduced.
+The complexity of `TS.ADD` is always `O(M)`, where `M` is the number of compaction rules or `O(1)` with no compaction.
+
+## Examples
+
+<details open><summary><b>Append a sample to a temperature time series</b></summary>
+
+Create a temperature time series.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
+OK
+{{< / highlight >}}
+
+Append a sample to the time series.
+
+{{< highlight bash >}}
 127.0.0.1:6379>TS.ADD temperature:2:32 1548149180000 26 LABELS sensor_id 2 area_id 32
 (integer) 1548149180000
 127.0.0.1:6379>TS.ADD temperature:3:11 1548149183000 27 RETENTION 3600
 (integer) 1548149183000
 127.0.0.1:6379>TS.ADD temperature:3:11 * 30
 (integer) 1559718352000
-```
+{{< / highlight >}}
+</details>
 
-#### Complexity
+## See also
 
-If a compaction rule exits on a time series, `TS.ADD` performance might be reduced.
-The complexity of `TS.ADD` is always O(M) when M is the number of compaction rules or O(1) with no compaction.
+`TS.CREATE` 
 
-#### Notes
+## Related topics
 
-- You can use this command to add data to a nonexisting time series in a single command.
-  This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
-- When specified and the key doesn't exist, a new time series will be created.
-  Setting `RETENTION` and `LABELS` introduces additional time complexity.
-- If _timestamp_ is older than the retention period (compared to maximal existing timestamp) - the sample will not be appended.
-- When adding a sample to a time series for which compaction rules are defined:
-  - If all the original samples for an affected aggregated time bucket are available - the compacted value will be recalculated based on the reported sample and the original samples.
-  - If only part of the original samples for an affected aggregated time bucket are available (due to trimming caused in accordance with the time series RETENTION policy) - the compacted value will be recalculated based on the reported sample and the available original samples.
-  - If the original samples for an affected aggregated time bucket are not available (due to trimming caused in accordance with the time series RETENTION policy) - the compacted value bucket will not be updated.  
+[RedisTimeSeries](/docs/stack/timeseries)

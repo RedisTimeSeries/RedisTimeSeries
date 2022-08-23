@@ -473,7 +473,7 @@ def runShortRead(env, data, total_len):
             info = env.execute_command('TS.INFO', 'shortread_t1')
             response = dict(zip(info[::2], info[1::2]))
             assert 'rules' in response
-            assert response['rules'] == [['shortread_t1_dst_avg', 2, 'AVG'], ['shortread_t1_dst_sum', 2, 'SUM'], ['shortread_t1_dst_count', 2, 'COUNT'], ['shortread_t1_dst_max', 2, 'MAX'], ['shortread_t1_dst_min', 2, 'MIN']]
+            assert response['rules'] == [['shortread_t1_dst_avg', 2, 'AVG', 0], ['shortread_t1_dst_sum', 2, 'SUM', 0], ['shortread_t1_dst_count', 2, 'COUNT', 0], ['shortread_t1_dst_max', 2, 'MAX', 0], ['shortread_t1_dst_min', 2, 'MIN', 0]]
 
             keys = env.execute_command('TS.QUERYINDEX', 'l1=(l1_value)')
             assert len(keys) == 2

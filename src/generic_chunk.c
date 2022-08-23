@@ -4,6 +4,7 @@
 #include "compressed_chunk.h"
 
 #include <ctype.h>
+#include <math.h>
 #include "rmutil/alloc.h"
 
 static const ChunkFuncs regChunk = {
@@ -21,6 +22,7 @@ static const ChunkFuncs regChunk = {
     .GetChunkSize = Uncompressed_GetChunkSize,
     .GetNumOfSample = Uncompressed_NumOfSample,
     .GetLastTimestamp = Uncompressed_GetLastTimestamp,
+    .GetLastValue = Uncompressed_GetLastValue,
     .GetFirstTimestamp = Uncompressed_GetFirstTimestamp,
 
     .SaveToRDB = Uncompressed_SaveToRDB,
@@ -44,6 +46,7 @@ static const ChunkFuncs comprChunk = {
     .GetChunkSize = Compressed_GetChunkSize,
     .GetNumOfSample = Compressed_ChunkNumOfSample,
     .GetLastTimestamp = Compressed_GetLastTimestamp,
+    .GetLastValue = Compressed_GetLastValue,
     .GetFirstTimestamp = Compressed_GetFirstTimestamp,
 
     .SaveToRDB = Compressed_SaveToRDB,
@@ -55,6 +58,15 @@ static const ChunkFuncs comprChunk = {
 // This function will decide according to the policy how to handle duplicate sample, the `newSample`
 // will contain the data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
+    bool has_NAN = isnan(oldSample.value) || isnan(newSample->value);
+    if (has_NAN && policy != DP_BLOCK) {
+        // take the valid sample regardless of policy
+        if (isnan(newSample->value)) {
+            newSample->value = oldSample.value;
+        }
+        return CR_OK;
+    }
+
     switch (policy) {
         case DP_BLOCK:
             return CR_ERR;

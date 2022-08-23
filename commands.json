@@ -342,6 +342,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
@@ -398,6 +399,7 @@
             {
                 "name": "timestamp",
                 "type": "integer",
+                "token": "TIMESTAMP",
                 "optional": true
             },
             {
@@ -515,12 +517,24 @@
                         "name": "var.s",
                         "type": "pure-token",
                         "token": "VAR.S"
+                    },
+                    {
+                        "name": "twa",
+                        "type": "pure-token",
+                        "token": "TWA",
+                        "since": "1.8.0"
                     }
                 ]
             },
             {
                 "name": "bucketDuration",
                 "type": "integer"
+            },
+            {
+                "name": "alignTimestamp",
+                "type": "integer",
+                "optional": true,
+                "since": "1.8.0"
             }
         ],
         "since": "1.0.0",
@@ -559,6 +573,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -666,12 +686,32 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             }
@@ -696,6 +736,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -803,12 +849,32 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             }
@@ -827,6 +893,12 @@
             {
                 "name": "toTimestamp",
                 "type": "integer"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
             },
             {
                 "token": "FILTER_BY_TS",
@@ -964,12 +1036,32 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             },
@@ -1046,6 +1138,12 @@
                 "type": "integer"
             },
             {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
                 "token": "FILTER_BY_TS",
                 "name": "Timestamp",
                 "type": "integer",
@@ -1181,12 +1279,32 @@
                                 "name": "var.s",
                                 "type": "pure-token",
                                 "token": "VAR.S"
+                            },
+                            {
+                                "name": "twa",
+                                "type": "pure-token",
+                                "token": "TWA",
+                                "since": "1.8.0"
                             }
                         ]
                     },
                     {
                         "name": "bucketDuration",
                         "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
                     }
                 ]
             },
@@ -1257,6 +1375,12 @@
             {
                 "name": "key",
                 "type": "key"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
             }
         ],
         "since": "1.0.0",
@@ -1266,6 +1390,12 @@
         "summary": "Get the last samples matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
             {
                 "name": "labels",
                 "type": "oneof",

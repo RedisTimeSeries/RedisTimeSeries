@@ -8,12 +8,16 @@
 #include "consts.h"
 #include "endianconv.h"
 #include "load_io_error_macros.h"
+#include "module.h"
 
 #include <inttypes.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
+int last_rdb_load_version;
+
 void *series_rdb_load(RedisModuleIO *io, int encver) {
+    last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
@@ -71,10 +75,14 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     for (int i = 0; i < rulesCount; i++) {
         destKey = LoadString_IOError(io, goto err);
         uint64_t bucketDuration = LoadUnsigned_IOError(io, goto err);
+        uint64_t timestampAlignment = 0;
+        if (encver >= TS_ALIGNMENT_TS_VER) {
+            timestampAlignment = LoadUnsigned_IOError(io, goto err);
+        }
         uint64_t aggType = LoadUnsigned_IOError(io, goto err);
         timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, goto err);
 
-        CompactionRule *rule = NewRule(destKey, aggType, bucketDuration);
+        CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
         destKey = NULL;
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
@@ -169,6 +177,9 @@ unsigned int countRules(Series *series) {
     return count;
 }
 
+#define should_save_cross_references(series)                                                       \
+    ((persistence_in_progress > 0) || (TSGlobalConfig.forceSaveCrossRef) || (!(series)->in_ram))
+
 void series_rdb_save(RedisModuleIO *io, void *value) {
     Series *series = value;
     RedisModule_SaveString(io, series->keyName);
@@ -179,7 +190,8 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveDouble(io, series->lastValue);
     RedisModule_SaveUnsigned(io, series->totalSamples);
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
-    if (series->srcKey != NULL) {
+    if ((series->srcKey != NULL) && (should_save_cross_references(series))) {
+        // on dump command (restore) we don't keep the cross references
         RedisModule_SaveUnsigned(io, TRUE);
         RedisModule_SaveString(io, series->srcKey);
     } else {
@@ -192,16 +204,22 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
         RedisModule_SaveString(io, series->labels[i].value);
     }
 
-    RedisModule_SaveUnsigned(io, countRules(series));
+    if (should_save_cross_references(series)) {
+        RedisModule_SaveUnsigned(io, countRules(series));
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        RedisModule_SaveString(io, rule->destKey);
-        RedisModule_SaveUnsigned(io, rule->bucketDuration);
-        RedisModule_SaveUnsigned(io, rule->aggType);
-        RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
-        rule->aggClass->writeContext(rule->aggContext, io);
-        rule = rule->nextRule;
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            RedisModule_SaveString(io, rule->destKey);
+            RedisModule_SaveUnsigned(io, rule->bucketDuration);
+            RedisModule_SaveUnsigned(io, rule->timestampAlignment);
+            RedisModule_SaveUnsigned(io, rule->aggType);
+            RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
+            rule->aggClass->writeContext(rule->aggContext, io);
+            rule = rule->nextRule;
+        }
+    } else {
+        // on dump command (restore) we don't keep the cross references
+        RedisModule_SaveUnsigned(io, 0);
     }
 
     Chunk_t *chunk;

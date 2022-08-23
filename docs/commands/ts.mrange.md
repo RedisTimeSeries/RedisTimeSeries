@@ -1,195 +1,322 @@
-### TS.MRANGE
+---
+syntax: 
+---
 
-Query a range across multiple time series by filters in forward direction.
+Query a range across multiple time series by filters in forward direction
 
-```sql
+## Syntax
+
+{{< highlight bash >}}
 TS.MRANGE fromTimestamp toTimestamp
-          [FILTER_BY_TS TS...]
+          [LATEST]
+          [FILTER_BY_TS ts...]
           [FILTER_BY_VALUE min max]
           [WITHLABELS | SELECTED_LABELS label...]
           [COUNT count]
-          [[ALIGN value] AGGREGATION aggregator bucketDuration]
+          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
           FILTER filter..
           [GROUPBY label REDUCE reducer]
-```
+{{< / highlight >}}
 
-- _fromTimestamp_ - Start timestamp for the range query. `-` can be used to express the minimum possible timestamp (0).
-- _toTimestamp_ - End timestamp for range query, `+` can be used to express the maximum possible timestamp.
-- FILTER _filter_...
+[Examples](#examples)
 
-  This is the list of possible filters:
-  - _label_`=`_value_ - _label_ equals _value_
-  - _label_`!=`_value_ - label doesn't equal _value_
-  - _label_`=` - _key_ does not have the label _label_
-  - _label_`!=` - _key_ has label _label_
-  - _label_`=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that equals one of the values in the list
-  - _lable_`!=(`_value1_`,`_value2_`,`...`)` - key with label _label_ that doesn't equal any of the values in the list
+## Required arguments
 
-  Note: Whenever filters need to be provided, a minimum of one _label_`=`_value_ filter must be applied.
+<details open>
+<summary><code>fromTimestamp</code></summary>
 
-Optional parameters:
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
+</details>
 
-- `FILTER_BY_TS` _ts_... - Followed by a list of timestamps to filter the result by specific timestamps
-- `FILTER_BY_VALUE` _min_ _max_ - Filter result by value using minimum and maximum.
+<details open>
+<summary><code>toTimestamp</code></summary>
 
-- `WITHLABELS` - Include in the reply all label-value pairs representing metadata labels of the time series. 
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
+</details>
 
-  If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
+<details open>
+<summary><code>FILTER filter..</code></summary>
 
-- `SELECTED_LABELS` _label_... - Include in the reply a subset of the label-value pairs that represent metadata labels of the time series. This is usefull when there is a large number of labels per series, but only the values of some of the labels are required.
- 
-  If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as the label-value pairs.
+filters time series based on their labels and label values, with these options:
 
-- `COUNT` _count_ - Maximum number of returned samples per time series.
+  - `label=value`, where `label` equals `value`
+  - `label!=value`, where `label` does not equal `value`
+  - `label=`, where `key` does not have label `label`
+  - `label!=`, where `key` has label `label`
+  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
-- `ALIGN` _value_ - Time bucket alignment control for AGGREGATION. This will control the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
-     Possible values:
-     * `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
-     * `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
-     * A specific timestamp: align the reference timestamp to a specific time
-     * **Note:** when not provided, alignment is set to `0`
+<note><b>Notes:</b> 
+   - When using filters, apply a minimum of one `label=value` filter.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
+   </note>
+</details>
 
-- `AGGREGATION` _aggregator_ _bucketDuration_
+## Optional arguments
 
-  Aggregate results into time buckets.
-  - _aggregator_ - Aggregation type: One of the following:
-    | aggregator | description                                         |
-    | ---------- | --------------------------------------------------- |
-    | `avg`      | arithmetic mean of all values                       |
-    | `sum`      | sum of all values                                   |
-    | `min`      | minimum value                                       |
-    | `max`      | maximum value                                       |
-    | `range`    | difference between the highest and the lowest value |
-    | `count`    | number of values                                    |
-    | `first`    | the value with the lowest timestamp in the bucket   |
-    | `last`     | the value with the highest timestamp in the bucket  |
-    | `std.p`    | population standard deviation of the values         |
-    | `std.s`    | sample standard deviation of the values             |
-    | `var.p`    | population variance of the values                   |
-    | `var.s`    | sample variance of the values                       |
-  - _bucketDuration_ - duration of each bucket, in milliseconds
+<details open>
+<summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
 
-  The alignment of time buckets is 0.
+is used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
 
-- `GROUPBY` _label_ `REDUCE` _reducer_
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
+</details>
 
-  Aggregate results across different time series, grouped by the provided label name.
-  
-  When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
-    - _label_ - label name to group series by.  A new series for each value will be produced.
-    - _reducer_ - Reducer type used to aggregate series that share the same label value. One of the following:
-      | reducer | description                        |
-      | ------- | ---------------------------------- |
-      | `sum`   | per label value: sum of all values |
-      | `min`   | per label value: minimum value     |
-      | `max`   | per label value: maximum value     |
-    - **Note:** The produced time series will be named `<label>=<groupbyvalue>`
-    - **Note:** The produced time series will contain 2 labels with the following label array structure:
-         - `__reducer__` : the reducer used
-         - `__source__` : the time series keys used to compute the grouped series ("key1,key2,key3,...")
+<details open>
+<summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
-#### Return Value
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
+</details>
+
+<details open>
+<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
+
+filters samples by minimum and maximum values.
+</details>
+
+<details open>
+<summary><code>WITHLABELS</code></summary>
+
+includes in the reply all label-value pairs representing metadata labels of the time series. 
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+</details>
+
+<details open>
+<summary><code>SELECTED_LABELS label...</code> (since RedisTimeSeries v1.6)</summary>
+
+returns a subset of the label-value pairs that represent metadata labels of the time series. 
+Use when a large number of labels exists per series, but only the values of some of the labels are required. 
+If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+</details>
+
+<details open>
+<summary><code>COUNT count</code></summary>
+
+limits the number of returned samples.
+</details>
+
+<details open>
+<summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
+
+is a time bucket alignment control for `AGGREGATION`. 
+It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
+
+Values include:
+   
+ - `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
+ - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
+ - A specific timestamp: align the reference timestamp to a specific time
+   
+<note><b>Note:</b> When not provided, alignment is set to `0`.</note>
+</details>
+
+<details open>
+<summary><code>AGGREGATION aggregator bucketDuration</code></summary>
+
+aggregates results into time buckets, where:
+
+  - `aggregator` takes one of the following aggregation types:
+
+    | `aggregator` &nbsp; &nbsp; &nbsp; | Description                                                      |
+    | ------------ | ---------------------------------------------------------------- |
+    | `avg`        | Arithmetic mean of all values                                    |
+    | `sum`        | Sum of all values                                                |
+    | `min`        | Minimum value                                                    |
+    | `max`        | Maximum value                                                    |
+    | `range`      | Difference between the highest and the lowest value              |
+    | `count`      | Number of values                                                 |
+    | `first`      | Value with lowest timestamp in the bucket                        |
+    | `last`       | Value with highest timestamp in the bucket                       |
+    | `std.p`      | Population standard deviation of the values                      |
+    | `std.s`      | Sample standard deviation of the values                          |
+    | `var.p`      | Population variance of the values                                |
+    | `var.s`      | Sample variance of the values                                    |
+    | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
+
+  - `bucketDuration` is duration of each bucket, in milliseconds.
+</details>
+
+<details open>
+<summary><code>[BUCKETTIMESTAMP bt]></code> (since RedisTimeSeries v1.8)</summary>
+
+controls how bucket timestamps are reported.
+
+| `bt`         | Description                                                |
+| ------------ | ---------------------------------------------------------- |
+| `-` or `low` | Timestamp is the start time (default)                      |
+| `+` or `high` &nbsp; &nbsp; &nbsp;| Timestamp is the end time                                  |
+| `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
+</details>
+
+<details open>
+<summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary>
+
+is a flag, which, when specified, reports aggregations also for empty buckets.
+
+| `aggregator`         | Value reported for each empty bucket |
+| -------------------- | ------------------------------------ |
+| `sum`, `count`       | `0`                                  |
+| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
+
+Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
+</details>
+
+<details open>
+<summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
+
+aggregates results across different time series, grouped by the provided label name. 
+When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+
+  - `label` is label name to group a series by. A new series for each value is produced.
+
+  - `reducer` is reducer type used to aggregate series that share the same label value.
+
+    | `reducer` | Description                         |
+    | --------- | ----------------------------------- |
+    | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)  |
+    | `sum`     | per label value: sum of all values  |
+    | `min`     | per label value: minimum value      |
+    | `max`     | per label value: maximum value      |
+    | `range` &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+    | `count`   | per label value: number of values (since RedisTimeSeries v1.8) |
+    | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8) |
+    | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8) |
+    | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8) |
+    | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
+
+<note><b>Notes:</b> 
+  - The produced time series is named `<label>=<groupbyvalue>`
+  - The produced time series contains two labels with these label array structures:
+    - `reducer`, the reducer used
+    - `source`, the time series keys used to compute the grouped series (`key1,key2,key3,...`)
+</note>
+</details>
+
+## Return value
 
 For each time series matching the specified filters, the following is reported:
 - The key name
 - A list of label-value pairs
   - By default, an empty list is reported
   - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS` _label_... is specified, the selected labels are reported
-- timestamp-value pairs for all samples/aggregations matching the range
+  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
+- Timestamp-value pairs for all samples/aggregations matching the range
 
-#### Examples
+<note><b>Note:</b> The `MRANGE` command cannot be part of transaction when running on a Redis cluster.</note>
 
-##### Query by Filters Example
-```sql
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 FILTER area_id=32 sensor_id!=1
-1) 1) "temperature:2:32"
-   2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
-         2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
-         2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
-         2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
-         2) "24"
-      5) 1) (integer) 1548149200000
-         2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
-         2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
-         2) "21"
-2) 1) "temperature:3:32"
-   2) (empty list or set)
-   3) 1) 1) (integer) 1548149180000
-         2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
-         2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
-         2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
-         2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
-         2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
-         2) "28"
-      7) 1) (integer) 1548149210000
-         2) "20"
-```
+## Examples
 
-##### Query by Filters Example with WITHLABELS option
+<details open>
+<summary><b>Retrieve maximum stock price per timestamp</b></summary>
 
-```sql
-127.0.0.1:6379> TS.MRANGE 1548149180000 1548149210000 AGGREGATION avg 5000 WITHLABELS FILTER area_id=32 sensor_id!=1
-1) 1) "temperature:2:32"
-   2) 1) 1) "sensor_id"
-         2) "2"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) 1) (integer) 1548149180000
-         2) "27.600000000000001"
-      2) 1) (integer) 1548149185000
-         2) "23.800000000000001"
-      3) 1) (integer) 1548149190000
-         2) "24.399999999999999"
-      4) 1) (integer) 1548149195000
-         2) "24"
-      5) 1) (integer) 1548149200000
-         2) "25.600000000000001"
-      6) 1) (integer) 1548149205000
-         2) "25.800000000000001"
-      7) 1) (integer) 1548149210000
-         2) "21"
-2) 1) "temperature:3:32"
-   2) 1) 1) "sensor_id"
-         2) "3"
-      2) 1) "area_id"
-         2) "32"
-   3) 1) 1) (integer) 1548149180000
-         2) "26.199999999999999"
-      2) 1) (integer) 1548149185000
-         2) "27.399999999999999"
-      3) 1) (integer) 1548149190000
-         2) "24.800000000000001"
-      4) 1) (integer) 1548149195000
-         2) "23.199999999999999"
-      5) 1) (integer) 1548149200000
-         2) "25.199999999999999"
-      6) 1) (integer) 1548149205000
-         2) "28"
-      7) 1) (integer) 1548149210000
-         2) "20"
-```
+Create two stocks and add their prices at three different timestamps.
 
-##### Query time series with metric=cpu, group them by metric_name reduce max
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+{{< / highlight >}}
 
-```sql
+You can now retrieve the maximum stock price per timestamp.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER type=stock GROUPBY type REDUCE max
+1) 1) "type=stock"
+   2) 1) 1) "type"
+         2) "stock"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "stock:A,stock:B"
+   3) 1) 1) (integer) 1000
+         2) 120
+      2) 1) (integer) 1010
+         2) 110
+      3) 1) (integer) 1020
+         2) 120
+{{< / highlight >}}
+
+The `FILTER type=stock` clause returns a single time series representing stock prices. The `GROUPBY type REDUCE max` clause splits the time series into groups with identical type values, and then, for each timestamp, aggregates all series that share the same type value using the max aggregator.
+</details>
+
+<details open>
+<summary><b>Calculate average stock price and retrieve maximum average</b></summary> 
+
+Create two stocks and add their prices at nine different timestamps.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE stock:A LABELS type stock name A
+OK
+127.0.0.1:6379> TS.CREATE stock:B LABELS type stock name B
+OK
+127.0.0.1:6379> TS.MADD stock:A 1000 100 stock:A 1010 110 stock:A 1020 120
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:B 1000 120 stock:B 1010 110 stock:B 1020 100
+1) (integer) 1000
+2) (integer) 1010
+3) (integer) 1020
+127.0.0.1:6379> TS.MADD stock:A 2000 200 stock:A 2010 210 stock:A 2020 220
+1) (integer) 2000
+2) (integer) 2010
+3) (integer) 2020
+127.0.0.1:6379> TS.MADD stock:B 2000 220 stock:B 2010 210 stock:B 2020 200
+1) (integer) 2000
+2) (integer) 2010
+3) (integer) 2020
+127.0.0.1:6379> TS.MADD stock:A 3000 300 stock:A 3010 310 stock:A 3020 320
+1) (integer) 3000
+2) (integer) 3010
+3) (integer) 3020
+127.0.0.1:6379> TS.MADD stock:B 3000 320 stock:B 3010 310 stock:B 3020 300
+1) (integer) 3000
+2) (integer) 3010
+3) (integer) 3020
+{{< / highlight >}}
+
+Now, for each stock, calculate the average stock price per a 1000-millisecond timeframe, and then retrieve the stock with the maximum average for that timeframe.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.MRANGE - + WITHLABELS AGGREGATION avg 1000 FILTER type=stock GROUPBY type REDUCE max
+1) 1) "type=stock"
+   2) 1) 1) "type"
+         2) "stock"
+      2) 1) "__reducer__"
+         2) "max"
+      3) 1) "__source__"
+         2) "stock:A,stock:B"
+   3) 1) 1) (integer) 1000
+         2) 110
+      2) 1) (integer) 2000
+         2) 210
+      3) 1) (integer) 3000
+         2) 310
+{{< / highlight >}}
+</details>
+
+<details open>
+<summary><b>Group query results</b></summary>
+
+Query all time series with the metric label equal to `cpu`, then group the time series by the value of their `metric_name` label value and for each group return the maximum value and the time series keys (_source_) with that value.
+
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + WITHLABELS FILTER metric=cpu GROUPBY metric_name REDUCE max
 1) 1) "metric_name=system"
    2) 1) 1) "metric_name"
@@ -211,17 +338,21 @@ For each time series matching the specified filters, the following is reported:
          2) "ts2"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
+</details>
 
-##### Query time series with metric=cpu, filter values larger or equal to 90.0 and smaller or equal to 100.0
+<details open>
+<summary><b>Filter query by value</b></summary>
 
-```sql
+Query all time series with the metric label equal to `cpu`, then filter values larger or equal to 90.0 and smaller or equal to 100.0.
+
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + FILTER_BY_VALUE 90 100 WITHLABELS FILTER metric=cpu
 1) 1) "ts1"
    2) 1) 1) "metric"
@@ -237,18 +368,21 @@ For each time series matching the specified filters, the following is reported:
          2) "user"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
+</details>
 
+<details open>
+<summary><b>Query using a label</b></summary>
 
-##### Query time series with metric=cpu, but only reply the team label
+Query all time series with the metric label equal to `cpu`, but only return the team label.
 
-```sql
+{{< highlight bash >}}
 127.0.0.1:6379> TS.ADD ts1 1548149180000 90 labels metric cpu metric_name system team NY
-(integer) 1
+(integer) 1548149180000
 127.0.0.1:6379> TS.ADD ts1 1548149185000 45
-(integer) 2
+(integer) 1548149185000
 127.0.0.1:6379> TS.ADD ts2 1548149180000 99 labels metric cpu metric_name user team SF
-(integer) 2
+(integer) 1548149180000
 127.0.0.1:6379> TS.MRANGE - + SELECTED_LABELS team FILTER metric=cpu
 1) 1) "ts1"
    2) 1) 1) "team"
@@ -262,4 +396,13 @@ For each time series matching the specified filters, the following is reported:
          2) "SF"
    3) 1) 1) (integer) 1548149180000
          2) 99
-```
+{{< / highlight >}}
+</details>
+
+## See also
+
+`TS.RANGE` | `TS.MREVRANGE` | `TS.REVRANGE`
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)

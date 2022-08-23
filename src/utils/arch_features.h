@@ -13,6 +13,7 @@
 #else
 typedef struct X86Features
 {
+    int avx2;
     int avx512f;
 } X86Features;
 

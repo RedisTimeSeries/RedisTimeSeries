@@ -13,6 +13,9 @@
 #include "module.h"
 #include "series_iterator.h"
 #include "sample_iterator.h"
+#include "multiseries_sample_iterator.h"
+#include "multiseries_agg_dup_sample_iterator.h"
+#include "rdb.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -130,6 +133,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->in_ram = true;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -211,19 +215,24 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
 
-    // Remove references to other keys
-    if (series->srcKey) {
-        RedisModule_FreeString(NULL, series->srcKey);
-        series->srcKey = NULL;
-    }
+    if (last_rdb_load_version < TS_REPLICAOF_SUPPORT_VER) {
+        // In versions greater than TS_REPLICAOF_SUPPORT_VER we delete the reference on the dump
+        // stage
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        CompactionRule *nextRule = rule->nextRule;
-        FreeCompactionRule(rule);
-        rule = nextRule;
+        // Remove references to other keys
+        if (series->srcKey) {
+            RedisModule_FreeString(NULL, series->srcKey);
+            series->srcKey = NULL;
+        }
+
+        CompactionRule *rule = series->rules;
+        while (rule != NULL) {
+            CompactionRule *nextRule = rule->nextRule;
+            FreeCompactionRule(rule);
+            rule = nextRule;
+        }
+        series->rules = NULL;
     }
-    series->rules = NULL;
 
     RedisModule_CloseKey(key);
 }
@@ -374,6 +383,8 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
+
+    dst->in_ram = src->in_ram;
     return dst;
 }
 
@@ -475,26 +486,15 @@ size_t SeriesGetNumSamples(const Series *series) {
 }
 
 int MultiSerieReduce(Series *dest,
-                     Series *source,
-                     MultiSeriesReduceOp op,
-                     const RangeArgs *args,
-                     bool reverse) {
+                     Series **series,
+                     size_t n_series,
+                     const ReducerArgs *gropuByReducerArgs,
+                     RangeArgs *args) {
     Sample sample;
-    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(source, args, reverse, true);
-    DuplicatePolicy dp = DP_INVALID;
-    switch (op) {
-        case MultiSeriesReduceOp_Max:
-            dp = DP_MAX;
-            break;
-        case MultiSeriesReduceOp_Min:
-            dp = DP_MIN;
-            break;
-        case MultiSeriesReduceOp_Sum:
-            dp = DP_SUM;
-            break;
-    }
+    AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
+        series, n_series, args, false, true, gropuByReducerArgs);
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
-        SeriesUpsertSample(dest, sample.timestamp, sample.value, dp);
+        SeriesAddSample(dest, sample.timestamp, sample.value);
     }
     iterator->Close(iterator);
     return 1;
@@ -538,33 +538,53 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
-        const timestamp_t curAggWindowStart = CalcWindowStart(seriesLastTimestamp, ruleTimebucket);
-        if (upsertTimestamp >= curAggWindowStart) {
+        const timestamp_t curAggWindowStart =
+            CalcBucketStart(seriesLastTimestamp, ruleTimebucket, rule->timestampAlignment);
+        const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
+        if (upsertTimestamp >= curAggWindowStartNormalized) {
             // upsert in latest timebucket
-            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+            const int rv = SeriesCalcRange(series,
+                                           curAggWindowStartNormalized,
+                                           curAggWindowStart + ruleTimebucket - 1,
+                                           rule,
+                                           NULL,
+                                           NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
-            const timestamp_t start = CalcWindowStart(upsertTimestamp, ruleTimebucket);
+            const timestamp_t start =
+                CalcBucketStart(upsertTimestamp, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t startNormalized = BucketStartNormalize(start);
             // ensure last include/exclude
             double val = 0;
-            const int rv =
-                SeriesCalcRange(series, start, start + ruleTimebucket - 1, rule, &val, NULL);
+            const int rv = SeriesCalcRange(
+                series, startNormalized, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
 
-            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, start, val)) {
+            if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startNormalized, val)) {
                 continue;
             }
         }
         rule = rule->nextRule;
     }
+}
+
+// update chunk in dictionary if first timestamp changed
+static inline void update_chunk_in_dict(RedisModuleDict *chunks,
+                                        Chunk_t *chunk,
+                                        timestamp_t chunkOrigFirstTS,
+                                        timestamp_t chunkFirstTSAfterOp) {
+    if (dictOperator(chunks, NULL, chunkOrigFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
+        dictOperator(chunks, NULL, 0, DICT_OP_DEL); // The first chunk is a special case
+    }
+    dictOperator(chunks, chunk, chunkFirstTSAfterOp, DICT_OP_SET);
 }
 
 int SeriesUpsertSample(Series *series,
@@ -638,11 +658,7 @@ int SeriesUpsertSample(Series *series,
         }
         timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
         if (chunkFirstTSAfterOp != chunkFirstTS) {
-            // update chunk in dictionary if first timestamp changed
-            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
-                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
-            }
-            dictOperator(series->chunks, uCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
+            update_chunk_in_dict(series->chunks, uCtx.inChunk, chunkFirstTS, chunkFirstTSAfterOp);
         }
 
         upsertCompaction(series, &uCtx);
@@ -704,19 +720,30 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
     while (rule) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart =
-            CalcWindowStart(series->lastTimestamp, ruleTimebucket);
+            CalcBucketStart(series->lastTimestamp, ruleTimebucket, rule->timestampAlignment);
+        const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
 
-        if (start_ts >= curAggWindowStart) {
+        if (start_ts >= curAggWindowStartNormalized) {
             // All deletion range in latest timebucket - only update the context on the rule
-            const int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+            const int rv = SeriesCalcRange(series,
+                                           curAggWindowStartNormalized,
+                                           curAggWindowStart + ruleTimebucket - 1,
+                                           rule,
+                                           NULL,
+                                           NULL);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
             }
         } else {
-            const timestamp_t startTSWindowStart = CalcWindowStart(start_ts, ruleTimebucket);
-            const timestamp_t endTSWindowStart = CalcWindowStart(end_ts, ruleTimebucket);
+            const timestamp_t startTSWindowStart =
+                CalcBucketStart(start_ts, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t startTSWindowStartNormalized =
+                BucketStartNormalize(startTSWindowStart);
+            const timestamp_t endTSWindowStart =
+                CalcBucketStart(end_ts, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t endTSWindowStartNormalized = BucketStartNormalize(endTSWindowStart);
             timestamp_t continuous_deletion_start;
             timestamp_t continuous_deletion_end;
             double val = 0;
@@ -726,7 +753,7 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             // ---- handle start bucket ----
 
             rv = SeriesCalcRange(series,
-                                 startTSWindowStart,
+                                 startTSWindowStartNormalized,
                                  startTSWindowStart + ruleTimebucket - 1,
                                  rule,
                                  &val,
@@ -739,32 +766,33 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
             if (is_empty) {
                 // first bucket should be deleted
-                continuous_deletion_start = startTSWindowStart;
+                continuous_deletion_start = startTSWindowStartNormalized;
             } else { // first bucket needs update
                 // continuous deletion starts one bucket after startTSWindowStart
                 continuous_deletion_start = startTSWindowStart + ruleTimebucket;
-                if (!RuleSeriesUpsertSample(rts_staticCtx, series, rule, startTSWindowStart, val)) {
+                if (!RuleSeriesUpsertSample(
+                        rts_staticCtx, series, rule, startTSWindowStartNormalized, val)) {
                     continue;
                 }
             }
 
             // ---- handle end bucket ----
 
-            if (end_ts >= curAggWindowStart) {
+            if (end_ts >= curAggWindowStartNormalized) {
                 // deletion in latest timebucket
-                const int rv =
-                    SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL, NULL);
+                const int rv = SeriesCalcRange(
+                    series, curAggWindowStartNormalized, UINT64_MAX, rule, NULL, NULL);
                 if (rv == TSDB_ERROR) {
                     RedisModule_Log(
                         rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
                 // continuous deletion ends one bucket before endTSWindowStart
-                continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+                continuous_deletion_end = BucketStartNormalize(endTSWindowStart - ruleTimebucket);
             } else {
                 // deletion in old timebucket
                 rv = SeriesCalcRange(series,
-                                     endTSWindowStart,
+                                     endTSWindowStartNormalized,
                                      endTSWindowStart + ruleTimebucket - 1,
                                      rule,
                                      &val,
@@ -777,12 +805,13 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
 
                 if (is_empty) {
                     // continuous deletion ends in end timebucket
-                    continuous_deletion_end = endTSWindowStart;
+                    continuous_deletion_end = endTSWindowStartNormalized;
                 } else { // update in end timebucket
                     // continuous deletion ends one bucket before endTSWindowStart
-                    continuous_deletion_end = endTSWindowStart - ruleTimebucket;
+                    continuous_deletion_end =
+                        BucketStartNormalize(endTSWindowStart - ruleTimebucket);
                     if (!RuleSeriesUpsertSample(
-                            rts_staticCtx, series, rule, endTSWindowStart, val)) {
+                            rts_staticCtx, series, rule, endTSWindowStartNormalized, val)) {
                         continue;
                     }
                 }
@@ -815,22 +844,49 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         // We deleted the latest samples, no more chunks/samples to delete or cur chunk start_ts is
         // larger than end_ts
-        if (!currentKey || funcs->GetFirstTimestamp(currentChunk) > end_ts)
+        if (!currentKey || (funcs->GetNumOfSample(currentChunk) == 0) ||
+            funcs->GetFirstTimestamp(currentChunk) > end_ts) {
+            // Having empty chunk means the series is empty
             break;
+        }
 
+        bool is_only_chunk =
+            ((funcs->GetNumOfSample(currentChunk) + deletedSamples) == series->totalSamples);
         // Should we delete the all chunk?
-        bool ts_delCondition = (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
-                                funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
-                               currentChunk != series->lastChunk;
+        bool ts_delCondition =
+            (funcs->GetFirstTimestamp(currentChunk) >= start_ts &&
+             funcs->GetLastTimestamp(currentChunk) <= end_ts) &&
+            (!is_only_chunk); // We assume at least one allocated chunk in the series
 
         if (!ts_delCondition) {
+            timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(currentChunk);
             deletedSamples += funcs->DelRange(currentChunk, start_ts, end_ts);
+            timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(currentChunk);
+            if (chunkFirstTSAfterOp != chunkFirstTS) {
+                update_chunk_in_dict(
+                    series->chunks, currentChunk, chunkFirstTS, chunkFirstTSAfterOp);
+                // reseek iterator since we modified the dict,
+                // go to first element that is bigger than current key
+                timestamp_t rax_key;
+                seriesEncodeTimestamp(&rax_key, chunkFirstTSAfterOp);
+                RedisModule_DictIteratorReseekC(iter, ">", &rax_key, sizeof(rax_key));
+            }
             continue;
         }
 
+        bool isLastChunkDeleted = (currentChunk == series->lastChunk);
         RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
         deletedSamples += funcs->GetNumOfSample(currentChunk);
         funcs->FreeChunk(currentChunk);
+
+        if (isLastChunkDeleted) {
+            Chunk_t *lastChunk;
+            RedisModuleDictIter *lastChunkIter =
+                RedisModule_DictIteratorStartC(series->chunks, "$", NULL, 0);
+            RedisModule_DictNextC(lastChunkIter, NULL, (void *)&lastChunk);
+            series->lastChunk = lastChunk;
+            RedisModule_DictIteratorStop(lastChunkIter);
+        }
 
         // reseek iterator since we modified the dict,
         // go to first element that is bigger than current key
@@ -841,6 +897,21 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
     RedisModule_DictIteratorStop(iter);
 
     CompactionDelRange(series, start_ts, end_ts);
+
+    // Check if last timestamp deleted
+    if (end_ts >= series->lastTimestamp && start_ts <= series->lastTimestamp) {
+        iter = RedisModule_DictIteratorStartC(series->chunks, "$", NULL, 0);
+        currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk);
+        if (!currentKey || (funcs->GetNumOfSample(currentChunk) == 0)) {
+            // No samples in the series
+            series->lastTimestamp = 0;
+            series->lastValue = 0;
+        } else {
+            series->lastTimestamp = funcs->GetLastTimestamp(currentChunk);
+            series->lastValue = funcs->GetLastValue(currentChunk);
+        }
+        RedisModule_DictIteratorStop(iter);
+    }
     return deletedSamples;
 }
 
@@ -848,8 +919,10 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,
                               Series *destSeries,
                               int aggType,
-                              uint64_t bucketDuration) {
-    CompactionRule *rule = NewRule(destSeries->keyName, aggType, bucketDuration);
+                              uint64_t bucketDuration,
+                              timestamp_t timestampAlignment) {
+    CompactionRule *rule =
+        NewRule(destSeries->keyName, aggType, bucketDuration, timestampAlignment);
     if (rule == NULL) {
         return NULL;
     }
@@ -879,12 +952,22 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
     for (i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
-        RedisModuleString *destKey =
-            RedisModule_CreateStringPrintf(ctx,
-                                           "%s_%s_%" PRIu64,
-                                           RedisModule_StringPtrLen(keyName, &len),
-                                           aggString,
-                                           rule->bucketDuration);
+        RedisModuleString *destKey;
+        if (rule->timestampAlignment != 0) {
+            destKey = RedisModule_CreateStringPrintf(ctx,
+                                                     "%s_%s_%" PRIu64 "_%" PRIu64,
+                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     aggString,
+                                                     rule->bucketDuration,
+                                                     rule->timestampAlignment);
+        } else {
+            destKey = RedisModule_CreateStringPrintf(ctx,
+                                                     "%s_%s_%" PRIu64,
+                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     aggString,
+                                                     rule->bucketDuration);
+        }
+
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
@@ -924,13 +1007,21 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         };
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         SeriesSetSrcRule(ctx, compactedSeries, series->keyName);
-        SeriesAddRule(ctx, series, compactedSeries, rule->aggType, rule->bucketDuration);
+        SeriesAddRule(ctx,
+                      series,
+                      compactedSeries,
+                      rule->aggType,
+                      rule->bucketDuration,
+                      rule->timestampAlignment);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
 }
 
-CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucketDuration) {
+CompactionRule *NewRule(RedisModuleString *destKey,
+                        int aggType,
+                        uint64_t bucketDuration,
+                        uint64_t timestampAlignment) {
     if (bucketDuration == 0ULL) {
         return NULL;
     }
@@ -938,8 +1029,9 @@ CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t bucket
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
-    rule->aggContext = rule->aggClass->createContext();
+    rule->aggContext = rule->aggClass->createContext(false);
     rule->bucketDuration = bucketDuration;
+    rule->timestampAlignment = timestampAlignment;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
@@ -996,27 +1088,49 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     Sample sample;
     AggregationClass *aggObject = rule->aggClass;
-    const RangeArgs args = { .startTimestamp = start_ts,
-                             .endTimestamp = end_ts,
-                             .aggregationArgs = { 0 },
-                             .filterByValueArgs = { 0 },
-                             .filterByTSArgs = { 0 } };
-
-    AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, true);
-
-    void *context = aggObject->createContext();
+    void *context = aggObject->createContext(false);
     bool _is_empty = true;
+    AbstractSampleIterator *iterator;
+    RangeArgs args = { .aggregationArgs = { 0 },
+                       .filterByValueArgs = { 0 },
+                       .filterByTSArgs = { 0 } };
+
+    if (aggObject->addBucketParams) {
+        aggObject->addBucketParams(context, start_ts, end_ts + 1);
+    }
+
+    if (aggObject->addPrevBucketLastSample && start_ts > 0) {
+        args.startTimestamp = 0, args.endTimestamp = start_ts - 1,
+        iterator = SeriesCreateSampleIterator(series, &args, true, true);
+        if (iterator->GetNext(iterator, &sample) == CR_OK) {
+            aggObject->addPrevBucketLastSample(context, sample.value, sample.timestamp);
+        }
+        iterator->Close(iterator);
+    }
+
+    args.startTimestamp = start_ts;
+    args.endTimestamp = end_ts;
+    iterator = SeriesCreateSampleIterator(series, &args, false, true);
 
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
-        aggObject->appendValue(context, sample.value);
+        aggObject->appendValue(context, sample.value, sample.timestamp);
         _is_empty = false;
+    }
+    iterator->Close(iterator);
+
+    if (aggObject->addNextBucketFirstSample) {
+        args.startTimestamp = end_ts + 1, args.endTimestamp = UINT64_MAX,
+        iterator = SeriesCreateSampleIterator(series, &args, false, true);
+        if (iterator->GetNext(iterator, &sample) == CR_OK) {
+            aggObject->addNextBucketFirstSample(context, sample.value, sample.timestamp);
+        }
+        iterator->Close(iterator);
     }
 
     if (is_empty) {
         *is_empty = _is_empty;
     }
 
-    iterator->Close(iterator);
     if (val == NULL) { // just update context for current window
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
@@ -1027,10 +1141,6 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(context);
     }
     return TSDB_OK;
-}
-
-timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
-    return timestamp - (timestamp % window);
 }
 
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
@@ -1088,7 +1198,7 @@ AbstractIterator *SeriesQuery(Series *series,
     // should_reverse_chunk point it out.
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
         chain =
@@ -1121,7 +1231,10 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.aggregationClass,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
-                                                            reverse);
+                                                            reverse,
+                                                            args->aggregationArgs.empty,
+                                                            args->aggregationArgs.bucketTS,
+                                                            series);
     }
 
     return chain;
@@ -1133,4 +1246,71 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
                                                    bool check_retention) {
     AbstractIterator *chain = SeriesQuery(series, args, reverse, check_retention);
     return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
+}
+
+// returns sample iterator over multiple series
+AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
+                                                                   size_t n_series,
+                                                                   const RangeArgs *args,
+                                                                   bool reverse,
+                                                                   bool check_retention) {
+    size_t i;
+    AbstractSampleIterator *iters[n_series];
+    for (i = 0; i < n_series; ++i) {
+        iters[i] = SeriesCreateSampleIterator(series[i], args, reverse, check_retention);
+    }
+    return (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(
+        iters, n_series, reverse);
+}
+
+// returns sample iterator over multiple series
+AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
+                                                              size_t n_series,
+                                                              const RangeArgs *args,
+                                                              bool reverse,
+                                                              bool check_retention,
+                                                              const ReducerArgs *reducerArgs) {
+    AbstractMultiSeriesSampleIterator *chain =
+        MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
+    return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+}
+
+CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName) {
+    bool ruleFound = false;
+    // find the rule which matches dstSeries
+    while (rules) {
+        if (RedisModule_StringCompare(keyName, rules->destKey) == 0) {
+            ruleFound = true;
+            break;
+        }
+        rules = rules->nextRule;
+    }
+
+    RedisModule_Assert(ruleFound);
+    return rules;
+}
+
+void calculate_latest_sample(Sample **sample, const Series *series) {
+    RedisModuleKey *srcKey = NULL;
+    Series *srcSeries;
+    const int status = GetSeries(
+        rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+    if (!status || srcSeries->totalSamples == 0) {
+        // LATEST is ignored for a series that is not a compaction.
+        *sample = NULL;
+    } else {
+        CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+        void *clonedContext = rule->aggClass->cloneContext(rule->aggContext);
+
+        double aggVal;
+        rule->aggClass->finalize(clonedContext, &aggVal);
+        (*sample)->timestamp = rule->startCurrentTimeBucket;
+        (*sample)->value = aggVal;
+
+        free(clonedContext);
+    }
+
+    if (srcKey) {
+        RedisModule_CloseKey(srcKey);
+    }
 }

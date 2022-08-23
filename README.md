@@ -22,21 +22,21 @@ A Redis time series comprises:
     Time tags can be specified by the client or filled automatically by the server.
 
   - 64-bit floating-point values.
-  
+
   The intervals between time tags can be constant or variable.
-  
+
   Raw samples can be reported in-order or out-of-order.
-  
+
   Duplication policy for samples with identical time tags can be set: block/first/last/min/max/sum.
-  
+
 - An optional configurable **retention period**.
 
   Raw samples older than the retention period (relative to the raw sample with the highest time tag) are discarded.
-  
+
 - **Series Metadata**: a set of name-value pairs (e.g., room = 3; sensorType = ‘xyz’).
 
   RedisTimeSeries supports cross-time-series commands. One can, for example, aggregate data over all sensors in the same room or all sensors of the same type.
-  
+
 - Zero or more **compactions**.
 
   Compactions are an economical way to retain historical data.
@@ -56,7 +56,7 @@ A Redis time series comprises:
 ## Features
 - High volume inserts, low latency reads
 - Query by start time and end-time
-- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S) for any time bucket
+- Aggregated queries (Min, Max, Avg, Sum, Range, Count, First, Last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 - Configurable maximum retention period
 - Compactions - automatically updated aggregated timeseries
 - Secondary index - each time series has labels (name-value pairs) which will allows to query by labels
@@ -83,7 +83,7 @@ You can either get RedisTimeSeries setup in a Docker container or on your own ma
 ### Docker
 To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
-docker run -p 6379:6379 -it --rm redislabs/redistimeseries
+docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 ```
 
 ### Build and Run it yourself
@@ -246,7 +246,7 @@ The module includes a basic set of unit tests and integration tests.
 
 To run all unit tests, follow these steps:
 
-    $ make unittests
+    $ make unit_tests
 
 
 **Integration tests**

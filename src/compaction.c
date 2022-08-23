@@ -11,6 +11,7 @@
 #include "rmutil/alloc.h"
 #include "compactions/compaction_common.h"
 #include "compactions/compaction_avx512f.h"
+#include "compactions/compaction_avx2.h"
 #include "utils/arch_features.h"
 
 #include <ctype.h>
@@ -36,6 +37,28 @@ typedef struct AvgContext
     bool isOverflow;
 } AvgContext;
 
+typedef struct WeightData
+{
+    double weightSum;
+    timestamp_t prevPrevTS;
+    timestamp_t prevTS;
+    double prevValue;
+    timestamp_t bucketStartTS;
+    timestamp_t bucketEndTS;
+    bool is_first_bucket;
+    bool is_last_ts_handled;
+    int64_t iteration;
+    double prevWeight;
+    double weight_sum;
+} WeightData;
+
+typedef struct TwaContext
+{
+    AvgContext avgContext;
+    WeightData weightData;
+    bool reverse;
+} TwaContext;
+
 typedef struct StdContext
 {
     double sum;
@@ -43,11 +66,25 @@ typedef struct StdContext
     u_int64_t cnt;
 } StdContext;
 
-void *SingleValueCreateContext() {
+void finalize_empty_with_NAN(double *value) {
+    *value = NAN;
+}
+
+void finalize_empty_with_ZERO(double *value) {
+    *value = 0;
+}
+
+void *SingleValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     context->isResetted = TRUE;
     return context;
+}
+
+void *SingleValueCloneContext(void *contextPtr) {
+    SingleValueContext *buf = (SingleValueContext *)malloc(sizeof(SingleValueContext));
+    memcpy(buf, contextPtr, sizeof(SingleValueContext));
+    return buf;
 }
 
 void SingleValueReset(void *contextPtr) {
@@ -78,12 +115,22 @@ err:
     return TSDB_ERROR;
 }
 
-void *AvgCreateContext() {
-    AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
+static inline void _AvgInitContext(AvgContext *context) {
     context->cnt = 0;
     context->val = 0;
     context->isOverflow = false;
+}
+
+void *AvgCreateContext(__unused bool reverse) {
+    AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
+    _AvgInitContext(context);
     return context;
+}
+
+void *AvgCloneContext(void *contextPtr) {
+    AvgContext *buf = (AvgContext *)malloc(sizeof(AvgContext));
+    memcpy(buf, contextPtr, sizeof(AvgContext));
+    return buf;
 }
 
 // Except valgrind it's equivalent to sizeof(long double) > 8
@@ -93,7 +140,7 @@ bool hasLongDouble = sizeof(long double) > 8;
 bool hasLongDouble = false;
 #endif
 
-void AvgAddValue(void *contextPtr, double value) {
+void AvgAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     AvgContext *context = (AvgContext *)contextPtr;
     context->cnt++;
 
@@ -136,10 +183,7 @@ void AvgFinalize(void *contextPtr, double *value) {
 }
 
 void AvgReset(void *contextPtr) {
-    AvgContext *context = (AvgContext *)contextPtr;
-    context->val = 0;
-    context->cnt = 0;
-    context->isOverflow = false;
+    _AvgInitContext(contextPtr);
 }
 
 void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
@@ -162,7 +206,252 @@ err:
     return TSDB_ERROR;
 }
 
-void *StdCreateContext() {
+static inline void _TwainitContext(TwaContext *context, bool reverse) {
+    _AvgInitContext(&context->avgContext);
+    context->weightData.weightSum = 0;
+    context->weightData.prevPrevTS = DC;    // arbitrary value
+    context->weightData.prevTS = DC;        // arbitrary value
+    context->weightData.prevValue = DC;     // arbitrary value
+    context->weightData.bucketStartTS = DC; // arbitrary value
+    context->weightData.bucketEndTS = DC;   // arbitrary value
+    context->weightData.is_first_bucket = true;
+    context->weightData.is_last_ts_handled = false;
+    context->weightData.iteration = 0;
+    context->weightData.prevWeight = 0;
+    context->weightData.weight_sum = 0;
+    context->reverse = reverse;
+}
+
+void *TwaCloneContext(void *contextPtr) {
+    TwaContext *buf = (TwaContext *)malloc(sizeof(TwaContext));
+    memcpy(buf, contextPtr, sizeof(TwaContext));
+    return buf;
+}
+
+void *TwaCreateContext(bool reverse) {
+    TwaContext *context = (TwaContext *)malloc(sizeof(TwaContext));
+    _TwainitContext(context, reverse);
+    return context;
+}
+
+static inline void _update_twaContext(TwaContext *wcontext,
+                                      const double *value,
+                                      const timestamp_t *ts,
+                                      const double *weight) {
+    wcontext->weightData.prevPrevTS = wcontext->weightData.prevTS;
+    wcontext->weightData.prevValue = *value;
+    wcontext->weightData.prevTS = *ts;
+    if (weight) {
+        wcontext->weightData.prevWeight = *weight;
+    }
+}
+
+void TwaAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
+    TwaContext *context = (TwaContext *)contextPtr;
+    if (context->reverse) {
+        __SWAP(bucketStartTS, bucketEndTS);
+    }
+    context->weightData.bucketStartTS = bucketStartTS;
+    context->weightData.bucketEndTS = bucketEndTS;
+}
+
+void TwaAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    _update_twaContext(wcontext, &value, &ts, NULL);
+    wcontext->weightData.is_first_bucket = false;
+}
+
+void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    AvgContext *context = &wcontext->avgContext;
+    const bool *rev = &wcontext->reverse;
+    int64_t *iter = &wcontext->weightData.iteration;
+    ++(*iter);
+    const timestamp_t *prevTS = &wcontext->weightData.prevTS;
+    const double *prev_value = &wcontext->weightData.prevValue;
+    const timestamp_t time_delta = llabs((int64_t)(ts - (*prevTS)));
+    const double half_time_delta = time_delta / 2.0;
+    const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
+    const timestamp_t *startTS = &wcontext->weightData.bucketStartTS;
+    double weight = 0;
+
+    // add prev value with it's weight
+
+    if ((*iter) == 1) { // First sample in bucket
+        if (!(*is_first_bucket)) {
+            // on reverse it's the mirror of the regular case
+            if ((half_time_delta <= llabs((int64_t)((*startTS) - (*prevTS))))) {
+                // regular: prev_ts --- --- half_way --- bucket_start --- fisrt_ts
+                // reverse: fisrt_ts --- bucket_start --- half_way --- --- prev_ts
+                weight = llabs((int64_t)(ts - (*startTS)));
+            } else {
+                // regular: prev_ts --- bucket_start --- half_way --- --- fisrt_ts
+                // reverse: fisrt_ts --- --- half_way --- bucket_start --- prev_ts
+                weight = (*rev) ? ((*startTS) - (ts + half_time_delta))
+                                : ((*prevTS) + half_time_delta - (*startTS));
+                wcontext->weightData.weight_sum += weight;
+                AvgAddValue(context, (*prev_value) * weight, DC);
+                weight = half_time_delta;
+            }
+        }
+        // else: cur sample is the first in the series,
+        // assume the delta from the prev sample is same as the delta from next sample
+        // will be handled on next sample
+
+        _update_twaContext(wcontext, &value, &ts, &weight);
+        return;
+    } else if (unlikely((*iter) == 2 && (*is_first_bucket))) {
+        // 2nd sample in bucket and first bucket in the series
+        // extrapolate the weight of the 1st sample to be time_delta
+        weight = min(half_time_delta, llabs((int64_t)((*prevTS) - (*startTS)))) + half_time_delta;
+    } else {
+        weight = half_time_delta + wcontext->weightData.prevWeight;
+    }
+
+    // add prev value with it's weight
+    AvgAddValue(context, (*prev_value) * weight, DC);
+    wcontext->weightData.weight_sum += weight;
+    wcontext->weightData.prevWeight = 0;
+
+    // save cur value first weight
+    _update_twaContext(wcontext, &value, &ts, &half_time_delta);
+}
+
+void TwaAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    AvgContext *context = &wcontext->avgContext;
+    const bool *rev = &wcontext->reverse;
+    int64_t *iter = &wcontext->weightData.iteration;
+    ++(*iter);
+    const timestamp_t *prevTS = &wcontext->weightData.prevTS;
+    const double *prev_value = &wcontext->weightData.prevValue;
+    const timestamp_t time_delta = llabs((int64_t)(ts - (*prevTS)));
+    const double half_time_delta = time_delta / 2.0;
+    const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
+    const timestamp_t *startTS = &wcontext->weightData.bucketStartTS;
+    const timestamp_t *endTS = &wcontext->weightData.bucketEndTS;
+    double weight = wcontext->weightData.prevWeight;
+
+    if (unlikely((*iter) == 2 && (*is_first_bucket))) {
+        // Only 1 sample in bucket and first in the series
+        // extrapolate the 1st weight of the 1st sample to be time_delta
+        weight = min(half_time_delta, llabs((int64_t)((*prevTS) - (*startTS))));
+    }
+
+    // add the 2nd weight of prev sample
+    if (half_time_delta >= llabs((int64_t)((*endTS) - (*prevTS)))) {
+        // regular: last_ts --- bucket_end --- half_way --- --- next_ts
+        // reverse: next_ts --- --- half_way --- bucket_end --- last_ts
+        weight += llabs((int64_t)((*endTS) - (*prevTS)));
+        wcontext->weightData.weight_sum += weight;
+        AvgAddValue(context, (*prev_value) * weight, DC);
+    } else {
+        // regular: last_ts --- --- half_way --- bucket_end --- next_ts
+        // reverse: next_ts --- bucket_end --- half_way --- --- last_ts
+        weight += half_time_delta;
+        wcontext->weightData.weight_sum += weight;
+        AvgAddValue(context, (*prev_value) * weight, DC);
+        weight = (*rev) ? ((ts + half_time_delta) - (*endTS))
+                        : ((*endTS) - ((*prevTS) + half_time_delta));
+        wcontext->weightData.weight_sum += weight;
+        AvgAddValue(context, value * weight, DC);
+    }
+
+    wcontext->weightData.prevWeight = 0;
+    wcontext->weightData.is_last_ts_handled = true;
+}
+
+void TwaFinalize(void *contextPtr, double *value) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    AvgContext *context = &wcontext->avgContext;
+    int64_t *iter = &wcontext->weightData.iteration;
+    ++(*iter);
+
+    if (!wcontext->weightData.is_last_ts_handled) {
+        const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
+        if (unlikely((*iter) == 2 && (*is_first_bucket))) {
+            // Only 1 sample in bucket and that's the only sample in the series
+            // don't use weights at all
+            wcontext->weightData.weight_sum = 0;
+            AvgAddValue(context, wcontext->weightData.prevValue, DC);
+        } else {
+            // This is the last bucket in the series
+            // extrapolate the weight of the prev sample to be the prev time_delta
+            const timestamp_t *prevTS = &wcontext->weightData.prevTS;
+            const timestamp_t *endTS = &wcontext->weightData.bucketEndTS;
+            const timestamp_t time_delta =
+                llabs((int64_t)((*prevTS) - wcontext->weightData.prevPrevTS));
+            const double half_time_delta = time_delta / 2.0;
+            double weight = min(half_time_delta, llabs((int64_t)((*endTS) - (*prevTS)))) +
+                            wcontext->weightData.prevWeight;
+            wcontext->weightData.weight_sum += weight;
+            AvgAddValue(context, wcontext->weightData.prevValue * weight, DC);
+        }
+    }
+
+    if (wcontext->weightData.weight_sum > 0) {
+        // Normalizing the weighting for each time by dividing each weight by the mean of all
+        // weights
+        const double avg_weight = wcontext->weightData.weight_sum / context->cnt;
+        context->val /= avg_weight;
+    }
+
+    AvgFinalize(context, value);
+    return;
+}
+
+void TwaGetLastSample(void *contextPtr, Sample *sample) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    sample->timestamp = wcontext->weightData.prevTS;
+    sample->value = wcontext->weightData.prevValue;
+}
+
+void TwaReset(void *contextPtr) {
+    TwaContext *wcontext = (TwaContext *)contextPtr;
+    _TwainitContext(contextPtr, wcontext->reverse);
+}
+
+void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
+    TwaContext *context = (TwaContext *)contextPtr;
+    AvgWriteContext(&context->avgContext, io);
+    RedisModule_SaveDouble(io, context->weightData.weightSum);
+    RedisModule_SaveUnsigned(io, context->weightData.prevPrevTS);
+    RedisModule_SaveUnsigned(io, context->weightData.prevTS);
+    RedisModule_SaveDouble(io, context->weightData.prevValue);
+    RedisModule_SaveUnsigned(io, context->weightData.bucketStartTS);
+    RedisModule_SaveUnsigned(io, context->weightData.bucketEndTS);
+    RedisModule_SaveUnsigned(io, context->weightData.is_first_bucket);
+    RedisModule_SaveUnsigned(io, context->weightData.is_last_ts_handled);
+    RedisModule_SaveUnsigned(io, context->weightData.iteration);
+    RedisModule_SaveDouble(io, context->weightData.prevWeight);
+    RedisModule_SaveDouble(io, context->weightData.weight_sum);
+    RedisModule_SaveUnsigned(io, context->reverse);
+}
+
+int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
+    TwaContext *context = (TwaContext *)contextPtr;
+    if (AvgReadContext(&context->avgContext, io, encver) == TSDB_ERROR) {
+        goto err;
+    }
+
+    context->weightData.weightSum = LoadDouble_IOError(io, goto err);
+    context->weightData.prevPrevTS = LoadUnsigned_IOError(io, goto err);
+    context->weightData.prevTS = LoadUnsigned_IOError(io, goto err);
+    context->weightData.prevValue = LoadDouble_IOError(io, goto err);
+    context->weightData.bucketStartTS = LoadUnsigned_IOError(io, goto err);
+    context->weightData.bucketEndTS = LoadUnsigned_IOError(io, goto err);
+    context->weightData.is_first_bucket = LoadUnsigned_IOError(io, goto err);
+    context->weightData.is_last_ts_handled = LoadUnsigned_IOError(io, goto err);
+    context->weightData.iteration = LoadUnsigned_IOError(io, goto err);
+    context->weightData.prevWeight = LoadDouble_IOError(io, goto err);
+    context->weightData.weight_sum = LoadDouble_IOError(io, goto err);
+    context->reverse = LoadUnsigned_IOError(io, goto err);
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
+}
+
+void *StdCreateContext(__unused bool reverse) {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->sum = 0;
@@ -170,7 +459,13 @@ void *StdCreateContext() {
     return context;
 }
 
-void StdAddValue(void *contextPtr, double value) {
+void *StdCloneContext(void *contextPtr) {
+    StdContext *buf = (StdContext *)malloc(sizeof(StdContext));
+    memcpy(buf, contextPtr, sizeof(StdContext));
+    return buf;
+}
+
+void StdAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     StdContext *context = (StdContext *)contextPtr;
     ++context->cnt;
     context->sum += value;
@@ -245,59 +540,110 @@ void rm_free(void *ptr) {
     free(ptr);
 }
 
+// time weighted avg
+static AggregationClass waggAvg = { .createContext = TwaCreateContext,
+                                    .appendValue = TwaAddValue,
+                                    .freeContext = rm_free,
+                                    .finalize = TwaFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
+                                    .writeContext = TwaWriteContext,
+                                    .readContext = TwaReadContext,
+                                    .addBucketParams = TwaAddBucketParams,
+                                    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
+                                    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
+                                    .getLastSample = TwaGetLastSample,
+                                    .resetContext = TwaReset,
+                                    .cloneContext = TwaCloneContext };
+
 static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .appendValue = AvgAddValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = AvgFinalize,
+                                   .finalizeEmpty = finalize_empty_with_NAN,
                                    .writeContext = AvgWriteContext,
                                    .readContext = AvgReadContext,
-                                   .resetContext = AvgReset };
+                                   .addBucketParams = NULL,
+                                   .addPrevBucketLastSample = NULL,
+                                   .addNextBucketFirstSample = NULL,
+                                   .getLastSample = NULL,
+                                   .resetContext = AvgReset,
+                                   .cloneContext = AvgCloneContext };
 
 static AggregationClass aggStdP = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = StdPopulationFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
-                                    .resetContext = StdReset };
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggStdS = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = StdSamplesFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
-                                    .resetContext = StdReset };
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggVarP = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = VarPopulationFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
-                                    .resetContext = StdReset };
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
 static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = VarSamplesFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = StdWriteContext,
                                     .readContext = StdReadContext,
-                                    .resetContext = StdReset };
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = StdReset,
+                                    .cloneContext = StdCloneContext };
 
-void *MaxMinCreateContext() {
+void *MaxMinCreateContext(__unused bool reverse) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = DBL_MAX;
     context->maxValue = _DOUBLE_MIN;
     return context;
 }
 
-void MaxAppendValue(void *context, double value) {
+void *MaxMinCloneContext(void *contextPtr) {
+    MaxMinContext *buf = (MaxMinContext *)malloc(sizeof(MaxMinContext));
+    memcpy(buf, contextPtr, sizeof(MaxMinContext));
+    return buf;
+}
+
+void MaxAppendValue(void *context, double value, __attribute__((unused)) timestamp_t ts) {
     _AssignIfGreater(&((MaxMinContext *)context)->maxValue, &value);
 }
 
@@ -310,14 +656,14 @@ void MaxAppendValuesVec(void *__restrict__ context,
     }
 }
 
-void MinAppendValue(void *contextPtr, double value) {
+void MinAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     if (value < context->minValue) {
         context->minValue = value;
     }
 }
 
-void MaxMinAppendValue(void *contextPtr, double value) {
+void MaxMinAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     if (value > context->maxValue) {
         context->maxValue = value;
@@ -363,12 +709,12 @@ err:
     return TSDB_ERROR;
 }
 
-void SumAppendValue(void *contextPtr, double value) {
+void SumAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value += value;
 }
 
-void CountAppendValue(void *contextPtr, double value) {
+void CountAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value++;
 }
@@ -378,7 +724,7 @@ void CountFinalize(void *contextPtr, double *val) {
     *val = context->value;
 }
 
-void FirstAppendValue(void *contextPtr, double value) {
+void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     if (context->isResetted) {
         context->isResetted = FALSE;
@@ -386,7 +732,7 @@ void FirstAppendValue(void *contextPtr, double value) {
     }
 }
 
-void LastAppendValue(void *contextPtr, double value) {
+void LastAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = value;
 }
@@ -396,77 +742,123 @@ AggregationClass aggMax = { .createContext = MaxMinCreateContext,
                             .appendValueVec = NULL, /* determined on run time */
                             .freeContext = rm_free,
                             .finalize = MaxFinalize,
+                            .finalizeEmpty = finalize_empty_with_NAN,
                             .writeContext = MaxMinWriteContext,
                             .readContext = MaxMinReadContext,
-                            .resetContext = MaxMinReset };
+                            .addBucketParams = NULL,
+                            .addPrevBucketLastSample = NULL,
+                            .addNextBucketFirstSample = NULL,
+                            .getLastSample = NULL,
+                            .resetContext = MaxMinReset,
+                            .cloneContext = MaxMinCloneContext };
 
 static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .appendValue = MinAppendValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = MinFinalize,
+                                   .finalizeEmpty = finalize_empty_with_NAN,
                                    .writeContext = MaxMinWriteContext,
                                    .readContext = MaxMinReadContext,
-                                   .resetContext = MaxMinReset };
+                                   .addBucketParams = NULL,
+                                   .addPrevBucketLastSample = NULL,
+                                   .addNextBucketFirstSample = NULL,
+                                   .getLastSample = NULL,
+                                   .resetContext = MaxMinReset,
+                                   .cloneContext = MaxMinCloneContext };
 
 static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .appendValue = SumAppendValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
                                    .finalize = SingleValueFinalize,
+                                   .finalizeEmpty = finalize_empty_with_ZERO,
                                    .writeContext = SingleValueWriteContext,
                                    .readContext = SingleValueReadContext,
-                                   .resetContext = SingleValueReset };
+                                   .addBucketParams = NULL,
+                                   .addPrevBucketLastSample = NULL,
+                                   .addNextBucketFirstSample = NULL,
+                                   .getLastSample = NULL,
+                                   .resetContext = SingleValueReset,
+                                   .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .appendValue = CountAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = CountFinalize,
+                                     .finalizeEmpty = finalize_empty_with_ZERO,
                                      .writeContext = SingleValueWriteContext,
                                      .readContext = SingleValueReadContext,
-                                     .resetContext = SingleValueReset };
+                                     .addBucketParams = NULL,
+                                     .addPrevBucketLastSample = NULL,
+                                     .addNextBucketFirstSample = NULL,
+                                     .getLastSample = NULL,
+                                     .resetContext = SingleValueReset,
+                                     .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
                                      .appendValue = FirstAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = SingleValueFinalize,
+                                     .finalizeEmpty = finalize_empty_with_NAN,
                                      .writeContext = SingleValueWriteContext,
                                      .readContext = SingleValueReadContext,
-                                     .resetContext = SingleValueReset };
+                                     .addBucketParams = NULL,
+                                     .addPrevBucketLastSample = NULL,
+                                     .addNextBucketFirstSample = NULL,
+                                     .getLastSample = NULL,
+                                     .resetContext = SingleValueReset,
+                                     .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .appendValue = LastAppendValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = SingleValueFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
                                     .writeContext = SingleValueWriteContext,
                                     .readContext = SingleValueReadContext,
-                                    .resetContext = SingleValueReset };
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = SingleValueReset,
+                                    .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
                                      .appendValue = MaxMinAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
                                      .finalize = RangeFinalize,
+                                     .finalizeEmpty = finalize_empty_with_NAN,
                                      .writeContext = MaxMinWriteContext,
                                      .readContext = MaxMinReadContext,
-                                     .resetContext = MaxMinReset };
+                                     .addBucketParams = NULL,
+                                     .addPrevBucketLastSample = NULL,
+                                     .addNextBucketFirstSample = NULL,
+                                     .getLastSample = NULL,
+                                     .resetContext = MaxMinReset,
+                                     .cloneContext = MaxMinCloneContext };
 
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
-    /* remove this comment to enable avx512
-    #if defined(__x86_64__)
-        if (!features) {
-            return;
-        } else if (features->avx512f) {
+
+#if defined(__x86_64__)
+    if (!features) {
+        return;
+        /* remove this comment to enable avx512
+     } else if (features->avx512f) {
             aggMax.appendValueVec = MaxAppendValuesAVX512F;
             return;
-        }
-    #endif // __x86_64__
-    */
+        }*/
+    } else if (features->avx2) {
+        aggMax.appendValueVec = MaxAppendValuesAVX2;
+        return;
+    }
+#endif // __x86_64__
     return;
 }
 
@@ -495,6 +887,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
             result = TS_AGG_SUM;
         } else if (strncmp(agg_type_lower, "avg", len) == 0) {
             result = TS_AGG_AVG;
+        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
+            result = TS_AGG_TWA;
         }
     } else if (len == 4) {
         if (strncmp(agg_type_lower, "last", len) == 0) {
@@ -530,6 +924,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "SUM";
         case TS_AGG_AVG:
             return "AVG";
+        case TS_AGG_TWA:
+            return "TWA";
         case TS_AGG_STD_P:
             return "STD.P";
         case TS_AGG_STD_S:
@@ -554,6 +950,42 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
     return "Unknown";
 }
 
+const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
+    switch (aggType) {
+        case TS_AGG_MIN:
+            return "min";
+        case TS_AGG_MAX:
+            return "max";
+        case TS_AGG_SUM:
+            return "sum";
+        case TS_AGG_AVG:
+            return "avg";
+        case TS_AGG_TWA:
+            return "twa";
+        case TS_AGG_STD_P:
+            return "std.p";
+        case TS_AGG_STD_S:
+            return "std.s";
+        case TS_AGG_VAR_P:
+            return "var.p";
+        case TS_AGG_VAR_S:
+            return "var.s";
+        case TS_AGG_COUNT:
+            return "count";
+        case TS_AGG_FIRST:
+            return "first";
+        case TS_AGG_LAST:
+            return "last";
+        case TS_AGG_RANGE:
+            return "range";
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+            break;
+    }
+    return "unknown";
+}
+
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
     switch (aggType) {
         case TS_AGG_MIN:
@@ -562,6 +994,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggMax;
         case TS_AGG_AVG:
             return &aggAvg;
+        case TS_AGG_TWA:
+            return &waggAvg;
         case TS_AGG_STD_P:
             return &aggStdP;
         case TS_AGG_STD_S:

@@ -25,6 +25,22 @@ def test_mrange_with_expire_cmd():
             assert(len(reply)>=0 and len(reply)<=3)
         assert r.execute_command("PING")
 
+def testWithMultiExec(env):
+    env = Env()
+    if env.shardsCount < 2:
+        env.skip()
+    if(not env.isCluster):
+        env.skip()
+    with env.getConnection() as r:
+        r.execute_command('multi', )
+        r.execute_command('TS.mrange', '-', '+', 'FILTER', 'name=bob')
+        if(is_rlec()):
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('exec')
+        else:
+            res = r.execute_command('exec')
+            assert type(res[0]) is redis.ResponseError
+
 def test_mrange_expire_issue549():
     Env().skipOnDebugger()
     env = Env()
@@ -81,11 +97,11 @@ def test_range_by_labels():
             assert [[1511885905, b'1']] == actual_result[0][2][:1]
             assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
-                                            'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
-                                            'COUNT', 3, 'FILTER', 'generation=x')
-            assert 3 == len(actual_result[0][2])  # just checking that agg count before count works
+                                            'COUNT', 4, 'FILTER', 'generation=x')
+            assert 4 == len(actual_result[0][2])  # just checking that agg count before count works
+            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 4, 'AGGREGATION', 'COUNT', 3,
+                                            'FILTER', 'generation=x')
+            assert 4 == len(actual_result[0][2])  # just checking that agg count after count works
             actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                             'FILTER', 'generation=x')
             assert 18 == len(actual_result[0][2])  # just checking that agg count before count works
@@ -383,3 +399,78 @@ def test_mrange_partial_range():
         res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
         'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=fabi')))
         assert res == exp
+
+def test_latest_flag_mrange():
+    env = Env(decodeResponses=True)
+    key1 = 't1{1}'
+    key2 = 't2{1}'
+    key3 = 't3{1}'
+    key4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key1)
+        assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATE', key3)
+        assert r.execute_command('TS.CREATE', key4, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.add', key1, 1, 1)
+        assert r.execute_command('TS.add', key1, 2, 3)
+        assert r.execute_command('TS.add', key1, 11, 7)
+        assert r.execute_command('TS.add', key1, 13, 1)
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert r.execute_command('TS.add', key3, 1, 1)
+        assert r.execute_command('TS.add', key3, 2, 3)
+        assert r.execute_command('TS.add', key3, 11, 7)
+        assert r.execute_command('TS.add', key3, 13, 1)
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]] or res == [[b't2{1}', [], [[0, b'4']]], [b't4{1}', [], [[0, b'4']]]]
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4'], [10, '8']]], ['t4{1}', [], [[0, '4'], [10, '8']]]] or res == [[b't2{1}', [], [[0, b'4'], [10, b'8']]], [b't4{1}', [], [[0, b'4'], [10, b'8']]]]
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8']]]] or res == [[b'is_compaction=true', [], [[0, b'8']]]]
+        res = env.getConnection(1).execute_command('TS.mrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8'], [10, '16']]]] or res == [[b'is_compaction=true', [], [[0, b'8'], [10, b'16']]]]
+
+        # make sure LATEST haven't changed anything in the keys
+        res = r.execute_command('TS.range', key2, 0, 10)
+        assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+def test_latest_flag_mrevrange():
+    env = Env(decodeResponses=True)
+    key1 = 't1{1}'
+    key2 = 't2{1}'
+    key3 = 't3{1}'
+    key4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', key1)
+        assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATE', key3)
+        assert r.execute_command('TS.CREATE', key4, 'LABELS', 'is_compaction', 'true')
+        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'SUM', 10)
+        assert r.execute_command('TS.add', key1, 1, 1)
+        assert r.execute_command('TS.add', key1, 2, 3)
+        assert r.execute_command('TS.add', key1, 11, 7)
+        assert r.execute_command('TS.add', key1, 13, 1)
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert r.execute_command('TS.add', key3, 1, 1)
+        assert r.execute_command('TS.add', key3, 2, 3)
+        assert r.execute_command('TS.add', key3, 11, 7)
+        assert r.execute_command('TS.add', key3, 13, 1)
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[0, '4']]], ['t4{1}', [], [[0, '4']]]] or res == [[b't2{1}', [], [[0, b'4']]], [b't4{1}', [], [[0, b'4']]]]
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true')
+        assert res == [['t2{1}', [], [[10, '8'], [0, '4']]], ['t4{1}', [], [[10, '8'], [0, '4']]]] or res == [[b't2{1}', [], [[10, b'8'], [0, b'4']]], [b't4{1}', [], [[10, b'8'], [0, b'4']]]]
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[0, '8']]]] or res == [[b'is_compaction=true', [], [[0, b'8']]]]
+        res = env.getConnection(1).execute_command('TS.mrevrange', 0, 10, 'LATEST', 'FILTER', 'is_compaction=true', 'GROUPBY', 'is_compaction', 'REDUCE', 'sum')
+        assert res == [['is_compaction=true', [], [[10, '16'], [0, '8']]]] or res == [[b'is_compaction=true', [], [[10, b'16'], [0, b'8']]]]
+
+        # make sure LATEST haven't changed anything in the keys
+        res = r.execute_command('TS.range', key2, 0, 10)
+        assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key1, 0, 20)
+        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
