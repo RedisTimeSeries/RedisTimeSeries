@@ -9,7 +9,7 @@
 
 #include "rmutil/alloc.h"
 
-Chunk_t *Uncompressed_NewChunk(size_t size, size_t size_unused) {
+Chunk_t *Uncompressed_NewChunk(size_t size, __attribute__((unused)) size_t size_values) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;

@@ -19,7 +19,7 @@ typedef struct Chunk
     size_t size;
 } Chunk;
 
-Chunk_t *Uncompressed_NewChunk(size_t size, size_t size_unused);
+Chunk_t *Uncompressed_NewChunk(size_t size, size_t size_values);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
