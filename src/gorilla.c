@@ -112,7 +112,6 @@
     if (!isSpaceAvailableValues((chunk), (x)))                                                     \
         return CR_ERR_VALUES;
 
-
 #define LeadingZeros64(x) __builtin_clzll(x)
 #define TrailingZeros64(x) __builtin_ctzll(x)
 
@@ -300,11 +299,11 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
        * The second value is a compressed representation of the value with the `length`
          encoded by the first value. Compression is done using `int2bin`.
      */
- 
+
     binary_t *bins = chunk->data_ts;
     globalbit_t *bit = &chunk->idx_ts;
     if (doubleDelta.i == 0) {
-        CHECKSPACE_TS(chunk, 1); 
+        CHECKSPACE_TS(chunk, 1);
         appendBits(bins, bit, 0x00, 1);
     } else if (Bin_InRange(doubleDelta.i, CMPR_L1)) {
         CHECKSPACE_TS(chunk, 2 + CMPR_L1);
@@ -354,7 +353,6 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     CHECKSPACE_VALUES(chunk, 1);
     appendBits(bins, bit, 1, 1);
 
-
     u_int64_t leading = LeadingZeros64(xorWithPrevious);
     u_int64_t trailing = TrailingZeros64(xorWithPrevious);
 
@@ -384,7 +382,6 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
      */
     if (leading >= chunk->prevLeading && trailing >= chunk->prevTrailing &&
         expectedSize > prevBlockInfoSize) {
-
         CHECKSPACE_VALUES(chunk, prevBlockInfoSize + 1);
         appendBits(bins, bit, 0, 1);
         appendBits(bins, bit, xorWithPrevious >> prevTrailing, prevBlockInfoSize);
@@ -417,10 +414,10 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
 
-        ChunkResult result = appendInteger(chunk, timestamp); 
-        result += appendFloat(chunk, value); 
+        ChunkResult result = appendInteger(chunk, timestamp);
+        result += appendFloat(chunk, value);
 
-        if(result != CR_OK){
+        if (result != CR_OK) {
             chunk->idx_ts = idx_ts;
             chunk->idx_values = idx_values;
             chunk->prevTimestamp = prevTimestamp;
@@ -462,7 +459,6 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
     }
     return iter->prevDelta;
 }
-
 
 /*
  * This function decodes values inserted by appendFloat.
@@ -529,19 +525,19 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
 
     const u_int64_t *bins_ts = iter->chunk->data_ts;
     const u_int64_t *bins_values = iter->chunk->data_values;
-   
+
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //
     // control bit ‘0’
     // Read stored double delta value
-    sample->timestamp = iter->prevTS += 
+    sample->timestamp = iter->prevTS +=
         Bins_bitoff(bins_ts, iter->idx_ts++) ? iter->prevDelta : readInteger(iter, bins_ts);
-
 
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins_values, iter->idx_values++) ? iter->prevValue.d : readFloat(iter, bins_values);
+    sample->value = Bins_bitoff(bins_values, iter->idx_values++) ? iter->prevValue.d
+                                                                 : readFloat(iter, bins_values);
 
     iter->count++;
     return CR_OK;

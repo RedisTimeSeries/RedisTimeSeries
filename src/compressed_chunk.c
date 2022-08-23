@@ -25,12 +25,12 @@
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size_ts, size_t size_values) {
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
-    
+
     // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
     // each write happens in 8 bytes blocks.
-    if(size_ts % sizeof(binary_t) != 0)
+    if (size_ts % sizeof(binary_t) != 0)
         size_ts += sizeof(binary_t) - (size_ts % sizeof(binary_t));
-    if(size_values % sizeof(binary_t) != 0)
+    if (size_values % sizeof(binary_t) != 0)
         size_values += sizeof(binary_t) - (size_values % sizeof(binary_t));
     chunk->size_ts = size_ts;
     chunk->size_values = size_values;
@@ -79,33 +79,35 @@ static void swapChunks(CompressedChunk *a, CompressedChunk *b) {
 static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     ChunkResult res = Compressed_AddSample(chunk, sample);
     if (res != CR_OK) {
-
         int oldsize_ts = chunk->size_ts;
         int oldsize_values = chunk->size_values;
 
-        switch (res)
-        {
-        case CR_ERR_TS:
-            chunk->size_ts += CHUNK_RESIZE_STEP;
-            chunk->data_ts = (u_int64_t *)realloc(chunk->data_ts, chunk->size_ts * sizeof(char));
-            memset((char *)chunk->data_ts + oldsize_ts, 0, CHUNK_RESIZE_STEP);
-            break;
-        case CR_ERR_VALUES:
-            chunk->size_values += CHUNK_RESIZE_STEP;
-            chunk->data_values = (u_int64_t *)realloc(chunk->data_values, chunk->size_values * sizeof(char));
-            memset((char *)chunk->data_values + oldsize_values, 0, CHUNK_RESIZE_STEP);
-            break; 
-        case CR_ERR: 
-            chunk->size_ts += CHUNK_RESIZE_STEP;
-            chunk->size_values += CHUNK_RESIZE_STEP;
-            chunk->data_ts = (u_int64_t *)realloc(chunk->data_ts, chunk->size_ts * sizeof(char));
-            chunk->data_values = (u_int64_t *)realloc(chunk->data_values, chunk->size_values * sizeof(char));
-            memset((char *)chunk->data_ts + oldsize_ts, 0, CHUNK_RESIZE_STEP);
-            memset((char *)chunk->data_values + oldsize_values, 0, CHUNK_RESIZE_STEP);
-            break; 
-        default:
-            assert(0); 
-            break;
+        switch (res) {
+            case CR_ERR_TS:
+                chunk->size_ts += CHUNK_RESIZE_STEP;
+                chunk->data_ts =
+                    (u_int64_t *)realloc(chunk->data_ts, chunk->size_ts * sizeof(char));
+                memset((char *)chunk->data_ts + oldsize_ts, 0, CHUNK_RESIZE_STEP);
+                break;
+            case CR_ERR_VALUES:
+                chunk->size_values += CHUNK_RESIZE_STEP;
+                chunk->data_values =
+                    (u_int64_t *)realloc(chunk->data_values, chunk->size_values * sizeof(char));
+                memset((char *)chunk->data_values + oldsize_values, 0, CHUNK_RESIZE_STEP);
+                break;
+            case CR_ERR:
+                chunk->size_ts += CHUNK_RESIZE_STEP;
+                chunk->size_values += CHUNK_RESIZE_STEP;
+                chunk->data_ts =
+                    (u_int64_t *)realloc(chunk->data_ts, chunk->size_ts * sizeof(char));
+                chunk->data_values =
+                    (u_int64_t *)realloc(chunk->data_values, chunk->size_values * sizeof(char));
+                memset((char *)chunk->data_ts + oldsize_ts, 0, CHUNK_RESIZE_STEP);
+                memset((char *)chunk->data_values + oldsize_values, 0, CHUNK_RESIZE_STEP);
+                break;
+            default:
+                assert(0);
+                break;
         }
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);
@@ -113,7 +115,7 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 }
 
 static void trimChunkTS(CompressedChunk *chunk) {
-    int excess = (chunk->size_ts * BIT - chunk->idx_ts) / BIT; 
+    int excess = (chunk->size_ts * BIT - chunk->idx_ts) / BIT;
 
     assert(excess >= 0); // else we have written beyond allocated memory
 
@@ -142,7 +144,6 @@ static void trimChunkValues(CompressedChunk *chunk) {
     }
 }
 
-
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
     size_t split = curChunk->count / 2;
@@ -163,19 +164,18 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
         ensureAddSample(newChunk2, &sample);
     }
 
-
     trimChunkTS(newChunk1);
-    trimChunkValues(newChunk1); 
+    trimChunkValues(newChunk1);
     trimChunkTS(newChunk2);
-    trimChunkValues(newChunk2); 
-    
+    trimChunkValues(newChunk2);
+
     swapChunks(curChunk, newChunk1);
 
     Compressed_FreeChunkIterator(iter);
     Compressed_FreeChunk(newChunk1);
 
     return newChunk2;
-} 
+}
 
 ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy) {
     *size = 0;
@@ -221,7 +221,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
             nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
         }
     }
- 
+
     swapChunks(newChunk, oldChunk);
 
     Compressed_FreeChunkIterator(iter);
@@ -268,7 +268,7 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
 
 size_t Compressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     CompressedChunk *oldChunk = (CompressedChunk *)chunk;
-    size_t newSize_ts = oldChunk->size_ts; // mem size
+    size_t newSize_ts = oldChunk->size_ts;         // mem size
     size_t newSize_values = oldChunk->size_values; // mem size
     CompressedChunk *newChunk = Compressed_NewChunk(newSize_ts, newSize_values);
     Compressed_Iterator *iter = Compressed_NewChunkIterator(oldChunk);
@@ -465,7 +465,7 @@ _done:
  *  Iterator functions  *
  ************************/
 // LCOV_EXCL_START - used for debug
-//u_int64_t getIterIdx(ChunkIter_t *iter) {
+// u_int64_t getIterIdx(ChunkIter_t *iter) {
 //    return ((Compressed_Iterator *)iter)->idx;
 //}
 u_int64_t getIterIdxTs(ChunkIter_t *iter) {
@@ -480,7 +480,7 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) 
     const CompressedChunk *compressedChunk = chunk;
     Compressed_Iterator *iter = (Compressed_Iterator *)iterator;
     iter->chunk = (CompressedChunk *)compressedChunk;
-    //iter->idx = 0;
+    // iter->idx = 0;
     iter->idx_ts = 0;
     iter->idx_values = 0;
     iter->count = 0;
@@ -557,8 +557,8 @@ static void Compressed_Serialize(Chunk_t *chunk,
                                                                                                    \
         compchunk->data_ts = NULL;                                                                 \
         compchunk->data_values = NULL;                                                             \
-        compchunk->size_ts = readUnsigned(ctx, ##__VA_ARGS__);                                        \
-        compchunk->size_values = readUnsigned(ctx, ##__VA_ARGS__);                                        \
+        compchunk->size_ts = readUnsigned(ctx, ##__VA_ARGS__);                                     \
+        compchunk->size_values = readUnsigned(ctx, ##__VA_ARGS__);                                 \
         compchunk->count = readUnsigned(ctx, ##__VA_ARGS__);                                       \
         compchunk->idx_ts = readUnsigned(ctx, ##__VA_ARGS__);                                      \
         compchunk->idx_values = readUnsigned(ctx, ##__VA_ARGS__);                                  \

@@ -143,7 +143,8 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     }
 
     if (!cCtx->skipChunkCreation) {
-        Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes, newSeries->chunkSizeBytes);
+        Chunk_t *newChunk =
+            newSeries->funcs->NewChunk(newSeries->chunkSizeBytes, newSeries->chunkSizeBytes);
         dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
         newSeries->lastChunk = newChunk;
     } else {
