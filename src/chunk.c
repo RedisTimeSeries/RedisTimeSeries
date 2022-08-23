@@ -9,7 +9,7 @@
 
 #include "rmutil/alloc.h"
 
-Chunk_t *Uncompressed_NewChunk(size_t size) {
+Chunk_t *Uncompressed_NewChunk(size_t size, size_t size_unused) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
@@ -40,7 +40,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
+    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE, 0);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
         Uncompressed_AddSample(newChunk, sample);
