@@ -547,19 +547,20 @@ void rm_free(void *ptr) {
 }
 
 // time weighted avg
-AggregationClass aggWAvg = { .createContext = TwaCreateContext,
-                             .appendValue = TwaAddValue,
-                             .freeContext = rm_free,
-                             .finalize = TwaFinalize,
-                             .finalizeEmpty = finalize_empty_with_NAN,
-                             .writeContext = TwaWriteContext,
-                             .readContext = TwaReadContext,
-                             .addBucketParams = TwaAddBucketParams,
-                             .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
-                             .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
-                             .getLastSample = TwaGetLastSample,
-                             .resetContext = TwaReset,
-                             .cloneContext = TwaCloneContext };
+static AggregationClass aggWAvg = { .type = TS_AGG_TWA,
+                                    .createContext = TwaCreateContext,
+                                    .appendValue = TwaAddValue,
+                                    .freeContext = rm_free,
+                                    .finalize = TwaFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
+                                    .writeContext = TwaWriteContext,
+                                    .readContext = TwaReadContext,
+                                    .addBucketParams = TwaAddBucketParams,
+                                    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
+                                    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
+                                    .getLastSample = TwaGetLastSample,
+                                    .resetContext = TwaReset,
+                                    .cloneContext = TwaCloneContext };
 
 static AggregationClass aggAvg = { .type = TS_AGG_AVG,
                                    .createContext = AvgCreateContext,
