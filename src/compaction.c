@@ -367,7 +367,13 @@ void TwaFinalize(void *contextPtr, double *value) {
     int64_t *iter = &wcontext->weightData.iteration;
     ++(*iter);
 
-    if (!wcontext->weightData.is_last_ts_handled) {
+    if (unlikely(wcontext->weightData.bucketStartTS == wcontext->weightData.bucketEndTS)) {
+        // Special case when the ta==tb and there is one sample in it
+        // This is the last or first bucket in the series
+        _AvgInitContext(&wcontext->avgContext);
+        wcontext->weightData.weight_sum = 0;
+        AvgAddValue(context, wcontext->weightData.prevValue, DC);
+    } else if (!wcontext->weightData.is_last_ts_handled) {
         const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
         if (unlikely((*iter) == 2 && (*is_first_bucket))) {
             // Only 1 sample in bucket and that's the only sample in the series
@@ -541,20 +547,19 @@ void rm_free(void *ptr) {
 }
 
 // time weighted avg
-static AggregationClass waggAvg = { .type = TS_AGG_TWA,
-                                    .createContext = TwaCreateContext,
-                                    .appendValue = TwaAddValue,
-                                    .freeContext = rm_free,
-                                    .finalize = TwaFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = TwaWriteContext,
-                                    .readContext = TwaReadContext,
-                                    .addBucketParams = TwaAddBucketParams,
-                                    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
-                                    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
-                                    .getLastSample = TwaGetLastSample,
-                                    .resetContext = TwaReset,
-                                    .cloneContext = TwaCloneContext };
+AggregationClass aggWAvg = { .createContext = TwaCreateContext,
+                             .appendValue = TwaAddValue,
+                             .freeContext = rm_free,
+                             .finalize = TwaFinalize,
+                             .finalizeEmpty = finalize_empty_with_NAN,
+                             .writeContext = TwaWriteContext,
+                             .readContext = TwaReadContext,
+                             .addBucketParams = TwaAddBucketParams,
+                             .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
+                             .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
+                             .getLastSample = TwaGetLastSample,
+                             .resetContext = TwaReset,
+                             .cloneContext = TwaCloneContext };
 
 static AggregationClass aggAvg = { .type = TS_AGG_AVG,
                                    .createContext = AvgCreateContext,
@@ -1008,7 +1013,7 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
         case TS_AGG_AVG:
             return &aggAvg;
         case TS_AGG_TWA:
-            return &waggAvg;
+            return &aggWAvg;
         case TS_AGG_STD_P:
             return &aggStdP;
         case TS_AGG_STD_S:
