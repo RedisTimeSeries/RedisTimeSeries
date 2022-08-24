@@ -1234,7 +1234,9 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             reverse,
                                                             args->aggregationArgs.empty,
                                                             args->aggregationArgs.bucketTS,
-                                                            series);
+                                                            series,
+                                                            args->startTimestamp,
+                                                            args->endTimestamp);
     }
 
     return chain;
