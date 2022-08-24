@@ -1085,6 +1085,22 @@ def test_latest_flag_range():
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
 
+#https://github.com/RedisTimeSeries/RedisTimeSeries/issues/1247
+def test_latest_flag_range_plus():
+        env = Env(decodeResponses=True)
+        key3 = 't3{1}'
+        key4 = 't4{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', key3)
+            assert r.execute_command('TS.CREATE', key4)
+            assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'RANGE', 10)
+            assert r.execute_command('TS.add', key3, 10, 20)
+            assert r.execute_command('TS.add', key3, 11, 30)
+            res = r.execute_command('TS.range', key4, 0, 10000, "LATEST")
+            assert res == [[10, '10']] or res == [[10, b'10']]
+            res = r.execute_command('TS.range', key4, "-", "+", "LATEST")
+            assert res == [[10, '10']] or res == [[10, b'10']]
+
 def test_latest_flag_revrange():
     env = Env(decodeResponses=True)
     key1 = 't1{1}'

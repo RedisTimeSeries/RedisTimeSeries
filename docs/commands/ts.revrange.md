@@ -2,7 +2,7 @@
 syntax: 
 ---
 
-Query a range in reverse direction.
+Query a range in reverse direction
 
 ## Syntax
 
@@ -15,45 +15,77 @@ TS.REVRANGE key fromTimestamp toTimestamp
          [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 {{< / highlight >}}
 
-[**Examples**](#examples)
+[Examples](#examples)
 
 ## Required arguments
 
-`key` is the key name for the time series.
+<details open>
+<summary><code>key</code></summary>
+is the key name for the time series.
+</details>
 
-`fromTimestamp` is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
+<details open>
+<summary><code>fromTimestamp</code></summary>
 
-`toTimestamp` is end timestamp for range query. Use `+` to express the maximum possible timestamp.
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
+</details>
 
-> **NOTE:** When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.
+<details open>
+<summary><code>toTimestamp</code></summary>
+
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
+
+<note><b>Note:</b>  When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` limits only the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
+
+</details>
 
 ## Optional arguments
 
-`LATEST` (since RedisTimeSeries v1.8), used when a time series is a compaction. With `LATEST`, TS.REVRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.REVRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
+<details open>
+<summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
+
+is used when a time series is a compaction. With `LATEST`, TS.REVRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.REVRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
   
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
+</details>
 
-`FILTER_BY_TS ts...` (since RedisTimeSeries v1.6) followed by a list of timestamps filters results by specific timestamps.
+<details open>
+<summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
-`FILTER_BY_VALUE min max` (since RedisTimeSeries v1.6) filters results by minimum and maximum values.
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
+</details>
 
-`COUNT count` limits the number of returned samples.
+<details open>
+<summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
 
-`ALIGN value` (since RedisTimeSeries v1.6) is a time bucket alignment control for `AGGREGATION`. 
-It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
+filters samples by minimum and maximum values.
+</details>
+
+<details open>
+<summary><code>COUNT count</code></summary>
+limits the number of returned samples.
+</details>
+
+<details open>
+<summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
+is a time bucket alignment control for `AGGREGATION`. It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
 Values include:
    
  - `start` or `-`: The reference timestamp will be the query start interval time (`fromTimestamp`) which can't be `-`
  - `end` or `+`: The reference timestamp will be the query end interval time (`toTimestamp`) which can't be `+`
  - A specific timestamp: align the reference timestamp to a specific time
    
-> **NOTE:** When not provided, alignment is set to `0`.
+<note><b>NOTE:</b> When not provided, alignment is set to `0`.</note>
 
-`AGGREGATION aggregator bucketDuration` aggregates results into time buckets, where:
+</details>
+
+<details open>
+<summary><code>AGGREGATION aggregator bucketDuration</code></summary>
+aggregates results into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
-    | `aggregator` | Description                                                      |
+    | `aggregator` &nbsp; &nbsp; &nbsp; | Description                                                      |
     | ------------ | ---------------------------------------------------------------- |
     | `avg`        | Arithmetic mean of all values                                    |
     | `sum`        | Sum of all values                                                |
@@ -70,43 +102,41 @@ Values include:
     | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
+</details>
 
-`[BUCKETTIMESTAMP bt]` (since RedisTimeSeries v1.8) controls how bucket timestamps are reported.
+<details open>
+<summary><code>[BUCKETTIMESTAMP bt]</code> (since RedisTimeSeries v1.8)</summary>
+controls how bucket timestamps are reported.
 
 | `bt`         | Description                                                |
 | ------------ | ---------------------------------------------------------- |
 | `-` or `low` | Timestamp is the start time (default)                      |
-| `+` or `high`| Timestamp is the end time                                  |
+| `+` or `high` &nbsp; &nbsp; &nbsp;| Timestamp is the end time                                  |
 | `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
+</details>
 
-`[EMPTY]` (since RedisTimeSeries v1.8) is a flag, which, when specified, reports aggregations for empty buckets.
+<details open>
+<summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary>
+is a flag, which, when specified, reports aggregations also for empty buckets.
 
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
-| `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
-| `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`         | `NaN` |
-| `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
+| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
 
-Regardless of the values of fromTimestamp and toTimestamp, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
-
+Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
+</details>
 
 ## Complexity
 
-TS.REVRANGE complexity is O(n/m+k), where:
-
- - `n` is number of data points.
- - `m` is chunk size (data points per chunk).
- - `k` is number of data points that are in the requested range.
-
-This can be improved in the future by using binary search to find the start of the range, which makes this `O(Log(n/m)+k*m)`.
-But, because `m` is small, you can disregard it and look at the operation as O(Log(n)+k).
+TS.REVRANGE complexity can be improved in the future by using binary search to find the start of the range, which makes this `O(Log(n/m)+k*m)`.
+But, because `m` is small, you can disregard it and look at the operation as `O(Log(n)+k)`.
 
 ## Examples
 
-### Filter results by timestamp or sample value
+<details open>
+<summary><b>Filter results by timestamp or sample value</b></summary>
 
 Consider a metric where acceptable values are between -100 and 100, and the value 9999 is used as an indication of bad measurement.
 
@@ -139,8 +169,10 @@ TS.REVRANGE temp:TLV - + FILTER_BY_VALUE -100 100 AGGREGATION avg 1000
 1) 1) (integer) 1000
    2) 35
 {{< / highlight >}}
+</details>
 
-### Align aggregation buckets
+<details open>
+<summary><b>Align aggregation buckets</b></summary>
 
 To demonstrate alignment, let’s create a stock and add prices at three different timestamps.
 
@@ -216,6 +248,7 @@ When the start timestamp for the range query is explicitly stated (not `-`), you
 {{< / highlight >}}
 
 Similarly, when the end timestamp for the range query is explicitly stated, you can set ALIGN to that time by setting align to `+` or to `end`.
+</details>
 
 ## See also
 

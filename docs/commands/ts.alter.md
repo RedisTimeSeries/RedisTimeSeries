@@ -1,37 +1,73 @@
-## Update
+---
+syntax: 
+---
 
-### TS.ALTER
+Update the retention, chunk size, duplicate policy, and labels of an existing time series
 
-Update the retention, chunk size, duplicate policy, and labels of an existing time series.
+## Syntax
 
-This command alters only the specified element. E.g., if only `RETENTION` and `LABELS` are specified - the chunk size and the duplicate policy won't be altered.
-
-```sql
+{{< highlight bash >}}
 TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS [{label value}...]]
-```
+{{< / highlight >}}
 
-- _key_ - Key name for time series
+[Examples](#examples)
 
-- `RETENTION` _retentionPeriod_ - Maximum retention period, compared to maximal existing timestamp (in milliseconds).
+## Required arguments
 
-  See `RETENTION` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>key</code></summary> 
 
-- `CHUNK_SIZE` _size_ - Memory size, in bytes, allocated for each data chunk.
+is key name for the time series.
+</details>
 
-  See `CHUNK_SIZE` in [TS.CREATE](/commands/ts.create/)
+<note><b>Note:</b> This command alters only the specified element. For example, if you specify only `RETENTION` and `LABELS`, the chunk size and the duplicate policy are not altered. </note>
 
-- `DUPLICATE_POLICY` _policy_ - Policy for handling multiple samples with identical timestamps.
+## Optional arguments
 
-  See `DUPLICATE_POLICY` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>RETENTION retentionPeriod</code></summary>
 
-- `LABELS` [{_label_ _value_}...] - Set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+is maximum retention period, compared to the maximum existing timestamp, in milliseconds. See `RETENTION` in `TS.CREATE`.
+</details>
 
-  If `LABELS` is specified, the given label-list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs will remove all existing labels.
-  
-  See `LABELS` in [TS.CREATE](/commands/ts.create/)
+<details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-#### Alter Example
+is the initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. See `CHUNK_SIZE` in `TS.CREATE`. Changing this value does not affect existing chunks.
+</details>
 
-```sql
-TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
-```
+<details open><summary><code>DUPLICATE_POLICY policy</code></summary> 
+
+is policy for handling multiple samples with identical timestamps. See `DUPLICATE_POLICY` in `TS.CREATE`.
+</details>
+
+<details open><summary><code>LABELS [{label value}...]</code></summary> 
+
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+
+If `LABELS` is specified, the given label list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs removes all existing labels. See `LABELS` in `TS.CREATE`.
+</details>
+
+## Examples
+
+<details open><summary><b>Alter a temperature time series</b></summary>
+
+Create a temperature time series.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
+OK
+{{< / highlight >}}
+
+Alter the labels in the time series.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.ALTER temperature:2:32 LABELS sensor_id 2 area_id 32 sub_area_id 15
+OK
+{{< / highlight >}}
+</details>
+
+## See also
+
+`TS.CREATE` 
+
+## Related topics
+
+[RedisTimeSeries](/docs/stack/timeseries)
