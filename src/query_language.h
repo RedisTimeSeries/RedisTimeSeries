@@ -67,6 +67,7 @@ typedef struct RangeArgs
 {
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
+    bool latest;     // get also the latest unfinalized bucket from the src series
     long long count; // AKA limit
     AggregationArgs aggregationArgs;
     FilterByValueArgs filterByValueArgs;
@@ -94,6 +95,7 @@ typedef struct MGetArgs
     unsigned short numLimitLabels;
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
+    bool latest;
 } MGetArgs;
 
 typedef struct CreateCtx
@@ -150,7 +152,6 @@ int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
                         int argc,
-                        timestamp_t maxTimestamp,
                         RangeArgs *out);
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
@@ -165,5 +166,6 @@ void MRangeArgs_Free(MRangeArgs *args);
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
+int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

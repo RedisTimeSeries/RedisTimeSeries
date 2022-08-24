@@ -133,6 +133,7 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->in_ram = true;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
@@ -383,6 +384,8 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
     }
+
+    dst->in_ram = src->in_ram;
     return dst;
 }
 
@@ -1196,7 +1199,7 @@ AbstractIterator *SeriesQuery(Series *series,
     // should_reverse_chunk point it out.
     bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk);
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
         chain =
@@ -1232,7 +1235,9 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             reverse,
                                                             args->aggregationArgs.empty,
                                                             args->aggregationArgs.bucketTS,
-                                                            series);
+                                                            series,
+                                                            args->startTimestamp,
+                                                            args->endTimestamp);
     }
 
     return chain;
@@ -1271,4 +1276,44 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
     AbstractMultiSeriesSampleIterator *chain =
         MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
     return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+}
+
+CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName) {
+    bool ruleFound = false;
+    // find the rule which matches dstSeries
+    while (rules) {
+        if (RedisModule_StringCompare(keyName, rules->destKey) == 0) {
+            ruleFound = true;
+            break;
+        }
+        rules = rules->nextRule;
+    }
+
+    RedisModule_Assert(ruleFound);
+    return rules;
+}
+
+void calculate_latest_sample(Sample **sample, const Series *series) {
+    RedisModuleKey *srcKey = NULL;
+    Series *srcSeries;
+    const int status = GetSeries(
+        rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true);
+    if (!status || srcSeries->totalSamples == 0) {
+        // LATEST is ignored for a series that is not a compaction.
+        *sample = NULL;
+    } else {
+        CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+        void *clonedContext = rule->aggClass->cloneContext(rule->aggContext);
+
+        double aggVal;
+        rule->aggClass->finalize(clonedContext, &aggVal);
+        (*sample)->timestamp = rule->startCurrentTimeBucket;
+        (*sample)->value = aggVal;
+
+        free(clonedContext);
+    }
+
+    if (srcKey) {
+        RedisModule_CloseKey(srcKey);
+    }
 }

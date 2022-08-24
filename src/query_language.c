@@ -63,15 +63,15 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
 }
 
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
-    if (chunkSizeBytes < 128) {
+    if (chunkSizeBytes < 64) {
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
     if (chunkSizeBytes > 1048576) {
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
@@ -79,7 +79,7 @@ bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
         // Currently the gorilla algorithm implementation can only handle chunks of size
         // multiplication of 8
         RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [128 .. 1048576]");
+            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [64 .. 1048576]");
         return false;
     }
 
@@ -522,11 +522,21 @@ static int parseFilterByTimestamp(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest) {
+    int offset = RMUtil_ArgIndex("LATEST", argv, argc);
+    if (offset > 0) {
+        *latest = true;
+    } else {
+        *latest = false;
+    }
+
+    return REDISMODULE_OK;
+}
+
 int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
                         int argc,
-                        timestamp_t maxTimestamp,
                         RangeArgs *out) {
     RangeArgs args = { 0 };
     args.aggregationArgs.timeDelta = 0;
@@ -551,13 +561,17 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     size_t end_len;
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
-        args.endTimestamp = maxTimestamp;
+        args.endTimestamp = LLONG_MAX;
         endTimestampMax = true;
     } else {
         if (parseTimestamp(argv[start_index + 1], &args.endTimestamp) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: wrong toTimestamp");
             return REDISMODULE_ERR;
         }
+    }
+
+    if (parseLatestArg(ctx, argv, argc, &args.latest) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
     }
 
     args.count = -1;
@@ -770,6 +784,10 @@ int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MG
         return REDISMODULE_ERR;
     }
 
+    if (parseLatestArg(ctx, argv, argc, &args.latest) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
     if (filter_location == -1) {
         RedisModule_WrongArity(ctx);
@@ -804,7 +822,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     args.queryPredicates = NULL;
     args.numLimitLabels = 0;
 
-    if (parseRangeArguments(ctx, 1, argv, argc, LLONG_MAX, &args.rangeArgs) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 1, argv, argc, &args.rangeArgs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 

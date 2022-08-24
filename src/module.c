@@ -253,6 +253,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     minimizedArgs.aggregationArgs.timeDelta = 0;
     minimizedArgs.filterByTSArgs.hasValue = false;
     minimizedArgs.filterByValueArgs.hasValue = false;
+    minimizedArgs.latest = false;
 
     replyResultSet(ctx,
                    resultset,
@@ -386,8 +387,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     RangeArgs rangeArgs = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
-        REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &rangeArgs) != REDISMODULE_OK) {
         goto _out;
     }
 
@@ -944,10 +944,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) {
+    if (argc < 2 || argc > 3) {
         return RedisModule_WrongArity(ctx);
     }
 
+    bool latest = false;
     Series *series;
     RedisModuleKey *key;
     const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false);
@@ -955,7 +956,28 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    ReplyWithSeriesLastDatapoint(ctx, series);
+    if (argc == 3) {
+        if (parseLatestArg(ctx, argv, argc, &latest) != REDISMODULE_OK || !latest) {
+            RTS_ReplyGeneralError(ctx, "TSDB: wrong 3rd argument");
+            return REDISMODULE_ERR;
+        }
+    }
+
+    // LATEST is ignored for a series that is not a compaction.
+    bool should_finalize_last_bucket = should_finalize_last_bucket_get(latest, series);
+    if (should_finalize_last_bucket) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr) {
+            ReplyWithSample(ctx, sample.timestamp, sample.value);
+        } else {
+            ReplyWithSeriesLastDatapoint(ctx, series);
+        }
+    } else {
+        ReplyWithSeriesLastDatapoint(ctx, series);
+    }
+
     RedisModule_CloseKey(key);
 
     return REDISMODULE_OK;
@@ -1021,7 +1043,20 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
-        ReplyWithSeriesLastDatapoint(ctx, series);
+        // LATEST is ignored for a series that is not a compaction.
+        bool should_finalize_last_bucket = should_finalize_last_bucket_get(args.latest, series);
+        if (should_finalize_last_bucket) {
+            Sample sample;
+            Sample *sample_ptr = &sample;
+            calculate_latest_sample(&sample_ptr, series);
+            if (sample_ptr) {
+                ReplyWithSample(ctx, sample.timestamp, sample.value);
+            } else {
+                ReplyWithSeriesLastDatapoint(ctx, series);
+            }
+        } else {
+            ReplyWithSeriesLastDatapoint(ctx, series);
+        }
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -1080,7 +1115,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RangeArgs args = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -1120,6 +1155,26 @@ void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, 
         RedisModuleSwapDbInfo *ei = data;
         REDISMODULE_NOT_USED(ei);
     }
+}
+
+void keyAddedToDbDict(RedisModuleCtx *ctx,
+                      RedisModuleString *key,
+                      void *value,
+                      int swap_key_metadata) {
+    Series *series = (Series *)value;
+    series->in_ram = true;
+}
+
+int keyRemovedFromDbDict(RedisModuleCtx *ctx,
+                         RedisModuleString *key,
+                         void *value,
+                         int swap_key_metadata,
+                         int writing_to_swap) {
+    Series *series = (Series *)value;
+    if (!!writing_to_swap) {
+        series->in_ram = false;
+    }
+    return 0;
 }
 
 int persistence_in_progress = 0;
@@ -1271,6 +1326,11 @@ void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
     }
 }
 
+__attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
+    RedisModuleCtx *ctx,
+    RedisModuleType *mt,
+    RedisModuleTypeExtMethods *typemethods) REDISMODULE_ATTR = NULL;
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1346,6 +1406,17 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
     if (SeriesType == NULL)
         return REDISMODULE_ERR;
+
+    RedisModuleTypeExtMethods etm = { .version = REDISMODULE_TYPE_EXT_METHOD_VERSION,
+                                      .key_added_to_db_dict = keyAddedToDbDict,
+                                      .removing_key_from_db_dict = keyRemovedFromDbDict,
+                                      .get_key_metadata_for_rdb = NULL };
+    if (RedisModule_SetDataTypeExtensions != NULL) {
+        if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    }
+
     IndexInit();
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.alter", TSDB_alter);
