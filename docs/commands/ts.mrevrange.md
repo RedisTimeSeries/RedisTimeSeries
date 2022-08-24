@@ -25,13 +25,13 @@ TS.MREVRANGE fromTimestamp toTimestamp
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for range query. Use `+` to express the maximum possible timestamp.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 </details>
 
 <details open>
@@ -39,17 +39,17 @@ is end timestamp for range query. Use `+` to express the maximum possible timest
 
 uses these filters:
 
-  - `label = value`, where `label` equals `value`
-  - `label != value`, where `label` does not equal `value`
-  - `label = `, where `key` does not have label `label`
-  - `label != `, where `key` has label `label`
-  - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
-  - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
+  - `label=value`, where `label` equals `value`
+  - `label!=value`, where `label` does not equal `value`
+  - `label=`, where `key` does not have label `label`
+  - `label!=`, where `key` has label `label`
+  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 </details>
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label = value` filter.
-   - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+   - When using filters, apply a minimum of one `label=value` filter.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    </note>
 
 ## Optional arguments
@@ -65,13 +65,13 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary> 
 
-followed by a list of timestamps filters results by specific timestamps.
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary> 
 
-filters results by minimum and maximum values.
+filters samples by minimum and maximum values.
 </details>
 
 <details open>
@@ -151,18 +151,15 @@ controls how bucket timestamps are reported.
 <details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary> 
 
-is a flag, which, when specified, reports aggregations for empty buckets.
+is a flag, which, when specified, reports aggregations also for empty buckets.
 
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` &nbsp; &nbsp; &nbsp; | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
-| `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
-| `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`         | `NaN` |
-| `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
+| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
 
-Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
+Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
 
 <details open>

@@ -24,28 +24,31 @@ TS.MRANGE fromTimestamp toTimestamp
 
 <details open>
 <summary><code>fromTimestamp</code></summary>
-is start timestamp for the range query. Use `-` to express the minimum possible timestamp (0).
+
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary>
-is end timestamp for range query. Use `+` to express the maximum possible timestamp.
+
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 </details>
 
 <details open>
 <summary><code>FILTER filter..</code></summary>
+
 filters time series based on their labels and label values, with these options:
 
-  - `label = value`, where `label` equals `value`
-  - `label != value`, where `label` does not equal `value`
-  - `label = `, where `key` does not have label `label`
-  - `label != `, where `key` has label `label`
-  - `label = (_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
-  - `label != (value1,value2,...)`, where key with label `label` does not equal any of the values in the list
+  - `label=value`, where `label` equals `value`
+  - `label!=value`, where `label` does not equal `value`
+  - `label=`, where `key` does not have label `label`
+  - `label!=`, where `key` has label `label`
+  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label = value` filter.
-   - Filters are conjunctive. For example, the FILTER `type = temperature room = study` means the a time series is a temperature time series of a study room.
+   - When using filters, apply a minimum of one `label=value` filter.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    </note>
 </details>
 
@@ -53,29 +56,34 @@ filters time series based on their labels and label values, with these options:
 
 <details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
+
 is used when a time series is a compaction. With `LATEST`, TS.MRANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MRANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
-  
+
 The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
-followed by a list of timestamps filters results by specific timestamps.
+
+filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
-filters results by minimum and maximum values.
+
+filters samples by minimum and maximum values.
 </details>
 
 <details open>
 <summary><code>WITHLABELS</code></summary>
+
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
 </details>
 
 <details open>
 <summary><code>SELECTED_LABELS label...</code> (since RedisTimeSeries v1.6)</summary>
+
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
@@ -83,11 +91,13 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 
 <details open>
 <summary><code>COUNT count</code></summary>
+
 limits the number of returned samples.
 </details>
 
 <details open>
 <summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
+
 is a time bucket alignment control for `AGGREGATION`. 
 It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
 
@@ -102,6 +112,7 @@ Values include:
 
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary>
+
 aggregates results into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
@@ -127,6 +138,7 @@ aggregates results into time buckets, where:
 
 <details open>
 <summary><code>[BUCKETTIMESTAMP bt]></code> (since RedisTimeSeries v1.8)</summary>
+
 controls how bucket timestamps are reported.
 
 | `bt`         | Description                                                |
@@ -138,22 +150,21 @@ controls how bucket timestamps are reported.
 
 <details open>
 <summary><code>[EMPTY]</code> (since RedisTimeSeries v1.8)</summary>
-is a flag, which, when specified, reports aggregations for empty buckets.
+
+is a flag, which, when specified, reports aggregations also for empty buckets.
 
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg` &nbsp; &nbsp; &nbsp; | Based on linear interpolation of the last value before the bucket’s start time and the first value on or after the bucket’s end time, calculates the min/max/range/avg within the bucket. Returns `NaN` if no values exist before or after the bucket.       |
-| `first`              | Last value before the bucket’s start time. Returns `NaN` if no such value exists.     |
-| `last`               | The first value on or after the bucket’s end time. Returns NaN if no such value exists. |
-| `std.p`, `std.s`         | `NaN` |
-| `twa` | Based on linear interpolation or extrapolation. Returns `NaN` when it cannot interpolate or extrapolate. |
+| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
+| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
 
-Regardless of the values of fromTimestamp and toTimestamp, no data is reported for buckets that end before the oldest available raw sample, or begin after the newest available raw sample.
+Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
 
 <details open>
 <summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
+
 aggregates results across different time series, grouped by the provided label name. 
 When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
 

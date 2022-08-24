@@ -22,7 +22,8 @@ is key name of the time series.
 ## Optional arguments
 
 <details open>
-<summary><code>[DEBUG]</code></summary> 
+<summary><code>[DEBUG]</code></summary>
+
 is an optional flag to get a more detailed information about the chunks.
 </details>
 
@@ -30,29 +31,30 @@ is an optional flag to get a more detailed information about the chunks.
 
 TS.INFO returns an array-reply with these elements:
 
-- `totalSamples` - Total number of samples in this time series
-- `memoryUsage` - Total number of bytes allocated for this time series
-- `firstTimestamp` - First timestamp present in this time series
-- `lastTimestamp` - Last timestamp present in this time series
-- `retentionTime` - The retention period, in milliseconds, for this time series
-- `chunkCount` - Number of Memory Chunks used for this time series
-- `chunkSize` - Memory size, in bytes, allocated for data
-- `chunkType` - The chunk type: `compressed` or `uncompressed`
-- `duplicatePolicy` - The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
-- `labels` - A nested array of label-value pairs that represent the metadata labels of this time series
-- `sourceKey` - Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
-- `rules` - A nested array of the [compaction rules](/commands/ts.createrule/) defined in this time series, with these elements:
-   - The compaction key
-   - The bucket duration
-   - The aggregator
-   - The alignment timestamp (since RedisTimeSeries v1.8)
+| Name | Description
+| ---- | -
+| `totalSamples`    | Total number of samples in this time series
+| `memoryUsage`     | Total number of bytes allocated for this time series, which is the sum of <br> - The memory used for storing the series' configuration parameters (retention period, duplication policy, etc.)<br>- The memory used for storing the series' compaction rules<br>- The memory used for storing the series' labels (key-value pairs)<br>- The memory used for storing the chunks (chunk header + compressed/uncompressed data)
+| `firstTimestamp`  | First timestamp present in this time series
+| `lastTimestamp`   | Last timestamp present in this time series
+| `retentionTime`   | The retention period, in milliseconds, for this time series
+| `chunkCount`      | Number of Memory Chunks used for this time series
+| `chunkSize`       | The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing chunkSize (using `TS.ALTER`) does not affect existing chunks.
+| `chunkType`       | The chunk type: `compressed` or `uncompressed`
+| `duplicatePolicy` | The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
+| `labels`          | A nested array of label-value pairs that represent the metadata labels of this time series
+| `sourceKey`       | Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
+| `rules`           | A nested array of the [compaction rules](/commands/ts.createrule/) defined in this time series, with these elements  for each rule:<br>- The compaction key<br>- The bucket duration<br>- The aggregator<br>- The alignment (since RedisTimeSeries v1.8)
 
 When `DEBUG` is specified, the response contains an additional array field called `Chunks` with these elements:
-- `startTimestamp` - First timestamp present in the chunk
-- `endTimestamp` - Last timestamp present in the chunk
-- `samples` - Total number of samples in the chunk
-- `size` - The chunk data size in bytes. This is the exact size that used for data only inside the chunk. It does not include other overheads.
-- `bytesPerSample` - Ratio of `size` and `samples`
+
+| Name | Description
+| ---- | -
+| `startTimestamp`  | First timestamp present in the chunk
+| `endTimestamp`    | Last timestamp present in the chunk
+| `samples`         | Total number of samples in the chunk
+| `size`            | The chunk data size in bytes. This is the exact size that used for data only inside the chunk. It does not include other overheads.
+| `bytesPerSample`  | Ratio of `size` and `samples`
 
 ## Examples
 
