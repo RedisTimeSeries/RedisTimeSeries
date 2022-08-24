@@ -1095,11 +1095,11 @@ int SeriesCalcRange(Series *series,
                        .filterByValueArgs = { 0 },
                        .filterByTSArgs = { 0 } };
 
-    if (aggObject->addBucketParams) {
+    if (aggObject->type == TS_AGG_TWA) {
         aggObject->addBucketParams(context, start_ts, end_ts + 1);
     }
 
-    if (aggObject->addPrevBucketLastSample && start_ts > 0) {
+    if (aggObject->type == TS_AGG_TWA && start_ts > 0) {
         args.startTimestamp = 0, args.endTimestamp = start_ts - 1,
         iterator = SeriesCreateSampleIterator(series, &args, true, true);
         if (iterator->GetNext(iterator, &sample) == CR_OK) {
@@ -1118,7 +1118,7 @@ int SeriesCalcRange(Series *series,
     }
     iterator->Close(iterator);
 
-    if (aggObject->addNextBucketFirstSample) {
+    if (aggObject->type == TS_AGG_TWA) {
         args.startTimestamp = end_ts + 1, args.endTimestamp = UINT64_MAX,
         iterator = SeriesCreateSampleIterator(series, &args, false, true);
         if (iterator->GetNext(iterator, &sample) == CR_OK) {

@@ -377,13 +377,13 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         self->aggregationLastTimestamp =
             CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
-        if (aggregation->addBucketParams) {
+        if (aggregation->type == TS_AGG_TWA) {
             aggregation->addBucketParams(aggregationContext,
                                          BucketStartNormalize(self->aggregationLastTimestamp),
                                          self->aggregationLastTimestamp + aggregationTimeDelta);
         }
 
-        if (aggregation->addPrevBucketLastSample && !((!is_reversed) && init_ts == 0)) {
+        if (aggregation->type == TS_AGG_TWA && !((!is_reversed) && init_ts == 0)) {
             RangeArgs args = { .aggregationArgs = { 0 },
                                .filterByValueArgs = { 0 },
                                .filterByTSArgs = { 0 },
@@ -464,13 +464,13 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                 // following condition should always be false on the first iteration
                 if ((is_reversed == FALSE && sample.timestamp >= contextScope) ||
                     (is_reversed == TRUE && sample.timestamp < self->aggregationLastTimestamp)) {
-                    if (aggregation->addNextBucketFirstSample) {
+                    if (aggregation->type == TS_AGG_TWA) {
                         aggregation->addNextBucketFirstSample(
                             aggregationContext, sample.value, sample.timestamp);
                     }
 
                     Sample last_sample;
-                    if (aggregation->addPrevBucketLastSample) {
+                    if (aggregation->type == TS_AGG_TWA) {
                         aggregation->getLastSample(aggregationContext, &last_sample);
                     }
                     finalizeBucket(&enrichedChunk->samples, agg_n_samples++, self);
@@ -489,12 +489,12 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
                     self->aggregationLastTimestamp =
                         BucketStartNormalize(self->aggregationLastTimestamp);
-                    if (aggregation->addPrevBucketLastSample) {
+                    if (aggregation->type == TS_AGG_TWA) {
                         aggregation->addPrevBucketLastSample(
                             aggregationContext, last_sample.value, last_sample.timestamp);
                     }
 
-                    if (aggregation->addBucketParams) {
+                    if (aggregation->type == TS_AGG_TWA) {
                         aggregation->addBucketParams(
                             aggregationContext, self->aggregationLastTimestamp, contextScope);
                     }
@@ -514,7 +514,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
 
 _finalize:
     self->hasUnFinalizedContext = false;
-    if (aggregation->addNextBucketFirstSample) {
+    if (aggregation->type == TS_AGG_TWA) {
         Sample last_sample;
         aggregation->getLastSample(aggregationContext, &last_sample);
         if (!(is_reversed && last_sample.timestamp == 0)) {

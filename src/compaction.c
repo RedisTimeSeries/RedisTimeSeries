@@ -541,7 +541,8 @@ void rm_free(void *ptr) {
 }
 
 // time weighted avg
-static AggregationClass waggAvg = { .createContext = TwaCreateContext,
+static AggregationClass waggAvg = { .type = TS_AGG_TWA,
+                                    .createContext = TwaCreateContext,
                                     .appendValue = TwaAddValue,
                                     .freeContext = rm_free,
                                     .finalize = TwaFinalize,
@@ -555,7 +556,8 @@ static AggregationClass waggAvg = { .createContext = TwaCreateContext,
                                     .resetContext = TwaReset,
                                     .cloneContext = TwaCloneContext };
 
-static AggregationClass aggAvg = { .createContext = AvgCreateContext,
+static AggregationClass aggAvg = { .type = TS_AGG_AVG,
+                                   .createContext = AvgCreateContext,
                                    .appendValue = AvgAddValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
@@ -570,7 +572,8 @@ static AggregationClass aggAvg = { .createContext = AvgCreateContext,
                                    .resetContext = AvgReset,
                                    .cloneContext = AvgCloneContext };
 
-static AggregationClass aggStdP = { .createContext = StdCreateContext,
+static AggregationClass aggStdP = { .type = TS_AGG_STD_P,
+                                    .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
@@ -585,7 +588,8 @@ static AggregationClass aggStdP = { .createContext = StdCreateContext,
                                     .resetContext = StdReset,
                                     .cloneContext = StdCloneContext };
 
-static AggregationClass aggStdS = { .createContext = StdCreateContext,
+static AggregationClass aggStdS = { .type = TS_AGG_STD_S,
+                                    .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
@@ -600,7 +604,8 @@ static AggregationClass aggStdS = { .createContext = StdCreateContext,
                                     .resetContext = StdReset,
                                     .cloneContext = StdCloneContext };
 
-static AggregationClass aggVarP = { .createContext = StdCreateContext,
+static AggregationClass aggVarP = { .type = TS_AGG_VAR_P,
+                                    .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
@@ -615,7 +620,8 @@ static AggregationClass aggVarP = { .createContext = StdCreateContext,
                                     .resetContext = StdReset,
                                     .cloneContext = StdCloneContext };
 
-static AggregationClass aggVarS = { .createContext = StdCreateContext,
+static AggregationClass aggVarS = { .type = TS_AGG_VAR_S,
+                                    .createContext = StdCreateContext,
                                     .appendValue = StdAddValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
@@ -737,22 +743,24 @@ void LastAppendValue(void *contextPtr, double value, __attribute__((unused)) tim
     context->value = value;
 }
 
-AggregationClass aggMax = { .createContext = MaxMinCreateContext,
-                            .appendValue = MaxAppendValue,
-                            .appendValueVec = NULL, /* determined on run time */
-                            .freeContext = rm_free,
-                            .finalize = MaxFinalize,
-                            .finalizeEmpty = finalize_empty_with_NAN,
-                            .writeContext = MaxMinWriteContext,
-                            .readContext = MaxMinReadContext,
-                            .addBucketParams = NULL,
-                            .addPrevBucketLastSample = NULL,
-                            .addNextBucketFirstSample = NULL,
-                            .getLastSample = NULL,
-                            .resetContext = MaxMinReset,
-                            .cloneContext = MaxMinCloneContext };
+static AggregationClass aggMax = { .type = TS_AGG_MAX,
+                                   .createContext = MaxMinCreateContext,
+                                   .appendValue = MaxAppendValue,
+                                   .appendValueVec = NULL, /* determined on run time */
+                                   .freeContext = rm_free,
+                                   .finalize = MaxFinalize,
+                                   .finalizeEmpty = finalize_empty_with_NAN,
+                                   .writeContext = MaxMinWriteContext,
+                                   .readContext = MaxMinReadContext,
+                                   .addBucketParams = NULL,
+                                   .addPrevBucketLastSample = NULL,
+                                   .addNextBucketFirstSample = NULL,
+                                   .getLastSample = NULL,
+                                   .resetContext = MaxMinReset,
+                                   .cloneContext = MaxMinCloneContext };
 
-static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
+static AggregationClass aggMin = { .type = TS_AGG_MIN,
+                                   .createContext = MaxMinCreateContext,
                                    .appendValue = MinAppendValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
@@ -767,7 +775,8 @@ static AggregationClass aggMin = { .createContext = MaxMinCreateContext,
                                    .resetContext = MaxMinReset,
                                    .cloneContext = MaxMinCloneContext };
 
-static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
+static AggregationClass aggSum = { .type = TS_AGG_SUM,
+                                   .createContext = SingleValueCreateContext,
                                    .appendValue = SumAppendValue,
                                    .appendValueVec = NULL, /* determined on run time */
                                    .freeContext = rm_free,
@@ -782,7 +791,8 @@ static AggregationClass aggSum = { .createContext = SingleValueCreateContext,
                                    .resetContext = SingleValueReset,
                                    .cloneContext = SingleValueCloneContext };
 
-static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
+static AggregationClass aggCount = { .type = TS_AGG_COUNT,
+                                     .createContext = SingleValueCreateContext,
                                      .appendValue = CountAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
@@ -797,7 +807,8 @@ static AggregationClass aggCount = { .createContext = SingleValueCreateContext,
                                      .resetContext = SingleValueReset,
                                      .cloneContext = SingleValueCloneContext };
 
-static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
+static AggregationClass aggFirst = { .type = TS_AGG_FIRST,
+                                     .createContext = SingleValueCreateContext,
                                      .appendValue = FirstAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
@@ -812,7 +823,8 @@ static AggregationClass aggFirst = { .createContext = SingleValueCreateContext,
                                      .resetContext = SingleValueReset,
                                      .cloneContext = SingleValueCloneContext };
 
-static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
+static AggregationClass aggLast = { .type = TS_AGG_LAST,
+                                    .createContext = SingleValueCreateContext,
                                     .appendValue = LastAppendValue,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
@@ -827,7 +839,8 @@ static AggregationClass aggLast = { .createContext = SingleValueCreateContext,
                                     .resetContext = SingleValueReset,
                                     .cloneContext = SingleValueCloneContext };
 
-static AggregationClass aggRange = { .createContext = MaxMinCreateContext,
+static AggregationClass aggRange = { .type = TS_AGG_RANGE,
+                                     .createContext = MaxMinCreateContext,
                                      .appendValue = MaxMinAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
