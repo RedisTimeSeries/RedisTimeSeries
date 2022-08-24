@@ -99,11 +99,6 @@
 #define DOUBLE_BLOCK_SIZE 6
 #define DOUBLE_BLOCK_ADJUST 1
 
-/*
-#define CHECKSPACE(chunk, x)                                                                       \
-    if (!isSpaceAvailable((chunk), (x)))                                                           \
-        return CR_ERR;
-*/
 #define CHECKSPACE_TS(chunk, x)                                                                    \
     if (!isSpaceAvailableTs((chunk), (x)))                                                         \
         return CR_ERR_TS;

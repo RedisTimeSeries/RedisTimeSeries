@@ -18,13 +18,13 @@ int last_rdb_load_version;
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
-    if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
+    if (encver < TS_CHUNK_DATA_SPLIT_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    double lastValue;
-    timestamp_t lastTimestamp;
-    uint64_t totalSamples;
+    double lastValue = 0.0;
+    timestamp_t lastTimestamp = 0;
+    uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;

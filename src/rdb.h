@@ -16,9 +16,10 @@
 #define TS_OVERFLOW_RDB_VER 4
 #define TS_REPLICAOF_SUPPORT_VER 5
 #define TS_ALIGNMENT_TS_VER 6
+#define TS_CHUNK_DATA_SPLIT_VER 7
 
 // This flag should be updated whenever a new rdb version is introduced
-#define TS_LATEST_ENCVER TS_ALIGNMENT_TS_VER
+#define TS_LATEST_ENCVER TS_CHUNK_DATA_SPLIT_VER
 
 extern int last_rdb_load_version;
 
