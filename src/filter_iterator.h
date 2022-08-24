@@ -52,6 +52,8 @@ typedef struct AggregationIterator
     BucketTimestamp bucketTS;
     EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket
     Series *series;
+    api_timestamp_t startTimestamp;
+    api_timestamp_t endTimestamp;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
@@ -61,7 +63,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              bool reverse,
                                              bool empty,
                                              BucketTimestamp bucketTS,
-                                             Series *series);
+                                             Series *series,
+                                             api_timestamp_t startTimestamp,
+                                             api_timestamp_t endTimestamp);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 

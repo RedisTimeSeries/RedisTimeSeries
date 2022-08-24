@@ -225,7 +225,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              bool reverse,
                                              bool empty,
                                              BucketTimestamp bucketTS,
-                                             Series *series) {
+                                             Series *series,
+                                             api_timestamp_t startTimestamp,
+                                             api_timestamp_t endTimestamp) {
     AggregationIterator *iter = malloc(sizeof(AggregationIterator));
     iter->base.GetNext = AggregationIterator_GetNextChunk;
     iter->base.Close = AggregationIterator_Close;
@@ -242,6 +244,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->empty = empty;
     iter->bucketTS = bucketTS;
     iter->aux_chunk = NewEnrichedChunk();
+    iter->startTimestamp = startTimestamp;
+    iter->endTimestamp = endTimestamp;
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
     return iter;
@@ -350,6 +354,30 @@ static void fillEmptyBuckets(Samples *samples,
     return;
 }
 
+timestamp_t twa_calc_ta(bool reverse,
+                        timestamp_t bucketStartTS,
+                        timestamp_t bucketEndTS,
+                        timestamp_t rangeStart,
+                        timestamp_t rangeEnd) {
+    if (!reverse) {
+        return max(bucketStartTS, rangeStart);
+    } else {
+        return min(bucketEndTS, rangeEnd);
+    }
+}
+
+timestamp_t twa_calc_tb(bool reverse,
+                        timestamp_t bucketStartTS,
+                        timestamp_t bucketEndTS,
+                        timestamp_t rangeStart,
+                        timestamp_t rangeEnd) {
+    if (!reverse) {
+        return min(bucketEndTS, rangeEnd);
+    } else {
+        return max(bucketStartTS, rangeStart);
+    }
+}
+
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     AggregationClass *aggregation = self->aggregation;
@@ -378,9 +406,18 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initilized = true;
         if (aggregation->addBucketParams) {
-            aggregation->addBucketParams(aggregationContext,
+            timestamp_t ta = twa_calc_ta(self->reverse,
                                          BucketStartNormalize(self->aggregationLastTimestamp),
-                                         self->aggregationLastTimestamp + aggregationTimeDelta);
+                                         self->aggregationLastTimestamp + aggregationTimeDelta,
+                                         self->startTimestamp,
+                                         self->endTimestamp);
+            timestamp_t tb = twa_calc_tb(self->reverse,
+                                         BucketStartNormalize(self->aggregationLastTimestamp),
+                                         self->aggregationLastTimestamp + aggregationTimeDelta,
+                                         self->startTimestamp,
+                                         self->endTimestamp);
+            aggregation->addBucketParams(
+                aggregationContext, (!self->reverse) ? ta : tb, (!self->reverse) ? tb : ta);
         }
 
         if (aggregation->addPrevBucketLastSample && !((!is_reversed) && init_ts == 0)) {
@@ -495,8 +532,15 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
 
                     if (aggregation->addBucketParams) {
+                        timestamp_t tb = twa_calc_tb(self->reverse,
+                                                     self->aggregationLastTimestamp,
+                                                     contextScope,
+                                                     self->startTimestamp,
+                                                     self->endTimestamp);
                         aggregation->addBucketParams(
-                            aggregationContext, self->aggregationLastTimestamp, contextScope);
+                            aggregationContext,
+                            (!self->reverse) ? self->aggregationLastTimestamp : tb,
+                            (!self->reverse) ? tb : contextScope);
                     }
                 }
 
