@@ -4,7 +4,8 @@ import sys
 import os
 import argparse
 
-ROOT = HERE = os.path.abspath(os.path.dirname(__file__))
+HERE = os.path.abspath(os.path.dirname(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, ".."))
 READIES = os.path.join(ROOT, "deps/readies")
 sys.path.insert(0, READIES)
 import paella
@@ -12,11 +13,12 @@ import paella
 #----------------------------------------------------------------------------------------------
 
 class RedisTimeSeriesSetup(paella.Setup):
-    def __init__(self, nop=False):
-        paella.Setup.__init__(self, nop)
+    def __init__(self, args):
+        paella.Setup.__init__(self, args.nop)
 
     def common_first(self):
-        self.install("git jq curl unzip")
+        self.install_downloaders()
+        self.install("git jq")
         self.run("%s/bin/enable-utf8" % READIES, sudo=self.os != 'macos')
 
         self.install("autoconf libtool m4 automake")
@@ -52,7 +54,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov-git", aur=True)
         self.pip_install("pudb awscli")
 
-        # self.run("{PYTHON} {READIES}/bin/getrmpytools".format(PYTHON=self.python, READIES=READIES))
+        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
         self.pip_install("gevent")
 
@@ -65,4 +67,4 @@ parser = argparse.ArgumentParser(description='Set up system for build.')
 parser.add_argument('-n', '--nop', action="store_true", help='no operation')
 args = parser.parse_args()
 
-RedisTimeSeriesSetup(nop = args.nop).setup()
+RedisTimeSeriesSetup(args).setup()

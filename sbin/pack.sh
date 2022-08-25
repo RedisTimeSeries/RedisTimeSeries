@@ -1,6 +1,7 @@
 #!/bin/bash
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+PROGNAME="${BASH_SOURCE[0]}"
+HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 ROOT=$(cd $HERE/.. && pwd)
 export READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
@@ -117,11 +118,15 @@ pack_ramp() {
 		-e NUMVER -e SEMVER \
 		$ROOT/$rampfile > /tmp/ramp.yml
 	rm -f /tmp/ramp.fname $packfile
-	$RAMP_CMD pack -m /tmp/ramp.yml --packname-file /tmp/ramp.fname --verbose --debug -o $packfile $MODULE >/tmp/ramp.err 2>&1 || true
+	$RAMP_CMD pack -m /tmp/ramp.yml --packname-file /tmp/ramp.fname --verbose --debug \
+		-o $packfile $MODULE >/tmp/ramp.err 2>&1 || true
 	if [[ ! -e $packfile ]]; then
 		eprint "Error generating RAMP file:"
 		>&2 cat /tmp/ramp.err
 		exit 1
+	else
+		local packname=`cat /tmp/ramp.fname`
+		echo "Created $packname"
 	fi
 
 	cd $ARTDIR/snapshots
@@ -193,7 +198,15 @@ if [[ ! -z $VARIANT ]]; then
 	VARIANT=-${VARIANT}
 fi
 
-[[ -z $BRANCH ]] && BRANCH=${CIRCLE_BRANCH:-`git rev-parse --abbrev-ref HEAD`}
+#----------------------------------------------------------------------------------------------
+
+if [[ -z $BRANCH ]]; then
+	BRANCH=$(git rev-parse --abbrev-ref HEAD)
+	# this happens of detached HEAD
+	if [[ $BRANCH == HEAD ]]; then
+		BRANCH="$SEMVER"
+	fi
+fi
 BRANCH=${BRANCH//[^A-Za-z0-9._-]/_}
 if [[ $GITSHA == 1 ]]; then
 	GIT_COMMIT=$(git describe --always --abbrev=7 --dirty="+" 2>/dev/null || git rev-parse --short HEAD)
@@ -214,7 +227,7 @@ fi
 
 if [[ $RAMP == 1 ]]; then
 	if ! command -v redis-server > /dev/null; then
-		eprint "$0: Cannot find redis-server. Aborting."
+		eprint "Cannot find redis-server. Aborting."
 		exit 1
 	fi
 

@@ -732,7 +732,8 @@ workflows:
             parameters:
               redis_version: ["6.0", "6.2"]
       - test-rlec:
-          <<: *on-any-branch
+          #@@<<: *on-any-branch
+          <<: *never
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
@@ -748,10 +749,12 @@ workflows:
             parameters:
               platform: [focal, bionic]
       - build-macos:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - coverage:
           context: common
-          <<: *on-any-branch
+          #@@<<: *on-any-branch
+          <<: *never
       - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-perf-and-version-tags
