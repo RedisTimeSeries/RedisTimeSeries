@@ -347,6 +347,7 @@ static size_t twa_get_samples_from_right(timestamp_t cur_ts,
                 n_samples_right++;
             }
         }
+        sample_iterator->Close(sample_iterator);
     }
 
     return n_samples_right;
@@ -372,6 +373,7 @@ static size_t twa_get_samples_from_left(timestamp_t cur_ts,
                 n_samples_left++;
             }
         }
+        sample_iterator->Close(sample_iterator);
     }
 
     return n_samples_left;
