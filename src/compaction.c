@@ -13,6 +13,8 @@
 #include "compactions/compaction_avx512f.h"
 #include "compactions/compaction_avx2.h"
 #include "utils/arch_features.h"
+#include "utils/precent_tracker.h"
+#include "utils/arr.h"
 
 #include <ctype.h>
 #include <float.h>
@@ -66,6 +68,23 @@ typedef struct StdContext
     u_int64_t cnt;
 } StdContext;
 
+typedef struct RollingMedContext
+{
+    precentTracker_t pt;                // Rolling median tracker
+    list *items_queue;                  // items inorder
+    size_t count;                       // counter for the number of elements in the calculation (the size of the median calculation window)
+    size_t window_size;                 // Window size
+} RollingMedContext;
+
+typedef struct ZscoreContext
+{
+    double med;                 // Rolling median
+    double mad;                 // Rolling Median absolute deviation
+    size_t count;               // counter for the number of elements in the calculation to be valid (the size of the median calculation window)
+    size_t window_size;         // Minmal number of samples for the calculation to be valid
+    size_t n_samples_smaller_than_med; 
+} ZscoreContext;
+
 void finalize_empty_with_NAN(double *value) {
     *value = NAN;
 }
@@ -74,7 +93,7 @@ void finalize_empty_with_ZERO(double *value) {
     *value = 0;
 }
 
-void *SingleValueCreateContext(__unused bool reverse) {
+void *SingleValueCreateContext(__unused bool reverse, __unused size_t window_size) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     context->isResetted = TRUE;
@@ -121,7 +140,7 @@ static inline void _AvgInitContext(AvgContext *context) {
     context->isOverflow = false;
 }
 
-void *AvgCreateContext(__unused bool reverse) {
+void *AvgCreateContext(__unused bool reverse, __unused size_t window_size) {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     _AvgInitContext(context);
     return context;
@@ -228,7 +247,7 @@ void *TwaCloneContext(void *contextPtr) {
     return buf;
 }
 
-void *TwaCreateContext(bool reverse) {
+void *TwaCreateContext(bool reverse, __unused size_t window_size) {
     TwaContext *context = (TwaContext *)malloc(sizeof(TwaContext));
     _TwainitContext(context, reverse);
     return context;
@@ -457,7 +476,7 @@ err:
     return TSDB_ERROR;
 }
 
-void *StdCreateContext(__unused bool reverse) {
+void *StdCreateContext(__unused bool reverse, __unused size_t window_size) {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->sum = 0;
@@ -476,6 +495,38 @@ void StdAddValue(void *contextPtr, double value, __attribute__((unused)) timesta
     ++context->cnt;
     context->sum += value;
     context->sum_2 += value * value;
+}
+
+void *RollingMedCreateContext(__attribute__((unused)) bool reverse, size_t window_size) {
+    RollingMedContext *context = (RollingMedContext *)malloc(sizeof(RollingMedContext));
+    context->count = 0;
+    context->window_size = window_size;
+    context->items_queue = listCreate(double, window_size);
+    return context;
+}
+
+void RollingMedAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+    RollingMedContext *context = (RollingMedContext *)contextPtr;
+    array_append(context->items_queue, value);
+    context->count = min(context->count + 1, context->window_size);
+}
+
+void *ZscoreCreateContext(__attribute__((unused)) bool reverse, size_t window_size) {
+    ZscoreContext *context = (ZscoreContext *)malloc(sizeof(ZscoreContext));
+    context->count = 0;
+    context->med = 0;
+    context->n_samples_smaller_than_med = 0;
+    context->mad = 0;
+    context->window_size = window_size;
+    return context;
+}
+
+void ZscoreAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+    ZscoreContext *context = (ZscoreContext *)contextPtr;
+    context->count++;
+    if
+    if(value > )
+    context->mad
 }
 
 static inline double variance(double sum, double sum_2, double count) {
@@ -636,7 +687,41 @@ static AggregationClass aggVarS = { .createContext = StdCreateContext,
                                     .resetContext = StdReset,
                                     .cloneContext = StdCloneContext };
 
-void *MaxMinCreateContext(__unused bool reverse) {
+// implementing robust zscore for normal distributions
+static AggregationClass aggRollMed = { .createContext = RollingMedCreateContext,
+                                    .appendValue = AvgAddValue,
+                                    .appendValueVec = NULL, /* determined on run time */
+                                    .freeContext = rm_free,
+                                    .finalize = AvgFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
+                                    .writeContext = AvgWriteContext,
+                                    .readContext = AvgReadContext,
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = AvgReset,
+                                    .cloneContext = AvgCloneContext };
+
+
+// implementing robust zscore for normal distributions
+static AggregationClass aggZscore = { .createContext = ZscoreCreateContext,
+                                    .appendValue = AvgAddValue,
+                                    .appendValueVec = NULL, /* determined on run time */
+                                    .freeContext = rm_free,
+                                    .finalize = AvgFinalize,
+                                    .finalizeEmpty = finalize_empty_with_NAN,
+                                    .writeContext = AvgWriteContext,
+                                    .readContext = AvgReadContext,
+                                    .addBucketParams = NULL,
+                                    .addPrevBucketLastSample = NULL,
+                                    .addNextBucketFirstSample = NULL,
+                                    .getLastSample = NULL,
+                                    .resetContext = AvgReset,
+                                    .cloneContext = AvgCloneContext };
+
+
+void *MaxMinCreateContext(__unused bool reverse, __unused size_t window_size) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = DBL_MAX;
     context->maxValue = _DOUBLE_MIN;

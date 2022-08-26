@@ -14,7 +14,7 @@
 
 typedef struct AggregationClass
 {
-    void *(*createContext)(bool reverse);
+    void *(*createContext)(bool reverse, size_t window_size);
     void (*freeContext)(void *context);
     void (*appendValue)(void *context, double value, timestamp_t ts);
     void (*appendValueVec)(void *__restrict__ context,
