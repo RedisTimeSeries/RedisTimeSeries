@@ -58,7 +58,7 @@ LD_FLAGS += -g
 else ifeq ($(PROFILE),1)
 CC_FLAGS += -O2
 else
-CC_FLAGS += -O3
+CC_FLAGS += -O3 -flto
 endif
 
 ifeq ($(OS),macos)

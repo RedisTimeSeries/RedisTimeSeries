@@ -65,7 +65,7 @@ ifeq ($(DEBUG),1)
 CC_FLAGS += -g -O0
 LD_FLAGS += -g
 else
-CC_FLAGS += -O2 -Wno-unused-result
+CC_FLAGS += -O3 -flto -Wno-unused-result
 endif
 
 ifeq ($(OS),macos)
