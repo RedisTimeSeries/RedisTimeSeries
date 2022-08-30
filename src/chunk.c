@@ -323,7 +323,9 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                                   (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+int Uncompressed_LoadFromRDB(Chunk_t **chunk,
+                             struct RedisModuleIO *io,
+                             __attribute__((unused)) int encver) {
     UNCOMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 

@@ -59,6 +59,15 @@ void Compressed_FreeChunk(Chunk_t *chunk) {
     free(chunk);
 }
 
+void Compressed_FreeChunk_Legacy(Chunk_t *chunk) {
+    CompressedChunk_Legacy *cmpChunk = chunk;
+    if (cmpChunk->data) {
+        free(cmpChunk->data);
+    }
+    cmpChunk->data = NULL;
+    free(chunk);
+}
+
 Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
@@ -584,6 +593,38 @@ err:                                                                            
         return TSDB_ERROR;                                                                         \
     } while (0)
 
+#define COMPRESSED_DESERIALIZE_LEGACY(chunk, ctx, readUnsigned, readStringBuffer, ...)             \
+    do {                                                                                           \
+        CompressedChunk_Legacy *compchunk_legacy =                                                 \
+            (CompressedChunk_Legacy *)malloc(sizeof(*compchunk_legacy));                           \
+                                                                                                   \
+        compchunk_legacy->data = NULL;                                                             \
+        compchunk_legacy->size = readUnsigned(ctx, ##__VA_ARGS__);                                 \
+        compchunk_legacy->count = readUnsigned(ctx, ##__VA_ARGS__);                                \
+        compchunk_legacy->idx = readUnsigned(ctx, ##__VA_ARGS__);                                  \
+        compchunk_legacy->baseValue.u = readUnsigned(ctx, ##__VA_ARGS__);                          \
+        compchunk_legacy->baseTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                        \
+        compchunk_legacy->prevTimestamp = readUnsigned(ctx, ##__VA_ARGS__);                        \
+                                                                                                   \
+        compchunk_legacy->prevTimestampDelta = (int64_t)readUnsigned(ctx, ##__VA_ARGS__);          \
+        compchunk_legacy->prevValue.u = readUnsigned(ctx, ##__VA_ARGS__);                          \
+        compchunk_legacy->prevLeading = readUnsigned(ctx, ##__VA_ARGS__);                          \
+        compchunk_legacy->prevTrailing = readUnsigned(ctx, ##__VA_ARGS__);                         \
+                                                                                                   \
+        size_t len;                                                                                \
+        compchunk_legacy->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);           \
+                                                                                                   \
+        *chunk = (Chunk_t *)compchunk_legacy;                                                      \
+        return TSDB_OK;                                                                            \
+                                                                                                   \
+err_legacy:                                                                                        \
+        __attribute__((cold, unused));                                                             \
+        *chunk = NULL;                                                                             \
+        Compressed_FreeChunk_Legacy(compchunk_legacy);                                             \
+                                                                                                   \
+        return TSDB_ERROR;                                                                         \
+    } while (0)
+
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
     Compressed_Serialize(chunk,
                          io,
@@ -591,8 +632,14 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver) {
+    if (encver < TS_CHUNK_DATA_SPLIT_VER) {
+        Chunk_t *legacy_chunk = NULL;
+        COMPRESSED_DESERIALIZE_LEGACY(
+            &legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
+    } else {
+        COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
+    }
 }
 
 void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {

@@ -9,6 +9,7 @@
 
 #include "generic_chunk.h"
 #include "gorilla.h"
+#include "rdb.h"
 
 #include <stdbool.h>   // bool
 #include <sys/types.h> // u_int_t
@@ -44,7 +45,7 @@ double Compressed_GetLastValue(Chunk_t *chunk);
 
 // RDB
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
 
 // LibMR
 void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
