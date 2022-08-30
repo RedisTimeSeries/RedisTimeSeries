@@ -70,7 +70,7 @@ commands:
       - run:
           name: System setup
           command: |
-		    ./sbin/setup
+            ./sbin/setup
             python3 -m pip list
       - run:
           name: Install Redis
@@ -155,7 +155,6 @@ commands:
       - run:
           name: Flow test
           no_output_timeout: 30m
-          command: make test SHOW=1
           command: |
             python3 -m RLTest --version
             mkdir -p ~/workspace/tests
