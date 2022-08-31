@@ -470,6 +470,31 @@ _done:
     return;
 }
 
+// Used to decompress a chunk after it was deserialized in a legacy data format
+static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compressedChunk,
+                                   EnrichedChunk *enrichedChunk) {
+    uint64_t numSamples = compressedChunk->count;
+    uint64_t lastTS = compressedChunk->prevTimestamp;
+    Sample sample;
+    ChunkResult res;
+    ResetEnrichedChunk(enrichedChunk);
+    if (unlikely(numSamples == 0)) {
+        return;
+    }
+
+
+    Compressed_IteratorLegacy *iter = Compressed_NewChunkIterator(compressedChunk);
+    timestamp_t *timestamps_ptr = enrichedChunk->samples.timestamps;
+    double *values_ptr = enrichedChunk->samples.values;
+
+    while (iter->count < numSamples) {
+        Compressed_ChunkIteratorGetNext_Legacy(iter, &sample);
+        *timestamps_ptr++ = sample.timestamp;
+        *values_ptr++ = sample.value;
+    }
+}
+
+
 /************************
  *  Iterator functions  *
  ************************/
@@ -503,10 +528,33 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk) 
     iterator = (ChunkIter_t *)iter;
 }
 
+void Compressed_ResetChunkIteratorLegacy(ChunkIter_t *iterator, const Chunk_t *chunk) {
+    const CompressedChunk_Legacy *compressedChunk = chunk;
+    Compressed_IteratorLegacy *iter = (Compressed_IteratorLegacy *)iterator;
+    iter->chunk = (CompressedChunk_Legacy *)compressedChunk;
+    iter->idx = 0;
+    iter->count = 0;
+
+    iter->prevDelta = 0;
+    iter->prevTS = compressedChunk->baseTimestamp;
+    iter->prevValue.d = compressedChunk->baseValue.d;
+    iter->leading = 32;
+    iter->trailing = 32;
+    iter->blocksize = 0;
+    iterator = (ChunkIter_t *)iter;
+}
+
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk) {
     const CompressedChunk *compressedChunk = chunk;
     Compressed_Iterator *iter = (Compressed_Iterator *)calloc(1, sizeof(Compressed_Iterator));
     Compressed_ResetChunkIterator(iter, compressedChunk);
+    return (ChunkIter_t *)iter;
+}
+
+ChunkIter_t *Compressed_NewChunkIteratorLegacy(const Chunk_t *chunk) {
+    const CompressedChunk_Legacy *compressedChunk = chunk;
+    Compressed_IteratorLegacy *iter = (Compressed_IteratorLegacy *)calloc(1, sizeof(Compressed_IteratorLegacy));
+    Compressed_ResetChunkIteratorLegacy(iter, compressedChunk);
     return (ChunkIter_t *)iter;
 }
 
@@ -632,11 +680,20 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
+// If the RDB is in the old encoding, then we need to deserialize into a temporary buffer, 
+// decompress than buffer and re-insert it using the new data format. 
 int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver) {
     if (encver < TS_CHUNK_DATA_SPLIT_VER) {
         Chunk_t *legacy_chunk = NULL;
         COMPRESSED_DESERIALIZE_LEGACY(
             &legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
+
+        CompressedChunk_Legacy *compressedChunk = (CompressedChunk_Legacy *)legacy_chunk;  
+        EnrichedChunk *enrichedChunk = NewEnrichedChunk(); 
+        ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count); 
+        decompressChunkLegacy(compressedChunk, enrichedChunk); 
+
+
     } else {
         COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
     }

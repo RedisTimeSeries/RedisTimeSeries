@@ -537,3 +537,35 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
     iter->count++;
     return CR_OK;
 }
+
+ChunkResult Compressed_ChunkIteratorGetNext_Legacy(ChunkIter_t *abstractIter, Sample *sample) {
+    Compressed_IteratorLegacy *iter = (Compressed_IteratorLegacy *)abstractIter;
+#ifdef DEBUG
+    assert(iter);
+    assert(iter->chunk);
+#endif
+    if (unlikely(iter->count >= iter->chunk->count))
+        return CR_END;
+
+    // First sample
+    if (unlikely(iter->count == 0)) {
+        sample->timestamp = iter->chunk->baseTimestamp;
+        sample->value = iter->chunk->baseValue.d;
+        iter->count++;
+        return CR_OK;
+    }
+
+    const u_int64_t *bins = iter->chunk->data;
+    // We're fast checking the control bits for the cases in which the delta is 0
+    // This avoids the call to expensive readInteger and readFloat functions
+    //
+    // control bit ‘0’
+    // Read stored double delta value
+    sample->timestamp = iter->prevTS +=
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+    // Check if value was changed
+    // control bit ‘0’ (case a)
+    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    iter->count++;
+    return CR_OK;
+}
