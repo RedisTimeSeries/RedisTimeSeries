@@ -7,8 +7,12 @@ Create a compaction rule
 ## Syntax
 
 {{< highlight bash >}}
-TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
+TS.CREATERULE sourceKey destKey 
+  AGGREGATION aggregator bucketDuration 
+  [alignTimestamp]
 {{< / highlight >}}
+
+[Examples](#examples)
 
 ## Required arguments
 
@@ -66,6 +70,32 @@ is a `timeseries` type and is created before `TS.CREATERULE` is called.
 - If no samples are added to the source time series during a bucket period. no _compacted sample_ is added to the destination time series.
 - The timestamp of a compacted sample added to the destination time series is set to the start timestamp the appropriate compaction bucket. For example, for a 10-minute compaction bucket with no alignment, the compacted samples timestamps are `x:00`, `x:10`, `x:20`, and so on.
 </note>
+
+## Examples
+
+<details open>
+<summary><b>Create a compaction rule</b></summary>
+
+Create a time series to store the temperatures measured in Tel Aviv.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE temp:TLV LABELS type temp location TLV
+OK
+{{< / highlight >}}
+
+Next, create a compacted time series named `dailyAvgTemp` containing one compacted sample per 24 hours: the time-weighted average of all measurements taken from midnight to next midnight.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE dailyAvgTemp:TLV LABELS type temp location TLV
+127.0.0.1:6379> TS.CREATERULE temp:TLV dailyAvgTemp:TLV AGGREGATION twa 86400000 
+{{< / highlight >}}
+
+Now, also create a compacted time series named _dailyDiffTemp_. This time series will contain one compacted sample per 24 hours: the difference between the minimum and the maximum temperature measured between 06:00 and 06:00 next day.
+
+{{< highlight bash >}}
+127.0.0.1:6379> TS.CREATE dailyDiffTemp:TLV LABELS type temp location TLV
+127.0.0.1:6379> TS.CREATERULE temp:TLV dailyDiffTemp:TLV AGGREGATION range 86400000 21600000
+{{< / highlight >}}
 
 ## See also
 
