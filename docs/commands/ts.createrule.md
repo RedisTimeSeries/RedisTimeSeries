@@ -83,7 +83,7 @@ Create a time series to store the temperatures measured in Tel Aviv.
 OK
 {{< / highlight >}}
 
-Next, create a compacted time series named `dailyAvgTemp` containing one compacted sample per 24 hours: the time-weighted average of all measurements taken from midnight to next midnight.
+Next, create a compacted time series named _dailyAvgTemp_ containing one compacted sample per 24 hours: the time-weighted average of all measurements taken from midnight to next midnight.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.CREATE dailyAvgTemp:TLV LABELS type temp location TLV
@@ -91,6 +91,7 @@ Next, create a compacted time series named `dailyAvgTemp` containing one compact
 {{< / highlight >}}
 
 Now, also create a compacted time series named _dailyDiffTemp_. This time series will contain one compacted sample per 24 hours: the difference between the minimum and the maximum temperature measured between 06:00 and 06:00 next day.
+ Here, 86400000 is the number of milliseconds in 24 hours, 21600000 is the number of milliseconds in 6 hours.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.CREATE dailyDiffTemp:TLV LABELS type temp location TLV
