@@ -152,7 +152,6 @@ int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
                         int argc,
-                        timestamp_t maxTimestamp,
                         RangeArgs *out);
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
