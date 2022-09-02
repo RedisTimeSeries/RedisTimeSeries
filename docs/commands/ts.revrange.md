@@ -8,11 +8,11 @@ Query a range in reverse direction
 
 {{< highlight bash >}}
 TS.REVRANGE key fromTimestamp toTimestamp
-         [LATEST]
-         [FILTER_BY_TS TS...]
-         [FILTER_BY_VALUE min max]
-         [COUNT count]
-         [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+  [LATEST]
+  [FILTER_BY_TS TS...]
+  [FILTER_BY_VALUE min max]
+  [COUNT count]
+  [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 {{< / highlight >}}
 
 [Examples](#examples)
