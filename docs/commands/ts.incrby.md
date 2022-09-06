@@ -7,7 +7,12 @@ Increase the value of the sample with the maximum existing timestamp, or create 
 ## Syntax
 
 {{< highlight bash >}}
-TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
+TS.INCRBY key value 
+  [TIMESTAMP timestamp] 
+  [RETENTION retentionPeriod] 
+  [UNCOMPRESSED] 
+  [CHUNK_SIZE size] 
+  [LABELS {label value}...]
 {{< / highlight >}}
 
 [Examples](#examples)

@@ -8,7 +8,12 @@ Append a sample to a time series
 ## Syntax
 
 {{< highlight bash >}}
-TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING [COMPRESSED|UNCOMPRESSED]] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS {label value}...]
+TS.ADD key timestamp value 
+  [RETENTION retentionPeriod] 
+  [ENCODING [COMPRESSED|UNCOMPRESSED]] 
+  [CHUNK_SIZE size] 
+  [ON_DUPLICATE policy] 
+  [LABELS {label value}...]
 {{< / highlight >}}
 
 [Examples](#examples)
@@ -94,22 +99,20 @@ The complexity of `TS.ADD` is always `O(M)`, where `M` is the number of compacti
 
 <details open><summary><b>Append a sample to a temperature time series</b></summary>
 
-Create a temperature time series.
+Create a temperature time series, set its retention to 1 year, and append a sample.
 
 {{< highlight bash >}}
-127.0.0.1:6379> TS.CREATE temperature:2:32 RETENTION 60000 DUPLICATE_POLICY MAX LABELS sensor_id 2 area_id 32
-OK
+127.0.0.1:6379> TS.ADD temperature:3:11 1548149183000 27 RETENTION 31536000000
+(integer) 1548149183000
 {{< / highlight >}}
 
-Append a sample to the time series.
+<note><b>Note:</b> If a time series with such a name already exists, the sample is added, but the retention does not change.</note>
+
+Add a sample to the time series, setting the sample's timestamp according to the server clock.
 
 {{< highlight bash >}}
-127.0.0.1:6379>TS.ADD temperature:2:32 1548149180000 26 LABELS sensor_id 2 area_id 32
-(integer) 1548149180000
-127.0.0.1:6379>TS.ADD temperature:3:11 1548149183000 27 RETENTION 3600
-(integer) 1548149183000
-127.0.0.1:6379>TS.ADD temperature:3:11 * 30
-(integer) 1559718352000
+127.0.0.1:6379> TS.ADD temperature:3:11 * 30
+(integer) 1662042954573
 {{< / highlight >}}
 </details>
 

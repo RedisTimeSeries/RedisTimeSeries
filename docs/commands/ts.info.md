@@ -7,7 +7,8 @@ Return information and statistics for a time series.
 ## Syntax
 
 {{< highlight bash >}}
-TS.INFO key [DEBUG]
+TS.INFO key 
+  [DEBUG]
 {{< / highlight >}}
 
 [Examples](#examples)
