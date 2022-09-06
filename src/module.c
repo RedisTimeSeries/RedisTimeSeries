@@ -387,8 +387,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     RangeArgs rangeArgs = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, series->lastTimestamp, &rangeArgs) !=
-        REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &rangeArgs) != REDISMODULE_OK) {
         goto _out;
     }
 
@@ -420,7 +419,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
         // first sample, lets init the startCurrentTimeBucket
         rule->startCurrentTimeBucket = currentTimestampNormalized;
 
-        if (rule->aggClass->addBucketParams) {
+        if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
                                             currentTimestamp + rule->bucketDuration);
@@ -442,7 +441,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
 
-        if (rule->aggClass->addNextBucketFirstSample) {
+        if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
@@ -452,17 +451,17 @@ static void handleCompaction(RedisModuleCtx *ctx,
         RedisModule_NotifyKeyspaceEvent(
             ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         Sample last_sample;
-        if (rule->aggClass->addPrevBucketLastSample) {
+        if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
         }
         rule->aggClass->resetContext(rule->aggContext);
-        if (rule->aggClass->addBucketParams) {
+        if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
                                             currentTimestamp + rule->bucketDuration);
         }
 
-        if (rule->aggClass->addPrevBucketLastSample) {
+        if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addPrevBucketLastSample(
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }
@@ -1116,7 +1115,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RangeArgs args = { 0 };
-    if (parseRangeArguments(ctx, 2, argv, argc, (timestamp_t)0, &args) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 2, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 

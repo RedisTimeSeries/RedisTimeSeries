@@ -537,7 +537,6 @@ int parseRangeArguments(RedisModuleCtx *ctx,
                         int start_index,
                         RedisModuleString **argv,
                         int argc,
-                        timestamp_t maxTimestamp,
                         RangeArgs *out) {
     RangeArgs args = { 0 };
     args.aggregationArgs.timeDelta = 0;
@@ -562,7 +561,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     size_t end_len;
     const char *end = RedisModule_StringPtrLen(argv[start_index + 1], &end_len);
     if (strcmp(end, "+") == 0) {
-        args.endTimestamp = maxTimestamp;
+        args.endTimestamp = LLONG_MAX;
         endTimestampMax = true;
     } else {
         if (parseTimestamp(argv[start_index + 1], &args.endTimestamp) != REDISMODULE_OK) {
@@ -823,7 +822,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     args.queryPredicates = NULL;
     args.numLimitLabels = 0;
 
-    if (parseRangeArguments(ctx, 1, argv, argc, LLONG_MAX, &args.rangeArgs) != REDISMODULE_OK) {
+    if (parseRangeArguments(ctx, 1, argv, argc, &args.rangeArgs) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 

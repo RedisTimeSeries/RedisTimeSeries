@@ -8,11 +8,11 @@ Query a range in forward direction
 
 {{< highlight bash >}}
 TS.RANGE key fromTimestamp toTimestamp
-         [LATEST]
-         [FILTER_BY_TS ts...]
-         [FILTER_BY_VALUE min max]
-         [COUNT count] 
-         [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+  [LATEST]
+  [FILTER_BY_TS ts...]
+  [FILTER_BY_VALUE min max]
+  [COUNT count] 
+  [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 {{< / highlight >}}
 
 [Examples](#examples)
