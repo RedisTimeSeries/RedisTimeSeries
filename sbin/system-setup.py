@@ -47,7 +47,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install_gnu_utils()
 
     def linux_last(self):
-        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
+        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi".format(PYTHON=self.python, READIES=READIES))
 
     def common_last(self):
         self.run("{PYTHON} {READIES}/bin/getcmake --usr".format(PYTHON=self.python, READIES=READIES))
