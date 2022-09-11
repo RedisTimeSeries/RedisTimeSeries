@@ -15,7 +15,7 @@ import paella
 class RedisTimeSeriesSetup(paella.Setup):
     def __init__(self, args):
         paella.Setup.__init__(self, args.nop)
-        self.SudoIf(self.os != 'macos')
+        self.sudoIf(self.os != 'macos')
 
     def common_first(self):
         self.install_downloaders()
