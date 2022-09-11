@@ -58,7 +58,7 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov-git", aur=True)
         self.pip_install("pudb")
         self.run("{READIES}/bin/getaws".format(READIES=READIES))
-        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
+        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
         self.pip_install("gevent")
 
