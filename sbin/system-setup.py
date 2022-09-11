@@ -48,7 +48,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install_gnu_utils()
 
     def linux_last(self):
-        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi".format(PYTHON=self.python, READIES=READIES))
+        pass
 
     def common_last(self):
         self.run("{PYTHON} {READIES}/bin/getcmake --usr".format(PYTHON=self.python, READIES=READIES))
@@ -56,8 +56,9 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov")
         else:
             self.install("lcov-git", aur=True)
-        self.pip_install("pudb awscli")
-
+        self.pip_install("pudb")
+        self.run("{READIES}/bin/getaws".format(READIES=READIES))
+        self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
         self.pip_install("gevent")
 
