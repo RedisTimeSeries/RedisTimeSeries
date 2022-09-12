@@ -15,6 +15,7 @@ Nikolovski
 Profelt
 RLTest
 Rafa
+Redis
 RedisTimeSeries
 RedisTimeSeries
 RedisTimeSeries
@@ -47,6 +48,7 @@ phpRedisTimeSeries
 py
 py
 py
+redis
 redistimeseries
 redistimeseries
 rueidis
