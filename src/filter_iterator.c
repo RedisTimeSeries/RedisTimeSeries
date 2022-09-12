@@ -565,7 +565,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     if (!enrichedChunk || enrichedChunk->samples.num_samples == 0) {
         if (self->hasUnFinalizedContext) {
             goto _finalize;
-        } else if (TWA_EMPTY_RANGE(self)) {
+        } else if (TWA_EMPTY_RANGE(self) && (self->endTimestamp < LLONG_MAX)) {
+            //  don't add suffix when endTimestamp is + inorder to prevent OOM ^^
             if (!self->handled_twa_empty_prefix) {
                 self->handled_twa_empty_prefix = true;
                 self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
@@ -883,7 +884,9 @@ _finalize:
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     self->aux_chunk->samples.values[0] = value;
     size_t n_samples = 1;
-    if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_suffix) {
+    if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_suffix &&
+        (self->endTimestamp < LLONG_MAX)) {
+        //  don't add suffix when endTimestamp is + inorder to prevent OOM  ^^^^^^^^
         self->handled_twa_empty_suffix = true;
         timestamp_t last_bucket =
             CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,

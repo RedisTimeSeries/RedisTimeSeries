@@ -915,6 +915,15 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
         assert actual_result == expected_result
 
+def test_agg_twa_large_empty_suffix():
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't')
+        res = r.execute_command('TS.RANGE t - + AGGREGATION twa 1000 EMPTY')
+        assert res == []
+        assert r.execute_command('TS.MADD t 1000 10 t 2000 20 t 3000 30 t 4000 40 t 6000 60')
+        res = r.execute_command('TS.RANGE t - + AGGREGATION twa 1000 EMPTY')
+        assert res == [[0, b'10'], [1000, b'15'], [2000, b'25'], [3000, b'35'], [4000, b'40'], [5000, b'60'], [6000, b'60']]
+
 def test_series_ordering():
     with Env().getClusterConnectionIfNeeded() as r:
         sample_len = 1024
@@ -929,7 +938,6 @@ def test_series_ordering():
         for sample in res:
             assert sample == [i, str(i).encode('ascii')]
             i += 1
-
 
 def test_sanity():
     start_ts = 1511885909
