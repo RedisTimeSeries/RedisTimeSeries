@@ -44,11 +44,11 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install("openssl-devel")
         self.install("python3-networkx")
 
+    def linux_last(self):
+        self.install("valgrind")
+
     def macos(self):
         self.install_gnu_utils()
-
-    def linux_last(self):
-        pass
 
     def common_last(self):
         self.run("{PYTHON} {READIES}/bin/getcmake --usr".format(PYTHON=self.python, READIES=READIES))
@@ -61,9 +61,6 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi".format(PYTHON=self.python, READIES=READIES))
         self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
         self.pip_install("gevent")
-
-    def linux_last(self):
-        self.install("valgrind")
 
 #----------------------------------------------------------------------------------------------
 
