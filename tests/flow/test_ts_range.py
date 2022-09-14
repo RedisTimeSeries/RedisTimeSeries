@@ -745,12 +745,12 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [0, str(110).encode('ascii')]
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(110).encode('ascii')]
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         #Test case 22:
         expected_result = []
@@ -760,10 +760,10 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [[0, str(110).encode('ascii')], [100, b'NaN']]
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
         assert actual_result == expected_result
-        expected_result = [[100, b'NaN'], [0, str(110).encode('ascii')]]
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
         assert actual_result == expected_result
 
@@ -775,10 +775,10 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [[0, b'NaN'], [100, b'NaN']]
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
         assert actual_result == expected_result
-        expected_result = [[100, b'NaN'], [0, b'NaN']]
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
         assert actual_result == expected_result
 
@@ -790,12 +790,12 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [0, str(100).encode('ascii')]
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(100).encode('ascii')]
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         #Test case 25:
         expected_result = []
@@ -805,12 +805,12 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [0, str(100).encode('ascii')]
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(100).encode('ascii')]
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         #Test case 26:
         expected_result = []
@@ -820,12 +820,12 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
 
-        expected_result = [0, b'NaN']
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, b'NaN']
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         #case 8:
         assert r.execute_command('TS.CREATE', 'ts21')
@@ -862,12 +862,12 @@ def test_agg_twa():
         expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
-        expected_result = [0, b'NaN']
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, b'NaN']
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         # Test case #35:
         expected_result = []
@@ -876,12 +876,12 @@ def test_agg_twa():
         expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100)
         assert actual_result == expected_result
-        expected_result = [0, b'NaN']
+        expected_result = []
         actual_result = r.execute_command('TS.RANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, b'NaN']
+        assert actual_result == expected_result
+        expected_result = []
         actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
+        assert actual_result == expected_result
 
         # Test case 100:
         assert r.execute_command('TS.CREATE', 'ts22')
@@ -901,14 +901,14 @@ def test_agg_twa():
         assert r.execute_command('TS.CREATE', 'ts23')
         assert r.execute_command('TS.ADD', 'ts23', 40, 100)
         assert r.execute_command('TS.ADD', 'ts23', 50, 130)
-        expected_result = [[20, b'NaN'], [30, str(100).encode('ascii')], [40, str(115).encode('ascii')], [50, str(130).encode('ascii')], [60, b'NaN'], [70, b'NaN']]
+        expected_result = [[40, str(115).encode('ascii')], [50, str(130).encode('ascii')]]
         actual_result = r.execute_command('TS.RANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
         assert actual_result == expected_result
         expected_result.reverse()
         actual_result = r.execute_command('TS.REVRANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
         assert actual_result == expected_result
 
-        expected_result = [[30, str(100).encode('ascii')], [40, str(115).encode('ascii')], [50, str(130).encode('ascii')], [60, b'NaN'], [70, b'NaN']]
+        expected_result = [[40, str(115).encode('ascii')], [50, str(130).encode('ascii')]]
         actual_result = r.execute_command('TS.RANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
         assert actual_result == expected_result
         expected_result.reverse()
