@@ -503,6 +503,26 @@ static void fillEmptyBuckets(Samples *samples,
     size_t n_empty_buckets = ((end_bucket_ts - first_bucket_ts) / agg_time_delta) + 1;
     RedisModule_Assert(n_empty_buckets > 0);
 
+    timestamp_t cur_ts = (reversed) ? end_bucket_ts : first_bucket_ts;
+
+#ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
+                           // users
+    if (self->aggregation->type == TS_AGG_TWA) {
+        Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
+        timestamp_t ta, tb;
+        int64_t agg_time_delta = self->aggregationTimeDelta;
+        ta = twa_calc_ta(
+            false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
+        size_t n_samples_before =
+            twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
+        size_t n_samples_after =
+            twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
+        if (n_samples_before == 0 || n_samples_after == 0) { // the PM canceled cases 6 and 7
+            return;
+        }
+    }
+#endif // PREFIX_SUFFIX_IMPL
+
     // We are aggregating in-place, make sure not to override unprocessed data
     if (*write_index + n_empty_buckets - 1 >= _read_index) {
         timestamp_t n_read_samples_left = samples->num_samples - _read_index;
@@ -535,7 +555,6 @@ static void fillEmptyBuckets(Samples *samples,
         samples->num_samples = _read_index + n_read_samples_left;
     }
 
-    timestamp_t cur_ts = (reversed) ? end_bucket_ts : first_bucket_ts;
     if (self->aggregation->type != TS_AGG_TWA) {
         fillEmptyBucketsWithDefaultVals(
             write_index, cur_ts, samples, self, n_empty_buckets, reversed);
