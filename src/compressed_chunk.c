@@ -659,14 +659,14 @@ err:                                                                            
         size_t len;                                                                                \
         compchunk_legacy->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);           \
                                                                                                    \
-        *chunk = (Chunk_t *)compchunk_legacy;                                                      \
-        return TSDB_OK;                                                                            \
+        chunk = (Chunk_t *)compchunk_legacy;                                                      \
+        break;                                                                             \
                                                                                                    \
 err_legacy:                                                                                        \
         __attribute__((cold, unused));                                                             \
-        *chunk = NULL;                                                                             \
+        chunk = NULL;                                                                             \
         Compressed_FreeChunk_Legacy(compchunk_legacy);                                             \
-                                                                                                   \
+                                                                                                   \                                    
         return TSDB_ERROR;                                                                         \
     } while (0)
 
@@ -683,24 +683,29 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver
     if (encver < TS_CHUNK_DATA_SPLIT_VER) {
         Chunk_t *legacy_chunk = NULL;
         COMPRESSED_DESERIALIZE_LEGACY(
-            &legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
-
+            legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
+     
         CompressedChunk_Legacy *compressedChunk = (CompressedChunk_Legacy *)legacy_chunk;  
-        EnrichedChunk *enrichedChunk = NewEnrichedChunk(); 
+        EnrichedChunk *enrichedChunk = NewEnrichedChunk();    
         ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count); 
-        decompressChunkLegacy(compressedChunk, enrichedChunk); 
 
-        Chunk_t *chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size); 
+        decompressChunkLegacy(compressedChunk, enrichedChunk); 
+        Compressed_FreeChunk_Legacy(compressedChunk);
+
+        Chunk_t *new_chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size); 
         for(int i=0; i< enrichedChunk->samples.num_samples; i++){
             Sample sample; 
             sample.timestamp = enrichedChunk->samples.timestamps[i]; 
             sample.value = enrichedChunk->samples.values[i]; 
-            ensureAddSample(chunk, &sample); 
+            ensureAddSample(new_chunk, &sample); 
         }
+        FreeEnrichedChunk(enrichedChunk);
+        *chunk = (Chunk_t *)new_chunk;
 
     } else {
         COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
     }
+    return TSDB_OK;
 }
 
 void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
