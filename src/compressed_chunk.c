@@ -474,14 +474,11 @@ _done:
 static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compressedChunk,
                                    EnrichedChunk *enrichedChunk) {
     uint64_t numSamples = compressedChunk->count;
-    uint64_t lastTS = compressedChunk->prevTimestamp;
     Sample sample;
-    ChunkResult res;
     ResetEnrichedChunk(enrichedChunk);
     if (unlikely(numSamples == 0)) {
         return;
     }
-
 
     Compressed_IteratorLegacy *iter = Compressed_NewChunkIterator(compressedChunk);
     timestamp_t *timestamps_ptr = enrichedChunk->samples.timestamps;
@@ -693,6 +690,13 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver
         ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count); 
         decompressChunkLegacy(compressedChunk, enrichedChunk); 
 
+        Chunk_t *chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size); 
+        for(int i=0; i< enrichedChunk->samples.num_samples; i++){
+            Sample sample; 
+            sample.timestamp = enrichedChunk->samples.timestamps[i]; 
+            sample.value = enrichedChunk->samples.values[i]; 
+            ensureAddSample(chunk, &sample); 
+        }
 
     } else {
         COMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);

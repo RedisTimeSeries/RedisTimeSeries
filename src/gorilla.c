@@ -455,6 +455,30 @@ static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *b
     return iter->prevDelta;
 }
 
+static inline u_int64_t readInteger_Legacy(Compressed_IteratorLegacy *iter, const uint64_t *bins) {
+    if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
+        iter->idx += CMPR_L1;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L2), CMPR_L2);
+        iter->idx += CMPR_L2;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L3), CMPR_L3);
+        iter->idx += CMPR_L3;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L4), CMPR_L4);
+        iter->idx += CMPR_L4;
+    } else if (Bins_bitoff(bins, iter->idx++)) {
+        iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L5), CMPR_L5);
+        iter->idx += CMPR_L5;
+    } else {
+        iter->prevDelta += readBits(bins, iter->idx, 64);
+        iter->idx += 64;
+    }
+    return iter->prevDelta;
+}
+
+
 /*
  * This function decodes values inserted by appendFloat.
  *
@@ -495,6 +519,42 @@ static inline double readFloat(Compressed_Iterator *iter, const uint64_t *data) 
         iter->trailing = BINW - iter->leading - iter->blocksize;
         xorValue = readBits(data, iter->idx_values, iter->blocksize) << iter->trailing;
         iter->idx_values += iter->blocksize;
+    }
+    union64bits rv;
+    rv.u = xorValue ^ iter->prevValue.u;
+    return iter->prevValue.d = rv.d;
+}
+
+static inline double readFloat_Legacy(Compressed_IteratorLegacy *iter, const uint64_t *data) {
+    binary_t xorValue;
+
+    // Check if we can use the previous block info
+    // meaning control bit number 2 is 1. i.e. control bits are ‘10’ (case b)
+    // there are at least as many leading zeros and as
+    // many trailing zeros as with the previous value
+    // use  the previous block  information and
+    // just read the meaningful XORed value
+    if (Bins_bitoff(data, iter->idx++)) {
+#ifdef DEBUG
+        assert(iter->leading + iter->trailing <= BINW);
+#endif
+        xorValue = readBits(data, iter->idx, iter->blocksize);
+        iter->idx += iter->blocksize;
+        xorValue <<= iter->trailing;
+    } else {
+        // Read the length of the number of leading zeros in the next 5 bits,
+        // then read the length of the meaningful XORed value in the next 6 bits.
+        // Finally read the meaningful bits of theXORed value
+        iter->leading = readBits(data, iter->idx, DOUBLE_LEADING);
+        iter->idx += DOUBLE_LEADING;
+        iter->blocksize = readBits(data, iter->idx, DOUBLE_BLOCK_SIZE) + DOUBLE_BLOCK_ADJUST;
+        iter->idx += DOUBLE_BLOCK_SIZE;
+#ifdef DEBUG
+        assert(iter->leading + iter->blocksize <= BINW);
+#endif
+        iter->trailing = BINW - iter->leading - iter->blocksize;
+        xorValue = readBits(data, iter->idx, iter->blocksize) << iter->trailing;
+        iter->idx += iter->blocksize;
     }
     union64bits rv;
     rv.u = xorValue ^ iter->prevValue.u;
@@ -562,10 +622,10 @@ ChunkResult Compressed_ChunkIteratorGetNext_Legacy(ChunkIter_t *abstractIter, Sa
     // control bit ‘0’
     // Read stored double delta value
     sample->timestamp = iter->prevTS +=
-        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger(iter, bins);
+        Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger_Legacy(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat(iter, bins);
+    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat_Legacy(iter, bins);
     iter->count++;
     return CR_OK;
 }
