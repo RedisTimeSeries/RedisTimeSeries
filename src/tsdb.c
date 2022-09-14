@@ -615,7 +615,7 @@ int SeriesUpsertSample(Series *series,
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * 2 * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
