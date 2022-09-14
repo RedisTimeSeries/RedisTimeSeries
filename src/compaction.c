@@ -20,7 +20,7 @@
 #include <string.h>
 #include <assert.h>
 
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(_VALGRIND)
 #include "valgrind/valgrind.h"
 #endif
 
