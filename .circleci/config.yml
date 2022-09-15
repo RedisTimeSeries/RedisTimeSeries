@@ -360,7 +360,7 @@ jobs:
             sudo mkdir -p ~/workspace
             sudo chown $USER ~/workspace
       - build-steps:
-          platform: catalina
+          platform: monterey
       - persist-artifacts
 
   build-multiarch-docker:
