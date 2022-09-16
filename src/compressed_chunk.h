@@ -33,7 +33,9 @@ void Compressed_ProcessChunk(const Chunk_t *chunk,
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk);
+ChunkIter_t *Compressed_NewChunkIteratorLegacy(const Chunk_t *chunk);
 void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
+void Compressed_ResetChunkIteratorLegacy(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous

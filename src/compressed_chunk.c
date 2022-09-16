@@ -480,7 +480,7 @@ static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compresse
         return;
     }
 
-    Compressed_IteratorLegacy *iter = Compressed_NewChunkIterator(compressedChunk);
+    Compressed_IteratorLegacy *iter = Compressed_NewChunkIteratorLegacy(compressedChunk);
     timestamp_t *timestamps_ptr = enrichedChunk->samples.timestamps;
     double *values_ptr = enrichedChunk->samples.values;
 
@@ -489,6 +489,10 @@ static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compresse
         *timestamps_ptr++ = sample.timestamp;
         *values_ptr++ = sample.value;
     }
+
+    enrichedChunk->samples.num_samples = timestamps_ptr - enrichedChunk->samples.timestamps;
+    Compressed_FreeChunkIterator(iter);
+    return;
 }
 
 
@@ -686,13 +690,14 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver
             legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
      
         CompressedChunk_Legacy *compressedChunk = (CompressedChunk_Legacy *)legacy_chunk;  
-        EnrichedChunk *enrichedChunk = NewEnrichedChunk();    
+        EnrichedChunk *enrichedChunk = NewEnrichedChunk();   
         ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count); 
 
         decompressChunkLegacy(compressedChunk, enrichedChunk); 
         Compressed_FreeChunk_Legacy(compressedChunk);
 
         Chunk_t *new_chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size); 
+         
         for(int i=0; i< enrichedChunk->samples.num_samples; i++){
             Sample sample; 
             sample.timestamp = enrichedChunk->samples.timestamps[i]; 
