@@ -472,7 +472,7 @@ _done:
 
 // Used to decompress a chunk after it was deserialized in a legacy data format
 static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compressedChunk,
-                                   EnrichedChunk *enrichedChunk) {
+                                         EnrichedChunk *enrichedChunk) {
     uint64_t numSamples = compressedChunk->count;
     Sample sample;
     ResetEnrichedChunk(enrichedChunk);
@@ -494,7 +494,6 @@ static inline void decompressChunkLegacy(const CompressedChunk_Legacy *compresse
     Compressed_FreeChunkIterator(iter);
     return;
 }
-
 
 /************************
  *  Iterator functions  *
@@ -554,7 +553,8 @@ ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk) {
 
 ChunkIter_t *Compressed_NewChunkIteratorLegacy(const Chunk_t *chunk) {
     const CompressedChunk_Legacy *compressedChunk = chunk;
-    Compressed_IteratorLegacy *iter = (Compressed_IteratorLegacy *)calloc(1, sizeof(Compressed_IteratorLegacy));
+    Compressed_IteratorLegacy *iter =
+        (Compressed_IteratorLegacy *)calloc(1, sizeof(Compressed_IteratorLegacy));
     Compressed_ResetChunkIteratorLegacy(iter, compressedChunk);
     return (ChunkIter_t *)iter;
 }
@@ -663,14 +663,14 @@ err:                                                                            
         size_t len;                                                                                \
         compchunk_legacy->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);           \
                                                                                                    \
-        chunk = (Chunk_t *)compchunk_legacy;                                                      \
-        break;                                                                             \
+        chunk = (Chunk_t *)compchunk_legacy;                                                       \
+        break;                                                                                     \
                                                                                                    \
 err_legacy:                                                                                        \
         __attribute__((cold, unused));                                                             \
-        chunk = NULL;                                                                             \
+        chunk = NULL;                                                                              \
         Compressed_FreeChunk_Legacy(compchunk_legacy);                                             \
-                                                                                                   \                                    
+        \                                    
         return TSDB_ERROR;                                                                         \
     } while (0)
 
@@ -681,28 +681,28 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-// If the RDB is in the old encoding, then we need to deserialize into a temporary buffer, 
-// decompress than buffer and re-insert it using the new data format. 
+// If the RDB is in the old encoding, then we need to deserialize into a temporary buffer,
+// decompress than buffer and re-insert it using the new data format.
 int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver) {
     if (encver < TS_CHUNK_DATA_SPLIT_VER) {
         Chunk_t *legacy_chunk = NULL;
         COMPRESSED_DESERIALIZE_LEGACY(
             legacy_chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err_legacy);
-     
-        CompressedChunk_Legacy *compressedChunk = (CompressedChunk_Legacy *)legacy_chunk;  
-        EnrichedChunk *enrichedChunk = NewEnrichedChunk();   
-        ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count); 
 
-        decompressChunkLegacy(compressedChunk, enrichedChunk); 
+        CompressedChunk_Legacy *compressedChunk = (CompressedChunk_Legacy *)legacy_chunk;
+        EnrichedChunk *enrichedChunk = NewEnrichedChunk();
+        ReallocSamplesArray(&enrichedChunk->samples, compressedChunk->count);
+
+        decompressChunkLegacy(compressedChunk, enrichedChunk);
         Compressed_FreeChunk_Legacy(compressedChunk);
 
-        Chunk_t *new_chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size); 
-         
-        for(int i=0; i< enrichedChunk->samples.num_samples; i++){
-            Sample sample; 
-            sample.timestamp = enrichedChunk->samples.timestamps[i]; 
-            sample.value = enrichedChunk->samples.values[i]; 
-            ensureAddSample(new_chunk, &sample); 
+        Chunk_t *new_chunk = Compressed_NewChunk(compressedChunk->size, compressedChunk->size);
+
+        for (int i = 0; i < enrichedChunk->samples.num_samples; i++) {
+            Sample sample;
+            sample.timestamp = enrichedChunk->samples.timestamps[i];
+            sample.value = enrichedChunk->samples.values[i];
+            ensureAddSample(new_chunk, &sample);
         }
         FreeEnrichedChunk(enrichedChunk);
         *chunk = (Chunk_t *)new_chunk;

@@ -478,7 +478,6 @@ static inline u_int64_t readInteger_Legacy(Compressed_IteratorLegacy *iter, cons
     return iter->prevDelta;
 }
 
-
 /*
  * This function decodes values inserted by appendFloat.
  *
@@ -625,7 +624,8 @@ ChunkResult Compressed_ChunkIteratorGetNext_Legacy(ChunkIter_t *abstractIter, Sa
         Bins_bitoff(bins, iter->idx++) ? iter->prevDelta : readInteger_Legacy(iter, bins);
     // Check if value was changed
     // control bit ‘0’ (case a)
-    sample->value = Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat_Legacy(iter, bins);
+    sample->value =
+        Bins_bitoff(bins, iter->idx++) ? iter->prevValue.d : readFloat_Legacy(iter, bins);
     iter->count++;
     return CR_OK;
 }
