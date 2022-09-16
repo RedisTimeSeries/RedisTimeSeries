@@ -148,6 +148,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
+        args.latest = false; // we already handled the latest flag in the client side
         ResultSet_ApplyReducer(resultset, &args, &data->args.gropuByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
@@ -158,6 +159,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;
+        minimizedArgs.latest = false;
 
         replyResultSet(rctx,
                        resultset,
@@ -190,6 +192,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
+    queryArg->latest = args.latest;
     // moving ownership of queries to QueryPredicates_Arg
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -236,6 +239,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
+    queryArg->latest = args.rangeArgs.latest;
     args.queryPredicates->ref++;
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;

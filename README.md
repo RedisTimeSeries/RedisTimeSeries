@@ -22,21 +22,21 @@ A Redis time series comprises:
     Time tags can be specified by the client or filled automatically by the server.
 
   - 64-bit floating-point values.
-  
+
   The intervals between time tags can be constant or variable.
-  
+
   Raw samples can be reported in-order or out-of-order.
-  
+
   Duplication policy for samples with identical time tags can be set: block/first/last/min/max/sum.
-  
+
 - An optional configurable **retention period**.
 
   Raw samples older than the retention period (relative to the raw sample with the highest time tag) are discarded.
-  
+
 - **Series Metadata**: a set of name-value pairs (e.g., room = 3; sensorType = ‘xyz’).
 
   RedisTimeSeries supports cross-time-series commands. One can, for example, aggregate data over all sensors in the same room or all sensors of the same type.
-  
+
 - Zero or more **compactions**.
 
   Compactions are an economical way to retain historical data.
@@ -83,7 +83,7 @@ You can either get RedisTimeSeries setup in a Docker container or on your own ma
 ### Docker
 To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
-docker run -p 6379:6379 -it --rm redislabs/redistimeseries
+docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 ```
 
 ### Build and Run it yourself

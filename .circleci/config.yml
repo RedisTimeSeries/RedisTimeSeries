@@ -40,7 +40,7 @@ commands:
             apt-get -q install -y git openssh-client curl ca-certificates make tar gzip
             bash <(curl -fsSL https://raw.githubusercontent.com/docker/docker-install/master/install.sh)
       - setup_remote_docker:
-          version: 20.10.7
+          version: 20.10.14
           docker_layer_caching: true
 
   checkout-all:
@@ -67,10 +67,11 @@ commands:
         type: string
         default: ""
     steps:
-      - setup-automation
       - run:
           name: System setup
-          command: ./system-setup.py
+          command: |
+            ./sbin/setup
+            python3 -m pip list
       - run:
           name: Install Redis
           shell: /bin/bash -l -eo pipefail
@@ -92,10 +93,7 @@ commands:
       - run:
           name: Cleanup test log dir
           command: |
-            if [[ -d tests/flow/logs ]]; then
-              cd tests/flow/logs
-              rm -f *.aof *.rdb
-            fi
+            rm -f tests/flow/logs/*.{aof,rdb}
           when: always
       - store_artifacts:
           path: tests/flow/logs
@@ -103,6 +101,11 @@ commands:
   persist-artifacts:
     steps:
       - early-return-for-forked-pull-requests
+      - run:
+          name: List artifacts
+          command: |
+            cd bin/artifacts
+            du -ah --apparent-size *
       - persist_to_workspace:
           root: bin/
           paths:
@@ -137,22 +140,25 @@ commands:
           getredis_params: <<parameters.getredis_params>>
       - run:
           name: Build
-          command: bash -l -c "make build <<parameters.build_params>> SHOW=1"
+          shell: /bin/bash -l -eo pipefail
+          command: make build <<parameters.build_params>> SHOW=1
       - run:
+          shell: /bin/bash -l -eo pipefail
           name: Pack
-          command: bash -l -c "make pack SHOW=1"
+          command: make pack SHOW=1
       - run:
           name: Unit Test
+          shell: /bin/bash -l -eo pipefail
           command: |
             mkdir -p ~/workspace/tests
-            bash -l -c "make unit_tests <<parameters.test_params>> SHOW=1"
+            make unit_tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow test
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
             mkdir -p ~/workspace/tests
-            bash -l -c "make flow_tests <<parameters.test_params>> SHOW=1"
+            make flow_tests <<parameters.test_params>> SHOW=1
       - save-tests-logs
 
   build-platforms-steps:
@@ -163,7 +169,6 @@ commands:
       - early-returns
       - setup-executor
       - checkout-all
-      - setup-automation
       - install-prerequisites
       - run:
           name: Build for platform
@@ -195,7 +200,8 @@ commands:
       - setup-automation
       - run:
           name: Install Docker
-          command: sudo bash -l -c "./deps/readies/bin/getdocker"
+          shell: /bin/bash -l -eo pipefail
+          command: ./deps/readies/bin/getdocker
       - run:
           name: Build for platform
           command: |
@@ -259,7 +265,8 @@ commands:
           timeout: << parameters.timeout >>
           no_output_timeout: 20m
           command: |
-            cd ./tests/benchmarks
+            ROOT="$PWD"
+            cd tests/benchmarks
             export AWS_ACCESS_KEY_ID=$PERFORMANCE_EC2_ACCESS_KEY
             export AWS_SECRET_ACCESS_KEY=$PERFORMANCE_EC2_SECRET_KEY
             export AWS_DEFAULT_REGION=$PERFORMANCE_EC2_REGION
@@ -267,13 +274,14 @@ commands:
             export PROFILE=<< parameters.profile_env >>
             export BENCHMARK_GLOB=<< parameters.benchmark_glob >>
             export PERF_CALLGRAPH_MODE="dwarf"
+            if [[ -n $CIRCLE_BRANCH ]]; then branch="$CIRCLE_BRANCH"; else branch="$CIRCLE_TAG"; fi
             redisbench-admin run-remote \
               --module_path << parameters.module_path >> \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
               --github_org $CIRCLE_PROJECT_USERNAME \
               --github_sha $CIRCLE_SHA1 \
-              --github_branch $CIRCLE_BRANCH \
+              --github_branch $branch \
               --upload_results_s3 \
               --fail_fast \
               --triggering_env << parameters.triggering_env >> \
@@ -308,7 +316,7 @@ jobs:
 
   build:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     parameters:
       redis_version:
         type: string
@@ -351,14 +359,13 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 11.6.0
+      xcode: 11.7.0
+    resource_class: macos.x86.medium.gen2
     steps:
       - early-returns
       - run:
           name: Set up workspace
-          command: |
-            sudo mkdir -p ~/workspace
-            sudo chown $USER ~/workspace
+          command: mkdir -p ~/workspace
       - build-steps:
           platform: catalina
       - persist-artifacts
@@ -398,8 +405,7 @@ jobs:
       - run:
           name: Install prerequisites
           command: |
-            ./deps/readies/bin/getpy3
-            ./system-setup.py
+            ./sbin/setup
             ./deps/readies/bin/getredis
             sudo ./deps/readies/bin/getdocker --just-enable-exp
             docker version
@@ -432,7 +438,7 @@ jobs:
 
   coverage:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - checkout-all
@@ -455,7 +461,7 @@ jobs:
         type: string
         default: ""
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - early-return-for-forked-pull-requests

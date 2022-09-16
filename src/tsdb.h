@@ -44,6 +44,7 @@ typedef struct Series
     const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    bool in_ram; // false if the key is on flash (relevant only for RoF)
 } Series;
 
 // process C's modulo result to translate from a negative modulo to a positive
@@ -160,5 +161,11 @@ typedef enum
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
 
 void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
+
+CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
+
+#define should_finalize_last_bucket_get(latest, series) ((latest) && (series)->srcKey)
+
+void calculate_latest_sample(Sample **sample, const Series *series);
 
 #endif /* TSDB_H */
