@@ -106,13 +106,14 @@ aggregates results into time buckets, where:
 
 <details open>
 <summary><code>[BUCKETTIMESTAMP bt]</code> (since RedisTimeSeries v1.8)</summary>
+
 controls how bucket timestamps are reported.
 
-| `bt`         | Description                                                |
-| ------------ | ---------------------------------------------------------- |
-| `-` or `low` | Timestamp is the start time (default)                      |
-| `+` or `high` &nbsp; &nbsp; &nbsp;| Timestamp is the end time                                  |
-| `~` or `mid` | Timestamp is the mid time (rounded down if not an integer) |
+| `bt`             | Timestamp reported for each bucket                            |
+| ---------------- | ------------------------------------------------------------- |
+| `-` or `low`     | the bucket's start time (default)                             |
+| `+` or `high`    | the bucket's end time                                         |
+| `~` or `mid`     | the bucket's mid time (rounded down if not an integer)        |
 </details>
 
 <details open>
@@ -123,7 +124,7 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
 | `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
-| `twa`                | Based on linear interpolation or extrapolation of neighbouring buckets. `NaN` when cannot interpolate nor extrapolate. |
+| `twa`                | Based on linear interpolation of neighbouring buckets. `NaN` when cannot interpolate. |
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
