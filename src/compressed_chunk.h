@@ -9,6 +9,7 @@
 
 #include "generic_chunk.h"
 #include "gorilla.h"
+#include "rdb.h"
 
 #include <stdbool.h>   // bool
 #include <sys/types.h> // u_int_t
@@ -32,7 +33,9 @@ void Compressed_ProcessChunk(const Chunk_t *chunk,
 
 // Read from compressed chunk using an iterator
 ChunkIter_t *Compressed_NewChunkIterator(const Chunk_t *chunk);
+ChunkIter_t *Compressed_NewChunkIteratorLegacy(const Chunk_t *chunk);
 void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
+void Compressed_ResetChunkIteratorLegacy(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous
@@ -44,7 +47,7 @@ double Compressed_GetLastValue(Chunk_t *chunk);
 
 // RDB
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
 
 // LibMR
 void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);

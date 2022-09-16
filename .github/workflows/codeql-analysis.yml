@@ -60,7 +60,7 @@ jobs:
 
     - name: Build
       run: |
-        sudo ./system-setup.py
+        ./sbin/setup
         make fetch
         make build
 

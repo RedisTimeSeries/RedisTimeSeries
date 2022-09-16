@@ -47,6 +47,25 @@ typedef struct CompressedChunk
     u_int8_t prevTrailing;
 } CompressedChunk;
 
+typedef struct CompressedChunk_Legacy
+{
+    u_int64_t size;
+    u_int64_t count;
+    u_int64_t idx;
+
+    union64bits baseValue;
+    u_int64_t baseTimestamp;
+
+    u_int64_t *data;
+
+    u_int64_t prevTimestamp;
+    int64_t prevTimestampDelta;
+
+    union64bits prevValue;
+    u_int8_t prevLeading;
+    u_int8_t prevTrailing;
+} CompressedChunk_Legacy;
+
 typedef struct Compressed_Iterator
 {
     CompressedChunk *chunk;
@@ -65,7 +84,25 @@ typedef struct Compressed_Iterator
     u_int8_t blocksize;
 } Compressed_Iterator;
 
+typedef struct Compressed_IteratorLegacy
+{
+    CompressedChunk_Legacy *chunk;
+    u_int64_t idx;
+    u_int64_t count;
+
+    // timestamp vars
+    u_int64_t prevTS;
+    int64_t prevDelta;
+
+    // value vars
+    union64bits prevValue;
+    u_int8_t leading;
+    u_int8_t trailing;
+    u_int8_t blocksize;
+} Compressed_IteratorLegacy;
+
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample);
+ChunkResult Compressed_ChunkIteratorGetNext_Legacy(ChunkIter_t *iter, Sample *sample);
 
 #endif

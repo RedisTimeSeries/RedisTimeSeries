@@ -7,7 +7,8 @@ Get the last sample
 ## Syntax
 
 {{< highlight bash >}}
-TS.GET key [LATEST]
+TS.GET key 
+  [LATEST]
 {{< / highlight >}}
 
 [Examples](#examples)

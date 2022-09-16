@@ -63,7 +63,7 @@ void Uncompressed_ProcessChunk(const Chunk_t *chunk,
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
 
 // LibMR
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);

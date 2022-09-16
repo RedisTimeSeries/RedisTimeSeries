@@ -18,7 +18,7 @@ int last_rdb_load_version;
 
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
-    if (encver < TS_CHUNK_DATA_SPLIT_VER || encver > TS_LATEST_ENCVER) {
+    if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
@@ -119,7 +119,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         uint64_t numChunks = LoadUnsigned_IOError(io, goto err);
         for (int i = 0; i < numChunks; ++i) {
-            if (series->funcs->LoadFromRDB(&chunk, io)) {
+            if (series->funcs->LoadFromRDB(&chunk, io, encver)) {
                 goto err;
             }
             dictOperator(

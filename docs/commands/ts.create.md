@@ -7,7 +7,12 @@ Create a new time series
 ## Syntax
 
 {{< highlight bash >}}
-TS.CREATE key [RETENTION retentionPeriod] [ENCODING [UNCOMPRESSED|COMPRESSED]] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS {label value}...]
+TS.CREATE key 
+  [RETENTION retentionPeriod] 
+  [ENCODING [UNCOMPRESSED|COMPRESSED]] 
+  [CHUNK_SIZE size] 
+  [DUPLICATE_POLICY policy] 
+  [LABELS {label value}...]
 {{< / highlight >}}
 
 [Examples](#examples)
