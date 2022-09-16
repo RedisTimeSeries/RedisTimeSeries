@@ -12,7 +12,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
   [FILTER_BY_TS TS...]
   [FILTER_BY_VALUE min max]
   [COUNT count]
-  [[ALIGN value] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+  [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 {{< / highlight >}}
 
 [Examples](#examples)
@@ -67,7 +67,8 @@ limits the number of returned samples.
 </details>
 
 <details open>
-<summary><code>ALIGN value</code> (since RedisTimeSeries v1.6)</summary>
+<summary><code>ALIGN align</code> (since RedisTimeSeries v1.6)</summary>
+
 is a time bucket alignment control for `AGGREGATION`. It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined. 
 Values include:
    
@@ -102,6 +103,12 @@ aggregates results into time buckets, where:
     | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
+  
+  Without `ALIGN`, bucket start times are multiples of `bucketDuration`.
+  
+  With `ALIGN align`, bucket start times are multiples of `bucketDuration` with remainder `align % bucketDuration`.
+  
+  The first bucket start time is less of equal to `fromTimestamp`.  
 </details>
 
 <details open>
