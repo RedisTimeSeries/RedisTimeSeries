@@ -108,7 +108,7 @@ aggregates results into time buckets, where:
   
   With `ALIGN align`, bucket start times are multiples of `bucketDuration` with remainder `align % bucketDuration`.
   
-  The first bucket start time is less of equal to `fromTimestamp`.  
+  The first bucket start time is less than or equal to `fromTimestamp`.  
 </details>
 
 <details open>
