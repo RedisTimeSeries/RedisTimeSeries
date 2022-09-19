@@ -68,19 +68,19 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
 
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
-    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);
     RedisModule_ReplyWithSimpleString(ctx, "memoryUsage");
-    RedisModule_ReplyWithLongLong(ctx, SeriesMemUsage(series));
+    RedisModule_ReplyWithUnsignedLongLong(ctx, SeriesMemUsage(series));
     RedisModule_ReplyWithSimpleString(ctx, "firstTimestamp");
-    RedisModule_ReplyWithLongLong(ctx, firstTimestamp);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, firstTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
-    RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, series->lastTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "retentionTime");
-    RedisModule_ReplyWithLongLong(ctx, series->retentionTime);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, series->retentionTime);
     RedisModule_ReplyWithSimpleString(ctx, "chunkCount");
-    RedisModule_ReplyWithLongLong(ctx, RedisModule_DictSize(series->chunks));
+    RedisModule_ReplyWithUnsignedLongLong(ctx, RedisModule_DictSize(series->chunks));
     RedisModule_ReplyWithSimpleString(ctx, "chunkSize");
-    RedisModule_ReplyWithLongLong(ctx, series->chunkSizeBytes);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, series->chunkSizeBytes);
     RedisModule_ReplyWithSimpleString(ctx, "chunkType");
     RedisModule_ReplyWithSimpleString(ctx, ChunkTypeToString(series->options));
     RedisModule_ReplyWithSimpleString(ctx, "duplicatePolicy");
@@ -107,9 +107,9 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     while (rule != NULL) {
         RedisModule_ReplyWithArray(ctx, 4);
         RedisModule_ReplyWithString(ctx, rule->destKey);
-        RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
+        RedisModule_ReplyWithUnsignedLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
-        RedisModule_ReplyWithLongLong(ctx, rule->timestampAlignment);
+        RedisModule_ReplyWithUnsignedLongLong(ctx, rule->timestampAlignment);
 
         rule = rule->nextRule;
         ruleCount++;
@@ -129,15 +129,15 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
             RedisModule_ReplyWithArray(ctx, 5 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
-            RedisModule_ReplyWithLongLong(
+            RedisModule_ReplyWithUnsignedLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
-            RedisModule_ReplyWithLongLong(
+            RedisModule_ReplyWithUnsignedLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
             RedisModule_ReplyWithSimpleString(ctx, "samples");
-            RedisModule_ReplyWithLongLong(ctx, numOfSamples);
+            RedisModule_ReplyWithUnsignedLongLong(ctx, numOfSamples);
             RedisModule_ReplyWithSimpleString(ctx, "size");
-            RedisModule_ReplyWithLongLong(ctx, chunkSize);
+            RedisModule_ReplyWithUnsignedLongLong(ctx, chunkSize);
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
             RedisModule_ReplyWithDouble(ctx, (float)chunkSize / numOfSamples);
             chunkCount++;
@@ -506,7 +506,7 @@ static int internalAdd(RedisModuleCtx *ctx,
             rule = rule->nextRule;
         }
     }
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, timestamp);
     return REDISMODULE_OK;
 }
 
@@ -1134,7 +1134,7 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     size_t deleted = SeriesDelRange(series, args.startTimestamp, args.endTimestamp);
 
-    RedisModule_ReplyWithLongLong(ctx, deleted);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, deleted);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.del", argv[1]);
 

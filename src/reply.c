@@ -11,6 +11,7 @@
 #include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
+#include "ll2string.h"
 
 #include "rmutil/alloc.h"
 
@@ -111,7 +112,7 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 #define MAX_VAL_LEN 24
 void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    RedisModule_ReplyWithUnsignedLongLong(ctx, timestamp);
     char buf[MAX_VAL_LEN + 1];
     dragonbox_double_to_chars(value, buf);
     RedisModule_ReplyWithSimpleString(ctx, buf);

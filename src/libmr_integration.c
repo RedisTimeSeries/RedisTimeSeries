@@ -773,8 +773,8 @@ void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record) {
     SeriesRecord *series = (SeriesRecord *)record;
     RedisModule_ReplyWithArray(rctx, 3);
     RedisModule_ReplyWithString(rctx, series->keyName);
-    RedisModule_ReplyWithLongLong(rctx, series->chunkCount);
-    RedisModule_ReplyWithLongLong(rctx, series->labelsCount);
+    RedisModule_ReplyWithUnsignedLongLong(rctx, series->chunkCount);
+    RedisModule_ReplyWithUnsignedLongLong(rctx, series->labelsCount);
 }
 
 Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
