@@ -38,21 +38,32 @@ def test_dump_restore_dst_rule():
     with Env().getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
+        key3 = 'ts3{a}'
         r.execute_command('TS.CREATE', key1)
         r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.CREATE', key3)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
+        r.execute_command('TS.CREATERULE', key1, key3, 'AGGREGATION', 'twa', 10)
 
         assert _get_ts_info(r, key2).sourceKey.decode() == key1
-        assert len(_get_ts_info(r, key1).rules) == 1
+        assert len(_get_ts_info(r, key1).rules) == 2
 
         data = r.execute_command('DUMP', key2)
         r.execute_command('DEL', key2)
         r.execute_command('restore', key2, 0, data)
 
         assert _get_ts_info(r, key1).sourceKey == None
-        assert len(_get_ts_info(r, key1).rules) == 0
+        assert len(_get_ts_info(r, key1).rules) == 1
         assert _get_ts_info(r, key2).sourceKey == None
         assert len(_get_ts_info(r, key2).rules) == 0
+    
+        data = r.execute_command('DUMP', key3)
+        r.execute_command('DEL', key3)
+        r.execute_command('restore', key3, 0, data)
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) == 0
+        assert _get_ts_info(r, key3).sourceKey == None
+        assert len(_get_ts_info(r, key3).rules) == 0
 
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
         assert _get_ts_info(r, key2).sourceKey.decode() == key1
@@ -74,12 +85,15 @@ def test_dump_restore_dst_rule_force_save_refs():
     with Env(moduleArgs='DEUBG_FORCE_RULE_DUMP enable').getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
+        key3 = 'ts3{a}'
         r.execute_command('TS.CREATE', key1)
         r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.CREATE', key3)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
+        r.execute_command('TS.CREATERULE', key1, key3, 'AGGREGATION', 'twa', 10)
 
         assert _get_ts_info(r, key2).sourceKey.decode() == key1
-        assert len(_get_ts_info(r, key1).rules) == 1
+        assert len(_get_ts_info(r, key1).rules) == 2
 
         data = r.execute_command('DUMP', key2)
         r.execute_command('DEL', key2)
