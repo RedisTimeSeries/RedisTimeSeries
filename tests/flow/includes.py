@@ -18,6 +18,11 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = os.getenv('VALGRIND', '0') == '1'
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
+def is_rlec():
+    if RLEC_CLUSTER:
+        return True
+    else:
+        return False
 
 def skip_on_rlec():
     if RLEC_CLUSTER:

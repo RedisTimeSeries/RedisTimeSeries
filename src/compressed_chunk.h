@@ -40,6 +40,7 @@ size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);
+double Compressed_GetLastValue(Chunk_t *chunk);
 
 // RDB
 void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);

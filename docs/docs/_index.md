@@ -6,15 +6,16 @@ type: docs
 ---
 
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
+[![Github](https://img.shields.io/static/v1?label=&message=repository&color=5961FF&logo=github)](https://github.com/RedisTimeSeries/RedisTimeSeries/)
 
 RedisTimeSeries is a Redis module that adds a time series data structure to Redis.
 
 ## Features
 * High volume inserts, low latency reads
 * Query by start time and end-time
-* Aggregated queries (min, max, avg, sum, range, count, first, last, STD.P, STD.S, Var.P, Var.S) for any time bucket
+* Aggregated queries (min, max, avg, sum, range, count, first, last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 * Configurable maximum retention period
-* Downsampling / compaction for automatically updated aggregated timeseries
+* Downsampling/compaction for automatically updated aggregated timeseries
 * Secondary indexing for time series entries. Each time series has labels (field value pairs) which will allows to query by labels
 
 ## Client libraries
@@ -23,14 +24,14 @@ Official and community client libraries in Python, Java, JavaScript, Ruby, Go, C
 
 See the [clients page](clients) for the full list.
 
-## Using with other tools metrics tools
+## Using with other metrics tools
 
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
-1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
-2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
-3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
+1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use RedisTimeSeries as backend db.
+2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource), using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
+3. [Telegraf](https://github.com/influxdata/telegraf). Download the plugin from [InfluxData](https://portal.influxdata.com/downloads/). 
 4. StatsD, Graphite exports using graphite protocol.
 
 ## Memory model

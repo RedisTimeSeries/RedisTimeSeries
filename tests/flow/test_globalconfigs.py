@@ -77,6 +77,28 @@ def test_compressed_debug():
 
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
 
+def test_timestamp_alignment():
+    Env().skipOnCluster()
+    skip_on_rlec()
+    env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:0:500m')
+    with env.getConnection() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.ADD', 't1', '1', 1.0)
+        r.execute_command('TS.ADD', 't1', '3000', 1.0)
+        r.execute_command('TS.ADD', 't1', '5000', 1.0)
+        res = r.execute_command('KEYS *')
+        res.sort()
+        assert res == [b't1', b't1_MAX_1000_500']
+
+        info = r.execute_command('TS.INFO', 't1_MAX_1000_500')
+        assert info == [b'totalSamples', 2, b'memoryUsage', 4201, b'firstTimestamp', 0, b'lastTimestamp', 2500, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'uncompressed', b'duplicatePolicy', None, b'labels', [[b'aggregation', b'MAX'], [b'time_bucket', b'1000']], b'sourceKey', b't1', b'rules', []]
+
+        info = r.execute_command('TS.INFO', 't1', 'DEBUG')
+        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'keySelfName', b't1', b'Chunks', [[b'startTimestamp', 1, b'endTimestamp', 5000, b'samples', 3, b'size', 4096, b'bytesPerSample', b'1365.3333740234375']]]
+
+        info = r.execute_command('TS.INFO', 't1')
+        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]]]
+
 class testGlobalConfigTests():
 
     def __init__(self):

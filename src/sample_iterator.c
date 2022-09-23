@@ -8,9 +8,9 @@
 
 ChunkResult SeriesSampleIterator_GetNext(struct AbstractSampleIterator *base, Sample *sample) {
     SeriesSampleIterator *iter = (SeriesSampleIterator *)base;
-    if (unlikely(!iter->chunk || iter->cur_index >= iter->chunk->num_samples)) {
+    if (unlikely(!iter->chunk || iter->cur_index >= iter->chunk->samples.num_samples)) {
         iter->chunk = iter->base.input->GetNext(iter->base.input);
-        if (!iter->chunk || iter->chunk->num_samples == 0) {
+        if (!iter->chunk || iter->chunk->samples.num_samples == 0) {
             return CR_END;
         }
         iter->cur_index = 0;

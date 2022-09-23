@@ -1,0 +1,2 @@
+
+CPU_FEATURES=$(CPU_FEATURES_BINDIR)/libcpu_features.a

@@ -12,7 +12,6 @@
 #include "query_language.h"
 #include "tsdb.h"
 
-#include <assert.h>
 #include "rmutil/alloc.h"
 
 #define SeriesRecordName "SeriesRecord"
@@ -104,6 +103,7 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->limitLabelsSize, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->startTimestamp, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->endTimestamp, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->latest, error);
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         SerializationCtxWriteRedisString(sctx, predicate_list->limitLabels[i], error);
     }
@@ -149,6 +149,7 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->limitLabelsSize = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->startTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->endTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->latest = MR_SerializationCtxReadeLongLong(sctx, error);
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof(char **));
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
@@ -233,13 +234,26 @@ Record *ListWithSample(u_int64_t timestamp, double value) {
     return r;
 }
 
-Record *ListWithSeriesLastDatapoint(const Series *series) {
+Record *ListWithSeriesLastDatapoint(const Series *series, bool latest) {
+    if (should_finalize_last_bucket_get(latest, series)) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr) {
+            return ListWithSample(sample.timestamp, sample.value);
+        }
+    }
+
     if (SeriesGetNumSamples(series) == 0) {
         return ListRecord_Create(0);
     } else {
         return ListWithSample(series->lastTimestamp, series->lastValue);
     }
 }
+
+// LATEST is ignored for a series that is not a compaction.
+#define should_finalize_last_bucket(pred, series)                                                  \
+    ((pred)->latest && (series)->srcKey && (pred)->endTimestamp > (series)->lastTimestamp)
 
 Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     QueryPredicates_Arg *predicates = arg;
@@ -281,7 +295,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
         ListRecord_Add(
             series_list,
-            SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp));
+            SeriesRecord_New(
+                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
 
         RedisModule_CloseKey(key);
     }
@@ -348,7 +363,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         } else {
             ListRecord_Add(key_record, ListRecord_Create(0));
         }
-        ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series));
+
+        ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series, predicates->latest));
+
         RedisModule_CloseKey(key);
         ListRecord_Add(series_list, key_record);
     }
@@ -641,7 +658,10 @@ static void *ListRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **erro
     return r;
 }
 
-Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t endTimestamp) {
+Record *SeriesRecord_New(Series *series,
+                         timestamp_t startTimestamp,
+                         timestamp_t endTimestamp,
+                         const QueryPredicates_Arg *predicates) {
     SeriesRecord *out = (SeriesRecord *)MR_RecordCreate(SeriesRecordType, sizeof(*out));
     out->keyName = RedisModule_CreateStringFromString(NULL, series->keyName);
     if (series->options & SERIES_OPT_UNCOMPRESSED) {
@@ -658,17 +678,36 @@ Record *SeriesRecord_New(Series *series, timestamp_t startTimestamp, timestamp_t
     }
 
     // clone chunks
-    out->chunks = calloc(RedisModule_DictSize(series->chunks), sizeof(Chunk_t *));
+    out->chunks = calloc(RedisModule_DictSize(series->chunks) + 1,
+                         sizeof(Chunk_t *)); // + 1 in case of latest flag
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     Chunk_t *chunk = NULL;
     int index = 0;
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
-        if (series->funcs->GetLastTimestamp(chunk) > startTimestamp) {
+        if (series->funcs->GetNumOfSample(chunk) == 0) {
+            if (unlikely(series->totalSamples != 0)) { // empty chunks are being removed
+                RedisModule_Log(
+                    mr_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+            }
+            break;
+        }
+        if (series->funcs->GetLastTimestamp(chunk) >= startTimestamp) {
             if (series->funcs->GetFirstTimestamp(chunk) > endTimestamp) {
                 break;
             }
 
             out->chunks[index] = out->funcs->CloneChunk(chunk);
+            index++;
+        }
+    }
+
+    if (should_finalize_last_bucket(predicates, series)) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr && (sample.timestamp <= endTimestamp)) {
+            out->chunks[index] = out->funcs->NewChunk(128);
+            series->funcs->AddSample(out->chunks[index], &sample);
             index++;
         }
     }

@@ -36,6 +36,9 @@ include $(ROOT)/build/fast_double_parser_c/Makefile.defs
 export RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
 include $(ROOT)/build/rmutil/Makefile.defs
 
+export CPU_FEATURES_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/cpu_features
+include $(ROOT)/build/cpu_features/Makefile.defs
+
 #----------------------------------------------------------------------------------------------  
 
 define HELPTEXT
@@ -97,6 +100,7 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 
 #----------------------------------------------------------------------------------------------
 
+ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
@@ -113,9 +117,10 @@ CC_FLAGS = \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
-	-DREDISMODULE_EXPERIMENTAL_API
+	-DREDISMODULE_EXPERIMENTAL_API \
+	-g -ggdb
 
-LD_FLAGS += 
+LD_FLAGS += -g -ggdb
 LD_LIBS += \
 	  $(LIBMR) \
 	  $(FAST_DOUBLE_PARSER_C) \
@@ -123,6 +128,7 @@ LD_LIBS += \
 	  $(LIBEVENT_LIBS) \
 	  $(HIREDIS) \
 	  $(RMUTIL) \
+	  $(CPU_FEATURES) \
 	  -lc -lm -lpthread -lstdc++
 
 ifeq ($(OS),linux)
@@ -132,16 +138,16 @@ endif
 
 ifeq ($(OS),macos)
 LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
-DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS) -static
+DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS) -static
 endif
 
 ifeq ($(PROFILE),1)
-CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
+CC_FLAGS += -fno-omit-frame-pointer
 endif
 
 ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0 -DDEBUG -D_DEBUG
+CC_FLAGS += -O0 -DDEBUG -D_DEBUG
 LD_FLAGS += -g
 
 ifeq ($(VALGRIND),1)
@@ -177,8 +183,20 @@ _SOURCES=\
 	resultset.c \
 	tsdb.c \
 	series_iterator.c \
+	utils/arch_features.c \
 	sample_iterator.c \
-	enriched_chunk.c
+	enriched_chunk.c \
+	utils/heap.c \
+	multiseries_sample_iterator.c \
+	multiseries_agg_dup_sample_iterator.c \
+	utils/blocked_client.c
+
+
+ifeq ($(ARCH), x86_64)
+_SOURCES_AVX512=compactions/compaction_avx512f.c
+_SOURCES_AVX2=compactions/compaction_avx2.c
+_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512) $(_SOURCES_AVX2)
+endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
@@ -206,6 +224,9 @@ endif
 ifeq ($(wildcard $(RMUTIL)),)
 MISSING_DEPS += $(RMUTIL)
 endif
+ifeq ($(wildcard $(CPU_FEATURES)),)
+MISSING_DEPS += $(CPU_FEATURES)
+endif
 ifeq ($(wildcard $(LIBMR)),)
 MISSING_DEPS += $(LIBMR)
 endif
@@ -214,7 +235,7 @@ ifneq ($(MISSING_DEPS),)
 DEPS=1
 endif
 
-DEPENDENCIES=rmutil libmr hiredis libevent fast_double_parser_c dragonbox
+DEPENDENCIES=cpu_features rmutil libmr hiredis libevent fast_double_parser_c dragonbox
 
 ifneq ($(filter all deps $(DEPENDENCIES) pack,$(MAKECMDGOALS)),)
 DEPS=1
@@ -234,9 +255,15 @@ include $(MK)/rules
 
 ifeq ($(DEPS),1)
 
-.PHONY: rmutil libmr hiredis dragonbox fast_double_parser_c
+.PHONY: cpu_features rmutil libmr hiredis dragonbox fast_double_parser_c
 
-deps: $(RMUTIL) $(LIBEVENT) $(HIREDIS) $(LIBMR) $(FAST_DOUBLE_PARSER_C) $(DRAGONBOX)
+deps: $(CPU_FEATURES) $(RMUTIL) $(LIBEVENT) $(HIREDIS) $(LIBMR) $(FAST_DOUBLE_PARSER_C) $(DRAGONBOX)
+
+cpu_features: $(CPU_FEATURES)
+
+$(CPU_FEATURES):
+	@echo Building $@ ...
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/cpu_features DEBUG=''
 
 rmutil: $(RMUTIL)
 
@@ -285,14 +312,14 @@ endif # DEPS
 #----------------------------------------------------------------------------------------------
 
 clean:
+	@echo Cleaning ...
 ifeq ($(ALL),1)
-	-$(SHOW)rm -rf $(BINDIR) $(TARGET)
+	-$(SHOW)rm -rf $(BINROOT)
 else
-	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
-	-$(SHOW)rm -f $(TARGET)
-endif
-ifdef ($(DEPS),1)
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil  DEBUG='' clean
+	-$(SHOW)rm -rf $(BINDIR)
+ifeq ($(DEPS),1)
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/cpu_features DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
@@ -300,10 +327,24 @@ ifdef ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 endif
+endif
 
 -include $(CC_DEPS)
 
-$(BINDIR)/%.o: $(SRCDIR)/%.c
+
+AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
+AVX2_OBJECTS=$(filter %avx2.o,$(OBJECTS))
+REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS) $(AVX2_OBJECTS),$(OBJECTS))
+
+$(AVX512F_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
+
+$(AVX2_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+	@echo Compiling $<...
+	$(SHOW)$(CC) $(CC_FLAGS) -mavx2 -c $< -o $@
+
+$(REGULAR_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
@@ -477,5 +518,3 @@ coverage:
 pack: $(TARGET)
 	@echo Creating packages...
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
-
-#----------------------------------------------------------------------------------------------

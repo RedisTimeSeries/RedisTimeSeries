@@ -8,6 +8,7 @@
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
+#include "utils/blocked_client.h"
 
 #include "rmutil/alloc.h"
 
@@ -15,9 +16,9 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
         RedisModule_ReplyWithError(rctx, "multi shard cmd failed");
-        RedisModule_Log(rctx, "verbose", "got libmr error:");
+        RedisModule_Log(rctx, "warning", "got libmr error:");
         for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "verbose", MR_ExecutionCtxGetError(eCtx, i));
+            RedisModule_Log(rctx, "warning", MR_ExecutionCtxGetError(eCtx, i));
         }
         return true;
     }
@@ -75,7 +76,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     }
 
 __done:
-    RedisModule_UnblockClient(bc, rctx);
+    RTS_UnblockClient(bc, rctx);
 }
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
@@ -147,7 +148,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     if (data->args.groupByLabel) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
-        ResultSet_ApplyReducer(resultset, &args, data->args.gropuByReducerOp, data->args.reverse);
+        args.latest = false; // we already handled the latest flag in the client side
+        ResultSet_ApplyReducer(resultset, &args, &data->args.gropuByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
@@ -155,7 +157,9 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.endTimestamp = UINT64_MAX;
         minimizedArgs.aggregationArgs.aggregationClass = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;
+        minimizedArgs.latest = false;
 
         replyResultSet(rctx,
                        resultset,
@@ -173,7 +177,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 __done:
     MRangeArgs_Free(&data->args);
     free(data);
-    RedisModule_UnblockClient(bc, rctx);
+    RTS_UnblockClient(bc, rctx);
 }
 
 int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -188,6 +192,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
+    queryArg->latest = args.latest;
     // moving ownership of queries to QueryPredicates_Arg
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -211,7 +216,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
@@ -234,6 +239,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
+    queryArg->latest = args.rangeArgs.latest;
     args.queryPredicates->ref++;
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -258,7 +264,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
@@ -296,7 +302,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         return REDISMODULE_OK;
     }
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, rts_free_rctx, 0);
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
