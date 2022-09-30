@@ -54,9 +54,9 @@ When not specified, the option is set to `COMPRESSED`.
 
 is initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. Changing chunkSize (using `TS.ALTER`) does not affect existing chunks.
 
-Must be a multiple of 8 in the range [64 .. 1048576]. When not specified, it is set to 4096 bytes (a single memory page).
+Must be a multiple of 8 in the range [48 .. 1048576]. When not specified, it is set to 4096 bytes (a single memory page).
 
-Note: the minimal value was 128 between versions 1.6.10 and 1.6.17, and in version 1.8.0.
+Note: Before v1.6.10 no minimum was enforced. Between v1.6.10 and v1.6.17 and in v1.8.0 The minimum value was 128. Since v1.8.1 the minimum value is 48.
 
 The data in each key is stored in chunks. Each chunk contains header and data for a given timeframe. An index contains all chunks. Iterations occur inside each chunk. Depending on your use case, consider these tradeoffs for having smaller or larger sizes of chunks:
 
