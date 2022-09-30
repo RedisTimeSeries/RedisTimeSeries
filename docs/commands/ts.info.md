@@ -39,9 +39,9 @@ TS.INFO returns an array-reply with these elements:
 | `firstTimestamp`  | First timestamp present in this time series
 | `lastTimestamp`   | Last timestamp present in this time series
 | `retentionTime`   | The retention period, in milliseconds, for this time series
-| `chunkCount`      | Number of Memory Chunks used for this time series
-| `chunkSize`       | The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing chunkSize (using `TS.ALTER`) does not affect existing chunks.
-| `chunkType`       | The chunk type: `compressed` or `uncompressed`
+| `chunkCount`      | Number of chunks used for this time series
+| `chunkSize`       | The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing the chunk size (using `TS.ALTER`) does not affect existing chunks.
+| `chunkType`       | The chunks type: `compressed` or `uncompressed`
 | `duplicatePolicy` | The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
 | `labels`          | A nested array of label-value pairs that represent the metadata labels of this time series
 | `sourceKey`       | Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
