@@ -1,14 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.QUERYINDEX filter...
+
 ---
 
 Get all time series keys matching a filter list
-
-## Syntax
-
-{{< highlight bash >}}
-TS.QUERYINDEX filter...
-{{< / highlight >}}
 
 [Examples](#examples)
 

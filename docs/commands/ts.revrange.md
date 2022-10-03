@@ -1,19 +1,14 @@
 ---
-syntax: 
+syntax: |
+  TS.REVRANGE key fromTimestamp toTimestamp
+    [LATEST]
+    [FILTER_BY_TS TS...]
+    [FILTER_BY_VALUE min max]
+    [COUNT count]
+    [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ---
 
 Query a range in reverse direction
-
-## Syntax
-
-{{< highlight bash >}}
-TS.REVRANGE key fromTimestamp toTimestamp
-  [LATEST]
-  [FILTER_BY_TS TS...]
-  [FILTER_BY_VALUE min max]
-  [COUNT count]
-  [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-{{< / highlight >}}
 
 [Examples](#examples)
 
@@ -21,6 +16,7 @@ TS.REVRANGE key fromTimestamp toTimestamp
 
 <details open>
 <summary><code>key</code></summary>
+
 is the key name for the time series.
 </details>
 

@@ -1,14 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.DELETERULE sourceKey destKey
+
 ---
 
 Delete a compaction rule
-
-## Syntax
-
-{{< highlight bash >}}
-TS.DELETERULE sourceKey destKey
-{{< / highlight >}}
 
 ## Required arguments
 <details open><summary><code>sourceKey</code></summary>

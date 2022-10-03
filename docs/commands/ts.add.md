@@ -1,20 +1,14 @@
 ---
-syntax: 
+syntax: |
+  TS.ADD key timestamp value 
+    [RETENTION retentionPeriod] 
+    [ENCODING [COMPRESSED|UNCOMPRESSED]] 
+    [CHUNK_SIZE size] 
+    [ON_DUPLICATE policy] 
+    [LABELS {label value}...]
 ---
 
 Append a sample to a time series
-
-
-## Syntax
-
-{{< highlight bash >}}
-TS.ADD key timestamp value 
-  [RETENTION retentionPeriod] 
-  [ENCODING [COMPRESSED|UNCOMPRESSED]] 
-  [CHUNK_SIZE size] 
-  [ON_DUPLICATE policy] 
-  [LABELS {label value}...]
-{{< / highlight >}}
 
 [Examples](#examples)
 

@@ -1,16 +1,11 @@
 ---
-syntax: 
+syntax: |
+  TS.CREATERULE sourceKey destKey 
+    AGGREGATION aggregator bucketDuration 
+    [alignTimestamp]
 ---
 
 Create a compaction rule
-
-## Syntax
-
-{{< highlight bash >}}
-TS.CREATERULE sourceKey destKey 
-  AGGREGATION aggregator bucketDuration 
-  [alignTimestamp]
-{{< / highlight >}}
 
 [Examples](#examples)
 

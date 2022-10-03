@@ -1,14 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
+
 ---
 
 Get the last samples matching a specific filter
-
-## Syntax
-
-{{< highlight bash >}}
-TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
-{{< / highlight >}}
 
 [Examples](#examples)
 

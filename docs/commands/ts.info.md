@@ -1,15 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.INFO key 
+    [DEBUG]
 ---
 
 Return information and statistics for a time series.
-
-## Syntax
-
-{{< highlight bash >}}
-TS.INFO key 
-  [DEBUG]
-{{< / highlight >}}
 
 [Examples](#examples)
 

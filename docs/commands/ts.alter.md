@@ -1,18 +1,13 @@
 ---
-syntax: 
+syntax: |
+  TS.ALTER key 
+    [RETENTION retentionPeriod] 
+    [CHUNK_SIZE size] 
+    [DUPLICATE_POLICY policy] 
+    [LABELS [{label value}...]]
 ---
 
 Update the retention, chunk size, duplicate policy, and labels of an existing time series
-
-## Syntax
-
-{{< highlight bash >}}
-TS.ALTER key 
-  [RETENTION retentionPeriod] 
-  [CHUNK_SIZE size] 
-  [DUPLICATE_POLICY policy] 
-  [LABELS [{label value}...]]
-{{< / highlight >}}
 
 [Examples](#examples)
 

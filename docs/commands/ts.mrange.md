@@ -1,22 +1,18 @@
 ---
-syntax: 
+syntax: |
+  TS.MRANGE fromTimestamp toTimestamp
+    [LATEST]
+    [FILTER_BY_TS ts...]
+    [FILTER_BY_VALUE min max]
+    [WITHLABELS | SELECTED_LABELS label...]
+    [COUNT count]
+    [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+    FILTER filter..
+    [GROUPBY label REDUCE reducer]
+
 ---
 
 Query a range across multiple time series by filters in forward direction
-
-## Syntax
-
-{{< highlight bash >}}
-TS.MRANGE fromTimestamp toTimestamp
-  [LATEST]
-  [FILTER_BY_TS ts...]
-  [FILTER_BY_VALUE min max]
-  [WITHLABELS | SELECTED_LABELS label...]
-  [COUNT count]
-  [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-  FILTER filter..
-  [GROUPBY label REDUCE reducer]
-{{< / highlight >}}
 
 [Examples](#examples)
 

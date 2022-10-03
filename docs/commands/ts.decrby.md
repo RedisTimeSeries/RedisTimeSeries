@@ -1,19 +1,14 @@
 ---
-syntax: 
+syntax: |
+  TS.DECRBY key value 
+    [TIMESTAMP timestamp] 
+    [RETENTION retentionPeriod] 
+    [UNCOMPRESSED] 
+    [CHUNK_SIZE size] 
+    [LABELS {label value}...]
 ---
 
 Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
-
-## Syntax
-
-{{< highlight bash >}}
-TS.DECRBY key value 
-  [TIMESTAMP timestamp] 
-  [RETENTION retentionPeriod] 
-  [UNCOMPRESSED] 
-  [CHUNK_SIZE size] 
-  [LABELS {label value}...]
-{{< / highlight >}}
 
 ## Required arguments
 
