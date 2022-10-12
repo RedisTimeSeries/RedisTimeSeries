@@ -28,9 +28,15 @@ is numeric data value of the sample (double)
 </details>
 
 <note><b>Notes</b>
+- If the time series does not exist, it is automatically created.
+- You can use this command as a counter or gauge that automatically gets history as a time series.
+- Before RedisTimeSeries v1.8:
 
- - If the time series does not exist, it is automatically created.
- - You can use this command as a counter or gauge that automatically gets history as a time series.
+  Explicitly adding samples to a compacted time series can result in an undefined behavior.
+
+  Since RedisTimeSeries v1.8:
+
+  Explicitly adding samples to a compacted time series would return an error.
 </note>
 
 ## Optional arguments
