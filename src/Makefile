@@ -384,7 +384,7 @@ test: unit_tests flow_tests
 #----------------------------------------------------------------------------------------------
 
 $(UNITTESTS_RUNNER)	: $(TARGET)
-	$(SHOW)$(MAKE) -C ../tests/unit
+	$(SHOW)$(MAKE) -C $(ROOT)/tests/unit
 
 unit_tests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
@@ -525,9 +525,9 @@ pack: $(TARGET)
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
 
 upload-release:
-	@RELEASE=1 ./sbin/upload-artifacts
+	@RELEASE=1 $(ROOT)/sbin/upload-artifacts
 
 upload-artifacts:
-	@SNAPSHOT=1 ./sbin/upload-artifacts
+	@SNAPSHOT=1 $(ROOT)/sbin/upload-artifacts
 
 .PHONY: pack upload-release upload-artifacts
