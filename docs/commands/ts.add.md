@@ -88,14 +88,8 @@ Use it only if you are creating a new time series. It is ignored if you are addi
   - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
   - If only a part of the original samples for an affected aggregated time bucket is available due to trimming caused in accordance with the time series RETENTION policy, the compacted value is recalculated based on the reported sample and the available original samples.
   - If the original samples for an affected aggregated time bucket are not available due to trimming caused in accordance with the time series RETENTION policy, the compacted value bucket is not updated.
-- Before RedisTimeSeries v1.8:
-
-  Explicitly adding samples to a compacted time series can result in an undefined behavior.
-
-  Since RedisTimeSeries v1.8:
-
-  Explicitly adding samples to a compacted time series would return an error.  
-  </note>
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
+</note>
 
 ## Complexity
 
