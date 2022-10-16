@@ -16,7 +16,7 @@ BINDIR=$(BINROOT)
 include $(MK)/defs
 include $(MK)/rules
 
-.PHONY: all setup fetch build clean deps test coverage cov-upload pack help
+.PHONY: all setup fetch build clean deps test coverage upload-cov pack upload-release upload-artifacts help
 
 all: fetch deps build
 
@@ -57,11 +57,17 @@ flow_tests:
 coverage:
 	@$(MAKE) -C src coverage
 
-cov-upload:
-	@$(MAKE) -C src cov-upload
+upload-cov:
+	@$(MAKE) -C src upload-cov
 
 pack:
 	@$(MAKE) -C src pack
+
+upload-release:
+	@$(MAKE) -C src upload-release
+
+upload-artifacts:
+	@$(MAKE) -C src upload-artifacts
 
 run:
 	@$(MAKE) -C src run

@@ -758,13 +758,14 @@ workflows:
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.2", "7"]
+              redis_version: ["6.0", "6.2"]
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
           context: common
           matrix:
             parameters:
@@ -843,7 +844,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.0", "unstable"]
+              redis_version: ["7.0", "unstable"]
       - performance-ci-automation-oss-cluster-query:
           context: common
       - performance-ci-automation-oss-cluster-ingestion:

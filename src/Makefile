@@ -523,3 +523,11 @@ docker:
 pack: $(TARGET)
 	@echo Creating packages...
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
+
+upload-release:
+	@RELEASE=1 ./sbin/upload-artifacts
+
+upload-artifacts:
+	@SNAPSHOT=1 ./sbin/upload-artifacts
+
+.PHONY: pack upload-release upload-artifacts
