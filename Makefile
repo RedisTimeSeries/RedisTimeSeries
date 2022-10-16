@@ -7,7 +7,6 @@ ifeq ($(wildcard $(ROOT)/deps/readies/*),)
 ___:=$(shell git submodule update --init --recursive &> /dev/null)
 endif
 
-MK.pyver:=3
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
@@ -17,7 +16,7 @@ BINDIR=$(BINROOT)
 include $(MK)/defs
 include $(MK)/rules
 
-.PHONY: all setup fetch build clean deps test pack help
+.PHONY: all setup fetch build clean deps test coverage cov-upload pack help
 
 all: fetch deps build
 
@@ -26,8 +25,7 @@ help:
 
 setup:
 	@echo Setting up system...
-	@./deps/readies/bin/getpy3
-	@./system-setup.py
+	@./sbin/setup
 
 fetch:
 	-@git submodule update --init --recursive
@@ -48,13 +46,19 @@ format:
 	@$(MAKE) -C src format
 
 test:
-	@$(MAKE) -C src unit_tests flow_tests
+	@$(MAKE) -C src test
 
 unit_tests:
 	@$(MAKE) -C src unit_tests
 
 flow_tests:
 	@$(MAKE) -C src flow_tests
+
+coverage:
+	@$(MAKE) -C src coverage
+
+cov-upload:
+	@$(MAKE) -C src cov-upload
 
 pack:
 	@$(MAKE) -C src pack

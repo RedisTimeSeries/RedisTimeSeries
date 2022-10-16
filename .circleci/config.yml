@@ -57,6 +57,7 @@ commands:
           command: |
             git submodule update --init deps/readies
             ./deps/readies/bin/getpy3
+            ./deps/readies/bin/getaws
 
   install-prerequisites:
     parameters:
@@ -72,6 +73,8 @@ commands:
           command: |
             ./sbin/setup
             python3 -m pip list
+            if command -v gcc &> /dev/null; then gcc --version; fi
+            if command -v clang &> /dev/null; then clang --version; fi
       - run:
           name: Install Redis
           shell: /bin/bash -l -eo pipefail
@@ -109,29 +112,24 @@ commands:
       - persist_to_workspace:
           root: bin/
           paths:
-            - artifacts/snapshots/*.zip
-            - artifacts/snapshots/*.tgz
-            - artifacts/snapshots/*.tar
             - artifacts/*.zip
             - artifacts/*.tgz
             - artifacts/*.tar
 
   build-steps:
     parameters:
-      platform:
+      build_params:
         type: string
+        default: ""
+      test_params:
+        type: string
+        default: ""
       redis_version:
         type: string
         default: "6"
       getredis_params:
         type: string
         default: ""
-      build_params:
-        type: string
-        default: ""
-      test_params:
-        type: string
-        default: "AOF=0 SLAVES=0 AOF_SLAVES=1"
     steps:
       - early-returns
       - checkout-all
@@ -143,21 +141,20 @@ commands:
           shell: /bin/bash -l -eo pipefail
           command: make build <<parameters.build_params>> SHOW=1
       - run:
-          shell: /bin/bash -l -eo pipefail
           name: Pack
+          shell: /bin/bash -l -eo pipefail
           command: make pack SHOW=1
       - run:
           name: Unit Test
           shell: /bin/bash -l -eo pipefail
           command: |
-            mkdir -p ~/workspace/tests
             make unit_tests <<parameters.test_params>> SHOW=1
       - run:
           name: Flow test
+          shell: /bin/bash -l -eo pipefail
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            mkdir -p ~/workspace/tests
             make flow_tests <<parameters.test_params>> SHOW=1
       - save-tests-logs
 
@@ -165,6 +162,9 @@ commands:
     parameters:
       platform:
         type: string
+      official:
+        type: string
+        default: "1"
     steps:
       - early-returns
       - setup-executor
@@ -172,28 +172,28 @@ commands:
       - install-prerequisites
       - run:
           name: Build for platform
+          shell: /bin/bash -l -eo pipefail
           command: |
-            ROOT=$PWD
             cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=1 SHOW=1 VERBOSE=1
-            cd $ROOT
-            mkdir -p tests/flow/logs
-            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
-          no_output_timeout: 30m
+            make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
       - save-tests-logs
       - early-return-for-forked-pull-requests
       - run:
-          name: Build for platform (publish)
+          name: Publish container
+          shell: /bin/bash -l -eo pipefail
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=1 SHOW=1 VERBOSE=1
+            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
       - persist-artifacts
 
   vm-build-platforms-steps:
     parameters:
       platform:
         type: string
+      official:
+        type: string
+        default: "1"
     steps:
       - early-returns
       - checkout-all
@@ -205,31 +205,33 @@ commands:
       - run:
           name: Build for platform
           command: |
-            ROOT=$PWD
             cd build/docker
-            make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=1 SHOW=1 VERBOSE=1
-            cd $ROOT
-            mkdir -p tests/flow/logs
-            tar -C tests/flow/logs -xzf bin/artifacts/tests-flow-logs*.tgz
+            make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH TEST=1 OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
           no_output_timeout: 30m
       - save-tests-logs
       - early-return-for-forked-pull-requests
       - run:
-          name: Build for platform (publish)
+          name: Upload artifacts to S3
+          command: |
+            if [[ -n $CIRCLE_BRANCH ]]; then
+                make upload-artifacts OSNICK=<<parameters.platform>> SHOW=1
+            fi
+      - run:
+          name: Publish container
           command: |
             docker login -u redisfab -p $DOCKER_REDISFAB_PWD
             cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=1 SHOW=1 VERBOSE=1
+            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
       - persist-artifacts
 
-  benchmark-automation:
+  benchmark-steps:
     parameters:
       github_actor:
         type: string
         default: $CIRCLE_USERNAME
       module_path:
         type: string
-        default: ../../bin/redistimeseries.so
+        default: bin/linux-x64-release/redistimeseries.so
       allowed_envs:
         type: string
         default: "oss-standalone"
@@ -253,7 +255,7 @@ commands:
           name: Install remote benchmark tool dependencies
           command: |
             VERSION=0.14.8 ./deps/readies/bin/getterraform
-            apt install python3-dev libhdf5-dev -y
+            apt-get install -y python3-dev libhdf5-dev
       - run:
           name: Install remote benchmark python dependencies
           command: |
@@ -294,11 +296,10 @@ commands:
 jobs:
   valgrind:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     resource_class: xlarge
     steps:
       - build-steps:
-          platform: bullseye
           build_params: VALGRIND=1 -j
           test_params: VALGRIND=1 SIMPLE=1
           getredis_params: --valgrind
@@ -312,7 +313,8 @@ jobs:
       - install-prerequisites
       - run:
           name: lint
-          command: bash -l -c "make lint"
+          shell: /bin/bash -l -eo pipefail
+          command: make lint
 
   build:
     docker:
@@ -326,8 +328,8 @@ jobs:
         default: "yes"
     steps:
       - build-steps:
-          platform: bullseye
           redis_version: <<parameters.redis_version>>
+      - early-return-for-forked-pull-requests
       - run:
           name: Persist artifacts?
           command: |
@@ -340,10 +342,14 @@ jobs:
     parameters:
       platform:
         type: string
-    docker:
-      - image: debian:bullseye
+    # docker:
+    #   - image: debian:bullseye
+    machine:
+      enabled: true
+      image: ubuntu-2004:202010-01
+      resource_class: large
     steps:
-      - build-platforms-steps:
+      - vm-build-platforms-steps:
           platform: <<parameters.platform>>
 
   build-arm-platforms:
@@ -356,18 +362,25 @@ jobs:
     steps:
       - vm-build-platforms-steps:
           platform: <<parameters.platform>>
+          official: "0"
 
   build-macos:
     macos:
       xcode: 11.7.0
     resource_class: macos.x86.medium.gen2
+    parameters:
+      upload:
+        type: string
+        default: "yes"
     steps:
       - early-returns
+      - build-steps
       - run:
-          name: Set up workspace
-          command: mkdir -p ~/workspace
-      - build-steps:
-          platform: catalina
+          name: Upload artifacts to S3
+          command: |
+            if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
+                make upload-artifacts
+            fi
       - persist-artifacts
 
   build-multiarch-docker:
@@ -440,50 +453,43 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
-      - early-returns
-      - checkout-all
-      - install-prerequisites
-      - build-steps:
-          platform: bullseye
-          build_params: COV=1
-          test_params: COV=1
       - run:
-          name: Upload coverage data
+          name: Coverage analysis
+          shell: /bin/bash -l -eo pipefail
           command: |
-            bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov) -f bin/linux-x64-debug-cov/cov.info
-      - store_artifacts:
-          path: coverage
-          destination: coverage
+            make coverage
+            make cov-upload
+          no_output_timeout: 45m
+      - save-tests-logs
 
-  deploy-artifacts:
+  upload-artifacts:
     parameters:
-      location:
+      staging-lab:
         type: string
-        default: ""
+        default: "0"
     docker:
       - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - early-return-for-forked-pull-requests
+      - checkout
+      - setup-automation
       - attach_workspace:
-          at: workspace
+          at: ~/workspace
       - run:
-          name: Deploy to S3
+          name: Upload artifacts to S3
           command: |
-            cd "workspace/artifacts/<<parameters.location>>"
-            du -ah --apparent-size *
-            if [[ -z "<<parameters.location>>" ]]; then
-                path=""
+            mkdir -p bin
+            ln -s ~/workspace/artifacts bin/artifacts
+            if [[ -n $CIRCLE_TAG && "<<parameters.staging-lab>>" != 1 ]]; then
+                make upload-release SHOW=1
             else
-                path="<<parameters.location>>/"
+                make upload-release SHOW=1 STAGING=1
             fi
-            for f in `ls *.zip *.tgz`; do
-              aws s3 cp $f s3://redismodules/$PACKAGE_NAME/$path --acl public-read
-            done
 
   release-automation:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - early-return-for-forked-pull-requests
@@ -495,7 +501,7 @@ jobs:
 
   nightly-automation:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - early-return-for-forked-pull-requests
@@ -515,7 +521,7 @@ jobs:
       - run:
           name: Build
           command: bash -l -c "make build"
-      - benchmark-automation:
+      - benchmark-steps:
           allowed_envs: "oss-standalone"
           benchmark_glob: "tsbs-scale100*.yml"
 
@@ -528,8 +534,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build DEBUG=1"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build
+      - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
@@ -544,8 +551,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build
+      - benchmark-steps:
           allowed_envs: "oss-standalone"
           timeout: 90m
           benchmark_glob: "scaling-*.yml"
@@ -559,8 +567,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build
+      - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
@@ -575,8 +584,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build
+      - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
@@ -591,8 +601,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build PROFILE=1"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build PROFILE=1
+      - benchmark-steps:
           allowed_envs: "oss-standalone"
           timeout: 30m
           profile_env: "1"
@@ -608,8 +619,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build PROFILE=1"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build PROFILE=1
+      - benchmark-steps:
           allowed_envs: "oss-standalone"
           timeout: 30m
           profile_env: "1"
@@ -625,8 +637,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build PROFILE=1 DEBUG=1"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build PROFILE=1 DEBUG=1
+      - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
@@ -643,8 +656,9 @@ jobs:
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build PROFILE=1"
-      - benchmark-automation:
+          shell: /bin/bash -l -eo pipefail
+          command: make build PROFILE=1
+      - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
           timeout: 90m
@@ -682,6 +696,7 @@ on-integ-branch: &on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
+        - /^perf-.*$/
     tags:
       ignore: /.*/
 
@@ -692,6 +707,7 @@ not-on-integ-branch: &not-on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
+        - /^perf-.*$/
     tags:
       ignore: /.*/
 
@@ -739,7 +755,7 @@ workflows:
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.0", "6.2"]
+              redis_version: ["6.2", "7"]
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
@@ -749,17 +765,20 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic, xenial, centos7, rocky8, bullseye]
+              #@@platform: [jammy, focal, bionic, xenial, centos7, rocky8, bullseye]
+              platform: [jammy]
       - build-arm-platforms:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
           context: common
           matrix:
             parameters:
-              platform: [focal, bionic]
+              #@@platform: [jammy, focal, bionic]
+              platform: [jammy]
       - build-macos:
+          context: common
           <<: *on-integ-and-version-tags
       - coverage:
-          context: common
           <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
           context: common
@@ -785,17 +804,17 @@ workflows:
       - performance-ci-automation-oss-cluster-profiler-ingestion:
           context: common
           <<: *on-perf-and-version-tags
-      - deploy-artifacts:
-          name: deploy-snapshot
-          location: snapshots
+      - upload-artifacts:
+          name: upload-artifacts-to-staging-lab
+          staging-lab: "1"
           context: common
           <<: *on-integ-branch
           requires:
             - build-platforms
             - build-arm-platforms
             - build-macos
-      - deploy-artifacts:
-          name: deploy-release
+      - upload-artifacts:
+          name: upload-release-artifacts
           context: common
           <<: *on-version-tags
           requires:
@@ -803,10 +822,10 @@ workflows:
             - build-arm-platforms
             - build-macos
       - release-automation:
+          <<: *on-version-tags
           context: common
           requires:
-            - deploy-release
-          <<: *on-version-tags
+            - upload-release-artifacts
 
   nightly:
     triggers:
@@ -820,7 +839,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.0", "6.2", "7.0"]
+              redis_version: ["6.0", "unstable"]
       - performance-ci-automation-oss-cluster-query:
           context: common
       - performance-ci-automation-oss-cluster-ingestion:
