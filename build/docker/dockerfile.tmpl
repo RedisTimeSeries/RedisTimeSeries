@@ -44,7 +44,7 @@ RUN chown -R redis:redis /var/opt/redislabs
 COPY --from=builder /build/bin/artifacts/ /var/opt/redislabs/artifacts
 {% endif %}
 
-COPY --from=builder /build/bin/redistimeseries.so "{{MODULES_DIR}}"
+COPY --from=builder /build/bin/linux-${ARCH}-release/redistimeseries.so "{{MODULES_DIR}}"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "{{MODULES_DIR}}/redistimeseries.so"]

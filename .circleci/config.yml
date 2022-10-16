@@ -453,6 +453,9 @@ jobs:
     docker:
       - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
+      - early-returns
+      - checkout-all
+      - install-prerequisites
       - run:
           name: Coverage analysis
           shell: /bin/bash -l -eo pipefail
@@ -777,7 +780,8 @@ workflows:
               platform: [jammy]
       - build-macos:
           context: common
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *on-any-branch
       - coverage:
           <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
