@@ -383,29 +383,6 @@ jobs:
             fi
       - persist-artifacts
 
-  build-multiarch-docker:
-    machine:
-      enabled: true
-      image: ubuntu-1604:202010-01
-    steps:
-      - early-returns
-      - checkout-all
-      - run:
-          name: Set up Python3
-          command: pyenv global 3.7.0
-      - run:
-          name: Setup Docker client experimental features
-          command: |
-            sudo ./deps/readies/bin/getdocker --just-enable-exp
-            docker version
-      - run:
-          name: Build
-          command: |
-            sudo docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            make -C build/docker build
-            sudo make -C build/docker publish
-          no_output_timeout: 20m
-
   test-rlec:
     machine:
       enabled: true
@@ -420,7 +397,7 @@ jobs:
           command: |
             ./sbin/setup
             ./deps/readies/bin/getredis
-            sudo ./deps/readies/bin/getdocker --just-enable-exp
+            ./deps/readies/bin/getdocker --just-enable-exp
             docker version
             python3 -m pip list
       - install-arlecchino
@@ -516,21 +493,22 @@ jobs:
 
   performance-ci-automation-oss-standalone:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
       - install-prerequisites
       - run:
           name: Build
-          command: bash -l -c "make build"
+          shell: /bin/bash -l -eo pipefail
+          command: make build
       - benchmark-steps:
           allowed_envs: "oss-standalone"
           benchmark_glob: "tsbs-scale100*.yml"
 
   performance-ci-automation-oss-cluster-query:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -547,7 +525,7 @@ jobs:
 
   performance-ci-automation-oss-standalone-scaling:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -563,7 +541,7 @@ jobs:
 
   performance-ci-automation-oss-cluster-scaling:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -580,7 +558,7 @@ jobs:
 
   performance-ci-automation-oss-cluster-ingestion:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -597,7 +575,7 @@ jobs:
 
   performance-ci-automation-oss-standalone-tsbs-profiler:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -615,7 +593,7 @@ jobs:
 
   performance-ci-automation-oss-standalone-scaling-profiler:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -633,7 +611,7 @@ jobs:
 
   performance-ci-automation-oss-cluster-profiler-query:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -641,7 +619,7 @@ jobs:
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
-          command: make build PROFILE=1 DEBUG=1
+          command: make build PROFILE=1
       - benchmark-steps:
           allowed_envs: "oss-cluster"
           allowed_setups: "oss-cluster-30-primaries"
@@ -652,7 +630,7 @@ jobs:
 
   performance-ci-automation-oss-cluster-profiler-ingestion:
     docker:
-      - image: redisfab/rmbuilder:6.2.5-x64-bullseye
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
@@ -764,25 +742,20 @@ workflows:
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
-              #@@platform: [jammy, focal, bionic, xenial, centos7, rocky8, bullseye]
-              platform: [jammy]
+              platform: [jammy, focal, bionic, xenial, centos7, rocky8, bullseye]
       - build-arm-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
-              #@@platform: [jammy, focal, bionic]
-              platform: [jammy]
+              platform: [jammy, focal, bionic]
       - build-macos:
           context: common
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - coverage:
           <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
