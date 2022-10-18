@@ -64,22 +64,8 @@ is a `timeseries` type and is created before `TS.CREATERULE` is called.
 
 <note><b>Notes</b>
 
-- Before RedisTimeSeries v1.8:
-
-  Calling `TS.CREATERULE` with a nonempty `destKey` can result in an undefined behavior.
-  
-  Since RedisTimeSeries v1.8:
-
-  Calling `TS.CREATERULE` with a nonempty `destKey` would return an error.
-
-- Before RedisTimeSeries v1.8:
-
-  Explicitly adding samples to `destKey` can result in an undefined behavior.
-
-  Since RedisTimeSeries v1.8:
-
-  Explicitly adding samples to `destKey` would return an error.
-
+- Calling `TS.CREATERULE` with a nonempty `destKey` can result in data inconsistencies.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
 - Only new samples that are added into the source series after the creation of the rule will be aggregated
 - If no samples are added to the source time series during a bucket period. no _compacted sample_ is added to the destination time series.
 - The timestamp of a compacted sample added to the destination time series is set to the start timestamp the appropriate compaction bucket. For example, for a 10-minute compaction bucket with no alignment, the compacted samples timestamps are `x:00`, `x:10`, `x:20`, and so on.

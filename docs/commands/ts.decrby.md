@@ -30,13 +30,7 @@ is numeric data value of the sample (double)
 <note><b>Notes</b>
 - If the time series does not exist, it is automatically created.
 - You can use this command as a counter or gauge that automatically gets history as a time series.
-- Before RedisTimeSeries v1.8:
-
-  Explicitly adding samples to a compacted time series can result in an undefined behavior.
-
-  Since RedisTimeSeries v1.8:
-
-  Explicitly adding samples to a compacted time series would return an error.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
 </note>
 
 ## Optional arguments
