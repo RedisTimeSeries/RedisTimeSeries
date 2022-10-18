@@ -5,6 +5,7 @@ import redis
 from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
+import random 
 
 
 def test_issue_504():
@@ -147,3 +148,91 @@ def test_ts_add_negative():
             r.execute_command('TS.CREATE', 'tester', 'ENCODING')
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding')
+
+def test_ts_upsert():
+    random.seed(5)
+    with Env().getClusterConnectionIfNeeded() as r:
+        DOUBLE_MAX = 1.7976931348623158E+308     # 64 bit floating point max value
+        MAX_INT64 = pow(2,63) - 1
+        key = 't1{1}'
+        key2 = 't2{1}'
+        r.execute_command('ts.create', key, 'CHUNK_SIZE', 128, 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('ts.create', key2, 'CHUNK_SIZE', 128)
+        j = 1
+        while True:
+            info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+            if(len(info.chunks) > 1):
+                break
+            for i in range(1,10):
+                r.execute_command('ts.add', key, MAX_INT64 - j, DOUBLE_MAX - j)
+                r.execute_command('ts.add', key2, MAX_INT64 - j, DOUBLE_MAX - j)
+                j += 1
+
+        info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+        n_samples_2_chunk = info.total_samples
+        j = 1
+        while True:
+            info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+            if(len(info.chunks) > 2):
+                break
+            for i in range(1,10):
+                r.execute_command('ts.add', key, pow(j, 2), pow(j, 2))
+                j += 1
+
+        res = r.execute_command('ts.range', key, '-', pow((j-1), 2))
+        expected = [[pow(d, 2), str(int(pow(d, 2))).encode('ascii')] for d in range(1, j)]
+        assert res == expected
+        info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+        assert len(info.chunks) == 3
+        total_samples = info.total_samples
+        assert len(res) + n_samples_2_chunk == total_samples
+        expected2 = expected.copy()
+        random.shuffle(expected2)
+        for i in range(0, len(expected2)):
+            r.execute_command('ts.add', key2, expected2[i][0], expected2[i][1])
+        res = r.execute_command('ts.range', key2, '-', pow((j-1), 2))
+        assert res == expected
+
+        for k in range (0, pow(j, 2) + 1):
+            r.execute_command('ts.add', key, k, pow(k,3))
+
+        res = r.execute_command('ts.range', key, '-', '+')
+        info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+
+def test_ts_upsert_downsampled():
+    with Env().getClusterConnectionIfNeeded() as r:
+        t1 = 't1{a}'
+        t2 = 't2{a}'
+        r.execute_command('TS.CREATE', t1)
+        r.execute_command('TS.CREATE', t2)
+        r.execute_command('TS.CREATERULE', t1, t2, 'AGGREGATION', 'max', 10)
+        r.execute_command('ts.add', t1, 1, 2)
+        r.execute_command('ts.add', t1, 3, 4)
+        r.execute_command('ts.add', t2, 10, 6)
+        r.execute_command('ts.add', t1, 11, 7)
+        res = r.execute_command('TS.range', t2, '-', '+')
+        assert res == [[0, b'4'], [10, b'6']]
+
+        #override the downsampled key
+        r.execute_command('ts.add', t1, 21, 9)
+        res = r.execute_command('TS.range', t2, '-', '+')
+        assert res == [[0, b'4'], [10, b'7']]
+
+
+        t3 = 't3{a}'
+        t4 = 't4{a}'
+        r.execute_command('TS.CREATE', t3)
+        r.execute_command('TS.CREATE', t4)
+        r.execute_command('ts.add', t4, 10, 6)
+        r.execute_command('ts.add', t4, 20, 9)
+        r.execute_command('ts.add', t4, 23, 9)
+        r.execute_command('TS.CREATERULE', t3, t4, 'AGGREGATION', 'max', 10)
+
+        #override the downsampled key
+        r.execute_command('ts.add', t3, 10, 22)
+        r.execute_command('ts.add', t3, 25, 29)
+        res = r.execute_command('TS.range', t4, '-', '+')
+        assert res == [[10, b'22'], [20, b'9'], [23, b'9']]
+        r.execute_command('ts.add', t3, 31, 3)
+        res = r.execute_command('TS.range', t4, '-', '+')
+        assert res == [[10, b'22'], [20, b'29'], [23, b'9']]
