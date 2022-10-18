@@ -152,6 +152,8 @@ Query the time series using DEBUG to get more information about the chunks.
         8) (integer) 4096
         9) bytesPerSample
        10) "inf"
+       11) chunkKey (Chunk Map key - should be equal to startTimestamp)
+       12) (integer) 0
 {{< / highlight >}}
 
 </details>
