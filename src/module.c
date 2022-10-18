@@ -139,7 +139,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
-            RedisModule_ReplyWithDouble(ctx, (float)chunkSize / numOfSamples);
+            RedisModule_ReplyWithDouble(
+                ctx, (numOfSamples == 0) ? (float)0 : (float)chunkSize / numOfSamples);
             chunkCount++;
         }
         RedisModule_DictIteratorStop(iter);
