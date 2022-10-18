@@ -35,6 +35,8 @@
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
 
+#include "endianconv.h"
+
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
 #endif
@@ -117,6 +119,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplySetArrayLength(ctx, ruleCount);
 
     if (is_debug) {
+        timestamp_t *key_time;
+        size_t key_len;
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
         Chunk_t *chunk = NULL;
         int chunkCount = 0;
@@ -124,10 +128,10 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithString(ctx, series->keyName);
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-        while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
+        while ((key_time = RedisModule_DictNextC(iter, &key_len, (void *)&chunk))) {
             u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
-            RedisModule_ReplyWithArray(ctx, 5 * 2);
+            RedisModule_ReplyWithArray(ctx, 6 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
             RedisModule_ReplyWithLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
@@ -140,6 +144,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
             RedisModule_ReplyWithDouble(ctx, (float)chunkSize / numOfSamples);
+            RedisModule_ReplyWithSimpleString(ctx, "chunkKey");
+            RedisModule_ReplyWithLongLong(ctx, ntohu64(*key_time));
             chunkCount++;
         }
         RedisModule_DictIteratorStop(iter);
