@@ -35,7 +35,10 @@ is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp a
 is (double) numeric data value of the sample. The double number should follow [RFC 7159](https://tools.ietf.org/html/rfc7159) (JSON standard). In particular, the parser rejects overly large values that do not fit in binary64. It does not accept NaN or infinite values.
 </details>
 
-<note><b>Note:</b> If the time series does not exist, it is automatically created.</note>
+<note><b>Notes:</b>
+- If the time series does not exist, it is automatically created.</note>
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
+</note>
 
 ## Optional arguments
 
@@ -88,7 +91,6 @@ Use it only if you are creating a new time series. It is ignored if you are addi
   - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
   - If only a part of the original samples for an affected aggregated time bucket is available due to trimming caused in accordance with the time series RETENTION policy, the compacted value is recalculated based on the reported sample and the available original samples.
   - If the original samples for an affected aggregated time bucket are not available due to trimming caused in accordance with the time series RETENTION policy, the compacted value bucket is not updated.
-- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
 </note>
 
 ## Complexity
