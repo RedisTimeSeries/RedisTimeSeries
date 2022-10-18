@@ -5,42 +5,43 @@ HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 ROOT=$(cd $HERE/.. && pwd)
 export READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
-
-cd $ROOT
+SBIN=$ROOT/sbin
 
 export PYTHONWARNINGS=ignore
 
+cd $ROOT
+
 #----------------------------------------------------------------------------------------------
 
-if [[ $1 == --help || $1 == help ]]; then
+if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 	cat <<-END
+		Generate RedisTimeSeries distribution packages.
+
 		[ARGVARS...] pack.sh [--help|help]
-		
+
 		Argument variables:
-		MODULE=path       Path to module .so file
+		MODULE=path       Path of module .so
 
 		RAMP=1|0          Build RAMP file
 		DEPS=0|1          Build dependencies file
 		SYM=0|1           Build debug symbols file
 
-		VARIANT=name      Build variant (default: empty)
 		BRANCH=name       Branch name for snapshot packages
-		GITSHA=1          Append Git SHA to shapshot package names
+		VERSION=ver         Version for release packages
+		WITH_GITSHA=1     Append Git SHA to shapshot package names
+		VARIANT=name      Build variant (default: empty)
 
 		ARTDIR=dir        Directory in which packages are created (default: bin/artifacts)
-		BINDIR=dir        Directory in which binaries are found
 
+		JUST_PRINT=1      Only print package names, do not generate
 		VERBOSE=1         Print commands
-		IGNERR=1          Do not abort on error
+		HELP=1            Show help
 
 	END
 	exit 0
 fi
 
 #----------------------------------------------------------------------------------------------
-
-[[ $IGNERR == 1 ]] || set -e
-[[ $V == 1 || $VERBOSE == 1 ]] && set -x
 
 RAMP=${RAMP:-1}
 DEPS=${DEPS:-0}
@@ -51,42 +52,33 @@ if [[ -z $MODULE || ! -f $MODULE ]]; then
 	exit 1
 fi
 
-[[ -z $BINDIR ]] && BINDIR=$(dirname $MODULE)
-BINDIR=$(cd $BINDIR && pwd)
-
 [[ -z $ARTDIR ]] && ARTDIR=bin/artifacts
 mkdir -p $ARTDIR $ARTDIR/snapshots
 ARTDIR=$(cd $ARTDIR && pwd)
 
-export ARCH=$($READIES/bin/platform --arch)
-export OS=$($READIES/bin/platform --os)
-export OSNICK=$($READIES/bin/platform --osnick)
-
 # RLEC naming conventions
+
+ARCH=$($READIES/bin/platform --arch)
 [[ $ARCH == x64 ]] && ARCH=x86_64
+
+OS=$($READIES/bin/platform --os)
 [[ $OS == linux ]] && OS=Linux
-if [[ $OSNICK == focal ]]; then
-	OSNICK=ubuntu20.04
-elif [[ $OSNICK == bionic ]]; then
-	OSNICK=ubuntu18.04
-elif [[ $OSNICK == xenial ]]; then
-	OSNICK=ubuntu16.04
-elif [[ $OSNICK == trusty ]]; then
-	OSNICK=ubuntu14.04
-elif [[ $OSNICK == centos7 ]]; then
-	OSNICK=rhel7
-elif [[ $OSNICK == centos8 ]]; then
-	OSNICK=rhel8
-elif [[ $OSNICK == ol8 ]]; then
-	OSNICK=rhel8
-elif [[ $OSNICK == rocky8 ]]; then
-	OSNICK=rhel8	
-fi
+
+OSNICK=$($READIES/bin/platform --osnick)
+[[ $OSNICK == trusty ]]  && OSNICK=ubuntu14.04
+[[ $OSNICK == xenial ]]  && OSNICK=ubuntu16.04
+[[ $OSNICK == bionic ]]  && OSNICK=ubuntu18.04
+[[ $OSNICK == focal ]]   && OSNICK=ubuntu20.04
+[[ $OSNICK == jammy ]] && OSNICK=ubuntu22.04
+[[ $OSNICK == centos7 ]] && OSNICK=rhel7
+[[ $OSNICK == centos8 ]] && OSNICK=rhel8
+[[ $OSNICK == rocky8 ]]  && OSNICK=rhel8
 
 export PRODUCT=redistimeseries
+export PRODUCT_LIB=$PRODUCT.so
 export DEPNAMES=""
 
-export PACKAGE_NAME=${PACKAGE_NAME:-${PRODUCT}}
+export PACKAGE_NAME=redistimeseries
 
 RAMP_CMD="python3 -m RAMP.ramp"
 
@@ -124,9 +116,6 @@ pack_ramp() {
 		eprint "Error generating RAMP file:"
 		>&2 cat /tmp/ramp.err
 		exit 1
-	else
-		local packname=`cat /tmp/ramp.fname`
-		echo "Created $packname"
 	fi
 
 	cd $ARTDIR/snapshots
@@ -135,6 +124,8 @@ pack_ramp() {
 		ln -sf ../$fq_package $snap_package
 	fi
 
+	local packname=`cat /tmp/ramp.fname`
+	echo "Created $packname"
 	cd $ROOT
 }
 
@@ -156,12 +147,12 @@ pack_deps() {
 	{ cd $depdir ;\
 	  cat $ARTDIR/$dep.files | \
 	  xargs tar -c --sort=name --owner=root:0 --group=root:0 --mtime='UTC 1970-01-01' \
-		--transform "s,^,$dep_prefix_dir," 2>> /tmp/pack.err | \
+		--transform "s,^,$dep_prefix_dir," 2> /tmp/pack.err | \
 	  gzip -n - > $tar_path ; E=$?; } || true
 	rm -f $ARTDIR/$dep.prefix $ARTDIR/$dep.files $ARTDIR/$dep.dir
 
 	cd $ROOT
-	if [[ $E != 0 ]]; then
+	if [[ $E != 0 || -s /tmp/pack.err ]]; then
 		eprint "Error creating $tar_path:"
 		cat /tmp/pack.err >&2
 		exit 1
@@ -174,15 +165,16 @@ pack_deps() {
 		ln -sf ../$fq_dep $snap_dep
 		ln -sf ../$fq_dep.sha256 $snap_dep.sha256
 	fi
-	
+
 	cd $ROOT
 }
 
 #----------------------------------------------------------------------------------------------
 
 prepare_symbols_dep() {
+	if [[ ! -f $MODULE.debug ]]; then return 0; fi
 	echo "Preparing debug symbols dependencies ..."
-	echo $BINDIR > $ARTDIR/debug.dir
+	echo $(cd "$(dirname $MODULE)" && pwd) > $ARTDIR/debug.dir
 	echo $MODULE.debug > $ARTDIR/debug.files
 	echo "" > $ARTDIR/debug.prefix
 	pack_deps debug
@@ -191,8 +183,8 @@ prepare_symbols_dep() {
 
 #----------------------------------------------------------------------------------------------
 
-export NUMVER=$(NUMERIC=1 $ROOT/sbin/getver)
-export SEMVER=$($ROOT/sbin/getver)
+NUMVER=$(NUMERIC=1 $SBIN/getver)
+SEMVER=$($SBIN/getver)
 
 if [[ ! -z $VARIANT ]]; then
 	VARIANT=-${VARIANT}
@@ -208,11 +200,27 @@ if [[ -z $BRANCH ]]; then
 	fi
 fi
 BRANCH=${BRANCH//[^A-Za-z0-9._-]/_}
-if [[ $GITSHA == 1 ]]; then
-	GIT_COMMIT=$(git describe --always --abbrev=7 --dirty="+" 2>/dev/null || git rev-parse --short HEAD)
+if [[ $WITH_GITSHA == 1 ]]; then
+	GIT_COMMIT=$(git rev-parse --short HEAD)
 	BRANCH="${BRANCH}-${GIT_COMMIT}"
 fi
 export BRANCH
+
+#----------------------------------------------------------------------------------------------
+
+if [[ $JUST_PRINT == 1 ]]; then
+	if [[ $RAMP == 1 ]]; then
+		echo "${PACKAGE_NAME}.${OS}-${OSNICK}-${ARCH}.${SEMVER}${VARIANT}.zip"
+	fi
+	if [[ $DEPS == 1 ]]; then
+		for dep in $DEPNAMES; do
+			echo "${PACKAGE_NAME}.${dep}.${OS}-${OSNICK}-${ARCH}.${SEMVER}${VARIANT}.tgz"
+		done
+	fi
+	exit 0
+fi
+
+#----------------------------------------------------------------------------------------------
 
 if [[ $DEPS == 1 ]]; then
 	echo "Building dependencies ..."

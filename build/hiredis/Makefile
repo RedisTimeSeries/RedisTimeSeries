@@ -18,6 +18,8 @@ SRCDIR=$(ROOT)/deps/LibMR/deps/hiredis
 
 TARGET=$(BINDIR)/libhiredis.a
 
+SSL ?= 1
+
 #----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
@@ -26,7 +28,10 @@ include $(MK)/defs
 
 CC=gcc
 
-_SOURCES=alloc.c async.c dict.c hiredis.c net.c read.c sds.c sockcompat.c ssl.c
+_SOURCES=alloc.c async.c dict.c hiredis.c net.c read.c sds.c sockcompat.c
+ifeq ($(SSL),1)
+_SOURCES += ssl.c
+endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
@@ -39,8 +44,12 @@ CC_FLAGS += \
 	-MMD -MF $(@:.o=.d) \
 	-I$(SRCDIR) \
 	-I$(BINDIR) \
-	-I$(LIBSSL_PREFIX)/include \
 	$(CC_FLAGS.coverage)
+
+ifeq ($(SSL),1)
+CC_FLAGS += \
+	-I$(LIBSSL_PREFIX)/include
+endif
 
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -O0
