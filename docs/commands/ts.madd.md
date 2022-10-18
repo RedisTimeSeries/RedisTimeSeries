@@ -34,7 +34,7 @@ is numeric data value of the sample (double). The double number should follow <a
 
 
 <note><b>Notes:</b>
-- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.  
 </note>
 
 ## Complexity
