@@ -20,6 +20,8 @@ SRCDIR=$(ROOT)/deps/LibMR/src
 
 TARGET=$(BINDIR)/libmr.a
 
+SSL ?= 1
+
 #----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
@@ -58,8 +60,12 @@ CC_FLAGS += \
 	-I$(ROOT)/deps/LibMR/deps/hiredis/adapters \
 	-I$(ROOT)/deps/LibMR/deps/libevent/include \
 	-I$(LIBEVENT_BINDIR)/include \
-	-I$(LIBSSL_PREFIX)/include \
 	$(CC_FLAGS.coverage)
+
+ifeq ($(SSL),1)
+CC_FLAGS += \
+	-I$(LIBSSL_PREFIX)/include
+endif
 
 ifeq ($(DEBUG),1)
 CC_FLAGS += -g -O0
