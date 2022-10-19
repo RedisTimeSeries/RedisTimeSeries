@@ -381,6 +381,30 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     return CR_OK;
 }
 
+static void zero_bits(u_int64_t *data, size_t data_size, globalbit_t start, globalbit_t end) {
+#ifdef DEBUG
+    assert(start <= end);
+#endif
+
+    if (start == end) { // If they are equal it means we haven't changed the data
+        return;
+    }
+    binary_t *first_bin = &data[start >> 6];
+    size_t end_byte = min(end >> 3, data_size - 1);
+    binary_t *last_bin = &data[end_byte >> 3];
+    localbit_t first_bin_first_bit = localbit(start);
+
+    // partially zero the first bin
+    *first_bin &= bitmask[first_bin_first_bit];
+
+    // fully zero the rest of the bins
+    binary_t *bin = first_bin + 1;
+    while (bin <= last_bin) {
+        *bin = 0;
+        bin++;
+    }
+}
+
 ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, double value) {
 #ifdef DEBUG
     assert(chunk);
@@ -395,6 +419,7 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         u_int64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
         if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
+            zero_bits(chunk->data, chunk->size, idx, chunk->idx);
             chunk->idx = idx;
             chunk->prevTimestamp = prevTimestamp;
             chunk->prevTimestampDelta = prevTimestampDelta;
