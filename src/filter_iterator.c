@@ -448,16 +448,13 @@ static void twa_fillEmptyBuckets(size_t *write_index,
         if (is_nan_bucket) {
             aggregation->finalizeEmpty(&val);
         } else if (has_before_and_after) {
-            timestamp_t middle = (sample_after.timestamp + sample_before.timestamp) / 2;
-            if (middle < ta) {
-                val = sample_after.value;
-            } else if (middle >= tb) {
-                val = sample_before.value;
-            } else {
-                val = ((double)((middle - ta) * sample_before.value +
-                                (tb - middle) * sample_after.value)) /
-                      ((double)(tb - ta));
-            }
+            double delta_val = (sample_after.value - sample_before.value);
+            double delta_ts = (sample_after.timestamp - sample_before.timestamp);
+            double va =
+                sample_before.value + ((ta - sample_before.timestamp) * delta_val) / delta_ts;
+            double vb =
+                sample_before.value + ((tb - sample_before.timestamp) * delta_val) / delta_ts;
+            val = (va + vb) / 2.0;
         } else if (n_samples_after > 1) {
             timestamp_t delta = sample_afAfter.timestamp - sample_after.timestamp;
             if (tb + (delta / 2) <= sample_after.timestamp) {

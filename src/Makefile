@@ -1,6 +1,9 @@
 
 ROOT=..
-MK.pyver:=3
+
+ifneq ($(filter coverage show-cov upload-cov,$(MAKECMDGOALS)),)
+COV=1
+endif
 
 ifeq ($(VG),1)
 override VALGRIND:=1
@@ -58,6 +61,8 @@ make clean         # remove binary files
 
 make deps          # build dependant modules
 make all           # build all libraries and packages
+
+make test          # run unit and flow tests
 
 make unit_tests    # run unit tests
 
@@ -245,7 +250,7 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: pack flow_tests unit_tests clean all install uninstall docker bindirs
+.PHONY: pack clean all install uninstall docker bindirs
 
 all: bindirs $(TARGET)
 
@@ -331,7 +336,6 @@ endif
 
 -include $(CC_DEPS)
 
-
 AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
 AVX2_OBJECTS=$(filter %avx2.o,$(OBJECTS))
 REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS) $(AVX2_OBJECTS),$(OBJECTS))
@@ -354,7 +358,6 @@ $(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 ifeq ($(OS),macos)
 	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
 endif
-	$(SHOW)cd $(BINROOT)/..; ln -sf $(FULL_VARIANT)/$(notdir $(TARGET)) $(notdir $(TARGET))
 
 #----------------------------------------------------------------------------------------------
 
@@ -374,8 +377,14 @@ format:
 
 #----------------------------------------------------------------------------------------------
 
+test: unit_tests flow_tests
+
+.PHONY: test unit_tests flow_tests
+
+#----------------------------------------------------------------------------------------------
+
 $(UNITTESTS_RUNNER)	: $(TARGET)
-	$(SHOW)$(MAKE) -C ../tests/unit
+	$(SHOW)$(MAKE) -C $(ROOT)/tests/unit
 
 unit_tests: $(UNITTESTS_RUNNER)
 	@echo Running unit tests...
@@ -398,29 +407,17 @@ endif
 ifneq ($(RLEC),1)
 
 flow_tests: #$(TARGET)
-ifeq ($(COV),1)
-	$(COVERAGE_RESET)
-endif
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh
-ifeq ($(COV),1)
-	$(COVERAGE_COLLECT_REPORT)
-endif
 
 else # RLEC
 
 flow_tests: #$(TARGET)
-ifeq ($(COV),1)
-	$(COVERAGE_RESET)
-endif
 	$(SHOW)RLEC=1 $(ROOT)/tests/flow/tests.sh
-ifeq ($(COV),1)
-	$(COVERAGE_COLLECT_REPORT)
-endif
 
 endif # RLEC
 
@@ -447,6 +444,22 @@ endif
 
 benchmark: $(TARGET)
 	$(SHOW)set -e; cd $(ROOT)/tests/benchmarks; $(BENCHMARK_ARGS)
+
+#----------------------------------------------------------------------------------------------
+
+COV_EXCLUDE_DIRS += \
+	deps \
+	tests/unit
+
+COV_EXCLUDE+=$(foreach D,$(COV_EXCLUDE_DIRS),'$(realpath $(ROOT))/$(D)/*')
+
+coverage:
+	$(SHOW)$(MAKE) build COV=1
+	$(SHOW)$(COVERAGE_RESET)
+	-$(SHOW)$(MAKE) test COV=1
+	$(SHOW)$(COVERAGE_COLLECT_REPORT)
+
+.PHONY: coverage
 
 #----------------------------------------------------------------------------------------------
 
@@ -505,16 +518,16 @@ uninstall:
 docker:
 	$(SHOW)cd .. && docker build -t redis-tsdb .
 
-coverage:
-	$(SHOW)DEBUG=1 COVERAGE=1 make unit_tests
-	$(SHOW)DEBUG=1 COVERAGE=1 make flow_tests
-	$(SHOW)mkdir -p tmp/lcov
-	$(SHOW)lcov -d ../bin/linux-x64-debug/src -c -o tmp/lcov/hiredis.info
-	$(SHOW)lcov -l tmp/lcov/hiredis.info
-	$(SHOW)genhtml --legend -o tmp/lcov/report tmp/lcov/hiredis.info > /dev/null 2>&1
-
 #----------------------------------------------------------------------------------------------
 
 pack: $(TARGET)
 	@echo Creating packages...
 	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
+
+upload-release:
+	@RELEASE=1 $(ROOT)/sbin/upload-artifacts
+
+upload-artifacts:
+	@SNAPSHOT=1 $(ROOT)/sbin/upload-artifacts
+
+.PHONY: pack upload-release upload-artifacts

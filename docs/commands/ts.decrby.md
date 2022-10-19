@@ -23,9 +23,9 @@ is numeric data value of the sample (double)
 </details>
 
 <note><b>Notes</b>
-
- - If the time series does not exist, it is automatically created.
- - You can use this command as a counter or gauge that automatically gets history as a time series.
+- If the time series does not exist, it is automatically created.
+- You can use this command as a counter or gauge that automatically gets history as a time series.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 </note>
 
 ## Optional arguments

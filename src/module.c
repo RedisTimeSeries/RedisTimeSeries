@@ -139,7 +139,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
-            RedisModule_ReplyWithDouble(ctx, (float)chunkSize / numOfSamples);
+            RedisModule_ReplyWithDouble(
+                ctx, (numOfSamples == 0) ? (float)0 : (float)chunkSize / numOfSamples);
             chunkCount++;
         }
         RedisModule_DictIteratorStop(iter);
@@ -406,6 +407,13 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
+static int internalAdd(RedisModuleCtx *ctx,
+                       Series *series,
+                       api_timestamp_t timestamp,
+                       double value,
+                       DuplicatePolicy dp_override,
+                       bool should_reply);
+
 static void handleCompaction(RedisModuleCtx *ctx,
                              Series *series,
                              CompactionRule *rule,
@@ -447,7 +455,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
 
         double aggVal;
         rule->aggClass->finalize(rule->aggContext, &aggVal);
-        SeriesAddSample(destSeries, rule->startCurrentTimeBucket, aggVal);
+        internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
         RedisModule_NotifyKeyspaceEvent(
             ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         Sample last_sample;
@@ -475,7 +483,8 @@ static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
                        double value,
-                       DuplicatePolicy dp_override) {
+                       DuplicatePolicy dp_override,
+                       bool should_reply) {
     timestamp_t lastTS = series->lastTimestamp;
     uint64_t retention = series->retentionTime;
     // ensure inside retention period.
@@ -506,7 +515,9 @@ static int internalAdd(RedisModuleCtx *ctx,
             rule = rule->nextRule;
         }
     }
-    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    if (should_reply) {
+        RedisModule_ReplyWithLongLong(ctx, timestamp);
+    }
     return REDISMODULE_OK;
 }
 
@@ -564,7 +575,7 @@ static inline int add(RedisModuleCtx *ctx,
             return REDISMODULE_ERR;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp);
+    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
     RedisModule_CloseKey(key);
     return rv;
 }
@@ -931,7 +942,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result -= incrby;
     }
 
-    int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST);
+    int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 

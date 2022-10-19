@@ -25,9 +25,9 @@ is numeric data value of the sample (double)
 </details>
 
 <note><b>Notes</b>
-
- - If the time series does not exist, it is automatically created.
- - You can use this command as a counter or gauge that automatically gets history as a time series.
+- If the time series does not exist, it is automatically created.
+- You can use this command as a counter or gauge that automatically gets history as a time series.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.  
 </note>
 
 ## Optional arguments
@@ -63,11 +63,8 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 </details>
 
 <note><b>Notes</b>
-
- - You can use this command to add data to a nonexisting time series in a single command.
-  This is why `RETENTION`, `UNCOMPRESSED`,  `CHUNK_SIZE`, and `LABELS` are optional arguments.
- - When specified and the key doesn't exist, a new time series is created.
-  Setting the `RETENTION` and `LABELS` introduces additional time complexity.
+- You can use this command to add data to a nonexisting time series in a single command. This is why `RETENTION`, `UNCOMPRESSED`,  `CHUNK_SIZE`, and `LABELS` are optional arguments.
+- When specified and the key doesn't exist, a new time series is created. Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
 ## Examples

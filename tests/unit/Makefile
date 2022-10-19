@@ -66,14 +66,14 @@ endif
 
 ifeq ($(OS),macos)
 LD_FLAGS += -undefined dynamic_lookup
-LD_sHARED_EXT=dylib
+LD_SHARED_EXT=dylib
 else
-LD_sHARED_EXT=so
+LD_SHARED_EXT=so
 endif
 
 LD_FLAGS += $(LD_FLAGS.coverage)
 
-LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_sHARED_EXT))
+LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_SHARED_EXT))
 
 #----------------------------------------------------------------------------------------------
 

@@ -39,24 +39,20 @@ typedef struct AvgContext
 
 typedef struct WeightData
 {
-    double weightSum;
-    timestamp_t prevPrevTS;
-    timestamp_t prevTS;
-    double prevValue;
-    timestamp_t bucketStartTS;
-    timestamp_t bucketEndTS;
-    bool is_first_bucket;
-    bool is_last_ts_handled;
-    int64_t iteration;
-    double prevWeight;
-    double weight_sum;
 } WeightData;
 
 typedef struct TwaContext
 {
-    AvgContext avgContext;
-    WeightData weightData;
+    double res;
+    timestamp_t prevTS;
+    double prevValue;
+    timestamp_t bucketStartTS;
+    timestamp_t bucketEndTS;
+    timestamp_t first_ts;
+    timestamp_t last_ts;
+    bool is_first_bucket;
     bool reverse;
+    int64_t iteration;
 } TwaContext;
 
 typedef struct StdContext
@@ -207,18 +203,15 @@ err:
 }
 
 static inline void _TwainitContext(TwaContext *context, bool reverse) {
-    _AvgInitContext(&context->avgContext);
-    context->weightData.weightSum = 0;
-    context->weightData.prevPrevTS = DC;    // arbitrary value
-    context->weightData.prevTS = DC;        // arbitrary value
-    context->weightData.prevValue = DC;     // arbitrary value
-    context->weightData.bucketStartTS = DC; // arbitrary value
-    context->weightData.bucketEndTS = DC;   // arbitrary value
-    context->weightData.is_first_bucket = true;
-    context->weightData.is_last_ts_handled = false;
-    context->weightData.iteration = 0;
-    context->weightData.prevWeight = 0;
-    context->weightData.weight_sum = 0;
+    context->res = 0;
+    context->prevTS = DC;        // arbitrary value
+    context->prevValue = DC;     // arbitrary value
+    context->bucketStartTS = DC; // arbitrary value
+    context->bucketEndTS = DC;   // arbitrary value
+    context->first_ts = DC;
+    context->last_ts = DC;
+    context->is_first_bucket = true;
+    context->iteration = 0;
     context->reverse = reverse;
 }
 
@@ -236,14 +229,9 @@ void *TwaCreateContext(bool reverse) {
 
 static inline void _update_twaContext(TwaContext *wcontext,
                                       const double *value,
-                                      const timestamp_t *ts,
-                                      const double *weight) {
-    wcontext->weightData.prevPrevTS = wcontext->weightData.prevTS;
-    wcontext->weightData.prevValue = *value;
-    wcontext->weightData.prevTS = *ts;
-    if (weight) {
-        wcontext->weightData.prevWeight = *weight;
-    }
+                                      const timestamp_t *ts) {
+    wcontext->prevValue = *value;
+    wcontext->prevTS = *ts;
 }
 
 void TwaAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
@@ -251,165 +239,91 @@ void TwaAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t
     if (context->reverse) {
         __SWAP(bucketStartTS, bucketEndTS);
     }
-    context->weightData.bucketStartTS = bucketStartTS;
-    context->weightData.bucketEndTS = bucketEndTS;
+    context->bucketStartTS = bucketStartTS;
+    context->bucketEndTS = bucketEndTS;
 }
 
 void TwaAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) {
     TwaContext *wcontext = (TwaContext *)contextPtr;
-    _update_twaContext(wcontext, &value, &ts, NULL);
-    wcontext->weightData.is_first_bucket = false;
+    _update_twaContext(wcontext, &value, &ts);
+    wcontext->is_first_bucket = false;
 }
 
 void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
-    TwaContext *wcontext = (TwaContext *)contextPtr;
-    AvgContext *context = &wcontext->avgContext;
-    const bool *rev = &wcontext->reverse;
-    int64_t *iter = &wcontext->weightData.iteration;
-    ++(*iter);
-    const timestamp_t *prevTS = &wcontext->weightData.prevTS;
-    const double *prev_value = &wcontext->weightData.prevValue;
-    const timestamp_t time_delta = llabs((int64_t)(ts - (*prevTS)));
-    const double half_time_delta = time_delta / 2.0;
-    const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
-    const timestamp_t *startTS = &wcontext->weightData.bucketStartTS;
-    double weight = 0;
+    TwaContext *context = (TwaContext *)contextPtr;
+    int64_t *iter = &context->iteration;
+    timestamp_t t1 = context->prevTS, t2 = ts;
+    double v1 = context->prevValue, v2 = value;
+    if (context->reverse) {
+        __SWAP(t1, t2);
+        __SWAP(v1, v2);
+    }
+    const double delta_time = t2 - t1;
+    const double delta_val = v2 - v1;
+    const bool *is_first_bucket = &context->is_first_bucket;
+    const timestamp_t ta = context->bucketStartTS;
 
-    // add prev value with it's weight
-
-    if ((*iter) == 1) { // First sample in bucket
+    if ((*iter) == 0) { // First sample in bucket
         if (!(*is_first_bucket)) {
-            // on reverse it's the mirror of the regular case
-            if ((half_time_delta <= llabs((int64_t)((*startTS) - (*prevTS))))) {
-                // regular: prev_ts --- --- half_way --- bucket_start --- fisrt_ts
-                // reverse: fisrt_ts --- bucket_start --- half_way --- --- prev_ts
-                weight = llabs((int64_t)(ts - (*startTS)));
+            context->first_ts = ta;
+            double vab = v1 + ((double)((ta - t1) * delta_val)) / delta_time;
+            if (!context->reverse) {
+                context->res += ((vab + v2) * (t2 - ta)) / 2.0;
             } else {
-                // regular: prev_ts --- bucket_start --- half_way --- --- fisrt_ts
-                // reverse: fisrt_ts --- --- half_way --- bucket_start --- prev_ts
-                weight = (*rev) ? ((*startTS) - (ts + half_time_delta))
-                                : ((*prevTS) + half_time_delta - (*startTS));
-                wcontext->weightData.weight_sum += weight;
-                AvgAddValue(context, (*prev_value) * weight, DC);
-                weight = half_time_delta;
+                context->res += ((vab + v1) * (ta - t1)) / 2.0;
             }
+        } else {
+            // else: cur sample is the first in the series, so just store it
+            context->first_ts = ts;
         }
-        // else: cur sample is the first in the series,
-        // assume the delta from the prev sample is same as the delta from next sample
-        // will be handled on next sample
-
-        _update_twaContext(wcontext, &value, &ts, &weight);
-        return;
-    } else if (unlikely((*iter) == 2 && (*is_first_bucket))) {
-        // 2nd sample in bucket and first bucket in the series
-        // extrapolate the weight of the 1st sample to be time_delta
-        weight = min(half_time_delta, llabs((int64_t)((*prevTS) - (*startTS)))) + half_time_delta;
     } else {
-        weight = half_time_delta + wcontext->weightData.prevWeight;
+        context->res += ((v1 + v2) * (t2 - t1)) / 2.0;
     }
 
-    // add prev value with it's weight
-    AvgAddValue(context, (*prev_value) * weight, DC);
-    wcontext->weightData.weight_sum += weight;
-    wcontext->weightData.prevWeight = 0;
-
-    // save cur value first weight
-    _update_twaContext(wcontext, &value, &ts, &half_time_delta);
+    // store this sample for next iteration
+    context->last_ts = context->prevTS = ts;
+    context->prevValue = value;
+    ++(*iter);
 }
 
 void TwaAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
-    TwaContext *wcontext = (TwaContext *)contextPtr;
-    AvgContext *context = &wcontext->avgContext;
-    const bool *rev = &wcontext->reverse;
-    int64_t *iter = &wcontext->weightData.iteration;
-    ++(*iter);
-    const timestamp_t *prevTS = &wcontext->weightData.prevTS;
-    const double *prev_value = &wcontext->weightData.prevValue;
-    const timestamp_t time_delta = llabs((int64_t)(ts - (*prevTS)));
-    const double half_time_delta = time_delta / 2.0;
-    const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
-    const timestamp_t *startTS = &wcontext->weightData.bucketStartTS;
-    const timestamp_t *endTS = &wcontext->weightData.bucketEndTS;
-    double weight = wcontext->weightData.prevWeight;
-
-    if (unlikely((*iter) == 2 && (*is_first_bucket))) {
-        // Only 1 sample in bucket and first in the series
-        // extrapolate the 1st weight of the 1st sample to be time_delta
-        weight = min(half_time_delta, llabs((int64_t)((*prevTS) - (*startTS))));
+    TwaContext *context = (TwaContext *)contextPtr;
+    timestamp_t t1 = context->prevTS, t2 = ts;
+    double v1 = context->prevValue, v2 = value;
+    if (context->reverse) {
+        __SWAP(t1, t2);
+        __SWAP(v1, v2);
     }
+    const double delta_time = t2 - t1;
+    const double delta_val = v2 - v1;
+    const timestamp_t tb = context->bucketEndTS;
 
-    // add the 2nd weight of prev sample
-    if (half_time_delta >= llabs((int64_t)((*endTS) - (*prevTS)))) {
-        // regular: last_ts --- bucket_end --- half_way --- --- next_ts
-        // reverse: next_ts --- --- half_way --- bucket_end --- last_ts
-        weight += llabs((int64_t)((*endTS) - (*prevTS)));
-        wcontext->weightData.weight_sum += weight;
-        AvgAddValue(context, (*prev_value) * weight, DC);
+    double vab = v1 + ((double)((tb - t1) * delta_val)) / delta_time;
+    if (!context->reverse) {
+        context->res += ((vab + v1) * (tb - t1)) / 2.0;
     } else {
-        // regular: last_ts --- --- half_way --- bucket_end --- next_ts
-        // reverse: next_ts --- bucket_end --- half_way --- --- last_ts
-        weight += half_time_delta;
-        wcontext->weightData.weight_sum += weight;
-        AvgAddValue(context, (*prev_value) * weight, DC);
-        weight = (*rev) ? ((ts + half_time_delta) - (*endTS))
-                        : ((*endTS) - ((*prevTS) + half_time_delta));
-        wcontext->weightData.weight_sum += weight;
-        AvgAddValue(context, value * weight, DC);
+        context->res += ((vab + v2) * (t2 - tb)) / 2.0;
     }
 
-    wcontext->weightData.prevWeight = 0;
-    wcontext->weightData.is_last_ts_handled = true;
+    context->last_ts = tb;
 }
 
 void TwaFinalize(void *contextPtr, double *value) {
-    TwaContext *wcontext = (TwaContext *)contextPtr;
-    AvgContext *context = &wcontext->avgContext;
-    int64_t *iter = &wcontext->weightData.iteration;
-    ++(*iter);
-
-    if (unlikely(wcontext->weightData.bucketStartTS == wcontext->weightData.bucketEndTS)) {
-        // Special case when the ta==tb and there is one sample in it
-        // This is the last or first bucket in the series
-        _AvgInitContext(&wcontext->avgContext);
-        wcontext->weightData.weight_sum = 0;
-        AvgAddValue(context, wcontext->weightData.prevValue, DC);
-    } else if (!wcontext->weightData.is_last_ts_handled) {
-        const bool *is_first_bucket = &wcontext->weightData.is_first_bucket;
-        if (unlikely((*iter) == 2 && (*is_first_bucket))) {
-            // Only 1 sample in bucket and that's the only sample in the series
-            // don't use weights at all
-            wcontext->weightData.weight_sum = 0;
-            AvgAddValue(context, wcontext->weightData.prevValue, DC);
-        } else {
-            // This is the last bucket in the series
-            // extrapolate the weight of the prev sample to be the prev time_delta
-            const timestamp_t *prevTS = &wcontext->weightData.prevTS;
-            const timestamp_t *endTS = &wcontext->weightData.bucketEndTS;
-            const timestamp_t time_delta =
-                llabs((int64_t)((*prevTS) - wcontext->weightData.prevPrevTS));
-            const double half_time_delta = time_delta / 2.0;
-            double weight = min(half_time_delta, llabs((int64_t)((*endTS) - (*prevTS)))) +
-                            wcontext->weightData.prevWeight;
-            wcontext->weightData.weight_sum += weight;
-            AvgAddValue(context, wcontext->weightData.prevValue * weight, DC);
-        }
+    TwaContext *context = (TwaContext *)contextPtr;
+    if (context->last_ts == context->first_ts) {
+        // Or the size of the bucket is 0 with one sample in it,
+        // or there is only one sample in the series.
+        *value = context->prevValue;
+    } else {
+        *value = context->res / llabs((int64_t)(context->last_ts - context->first_ts));
     }
-
-    if (wcontext->weightData.weight_sum > 0) {
-        // Normalizing the weighting for each time by dividing each weight by the mean of all
-        // weights
-        const double avg_weight = wcontext->weightData.weight_sum / context->cnt;
-        context->val /= avg_weight;
-    }
-
-    AvgFinalize(context, value);
     return;
 }
 
 void TwaGetLastSample(void *contextPtr, Sample *sample) {
     TwaContext *wcontext = (TwaContext *)contextPtr;
-    sample->timestamp = wcontext->weightData.prevTS;
-    sample->value = wcontext->weightData.prevValue;
+    sample->timestamp = wcontext->prevTS;
+    sample->value = wcontext->prevValue;
 }
 
 void TwaReset(void *contextPtr) {
@@ -419,38 +333,29 @@ void TwaReset(void *contextPtr) {
 
 void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     TwaContext *context = (TwaContext *)contextPtr;
-    AvgWriteContext(&context->avgContext, io);
-    RedisModule_SaveDouble(io, context->weightData.weightSum);
-    RedisModule_SaveUnsigned(io, context->weightData.prevPrevTS);
-    RedisModule_SaveUnsigned(io, context->weightData.prevTS);
-    RedisModule_SaveDouble(io, context->weightData.prevValue);
-    RedisModule_SaveUnsigned(io, context->weightData.bucketStartTS);
-    RedisModule_SaveUnsigned(io, context->weightData.bucketEndTS);
-    RedisModule_SaveUnsigned(io, context->weightData.is_first_bucket);
-    RedisModule_SaveUnsigned(io, context->weightData.is_last_ts_handled);
-    RedisModule_SaveUnsigned(io, context->weightData.iteration);
-    RedisModule_SaveDouble(io, context->weightData.prevWeight);
-    RedisModule_SaveDouble(io, context->weightData.weight_sum);
+    RedisModule_SaveDouble(io, context->res);
+    RedisModule_SaveUnsigned(io, context->prevTS);
+    RedisModule_SaveDouble(io, context->prevValue);
+    RedisModule_SaveUnsigned(io, context->bucketStartTS);
+    RedisModule_SaveUnsigned(io, context->bucketEndTS);
+    RedisModule_SaveUnsigned(io, context->first_ts);
+    RedisModule_SaveUnsigned(io, context->last_ts);
+    RedisModule_SaveUnsigned(io, context->is_first_bucket);
+    RedisModule_SaveUnsigned(io, context->iteration);
     RedisModule_SaveUnsigned(io, context->reverse);
 }
 
 int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     TwaContext *context = (TwaContext *)contextPtr;
-    if (AvgReadContext(&context->avgContext, io, encver) == TSDB_ERROR) {
-        goto err;
-    }
-
-    context->weightData.weightSum = LoadDouble_IOError(io, goto err);
-    context->weightData.prevPrevTS = LoadUnsigned_IOError(io, goto err);
-    context->weightData.prevTS = LoadUnsigned_IOError(io, goto err);
-    context->weightData.prevValue = LoadDouble_IOError(io, goto err);
-    context->weightData.bucketStartTS = LoadUnsigned_IOError(io, goto err);
-    context->weightData.bucketEndTS = LoadUnsigned_IOError(io, goto err);
-    context->weightData.is_first_bucket = LoadUnsigned_IOError(io, goto err);
-    context->weightData.is_last_ts_handled = LoadUnsigned_IOError(io, goto err);
-    context->weightData.iteration = LoadUnsigned_IOError(io, goto err);
-    context->weightData.prevWeight = LoadDouble_IOError(io, goto err);
-    context->weightData.weight_sum = LoadDouble_IOError(io, goto err);
+    context->res = LoadDouble_IOError(io, goto err);
+    context->prevTS = LoadUnsigned_IOError(io, goto err);
+    context->prevValue = LoadDouble_IOError(io, goto err);
+    context->bucketStartTS = LoadUnsigned_IOError(io, goto err);
+    context->bucketEndTS = LoadUnsigned_IOError(io, goto err);
+    context->first_ts = LoadUnsigned_IOError(io, goto err);
+    context->last_ts = LoadUnsigned_IOError(io, goto err);
+    context->is_first_bucket = LoadUnsigned_IOError(io, goto err);
+    context->iteration = LoadUnsigned_IOError(io, goto err);
     context->reverse = LoadUnsigned_IOError(io, goto err);
     return TSDB_OK;
 err:
