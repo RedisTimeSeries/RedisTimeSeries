@@ -280,7 +280,7 @@ commands:
             export PERF_CALLGRAPH_MODE="dwarf"
             if [[ -n $CIRCLE_BRANCH ]]; then branch="$CIRCLE_BRANCH"; else branch="$CIRCLE_TAG"; fi
             if [[ $PROFILE == 1 ]]; then
-                module_pth="bin/linux-x64-release-profile/redistimeseries.so"
+                module_path="bin/linux-x64-release-profile/redistimeseries.so"
             else
                 module_path="<< parameters.module_path >>"
             fi
