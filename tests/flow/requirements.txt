@@ -4,3 +4,4 @@ RLTest~=0.4.2
 ramp-packer~=2.2.1
 statistics
 hiredis==2.0.0
+gevent~=22.10.1

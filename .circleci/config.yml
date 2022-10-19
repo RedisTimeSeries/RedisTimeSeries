@@ -61,6 +61,9 @@ commands:
 
   install-prerequisites:
     parameters:
+      setup_args:
+        type: string
+        default: ""
       redis_version:
         type: string
         default: "6"
@@ -71,7 +74,7 @@ commands:
       - run:
           name: System setup
           command: |
-            ./sbin/setup
+            SETUP_ARGS="<<parameters.setup_args>>" ./sbin/setup
             python3 -m pip list
             if command -v gcc &> /dev/null; then gcc --version; fi
             if command -v clang &> /dev/null; then clang --version; fi
@@ -260,8 +263,7 @@ commands:
           name: Install remote benchmark python dependencies
           command: |
             python3 -m pip install --upgrade cython
-            python3 -m pip install -r ./tests/benchmarks/requirements.txt
-
+            python3 -m pip install -r tests/benchmarks/requirements.txt
       - run:
           name: Run CI benchmarks on aws for envs << parameters.allowed_envs >>
           timeout: << parameters.timeout >>
@@ -277,8 +279,13 @@ commands:
             export BENCHMARK_GLOB=<< parameters.benchmark_glob >>
             export PERF_CALLGRAPH_MODE="dwarf"
             if [[ -n $CIRCLE_BRANCH ]]; then branch="$CIRCLE_BRANCH"; else branch="$CIRCLE_TAG"; fi
+            if [[ $PROFILE == 1 ]]; then
+                module_path="$ROOT/bin/linux-x64-release-profile/redistimeseries.so"
+            else
+                module_path="$ROOT/<< parameters.module_path >>"
+            fi
             redisbench-admin run-remote \
-              --module_path << parameters.module_path >> \
+              --module_path $module_path \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
               --github_org $CIRCLE_PROJECT_USERNAME \
@@ -497,7 +504,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -512,7 +520,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -529,7 +538,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -545,7 +555,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -562,7 +573,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -579,7 +591,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -597,7 +610,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -615,7 +629,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
@@ -634,7 +649,8 @@ jobs:
     steps:
       - early-return-for-forked-pull-requests
       - checkout-all
-      - install-prerequisites
+      - install-prerequisites:
+          setup_args: "--no-pytools"
       - run:
           name: Build
           shell: /bin/bash -l -eo pipefail
