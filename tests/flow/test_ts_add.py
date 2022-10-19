@@ -6,6 +6,7 @@ from RLTest import Env
 from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
 import random 
+import struct
 
 
 def test_issue_504():
@@ -236,3 +237,44 @@ def test_ts_upsert_downsampled():
         r.execute_command('ts.add', t3, 31, 3)
         res = r.execute_command('TS.range', t4, '-', '+')
         assert res == [[10, b'22'], [20, b'29'], [23, b'9']]
+
+# End Chunk space when add the value, than try adding value which will fit in the old chunk
+def test_ts_upsert_bug():
+    with Env().getClusterConnectionIfNeeded() as r:
+        t1 = 't1{1}'
+        r.execute_command('ts.create', t1, 'CHUNK_SIZE', 64, 'DUPLICATE_POLICY', 'LAST')
+        j = 1
+        mantisa = list('1111111111111111111111111111111111111111100000000000')
+        mantisa_len = len(mantisa)
+        exp = list('00000000000')
+        exp_len = len(exp)
+        c = 0
+        while True:
+            val = int('0' + ''.join(exp) + ''.join(mantisa), 2)
+            v = struct.unpack('d', struct.pack('Q', val))[0]
+            r.execute_command('ts.add', t1, j, v)
+            info = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
+            if(len(info.chunks) > 1):
+                break
+            if(j == 13):
+                j += 100
+            elif (j > 13):
+                j += 500
+            else:
+                j += 2
+            exp[exp_len - c - 1] = '1'
+            mantisa[mantisa_len - exp_len + c] = '1'
+            c += 1
+
+        info = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
+        first_chunk_last_ts = info.chunks[0][3]
+        res = r.execute_command("ts.del", t1, first_chunk_last_ts + 500, '+')
+        info = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
+        first_chunk_last_ts = info.chunks[0][3]
+        res = r.execute_command("ts.range", t1, first_chunk_last_ts, first_chunk_last_ts)
+        first_chunk_last_val = res[0][1]
+        r.execute_command('ts.add', t1, first_chunk_last_ts + 100, first_chunk_last_val)
+        res2 = r.execute_command("ts.range", t1, first_chunk_last_ts, first_chunk_last_ts + 100)
+        info2 = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
+        assert res2 == [res[0], [first_chunk_last_ts + 100, first_chunk_last_val]]
+  
