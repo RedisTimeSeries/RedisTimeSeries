@@ -850,6 +850,10 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             break;
         }
 
+        if (funcs->GetLastTimestamp(currentChunk) < start_ts) {
+            continue;
+        }
+
         bool is_only_chunk =
             ((funcs->GetNumOfSample(currentChunk) + deletedSamples) == series->totalSamples);
         // Should we delete the all chunk?
