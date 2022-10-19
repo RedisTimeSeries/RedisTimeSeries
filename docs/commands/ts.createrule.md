@@ -52,9 +52,9 @@ aggregates results into time buckets.
   
 <note><b>Notes</b>
 
-- Calling `TS.CREATERULE` with a nonempty `destKey` can result in data inconsistencies.
-- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
-- Only new samples that are added into the source series after the creation of the rule will be aggregated
+- Only new samples that are added into the source series after the creation of the rule will be aggregated.
+- Calling `TS.CREATERULE` with a nonempty `destKey` may result in inconsistencies between the raw and the compacted data.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 - If no samples are added to the source time series during a bucket period. no _compacted sample_ is added to the destination time series.
 - The timestamp of a compacted sample added to the destination time series is set to the start timestamp the appropriate compaction bucket. For example, for a 10-minute compaction bucket with no alignment, the compacted samples timestamps are `x:00`, `x:10`, `x:20`, and so on.
 </note>

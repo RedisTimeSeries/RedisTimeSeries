@@ -36,8 +36,8 @@ is (double) numeric data value of the sample. The double number should follow [R
 </details>
 
 <note><b>Notes:</b>
-- If the time series does not exist, it is automatically created.</note>
-- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) can result in data inconsistencies.
+- If the time series does not exist, it is automatically created.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 </note>
 
 ## Optional arguments
