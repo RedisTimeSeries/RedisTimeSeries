@@ -285,7 +285,7 @@ commands:
                 module_path="<< parameters.module_path >>"
             fi
             redisbench-admin run-remote \
-              --module_path << parameters.module_path >> \
+              --module_path $module_path \
               --github_actor << parameters.github_actor >> \
               --github_repo $CIRCLE_PROJECT_REPONAME \
               --github_org $CIRCLE_PROJECT_USERNAME \
