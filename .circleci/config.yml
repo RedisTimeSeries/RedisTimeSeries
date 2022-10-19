@@ -754,8 +754,7 @@ workflows:
             parameters:
               redis_version: ["6.0", "6.2"]
       - test-rlec:
-          #@@<<: *on-any-branch
-          <<: *never
+          <<: *on-any-branch
       - valgrind:
           <<: *on-integ-and-version-tags
       - build-platforms:
@@ -774,8 +773,7 @@ workflows:
           context: common
           <<: *on-integ-and-version-tags
       - coverage:
-          #@@<<: *on-any-branch
-          <<: *never
+          <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-perf-and-version-tags
@@ -799,8 +797,7 @@ workflows:
           <<: *on-perf-and-version-tags
       - performance-ci-automation-oss-cluster-profiler-ingestion:
           context: common
-          #@@<<: *on-perf-and-version-tags
-          <<: *on-any-branch
+          <<: *on-perf-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
           staging-lab: "1"
