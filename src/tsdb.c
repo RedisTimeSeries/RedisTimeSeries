@@ -144,7 +144,8 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     }
 
     if (!cCtx->skipChunkCreation) {
-        Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->chunkSizeBytes);
+        Chunk_t *newChunk =
+            newSeries->funcs->NewChunk(newSeries->chunkSizeBytes, newSeries->chunkSizeBytes);
         dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
         newSeries->lastChunk = newChunk;
     } else {
@@ -617,7 +618,7 @@ int SeriesUpsertSample(Series *series,
     }
 
     // Split chunks
-    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * 2 * SPLIT_FACTOR) {
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
@@ -675,7 +676,7 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
         // When a new chunk is created trim the series
         SeriesTrim(series, 0, 0);
 
-        Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes);
+        Chunk_t *newChunk = series->funcs->NewChunk(series->chunkSizeBytes, series->chunkSizeBytes);
         dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
         ret = series->funcs->AddSample(newChunk, &sample);
         series->lastChunk = newChunk;

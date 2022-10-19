@@ -19,7 +19,7 @@ typedef struct Chunk
     size_t size;
 } Chunk;
 
-Chunk_t *Uncompressed_NewChunk(size_t size);
+Chunk_t *Uncompressed_NewChunk(size_t size, size_t size_values);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
 
 /**
@@ -63,7 +63,7 @@ void Uncompressed_ProcessChunk(const Chunk_t *chunk,
 
 // RDB
 void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
 
 // LibMR
 void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);

@@ -22,9 +22,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    double lastValue;
-    timestamp_t lastTimestamp;
-    uint64_t totalSamples;
+    double lastValue = 0.0;
+    timestamp_t lastTimestamp = 0;
+    uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
@@ -119,7 +119,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         uint64_t numChunks = LoadUnsigned_IOError(io, goto err);
         for (int i = 0; i < numChunks; ++i) {
-            if (series->funcs->LoadFromRDB(&chunk, io)) {
+            if (series->funcs->LoadFromRDB(&chunk, io, encver)) {
                 goto err;
             }
             dictOperator(

@@ -706,7 +706,7 @@ Record *SeriesRecord_New(Series *series,
         Sample *sample_ptr = &sample;
         calculate_latest_sample(&sample_ptr, series);
         if (sample_ptr && (sample.timestamp <= endTimestamp)) {
-            out->chunks[index] = out->funcs->NewChunk(128);
+            out->chunks[index] = out->funcs->NewChunk(128, 128);
             series->funcs->AddSample(out->chunks[index], &sample);
             index++;
         }

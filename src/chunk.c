@@ -9,7 +9,7 @@
 
 #include "rmutil/alloc.h"
 
-Chunk_t *Uncompressed_NewChunk(size_t size) {
+Chunk_t *Uncompressed_NewChunk(size_t size, __attribute__((unused)) size_t size_values) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
@@ -40,7 +40,7 @@ Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     size_t curNumSamples = curChunk->num_samples - split;
 
     // create chunk and copy samples
-    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE);
+    Chunk *newChunk = Uncompressed_NewChunk(split * SAMPLE_SIZE, DC);
     for (size_t i = 0; i < split; ++i) {
         Sample *sample = &curChunk->samples[curNumSamples + i];
         Uncompressed_AddSample(newChunk, sample);
@@ -323,7 +323,9 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                                   (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
-int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
+int Uncompressed_LoadFromRDB(Chunk_t **chunk,
+                             struct RedisModuleIO *io,
+                             __attribute__((unused)) int encver) {
     UNCOMPRESSED_DESERIALIZE(chunk, io, LoadUnsigned_IOError, LoadStringBuffer_IOError, goto err);
 }
 

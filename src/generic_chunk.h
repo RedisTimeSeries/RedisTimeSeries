@@ -43,7 +43,7 @@ typedef struct UpsertCtx
 
 typedef struct ChunkFuncs
 {
-    Chunk_t *(*NewChunk)(size_t sampleCount);
+    Chunk_t *(*NewChunk)(size_t sampleCountTS, size_t sampleCountValues);
     void (*FreeChunk)(Chunk_t *chunk);
     Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
@@ -65,7 +65,7 @@ typedef struct ChunkFuncs
     u_int64_t (*GetFirstTimestamp)(Chunk_t *chunk);
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
-    int (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
+    int (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io, int encver);
     void (*MRSerialize)(Chunk_t *chunk, WriteSerializationCtx *sctx);
     int (*MRDeserialize)(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 } ChunkFuncs;
