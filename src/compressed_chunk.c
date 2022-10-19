@@ -77,7 +77,14 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 static void trimChunk(CompressedChunk *chunk) {
     int excess = (chunk->size * BIT - chunk->idx) / BIT;
 
-    assert(excess >= 0); // else we have written beyond allocated memory
+    if (unlikely(chunk->size * BIT < chunk->idx)) {
+        _log_if(
+            true,
+            "Invalid chunk index, we have written beyond allocated memorye"); // else we have
+                                                                              // written beyond
+                                                                              // allocated memory
+        return;
+    }
 
     if (excess > 1) {
         size_t newSize = chunk->size - excess + 1;
