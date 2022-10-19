@@ -7,4 +7,4 @@ READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
 
 $READIES/bin/getpy3
-$ROOT/sbin/system-setup.py
+$ROOT/sbin/system-setup.py "$SETUP_ARGS"
