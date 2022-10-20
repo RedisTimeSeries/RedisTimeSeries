@@ -1,14 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.MADD {key timestamp value}...
+
 ---
 
 Append new samples to one or more time series
-
-## Syntax
-
-{{< highlight bash >}}
-TS.MADD {key timestamp value}...
-{{< / highlight >}}
 
 [Examples](#examples)
 

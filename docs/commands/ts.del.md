@@ -1,14 +1,9 @@
 ---
-syntax: 
+syntax: |
+  TS.DEL key fromTimestamp toTimestamp
 ---
 
 Delete all samples between two timestamps for a given time series
-
-## Syntax
-
-{{< highlight bash >}}
-TS.DEL key fromTimestamp toTimestamp
-{{< / highlight >}}
 
 [Examples](#examples)
 

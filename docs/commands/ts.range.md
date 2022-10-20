@@ -1,19 +1,14 @@
 ---
-syntax: 
+syntax: |
+  TS.RANGE key fromTimestamp toTimestamp
+    [LATEST]
+    [FILTER_BY_TS ts...]
+    [FILTER_BY_VALUE min max]
+    [COUNT count] 
+    [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 ---
 
 Query a range in forward direction
-
-## Syntax
-
-{{< highlight bash >}}
-TS.RANGE key fromTimestamp toTimestamp
-  [LATEST]
-  [FILTER_BY_TS ts...]
-  [FILTER_BY_VALUE min max]
-  [COUNT count] 
-  [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-{{< / highlight >}}
 
 [Examples](#examples)
 
