@@ -236,7 +236,7 @@ def test_empty():
         assert r.execute_command('TS.add', 't2', 51, 3)
         assert r.execute_command('TS.add', 't2', 60, 9)
         #expected_agg_t1 = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
-        #expected_agg_t2 = [[0, '2'], [10, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, '9']]
+        #expected_agg_t2 = [[0, '2'], [10, 'NaN'], [20, 'NaN'] [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, '9']]
         exp_samples = [[0, '2'], [10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '6'], [60, '9'], [70, '5']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
@@ -245,6 +245,20 @@ def test_empty():
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
         decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+
+        # test LAST + EMPTY
+        #expected_agg_t1 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
+        #expected_agg_t2 = [[0, '2'], [10, '2'], [20, '2'], [30, '2'], [40, '2'], [50, '3'], [60, '9']]
+        exp_samples = [[0, '2'], [10, '6'], [20, '6'], [30, '6'], [40, '6'], [50, '6'], [60, '12'], [70, '3']]
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        exp_samples.reverse()
+        expected_data = [['metric_name=user', [], exp_samples]]
+        assert expected_data == \
+        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+
+
 
 def test_bucket_timestamp():
     agg_size = 10
