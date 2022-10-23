@@ -315,7 +315,7 @@ static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
                                             bool reversed) {
     double val;
     for (size_t i = 0; i < n_empty_buckets; ++i) {
-        self->aggregation->finalizeEmpty(&val);
+        self->aggregation->finalizeEmpty(self->aggregationContext, &val);
         fillEmptyBucketWithValueIncIter(
             write_index,
             &cur_ts,
@@ -446,7 +446,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 
         // Calculate val
         if (is_nan_bucket) {
-            aggregation->finalizeEmpty(&val);
+            aggregation->finalizeEmpty(NULL, &val);
         } else if (has_before_and_after) {
             double delta_val = (sample_after.value - sample_before.value);
             double delta_ts = (sample_after.timestamp - sample_before.timestamp);
@@ -458,7 +458,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
         } else if (n_samples_after > 1) {
             timestamp_t delta = sample_afAfter.timestamp - sample_after.timestamp;
             if (tb + (delta / 2) <= sample_after.timestamp) {
-                aggregation->finalizeEmpty(&val);
+                aggregation->finalizeEmpty(NULL, &val);
             } else {
                 val = sample_after.value;
             }
@@ -466,7 +466,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
             RedisModule_Assert(n_samples_before > 1);
             timestamp_t delta = sample_before.timestamp - sample_befBefore.timestamp;
             if (sample_before.timestamp + (delta / 2) <= ta) {
-                aggregation->finalizeEmpty(&val);
+                aggregation->finalizeEmpty(NULL, &val);
             } else {
                 val = sample_before.value;
             }
