@@ -24,10 +24,15 @@
 #include "valgrind/valgrind.h"
 #endif
 
-typedef struct SingleValueContext
+typedef struct FirstValueContext
 {
     double value;
     char isResetted;
+} FirstValueContext;
+
+typedef struct SingleValueContext
+{
+    double value;
 } SingleValueContext;
 
 typedef struct AvgContext
@@ -62,18 +67,22 @@ typedef struct StdContext
     u_int64_t cnt;
 } StdContext;
 
-void finalize_empty_with_NAN(double *value) {
+void finalize_empty_with_NAN(__unused void *contextPtr, double *value) {
     *value = NAN;
 }
 
-void finalize_empty_with_ZERO(double *value) {
+void finalize_empty_with_ZERO(__unused void *contextPtr, double *value) {
     *value = 0;
+}
+
+void finalize_empty_last_value(void *contextPtr, double *value) {
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    *value = context->value;
 }
 
 void *SingleValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
-    context->isResetted = TRUE;
     return context;
 }
 
@@ -86,7 +95,11 @@ void *SingleValueCloneContext(void *contextPtr) {
 void SingleValueReset(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
-    context->isResetted = TRUE;
+}
+
+void LastValueReset(void *contextPtr) {
+    // Don't do anything cause with EMPTY flag we would like to use the last value
+    return;
 }
 
 void SingleValueFinalize(void *contextPtr, double *val) {
@@ -97,11 +110,52 @@ void SingleValueFinalize(void *contextPtr, double *val) {
 void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     RedisModule_SaveDouble(io, context->value);
-    RedisModule_SaveUnsigned(io, context->isResetted);
 }
 
 int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
+    context->value = LoadDouble_IOError(io, goto err);
+    if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER && encver < TS_LAST_AGGREGATION_EMPTY) {
+        // In old rdbs there was is_resetted flag
+        LoadUnsigned_IOError(io, goto err);
+    }
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
+}
+
+void *FirstValueCreateContext(__unused bool reverse) {
+    FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
+    context->value = 0;
+    context->isResetted = TRUE;
+    return context;
+}
+
+void *FirstValueCloneContext(void *contextPtr) {
+    FirstValueContext *buf = (FirstValueContext *)malloc(sizeof(FirstValueContext));
+    memcpy(buf, contextPtr, sizeof(FirstValueContext));
+    return buf;
+}
+
+void FirstValueReset(void *contextPtr) {
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
+    context->value = 0;
+    context->isResetted = TRUE;
+}
+
+void FirstValueFinalize(void *contextPtr, double *val) {
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
+    *val = context->value;
+}
+
+void FirstValueWriteContext(void *contextPtr, RedisModuleIO *io) {
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
+    RedisModule_SaveDouble(io, context->value);
+    RedisModule_SaveUnsigned(io, context->isResetted);
+}
+
+int FirstValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value = LoadDouble_IOError(io, goto err);
     if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
         context->isResetted = LoadUnsigned_IOError(io, goto err);
@@ -627,22 +681,22 @@ err:
 }
 
 void SumAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
-    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value += value;
 }
 
 void CountAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
-    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value++;
 }
 
 void CountFinalize(void *contextPtr, double *val) {
-    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
     *val = context->value;
 }
 
 void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
-    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    FirstValueContext *context = (FirstValueContext *)contextPtr;
     if (context->isResetted) {
         context->isResetted = FALSE;
         context->value = value;
@@ -719,20 +773,20 @@ static AggregationClass aggCount = { .type = TS_AGG_COUNT,
                                      .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggFirst = { .type = TS_AGG_FIRST,
-                                     .createContext = SingleValueCreateContext,
+                                     .createContext = FirstValueCreateContext,
                                      .appendValue = FirstAppendValue,
                                      .appendValueVec = NULL, /* determined on run time */
                                      .freeContext = rm_free,
-                                     .finalize = SingleValueFinalize,
+                                     .finalize = FirstValueFinalize,
                                      .finalizeEmpty = finalize_empty_with_NAN,
-                                     .writeContext = SingleValueWriteContext,
-                                     .readContext = SingleValueReadContext,
+                                     .writeContext = FirstValueWriteContext,
+                                     .readContext = FirstValueReadContext,
                                      .addBucketParams = NULL,
                                      .addPrevBucketLastSample = NULL,
                                      .addNextBucketFirstSample = NULL,
                                      .getLastSample = NULL,
-                                     .resetContext = SingleValueReset,
-                                     .cloneContext = SingleValueCloneContext };
+                                     .resetContext = FirstValueReset,
+                                     .cloneContext = FirstValueCloneContext };
 
 static AggregationClass aggLast = { .type = TS_AGG_LAST,
                                     .createContext = SingleValueCreateContext,
@@ -740,14 +794,14 @@ static AggregationClass aggLast = { .type = TS_AGG_LAST,
                                     .appendValueVec = NULL, /* determined on run time */
                                     .freeContext = rm_free,
                                     .finalize = SingleValueFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
+                                    .finalizeEmpty = finalize_empty_last_value,
                                     .writeContext = SingleValueWriteContext,
                                     .readContext = SingleValueReadContext,
                                     .addBucketParams = NULL,
                                     .addPrevBucketLastSample = NULL,
                                     .addNextBucketFirstSample = NULL,
                                     .getLastSample = NULL,
-                                    .resetContext = SingleValueReset,
+                                    .resetContext = LastValueReset,
                                     .cloneContext = SingleValueCloneContext };
 
 static AggregationClass aggRange = { .type = TS_AGG_RANGE,

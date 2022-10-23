@@ -39,21 +39,31 @@ def test_dump_restore_dst_rule():
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
         key3 = 'ts3{a}'
+        key4 = 'ts4{a}'
+        key5 = 'ts5{a}'
+        key6 = 'ts6{a}'
+        n_dst_keys = 5
         r.execute_command('TS.CREATE', key1)
         r.execute_command('TS.CREATE', key2)
         r.execute_command('TS.CREATE', key3)
+        r.execute_command('TS.CREATE', key4)
+        r.execute_command('TS.CREATE', key5)
+        r.execute_command('TS.CREATE', key6)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
         r.execute_command('TS.CREATERULE', key1, key3, 'AGGREGATION', 'twa', 10)
+        r.execute_command('TS.CREATERULE', key1, key4, 'AGGREGATION', 'last', 10)
+        r.execute_command('TS.CREATERULE', key1, key5, 'AGGREGATION', 'count', 10)
+        r.execute_command('TS.CREATERULE', key1, key6, 'AGGREGATION', 'first', 10)
 
         assert _get_ts_info(r, key2).sourceKey.decode() == key1
-        assert len(_get_ts_info(r, key1).rules) == 2
+        assert len(_get_ts_info(r, key1).rules) == n_dst_keys
 
         data = r.execute_command('DUMP', key2)
         r.execute_command('DEL', key2)
         r.execute_command('restore', key2, 0, data)
 
         assert _get_ts_info(r, key1).sourceKey == None
-        assert len(_get_ts_info(r, key1).rules) == 1
+        assert len(_get_ts_info(r, key1).rules) == n_dst_keys - 1
         assert _get_ts_info(r, key2).sourceKey == None
         assert len(_get_ts_info(r, key2).rules) == 0
     
@@ -61,9 +71,33 @@ def test_dump_restore_dst_rule():
         r.execute_command('DEL', key3)
         r.execute_command('restore', key3, 0, data)
         assert _get_ts_info(r, key1).sourceKey == None
-        assert len(_get_ts_info(r, key1).rules) == 0
+        assert len(_get_ts_info(r, key1).rules) == n_dst_keys - 2
         assert _get_ts_info(r, key3).sourceKey == None
         assert len(_get_ts_info(r, key3).rules) == 0
+
+        data = r.execute_command('DUMP', key4)
+        r.execute_command('DEL', key4)
+        r.execute_command('restore', key4, 0, data)
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 3
+        assert _get_ts_info(r, key4).sourceKey == None
+        assert len(_get_ts_info(r, key4).rules) == 0
+
+        data = r.execute_command('DUMP', key5)
+        r.execute_command('DEL', key5)
+        r.execute_command('restore', key5, 0, data)
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 4
+        assert _get_ts_info(r, key5).sourceKey == None
+        assert len(_get_ts_info(r, key5).rules) == 0
+
+        data = r.execute_command('DUMP', key6)
+        r.execute_command('DEL', key6)
+        r.execute_command('restore', key6, 0, data)
+        assert _get_ts_info(r, key1).sourceKey == None
+        assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 5
+        assert _get_ts_info(r, key6).sourceKey == None
+        assert len(_get_ts_info(r, key6).rules) == 0
 
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
         assert _get_ts_info(r, key2).sourceKey.decode() == key1

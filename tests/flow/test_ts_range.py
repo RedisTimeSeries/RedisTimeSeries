@@ -1342,6 +1342,13 @@ def test_empty():
         assert expected_data == \
         decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
 
+        expected_data_2 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
+        assert expected_data_2 == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
+        expected_data_3 = [[70, '5'], [60, '5'], [50, '3'], [40, '3'], [30, '3'], [20, '3'], [10, '1']]
+        assert expected_data_3 == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
+
         expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
         assert expected_data == \
         decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
