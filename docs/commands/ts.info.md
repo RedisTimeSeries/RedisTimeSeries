@@ -25,7 +25,7 @@ is an optional flag to get a more detailed information about the chunks.
 
 ## Return value
 
-TS.INFO returns an array-reply with these elements:
+An array-reply with information about the time series:
 
 | Name | Description
 | ---- | -
