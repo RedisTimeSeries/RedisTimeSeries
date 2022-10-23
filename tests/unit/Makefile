@@ -61,7 +61,7 @@ endif
 
 LD_FLAGS += $(LD_FLAGS.coverage)
 
-LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_SHARED_EXT))
+LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_SHARED_EXT)) -lm
 
 #----------------------------------------------------------------------------------------------
 
