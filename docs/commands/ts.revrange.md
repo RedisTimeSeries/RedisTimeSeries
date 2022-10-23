@@ -126,8 +126,9 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
-| `min`, `max`, `range`, `avg`, `first`, `last`, `std.p`, `std.s` | `NaN` |
-| `twa`                | Based on linear interpolation of neighbouring buckets. `NaN` when cannot interpolate. |
+| `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` | `NaN` |
+| `last`               | The value of the previous sample. `NaN` when no previous sample. |
+| `twa`                | Based on linear interpolation of previous and next samples. `NaN` when cannot interpolate. |  
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
