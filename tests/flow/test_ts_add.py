@@ -148,7 +148,7 @@ def test_ts_add_negative():
             r.execute_command('TS.CREATE', 'tester', 'ENCODING')
         with pytest.raises(redis.ResponseError) as excinfo:
             r.execute_command('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding')
-
+'''
 def test_ts_upsert():
     random.seed(5)
     with Env().getClusterConnectionIfNeeded() as r:
@@ -198,6 +198,7 @@ def test_ts_upsert():
 
         res = r.execute_command('ts.range', key, '-', '+')
         info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
+'''
 
 def test_ts_upsert_downsampled():
     with Env().getClusterConnectionIfNeeded() as r:
