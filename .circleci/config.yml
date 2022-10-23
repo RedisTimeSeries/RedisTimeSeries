@@ -481,8 +481,19 @@ jobs:
       - run:
           name: Build & test
           shell: /bin/bash -l -eo pipefail
-          command: make SAN=<<parameters.san-type>> build test SHOW=1 VERBOSE=1
+          command: make SAN=<<parameters.san-type>> build SHOW=1 VERBOSE=1
+      - run:
+          name: Unit Test
+          shell: /bin/bash -l -eo pipefail
+          command: |
+            make unit_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1
+      - run:
+          name: Flow test
+          shell: /bin/bash -l -eo pipefail
           no_output_timeout: 30m
+          command: |
+            python3 -m RLTest --version
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1
       - save-tests-logs
 
   upload-artifacts:
