@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -28,8 +28,6 @@ MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 
-CC=gcc
-
 _SOURCES=\
 	cluster.c \
 	crc16.c \
@@ -52,6 +50,7 @@ CC_FLAGS += \
 	-fPIC \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
+	-DREDISMODULE_API=extern \
 	-DREDISMODULE_EXPERIMENTAL_API \
 	-DMODULE_NAME=$(MODULE_NAME) \
 	-I$(SRCDIR) \

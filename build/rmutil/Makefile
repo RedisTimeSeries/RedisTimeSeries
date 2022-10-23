@@ -9,8 +9,6 @@ MK_CUSTOM_CLEAN=1
 BINDIR=$(BINROOT)/rmutil
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
-CC=gcc
-
 CC_FLAGS=\
 	-I$(SRCDIR)/.. \
 	-DREDIS_MODULE_TARGET \

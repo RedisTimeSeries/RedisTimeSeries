@@ -1,19 +1,7 @@
 
 ROOT=..
 
-ifneq ($(filter coverage show-cov upload-cov,$(MAKECMDGOALS)),)
-COV=1
-endif
-
-ifeq ($(VG),1)
-override VALGRIND:=1
-export VALGRIND
-endif
-
-ifeq ($(VALGRIND),1)
-override DEBUG:=1
-export DEBUG
-endif
+#----------------------------------------------------------------------------------------------  
 
 MK_ALL_TARGETS=bindirs deps build pack
 
@@ -55,6 +43,8 @@ make build
                    # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
+  VG=1             # build for Valgrind
+  SAN=type         # build with LLVM sanitizer (type=address|memory|leak|thread) 
 make clean         # remove binary files
   ALL=1            # remove binary directories
   DEPS=1           # also clean dependant modules
@@ -78,6 +68,7 @@ make flow_tests    # run tests
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
+  SAN=type         # use LLVM sanitizer (type=address|memory|leak|thread) 
   EXT=1            # run tests with existing redis-server running
 
 make pack          # build packages (ramp & dependencies)
@@ -89,6 +80,8 @@ make benchmarks    # run all benchmarks
 make platform      # build artifacts for given platform
   OSNICK=nick        # build for OSNICK `nick`
   TEST=1             # also run tests
+
+make sanbox        # create container with CLang Sanitizer
 
 endef
 
@@ -108,8 +101,6 @@ PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
 ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
-
-CC=gcc
 
 CC_FLAGS = \
 	-I$(ROOT)/deps/RedisModulesSDK \
@@ -531,3 +522,14 @@ upload-artifacts:
 	@SNAPSHOT=1 $(ROOT)/sbin/upload-artifacts
 
 .PHONY: pack upload-release upload-artifacts
+
+#----------------------------------------------------------------------------------------------
+
+ifneq ($(wildcard /w/*),)
+SANBOX_ARGS += -v /w:/w
+endif
+
+sanbox:
+	@docker run -it -v $(PWD):/build -w /build --cap-add=SYS_PTRACE --security-opt seccomp=unconfined $(SANBOX_ARGS) redisfab/clang:13-x64-bullseye bash
+
+.PHONY: sanbox
