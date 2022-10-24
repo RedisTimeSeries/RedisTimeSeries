@@ -25,36 +25,47 @@ help() {
 		Argument variables:
 		MODULE=path         Module .so path
 
+		TEST=test           Run specific test (e.g. test.py:test_name)
+
+		RLTEST=path|'view'  Take RLTest from repo path or from local view
+		RLTEST_ARGS=...     Extra RLTest arguments
+
 		GEN=0|1             General tests on standalone Redis (default)
 		AOF=0|1             AOF persistency tests on standalone Redis
 		SLAVES=0|1          Replication tests on standalone Redis
 		AOF_SLAVES=0|1      AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
 		SHARDS=n            Number of shards (default: 3)
+
+		QUICK=1             Perform only one test variant
+		PARALLEL=1          Runs RLTest tests in parallel
+
+
 		RLEC=0|1            General tests on RLEC
+		DOCKER_HOST=addr    Address of Docker server (default: localhost)
+		RLEC_PORT=n         Port of RLEC database (default: 12000)
 
 		REDIS_SERVER=path   Location of redis-server
-		EXISTING_ENV=1      Run the tests on existing env
+
+		EXISTING_ENV=1      Test on existing env (like EXT=1)
 		EXT=1|run           Test on existing env (1=running; run=start redis-server)
 		EXT_HOST=addr       Address if existing env (default: 127.0.0.1)
 		EXT_PORT=n          Port of existing env
-		TEST=test           Run specific test (e.g. test.py:test_name)
+
 		COV=1               Run with coverage analysis
 		VG=1                Run with Valgrind
 		VG_LEAKS=0          Do not detect leaks
 		SAN=type            Use LLVM sanitizer (type=address|memory|leak|thread) 
 		GDB=1               Enable interactive gdb debugging (in single-test mode)
 
-		DOCKER_HOST         Address of Docker server (default: localhost)
-		RLEC_PORT           Port of existing-env in RLEC container (default: 12000)
-
-		RLTEST_ARGS=...     Extra RLTest arguments
-		VERBOSE=1           Print commands
+		LIST=1                List all tests and exit
+		VERBOSE=1           Print commands and Redis output
 		LOG=1               Send results to log (even on single-test mode)
 		KEEP=1              Do not remove intermediate files
 		IGNERR=1            Do not abort on error
 		NOP=1               Dry run
 		HELP=1              Show help
+
 
 	END
 	exit 0
@@ -111,7 +122,8 @@ setup_clang_sanitizer() {
 	export SANITIZER="$SAN"
 	
 	# --no-output-catch --exit-on-failure --check-exitcode
-	RLTEST_SAN_ARGS="--unix --sanitizer $SAN"
+	# RLTEST_SAN_ARGS="--unix --sanitizer $SAN"
+	RLTEST_SAN_ARGS="--sanitizer $SAN"
 
 	if [[ $SAN == addr || $SAN == address ]]; then
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-asan-$SAN_REDIS_VER}
@@ -202,7 +214,7 @@ valgrind_summary() {
 #----------------------------------------------------------------------------------------------
 
 setup_coverage() {
-	RLTEST_COV_ARGS="--unix"
+	# RLTEST_COV_ARGS="--unix"
 
 	export CODE_COVERAGE=1
 }
