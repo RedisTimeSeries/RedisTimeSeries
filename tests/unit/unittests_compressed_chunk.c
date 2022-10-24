@@ -22,7 +22,7 @@ MU_TEST(test_compressed_upsert) {
     int size = 0;
     float minV = 0.0;
     float maxV = 100.0;
-    for (size_t chunk_size = 2; chunk_size < max_chunk_size; chunk_size += 64) {
+    for (size_t chunk_size = 8; chunk_size < max_chunk_size; chunk_size += 64) {
         CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
         mu_assert(chunk != NULL, "create compressed chunk");
         for (size_t i = 1; i <= total_data_points; i++) {
