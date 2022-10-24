@@ -1128,6 +1128,7 @@
     "TS.MREVRANGE": {
         "summary": "Query a range across multiple time-series by filters in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
+        "since": "1.4.0",
         "arguments": [
             {
                 "name": "fromTimestamp",
@@ -1365,8 +1366,7 @@
                 ]
             }
         ],
-        "since": "1.0.0",
-        "group": "timeseries"
+            "group": "timeseries"
     },
     "TS.GET": {
         "summary": "Get the last sample",
