@@ -129,4 +129,13 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
     return strcmp(input_upper, str);
 }
 
+#define _log_if(cond, format, ...) do {          \
+  extern RedisModuleCtx *rts_staticCtx;          \
+  if(unlikely(cond)){                            \
+    RedisModule_Log(rts_staticCtx,               \
+                    "warning",                   \
+                    format, ##__VA_ARGS__);      \
+  }                                              \
+} while(0)
+
 #endif

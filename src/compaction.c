@@ -42,10 +42,6 @@ typedef struct AvgContext
     bool isOverflow;
 } AvgContext;
 
-typedef struct WeightData
-{
-} WeightData;
-
 typedef struct TwaContext
 {
     double res;
