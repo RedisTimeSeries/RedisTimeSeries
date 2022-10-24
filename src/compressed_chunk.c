@@ -24,6 +24,7 @@
  *  Chunk functions  *
  *********************/
 Chunk_t *Compressed_NewChunk(size_t size) {
+    _log_if(size % 8 != 0, "chunk size isn't multiplication of 8");
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
     chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
