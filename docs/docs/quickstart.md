@@ -25,7 +25,7 @@ docker run -p 6379:6379 -it --rm redislabs/redistimeseries
 
 ### Download and running binaries
 
-First download the pre-compiled version from the [Redis download center](https://redis.com/redis-enterprise-software/download-center/modules/).
+First download the pre-compiled version from the [Redis download center](https://app.redislabs.com/#/rlec-downloads).
 
 Next, run Redis with RedisTimeSeries: 
 
