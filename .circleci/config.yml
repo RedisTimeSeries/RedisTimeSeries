@@ -58,6 +58,8 @@ commands:
             git submodule update --init deps/readies
             ./deps/readies/bin/getpy3
             ./deps/readies/bin/getaws
+            python3 --version
+            python3 -m pip list
 
   install-prerequisites:
     parameters:
@@ -82,7 +84,7 @@ commands:
           name: Install Redis
           shell: /bin/bash -l -eo pipefail
           command: |
-            python3 ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>
+            ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>
             redis-server --version
 
   install-arlecchino:
@@ -177,10 +179,23 @@ commands:
           name: Build for platform
           shell: /bin/bash -l -eo pipefail
           command: |
+            ROOT=$PWD
             cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" TEST=1 OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
+            cd $ROOT
+            mkdir -p tests/flow/logs
+            tar -C tests/flow/logs -xzf bin/artifacts/flow-logs*.tgz
+          timeout: 60m
+          no_output_timeout: 30m
       - save-tests-logs
       - early-return-for-forked-pull-requests
+      - run:
+          name: Upload artifacts to S3
+          shell: /bin/bash -l -eo pipefail
+          command: |
+            if [[ -n $CIRCLE_BRANCH ]]; then
+                make upload-artifacts OSNICK=<<parameters.platform>> SHOW=1
+            fi
       - run:
           name: Publish container
           shell: /bin/bash -l -eo pipefail
@@ -208,8 +223,12 @@ commands:
       - run:
           name: Build for platform
           command: |
+            ROOT=$PWD
             cd build/docker
             make build OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH TEST=1 OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
+            cd $ROOT
+            mkdir -p tests/flow/logs
+            tar -C tests/flow/logs -xzf bin/artifacts/flow-logs*.tgz
           no_output_timeout: 30m
       - save-tests-logs
       - early-return-for-forked-pull-requests
@@ -386,7 +405,7 @@ jobs:
           name: Upload artifacts to S3
           command: |
             if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
-                make upload-artifacts
+                make upload-artifacts SHOW=1
             fi
       - persist-artifacts
 
@@ -474,7 +493,7 @@ jobs:
                 make upload-release SHOW=1 STAGING=1
             fi
 
-  release-automation:
+  release-qa-tests:
     docker:
       - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
@@ -484,7 +503,7 @@ jobs:
       - setup-automation
       - run:
           name: Run QA Automation
-          command: MODULE_VERSION="$CIRCLE_TAG" VERBOSE=1 TEST=release ./tests/qa/run
+          command: ./tests/qa/qatests -m "$CIRCLE_TAG"
 
   nightly-automation:
     docker:
@@ -815,7 +834,7 @@ workflows:
             - build-platforms
             - build-arm-platforms
             - build-macos
-      - release-automation:
+      - release-qa-tests:
           <<: *on-version-tags
           context: common
           requires:
