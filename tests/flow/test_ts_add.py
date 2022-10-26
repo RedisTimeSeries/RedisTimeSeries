@@ -151,6 +151,8 @@ def test_ts_add_negative():
             r.execute_command('TS.CREATE', 'tester', 'ENCODING', 'bad-encoding')
 
 def test_ts_upsert():
+    if VALGRIND == 1:
+        Env().skip()
     random.seed(5)
     with Env().getClusterConnectionIfNeeded() as r:
         DOUBLE_MAX = 1.7976931348623158E+308     # 64 bit floating point max value
