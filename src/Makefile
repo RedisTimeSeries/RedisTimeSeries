@@ -24,7 +24,7 @@ include $(ROOT)/deps/readies/mk/main
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
 
-export HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/hiredis
+export HIREDIS_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/hiredis
 include $(ROOT)/build/hiredis/Makefile.defs
 
 export LIBEVENT_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/libevent
@@ -36,7 +36,7 @@ include $(ROOT)/build/dragonbox/Makefile.defs
 export FAST_DOUBLE_PARSER_C_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/fast_double_parser_c
 include $(ROOT)/build/fast_double_parser_c/Makefile.defs
 
-export RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/rmutil
+export RMUTIL_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/rmutil
 include $(ROOT)/build/rmutil/Makefile.defs
 
 export CPU_FEATURES_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/cpu_features
