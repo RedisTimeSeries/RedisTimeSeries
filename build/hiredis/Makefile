@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -13,7 +13,8 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
-BINDIR=$(BINROOT)/hiredis
+# BINDIR=$(BINROOT)/hiredis
+override BINDIR=$(HIREDIS_BINDIR)
 SRCDIR=$(ROOT)/deps/LibMR/deps/hiredis
 
 TARGET=$(BINDIR)/libhiredis.a
