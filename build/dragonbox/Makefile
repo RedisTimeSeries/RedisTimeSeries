@@ -23,9 +23,6 @@ MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 
-CC=gcc
-CXX=g++
-
 _SOURCES=dragonbox.cpp
 
 SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))

@@ -109,8 +109,6 @@ ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
 UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
-CC=gcc
-
 CC_FLAGS = \
 	-I$(ROOT)/deps/RedisModulesSDK \
 	-I$(ROOT)/deps \

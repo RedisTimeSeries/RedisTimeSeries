@@ -27,6 +27,9 @@ help() {
 		AOF_SLAVES=0|1      AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
 		SHARDS=n            Number of shards (default: 3)
+
+		QUICK|SIMPLE=1      Perform only one test variant
+
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
@@ -161,11 +164,19 @@ OP=""
 
 #----------------------------------------------------------------------------------------------
 
-GEN=${GEN:-1}
-SLAVES=${SLAVES:-1}
-AOF=${AOF:-1}
-AOF_SLAVES=${AOF_SLAVES:-1}
-OSS_CLUSTER=${OSS_CLUSTER:-0}
+if [[ $QUICK != 1 && $SIMPLE != 1 ]]; then
+	GEN=${GEN:-1}
+	SLAVES=${SLAVES:-1}
+	AOF=${AOF:-1}
+	AOF_SLAVES=${AOF_SLAVES:-1}
+	OSS_CLUSTER=${OSS_CLUSTER:-0}
+else
+	GEN=1
+	SLAVES=0
+	AOF=0
+	AOF_SLAVES=0
+	OSS_CLUSTER=0
+fi
 SHARDS=${SHARDS:-3}
 RLEC=${RLEC:-0}
 

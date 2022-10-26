@@ -27,8 +27,6 @@ MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 
-CC=gcc
-
 _SOURCES=alloc.c async.c dict.c hiredis.c net.c read.c sds.c sockcompat.c
 ifeq ($(SSL),1)
 _SOURCES += ssl.c

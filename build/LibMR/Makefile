@@ -29,8 +29,6 @@ MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 
-CC=gcc
-
 _SOURCES=\
 	cluster.c \
 	crc16.c \
