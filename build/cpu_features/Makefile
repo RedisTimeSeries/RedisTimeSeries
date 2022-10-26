@@ -1,19 +1,6 @@
 
-ifeq (n,$(findstring n,$(firstword -$(MAKEFLAGS))))
-DRY_RUN:=1
-else
-DRY_RUN:=
-endif
-
-#----------------------------------------------------------------------------------------------
-
 ROOT=../..
 
-ifeq ($(wildcard $(ROOT)/deps/readies/*),)
-___:=$(shell git submodule update --init --recursive &> /dev/null)
-endif
-
-MK.pyver:=3
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------
@@ -32,7 +19,8 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-BINDIR=$(BINROOT)/cpu_features
+# BINDIR=$(BINROOT)/cpu_features
+override BINDIR=$(CPU_FEATURES_BINDIR)
 
 TARGET=$(BINDIR)/libcpu_features.a
 

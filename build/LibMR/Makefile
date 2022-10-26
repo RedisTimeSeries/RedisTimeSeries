@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -15,7 +15,8 @@ MK_ALL_TARGETS=build
 
 MODULE_NAME=timeseries
 
-BINDIR=$(BINROOT)/LibMR
+# BINDIR=$(BINROOT)/LibMR
+override BINDIR=$(LIBMR_BINDIR)
 SRCDIR=$(ROOT)/deps/LibMR/src
 
 TARGET=$(BINDIR)/libmr.a

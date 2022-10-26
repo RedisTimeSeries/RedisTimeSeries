@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -13,7 +13,8 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
-BINDIR=$(BINROOT)/fast_double_parser_c
+# BINDIR=$(BINROOT)/fast_double_parser_c
+override BINDIR=$(FAST_DOUBLE_PARSER_C_BINDIR)
 SRCDIR=$(ROOT)/src/fast_double_parser_c
 
 FAST_DOUBLE_PARSER_DIR=$(ROOT)/deps/fast_double_parser

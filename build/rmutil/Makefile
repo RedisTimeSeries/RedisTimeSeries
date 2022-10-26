@@ -1,12 +1,12 @@
 
 ROOT=../..
-MK.pyver:=3
 
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
 
-BINDIR=$(BINROOT)/rmutil
+# BINDIR=$(BINROOT)/rmutil
+override BINDIR=$(RMUTIL_BINDIR)
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
 CC=gcc
