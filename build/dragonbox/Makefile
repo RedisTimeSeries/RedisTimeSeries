@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -11,7 +11,8 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-BINDIR=$(BINROOT)/dragonbox
+# BINDIR=$(BINROOT)/dragonbox
+override BINDIR=$(DRAGONBOX_BINDIR)
 SRCDIR=$(ROOT)/deps/dragonbox
 
 TARGET=$(BINDIR)/dragonbox.a

@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 MK.configure=1
@@ -14,7 +14,8 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-BINDIR=$(BINROOT)/libevent
+# BINDIR=$(BINROOT)/libevent
+override BINDIR=$(LIBEVENT_BINDIR)
 SRCDIR=$(ROOT)/deps/LibMR/deps/libevent
 
 TARGET=$(BINDIR)/.libs/libevent.a
