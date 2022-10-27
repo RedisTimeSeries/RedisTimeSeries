@@ -260,7 +260,7 @@ rmutil: $(RMUTIL)
 
 $(RMUTIL):
 	@echo Building $@ ...
-	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil DEBUG=''
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil
 
 libevent: $(LIBEVENT)
 
@@ -272,7 +272,7 @@ hiredis: $(HIREDIS)
 
 $(HIREDIS):
 	@echo Building $@ ...
-	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG=''
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis
 
 libmr: $(LIBMR)
 
