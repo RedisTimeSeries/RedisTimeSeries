@@ -1,20 +1,6 @@
 
 ROOT=..
 
-ifneq ($(filter coverage show-cov upload-cov,$(MAKECMDGOALS)),)
-COV=1
-endif
-
-ifeq ($(VG),1)
-override VALGRIND:=1
-export VALGRIND
-endif
-
-ifeq ($(VALGRIND),1)
-override DEBUG:=1
-export DEBUG
-endif
-
 MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
@@ -99,15 +85,9 @@ MK_CUSTOM_CLEAN=1
 BINDIR=$(BINROOT)/src
 SRCDIR=.
 
-#----------------------------------------------------------------------------------------------  
-
-PAKCAGE_NAME ?= $(BINROOT)/redistimeseries.{os}-{architecture}.latest.zip
-
 #----------------------------------------------------------------------------------------------
 
-ARCH:=$(shell uname -m)
 TARGET=$(BINROOT)/redistimeseries.so
-UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
 
 CC_FLAGS = \
 	-I$(ROOT)/deps/RedisModulesSDK \
@@ -132,17 +112,18 @@ LD_LIBS += \
 	  $(HIREDIS) \
 	  $(RMUTIL) \
 	  $(CPU_FEATURES) \
-	  -lc -lm -lpthread -lstdc++
+	  -lm -lpthread -lstdc++
 
 ifeq ($(OS),linux)
-LD_LIBS += -lssl -lcrypto
+LD_LIBS += -c -lssl -lcrypto
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
+CC_FLAGS += -I$(SDK_PREFIX)/usr/include
 LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS) -static
-DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS) -static
+SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
 
 ifeq ($(PROFILE),1)
@@ -195,7 +176,7 @@ _SOURCES=\
 	utils/blocked_client.c
 
 
-ifeq ($(ARCH), x86_64)
+ifeq ($(ARCH),x64)
 _SOURCES_AVX512=compactions/compaction_avx512f.c
 _SOURCES_AVX2=compactions/compaction_avx2.c
 _SOURCES:=$(_SOURCES) $(_SOURCES_AVX512) $(_SOURCES_AVX2)
@@ -212,24 +193,31 @@ include $(MK)/defs
 #----------------------------------------------------------------------------------------------
 
 MISSING_DEPS:=
+
 ifeq ($(wildcard $(HIREDIS)),)
 MISSING_DEPS += $(HIREDIS)
 endif
+
 ifeq ($(wildcard $(LIBEVENT)),)
 MISSING_DEPS += $(LIBEVENT)
 endif
+
 ifeq ($(wildcard $(FAST_DOUBLE_PARSER_C)),)
 MISSING_DEPS += $(FAST_DOUBLE_PARSER_C)
 endif
+
 ifeq ($(wildcard $(DRAGONBOX)),)
 MISSING_DEPS += $(DRAGONBOX)
 endif
+
 ifeq ($(wildcard $(RMUTIL)),)
 MISSING_DEPS += $(RMUTIL)
 endif
+
 ifeq ($(wildcard $(CPU_FEATURES)),)
 MISSING_DEPS += $(CPU_FEATURES)
 endif
+
 ifeq ($(wildcard $(LIBMR)),)
 MISSING_DEPS += $(LIBMR)
 endif
@@ -321,11 +309,11 @@ ifeq ($(ALL),1)
 else
 	-$(SHOW)rm -rf $(BINDIR)
 ifeq ($(DEPS),1)
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/cpu_features DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/cpu_features DEBUG='' clean
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
@@ -338,15 +326,15 @@ AVX512F_OBJECTS=$(filter %512f.o,$(OBJECTS))
 AVX2_OBJECTS=$(filter %avx2.o,$(OBJECTS))
 REGULAR_OBJECTS=$(filter-out $(AVX512F_OBJECTS) $(AVX2_OBJECTS),$(OBJECTS))
 
-$(AVX512F_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+$(AVX512F_OBJECTS) : $(BINDIR)/%.o : $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -mavx512f -c $< -o $@
 
-$(AVX2_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+$(AVX2_OBJECTS) : $(BINDIR)/%.o : $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -mavx2 -c $< -o $@
 
-$(REGULAR_OBJECTS):$(BINDIR)/%.o:$(SRCDIR)/%.c
+$(REGULAR_OBJECTS) : $(BINDIR)/%.o : $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
 
@@ -381,6 +369,8 @@ test: unit_tests flow_tests
 
 #----------------------------------------------------------------------------------------------
 
+UNITTESTS_RUNNER=$(BINROOT)/unit_tests/unit_tests
+
 $(UNITTESTS_RUNNER)	: $(TARGET)
 	$(SHOW)$(MAKE) -C $(ROOT)/tests/unit
 
@@ -394,11 +384,13 @@ ifeq ($(SIMPLE),1)
 export GEN=1
 export SLAVES=0
 export AOF=0
+export AOF_SLAVES=0
 export OSS_CLUSTER=0
 else
 export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
+export AOF_SLAVES ?= 1
 export OSS_CLUSTER ?= 1
 endif
 
@@ -407,7 +399,7 @@ ifneq ($(RLEC),1)
 flow_tests: #$(TARGET)
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
-	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh

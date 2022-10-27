@@ -15,8 +15,12 @@ MK_ALL_TARGETS=build
 
 MODULE_NAME=timeseries
 
-# BINDIR=$(BINROOT)/LibMR
+ifeq ($(LIBMR_BINDIR),)
 override BINDIR=$(LIBMR_BINDIR)
+else
+BINDIR=$(BINROOT)/LibMR
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/src
 
 TARGET=$(BINDIR)/libmr.a

@@ -11,8 +11,12 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/dragonbox
+ifeq ($(DRAGONBOX_BINDIR),)
 override BINDIR=$(DRAGONBOX_BINDIR)
+else
+BINDIR=$(BINROOT)/dragonbox
+endif
+
 SRCDIR=$(ROOT)/deps/dragonbox
 
 TARGET=$(BINDIR)/dragonbox.a

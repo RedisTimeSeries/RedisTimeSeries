@@ -13,8 +13,12 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/hiredis
+ifeq ($(HIREDIS_BINDIR),)
 override BINDIR=$(HIREDIS_BINDIR)
+else
+BINDIR=$(BINROOT)/hiredis
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/deps/hiredis
 
 TARGET=$(BINDIR)/libhiredis.a

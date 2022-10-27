@@ -775,8 +775,7 @@ workflows:
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
-          #@@<<: *on-integ-and-version-tags
-          <<: *on-any-branch
+          <<: *never
       - build-platforms:
           <<: *on-integ-and-version-tags
           context: common

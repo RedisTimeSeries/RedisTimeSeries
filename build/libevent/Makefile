@@ -14,8 +14,12 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/libevent
+ifeq ($(LIBEVENT_BINDIR),)
 override BINDIR=$(LIBEVENT_BINDIR)
+else
+BINDIR=$(BINROOT)/libevent
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/deps/libevent
 
 TARGET=$(BINDIR)/.libs/libevent.a
