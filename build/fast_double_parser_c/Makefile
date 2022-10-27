@@ -13,8 +13,12 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/fast_double_parser_c
+ifeq ($(FAST_DOUBLE_PARSER_C_BINDIR),)
+BINDIR=$(BINROOT)/fast_double_parser_c
+else
 override BINDIR=$(FAST_DOUBLE_PARSER_C_BINDIR)
+endif
+
 SRCDIR=$(ROOT)/src/fast_double_parser_c
 
 FAST_DOUBLE_PARSER_DIR=$(ROOT)/deps/fast_double_parser

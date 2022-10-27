@@ -19,8 +19,11 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/cpu_features
+ifeq ($(CPU_FEATURES_BINDIR),)
+BINDIR=$(BINROOT)/cpu_features
+else
 override BINDIR=$(CPU_FEATURES_BINDIR)
+endif
 
 TARGET=$(BINDIR)/libcpu_features.a
 
@@ -74,9 +77,9 @@ endif
 $(TARGET): $(BINDIR)/Makefile
 	@echo Building $(TARGET) ...
 ifneq ($(DRY_RUN),1)
-	$(SHOW)$(MAKE) -C $(BINDIR) $(MAKE_J)
+	$(SHOW)$(MAKE) -C $(BINDIR) $(MAKE_J) cpu_features
 else
-	@make -C $(BINDIR) $(MAKE_J)
+	@make -C $(BINDIR) $(MAKE_J) cpu_features
 endif
 
 .PHONY: build clean

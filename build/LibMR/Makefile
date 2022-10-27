@@ -15,8 +15,12 @@ MK_ALL_TARGETS=build
 
 MODULE_NAME=timeseries
 
-# BINDIR=$(BINROOT)/LibMR
+ifeq ($(LIBMR_BINDIR),)
 override BINDIR=$(LIBMR_BINDIR)
+else
+BINDIR=$(BINROOT)/LibMR
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/src
 
 TARGET=$(BINDIR)/libmr.a
@@ -28,8 +32,6 @@ SSL ?= 1
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
-
-CC=gcc
 
 _SOURCES=\
 	cluster.c \

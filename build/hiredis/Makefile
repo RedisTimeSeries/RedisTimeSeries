@@ -13,8 +13,12 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/hiredis
+ifeq ($(HIREDIS_BINDIR),)
 override BINDIR=$(HIREDIS_BINDIR)
+else
+BINDIR=$(BINROOT)/hiredis
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/deps/hiredis
 
 TARGET=$(BINDIR)/libhiredis.a
@@ -26,8 +30,6 @@ SSL ?= 1
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
-
-CC=gcc
 
 _SOURCES=alloc.c async.c dict.c hiredis.c net.c read.c sds.c sockcompat.c
 ifeq ($(SSL),1)
