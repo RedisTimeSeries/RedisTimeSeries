@@ -1,16 +1,6 @@
 
-ifeq ($(VG),1)
-override VALGRIND:=1
-export VALGRIND
-endif
-
-ifeq ($(VALGRIND),1)
-override DEBUG:=1
-export DEBUG
-endif
-
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -33,8 +23,6 @@ TARGET=$(BINDIR)/unit_tests
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
-
-CC=gcc
 
 _SOURCES=unittests.c
 

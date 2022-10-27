@@ -3,13 +3,19 @@ ROOT=../..
 
 include $(ROOT)/deps/readies/mk/main
 
+#----------------------------------------------------------------------------------------------
+
 MK_CUSTOM_CLEAN=1
 
-# BINDIR=$(BINROOT)/rmutil
+ifeq ($(RMUTIL_BINDIR),)
 override BINDIR=$(RMUTIL_BINDIR)
+else
+BINDIR=$(BINROOT)/rmutil
+endif
+
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
-CC=gcc
+#----------------------------------------------------------------------------------------------
 
 CC_FLAGS=\
 	-I$(SRCDIR)/.. \
