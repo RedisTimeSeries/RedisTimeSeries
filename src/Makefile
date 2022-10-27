@@ -115,7 +115,7 @@ LD_LIBS += \
 	  -lm -lpthread -lstdc++
 
 ifeq ($(OS),linux)
-LD_LIBS += -c -lssl -lcrypto
+LD_LIBS += -lssl -lcrypto
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
