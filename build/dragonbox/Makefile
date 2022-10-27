@@ -11,8 +11,12 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/dragonbox
+ifeq ($(DRAGONBOX_BINDIR),)
 override BINDIR=$(DRAGONBOX_BINDIR)
+else
+BINDIR=$(BINROOT)/dragonbox
+endif
+
 SRCDIR=$(ROOT)/deps/dragonbox
 
 TARGET=$(BINDIR)/dragonbox.a
@@ -22,9 +26,6 @@ TARGET=$(BINDIR)/dragonbox.a
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
-
-CC=gcc
-CXX=g++
 
 _SOURCES=dragonbox.cpp
 

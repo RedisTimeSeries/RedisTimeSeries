@@ -14,8 +14,12 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/libevent
+ifeq ($(LIBEVENT_BINDIR),)
 override BINDIR=$(LIBEVENT_BINDIR)
+else
+BINDIR=$(BINROOT)/libevent
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/deps/libevent
 
 TARGET=$(BINDIR)/.libs/libevent.a
@@ -23,6 +27,8 @@ TARGET=$(BINDIR)/.libs/libevent.a
 export CFLAGS += -fPIC
 
 #----------------------------------------------------------------------------------------------
+
+# MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 include $(MK)/rules
@@ -35,3 +41,14 @@ source: $(SRCDIR)/configure
 
 $(SRCDIR)/configure: $(BIN_DIRS)
 	$(SHOW)cd $(SRCDIR); ./autogen.sh
+
+#clean:
+#ifeq ($(ALL),1)
+#	$(SHOW)-rm -rf $(CONFIGURE_BUILD_DIR)
+#else
+#	$(SHOW)[[ -d $(CONFIGURE_BUILD_DIR) ]] && $(MAKE) -C $(CONFIGURE_BUILD_DIR) clean
+#endif
+#ifeq ($(AUTOGEN),1)
+#	$(SHOW)cd $(SRCDIR); git ls-files -o | xargs rm
+#endif
+#
