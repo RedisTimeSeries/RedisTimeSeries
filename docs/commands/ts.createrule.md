@@ -27,21 +27,21 @@ aggregates results into time buckets.
 
   - `aggregator` takes one of the following aggregation types:
 
-    | `aggregator` &nbsp; &nbsp; &nbsp;  | Description                                                      |
-    | ------------ | ---------------------------------------------------------------- |
-    | `avg`        | Arithmetic mean of all values                                    |
-    | `sum`        | Sum of all values                                                |
-    | `min`        | Minimum value                                                    |
-    | `max`        | Maximum value                                                    |
-    | `range`      | Difference between the highest and the lowest value              |
-    | `count`      | Number of values                                                 |
-    | `first`      | Value with lowest timestamp in the bucket                        |
-    | `last`       | Value with highest timestamp in the bucket                       |
-    | `std.p`      | Population standard deviation of the values                      |
-    | `std.s`      | Sample standard deviation of the values                          |
-    | `var.p`      | Population variance of the values                                |
-    | `var.s`      | Sample variance of the values                                    |
-    | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
+    | `aggregator` | Description                                                                    |
+    | ------------ | ------------------------------------------------------------------------------ |
+    | `avg`        | Arithmetic mean of all values                                                  |
+    | `sum`        | Sum of all values                                                              |
+    | `min`        | Minimum value                                                                  |
+    | `max`        | Maximum value                                                                  |
+    | `range`      | Difference between the highest and the lowest value                            |
+    | `count`      | Number of values                                                               |
+    | `first`      | Value with lowest timestamp in the bucket                                      |
+    | `last`       | Value with highest timestamp in the bucket                                     |
+    | `std.p`      | Population standard deviation of the values                                    |
+    | `std.s`      | Sample standard deviation of the values                                        |
+    | `var.p`      | Population variance of the values                                              |
+    | `var.s`      | Sample variance of the values                                                  |
+    | `twa`        | Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
   
