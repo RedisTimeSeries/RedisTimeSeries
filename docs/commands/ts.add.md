@@ -30,7 +30,12 @@ is (double) numeric data value of the sample. The double number should follow [R
 </details>
 
 <note><b>Notes:</b>
-- If the time series does not exist, it is automatically created.
+- When specified key does not exist, a new time series is created.
+- If `timestamp` is older than the retention period compared to the maximum existing timestamp, the sample is appended.
+- When adding a sample to a time series for which compaction rules are defined:
+  - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
+  - If only a part of the original samples for an affected aggregated time bucket is available due to trimming caused in accordance with the time series RETENTION policy, the compacted value is recalculated based on the reported sample and the available original samples.
+  - If the original samples for an affected aggregated time bucket are not available due to trimming caused in accordance with the time series RETENTION policy, the compacted value bucket is not updated.
 - Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 </note>
 
@@ -78,13 +83,7 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 <note><b>Notes:</b>
 - You can use this command to add data to a nonexisting time series in a single command.
   This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
-- When specified key does not exist, a new time series is created.
-  Setting `RETENTION` and `LABELS` introduces additional time complexity.
-- If `timestamp` is older than the retention period compared to the maximum existing timestamp, the sample is appended.
-- When adding a sample to a time series for which compaction rules are defined:
-  - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
-  - If only a part of the original samples for an affected aggregated time bucket is available due to trimming caused in accordance with the time series RETENTION policy, the compacted value is recalculated based on the reported sample and the available original samples.
-  - If the original samples for an affected aggregated time bucket are not available due to trimming caused in accordance with the time series RETENTION policy, the compacted value bucket is not updated.
+- Setting `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
 ## Complexity
