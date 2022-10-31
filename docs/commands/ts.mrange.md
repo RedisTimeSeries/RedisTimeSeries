@@ -112,21 +112,21 @@ aggregates results into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
-    | `aggregator` &nbsp; &nbsp; &nbsp; | Description                                                      |
-    | ------------ | ---------------------------------------------------------------- |
-    | `avg`        | Arithmetic mean of all values                                    |
-    | `sum`        | Sum of all values                                                |
-    | `min`        | Minimum value                                                    |
-    | `max`        | Maximum value                                                    |
-    | `range`      | Difference between the highest and the lowest value              |
-    | `count`      | Number of values                                                 |
-    | `first`      | Value with lowest timestamp in the bucket                        |
-    | `last`       | Value with highest timestamp in the bucket                       |
-    | `std.p`      | Population standard deviation of the values                      |
-    | `std.s`      | Sample standard deviation of the values                          |
-    | `var.p`      | Population variance of the values                                |
-    | `var.s`      | Sample variance of the values                                    |
-    | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
+    | `aggregator` | Description                                                                    |
+    | ------------ | ------------------------------------------------------------------------------ |
+    | `avg`        | Arithmetic mean of all values                                                  |
+    | `sum`        | Sum of all values                                                              |
+    | `min`        | Minimum value                                                                  |
+    | `max`        | Maximum value                                                                  |
+    | `range`      | Difference between the highest and the lowest value                            |
+    | `count`      | Number of values                                                               |
+    | `first`      | Value with lowest timestamp in the bucket                                      |
+    | `last`       | Value with highest timestamp in the bucket                                     |
+    | `std.p`      | Population standard deviation of the values                                    |
+    | `std.s`      | Sample standard deviation of the values                                        |
+    | `var.p`      | Population variance of the values                                              |
+    | `var.s`      | Sample variance of the values                                                  |
+    | `twa`        | Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
   
@@ -138,7 +138,7 @@ aggregates results into time buckets, where:
 </details>
 
 <details open>
-<summary><code>[BUCKETTIMESTAMP bt]></code> (since RedisTimeSeries v1.8)</summary>
+<summary><code>[BUCKETTIMESTAMP bt]</code> (since RedisTimeSeries v1.8)</summary>
 
 controls how bucket timestamps are reported.
 
@@ -157,9 +157,9 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
+| `last`               | The value of the last sample before the bucket's start. `NaN` when no such sample. |
+| `twa`                | Average value over the bucket's timeframe based on linear interpolation of the last sample before the bucket's start and the first sample after the bucket's end. `NaN` when no such samples. |
 | `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` | `NaN` |
-| `last`               | The value of the previous sample. `NaN` when no previous sample. |
-| `twa`                | Based on linear interpolation of previous and next samples. `NaN` when cannot interpolate. |
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
