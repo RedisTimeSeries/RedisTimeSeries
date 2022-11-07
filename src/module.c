@@ -419,6 +419,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
+    bool is_rolling_agg = is_roll_agg_type(rule->aggType);
     timestamp_t currentTimestamp =
         CalcBucketStart(timestamp, rule->bucketDuration, rule->timestampAlignment);
     timestamp_t currentTimestampNormalized = BucketStartNormalize(currentTimestamp);
@@ -434,7 +435,13 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
     }
 
-    if (currentTimestampNormalized > rule->startCurrentTimeBucket) {
+    if (is_rolling_agg) {
+        // On rolling aggregation every sample finailizing to bucket so this sample is creating
+        // "it's own bucket"
+        rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    }
+    if (((!is_rolling_agg) && (currentTimestampNormalized > rule->startCurrentTimeBucket)) ||
+        (is_rolling_agg && series->totalSamples >= rule->windowSize)) {
         Series *destSeries;
         RedisModuleKey *key;
         int status = GetSeries(ctx,
@@ -455,14 +462,21 @@ static void handleCompaction(RedisModuleCtx *ctx,
 
         double aggVal;
         rule->aggClass->finalize(rule->aggContext, &aggVal);
-        internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+        internalAdd(ctx,
+                    destSeries,
+                    is_rolling_agg ? timestamp : rule->startCurrentTimeBucket,
+                    aggVal,
+                    DP_LAST,
+                    false);
         RedisModule_NotifyKeyspaceEvent(
             ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
         }
-        rule->aggClass->resetContext(rule->aggContext);
+        if (!is_rolling_agg) {
+            rule->aggClass->resetContext(rule->aggContext);
+        }
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
@@ -476,7 +490,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
         rule->startCurrentTimeBucket = currentTimestampNormalized;
         RedisModule_CloseKey(key);
     }
-    rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    if (!is_rolling_agg) {
+        // On rolling aggregation already appended the sample above
+        rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    }
 }
 
 static int internalAdd(RedisModuleCtx *ctx,
@@ -804,13 +821,17 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     // Validate aggregation arguments
-    api_timestamp_t bucketDuration;
+    api_timestamp_t bucketDuration = 0;
+    uint64_t windowSize = 0;
     int aggType;
     timestamp_t alignmentTS;
-    const int result =
+    int result =
         _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType, NULL, NULL, &alignmentTS);
     if (result == TSDB_NOTEXISTS) {
-        return RedisModule_WrongArity(ctx);
+        result = _parseRollingAggregationArgs(ctx, argv, argc, &windowSize, &aggType);
+        if (result == TSDB_NOTEXISTS) {
+            return RedisModule_WrongArity(ctx);
+        }
     }
     if (result == TSDB_ERROR) {
         return REDISMODULE_ERR;
@@ -865,7 +886,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     SeriesSetSrcRule(ctx, destSeries, srcSeries->keyName);
 
     // Last add the rule to source
-    if (SeriesAddRule(ctx, srcSeries, destSeries, aggType, bucketDuration, alignmentTS) == NULL) {
+    if (SeriesAddRule(
+            ctx, srcSeries, destSeries, aggType, bucketDuration, alignmentTS, windowSize) == NULL) {
         RedisModule_CloseKey(srcKey);
         RedisModule_CloseKey(destKey);
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");

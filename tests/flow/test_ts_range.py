@@ -1465,3 +1465,73 @@ def test_latest_flag_revrange():
         assert res == [[0, '4']] or res == [[0, b'4']]
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+def test_rolling_med():
+    env = Env(decodeResponses=True)
+    t1 = 't1{1}'
+    t2 = 't2{1}'
+    t3 = 't3{1}'
+    t4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', t1)
+        assert r.execute_command('TS.CREATE', t3)
+        assert r.execute_command('TS.CREATERULE', t1, t3, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert r.execute_command('TS.add', t1, 1, 1)
+        assert r.execute_command('TS.add', t1, 2, 3)
+        assert r.execute_command('TS.add', t1, 11, 7)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3']]
+        assert r.execute_command('TS.add', t1, 13, 4)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3'], [13, '4']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3'], [13, '4']]
+        assert r.execute_command('TS.add', t1, 14, 5)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3'], [13, '4'], [14, '5']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3'], [13, '4'], [14, '5']]
+        assert r.execute_command('TS.add', t1, 15, 1)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4']]
+        assert r.execute_command('TS.add', t1, 16, 1)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4'], [16, '1']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4'], [16, '1']]
+        assert r.execute_command('TS.add', t1, 17, 1)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 3)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4'], [16, '1'], [17, '1']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3'], [13, '4'], [14, '5'], [15, '4'], [16, '1'], [17, '1']]
+
+        assert r.execute_command('TS.CREATE', t2)
+        assert r.execute_command('TS.CREATE', t4)
+        assert r.execute_command('TS.CREATERULE', t2, t4, 'ROLL_AGGREGATION', 'roll_med', 4)
+        assert r.execute_command('TS.add', t2, 1, 1)
+        assert r.execute_command('TS.add', t2, 2, 3)
+        assert r.execute_command('TS.add', t2, 11, 7)
+        res = r.execute_command('TS.range', t2, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 4)
+        assert res == []
+        res = r.execute_command('TS.range', t4, 0, 20)
+        assert res == []
+        assert r.execute_command('TS.add', t2, 12, 4)
+        res = r.execute_command('TS.range', t2, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 4)
+        assert res == [[12, '3.5']]
+        res = r.execute_command('TS.range', t4, 0, 20)
+        assert res == [[12, '3.5']]
+        assert r.execute_command('TS.add', t2, 13, 2)
+        res = r.execute_command('TS.range', t2, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 4)
+        assert res == [[12, '3.5'], [13, '3.5']]
+        res = r.execute_command('TS.range', t4, 0, 20)
+        assert res == [[12, '3.5'], [13, '3.5']]
+        assert r.execute_command('TS.add', t2, 14, 1)
+        res = r.execute_command('TS.range', t2, 0, 20, 'ROLL_AGGREGATION', 'roll_med', 4)
+        assert res == [[12, '3.5'], [13, '3.5'], [14, '3']]
+        res = r.execute_command('TS.range', t4, 0, 20)
+        assert res == [[12, '3.5'], [13, '3.5'], [14, '3']]
+

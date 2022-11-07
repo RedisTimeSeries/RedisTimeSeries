@@ -5,20 +5,11 @@
 #include <string.h>
 
 #include "heap.h"
+#include "redismodule.h"
+#include "../consts.h"
+#include "../load_io_error_macros.h"
 
 #define DEFAULT_CAPACITY 13
-
-struct heap_s
-{
-    /* size of array */
-    unsigned int size;
-    /* items within heap */
-    unsigned int count;
-    /**  user data */
-    const void *udata;
-    int (*cmp)(const void *, const void *, const void *);
-    void *array[];
-};
 
 size_t heap_sizeof(unsigned int size) {
     return sizeof(heap_t) + size * sizeof(void *);
@@ -46,13 +37,16 @@ void heap_init(heap_t *h,
     h->count = 0;
 }
 
-heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata) {
-    heap_t *h = malloc(heap_sizeof(DEFAULT_CAPACITY));
+heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata),
+                 const void *udata,
+                 const size_t *cap) {
+    size_t _cap = (!cap) ? DEFAULT_CAPACITY : *cap;
+    heap_t *h = malloc(heap_sizeof(_cap));
 
     if (!h)
         return NULL;
 
-    heap_init(h, cmp, udata, DEFAULT_CAPACITY);
+    heap_init(h, cmp, udata, _cap);
 
     return h;
 }
@@ -220,7 +214,12 @@ void *heap_remove_item(heap_t *h, const void *item) {
     h->count -= 1;
 
     /* ensure heap property */
-    __pushup(h, idx);
+    if (idx < h->count) {
+        // try to push up first
+        int new_idx = __pushup(h, idx);
+        // try to push down
+        __pushdown(h, new_idx);
+    } // else: we removed the last element in the array no need to pushup
 
     return ret_item;
 }
@@ -257,6 +256,16 @@ void heap_cb_root(const heap_t *hp, HeapCallback cb, void *ctx) {
 
     _heap_cb_child(__child_left(0), hp, cb, ctx);
     _heap_cb_child(__child_right(0), hp, cb, ctx);
+}
+
+// itemWriteRDB: cb func to write the array's items to rdb
+void heapRDBWrite(heap_t *h, RedisModuleIO *io, void (*itemWriteRDB_cb)()) {
+    RedisModule_SaveUnsigned(io, h->size);
+    RedisModule_SaveUnsigned(io, h->count);
+    _log_if(h->udata != NULL, "Currently saving heap's user data to rdb is not supported.");
+    for (size_t i = 0; i < h->count; ++i) {
+        itemWriteRDB_cb(h->array[i], io);
+    }
 }
 
 /*--------------------------------------------------------------79-characters-*/

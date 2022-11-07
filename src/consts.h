@@ -67,9 +67,17 @@ typedef enum {
     TS_AGG_VAR_P,
     TS_AGG_VAR_S,
     TS_AGG_TWA,
-    TS_AGG_TYPES_MAX // 13
+    TS_AGG_ROLL_MED,
+    TS_AGG_TYPES_MAX // 14
 } TS_AGG_TYPES_T;
 
+static inline bool is_roll_agg_type(TS_AGG_TYPES_T agg_type) {
+  if(agg_type == TS_AGG_ROLL_MED) {
+    return true;
+  }
+
+  return false;
+}
 
 typedef enum DuplicatePolicy {
     DP_INVALID = -1,

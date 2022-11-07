@@ -17,8 +17,15 @@
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
-    timestamp_t bucketDuration;
-    timestamp_t timestampAlignment;
+    union
+    {
+        struct
+        {
+            timestamp_t bucketDuration;
+            timestamp_t timestampAlignment;
+        };
+        uint64_t windowSize;
+    };
     AggregationClass *aggClass;
     TS_AGG_TYPES_T aggType;
     void *aggContext;
@@ -123,7 +130,8 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *destSeries,
                               int aggType,
                               uint64_t bucketDuration,
-                              timestamp_t timestampAlignment);
+                              timestamp_t timestampAlignment,
+                              uint64_t windowSize);
 int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                       RedisModuleString *keyName,
                                       Series *series,
@@ -149,7 +157,8 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
 CompactionRule *NewRule(RedisModuleString *destKey,
                         int aggType,
                         uint64_t bucketDuration,
-                        timestamp_t timestampAlignment);
+                        uint64_t timestampAlignment,
+                        uint64_t windowSize);
 
 // set/delete/replace a chunk in a dictionary
 typedef enum

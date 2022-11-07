@@ -178,7 +178,9 @@ _SOURCES=\
 	utils/heap.c \
 	multiseries_sample_iterator.c \
 	multiseries_agg_dup_sample_iterator.c \
-	utils/blocked_client.c
+	utils/blocked_client.c \
+	utils/precent_tracker.c \
+	rolling_aggregation_iterator.c
 
 
 ifeq ($(ARCH),x64)

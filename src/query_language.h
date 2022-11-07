@@ -32,6 +32,12 @@ typedef struct AggregationArgs
     AggregationClass *aggregationClass;
 } AggregationArgs;
 
+typedef struct RollingAggregationArgs
+{
+    u_int64_t windowSize;
+    AggregationClass *aggregationClass;
+} RollingAggregationArgs;
+
 // GroupBy reducer args
 typedef struct ReducerArgs
 {
@@ -70,6 +76,7 @@ typedef struct RangeArgs
     bool latest;     // get also the latest unfinalized bucket from the src series
     long long count; // AKA limit
     AggregationArgs aggregationArgs;
+    RollingAggregationArgs rollingAggregationArgs;
     FilterByValueArgs filterByValueArgs;
     FilterByTSArgs filterByTSArgs;
     RangeAlignment alignment;
@@ -135,6 +142,12 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           bool *empty,
                           BucketTimestamp *bucketTS,
                           timestamp_t *alignmetTS);
+
+int _parseRollingAggregationArgs(RedisModuleCtx *ctx,
+                                 RedisModuleString **argv,
+                                 int argc,
+                                 u_int64_t *windowSize,
+                                 int *agg_type);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,

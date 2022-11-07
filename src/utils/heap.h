@@ -2,6 +2,18 @@
 #define HEAP_H
 #include <stdlib.h>
 
+struct heap_s
+{
+    /* size of array */
+    unsigned int size;
+    /* items within heap */
+    unsigned int count;
+    /**  user data */
+    const void *udata;
+    int (*cmp)(const void *, const void *, const void *);
+    void *array[];
+};
+
 typedef struct heap_s heap_t;
 
 /**
@@ -11,8 +23,11 @@ typedef struct heap_s heap_t;
  *
  * @param[in] cmp Callback used to get an item's priority
  * @param[in] udata User data passed through to cmp callback
+ * @param[in] cap Capacity of the heap
  * @return initialised heap */
-heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata), const void *udata);
+heap_t *heap_new(int (*cmp)(const void *, const void *, const void *udata),
+                 const void *udata,
+                 const size_t *cap);
 
 /**
  * Initialise heap. Use memory passed by user.
@@ -128,5 +143,21 @@ typedef void (*HeapCallback)(void *dst, void *src);
  * @return
  */
 void heap_cb_root(const heap_t *hp, HeapCallback cb, void *ctx);
+
+typedef struct RedisModuleIO RedisModuleIO;
+void heapRDBWrite(heap_t *h, RedisModuleIO *io, void (*itemWriteRDB_cb)());
+
+// itemReadRDB: cb func to read the heap's items to rdb
+#define heapRDBRead(h, io, itemReadRDB, cleanup_exp)                                               \
+    __extension__({                                                                                \
+        h->size = LoadUnsigned_IOError((io), cleanup_exp);                                         \
+        h->count = LoadUnsigned_IOError((io), cleanup_exp);                                        \
+        h->udata = NULL;                                                                           \
+        for (size_t i = 0; i < h->count; ++i) {                                                    \
+            typeof(itemReadRDB(io, cleanup_exp)) res = itemReadRDB(io, cleanup_exp);               \
+            typeof(res) *v = (typeof(res) *)malloc(sizeof(res));                                   \
+            h->array[i] = v;                                                                       \
+        }                                                                                          \
+    })
 
 #endif /* HEAP_H */

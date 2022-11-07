@@ -15,6 +15,7 @@
 #include "sample_iterator.h"
 #include "multiseries_sample_iterator.h"
 #include "multiseries_agg_dup_sample_iterator.h"
+#include "rolling_aggregation_iterator.h"
 #include "rdb.h"
 
 #include <inttypes.h>
@@ -924,9 +925,10 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *destSeries,
                               int aggType,
                               uint64_t bucketDuration,
-                              timestamp_t timestampAlignment) {
+                              timestamp_t timestampAlignment,
+                              uint64_t windowSize) {
     CompactionRule *rule =
-        NewRule(destSeries->keyName, aggType, bucketDuration, timestampAlignment);
+        NewRule(destSeries->keyName, aggType, bucketDuration, timestampAlignment, windowSize);
     if (rule == NULL) {
         return NULL;
     }
@@ -957,7 +959,13 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
         RedisModuleString *destKey;
-        if (rule->timestampAlignment != 0) {
+        if (is_roll_agg_type(rule->aggType)) {
+            destKey = RedisModule_CreateStringPrintf(ctx,
+                                                     "%s_%s_%" PRIu64,
+                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     aggString,
+                                                     rule->windowSize);
+        } else if (rule->timestampAlignment != 0) {
             destKey = RedisModule_CreateStringPrintf(ctx,
                                                      "%s_%s_%" PRIu64 "_%" PRIu64,
                                                      RedisModule_StringPtrLen(keyName, &len),
@@ -994,9 +1002,17 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
         compactedLabels[labelsCount].value =
             RedisModule_CreateString(NULL, aggString, strlen(aggString));
-        compactedLabels[labelsCount + 1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
-        compactedLabels[labelsCount + 1].value =
-            RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->bucketDuration);
+        if (is_roll_agg_type(rule->aggType)) {
+            compactedLabels[labelsCount + 1].key =
+                RedisModule_CreateStringPrintf(NULL, "windowSize");
+            compactedLabels[labelsCount + 1].value =
+                RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->windowSize);
+        } else {
+            compactedLabels[labelsCount + 1].key =
+                RedisModule_CreateStringPrintf(NULL, "time_bucket");
+            compactedLabels[labelsCount + 1].value =
+                RedisModule_CreateStringPrintf(NULL, "%" PRIu64, rule->bucketDuration);
+        }
 
         int rules_options = TSGlobalConfig.options;
         rules_options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
@@ -1016,7 +1032,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                       compactedSeries,
                       rule->aggType,
                       rule->bucketDuration,
-                      rule->timestampAlignment);
+                      rule->timestampAlignment,
+                      rule->windowSize);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
@@ -1025,20 +1042,27 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 CompactionRule *NewRule(RedisModuleString *destKey,
                         int aggType,
                         uint64_t bucketDuration,
-                        uint64_t timestampAlignment) {
-    if (bucketDuration == 0ULL) {
+                        uint64_t timestampAlignment,
+                        uint64_t windowSize) {
+    if (bucketDuration == 0ULL && windowSize == 0ULL) {
         return NULL;
     }
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
-    rule->aggContext = rule->aggClass->createContext(false);
-    rule->bucketDuration = bucketDuration;
-    rule->timestampAlignment = timestampAlignment;
+    rule->aggContext = rule->aggClass->createContext(false, windowSize);
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
+    if (is_roll_agg_type(aggType)) {
+        rule->bucketDuration = 10; // An arbitary value for handle_compaction to work properly
+        rule->timestampAlignment = DC;
+        rule->windowSize = windowSize;
+    } else {
+        rule->bucketDuration = bucketDuration;
+        rule->timestampAlignment = timestampAlignment;
+    }
 
     return rule;
 }
@@ -1092,12 +1116,14 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     Sample sample;
     AggregationClass *aggObject = rule->aggClass;
-    void *context = aggObject->createContext(false);
+    void *context = aggObject->createContext(false, DC);
     bool _is_empty = true;
     AbstractSampleIterator *iterator;
     RangeArgs args = { .aggregationArgs = { 0 },
                        .filterByValueArgs = { 0 },
                        .filterByTSArgs = { 0 } };
+
+    _log_if(is_roll_agg_type(rule->aggType), "upsert to rolling aggregation isn't supported yet");
 
     if (aggObject->type == TS_AGG_TWA) {
         aggObject->addBucketParams(context, start_ts, end_ts + 1);
@@ -1241,6 +1267,16 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             series,
                                                             args->startTimestamp,
                                                             args->endTimestamp);
+    }
+
+    if (args->rollingAggregationArgs.aggregationClass != NULL) {
+        chain = (AbstractIterator *)RollingAggregationIterator_New(
+            chain,
+            args->rollingAggregationArgs.aggregationClass,
+            args->rollingAggregationArgs.windowSize,
+            series,
+            args->startTimestamp,
+            args->endTimestamp);
     }
 
     return chain;

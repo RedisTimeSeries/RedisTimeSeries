@@ -13,6 +13,8 @@
 #include "compactions/compaction_avx512f.h"
 #include "compactions/compaction_avx2.h"
 #include "utils/arch_features.h"
+#include "utils/precent_tracker.h"
+#include "utils/circular_array.h"
 
 #include <ctype.h>
 #include <float.h>
@@ -63,6 +65,25 @@ typedef struct StdContext
     u_int64_t cnt;
 } StdContext;
 
+typedef struct RollingMedContext
+{
+    precentTracker_t *pt;  // Rolling median tracker
+    carray_t *items_queue; // items inorder
+    size_t count; // counter for the number of elements in the calculation (the size of the median
+                  // calculation window)
+    size_t windowSize; // Window size
+} RollingMedContext;
+
+typedef struct ZscoreContext
+{
+    double med;   // Rolling median
+    double mad;   // Rolling Median absolute deviation
+    size_t count; // counter for the number of elements in the calculation to be valid (the size of
+                  // the median calculation window)
+    size_t windowSize; // Minmal number of samples for the calculation to be valid
+    size_t n_samples_smaller_than_med;
+} ZscoreContext;
+
 void finalize_empty_with_NAN(__unused void *contextPtr, double *value) {
     *value = NAN;
 }
@@ -76,7 +97,7 @@ void finalize_empty_last_value(void *contextPtr, double *value) {
     *value = context->value;
 }
 
-void *SingleValueCreateContext(__unused bool reverse) {
+void *SingleValueCreateContext(__unused bool reverse, __unused size_t windowSize) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     return context;
@@ -120,7 +141,7 @@ err:
     return TSDB_ERROR;
 }
 
-void *FirstValueCreateContext(__unused bool reverse) {
+void *FirstValueCreateContext(__unused bool reverse, __unused size_t windowSize) {
     FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
     context->value = 0;
     context->isResetted = TRUE;
@@ -167,7 +188,7 @@ static inline void _AvgInitContext(AvgContext *context) {
     context->isOverflow = false;
 }
 
-void *AvgCreateContext(__unused bool reverse) {
+void *AvgCreateContext(__unused bool reverse, __unused size_t windowSize) {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     _AvgInitContext(context);
     return context;
@@ -271,7 +292,7 @@ void *TwaCloneContext(void *contextPtr) {
     return buf;
 }
 
-void *TwaCreateContext(bool reverse) {
+void *TwaCreateContext(bool reverse, __unused size_t windowSize) {
     TwaContext *context = (TwaContext *)malloc(sizeof(TwaContext));
     _TwainitContext(context, reverse);
     return context;
@@ -412,7 +433,7 @@ err:
     return TSDB_ERROR;
 }
 
-void *StdCreateContext(__unused bool reverse) {
+void *StdCreateContext(__unused bool reverse, __unused size_t windowSize) {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->sum = 0;
@@ -431,6 +452,51 @@ void StdAddValue(void *contextPtr, double value, __attribute__((unused)) timesta
     ++context->cnt;
     context->sum += value;
     context->sum_2 += value * value;
+}
+
+void *RollingMedCreateContext(__attribute__((unused)) bool reverse, size_t windowSize) {
+    RollingMedContext *context = (RollingMedContext *)malloc(sizeof(RollingMedContext));
+    context->count = 0;
+    context->windowSize = windowSize;
+    context->items_queue = carray_new(double, windowSize);
+    context->pt = precent_tracker_new(windowSize);
+    return context;
+}
+
+void RollingMedAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+    RollingMedContext *context = (RollingMedContext *)contextPtr;
+    if (context->count >= context->windowSize) {
+        double del_val = carray_pop_front(context->items_queue, double);
+        precent_tracker_delete(context->pt, del_val);
+    }
+    carray_push_back(context->items_queue, value);
+    precent_tracker_add(context->pt, value);
+    context->count = min(context->count + 1, context->windowSize);
+}
+
+void RollingMedFinalize(void *contextPtr, double *value) {
+    RollingMedContext *context = (RollingMedContext *)contextPtr;
+    assert(context->count >= context->windowSize);
+    *value = precent_tracker_getMedian(context->pt);
+}
+
+void RollingMedWriteContext(void *contextPtr, RedisModuleIO *io) {
+    RollingMedContext *context = (RollingMedContext *)contextPtr;
+    RedisModule_SaveUnsigned(io, context->count);
+    RedisModule_SaveUnsigned(io, context->windowSize);
+    precent_tracker_RDBWrite(context->pt, io);
+    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble);
+}
+
+int RollingMedReadContext(void *contextPtr, RedisModuleIO *io, __unused int encver) {
+    RollingMedContext *context = (RollingMedContext *)contextPtr;
+    context->count = LoadUnsigned_IOError(io, goto err);
+    context->windowSize = LoadUnsigned_IOError(io, goto err);
+    int ret = precent_tracker_RDBRead(context->pt, io);
+    array_RDBRead(context->items_queue, io, LoadDouble_IOError, goto err);
+    return ret;
+err:
+    return TSDB_ERROR;
 }
 
 static inline double variance(double sum, double sum_2, double count) {
@@ -597,7 +663,24 @@ static AggregationClass aggVarS = { .type = TS_AGG_VAR_S,
                                     .resetContext = StdReset,
                                     .cloneContext = StdCloneContext };
 
-void *MaxMinCreateContext(__unused bool reverse) {
+// implementing robust zscore for normal distributions
+static AggregationClass aggRollMed = { .type = TS_AGG_ROLL_MED,
+                                       .createContext = RollingMedCreateContext,
+                                       .appendValue = RollingMedAddValue,
+                                       .appendValueVec = NULL, /* determined on run time */
+                                       .freeContext = rm_free,
+                                       .finalize = RollingMedFinalize,
+                                       .finalizeEmpty = NULL,
+                                       .writeContext = RollingMedWriteContext,
+                                       .readContext = RollingMedReadContext,
+                                       .addBucketParams = NULL,
+                                       .addPrevBucketLastSample = NULL,
+                                       .addNextBucketFirstSample = NULL,
+                                       .getLastSample = NULL,
+                                       .resetContext = NULL,
+                                       .cloneContext = NULL };
+
+void *MaxMinCreateContext(__unused bool reverse, __unused size_t windowSize) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = DBL_MAX;
     context->maxValue = _DOUBLE_MIN;
@@ -884,6 +967,10 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
         } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
             result = TS_AGG_VAR_S;
         }
+    } else if (len == 8) {
+        if (strncmp(agg_type_lower, "roll_med", len) == 0) {
+            result = TS_AGG_ROLL_MED;
+        }
     }
     return result;
 }
@@ -916,6 +1003,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
+        case TS_AGG_ROLL_MED:
+            return "ROLL_MED";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -952,6 +1041,8 @@ const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
             return "last";
         case TS_AGG_RANGE:
             return "range";
+        case TS_AGG_ROLL_MED:
+            return "roll_med";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -988,6 +1079,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_ROLL_MED:
+            return &aggRollMed;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
