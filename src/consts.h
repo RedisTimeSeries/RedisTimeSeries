@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 
   #if defined(__GNUC__)
 #define likely(x)       __builtin_expect((x),1)
@@ -129,6 +130,9 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
     return strcmp(input_upper, str);
 }
 
+#ifdef DEBUG
+  #define _log_if(cond, format, ...) assert(!(cond))
+#else
 #define _log_if(cond, format, ...) do {          \
   extern RedisModuleCtx *rts_staticCtx;          \
   if(unlikely(cond)){                            \
@@ -137,5 +141,6 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
                     format, ##__VA_ARGS__);      \
   }                                              \
 } while(0)
+#endif
 
 #endif
