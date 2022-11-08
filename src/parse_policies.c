@@ -26,7 +26,7 @@ static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool
     timestamp_t timeSize;
     int ret;
     ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
-    bool valid_state = (ret == 2) || (timeSize == 0 && ret == 1);
+    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
     if (!valid_state) {
         return FALSE;
     }
