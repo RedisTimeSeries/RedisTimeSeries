@@ -315,7 +315,7 @@ commands:
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
               --allowed-envs << parameters.allowed_envs >> \
-              --allowed-setups << parameters.allowed_setups >>
+              --allowed-setups << parameters.allowed_setups >> || true
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -874,5 +874,6 @@ workflows:
                 - master
                 - /^feature-.*$/
     jobs:
-      - build-macos
+      - build-macos:
+          upload: "no"
       - valgrind

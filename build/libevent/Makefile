@@ -1,4 +1,6 @@
 
+.NOTPARALLEL:
+
 ROOT=../..
 
 include $(ROOT)/deps/readies/mk/main
@@ -28,7 +30,7 @@ export CFLAGS += -fPIC
 
 #----------------------------------------------------------------------------------------------
 
-# MK_CUSTOM_CLEAN=1
+MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 include $(MK)/rules
@@ -39,16 +41,15 @@ source: $(SRCDIR)/configure
 
 .PHONY: source
 
-$(SRCDIR)/configure: $(BIN_DIRS)
+$(SRCDIR)/configure: $(BIN_DIRS) $(SRCDIR)/configure.ac
 	$(SHOW)cd $(SRCDIR); ./autogen.sh
 
-#clean:
-#ifeq ($(ALL),1)
-#	$(SHOW)-rm -rf $(CONFIGURE_BUILD_DIR)
-#else
-#	$(SHOW)[[ -d $(CONFIGURE_BUILD_DIR) ]] && $(MAKE) -C $(CONFIGURE_BUILD_DIR) clean
-#endif
-#ifeq ($(AUTOGEN),1)
-#	$(SHOW)cd $(SRCDIR); git ls-files -o | xargs rm
-#endif
-#
+clean:
+ifeq ($(ALL),1)
+	$(SHOW)-rm -rf $(CONFIGURE_BUILD_DIR)
+else
+	$(SHOW)[[ -d $(CONFIGURE_BUILD_DIR) ]] && $(MAKE) -C $(CONFIGURE_BUILD_DIR) clean
+endif
+ifeq ($(AUTOGEN),1)
+	$(SHOW)cd $(SRCDIR); git ls-files -o | xargs -r rm
+endif

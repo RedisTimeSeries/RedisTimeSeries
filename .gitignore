@@ -22,3 +22,5 @@ venv/
 site/
 /tests/benchmarks/profile_*
 wordlist.dic
+/1/
+
