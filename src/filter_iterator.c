@@ -506,7 +506,7 @@ static void fillEmptyBuckets(Samples *samples,
                            // users
     if (self->aggregation->type == TS_AGG_TWA) {
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-        timestamp_t ta, tb;
+        timestamp_t ta;
         int64_t agg_time_delta = self->aggregationTimeDelta;
         ta = twa_calc_ta(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);

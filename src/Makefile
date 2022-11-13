@@ -1,4 +1,8 @@
 
+ifeq ($(NOPAR),1)
+.NOTPARALLEL: ;
+endif
+
 ROOT=..
 
 MK_ALL_TARGETS=bindirs deps build pack
@@ -92,6 +96,7 @@ TARGET=$(BINROOT)/redistimeseries.so
 CC_FLAGS = \
 	-I$(ROOT)/deps/RedisModulesSDK \
 	-I$(ROOT)/deps \
+	-I$(LIBEVENT_BINDIR)/include \
 	-Wall \
 	-fPIC \
 	-pedantic \
@@ -305,7 +310,8 @@ endif # DEPS
 clean:
 	@echo Cleaning ...
 ifeq ($(ALL),1)
-	-$(SHOW)rm -rf $(BINROOT)
+	-$(SHOW)rm -rf $(BINROOT) $(LIBEVENT_BINDIR) $(DRAGONBOX_BINDIR) $(FAST_DOUBLE_PARSER_C_BINDIR) $(CPU_FEATURES_BINDIR)
+	$(SHOW)$(MAKE) -C $(ROOT)/build/libevent clean AUTOGEN=1
 else
 	-$(SHOW)rm -rf $(BINDIR)
 ifeq ($(DEPS),1)
