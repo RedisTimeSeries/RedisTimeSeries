@@ -60,6 +60,7 @@ jobs:
 
     - name: Build
       run: |
+        sudo ln -sf /usr/bin/gcc /usr/bin/gcc-5
         ./sbin/setup
         make fetch
         make build

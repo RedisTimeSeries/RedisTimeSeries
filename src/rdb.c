@@ -22,9 +22,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    double lastValue;
-    timestamp_t lastTimestamp;
-    uint64_t totalSamples;
+    double lastValue = 0;
+    timestamp_t lastTimestamp = 0;
+    uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
