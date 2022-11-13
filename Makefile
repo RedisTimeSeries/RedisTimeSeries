@@ -1,4 +1,6 @@
 
+.NOTPARALLEL:
+
 ROOT=.
 
 MK_ALL_TARGETS=bindirs deps build package
@@ -18,7 +20,11 @@ include $(MK)/rules
 
 .PHONY: all setup fetch build clean deps test coverage upload-cov pack upload-release upload-artifacts help
 
-all: fetch deps build
+all:
+	@$(MAKE) -C src bindirs
+	@$(MAKE) -C src deps NOPAR=1 -j $(NPROC)
+	@$(MAKE) -C src build -j $(NPROC)
+	@$(MAKE) -C src pack
 
 help:
 	@$(MAKE) -C src help
@@ -31,7 +37,9 @@ fetch:
 	-@git submodule update --init --recursive
 
 build:
-	@$(MAKE) -C src all -j $(NCPUS)
+	@$(MAKE) -C src bindirs
+	@$(MAKE) -C src deps NOPAR=1 -j $(NPROC)
+	@$(MAKE) -C src build -j $(NPROC)
 
 clean:
 	@$(MAKE) -C src clean

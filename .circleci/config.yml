@@ -315,7 +315,7 @@ commands:
               --triggering_env << parameters.triggering_env >> \
               --push_results_redistimeseries \
               --allowed-envs << parameters.allowed_envs >> \
-              --allowed-setups << parameters.allowed_setups >>
+              --allowed-setups << parameters.allowed_setups >> || true
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -691,6 +691,13 @@ on-any-branch: &on-any-branch
     tags:
       only: /.*/
 
+always: &always
+  filters:
+    branches:
+      only: /.*/
+    tags:
+      only: /.*/
+
 never: &never
   filters:
     branches:
@@ -715,6 +722,15 @@ on-integ-branch: &on-integ-branch
         - /^perf-.*$/
     tags:
       ignore: /.*/
+
+on-integ-branch-cron: &on-integ-branch-cron
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+        - /^perf-.*$/
 
 not-on-integ-branch: &not-on-integ-branch
   filters:
@@ -844,15 +860,13 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * *"
-          filters:
-            branches:
-              only: master
+          <<: *on-integ-branch-cron
     jobs:
       - build:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["7.0", "unstable"]
+              redis_version: ["6.2", "7.0", "unstable"]
       - performance-ci-automation-oss-cluster-query:
           context: common
       - performance-ci-automation-oss-cluster-ingestion:
@@ -868,11 +882,8 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * 0,3"
-          filters:
-            branches:
-              only:
-                - master
-                - /^feature-.*$/
+          <<: *on-integ-branch-cron
     jobs:
-      - build-macos
+      - build-macos:
+          upload: "no"
       - valgrind
