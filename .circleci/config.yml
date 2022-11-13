@@ -723,6 +723,15 @@ on-integ-branch: &on-integ-branch
     tags:
       ignore: /.*/
 
+on-integ-branch-cron: &on-integ-branch-cron
+  filters:
+    branches:
+      only:
+        - master
+        - /^\d+\.\d+.*$/
+        - /^feature-.*$/
+        - /^perf-.*$/
+
 not-on-integ-branch: &not-on-integ-branch
   filters:
     branches:
@@ -851,7 +860,7 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * *"
-          <<: *on-integ-branch
+          <<: *on-integ-branch-cron
     jobs:
       - build:
           name: build-with-redis-<<matrix.redis_version>>
@@ -873,7 +882,7 @@ workflows:
     triggers:
       - schedule:
           cron: "20 17 * * 0,3"
-          <<: *on-integ-branch
+          <<: *on-integ-branch-cron
     jobs:
       - build-macos:
           upload: "no"
