@@ -366,3 +366,17 @@ def test_rule_timebucket_64bit(self):
         info = _get_ts_info(r, 'test_key{test}')
         assert info.rules[0][1] == BELOW_32BIT_LIMIT
         assert info.rules[1][1] == ABOVE_32BIT_LIMIT
+
+def test_create_rule_non_empty_src_series(self):
+    t1 = "t1{1}"
+    t2 = "t2{1}"
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", t1)
+        r.execute_command("ts.create", t2)
+        r.execute_command("ts.add", t1, 1, 1)
+        r.execute_command("ts.add", t1, 2, 2)
+        r.execute_command("ts.add", t1, 3, 3)
+        r.execute_command("ts.add", t1, 11, 11)
+        r.execute_command("ts.createrule", t1, t2, "AGGREGATION", "avg", 10)
+        res = r.execute_command("ts.range", t2, "-", "+", "LATEST")
+        assert res == [[0, b'2'], [10, b'11']]
