@@ -871,6 +871,26 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, "TSDB: ERROR creating rule");
         return REDISMODULE_ERR;
     }
+
+    if (unlikely(srcSeries->totalSamples > 0)) {
+        RangeArgs args = { 0 };
+        args.startTimestamp = 0;
+        args.endTimestamp = LLONG_MAX;
+        CompactionRule *rule = GetRule(srcSeries->rules, destSeries->keyName);
+        AbstractIterator *iter = SeriesQuery(srcSeries, &args, false, false);
+        EnrichedChunk *enrichedChunk;
+        while ((enrichedChunk = iter->GetNext(iter))) {
+            for (size_t i = 0; i < enrichedChunk->samples.num_samples; i++) {
+                handleCompaction(ctx,
+                                 srcSeries,
+                                 rule,
+                                 enrichedChunk->samples.timestamps[i],
+                                 enrichedChunk->samples.values[i]);
+            }
+        }
+        iter->Close(iter);
+    }
+
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
 

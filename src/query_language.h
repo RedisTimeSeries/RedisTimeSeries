@@ -57,7 +57,7 @@ typedef struct FilterByTSArgs
 
 typedef enum RangeAlignment
 {
-    DefaultAlignment,
+    DefaultAlignment = 0,
     StartAlignment,
     EndAlignment,
     TimestampAlignment
