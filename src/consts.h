@@ -1,8 +1,8 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
+ */
 #ifndef CONSTS_H
 #define CONSTS_H
 
