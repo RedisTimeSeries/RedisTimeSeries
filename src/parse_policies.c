@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "parse_policies.h"
 
@@ -26,7 +26,7 @@ static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool
     timestamp_t timeSize;
     int ret;
     ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
-    bool valid_state = (ret == 2) || (timeSize == 0 && ret == 1);
+    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
     if (!valid_state) {
         return FALSE;
     }

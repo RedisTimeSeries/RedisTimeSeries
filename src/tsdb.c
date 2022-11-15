@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "tsdb.h"
 
@@ -1306,6 +1306,12 @@ void calculate_latest_sample(Sample **sample, const Series *series) {
         *sample = NULL;
     } else {
         CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+        if (rule->startCurrentTimeBucket == -1LL) {
+            // when srcSeries->totalSamples != 0 and rule->startCurrentTimeBucket == -1LL it means
+            // that on ts.createrule the src wasn't empty This means that the rule context is empty
+            *sample = NULL;
+            goto __out;
+        }
         void *clonedContext = rule->aggClass->cloneContext(rule->aggContext);
 
         double aggVal;
@@ -1316,6 +1322,7 @@ void calculate_latest_sample(Sample **sample, const Series *series) {
         free(clonedContext);
     }
 
+__out:
     if (srcKey) {
         RedisModule_CloseKey(srcKey);
     }

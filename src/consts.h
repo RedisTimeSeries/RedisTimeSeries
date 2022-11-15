@@ -1,8 +1,8 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
+ */
 #ifndef CONSTS_H
 #define CONSTS_H
 
@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 
   #if defined(__GNUC__)
 #define likely(x)       __builtin_expect((x),1)
@@ -129,6 +130,9 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
     return strcmp(input_upper, str);
 }
 
+#ifdef DEBUG
+  #define _log_if(cond, format, ...) assert(!(cond))
+#else
 #define _log_if(cond, format, ...) do {          \
   extern RedisModuleCtx *rts_staticCtx;          \
   if(unlikely(cond)){                            \
@@ -137,5 +141,6 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
                     format, ##__VA_ARGS__);      \
   }                                              \
 } while(0)
+#endif
 
 #endif
