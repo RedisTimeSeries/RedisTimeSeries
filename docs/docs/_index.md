@@ -43,5 +43,4 @@ A time series is a linked list of memory chunks. Each chunk has a predefined siz
 Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://forum.redislabs.com/c/modules/redistimeseries).
 
 ## License
-
-Redis Source Available License Agreement. See [LICENSE](https://raw.githubusercontent.com/RedisTimeSeries/RedisTimeSeries/master/LICENSE)
+RedisTimeSeries is licensed under the [Redis Source Available License 2.0 (RSALv2)](https://redis.com/legal/rsalv2-agreement) or the [Server Side Public License v1 (SSPLv1)](https://www.mongodb.com/licensing/server-side-public-license).
