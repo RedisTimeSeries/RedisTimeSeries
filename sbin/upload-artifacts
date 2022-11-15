@@ -123,4 +123,4 @@ s3_upload() {
 
 #----------------------------------------------------------------------------------------------
 
-s3_upload redistimesereies redistimesereies
+s3_upload redistimeseries redistimeseries
