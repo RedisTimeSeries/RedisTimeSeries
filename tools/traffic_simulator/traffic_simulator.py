@@ -53,6 +53,28 @@ def worker_func(args):
         if len(res) != n_res:
             print("# failed!!! key= " + key_format.format(index=key_index) + " Number of series returned by query index is wrong, expected " + str(n_res) + " got " + str(len(res)))
             return -1
+
+        # Test '*' functionality
+        res = redis_client.execute_command('ts.range', 'timestampStore{1}', '-', '+')
+        if len(res) != 2:
+            print("# failed!!! timestampStore key has less than 2 samples")
+            return -1
+        first_ts = res[0][1]
+        second_ts = res[1][1]
+        res = redis_client.execute_command('ts.range', 'special{1}', '-', '+')
+        if len(res) != 2:
+            print("# failed!!! special key has less than 2 samples")
+            return -1
+        if int(float(res[0][0])) != int(first_ts) or int(float(res[1][0])) != int(second_ts):
+            print("# failed!!! special key has wrong samples: " + str(res[0][0]) + " " + str(res[1][0]) + " instead of: " + str(first_ts) + " " + str(second_ts))
+            return -1
+        res = redis_client.execute_command('ts.range', 'special2{1}', '-', '+')
+        if len(res) != 1:
+            print("# failed!!! special2 key has n_samples: " + str(len(res)) + " instead of 1")
+            return -1
+        if int(float(res[0][0])) != int(second_ts):
+            print("# failed!!! special2 key has wrong samples: " + str(res[0][0]) + " instead of: " + str(second_ts))
+            return -1
     else:
         count = 0
         cmds = []
@@ -105,6 +127,17 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
                 create_compacted_key(p, i, keyname, 'avg', 60)
                 create_compacted_key(p, i, keyname, 'count', 10)
             p.execute()
+
+        r.execute_command('ts.create', 'special{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
+        r.execute_command('ts.create', 'special2{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
+        r.execute_command('ts.create', 'timestampStore{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
+        r.execute_command('ts.add', 'special{1}', '*', 1)
+        res = r.execute_command('ts.get', 'special{1}')
+        r.execute_command('ts.add', 'timestampStore{1}', 1, res[0])
+        time.sleep(2)
+        r.execute_command('ts.madd', 'special{1}', '*', 1, 'special2{1}', '*', 3)
+        res = r.execute_command('ts.get', 'special2{1}')
+        r.execute_command('ts.add', 'timestampStore{1}', 2, res[0])
 
     pool = multiprocessing.Pool(pool_size)
     s = time.time()
