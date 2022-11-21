@@ -58,12 +58,12 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 <details open><summary><code>ON_DUPLICATE_policy</code></summary> 
 
 is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps. It is used with one of the following values:
-   - `BLOCK` - An error occurs for any out-of-order sample.
-   - `FIRST` - Ignores any newly reported value.
-   - `LAST` - Overrides with the newly reported value.
-   - `MIN` - Overrides only if the value is lower than the existing value.
-   - `MAX` - Overrides only if the value is higher than the existing value.
-   - `SUM` - If a previous sample exists, adds the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, it sets the updated value equal to the new value.
+  - `BLOCK`: ignore any newly reported value and reply with an error
+  - `FIRST`: ignore any newly reported value
+  - `LAST`: override with the newly reported value
+  - `MIN`: only override if the value is lower than the existing value
+  - `MAX`: only override if the value is higher than the existing value
+  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
 </details>
 
 <details open><summary><code>LABELS {label value}...</code></summary> 
