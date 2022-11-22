@@ -138,25 +138,28 @@ $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 
 ### DUPLICATE_POLICY
 
-Policy that will define handling of duplicate samples.
-The following are the possible policies:
+Is policy for handling insertion (`TS.ADD` and `TS.MADD`) of multiple samples with identical timestamps, with one of the following values:
 
-* `BLOCK` - an error will occur for any out of order sample
-* `FIRST` - ignore the new value
-* `LAST` - override with latest value
-* `MIN` - only override if the value is lower than the existing value
-* `MAX` - only override if the value is higher than the existing value
-* `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+  | policy     | description                                                      |
+  | ---------- | ---------------------------------------------------------------- |
+  | `BLOCK`    | ignore any newly reported value and reply with an error          |
+  | `FIRST`    | ignore any newly reported value                                  |
+  | `LAST`     | override with the newly reported value                           |
+  | `MIN`      | only override if the value is lower than the existing value      |
+  | `MAX`      | only override if the value is higher than the existing value     |
+  | `SUM`      | If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value. |
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
 
-1. TS.ADD input
-2. Key level policy
-3. Module configuration (AKA database-wide)
+1. `TS.ADD`'s `ON_DUPLICATE_policy` optional argument
+2. Key-level policy (as set with `TS.CREATE`'s and `TS.ALTER`'s `DUPLICATE_POLICY` optional argument)
+3. The `DUPLICATE_POLICY` module configuration parameter
+4. The default policy
 
-#### Default configuration
-The default policy for database-wide is `BLOCK`, new and pre-existing keys will conform to database-wide default policy.
+#### Default
+
+The default policy is `BLOCK`. Both new and pre-existing keys will conform to this default policy.
 
 #### Example
 
@@ -165,7 +168,9 @@ $ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```
 
 ### CHUNK_TYPE
+
 Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
+
 Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 
 
