@@ -95,6 +95,7 @@
 
 #define BIN_NUM_VALUES 64
 #define BINW BIN_NUM_VALUES
+#define BIN_MASK ((1ULL << 8ULL) - 1ULL) // 0xff,  log(BINW) = 8
 
 #define DOUBLE_LEADING 5
 #define DOUBLE_BLOCK_SIZE 6
@@ -219,7 +220,8 @@ static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
 }
 
 static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
-    return !(bins[bit / BINW] & BIT(localbit(bit)));
+    u_int64_t bit_mod = bit & BIN_MASK; // bit % BINW
+    return !(bins[bit - bit_mod] & BIT(bit_mod));
 }
 
 // unused:
