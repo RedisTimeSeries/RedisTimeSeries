@@ -119,6 +119,9 @@ def test_madd_some_failed_replicas():
     # getSlaveConnection is not supported in cluster mode
     Env().skipOnCluster()
     env =  Env(decodeResponses=False)
+    res = env.cmd('CONFIG', 'GET', 'appendfsync')
+    env.cmd('CONFIG', 'SET', 'appendfsync', 'always')
+
     with env.getClusterConnectionIfNeeded() as r:
         is_less_than_ver7 = is_redis_version_smaller_than(r, "7.0.0")
 
@@ -157,3 +160,6 @@ def test_madd_some_failed_replicas():
             print(cmds)
             print(cmds_filtered)
             raise
+
+    # rollback the config change
+    env.cmd('CONFIG', 'SET', 'appendfsync', res[1])
