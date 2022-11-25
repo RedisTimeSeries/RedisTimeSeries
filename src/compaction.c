@@ -729,8 +729,8 @@ static AggregationClass aggRollMed = { .type = TS_AGG_ROLL_MED,
                                        .freeContext = rm_free,
                                        .finalize = RollingMedFinalize,
                                        .finalizeEmpty = NULL,
-                                       .writeContext = RollingAvgWriteContext,
-                                       .readContext = RollingAvgReadContext,
+                                       .writeContext = RollingMedWriteContext,
+                                       .readContext = RollingMedReadContext,
                                        .addBucketParams = NULL,
                                        .addPrevBucketLastSample = NULL,
                                        .addNextBucketFirstSample = NULL,
@@ -745,8 +745,8 @@ static AggregationClass aggRollAvg = { .type = TS_AGG_ROLL_AVG,
                                        .freeContext = rm_free,
                                        .finalize = RollingAvgFinalize,
                                        .finalizeEmpty = NULL,
-                                       .writeContext = RollingMedWriteContext,
-                                       .readContext = RollingMedReadContext,
+                                       .writeContext = RollingAvgWriteContext,
+                                       .readContext = RollingAvgReadContext,
                                        .addBucketParams = NULL,
                                        .addPrevBucketLastSample = NULL,
                                        .addNextBucketFirstSample = NULL,
@@ -1081,6 +1081,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "RANGE";
         case TS_AGG_ROLL_MED:
             return "ROLL_MED";
+        case TS_AGG_ROLL_AVG:
+            return "ROLL_AVG";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1119,6 +1121,8 @@ const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
             return "range";
         case TS_AGG_ROLL_MED:
             return "roll_med";
+        case TS_AGG_ROLL_AVG:
+            return "roll_avg";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
