@@ -74,6 +74,14 @@ typedef struct RollingMedContext
     size_t windowSize; // Window size
 } RollingMedContext;
 
+typedef struct RollingAvgContext
+{
+    carray_t *items_queue; // items inorder
+    size_t count; // counter for the number of elements in the calculation
+    double sum;
+    size_t windowSize; // Window size
+} RollingAvgContext;
+
 typedef struct ZscoreContext
 {
     double med;   // Rolling median
@@ -499,6 +507,56 @@ err:
     return TSDB_ERROR;
 }
 
+void *RollingAvgCreateContext(__attribute__((unused)) bool reverse, size_t windowSize) {
+    RollingAvgContext *context = (RollingAvgContext *)malloc(sizeof(RollingMedContext));
+    context->count = 0;
+    context->windowSize = windowSize;
+    context->items_queue = carray_new(double, windowSize);
+    context->sum = 0.0;
+
+    for (int i = 0; i < windowSize; i++){
+        carray_push_back(context->items_queue, 0.0);
+    }
+    return context;
+}
+
+void RollingAvgAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+    RollingAvgContext *context = (RollingAvgContext *)contextPtr;
+    double* del_ptr = ((double *)context->items_queue->buf) + context->count;
+
+    // remove the oldest value and add the newest to the sum
+    context->sum += value - *del_ptr;
+    context->count = context->count + 1;
+    if(context->count >= context->windowSize)
+        context->count = 0;
+
+    *del_ptr = value;
+}
+
+void RollingAvgFinalize(void *contextPtr, double *value) {
+    RollingAvgContext *context = (RollingAvgContext *)contextPtr;
+    *value = context->sum / context->windowSize;
+}
+
+void RollingAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
+    RollingAvgContext *context = (RollingAvgContext *)contextPtr;
+    RedisModule_SaveUnsigned(io, context->count);
+    RedisModule_SaveUnsigned(io, context->windowSize);
+    RedisModule_SaveDouble(io, context->sum);
+    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble);
+}
+
+int RollingAvgReadContext(void *contextPtr, RedisModuleIO *io, __unused int encver) {
+    RollingAvgContext *context = (RollingAvgContext *)contextPtr;
+    context->count = LoadUnsigned_IOError(io, goto err);
+    context->windowSize = LoadUnsigned_IOError(io, goto err);
+    context->sum = LoadDouble_IOError(io, goto err);
+    array_RDBRead(context->items_queue, io, LoadDouble_IOError, goto err);
+    return TSDB_OK;
+err:
+    return TSDB_ERROR;
+}
+
 static inline double variance(double sum, double sum_2, double count) {
     if (count == 0) {
         return 0;
@@ -670,6 +728,22 @@ static AggregationClass aggRollMed = { .type = TS_AGG_ROLL_MED,
                                        .appendValueVec = NULL, /* determined on run time */
                                        .freeContext = rm_free,
                                        .finalize = RollingMedFinalize,
+                                       .finalizeEmpty = NULL,
+                                       .writeContext = RollingAvgWriteContext,
+                                       .readContext = RollingAvgReadContext,
+                                       .addBucketParams = NULL,
+                                       .addPrevBucketLastSample = NULL,
+                                       .addNextBucketFirstSample = NULL,
+                                       .getLastSample = NULL,
+                                       .resetContext = NULL,
+                                       .cloneContext = NULL };
+
+static AggregationClass aggRollAvg = { .type = TS_AGG_ROLL_AVG,
+                                       .createContext = RollingAvgCreateContext,
+                                       .appendValue = RollingAvgAddValue,
+                                       .appendValueVec = NULL, /* determined on run time */
+                                       .freeContext = rm_free,
+                                       .finalize = RollingAvgFinalize,
                                        .finalizeEmpty = NULL,
                                        .writeContext = RollingMedWriteContext,
                                        .readContext = RollingMedReadContext,
@@ -970,6 +1044,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
     } else if (len == 8) {
         if (strncmp(agg_type_lower, "roll_med", len) == 0) {
             result = TS_AGG_ROLL_MED;
+        } else if (strncmp(agg_type_lower, "roll_avg", len) == 0) {
+            result = TS_AGG_ROLL_AVG;
         }
     }
     return result;
@@ -1081,6 +1157,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggRange;
         case TS_AGG_ROLL_MED:
             return &aggRollMed;
+        case TS_AGG_ROLL_AVG:
+            return &aggRollAvg;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
