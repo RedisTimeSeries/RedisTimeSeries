@@ -118,7 +118,7 @@ No compaction rules.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10ms;avg:2h:10d;avg:3d:100d
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:1d;last:5M:10m;avg:2h:10d;avg:3d:100d
 ```
 
 ### RETENTION_POLICY
