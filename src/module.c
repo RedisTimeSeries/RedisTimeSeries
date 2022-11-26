@@ -697,6 +697,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     CreateTsKey(ctx, keyName, &cCtx, &series, &key);
+    SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
     RedisModule_CloseKey(key);
 
     RedisModule_Log(ctx, "verbose", "created new series");
