@@ -57,6 +57,8 @@ $ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
 
 Default compaction rules for newly created key with `TS.ADD`.
 
+Note that `COMPACTION_POLICY` has no effect for keys created with `TS.CREATE`. To understand the motivation for this behavior consider the following scenario: Suppose a `COMPACTION_POLICY` is defined, but then one wants to manually create an additional compaction rule (using `TS.CREATERULE`) which require to first create an empty destination key (using `TS.CREATE`). But now these is a problem: due to the `COMPACTION_POLICY`, automatic compactions would be also created for that destination key.
+
 Each rule is separated by a semicolon (`;`), the rule consists of multiple fields that are separated by a colon (`:`):
 
 * Aggregation type: One of the following:
