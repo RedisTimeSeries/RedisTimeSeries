@@ -31,6 +31,9 @@ is (double) numeric data value of the sample. The double number should follow [R
 
 <note><b>Notes:</b>
 - When specified key does not exist, a new time series is created.
+
+  if a [COMPACTION_POLICY](/docs/stack/timeseries/configuration/#compaction_policy) configuration parameter is defined, compacted time series would be created as well.
+
 - If `timestamp` is older than the retention period compared to the maximum existing timestamp, the sample is discarded and an error is returned.
 - When adding a sample to a time series for which compaction rules are defined:
   - If all the original samples for an affected aggregated time bucket are available, the compacted value is recalculated based on the reported sample and the original samples.
