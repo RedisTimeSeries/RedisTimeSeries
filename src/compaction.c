@@ -77,7 +77,6 @@ typedef struct RollingMedContext
 typedef struct RollingAvgContext
 {
     carray_t *items_queue; // items inorder
-    size_t count; // counter for the number of elements in the calculation
     double sum;
     size_t windowSize; // Window size
 } RollingAvgContext;
@@ -509,28 +508,26 @@ err:
 
 void *RollingAvgCreateContext(__attribute__((unused)) bool reverse, size_t windowSize) {
     RollingAvgContext *context = (RollingAvgContext *)malloc(sizeof(RollingMedContext));
-    context->count = 0;
     context->windowSize = windowSize;
     context->items_queue = carray_new(double, windowSize);
     context->sum = 0.0;
 
-    for (int i = 0; i < windowSize; i++){
-        carray_push_back(context->items_queue, 0.0);
-    }
     return context;
 }
 
 void RollingAvgAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     RollingAvgContext *context = (RollingAvgContext *)contextPtr;
-    double* del_ptr = ((double *)context->items_queue->buf) + context->count;
+    // if start has moved then we have necessarily popped an element, so keep popping,
+    // otherwise only pop when we have windowSize elements in the queue
+    if (context->items_queue->start != 0 || context->items_queue->end >= context->windowSize) {
+        double del_val = carray_pop_front(context->items_queue, double);
+        context->sum -= del_val;
+    }
 
     // remove the oldest value and add the newest to the sum
-    context->sum += value - *del_ptr;
-    context->count = context->count + 1;
-    if(context->count >= context->windowSize)
-        context->count = 0;
+    context->sum += value;
 
-    *del_ptr = value;
+    carray_push_back(context->items_queue, value);
 }
 
 void RollingAvgFinalize(void *contextPtr, double *value) {
@@ -540,7 +537,6 @@ void RollingAvgFinalize(void *contextPtr, double *value) {
 
 void RollingAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RollingAvgContext *context = (RollingAvgContext *)contextPtr;
-    RedisModule_SaveUnsigned(io, context->count);
     RedisModule_SaveUnsigned(io, context->windowSize);
     RedisModule_SaveDouble(io, context->sum);
     array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble);
@@ -548,7 +544,6 @@ void RollingAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int RollingAvgReadContext(void *contextPtr, RedisModuleIO *io, __unused int encver) {
     RollingAvgContext *context = (RollingAvgContext *)contextPtr;
-    context->count = LoadUnsigned_IOError(io, goto err);
     context->windowSize = LoadUnsigned_IOError(io, goto err);
     context->sum = LoadDouble_IOError(io, goto err);
     array_RDBRead(context->items_queue, io, LoadDouble_IOError, goto err);
