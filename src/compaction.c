@@ -517,9 +517,8 @@ void *RollingAvgCreateContext(__attribute__((unused)) bool reverse, size_t windo
 
 void RollingAvgAddValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     RollingAvgContext *context = (RollingAvgContext *)contextPtr;
-    // if start has moved then we have necessarily popped an element, so keep popping,
-    // otherwise only pop when we have windowSize elements in the queue
-    if (context->items_queue->start != 0 || context->items_queue->end >= context->windowSize) {
+
+    if (carray_len(context->items_queue) >= context->windowSize) {
         double del_val = carray_pop_front(context->items_queue, double);
         context->sum -= del_val;
     }
