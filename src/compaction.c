@@ -492,7 +492,7 @@ void RollingMedWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->count);
     RedisModule_SaveUnsigned(io, context->windowSize);
     precent_tracker_RDBWrite(context->pt, io);
-    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble);
+    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble, double);
 }
 
 int RollingMedReadContext(void *contextPtr, RedisModuleIO *io, __unused int encver) {
@@ -538,7 +538,7 @@ void RollingAvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     RollingAvgContext *context = (RollingAvgContext *)contextPtr;
     RedisModule_SaveUnsigned(io, context->windowSize);
     RedisModule_SaveDouble(io, context->sum);
-    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble);
+    array_RDBWrite(context->items_queue, io, RedisModule_SaveDouble, double);
 }
 
 int RollingAvgReadContext(void *contextPtr, RedisModuleIO *io, __unused int encver) {
