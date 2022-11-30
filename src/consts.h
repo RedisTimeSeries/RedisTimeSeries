@@ -51,7 +51,8 @@
 #define DEFAULT_DUPLICATE_POLICY        DP_BLOCK
 
 /* TS.Range Aggregation types */
-typedef enum {
+typedef enum
+{
     TS_AGG_INVALID = -1,
     TS_AGG_NONE = 0,
     TS_AGG_MIN,
@@ -68,11 +69,12 @@ typedef enum {
     TS_AGG_VAR_S,
     TS_AGG_TWA,
     TS_AGG_ROLL_MED,
+    TS_AGG_ROLL_AVG,
     TS_AGG_TYPES_MAX // 14
 } TS_AGG_TYPES_T;
 
 static inline bool is_roll_agg_type(TS_AGG_TYPES_T agg_type) {
-  if(agg_type == TS_AGG_ROLL_MED) {
+  if(agg_type == TS_AGG_ROLL_MED || agg_type == TS_AGG_ROLL_AVG) {
     return true;
   }
 

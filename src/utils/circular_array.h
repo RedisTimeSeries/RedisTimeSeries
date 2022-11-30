@@ -125,26 +125,26 @@ __extension__({                                           \
     *(((T *)((arr)->buf)) + old_start);            \
 })
 
-#define array_RDBWrite(arr, io, saveItem_cb)            \
+#define array_RDBWrite(arr, io, saveItem_cb, type)                                                 \
   __extension__({                                                \
     size_t len = carray_len(arr);                                   \
     RedisModule_SaveUnsigned(io, len);  \
-    for (size_t i = (arr)->start; i < len; i = (i + 1)%(arr)->cap) { \
-      saveItem_cb(io, (arr)->buf[i*(arr)->elem_sz]);                          \
-    }                                                            \
+    for (size_t i = arr->start; i < arr->start + len; i++){ \
+      /* replace with carray_at when made safe */ \
+      saveItem_cb(io, *((type*)&(arr)->buf[((i % (arr)->cap))*(arr)->elem_sz]));                          \
+    }\
   })
 
 #define array_RDBRead(arr, io, loadItem_cb, cleanup_exp)             \
   __extension__({                                                \
-    size_t len = LoadDouble_IOError((io), cleanup_exp);                                \
+    size_t len = LoadUnsigned_IOError((io), cleanup_exp);                                \
     (arr)->start = 0;    \
     _log_if(len >= (arr)->cap, "trying to load array with len bigger than capacity"); \
-    (arr)->end = len; \
-    for (size_t i = (arr)->start; i < len; i = (i + 1)%(arr)->cap) { \
+    for (size_t i = (arr)->start; i < len; i++) { \
       typeof(loadItem_cb((io), cleanup_exp)) ret = loadItem_cb((io), cleanup_exp); \
       carray_push_back((arr), ret);  \
     }                                                            \
-  })
+})
 
 #if 0 // Untested functions: most of them not working properly
 

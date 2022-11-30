@@ -1535,3 +1535,35 @@ def test_rolling_med():
         res = r.execute_command('TS.range', t4, 0, 20)
         assert res == [[12, '3.5'], [13, '3.5'], [14, '3']]
 
+def test_rolling_avg():
+    env = Env(decodeResponses=True)
+    t1 = 't1{1}'
+    t2 = 't2{1}'
+    t3 = 't3{1}'
+    t4 = 't4{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', t1)
+        assert r.execute_command('TS.CREATE', t3)
+        assert r.execute_command('TS.CREATERULE', t1, t3, 'ROLL_AGGREGATION', 'roll_avg', 3)
+        assert r.execute_command('TS.add', t1, 1, 1)
+        assert r.execute_command('TS.add', t1, 2, 3)
+        assert r.execute_command('TS.add', t1, 11, 7)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_avg', 3)
+        assert res == [[11, '3.6666666666666665']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3.6666666666666665']]
+        assert r.execute_command('TS.add', t1, 13, 4)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_avg', 3)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667']]
+        assert r.execute_command('TS.add', t1, 14, 5)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_avg', 3)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667'], [14, '5.333333333333333']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667'], [14, '5.333333333333333']]
+        assert r.execute_command('TS.add', t1, 15, 1)
+        res = r.execute_command('TS.range', t1, 0, 20, 'ROLL_AGGREGATION', 'roll_avg', 3)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667'], [14, '5.333333333333333'], [15, '3.3333333333333335']]
+        res = r.execute_command('TS.range', t3, 0, 20)
+        assert res == [[11, '3.6666666666666665'], [13, '4.666666666666667'], [14, '5.333333333333333'], [15, '3.3333333333333335']]
