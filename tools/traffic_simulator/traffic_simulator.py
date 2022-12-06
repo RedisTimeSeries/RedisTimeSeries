@@ -43,13 +43,13 @@ def worker_func(args):
             if not 'rules' in response:
                 print("# failed!!! key= " + key_format.format(index=key_index) + " No rules")
                 return -1
-            if len(response['rules']) != 3:
-                print("# failed!!! key= " + key_format.format(index=key_index) + " Number of rules isn't equal 3, rules = " + str(response['rules']))
+            if len(response['rules']) != 13:
+                print("# failed!!! key= " + key_format.format(index=key_index) + " Number of rules isn't equal 13, rules = " + str(response['rules']))
                 return -1
         res = redis_client.execute_command('TS.QUERYINDEX', 'index=' + str(key_index))
         n_res = 1
         if with_compaction:
-            n_res += 3
+            n_res += 13
         if len(res) != n_res:
             print("# failed!!! key= " + key_format.format(index=key_index) + " Number of series returned by query index is wrong, expected " + str(n_res) + " got " + str(len(res)))
             return -1
@@ -126,6 +126,16 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
                 create_compacted_key(p, i, keyname, 'avg', 10)
                 create_compacted_key(p, i, keyname, 'avg', 60)
                 create_compacted_key(p, i, keyname, 'count', 10)
+                create_compacted_key(p, i, keyname, 'max', 10)
+                create_compacted_key(p, i, keyname, 'min', 10)
+                create_compacted_key(p, i, keyname, 'first', 10)
+                create_compacted_key(p, i, keyname, 'last', 10)
+                create_compacted_key(p, i, keyname, 'sum', 10)
+                create_compacted_key(p, i, keyname, 'range', 10)
+                create_compacted_key(p, i, keyname, 'std.p', 10)
+                create_compacted_key(p, i, keyname, 'std.s', 10)
+                create_compacted_key(p, i, keyname, 'var.s', 10)
+                create_compacted_key(p, i, keyname, 'var.p', 10)
             p.execute()
 
         r.execute_command('ts.create', 'special{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
