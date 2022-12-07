@@ -48,6 +48,8 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *token;
     char *token_iter_ptr;
     char agg_type[20];
+    int agg_type_index;
+    bool is_rolling_agg = false;
     rule->timestampAlignment = 0; // the default alignment is 0
 
     token = strtok_r(policy, ":", &token_iter_ptr);
@@ -55,15 +57,30 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     while (token) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
-        } else if (i == 1) { // the 2nd param is the bucket
-            if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == FALSE) {
+            agg_type_index = StringAggTypeToEnum(agg_type);
+            if (agg_type_index == TS_AGG_INVALID) {
                 return FALSE;
+            }
+            is_rolling_agg = is_roll_agg_type(agg_type_index);
+        } else if (i == 1) { // the 2nd param is the bucket
+            if (is_rolling_agg) {
+                if ((rule->windowSize = strtoull(token, NULL, 10)) == FALSE) {
+                    return FALSE;
+                }
+            } else {
+                if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == FALSE) {
+                    return FALSE;
+                }
             }
         } else if (i == 2) {
             if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == FALSE) {
                 return FALSE;
             }
         } else if (i == 3) {
+            if (is_rolling_agg) {
+                // No alignment in rolling aggregation type
+                return false;
+            }
             if (parse_string_to_millisecs(token, &rule->timestampAlignment, false) == FALSE) {
                 return FALSE;
             }
@@ -77,10 +94,7 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     if (i < 3) {
         return FALSE;
     }
-    int agg_type_index = StringAggTypeToEnum(agg_type);
-    if (agg_type_index == TS_AGG_INVALID) {
-        return FALSE;
-    }
+
     rule->aggType = agg_type_index;
 
     return TRUE;

@@ -295,7 +295,7 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
 
         *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
 
-        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX) {
+        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX || is_roll_agg_type(*agg_type)) {
             RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
         }
@@ -360,6 +360,67 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
         aggregationArgs.aggregationClass = GetAggClass(agg_type);
         if (aggregationArgs.aggregationClass == NULL) {
             RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
+            return TSDB_ERROR;
+        }
+        *out = aggregationArgs;
+        return TSDB_OK;
+    } else {
+        return result;
+    }
+}
+
+int _parseRollingAggregationArgs(RedisModuleCtx *ctx,
+                                 RedisModuleString **argv,
+                                 int argc,
+                                 u_int64_t *windowSize,
+                                 int *agg_type) {
+    RedisModuleString *aggTypeStr = NULL;
+    int offset = RMUtil_ArgIndex("ROLL_AGGREGATION", argv, argc);
+    if (offset > 0) {
+        long long temp_windowSize = 0;
+        if (RMUtil_ParseArgs(argv, argc, offset + 1, "sl", &aggTypeStr, &temp_windowSize) !=
+            REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse AGGREGATION");
+            return TSDB_ERROR;
+        }
+
+        if (!aggTypeStr) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            return TSDB_ERROR;
+        }
+
+        *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
+
+        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX || !is_roll_agg_type(*agg_type)) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            return TSDB_ERROR;
+        }
+
+        if (temp_windowSize <= 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: windowSize must be greater than zero");
+            return TSDB_ERROR;
+        } else {
+            *windowSize = (u_int64_t)temp_windowSize;
+        }
+
+        return TSDB_OK;
+    }
+
+    return TSDB_NOTEXISTS;
+}
+
+int parseRollingAggregationArgs(RedisModuleCtx *ctx,
+                                RedisModuleString **argv,
+                                int argc,
+                                RollingAggregationArgs *out) {
+    int agg_type;
+    RollingAggregationArgs aggregationArgs = { 0 };
+    int result =
+        _parseRollingAggregationArgs(ctx, argv, argc, &aggregationArgs.windowSize, &agg_type);
+    if (result == TSDB_OK) {
+        aggregationArgs.aggregationClass = GetAggClass(agg_type);
+        if (aggregationArgs.aggregationClass == NULL) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve rolling aggregation class");
             return TSDB_ERROR;
         }
         *out = aggregationArgs;
@@ -583,6 +644,10 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     }
 
+    if (parseRollingAggregationArgs(ctx, argv, argc, &args.rollingAggregationArgs) == TSDB_ERROR) {
+        return REDISMODULE_ERR;
+    }
+
     if (parseAlignmentArgs(ctx, argv, argc, &args.alignment, &args.timestampAlignment) ==
         TSDB_ERROR) {
         return REDISMODULE_ERR;
@@ -695,7 +760,7 @@ int parseMultiSeriesReduceArgs(RedisModuleCtx *ctx,
                                ReducerArgs *reducerArgs) {
     TS_AGG_TYPES_T agg_type = RMStringLenAggTypeToEnum(reducerstr);
     if (agg_type == TS_AGG_FIRST || agg_type == TS_AGG_LAST || agg_type == TS_AGG_TWA ||
-        agg_type == TS_AGG_INVALID || agg_type == TS_AGG_NONE) {
+        agg_type == TS_AGG_INVALID || agg_type == TS_AGG_NONE || is_roll_agg_type(agg_type)) {
         RTS_ReplyGeneralError(ctx, "TSDB: Invalid reducer type");
         return TSDB_ERROR;
     }

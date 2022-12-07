@@ -235,7 +235,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->aggregation = aggregation;
     iter->timestampAlignment = timestampAlignment;
     iter->aggregationTimeDelta = aggregationTimeDelta;
-    iter->aggregationContext = iter->aggregation->createContext(reverse);
+    iter->aggregationContext = iter->aggregation->createContext(reverse, DC);
     iter->aggregationLastTimestamp = 0;
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;

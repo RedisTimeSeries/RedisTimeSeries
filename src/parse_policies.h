@@ -13,10 +13,17 @@
 
 typedef struct SimpleCompactionRule
 {
-    uint64_t bucketDuration;
     uint64_t retentionSizeMillisec;
     int aggType;
-    timestamp_t timestampAlignment;
+    union
+    {
+        struct
+        {
+            uint64_t bucketDuration;
+            timestamp_t timestampAlignment;
+        };
+        uint64_t windowSize;
+    };
 } SimpleCompactionRule;
 
 int ParseCompactionPolicy(const char *policy_string,

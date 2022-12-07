@@ -68,7 +68,7 @@ MultiSeriesAggDupSampleIterator *MultiSeriesAggDupSampleIterator_New(
     newIter->base.GetNext = MultiSeriesAggDupSampleIterator_GetNext;
     newIter->base.Close = MultiSeriesAggDupSampleIterator_Close;
     newIter->aggregation = reducerArgs->aggregationClass;
-    newIter->aggregationContext = newIter->aggregation->createContext(DC);
+    newIter->aggregationContext = newIter->aggregation->createContext(DC, DC);
     ChunkResult res = newIter->base.input->GetNext(newIter->base.input, &newIter->next_sample);
     newIter->has_next_sample = true;
     if (res != CR_OK) {
