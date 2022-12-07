@@ -4,6 +4,8 @@ import click
 import multiprocessing
 import sys
 
+ver_1_8_4 = 1
+traffic_sim_version = ver_1_8_4
 
 def send_pipeline(redis_client, cmds):
     def _exec():
@@ -53,28 +55,6 @@ def worker_func(args):
         if len(res) != n_res:
             print("# failed!!! key= " + key_format.format(index=key_index) + " Number of series returned by query index is wrong, expected " + str(n_res) + " got " + str(len(res)))
             return -1
-
-        # Test '*' functionality
-        res = redis_client.execute_command('ts.range', 'timestampStore{1}', '-', '+')
-        if len(res) != 2:
-            print("# failed!!! timestampStore key has less than 2 samples")
-            return -1
-        first_ts = res[0][1]
-        second_ts = res[1][1]
-        res = redis_client.execute_command('ts.range', 'special{1}', '-', '+')
-        if len(res) != 2:
-            print("# failed!!! special key has less than 2 samples")
-            return -1
-        if int(float(res[0][0])) != int(first_ts) or int(float(res[1][0])) != int(second_ts):
-            print("# failed!!! special key has wrong samples: " + str(res[0][0]) + " " + str(res[1][0]) + " instead of: " + str(first_ts) + " " + str(second_ts))
-            return -1
-        res = redis_client.execute_command('ts.range', 'special2{1}', '-', '+')
-        if len(res) != 1:
-            print("# failed!!! special2 key has n_samples: " + str(len(res)) + " instead of 1")
-            return -1
-        if int(float(res[0][0])) != int(second_ts):
-            print("# failed!!! special2 key has wrong samples: " + str(res[0][0]) + " instead of: " + str(second_ts))
-            return -1
     else:
         count = 0
         cmds = []
@@ -96,6 +76,52 @@ def create_compacted_key(redis, i, source, agg, bucket):
                           'LABELS', 'index', i, "aggregation", agg, "bucket", bucket)
     redis.execute_command('ts.createrule', source, dest, 'AGGREGATION', agg, bucket, )
 
+def test_madd(args):
+    host, port, check_only = args
+    r = redis.Redis(host, port, decode_responses=True, retry_on_timeout=True, socket_connect_timeout=30,
+                               socket_timeout=30)
+    if check_only:
+        version = 0
+        res = r.execute_command('EXISTS', 'version_store{1}')
+        if res == 1:
+            res = r.execute_command('ts.range', 'version_store{1}', '-', '+')
+            if len(res) == 1:
+                version = int(res[0][0])
+            elif len(res) > 1:
+                print("# failed!!! version_store key has more than 1 sample")
+                return -1
+
+        if version >= ver_1_8_4:
+            # Test '*' functionality
+            res = r.execute_command('ts.range', 'timestampStore{1}', '-', '+')
+            if len(res) != 2:
+                print("# failed!!! timestampStore key has less than 2 samples")
+                return -1
+            first_ts = res[0][1]
+            second_ts = res[1][1]
+            res = r.execute_command('ts.range', 'special{1}', '-', '+')
+            if len(res) != 2:
+                print("# failed!!! special key has less than 2 samples")
+                return -1
+            if int(float(res[0][0])) != int(first_ts) or int(float(res[1][0])) != int(second_ts):
+                print("# failed!!! special key has wrong samples: " + str(res[0][0]) + " " + str(res[1][0]) + " instead of: " + str(first_ts) + " " + str(second_ts))
+                return -1
+            res = r.execute_command('ts.range', 'special2{1}', '-', '+')
+            if len(res) != 1:
+                print("# failed!!! special2 key has n_samples: " + str(len(res)) + " instead of 1")
+                return -1
+            if int(float(res[0][0])) != int(second_ts):
+                print("# failed!!! special2 key has wrong samples: " + str(res[0][0]) + " instead of: " + str(second_ts))
+                return -1
+    else:
+        r.execute_command('ts.add', 'special{1}', '*', 1)
+        res = r.execute_command('ts.get', 'special{1}')
+        r.execute_command('ts.add', 'timestampStore{1}', 1, res[0])
+        time.sleep(2)
+        r.execute_command('ts.madd', 'special{1}', '*', 1, 'special2{1}', '*', 3)
+        res = r.execute_command('ts.get', 'special2{1}')
+        r.execute_command('ts.add', 'timestampStore{1}', 2, res[0])
+    return 0
 
 @click.command()
 @click.option('--host', default="localhost", help='redis host.')
@@ -141,13 +167,11 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
         r.execute_command('ts.create', 'special{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
         r.execute_command('ts.create', 'special2{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
         r.execute_command('ts.create', 'timestampStore{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
-        r.execute_command('ts.add', 'special{1}', '*', 1)
-        res = r.execute_command('ts.get', 'special{1}')
-        r.execute_command('ts.add', 'timestampStore{1}', 1, res[0])
-        time.sleep(2)
-        r.execute_command('ts.madd', 'special{1}', '*', 1, 'special2{1}', '*', 3)
-        res = r.execute_command('ts.get', 'special2{1}')
-        r.execute_command('ts.add', 'timestampStore{1}', 2, res[0])
+        r.execute_command('ts.create', 'version_store{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
+
+
+    if not check_only:
+        r.execute_command('ts.add', 'version_store{1}', traffic_sim_version, ver_1_8_4)
 
     pool = multiprocessing.Pool(pool_size)
     s = time.time()
@@ -156,6 +180,10 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
                        for key_index in range(key_count)])
     e = time.time()
     insert_time = e - s
+
+    if(test_madd((host, port, check_only)) == -1):
+        print("# failed!!! not all items exists in the database")
+        sys.exit(1)
 
     if check_only:
         for r in result:
