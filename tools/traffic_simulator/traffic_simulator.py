@@ -27,10 +27,11 @@ def send_pipeline(redis_client, cmds):
 
 
 def worker_func(args):
-    host, port, start_ts, tsrange, pipeline_size, key_index, key_format, check_only, with_compaction = args
+    host, port, start_ts, tsrange, pipeline_size, key_index, key_format, check_only, with_compaction, write_version = args
     redis_client = redis.Redis(host, port, decode_responses=True, retry_on_timeout=True, socket_connect_timeout=30,
                                socket_timeout=30)
     if check_only:
+        n_compactions = 13 if write_version >= ver_1_8_4 else 3
         res = redis_client.execute_command('TS.RANGE', key_format.format(index=key_index), 0, start_ts + tsrange)
         if len(res) != tsrange:
             print("# failed!!! key= " + key_format.format(index=key_index) + " len= " + str(len(res)) + " tsrange= " + str(tsrange))
@@ -45,13 +46,13 @@ def worker_func(args):
             if not 'rules' in response:
                 print("# failed!!! key= " + key_format.format(index=key_index) + " No rules")
                 return -1
-            if len(response['rules']) != 13:
+            if len(response['rules']) != n_compactions:
                 print("# failed!!! key= " + key_format.format(index=key_index) + " Number of rules isn't equal 13, rules = " + str(response['rules']))
                 return -1
         res = redis_client.execute_command('TS.QUERYINDEX', 'index=' + str(key_index))
         n_res = 1
         if with_compaction:
-            n_res += 13
+            n_res += n_compactions
         if len(res) != n_res:
             print("# failed!!! key= " + key_format.format(index=key_index) + " Number of series returned by query index is wrong, expected " + str(n_res) + " got " + str(len(res)))
             return -1
@@ -77,21 +78,11 @@ def create_compacted_key(redis, i, source, agg, bucket):
     redis.execute_command('ts.createrule', source, dest, 'AGGREGATION', agg, bucket, )
 
 def test_madd(args):
-    host, port, check_only = args
+    host, port, check_only, write_version = args
     r = redis.Redis(host, port, decode_responses=True, retry_on_timeout=True, socket_connect_timeout=30,
                                socket_timeout=30)
     if check_only:
-        version = 0
-        res = r.execute_command('EXISTS', 'version_store{1}')
-        if res == 1:
-            res = r.execute_command('ts.range', 'version_store{1}', '-', '+')
-            if len(res) == 1:
-                version = int(res[0][0])
-            elif len(res) > 1:
-                print("# failed!!! version_store key has more than 1 sample")
-                return -1
-
-        if version >= ver_1_8_4:
+        if write_version >= ver_1_8_4:
             # Test '*' functionality
             res = r.execute_command('ts.range', 'timestampStore{1}', '-', '+')
             if len(res) != 2:
@@ -169,19 +160,29 @@ def run(host, port, key_count, samples, pool_size, create_keys, pipeline_size, w
         r.execute_command('ts.create', 'timestampStore{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
         r.execute_command('ts.create', 'version_store{1}', 'RETENTION', 0, 'CHUNK_SIZE', 360)
 
+    write_version = 0
 
     if not check_only:
         r.execute_command('ts.add', 'version_store{1}', traffic_sim_version, ver_1_8_4)
+    else:
+        res = r.execute_command('EXISTS', 'version_store{1}')
+        if res == 1:
+            res = r.execute_command('ts.range', 'version_store{1}', '-', '+')
+            if len(res) == 1:
+                write_version = int(res[0][0])
+            elif len(res) > 1:
+                print("# failed!!! version_store key has more than 1 sample")
+                return -1
 
     pool = multiprocessing.Pool(pool_size)
     s = time.time()
     result = pool.map(worker_func,
-                      [(host, port, start_timestamp, int(samples), pipeline_size, key_index, key_format, check_only, with_compaction)
+                      [(host, port, start_timestamp, int(samples), pipeline_size, key_index, key_format, check_only, with_compaction, write_version)
                        for key_index in range(key_count)])
     e = time.time()
     insert_time = e - s
 
-    if(test_madd((host, port, check_only)) == -1):
+    if(test_madd((host, port, check_only, write_version)) == -1):
         print("# failed!!! not all items exists in the database")
         sys.exit(1)
 
