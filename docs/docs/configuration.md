@@ -41,6 +41,7 @@ The following table summerizes which configuration parameters can be set at modu
 | [CHUNK_TYPE](#chunk_type)               | :white_check_mark: | :white_large_square: |
 
 ### NUM_THREADS
+
 The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
 
 #### Default
@@ -135,7 +136,9 @@ $ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min
 
 ### RETENTION_POLICY
 
-Maximum age for samples compared to last event time (in milliseconds) per key. This configuration will set the default retention for newly created keys that do not have a an override.
+Default retention period, in milliseconds, for newly created keys.
+
+Retention period is the maximum age of samples compared to highest reported timestamp, per key. Samples are expired based solely on the difference between their timestamp and the timestamps passed to subsequent `TS.ADD`, `TS.MADD`, `TS.INCRBY`, and `TS.DECRBY` calls.
 
 The value `0` means no expiration.
 
@@ -147,8 +150,10 @@ When both `COMPACTION_POLICY` and `RETENTION_POLICY` are specified, the retentio
 
 #### Example
 
+Setting the default retention to 300 days:
+
 ```
-$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
+$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 25920000000
 ```
 
 ### DUPLICATE_POLICY
