@@ -93,6 +93,8 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     * M - minute
     * h - hour
     * d - day
+    
+  `0m`, `0s`, `0M`, `0h`, or `0d` means no expiration.
 
 * (since RedisTimeSeries v1.8):
 
