@@ -78,22 +78,30 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   | `var.s`    | sample variance of the values                                    |
   | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
 
-* Duration of each time bucket - number and the time representation (Example for 1 minute: 1M)
+* Duration of each time bucket - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
 
     * m - millisecond
-    * M - minute
     * s - seconds
+    * M - minute
+    * h - hour
     * d - day
 
-* Retention time - in milliseconds
+* Retention time - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
+
+    * m - millisecond
+    * s - seconds
+    * M - minute
+    * h - hour
+    * d - day
 
 * (since RedisTimeSeries v1.8):
 
-  Optional: Time bucket alignment - number and the time representation (Example for 1 minute: 1M)
+  Optional: Time bucket alignment - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
 
     * m - millisecond
-    * M - minute
     * s - seconds
+    * M - minute
+    * h - hour
     * d - day
 
   Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Units: milliseconds. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours (24 * 3600 * 1000), setting _alignTimestamp_ to 6 hours after the epoch (6 * 3600 * 1000) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
