@@ -78,7 +78,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   | `var.s`    | sample variance of the values                                    |
   | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
 
-* Duration of each time bucket - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
+* Duration of each time bucket - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
 
     * m - millisecond
     * s - seconds
@@ -86,7 +86,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     * h - hour
     * d - day
 
-* Retention time - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
+* Retention time - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
 
     * m - millisecond
     * s - seconds
@@ -96,7 +96,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
 
 * (since RedisTimeSeries v1.8):
 
-  Optional: Time bucket alignment - number and the time representation (Example for one minute: 1M, 60s, or 1000m)
+  Optional: Time bucket alignment - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
 
     * m - millisecond
     * s - seconds
