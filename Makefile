@@ -62,6 +62,9 @@ unit_tests:
 flow_tests:
 	@$(MAKE) -C src flow_tests
 
+clean-tests:
+	@$(MAKE) -C src clean-tests
+
 coverage:
 	@$(MAKE) -C src coverage
 
