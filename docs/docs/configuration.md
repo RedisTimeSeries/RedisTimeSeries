@@ -138,6 +138,10 @@ $ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min
 Maximum age for samples compared to last event time (in milliseconds) per key, this configuration will set
 the default retention for newly created keys that do not have a an override.
 
+The value `0` means no expiration.
+
+If both `COMPACTION_POLICY` and `RETENTION_POLICY` are specified, the expiration of newly created compactions is according to the retention time set in `COMPACTION_POLICY`.
+
 #### Default
 
 0
