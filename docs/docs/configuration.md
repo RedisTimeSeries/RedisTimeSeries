@@ -139,7 +139,7 @@ Maximum age for samples compared to last event time (in milliseconds) per key. T
 
 The value `0` means no expiration.
 
-When both `COMPACTION_POLICY` and `RETENTION_POLICY` are specified, the retention of newly created compactions is according to the retention time set in `COMPACTION_POLICY`.
+When both `COMPACTION_POLICY` and `RETENTION_POLICY` are specified, the retention of newly created compactions is according to the retention time specified in `COMPACTION_POLICY`.
 
 #### Default
 
