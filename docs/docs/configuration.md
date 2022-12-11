@@ -118,8 +118,8 @@ When a compaction policy is defined, compaction rules will be created automatica
 
 Examples:
 
-- `max:1M:1h` - Aggregate using max over one minute and retain the last hour
-- `twa:1d:0:360M` - Aggregate daily [06:00 .. 06:00) using time-weighted average; no expiration
+- `max:1M:1h` - Aggregate using `max` over one minute and retain the last hour
+- `twa:1d:0m:360M` - Aggregate daily [06:00 .. 06:00) using `twa`; no expiration
 
 #### Default
 
