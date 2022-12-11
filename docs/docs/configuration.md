@@ -104,7 +104,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     * h - hour
     * d - day
 
-  Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours, setting _alignTimestamp_ to 6 hours (`6h`) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
+  Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours, setting _alignTimestamp_ to `6h` (6 hours after the Epoch) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
   
 When a compaction policy is defined, compaction rules will be created automatically for newly created time series, and their key would be set to:
   
