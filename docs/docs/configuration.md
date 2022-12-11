@@ -78,7 +78,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   | `var.s`    | sample variance of the values                                    |
   | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
 
-* Duration of each time bucket - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
+* Duration of each time bucket - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
     * m - millisecond
     * s - seconds
@@ -86,7 +86,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     * h - hour
     * d - day
 
-* Retention time - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
+* Retention time - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
     * m - millisecond
     * s - seconds
@@ -96,7 +96,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
 
 * (since RedisTimeSeries v1.8):
 
-  Optional: Time bucket alignment - number and the time representation (Example for one minute: 1M, 60s, or 60000m)
+  Optional: Time bucket alignment - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
     * m - millisecond
     * s - seconds
@@ -104,7 +104,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     * h - hour
     * d - day
 
-  Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours, setting _alignTimestamp_ to 6 hours after the epoch will ensure that each bucket’s timeframe is [06:00 .. 06:00).
+  Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours, setting _alignTimestamp_ to 6 hours (`6h`) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
   
 When a compaction policy is defined, compaction rules will be created automatically for newly created time series, and their key would be set to:
   
