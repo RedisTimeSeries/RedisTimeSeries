@@ -339,9 +339,9 @@ $(REGULAR_OBJECTS) : $(BINDIR)/%.o : $(SRCDIR)/%.c
 
 $(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 	@echo Linking $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(SO_LD_FLAGS) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifeq ($(OS),macos)
-	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) $(LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
 endif
 
 #----------------------------------------------------------------------------------------------

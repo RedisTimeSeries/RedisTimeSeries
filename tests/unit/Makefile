@@ -64,7 +64,7 @@ $(BINDIR)/%.o: $(SRCDIR)/%.c
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(LD_SO_FLAGS) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 
 clean:
 ifeq ($(ALL),1)
