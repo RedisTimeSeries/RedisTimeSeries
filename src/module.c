@@ -42,8 +42,10 @@
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
 bool isTrimming = false;
+bool isErrorReplied = false;
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 2 || argc > 3) {
@@ -169,6 +171,7 @@ void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 }
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 2) {
@@ -343,6 +346,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     if (IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
@@ -360,6 +364,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     if (IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
@@ -400,10 +405,12 @@ _out:
 }
 
 int TSDB_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     return TSDB_generic_range(ctx, argv, argc, false);
 }
 
 int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
@@ -526,7 +533,8 @@ static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString *timestampStr,
                       RedisModuleString *valueStr,
                       RedisModuleString **argv,
-                      int argc) {
+                      int argc,
+                      bool should_reply) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
     const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
@@ -570,7 +578,7 @@ static inline int add(RedisModuleCtx *ctx,
             return REDISMODULE_ERR;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
+    int rv = internalAdd(ctx, series, timestamp, value, dp, should_reply);
     RedisModule_CloseKey(key);
     return rv;
 }
@@ -582,6 +590,7 @@ static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4 || (argc - 1) % 3 != 0) {
@@ -593,6 +602,8 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
     RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
     size_t replication_count = 0;
+    long long *reply_data = malloc(sizeof(long long) * ((argc - 1) / 3));
+    int val_count = 0;
     for (int i = 1; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
@@ -606,11 +617,24 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             timestampStr = curTimeStr;
         }
 
-        if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
+        if (add(ctx, keyName, timestampStr, valueStr, NULL, -1, false) == REDISMODULE_OK) {
             replication_data[replication_count] = keyName;
             replication_data[replication_count + 1] = timestampStr;
             replication_data[replication_count + 2] = valueStr;
             replication_count += 3;
+
+            long long timestampValue;
+            if ((RedisModule_StringToLongLong(timestampStr, &reply_data[val_count++]) !=
+                 REDISMODULE_OK)) {
+                _log_if(true, "TSDB: invalid timestamp");
+            }
+        }
+    }
+
+    if (!Get_ErrorFlag()) {
+        RedisModule_ReplyWithArray(ctx, val_count);
+        for (int i = 0; i < val_count; i++) {
+            RedisModule_ReplyWithLongLong(ctx, reply_data[i]);
         }
     }
 
@@ -630,6 +654,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4) {
@@ -645,7 +670,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         timestampStr = getCurrentTime(ctx);
     }
 
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc, true);
     if (result == REDISMODULE_OK) {
         RedisModule_Replicate(ctx, "TS.ADD", "sss", keyName, timestampStr, valueStr);
     }
@@ -676,6 +701,7 @@ int CreateTsKey(RedisModuleCtx *ctx,
 }
 
 int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 2) {
@@ -709,6 +735,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 2) {
@@ -763,6 +790,7 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 TS.DELETERULE SOURCE_KEY DEST_KEY
  */
 int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc != 3) {
@@ -814,6 +842,7 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
 */
 int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc != 6 && argc != 7) {
@@ -906,6 +935,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 TS.INCRBY ts_key NUMBER [TIMESTAMP timestamp]
 */
 int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 3) {
@@ -970,6 +1000,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc < 2 || argc > 3) {
@@ -1012,6 +1043,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     if (IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
@@ -1136,6 +1168,7 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
 }
 
 int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     RedisModule_AutoMemory(ctx);
 
     if (argc != 4) {
@@ -1369,6 +1402,7 @@ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY
 "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
 */
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    Unset_ErrorFlag();
     if (RedisModule_Init(ctx, "timeseries", REDISTIMESERIES_MODULE_VERSION, REDISMODULE_APIVER_1) ==
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
