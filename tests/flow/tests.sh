@@ -113,6 +113,17 @@ run_tests() {
 				$VALGRIND_ARGS
 
 				EOF
+			
+			cat <<-EOF > $rltest_config
+				--clear-logs
+				--oss-redis-path=$REDIS_SERVER
+				--module $MODULE
+				--module-args '$MODARGS -f test_ts_password.py \"password\" --oss_password \"password\"'
+				$RLTEST_ARGS
+				$VALGRIND_ARGS
+
+				EOF
+			
 		else
 			cat <<-EOF > $rltest_config
 				--clear-logs
