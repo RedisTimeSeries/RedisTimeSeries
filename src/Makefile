@@ -129,7 +129,7 @@ LD_LIBS += -lssl -lcrypto
 endif
 
 ifeq ($(OS),macos)
-LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
+LD_LIBS += -L$(openssl_prefix)/lib -lssl -lcrypto
 SO_LD_FLAGS += -undefined dynamic_lookup $(LD_FLAGS)
 DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
