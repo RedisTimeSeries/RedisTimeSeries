@@ -721,7 +721,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
     while (enrichedChunk) {
         // currently if the query reversed the chunk will be already revered here
-        assert(self->reverse == enrichedChunk->rev);
+        assert(self->reverse == enrichedChunk->rev || enrichedChunk->samples.num_samples == 0);
         Samples *samples = &enrichedChunk->samples;
         if (self->aggregation->type == TS_AGG_MAX &&
             !is_reversed) { // Currently only implemented vectorization for specific case
