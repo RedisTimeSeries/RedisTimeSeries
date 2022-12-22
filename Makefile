@@ -5,10 +5,6 @@ ROOT=.
 
 MK_ALL_TARGETS=bindirs deps build package
 
-ifeq ($(wildcard $(ROOT)/deps/readies/*),)
-___:=$(shell git submodule update --init --recursive &> /dev/null)
-endif
-
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
@@ -62,6 +58,9 @@ unit_tests:
 flow_tests:
 	@$(MAKE) -C src flow_tests
 
+clean-tests:
+	@$(MAKE) -C src clean-tests
+
 coverage:
 	@$(MAKE) -C src coverage
 
@@ -85,6 +84,3 @@ benchmark:
 
 docker:
 	@$(MAKE) -C src docker
-
-# deploy:
-#	@make -C src deploy
