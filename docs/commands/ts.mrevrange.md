@@ -50,7 +50,7 @@ uses these filters:
 <note><b>Notes:</b> 
    - At least one `label=value` filter is required.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
-   - Don't use whitespaces between the label, the equal sign, and the value.
+   - Don't use whitespaces in the filter expression.
    </note>
 
 ## Optional arguments
