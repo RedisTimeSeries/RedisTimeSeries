@@ -108,7 +108,7 @@ Values include:
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary>
 
-Per time series, aggregates samples into time buckets, where:
+per time series, aggregates samples into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
@@ -167,12 +167,13 @@ Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is report
 <details open>
 <summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
 
-aggregates results across different time series, grouped by the provided label name. 
-When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+splits time series into groups, each group contains time series that share the same value for the provided label name, then aggregates results in each group.
 
-  - `label` is label name to group a series by. A new series for each value is produced.
+When combined with `AGGREGATION` the `GROUPBY`/`REDUCE` is applied post aggregation stage.
 
-  - `reducer` is reducer type used to aggregate series that share the same label value.
+  - `label` is label name. A group is created for all time series that share the same value for this label.
+
+  - `reducer` is an aggregation type used to aggregate the results in each group.
 
     | `reducer` | Description                         |
     | --------- | ----------------------------------- |
@@ -188,7 +189,7 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
     | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
 
 <note><b>Notes:</b> 
-  - The produced time series is named `<label>=<groupbyvalue>`
+  - The produced time series is named `<label>=<value>`
   - The produced time series contains two labels with these label array structures:
     - `reducer`, the reducer used
     - `source`, the time series keys used to compute the grouped series (`key1,key2,key3,...`)
