@@ -48,7 +48,7 @@ uses these filters:
 </details>
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label=value` filter.
+   - At least one `label=value` filter is requireed.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    - Don't use whitespaces between the label, the equal sign, and the value.
    </note>
