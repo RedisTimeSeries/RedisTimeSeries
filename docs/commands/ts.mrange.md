@@ -188,8 +188,8 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
 <note><b>Notes:</b> 
   - The produced time series is named `<label>=<groupbyvalue>`
   - The produced time series contains two labels with these label array structures:
-    - `reducer`, the reducer used
-    - `source`, the time series keys used to compute the grouped series (`key1,key2,key3,...`)
+    - `__reducer__`, the reducer used (e.g., `"count"`)
+    - `__source__`, the list of time series keys used to compute the grouped series (e.g., `"key1,key2,key3"`)
 </note>
 </details>
 
