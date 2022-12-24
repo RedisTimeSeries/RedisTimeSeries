@@ -119,7 +119,7 @@ per time series, aggregates samples into time buckets, where:
     | `sum`        | Sum of all values                                                              |
     | `min`        | Minimum value                                                                  |
     | `max`        | Maximum value                                                                  |
-    | `range`      | Difference between the maximum and the minimum value                           |
+    | `range`      | Difference between maximum value and minimum value                             |
     | `count`      | Number of values                                                               |
     | `first`      | Value with lowest timestamp in the bucket                                      |
     | `last`       | Value with highest timestamp in the bucket                                     |
@@ -176,18 +176,18 @@ When combined with `AGGREGATION` the `GROUPBY`/`REDUCE` is applied post aggregat
 
   - `reducer` is an aggregation type used to aggregate the results in each group.
 
-    | `reducer` | Description                         |
-    | --------- | ----------------------------------- |
-    | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)  |
-    | `sum`     | per label value: sum of all values  |
-    | `min`     | per label value: minimum value      |
-    | `max`     | per label value: maximum value      |
-    | `range` &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
-    | `count`   | per label value: number of values (since RedisTimeSeries v1.8) |
-    | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8) |
-    | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8) |
-    | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8) |
-    | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
+    | `reducer` | Description                                                                                     |
+    | --------- | ----------------------------------------------------------------------------------------------- |
+    | `avg`     | Arithmetic mean of all non-NaN values (since RedisTimeSeries v1.8)                              |
+    | `sum`     | Sum of all non-NaN values                                                                       |
+    | `min`     | Minimum non-NaN value                                                                           |
+    | `max`     | Maximum non-NaN value                                                                           |
+    | `range`   | Difference between maximum non-NaN value and minimum non-NaN value (since RedisTimeSeries v1.8) |
+    | `count`   | Number of non-NaN values (since RedisTimeSeries v1.8)                                           |
+    | `std.p`   | Population standard deviation of all non-NaN values (since RedisTimeSeries v1.8)                |
+    | `std.s`   | Sample standard deviation of all non-NaN values (since RedisTimeSeries v1.8)                    |
+    | `var.p`   | Population variance of all non-NaN values (since RedisTimeSeries v1.8)                          |
+    | `var.s`   | Sample variance of all non-NaN values (since RedisTimeSeries v1.8)                              |
 
 <note><b>Notes:</b> 
   - The produced time series is named `<label>=<value>`
