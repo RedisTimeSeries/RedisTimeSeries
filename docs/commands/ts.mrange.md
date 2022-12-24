@@ -47,7 +47,7 @@ filters time series based on their labels and label values, with these options:
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label=value` filter.
+   - At least one `label=value` filter is required.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    - Don't use whitespaces between the label, the equal sign, and the value.   
    </note>
