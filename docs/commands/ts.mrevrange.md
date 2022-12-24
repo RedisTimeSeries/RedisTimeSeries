@@ -9,6 +9,7 @@ syntax: |
     [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
     FILTER filter..
     [GROUPBY label REDUCE reducer]
+
 ---
 
 Query a range across multiple time series by filters in reverse direction
@@ -32,7 +33,7 @@ is end timestamp for the range query (integer UNIX timestamp in milliseconds) or
 <details open>
 <summary><code>FILTER filter..</code></summary> 
 
-uses these filters:
+filters time series based on their labels and label values, with these options:
 
   - `label=value`, where `label` equals `value`
   - `label!=value`, where `label` does not equal `value`
@@ -40,12 +41,12 @@ uses these filters:
   - `label!=`, where `key` has label `label`
   - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
-</details>
 
 <note><b>Notes:</b> 
    - When using filters, apply a minimum of one `label=value` filter.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
    </note>
+</details>
 
 ## Optional arguments
 
@@ -107,7 +108,7 @@ Values include:
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary> 
 
-Per time series, aggregates samples into time buckets, where:
+per time series, aggregates samples into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
@@ -166,13 +167,13 @@ Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is report
 <details open>
 <summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
 
-aggregates results across different time series, grouped by the provided label name. 
-When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+splits time series into groups, each group contains time series that share the same value for the provided label name, then aggregates results in each group.
 
-  - `label` is label name to group a series by. A new series for each value is produced.
+When combined with `AGGREGATION` the `GROUPBY`/`REDUCE` is applied post aggregation stage.
 
-  - `reducer` is reducer type used to aggregate series that share the same label value.
+  - `label` is label name. A group is created for all time series that share the same value for this label.
 
+  - `reducer` is an aggregation type used to aggregate the results in each group.
 
     | `reducer` | Description                         |
     | --------- | ----------------------------------- |
@@ -180,7 +181,7 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
     | `sum`     | per label value: sum of all values  |
     | `min`     | per label value: minimum value      |
     | `max`     | per label value: maximum value      |
-    | `range` &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp;  | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
+    | `range` &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
     | `count`   | per label value: number of values (since RedisTimeSeries v1.8) |
     | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8) |
     | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8) |
@@ -188,7 +189,7 @@ When combined with `AGGREGATION` the groupby/reduce is applied post aggregation 
     | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
 
 <note><b>Notes:</b> 
-  - The produced time series is named `<label>=<groupbyvalue>`
+  - The produced time series is named `<label>=<value>`
   - The produced time series contains two labels with these label array structures:
     - `reducer`, the reducer used
     - `source`, the time series keys used to compute the grouped series (`key1,key2,key3,...`)
