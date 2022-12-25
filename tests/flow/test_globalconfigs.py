@@ -207,4 +207,4 @@ def test_negative_configuration():
         env = Env(moduleArgs='CHUNK_TYPE compressed; CHUNK_SIZE_BYTES')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_TYPE compressed; PASSWORD')
+        env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')
