@@ -65,15 +65,16 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc > 1 && RMUtil_ArgIndex("PASSWORD", argv, argc) >= 0) {
         RedisModuleString *password;
         size_t len;
-        if (RMUtil_ParseArgsAfter(
-                "PASSWORD", argv, argc, "s", &password) !=
-            REDISMODULE_OK) {
+        if (RMUtil_ParseArgsAfter("PASSWORD", argv, argc, "s", &password) != REDISMODULE_OK) {
             RedisModule_Log(ctx, "warning", "Unable to parse argument after PASSWORD");
             return TSDB_ERROR;
         }
 
         TSGlobalConfig.password = RedisModule_StringPtrLen(password, &len);
         RedisModule_Log(ctx, "notice", "loaded tls password");
+        TSGlobalConfig.hasGlobalConfig = TRUE;
+    } else {
+        TSGlobalConfig.password = NULL;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {

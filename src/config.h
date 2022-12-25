@@ -22,7 +22,7 @@ typedef struct
     DuplicatePolicy duplicatePolicy;
     long long numThreads;   // number of threads used by libMR
     bool forceSaveCrossRef; // Internal debug configuration param
-    const char *password;         // tls password which used by libmr
+    char *password;         // tls password which used by libmr
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

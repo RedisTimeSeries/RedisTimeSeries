@@ -55,19 +55,24 @@ CC_FLAGS += \
 	-fPIC \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
-	-DREDISMODULE_EXPERIMENTAL_API \
-	-DMODULE_NAME=$(MODULE_NAME) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
-	-I$(ROOT)/deps/LibMR/deps/hiredis \
-	-I$(ROOT)/deps/LibMR/deps/hiredis/adapters \
-	-I$(ROOT)/deps/LibMR/deps/libevent/include \
-	-I$(LIBEVENT_BINDIR)/include \
 	$(CC_FLAGS.coverage)
 
+define CC_DEFS +=
+	REDISMODULE_EXPERIMENTAL_API
+	MODULE_NAME=$(MODULE_NAME)
+endef
+
+define CC_INCLUDES +=
+	$(SRCDIR)
+	$(BINDIR)
+	$(ROOT)/deps/LibMR/deps/hiredis
+	$(ROOT)/deps/LibMR/deps/hiredis/adapters
+	$(ROOT)/deps/LibMR/deps/libevent/include
+	$(LIBEVENT_BINDIR)/include
+endef
+
 ifeq ($(SSL),1)
-CC_FLAGS += \
-	-I$(LIBSSL_PREFIX)/include
+CC_INCLUDES += $(openssl_prefix)/include
 endif
 
 ifeq ($(DEBUG),1)
