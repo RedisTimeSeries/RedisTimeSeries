@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.QUERYINDEX filter...
+  TS.QUERYINDEX filterExpr...
 
 ---
 
@@ -11,7 +11,7 @@ Get all time series keys matching a filter list
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filter...</code></summary>
+<summary><code>FILTER filterExpr...</code></summary>
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value`, where `label` equals `value`
