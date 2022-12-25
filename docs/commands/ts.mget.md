@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
+  TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filterExpr...
 
 ---
 
@@ -11,7 +11,7 @@ Get the last samples matching a specific filter
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filter...</code></summary> 
+<summary><code>FILTER filterExpr...</code></summary> 
 
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
