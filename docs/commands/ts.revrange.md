@@ -78,7 +78,7 @@ Values include:
 
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary>
-aggregates results into time buckets, where:
+aggregates samples into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
@@ -88,7 +88,7 @@ aggregates results into time buckets, where:
     | `sum`        | Sum of all values                                                              |
     | `min`        | Minimum value                                                                  |
     | `max`        | Maximum value                                                                  |
-    | `range`      | Difference between the highest and the lowest value                            |
+    | `range`      | Difference between the maximum and the minimum value                           |
     | `count`      | Number of values                                                               |
     | `first`      | Value with lowest timestamp in the bucket                                      |
     | `last`       | Value with highest timestamp in the bucket                                     |
