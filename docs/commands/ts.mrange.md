@@ -7,7 +7,7 @@ syntax: |
     [WITHLABELS | SELECTED_LABELS label...]
     [COUNT count]
     [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-    FILTER filter..
+    FILTER filterExpr...
     [GROUPBY label REDUCE reducer]
 
 ---
@@ -21,25 +21,25 @@ Query a range across multiple time series by filters in forward direction
 <details open>
 <summary><code>fromTimestamp</code></summary>
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary>
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
-<summary><code>FILTER filter..</code></summary>
+<summary><code>FILTER filterExpr...</code></summary>
 
-filters time series based on their labels and label values, with these options:
+filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value`, where `label` equals `value`
   - `label!=value`, where `label` does not equal `value`
   - `label=`, where `key` does not have label `label`
   - `label!=`, where `key` has label `label`
-  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
 <note><b>Notes:</b> 
