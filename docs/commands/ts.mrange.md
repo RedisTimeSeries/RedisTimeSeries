@@ -21,13 +21,13 @@ Query a range across multiple time series by filters in forward direction
 <details open>
 <summary><code>fromTimestamp</code></summary>
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filter...`
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filter...`.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary>
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filter...`
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filter...`.
 </details>
 
 <details open>
