@@ -43,7 +43,7 @@ filters time series based on their labels and label values, with these options:
   - `label!=value`, where `label` does not equal `value`
   - `label=`, where `key` does not have label `label`
   - `label!=`, where `key` has label `label`
-  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
 <note><b>Notes:</b> 
