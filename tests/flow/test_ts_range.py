@@ -1465,3 +1465,22 @@ def test_latest_flag_revrange():
         assert res == [[0, '4']] or res == [[0, b'4']]
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+# issue: #1370
+def test_multi_chunk_revrange():
+    env = Env(decodeResponses=True)
+    t1 = 't1{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
+        n_samples = 10000
+
+        # Fill 1 chunks
+        for i in range(1, 103):
+            assert r.execute_command('TS.ADD', t1, i, i)
+
+        # fill 2 chunks
+        for i in range(120, 220):
+            assert r.execute_command('TS.ADD', t1, i, i)
+
+        res = r.execute_command('TS.revrange', t1, 110, 215, 'AGGREGATION', 'count', 2*n_samples)
+        assert res == [[0, '96']] or res == [[0, b'96']]
