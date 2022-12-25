@@ -1066,7 +1066,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1310,7 +1310,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1425,7 +1425,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1482,7 +1482,7 @@
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "type": "oneof",
                 "arguments": [
                     {
