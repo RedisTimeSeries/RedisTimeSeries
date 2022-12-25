@@ -62,11 +62,12 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("PASSWORD", argv, argc) >= 0) {
+    if (argc > 1 && RMUtil_ArgIndex("OSS_GLOBAL_PASSWORD", argv, argc) >= 0) {
         RedisModuleString *password;
         size_t len;
-        if (RMUtil_ParseArgsAfter("PASSWORD", argv, argc, "s", &password) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after PASSWORD");
+        if (RMUtil_ParseArgsAfter("OSS_GLOBAL_PASSWORD", argv, argc, "s", &password) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after OSS_GLOBAL_PASSWORD");
             return TSDB_ERROR;
         }
 
