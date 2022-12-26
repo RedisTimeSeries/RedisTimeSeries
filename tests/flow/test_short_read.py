@@ -354,7 +354,7 @@ class Debug:
         env.debugPrint(name + ': %d out of %d \n%s' % (self.dbg_ndx, total_len, self.dbg_str))
 
 def test_ShortRead():
-    env.skip()
+    env = Env(decodeResponses=True)
     env.skipOnCluster()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnVersionSmaller("6.2.0")
@@ -369,7 +369,6 @@ def test_ShortRead():
     if OS == 'macos':
         env.skip()
 
-    env = Env(decodeResponses=True)
     env.execute_command('FLUSHALL')
     create_timeseries(env, False)
     create_rdb(env, "timeseries_short_read_local.rdb")
