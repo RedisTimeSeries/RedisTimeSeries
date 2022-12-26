@@ -232,7 +232,7 @@ E=0
 [[ $GEN == 1 ]]    && { (run_tests "general tests"); (( E |= $? )); } || true
 [[ $SLAVES == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "tests with slaves"); (( E |= $? )); } || true
 [[ $AOF == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "tests with AOF"); (( E |= $? )); } || true
-[[ $AOF_SLAVES == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
+[[ $AOF_SLAVES == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 if [[ $OSS_CLUSTER == 1 ]]; then
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
 		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
