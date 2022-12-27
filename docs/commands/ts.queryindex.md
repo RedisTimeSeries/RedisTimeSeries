@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.QUERYINDEX filter...
+  TS.QUERYINDEX filterExpr...
 
 ---
 
@@ -11,22 +11,24 @@ Get all time series keys matching a filter list
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filter..</code></summary>
-filters time series based on their labels and label values, with these options:
+<summary><code>FILTER filterExpr...</code></summary>
+filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value`, where `label` equals `value`
   - `label!=value`, where `label` does not equal `value`
   - `label=`, where `key` does not have label `label`
   - `label!=`, where `key` has label `label`
-  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
 
-<note><b>Notes:</b>
- - When using filters, apply a minimum of one `label=value` filter. 
- - `QUERYINDEX` cannot be part of a transaction that runs on a Redis cluster.
- - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
- </note>
- </details>
+  <note><b>Notes:</b>
+   - At least one `label=value` filter is required.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
+   - Don't use whitespaces in the filter expression.
+   </note>
+</details>
+
+<note><b>Note:</b> The `QUERYINDEX` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Examples
 
@@ -65,7 +67,7 @@ To retrieve the keys of all time series representing sensors that measure temper
 
 ## See also
 
-`TS.CREATE` | `TS.MRANGE` | `TS.MREVRANGE` | `MGET`
+`TS.CREATE` | `TS.MRANGE` | `TS.MREVRANGE` | `TS.MGET`
 
 ## Related topics
 
