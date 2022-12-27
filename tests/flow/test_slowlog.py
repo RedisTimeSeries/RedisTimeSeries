@@ -12,7 +12,7 @@ def test_ts_slowlog():
     env = Env()
     if env.shardsCount < 3:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     slowlog_threshold = []
     for shard in range(0, env.shardsCount):
