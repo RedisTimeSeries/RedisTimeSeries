@@ -373,7 +373,7 @@ def test_ShortRead():
     create_timeseries(env, False)
     create_rdb(env, "timeseries_short_read_local.rdb")
 
-    env.envRunner.setTerminateRetries(retries=3, seconds=2)
+    # env.envRunner.setTerminateRetries(retries=3, seconds=2) #@@ TODO: enable with modern RLTest 
 
     seed = str(time.time())
     env.assertNotEqual(seed, None, message='random seed ' + seed)
