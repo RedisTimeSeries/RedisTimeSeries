@@ -119,6 +119,9 @@ def test_madd_some_failed_replicas():
     # getSlaveConnection is not supported in cluster mode
     Env().skipOnCluster()
     env =  Env(decodeResponses=False)
+    res = env.cmd('CONFIG', 'GET', 'appendfsync')
+    env.cmd('CONFIG', 'SET', 'appendfsync', 'always')
+
     with env.getClusterConnectionIfNeeded() as r:
         is_less_than_ver7 = is_redis_version_smaller_than(r, "7.0.0")
 
@@ -147,8 +150,16 @@ def test_madd_some_failed_replicas():
         if not is_less_than_ver7:
             path = path + ".1.incr.aof"
         cmds = aof_parser.parse_file(path)
-        cmds = filter(lambda c: c[0].lower().startswith('ts.'), cmds)
-        env.assertEqual(list(cmds),
-                        [['ts.create', 'test_key1', 'DUPLICATE_POLICY', 'block'],
-                         ['TS.MADD', 'test_key1', '123', '11', 'test_key1', '124', '12'],
-                         ['TS.MADD', 'test_key1', '122', '11', 'test_key1', '125', '12']])
+        cmds_filtered = filter(lambda c: c[0].lower().startswith('ts.'), cmds)
+        try:
+            env.assertEqual(list(cmds_filtered),
+                            [['ts.create', 'test_key1', 'DUPLICATE_POLICY', 'block'],
+                            ['TS.MADD', 'test_key1', '123', '11', 'test_key1', '124', '12'],
+                            ['TS.MADD', 'test_key1', '122', '11', 'test_key1', '125', '12']])
+        except Exception:
+            print(cmds)
+            print(cmds_filtered)
+            raise
+
+    # rollback the config change
+    env.cmd('CONFIG', 'SET', 'appendfsync', res[1])

@@ -537,13 +537,8 @@ static inline int add(RedisModuleCtx *ctx,
 
     long long timestampValue;
     if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
-        // if timestamp is "*", take current time (automatic timestamp)
-        if (RMUtil_StringEqualsC(timestampStr, "*")) {
-            timestampValue = RedisModule_Milliseconds();
-        } else {
-            RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
-            return REDISMODULE_ERR;
-        }
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+        return REDISMODULE_ERR;
     }
 
     if (timestampValue < 0) {
@@ -580,12 +575,20 @@ static inline int add(RedisModuleCtx *ctx,
     return rv;
 }
 
+static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
+    char curTimeStr[sizeof(timestamp_t) * 8 + 1];
+    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
+    return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
+}
+
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4 || (argc - 1) % 3 != 0) {
         return RedisModule_WrongArity(ctx);
     }
+
+    RedisModuleString *curTimeStr = NULL;
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
     RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
@@ -594,6 +597,15 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
         RedisModuleString *valueStr = argv[i + 2];
+
+        if (RMUtil_StringEqualsC(timestampStr, "*")) {
+            // if timestamp is "*", take current time (automatic timestamp)
+            if (!curTimeStr) {
+                curTimeStr = getCurrentTime(ctx);
+            }
+            timestampStr = curTimeStr;
+        }
+
         if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
             replication_data[replication_count] = keyName;
             replication_data[replication_count + 1] = timestampStr;
@@ -628,9 +640,14 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *timestampStr = argv[2];
     RedisModuleString *valueStr = argv[3];
 
+    if (RMUtil_StringEqualsC(timestampStr, "*")) {
+        // if timestamp is "*", take current time (automatic timestamp)
+        timestampStr = getCurrentTime(ctx);
+    }
+
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
-        RedisModule_ReplicateVerbatim(ctx);
+        RedisModule_Replicate(ctx, "TS.ADD", "sss", keyName, timestampStr, valueStr);
     }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
