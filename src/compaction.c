@@ -667,10 +667,15 @@ void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveDouble(io, context->minValue);
 }
 
-int MaxMinReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
+int MaxMinReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     context->maxValue = LoadDouble_IOError(io, goto err);
     context->minValue = LoadDouble_IOError(io, goto err);
+    if (encver < TS_OVERFLOW_RDB_VER) {
+        size_t len = 1;
+        char *sb = LoadStringBuffer_IOError(io, &len, goto err);
+        RedisModule_Free(sb);
+    }
     return TSDB_OK;
 err:
     return TSDB_ERROR;

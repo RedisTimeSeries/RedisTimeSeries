@@ -41,6 +41,7 @@ The following table summerizes which configuration parameters can be set at modu
 | [CHUNK_TYPE](#chunk_type)               | :white_check_mark: | :white_large_square: |
 
 ### NUM_THREADS
+
 The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
 
 #### Default
@@ -56,6 +57,8 @@ $ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
 ### COMPACTION_POLICY
 
 Default compaction rules for newly created key with `TS.ADD`.
+
+Note that `COMPACTION_POLICY` has no effect on keys created with `TS.CREATE`. To understand the motivation for this behavior, consider the following scenario: Suppose a `COMPACTION_POLICY` is defined, but then one wants to manually create an additional compaction rule (using `TS.CREATERULE`) which requires first creating an empty destination key (using `TS.CREATE`). But now there is a problem: due to the `COMPACTION_POLICY`, automatic compactions would be undesirably created for that destination key.
 
 Each rule is separated by a semicolon (`;`), the rule consists of multiple fields that are separated by a colon (`:`):
 
@@ -76,25 +79,35 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   | `var.s`    | sample variance of the values                                    |
   | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
 
-* Duration of each time bucket - number and the time representation (Example for 1 minute: 1M)
+* Duration of each time bucket - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
     * m - millisecond
-    * M - minute
     * s - seconds
+    * M - minute
+    * h - hour
     * d - day
 
-* Retention time - in milliseconds
+* Retention time - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
+
+    * m - millisecond
+    * s - seconds
+    * M - minute
+    * h - hour
+    * d - day
+    
+  `0m`, `0s`, `0M`, `0h`, or `0d` means no expiration.
 
 * (since RedisTimeSeries v1.8):
 
-  Optional: Time bucket alignment - number and the time representation (Example for 1 minute: 1M)
+  Optional: Time bucket alignment - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
     * m - millisecond
-    * M - minute
     * s - seconds
+    * M - minute
+    * h - hour
     * d - day
 
-  Assure that there is a bucket that starts at exactly _alignTimestamp_ and align all other buckets accordingly. Units: milliseconds. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours (24 * 3600 * 1000), setting _alignTimestamp_ to 6 hours after the epoch (6 * 3600 * 1000) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
+  Assure that there is a bucket that starts at exactly _alignTimestamp_ after the epoch and align all other buckets accordingly. Default value: 0 (aligned with the epoch). Example: if _bucketDuration_ is 24 hours, setting _alignTimestamp_ to `6h` (6 hours after the Epoch) will ensure that each bucket’s timeframe is [06:00 .. 06:00).
   
 When a compaction policy is defined, compaction rules will be created automatically for newly created time series, and their key would be set to:
   
@@ -108,8 +121,8 @@ When a compaction policy is defined, compaction rules will be created automatica
 
 Examples:
 
-- `max:1M:1h` - Aggregate using max over one minute and retain the last hour
-- `twa:1d:0:360M` - Aggregate daily [06:00 .. 06:00) using time-weighted average; no expiration
+- `max:1M:1h` - Aggregate using `max` over one minute and retain the last hour
+- `twa:1d:0m:360M` - Aggregate daily [06:00 .. 06:00) using `twa`; no expiration
 
 #### Default
 
@@ -118,13 +131,18 @@ No compaction rules.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10ms;avg:2h:10d;avg:3d:100d
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10m;avg:2h:10d;avg:3d:100d
 ```
 
 ### RETENTION_POLICY
 
-Maximum age for samples compared to last event time (in milliseconds) per key, this configuration will set
-the default retention for newly created keys that do not have a an override.
+Default retention period, in milliseconds, for newly created keys.
+
+Retention period is the maximum age of samples compared to highest reported timestamp, per key. Samples are expired based solely on the difference between their timestamp and the timestamps passed to subsequent `TS.ADD`, `TS.MADD`, `TS.INCRBY`, and `TS.DECRBY` calls.
+
+The value `0` means no expiration.
+
+When both `COMPACTION_POLICY` and `RETENTION_POLICY` are specified, the retention of newly created compactions is according to the retention time specified in `COMPACTION_POLICY`.
 
 #### Default
 
@@ -132,31 +150,36 @@ the default retention for newly created keys that do not have a an override.
 
 #### Example
 
+Setting the default retention to 300 days:
+
 ```
-$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
+$ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 25920000000
 ```
 
 ### DUPLICATE_POLICY
 
-Policy that will define handling of duplicate samples.
-The following are the possible policies:
+Is policy for handling insertion (`TS.ADD` and `TS.MADD`) of multiple samples with identical timestamps, with one of the following values:
 
-* `BLOCK` - an error will occur for any out of order sample
-* `FIRST` - ignore the new value
-* `LAST` - override with latest value
-* `MIN` - only override if the value is lower than the existing value
-* `MAX` - only override if the value is higher than the existing value
-* `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+  | policy     | description                                                      |
+  | ---------- | ---------------------------------------------------------------- |
+  | `BLOCK`    | ignore any newly reported value and reply with an error          |
+  | `FIRST`    | ignore any newly reported value                                  |
+  | `LAST`     | override with the newly reported value                           |
+  | `MIN`      | only override if the value is lower than the existing value      |
+  | `MAX`      | only override if the value is higher than the existing value     |
+  | `SUM`      | If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value. |
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
 
-1. TS.ADD input
-2. Key level policy
-3. Module configuration (AKA database-wide)
+1. `TS.ADD`'s `ON_DUPLICATE_policy` optional argument
+2. Key-level policy (as set with `TS.CREATE`'s and `TS.ALTER`'s `DUPLICATE_POLICY` optional argument)
+3. The `DUPLICATE_POLICY` module configuration parameter
+4. The default policy
 
-#### Default configuration
-The default policy for database-wide is `BLOCK`, new and pre-existing keys will conform to database-wide default policy.
+#### Default
+
+The default policy is `BLOCK`. Both new and pre-existing keys will conform to this default policy.
 
 #### Example
 
@@ -165,7 +188,9 @@ $ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```
 
 ### CHUNK_TYPE
+
 Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
+
 Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 
 

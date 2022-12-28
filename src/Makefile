@@ -59,10 +59,11 @@ make unit_tests    # run unit tests
 make flow_tests    # run tests
   TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
-  SIMPLE=1         # shortcut for GEN=1 AOF=0 SLAVES=0 OSS_CLUSTER=0
+  SIMPLE=1         # shortcut for GEN=1 AOF=0 SLAVES=0 AOF_SLAVES=0 OSS_CLUSTER=0
   GEN=1            # run general tests on a standalone Redis topology
   AOF=1            # run AOF persistency tests on a standalone Redis topology
   SLAVES=1         # run replication tests on standalone Redis topology
+  AOF_SLAVES=1     # run AND and replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
   SHARDS=num       # run OSS cluster with `num` shards (default: 3)
   RLEC=1           # flow tests on RLEC
@@ -93,105 +94,98 @@ SRCDIR=.
 
 TARGET=$(BINROOT)/redistimeseries.so
 
-CC_FLAGS = \
-	-I$(ROOT)/deps/RedisModulesSDK \
-	-I$(ROOT)/deps \
-	-I$(LIBEVENT_BINDIR)/include \
-	-Wall \
-	-fPIC \
-	-pedantic \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
-	-include $(SRCDIR)/common.h \
-	-DREDIS_MODULE_TARGET \
-	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
-	-DREDISMODULE_EXPERIMENTAL_API \
-	-g -ggdb
+define CC_INCLUDES +=
+	$(ROOT)/deps/RedisModulesSDK
+	$(ROOT)/deps
+	$(LIBEVENT_BINDIR)/include
+endef
 
-LD_FLAGS += -g -ggdb
-LD_LIBS += \
-	  $(LIBMR) \
-	  $(FAST_DOUBLE_PARSER_C) \
-	  $(DRAGONBOX) \
-	  $(LIBEVENT_LIBS) \
-	  $(HIREDIS) \
-	  $(RMUTIL) \
-	  $(CPU_FEATURES) \
+define CC_DEFS +=
+	REDIS_MODULE_TARGET
+	REDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\"
+	REDISMODULE_EXPERIMENTAL_API
+endef
+
+CC_PEDANTIC=1
+
+define _CC_FLAGS +=
+	-std=gnu11
+endef
+CC_FLAGS += $(call flaten,_CC_FLAGS)
+
+define _LD_LIBS +=
+	  $(LIBMR)
+	  $(FAST_DOUBLE_PARSER_C)
+	  $(DRAGONBOX)
+	  $(LIBEVENT_LIBS)
+	  $(HIREDIS)
+	  $(RMUTIL)
+	  $(CPU_FEATURES)
 	  -lm -lpthread -lstdc++
+endef
+LD_LIBS += $(call flatten,$(_LD_LIBS))
 
 ifeq ($(OS),linux)
 LD_LIBS += -lssl -lcrypto
-SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
 endif
 
 ifeq ($(OS),macos)
-CC_FLAGS += -I$(SDK_PREFIX)/usr/include
-LD_LIBS += -L$(LIBSSL_PREFIX)/lib -lssl -lcrypto
-SO_LD_FLAGS += -bundle -undefined dynamic_lookup $(LD_FLAGS)
+LD_LIBS += -L$(openssl_prefix)/lib -lssl -lcrypto
+SO_LD_FLAGS += -undefined dynamic_lookup $(LD_FLAGS)
 DYLIB_LD_FLAGS += -dynamiclib $(LD_FLAGS)
 endif
 
-ifeq ($(PROFILE),1)
-CC_FLAGS += -fno-omit-frame-pointer
-endif
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -O0 -DDEBUG -D_DEBUG
-LD_FLAGS += -g
-
 ifeq ($(VALGRIND),1)
-CC_FLAGS += -D_VALGRIND
-endif
-else ifeq ($(PROFILE),1)
-CC_FLAGS += -O2
-else
-CC_FLAGS += -O3
+CC_DEFS += _VALGRIND
 endif
 
-CC_FLAGS += $(CC_FLAGS.coverage)
-LD_FLAGS += $(LD_FLAGS.coverage)
-
-_SOURCES=\
-	chunk.c \
-	compaction.c \
-	compressed_chunk.c \
-	config.c \
-	endianconv.c \
-	filter_iterator.c \
-	generic_chunk.c \
-	gorilla.c \
-	indexer.c \
-	libmr_integration.c \
-	libmr_commands.c \
-	module.c \
-	parse_policies.c \
-	query_language.c \
-	reply.c \
-	rdb.c \
-	short_read.c \
-	resultset.c \
-	tsdb.c \
-	series_iterator.c \
-	utils/arch_features.c \
-	sample_iterator.c \
-	enriched_chunk.c \
-	utils/heap.c \
-	multiseries_sample_iterator.c \
-	multiseries_agg_dup_sample_iterator.c \
+define _SOURCES
+	chunk.c
+	compaction.c
+	compressed_chunk.c
+	config.c
+	endianconv.c
+	filter_iterator.c
+	generic_chunk.c
+	gorilla.c
+	indexer.c
+	libmr_integration.c
+	libmr_commands.c
+	module.c
+	parse_policies.c
+	query_language.c
+	reply.c
+	rdb.c
+	short_read.c
+	resultset.c
+	tsdb.c
+	series_iterator.c
+	utils/arch_features.c
+	sample_iterator.c
+	enriched_chunk.c
+	utils/heap.c
+	multiseries_sample_iterator.c
+	multiseries_agg_dup_sample_iterator.c
 	utils/blocked_client.c
-
+endef
 
 ifeq ($(ARCH),x64)
-_SOURCES_AVX512=compactions/compaction_avx512f.c
-_SOURCES_AVX2=compactions/compaction_avx2.c
-_SOURCES:=$(_SOURCES) $(_SOURCES_AVX512) $(_SOURCES_AVX2)
+define _SOURCES_AVX512
+	compactions/compaction_avx512f.c
+endef
+
+define _SOURCES_AVX2
+	compactions/compaction_avx2.c
+endef
+
+_SOURCES += $(_SOURCES_AVX512) $(_SOURCES_AVX2)
 endif
 
-SOURCES=$(addprefix $(SRCDIR)/,$(_SOURCES))
+SOURCES=$(addprefix $(SRCDIR)/,$(call flatten,$(_SOURCES)))
 HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
-CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES) $(TEST_SOURCES))
+CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
 include $(MK)/defs
 
@@ -346,9 +340,9 @@ $(REGULAR_OBJECTS) : $(BINDIR)/%.o : $(SRCDIR)/%.c
 
 $(TARGET): $(BIN_DIRS) $(MISSING_DEPS) $(OBJECTS)
 	@echo Linking $@...
-	$(SHOW)$(CC) $(SO_LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(SO_LD_FLAGS) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 ifeq ($(OS),macos)
-	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(DYLIB_LD_FLAGS) $(LD_FLAGS) -o $(patsubst %.so,%.dylib,$@) $(OBJECTS) $(LD_LIBS)
 endif
 
 #----------------------------------------------------------------------------------------------
@@ -371,7 +365,10 @@ format:
 
 test: unit_tests flow_tests
 
-.PHONY: test unit_tests flow_tests
+clean-tests:
+	$(SHOW)$(MAKE) -C $(ROOT)/tests/unit clean
+
+.PHONY: test unit_tests flow_tests clean-tests
 
 #----------------------------------------------------------------------------------------------
 
@@ -405,7 +402,7 @@ ifneq ($(RLEC),1)
 flow_tests: #$(TARGET)
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
-	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh

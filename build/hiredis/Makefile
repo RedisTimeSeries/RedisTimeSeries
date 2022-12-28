@@ -45,13 +45,14 @@ CC_FLAGS += \
 	-fPIC \
 	-std=gnu99 \
 	-MMD -MF $(@:.o=.d) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
 	$(CC_FLAGS.coverage)
 
+CC_INCLUDES += \
+	$(SRCDIR) \
+	$(BINDIR)
+
 ifeq ($(SSL),1)
-CC_FLAGS += \
-	-I$(LIBSSL_PREFIX)/include
+CC_INCLUDES += $(openssl_prefix)/include
 endif
 
 ifeq ($(DEBUG),1)

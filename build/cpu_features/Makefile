@@ -1,6 +1,8 @@
 
 ROOT=../..
 
+MK.cmake=1
+
 include $(ROOT)/deps/readies/mk/main
 
 #----------------------------------------------------------------------------------------------
@@ -29,25 +31,13 @@ TARGET=$(BINDIR)/libcpu_features.a
 
 #----------------------------------------------------------------------------------------------
 
-CMAKE_DIR=$(ROOT)/deps/cpu_features
+SRCDIR=$(ROOT)/deps/cpu_features
+CMAKE_TARGETS=cpu_features
+MK_CMAKE_FILES=$(SRCDIR)/CMakeLists.txt
 
-ifeq ($(DEBUG),1)
-CMAKE_BUILD_TYPE=DEBUG
-else
-CMAKE_BUILD_TYPE=RelWithDebInfo
-endif
-CMAKE_DEBUG=-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE)
-
-ifeq ($(WHY),1)
-CMAKE_WHY=--trace-expand > /tmp/cmake-why 2>&1
-endif
-
-CMAKE_FLAGS=\
-	-Wno-dev \
-	-DBUILD_TESTING=off \
-	-DCMAKE_POSITION_INDEPENDENT_CODE=on
-
-CMAKE_FLAGS += $(CMAKE_ARGS) $(CMAKE_DEBUG) $(CMAKE_STATIC) $(CMAKE_WHY)
+CMAKE_DEFS += \
+	BUILD_TESTING=off \
+	CMAKE_POSITION_INDEPENDENT_CODE=on
 
 #----------------------------------------------------------------------------------------------
 
@@ -61,28 +51,7 @@ all: bindirs $(TARGET)
 
 include $(MK)/rules
 
-ifeq ($(SLOW),1)
-MAKE_J=
-else
-MAKE_J:=-j$(shell nproc)
-endif
-
-$(BINDIR)/Makefile : $(CMAKE_DIR)/CMakeLists.txt
-ifeq ($(WHY),1)
-	@echo CMake log is in /tmp/cmake-why
-endif
-	$(SHOW)mkdir -p $(BINDIR)
-	$(SHOW)cd $(BINDIR) && cmake $(CMAKE_DIR) $(CMAKE_FLAGS)
-
-$(TARGET): $(BINDIR)/Makefile
-	@echo Building $(TARGET) ...
-ifneq ($(DRY_RUN),1)
-	$(SHOW)$(MAKE) -C $(BINDIR) $(MAKE_J) cpu_features
-else
-	@make -C $(BINDIR) $(MAKE_J) cpu_features
-endif
-
-.PHONY: build clean
+.PHONY: clean
 
 clean:
 ifeq ($(ALL),1)
