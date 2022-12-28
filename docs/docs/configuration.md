@@ -57,8 +57,6 @@ $ redis-server --loadmodule ./redistimeseries.so NUM_THREADS 3
 
 Default compaction rules for newly created key with `TS.ADD`.
 
-Note that `COMPACTION_POLICY` has no effect for keys created with `TS.CREATE`. To understand the motivation for this behavior consider the following scenario: Suppose a `COMPACTION_POLICY` is defined, but then one wants to manually create an additional compaction rule (using `TS.CREATERULE`) which require to first create an empty destination key (using `TS.CREATE`). But now these is a problem: due to the `COMPACTION_POLICY`, automatic compactions would be also created for that destination key.
-
 Each rule is separated by a semicolon (`;`), the rule consists of multiple fields that are separated by a colon (`:`):
 
 * Aggregation type: One of the following:
@@ -120,7 +118,7 @@ No compaction rules.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10m;avg:2h:10d;avg:3d:100d
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h;min:10s:5d:10d;last:5M:10ms;avg:2h:10d;avg:3d:100d
 ```
 
 ### RETENTION_POLICY
@@ -140,28 +138,25 @@ $ redis-server --loadmodule ./redistimeseries.so RETENTION_POLICY 20
 
 ### DUPLICATE_POLICY
 
-Is policy for handling insertion (`TS.ADD` and `TS.MADD`) of multiple samples with identical timestamps, with one of the following values:
+Policy that will define handling of duplicate samples.
+The following are the possible policies:
 
-  | policy     | description                                                      |
-  | ---------- | ---------------------------------------------------------------- |
-  | `BLOCK`    | ignore any newly reported value and reply with an error          |
-  | `FIRST`    | ignore any newly reported value                                  |
-  | `LAST`     | override with the newly reported value                           |
-  | `MIN`      | only override if the value is lower than the existing value      |
-  | `MAX`      | only override if the value is higher than the existing value     |
-  | `SUM`      | If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value. |
+* `BLOCK` - an error will occur for any out of order sample
+* `FIRST` - ignore the new value
+* `LAST` - override with latest value
+* `MIN` - only override if the value is lower than the existing value
+* `MAX` - only override if the value is higher than the existing value
+* `SUM` - If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
 
 #### Precedence order
 Since the duplication policy can be provided at different levels, the actual precedence of the used policy will be:
 
-1. `TS.ADD`'s `ON_DUPLICATE_policy` optional argument
-2. Key-level policy (as set with `TS.CREATE`'s and `TS.ALTER`'s `DUPLICATE_POLICY` optional argument)
-3. The `DUPLICATE_POLICY` module configuration parameter
-4. The default policy
+1. TS.ADD input
+2. Key level policy
+3. Module configuration (AKA database-wide)
 
-#### Default
-
-The default policy is `BLOCK`. Both new and pre-existing keys will conform to this default policy.
+#### Default configuration
+The default policy for database-wide is `BLOCK`, new and pre-existing keys will conform to database-wide default policy.
 
 #### Example
 
@@ -170,9 +165,7 @@ $ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```
 
 ### CHUNK_TYPE
-
 Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
-
 Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 
 
