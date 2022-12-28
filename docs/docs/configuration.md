@@ -209,7 +209,7 @@ $ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; EN
 
 ### CHUNK_SIZE_BYTES
 
-Default chunk size, in bytes, for newly created time series.
+Default initial allocation size, in bytes, for the data part of each new chunk, for newly created time series. Actual chunks may consume more memory.
 
 #### Default
 
