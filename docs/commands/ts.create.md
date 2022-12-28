@@ -49,7 +49,7 @@ When not specified, the option is set to `COMPRESSED`.
 
 is initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. Changing chunkSize (using `TS.ALTER`) does not affect existing chunks.
 
-Must be a multiple of 8 in the range [48 .. 1048576]. When not specified, it is set to 4096 bytes (a single memory page).
+Must be a multiple of 8 in the range [48 .. 1048576]. When not specified, it is set to the global [CHUNK_SIZE_BYTES](/docs/stack/timeseries/configuration/#chunk_size_bytes) configuration of the database, which by default is 4096 (a single memory page).
 
 Note: Before v1.6.10 no minimum was enforced. Between v1.6.10 and v1.6.17 and in v1.8.0 the minimum value was 128. Since v1.8.1 the minimum value is 48.
 
