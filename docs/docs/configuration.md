@@ -32,17 +32,19 @@ $ redis-server --loadmodule ./redistimeseries.so [OPT VAL]...
 
 The following table summerizes which configuration parameters can be set at module load-time and which can be set on run-time:
 
-| Configuration Parameter                 | Load-time          | Run-time             |
-| :-------                                | :-----             | :-----------         |
-| [NUM_THREADS](#num_threads)             | :white_check_mark: | :white_large_square: |
-| [COMPACTION_POLICY](#compaction_policy) | :white_check_mark: | :white_large_square: |
-| [RETENTION_POLICY](#retention_policy)   | :white_check_mark: | :white_large_square: |
-| [DUPLICATE_POLICY](#duplicate_policy)   | :white_check_mark: | :white_large_square: |
-| [CHUNK_TYPE](#chunk_type)               | :white_check_mark: | :white_large_square: |
+| Configuration Parameter                                                    | Load-time          | Run-time             |
+| :-------                                                                   | :-----             | :-----------         |
+| [NUM_THREADS](#num_threads) (since RedisTimeSeries v1.6)                   | :white_check_mark: | :white_large_square: |
+| [COMPACTION_POLICY](#compaction_policy)                                    | :white_check_mark: | :white_large_square: |
+| [RETENTION_POLICY](#retention_policy)                                      | :white_check_mark: | :white_large_square: |
+| [DUPLICATE_POLICY](#duplicate_policy)                                      | :white_check_mark: | :white_large_square: |
+| [ENCODING](#encoding) (since RedisTimeSeries v1.6)                         | :white_check_mark: | :white_large_square: |
+| [CHUNK_SIZE_BYTES](#chunk_size_bytes)                                      | :white_check_mark: | :white_large_square: |
+| [OSS_GLOBAL_PASSWORD](#oss_global_password) (since RedisTimeSeries v1.8.4) | :white_check_mark: | :white_large_square: |
 
 ### NUM_THREADS
 
-The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
+The maximal number of per-shard threads for cross-key queries when using cluster mode (TS.MRANGE, TS.MREVRANGE, TS.MGET, and TS.QUERYINDEX). The value must be equal to or greater than 1. Note that increasing this value may either increase or decrease the performance!
 
 #### Default
 
@@ -187,12 +189,13 @@ The default policy is `BLOCK`. Both new and pre-existing keys will conform to th
 $ redis-server --loadmodule ./redistimeseries.so DUPLICATE_POLICY LAST
 ```
 
-### CHUNK_TYPE
+### ENCODING
 
-Default chunk type for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
+Default chunk encoding for automatically created keys when [COMPACTION_POLICY](#COMPACTION_POLICY) is configured.
 
 Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 
+Note: Before RedisTimeSeries 1.6 this configuration parameter was named `CHUNK_TYPE`.
 
 #### Default
 
@@ -201,5 +204,33 @@ Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 #### Example
 
 ```
-$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_TYPE COMPRESSED
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; ENCODING COMPRESSED
+```
+
+### CHUNK_SIZE_BYTES
+
+Default initial allocation size, in bytes, for the data part of each new chunk, for newly created time series. Actual chunks may consume more memory.
+
+#### Default
+
+4096
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY max:1m:1h; CHUNK_SIZE_BYTES 2048
+```
+
+### OSS_GLOBAL_PASSWORD
+
+Global OSS cluster password used for connecting to other shards.
+
+#### Default
+
+Not set
+
+#### Example
+
+```
+$ redis-server --loadmodule ./redistimeseries.so OSS_GLOBAL_PASSWORD password
 ```

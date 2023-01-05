@@ -29,7 +29,7 @@ def testWithMultiExec(env):
     env = Env()
     if env.shardsCount < 2:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     with env.getConnection() as r:
         r.execute_command('multi', )
