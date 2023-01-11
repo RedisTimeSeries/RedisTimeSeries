@@ -34,7 +34,30 @@ def parse_timestamp(ts):
     date_time_obj = datetime.strptime(ts, '%Y-%m-%d')
     return calendar.timegm(date_time_obj.timetuple()) * 1000
 
+def create_compacted_key(redis, i, source, agg, bucket):
+    dest = '%s_%s_%s' % (source, agg, bucket)
+    redis.delete(dest)
+    redis.execute_command('ts.create', dest, 'RETENTION', 0, 'CHUNK_SIZE', 360,
+                          'LABELS', 'index', i, "aggregation", agg, "bucket", bucket)
+    redis.execute_command('ts.createrule', source, dest, 'AGGREGATION', agg, bucket, )
+
 def load_into_redis(redis_conn):
+    label = '1'
+    keyname = 't1'
+    redis_conn.execute_command('TS.CREATE', keyname, 'RETENTION', 0, 'CHUNK_SIZE', 360, 'LABELS', 'index', label)
+    create_compacted_key(redis_conn, label, keyname, 'avg', 10)
+    create_compacted_key(redis_conn, label, keyname, 'avg', 60)
+    create_compacted_key(redis_conn, label, keyname, 'count', 10)
+    create_compacted_key(redis_conn, label, keyname, 'max', 10)
+    create_compacted_key(redis_conn, label, keyname, 'min', 10)
+    create_compacted_key(redis_conn, label, keyname, 'first', 10)
+    create_compacted_key(redis_conn, label, keyname, 'last', 10)
+    create_compacted_key(redis_conn, label, keyname, 'sum', 10)
+    create_compacted_key(redis_conn, label, keyname, 'range', 10)
+    create_compacted_key(redis_conn, label, keyname, 'std.p', 10)
+    create_compacted_key(redis_conn, label, keyname, 'std.s', 10)
+    create_compacted_key(redis_conn, label, keyname, 'var.s', 10)
+    create_compacted_key(redis_conn, label, keyname, 'var.p', 10)
     r = redis_conn.pipeline(transaction=False)
     count = 0
     for row in read_from_disk():
@@ -67,7 +90,7 @@ def load_into_redis(redis_conn):
         r.execute()
 
 
-def main(version):
+def main(version, i):
     if not os.path.exists(WORK_DIR):
         os.mkdir(WORK_DIR)
     elif os.path.exists(RDB_PATH):
@@ -76,7 +99,7 @@ def main(version):
     args = ['docker', 'run',
             '-p', '{}:{}'.format(PORT, PORT),
             '-v', '{}:{}'.format(WORK_DIR, WORK_DIR),
-            '--name', 'rdb_test',
+            '--name', 'rdb_test_{0}'.format(i),
             '--rm', 'redislabs/redistimeseries:{}'.format(version),
             'redis-server',
             '--port', str(PORT),
@@ -106,8 +129,13 @@ def main(version):
         shutil.copyfile(RDB_PATH, os.path.join('rdbs', "{}.rdb".format(version)))
 
     finally:
+        os.system("docker stop rdb_test_{0}".format(i))
         proc.send_signal(15)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    i = 0
+    for arg in sys.argv:
+        if i > 0:
+            main(arg, i)
+        i += 1

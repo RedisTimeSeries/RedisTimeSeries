@@ -86,6 +86,10 @@ def testRDBCompatibility():
             continue
 
         env.assertEqual(OLD_KEYS, KEYS)
+
+        if fileName < "1.4.4.rdb":
+            continue
+
         for key in OLD_KEYS:
             assert r.execute_command('ts.range', key, "-", "+") == TSRANGE_RESULTS[key]
             assert normalize_info(r.execute_command('ts.info', key)) == TSINFO_RESULTS[key]
