@@ -18,7 +18,14 @@ exporter:
       - "$.Tests.Overall.min_latency_ms"
       - '$."ALL STATS".*."Ops/sec"'
       - '$."ALL STATS".*."Latency"'
-
+  comparison:
+    metrics:
+      - "Ops/sec"
+      - "$.Tests.Overall.rps"
+      - "$.OverallRates.overallOpsRate"
+      - "$.Totals.overallQueryRates.all_queries"
+    mode: higher-better
+    baseline-branch: master
 clusterconfig:
   init_commands:
   - commands:

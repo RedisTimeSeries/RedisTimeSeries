@@ -35,7 +35,9 @@ SRCDIR=$(ROOT)/deps/cpu_features
 CMAKE_TARGETS=cpu_features
 MK_CMAKE_FILES=$(SRCDIR)/CMakeLists.txt
 
-CMAKE_FLAGS += -DBUILD_TESTING=off
+CMAKE_DEFS += \
+	BUILD_TESTING=off \
+	CMAKE_POSITION_INDEPENDENT_CODE=on
 
 #----------------------------------------------------------------------------------------------
 
