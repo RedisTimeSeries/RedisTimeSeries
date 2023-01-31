@@ -56,7 +56,7 @@ def testLibmrFail():
     env = Env()
     if env.shardsCount < 3:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnAOF()
@@ -96,7 +96,7 @@ def testLibmr_client_disconnect():
     env = Env()
     if env.shardsCount < 2:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnAOF()

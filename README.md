@@ -230,6 +230,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redis-time-series-rb-author]: https://github.com/dzunk
 [redis-time-series-rb-stars]: https://img.shields.io/github/stars/dzunk/redis-time-series.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
+[rustis-url]: https://github.com/dahomey-technologies/rustis
+[rustis-author]: https://github.com/dahomey-technologies
+[rustis-stars]: https://img.shields.io/github/stars/dahomey-technologies/rustis.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
 ## Tests
 
 The module includes a basic set of unit tests and integration tests.
