@@ -8,6 +8,11 @@ Eaden
 Grafana
 JRedisTimeSeries
 Jedis
+jedis
+npm
+nredisstack
+nuget
+pypi
 Milos
 NRedisTimeSeries
 Nikolovski
