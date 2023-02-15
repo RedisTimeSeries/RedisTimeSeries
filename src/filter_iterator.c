@@ -146,7 +146,8 @@ EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base
     if (self->tsFilterIndex == self->ByTsArgs.count) {
         return NULL;
     }
-    while ((enrichedChunk = self->base.input->GetNext(self->base.input))) {
+    while ((enrichedChunk = self->base.input->GetNext(self->base.input)) &&
+           enrichedChunk->samples.num_samples > 0) {
         assert(!enrichedChunk->rev); // the impl assumes that the chunk isn't reversed
         count = filterSamples(&enrichedChunk->samples,
                               self->ByTsArgs.values,
