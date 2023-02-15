@@ -33,6 +33,8 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'ENCODING', 'bad-encoding-type')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'DUPLICATE_POLICY', 'bla')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'label', 'DUPLICATE_POLICY', 'bla')
 
         # test for mem leak
         assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'key', 'val')
