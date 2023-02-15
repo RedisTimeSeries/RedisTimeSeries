@@ -641,6 +641,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(key);
+        if (cCtx.labelsCount > 0) {
+            FreeLabels(cCtx.labels, cCtx.labelsCount);
+        }
         return RTS_ReplyGeneralError(ctx, "TSDB: key already exists");
     }
 
