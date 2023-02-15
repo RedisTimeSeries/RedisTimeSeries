@@ -34,6 +34,12 @@ def test_create_params():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'invalid', 'LABELS', 'key', 'val', 'DUPLICATE_POLICY', 'bla')
 
+        # test for mem leak
+        assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'key', 'val')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'key', 'val')
+
+
         r.execute_command('TS.CREATE', 'a')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATE', 'a')  # filter exists
