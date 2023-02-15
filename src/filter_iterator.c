@@ -23,16 +23,16 @@ typedef struct dfs_stack_val
 {
     size_t si;
     size_t ei;
-    size_t values_si;
-    size_t values_ei;
+    size_t filter_si;
+    size_t filter_ei;
 } dfs_stack_val;
 
-#define dfs_stack_val_init(_val, _si, _ei, _values_si, _values_ei)                                 \
+#define dfs_stack_val_init(_val, _si, _ei, _filter_si, _filter_ei)                                 \
     do {                                                                                           \
         (_val).si = (_si);                                                                         \
         (_val).ei = (_ei);                                                                         \
-        (_val).values_si = (_values_si);                                                           \
-        (_val).values_ei = (_values_ei);                                                           \
+        (_val).filter_si = (_filter_si);                                                           \
+        (_val).filter_ei = (_filter_ei);                                                           \
     } while (0)
 
 static inline timestamp_t calc_bucket_ts(BucketTimestamp bucketTS,
@@ -52,15 +52,15 @@ static inline timestamp_t calc_bucket_ts(BucketTimestamp bucketTS,
 
 // returns the number of matches
 static size_t filterSamples(Samples *samples,
-                            const timestamp_t *tsVals,
-                            size_t values_si,
-                            size_t values_ei) {
+                            const timestamp_t *filter,
+                            size_t filter_si,
+                            size_t filter_ei) {
     size_t count = 0;
     size_t num_samples = samples->num_samples;
     dfs_stack_val *dfs_stack =
         array_new(dfs_stack_val, ceil(log(num_samples)) + 1); // + 1 is for one left child
     dfs_stack_val first_frame = {
-        .si = 0, .ei = num_samples - 1, .values_si = values_si, .values_ei = values_ei
+        .si = 0, .ei = num_samples - 1, .filter_si = filter_si, .filter_ei = filter_ei
     };
     dfs_stack_val left_frame, right_frame;
     array_append(dfs_stack, first_frame);
@@ -69,10 +69,10 @@ static size_t filterSamples(Samples *samples,
     while (array_len(dfs_stack) > 0) {
         cur_frame = array_pop(dfs_stack);
         if (cur_frame.si == cur_frame.ei) {
-            assert((num_samples <= 1) || cur_frame.values_ei == cur_frame.values_si);
-            for (size_t i = cur_frame.values_si; i <= cur_frame.values_ei; ++i) {
+            assert((num_samples <= 1) || cur_frame.filter_ei == cur_frame.filter_si);
+            for (size_t i = cur_frame.filter_si; i <= cur_frame.filter_ei; ++i) {
                 const timestamp_t sample_ts = samples->timestamps[cur_frame.si];
-                if (sample_ts == tsVals[i]) {
+                if (sample_ts == filter[i]) {
                     double value = samples->values[cur_frame.si];
                     samples->timestamps[count] = sample_ts;
                     samples->values[count] = value;
@@ -85,41 +85,43 @@ static size_t filterSamples(Samples *samples,
 
         const size_t mid = (cur_frame.si + cur_frame.ei) / 2;
 
-        // find tsVals that fit into left bucket
+        // find filter values that fit into left bucket
         found_left = false;
-        size_t _siVals = cur_frame.values_si, _eiVals;
+        size_t _filter_si = cur_frame.filter_si, _filter_ei;
 
-        while (_siVals <= cur_frame.values_ei &&
-               tsVals[_siVals] < samples->timestamps[cur_frame.si]) {
-            ++_siVals;
+        while (_filter_si <= cur_frame.filter_ei &&
+               filter[_filter_si] < samples->timestamps[cur_frame.si]) {
+            ++_filter_si;
         }
 
-        _eiVals = _siVals;
-        while (_eiVals <= cur_frame.values_ei && tsVals[_eiVals] <= samples->timestamps[mid]) {
+        _filter_ei = _filter_si;
+        while (_filter_ei <= cur_frame.filter_ei &&
+               filter[_filter_ei] <= samples->timestamps[mid]) {
             found_left = true;
-            ++_eiVals;
+            ++_filter_ei;
         }
 
         if (found_left) {
-            dfs_stack_val_init(left_frame, cur_frame.si, mid, _siVals, _eiVals - 1);
+            dfs_stack_val_init(left_frame, cur_frame.si, mid, _filter_si, _filter_ei - 1);
         }
 
-        // find tsVals that fit into right bucket
+        // find filter that fit into right bucket
         found_right = false;
-        _siVals = _eiVals;
-        while (_siVals <= cur_frame.values_ei && tsVals[_siVals] < samples->timestamps[mid + 1]) {
-            ++_siVals;
+        _filter_si = _filter_ei;
+        while (_filter_si <= cur_frame.filter_ei &&
+               filter[_filter_si] < samples->timestamps[mid + 1]) {
+            ++_filter_si;
         }
 
-        _eiVals = _siVals;
-        while (_eiVals <= cur_frame.values_ei &&
-               tsVals[_eiVals] <= samples->timestamps[cur_frame.ei]) {
+        _filter_ei = _filter_si;
+        while (_filter_ei <= cur_frame.filter_ei &&
+               filter[_filter_ei] <= samples->timestamps[cur_frame.ei]) {
             found_right = true;
-            ++_eiVals;
+            ++_filter_ei;
         }
 
         if (found_right) {
-            dfs_stack_val_init(right_frame, mid + 1, cur_frame.ei, _siVals, _eiVals - 1);
+            dfs_stack_val_init(right_frame, mid + 1, cur_frame.ei, _filter_si, _filter_ei - 1);
         }
 
         if (found_right) {
