@@ -90,6 +90,14 @@ def test_create_compaction_rule_own():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATERULE', key_name, key_name, 'AGGREGATION', 'MAX', 10)
 
+# test for mem leak
+def test_create_compaction_zero_bucket_size():
+    with Env().getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'key', 'val')
+        assert r.execute_command('TS.CREATE', 't2', 'LABELS', 'key', 'val')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            assert r.execute_command('TS.CREATERULE', 't1', 't2', 'AGGREGATION', 'sum', 0)
+
 
 def test_create_compaction_rule_and_del_dest_series():
     with Env().getClusterConnectionIfNeeded() as r:
