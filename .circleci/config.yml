@@ -325,7 +325,16 @@ commands:
               --push_results_redistimeseries \
               --allowed-envs << parameters.allowed_envs >> \
               --allowed-setups << parameters.allowed_setups >> || true
-
+      - run:
+          name: Generate Pull Request Performance info
+          command: |
+            if [[ -n ${CIRCLE_PULL_REQUEST##*/} ]]; then
+                redisbench-admin compare  \
+                  --defaults_filename ./tests/benchmarks/defaults.yml \
+                  --comparison-branch $CIRCLE_BRANCH \
+                  --auto-approve \
+                  --pull-request ${CIRCLE_PULL_REQUEST##*/}
+            fi
 #----------------------------------------------------------------------------------------------------------------------------------
 
 jobs:
