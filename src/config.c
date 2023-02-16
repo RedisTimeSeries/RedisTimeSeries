@@ -71,7 +71,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return TSDB_ERROR;
         }
 
-        TSGlobalConfig.password = RedisModule_StringPtrLen(password, &len);
+        TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
         RedisModule_Log(ctx, "notice", "loaded tls password");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
