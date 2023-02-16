@@ -14,5 +14,4 @@ PREVIEW_BRANCH=1.8
 
 ART_DIR=$(ROOT)/bin/artifacts
 
-export DOCKER_BUILDKIT=0
 include $(MK)/module.docker.rules
