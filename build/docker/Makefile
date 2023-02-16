@@ -1,10 +1,10 @@
 
 ROOT=../..
-MK.pyver:=3
 include $(ROOT)/deps/readies/mk/main
 
-REDIS_VERSION=6.2.7
 REPO=redistimeseries
+
+REDIS_VERSION=6.2.7
 
 OSNICK.official=bullseye
 
@@ -14,4 +14,5 @@ PREVIEW_BRANCH=1.8
 
 ART_DIR=$(ROOT)/bin/artifacts
 
+export DOCKER_BUILDKIT=0
 include $(MK)/module.docker.rules

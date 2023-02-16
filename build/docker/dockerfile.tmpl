@@ -15,12 +15,14 @@ ADD . /build
 
 RUN ./deps/readies/bin/getupdates
 RUN ./sbin/setup
-RUN make fetch
 RUN make build
 
 {% if PACK == "1" %}
 RUN mkdir -p bin/artifacts
 RUN make pack
+RUN set -e ;\
+    echo "Artifacts:" ;\
+    du -ah --apparent-size /build/bin/artifacts
 {% endif %}
 
 {% if TEST == "1" %}
