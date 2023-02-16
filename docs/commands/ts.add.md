@@ -65,7 +65,7 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
 </details>
 
-<details open><summary><code>ON_DUPLICATE_policy</code></summary> 
+<details open><summary><code>ON_DUPLICATE policy</code></summary> 
 
 is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps. It is used with one of the following values:
   - `BLOCK`: ignore any newly reported value and reply with an error
