@@ -19,7 +19,10 @@ on:
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
 
     strategy:
       fail-fast: false
@@ -58,11 +61,12 @@ jobs:
         # Prefix the list here with "+" to use these queries and those in the config file.
         # queries: ./path/to/local/query, your-org/your-repo/queries@main
 
-    - name: Build
+    - name: Setup
       run: |
         sudo ln -sf /usr/bin/gcc /usr/bin/gcc-5
         ./sbin/setup
-        bash -l -c "make build"
+    - name: Build
+      run: make
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
