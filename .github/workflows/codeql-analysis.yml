@@ -66,7 +66,9 @@ jobs:
         sudo ln -sf /usr/bin/gcc /usr/bin/gcc-5
         ./sbin/setup
     - name: Build
-      run: make SLOW=1
+      run: |
+        git submodule update --init --recursive
+        make SLOW=1
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
