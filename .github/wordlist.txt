@@ -52,3 +52,4 @@ timeseries
 twa
 virtualenv
 xyz
+rustis
