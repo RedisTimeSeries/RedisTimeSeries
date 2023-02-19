@@ -1,5 +1,14 @@
 version: 2.1
 
+parameters:
+  run_default_flow:
+    default: true
+    type: boolean
+
+  run_benchmark_flow_label:
+    default: false
+    type: boolean
+
 commands:
   early-returns:
     steps:
@@ -56,8 +65,16 @@ commands:
           name: Setup automation
           command: |
             git submodule update --init deps/readies
+            if [[ $(uname -s) == Darwin ]]; then rm -f /usr/local/bin/python3; fi
             ./deps/readies/bin/getpy3
+      - run:
+          name: Setup automation (2)
+          shell: /bin/bash -l -eo pipefail
+          no_output_timeout: 30m
+          command: |
             ./deps/readies/bin/getaws
+            ls -l /usr/local/bin/python* || true
+            echo "python3: $(command -v python3)"
             python3 --version
             python3 -m pip list
 
@@ -341,7 +358,7 @@ jobs:
 
   lint:
     docker:
-      - image: redislabsmodules/llvm-toolset:latest
+      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
     steps:
       - early-returns
       - checkout-all
@@ -401,7 +418,7 @@ jobs:
 
   build-macos:
     macos:
-      xcode: 11.7.0
+      xcode: 12.5.1
     resource_class: macos.x86.medium.gen2
     parameters:
       upload:
@@ -728,7 +745,6 @@ on-integ-branch: &on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - /^perf-.*$/
     tags:
       ignore: /.*/
 
@@ -739,7 +755,6 @@ on-integ-branch-cron: &on-integ-branch-cron
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - /^perf-.*$/
 
 not-on-integ-branch: &not-on-integ-branch
   filters:
@@ -748,7 +763,6 @@ not-on-integ-branch: &not-on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - /^perf-.*$/
     tags:
       ignore: /.*/
 
@@ -756,17 +770,6 @@ on-version-tags: &on-version-tags
   filters:
     branches:
       ignore: /.*/
-    tags:
-      only: /^v[0-9].*/
-
-on-perf-and-version-tags: &on-perf-and-version-tags
-  filters:
-    branches:
-      only:
-        - master
-        - /^\d+\.\d+.*$/
-        - /^feature-.*$/
-        - /^perf.*$/
     tags:
       only: /^v[0-9].*/
 
@@ -785,6 +788,8 @@ on-integ-and-version-tags: &on-integ-and-version-tags
 workflows:
   version: 2
   default-flow:
+    when:
+      << pipeline.parameters.run_default_flow >>
     jobs:
       - lint:
           <<: *on-any-branch
@@ -820,28 +825,28 @@ workflows:
           <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-standalone-scaling:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-cluster-query:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-cluster-ingestion:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-standalone-scaling-profiler:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-standalone-tsbs-profiler:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-cluster-profiler-query:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - performance-ci-automation-oss-cluster-profiler-ingestion:
           context: common
-          <<: *on-perf-and-version-tags
+          <<: *on-integ-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
           staging-lab: "1"
@@ -865,6 +870,36 @@ workflows:
           requires:
             - upload-release-artifacts
 
+
+  benchmark_flow_label:
+    when:
+      << pipeline.parameters.run_benchmark_flow_label >>
+    jobs:
+      - performance-ci-automation-oss-standalone:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-standalone-scaling:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-cluster-query:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-cluster-ingestion:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-standalone-scaling-profiler:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-standalone-tsbs-profiler:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-cluster-profiler-query:
+          context: common
+          <<: *on-any-branch
+      - performance-ci-automation-oss-cluster-profiler-ingestion:
+          context: common
+          <<: *on-any-branch
+
   nightly:
     triggers:
       - schedule:
@@ -876,6 +911,16 @@ workflows:
           matrix:
             parameters:
               redis_version: ["6.2", "7.0", "unstable"]
+
+  nightly-perf-once-a-week:
+    triggers:
+      - schedule:
+          #  “At 07:00 on Mondays.”
+          cron: "00 07 * * 1"
+          filters:
+            branches:
+              only: master
+    jobs:
       - performance-ci-automation-oss-cluster-query:
           context: common
       - performance-ci-automation-oss-cluster-ingestion:

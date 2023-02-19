@@ -20,6 +20,8 @@ TARGET=$(BINDIR)/unit_tests
 
 #----------------------------------------------------------------------------------------------
 
+CC_C_STD=gnu11
+
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
@@ -40,17 +42,7 @@ define CC_INCLUDES +=
 	$(ROOT)/deps/minunit
 endef
 
-CC_FLAGS += \
-	-std=gnu11
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-LD_SHARED_EXT=dylib
-else
-LD_SHARED_EXT=so
-endif
-
-LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_SHARED_EXT))
+LD_LIBS += $(realpath $(BINROOT)/redistimeseries.so)
 
 #----------------------------------------------------------------------------------------------
 
@@ -60,7 +52,7 @@ include $(MK)/rules
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -fvisibility=hidden -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) $(CC_C_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...

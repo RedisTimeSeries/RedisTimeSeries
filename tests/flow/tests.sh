@@ -1,19 +1,24 @@
 #!/bin/bash
 
 # [[ $VERBOSE == 1 ]] && set -x
-[[ $IGNERR == 1 ]] || set -e
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+PROGNAME="${BASH_SOURCE[0]}"
+HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 ROOT=$(cd $HERE/../.. && pwd)
-READIES=$ROOT/deps/readies 
+READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
 
+export PYTHONUNBUFFERED=1
+
 VALGRIND_REDIS_VER=6.2
+SAN_REDIS_VER=6.2
+
+cd $HERE
 
 #----------------------------------------------------------------------------------------------
 
 help() {
-	cat <<-END
+	cat <<-'END'
 		Run flow tests.
 
 		[ARGVARS...] tests.sh [--help|help] [<module-so-path>]
@@ -154,10 +159,10 @@ run_tests() {
 
 #----------------------------------------------------------------------------------------------
 
-[[ $1 == --help || $1 == help ]] && {
+if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 	help
 	exit 0
-}
+fi
 
 OP=""
 [[ $NOP == 1 ]] && OP=echo

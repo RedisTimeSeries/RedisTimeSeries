@@ -33,7 +33,7 @@ TARGET=$(BINDIR)/libcpu_features.a
 
 SRCDIR=$(ROOT)/deps/cpu_features
 CMAKE_TARGETS=cpu_features
-MK_CMAKE_FILES=$(SRCDIR)/CMakeLists.txt
+MK_CMAKE_FILES=$(CURDIR)/CMakeLists.txt
 
 CMAKE_DEFS += \
 	BUILD_TESTING=off \
