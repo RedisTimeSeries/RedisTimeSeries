@@ -915,7 +915,7 @@ workflows:
   nightly-perf-once-a-week:
     triggers:
       - schedule:
-          #  “At 07:00 on Mondays.”
+          # At 07:00 on Mondays
           cron: "00 07 * * 1"
           filters:
             branches:
