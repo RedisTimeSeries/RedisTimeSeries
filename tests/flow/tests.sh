@@ -1,19 +1,24 @@
 #!/bin/bash
 
 # [[ $VERBOSE == 1 ]] && set -x
-[[ $IGNERR == 1 ]] || set -e
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+PROGNAME="${BASH_SOURCE[0]}"
+HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 ROOT=$(cd $HERE/../.. && pwd)
-READIES=$ROOT/deps/readies 
+READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
 
+export PYTHONUNBUFFERED=1
+
 VALGRIND_REDIS_VER=6.2
+SAN_REDIS_VER=6.2
+
+cd $HERE
 
 #----------------------------------------------------------------------------------------------
 
 help() {
-	cat <<-END
+	cat <<-'END'
 		Run flow tests.
 
 		[ARGVARS...] tests.sh [--help|help] [<module-so-path>]
@@ -27,6 +32,9 @@ help() {
 		AOF_SLAVES=0|1      AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1     General tests on Redis OSS Cluster
 		SHARDS=n            Number of shards (default: 3)
+
+		QUICK|SIMPLE=1      Perform only one test variant
+
 		RLEC=0|1            General tests on RLEC
 
 		REDIS_SERVER=path   Location of redis-server
@@ -151,21 +159,29 @@ run_tests() {
 
 #----------------------------------------------------------------------------------------------
 
-[[ $1 == --help || $1 == help ]] && {
+if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 	help
 	exit 0
-}
+fi
 
 OP=""
 [[ $NOP == 1 ]] && OP=echo
 
 #----------------------------------------------------------------------------------------------
 
-GEN=${GEN:-1}
-SLAVES=${SLAVES:-1}
-AOF=${AOF:-1}
-AOF_SLAVES=${AOF_SLAVES:-1}
-OSS_CLUSTER=${OSS_CLUSTER:-0}
+if [[ $QUICK != 1 && $SIMPLE != 1 ]]; then
+	GEN=${GEN:-1}
+	SLAVES=${SLAVES:-1}
+	AOF=${AOF:-1}
+	AOF_SLAVES=${AOF_SLAVES:-1}
+	OSS_CLUSTER=${OSS_CLUSTER:-0}
+else
+	GEN=1
+	SLAVES=0
+	AOF=0
+	AOF_SLAVES=0
+	OSS_CLUSTER=0
+fi
 SHARDS=${SHARDS:-3}
 RLEC=${RLEC:-0}
 
@@ -221,7 +237,7 @@ E=0
 [[ $GEN == 1 ]]    && { (run_tests "general tests"); (( E |= $? )); } || true
 [[ $SLAVES == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "tests with slaves"); (( E |= $? )); } || true
 [[ $AOF == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "tests with AOF"); (( E |= $? )); } || true
-[[ $AOF_SLAVES == 1 ]]    && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
+[[ $AOF_SLAVES == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 [[ $OSS_CLUSTER == 1 ]] && { (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 
 [[ $RLEC == 1 ]]   && { (RLTEST_ARGS="${RLTEST_ARGS} --env existing-env --existing-env-addr $DOCKER_HOST:$RLEC_PORT" run_tests "tests on RLEC"); (( E |= $? )); } || true

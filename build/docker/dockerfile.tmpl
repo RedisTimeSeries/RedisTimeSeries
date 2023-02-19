@@ -14,14 +14,15 @@ COPY --from=redis /usr/local/ /usr/local/
 ADD . /build
 
 RUN ./deps/readies/bin/getupdates
-RUN ./deps/readies/bin/getpy3
-RUN ./system-setup.py
-RUN make fetch
+RUN ./sbin/setup
 RUN make build
 
 {% if PACK == "1" %}
 RUN mkdir -p bin/artifacts
 RUN make pack
+RUN set -e ;\
+    echo "Artifacts:" ;\
+    du -ah --apparent-size /build/bin/artifacts
 {% endif %}
 
 {% if TEST == "1" %}
@@ -45,7 +46,7 @@ RUN chown -R redis:redis /var/opt/redislabs
 COPY --from=builder /build/bin/artifacts/ /var/opt/redislabs/artifacts
 {% endif %}
 
-COPY --from=builder /build/bin/redistimeseries.so "{{MODULES_DIR}}"
+COPY --from=builder /build/bin/linux-{{ARCH}}-release/redistimeseries.so "{{MODULES_DIR}}"
 
 EXPOSE 6379
 CMD ["redis-server", "--loadmodule", "{{MODULES_DIR}}/redistimeseries.so"]
