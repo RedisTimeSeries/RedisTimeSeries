@@ -31,6 +31,8 @@ SSL ?= 1
 
 MK_CUSTOM_CLEAN=1
 
+CC_C_STD=gnu99
+
 include $(MK)/defs
 
 _SOURCES=\
@@ -50,13 +52,6 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
-CC_FLAGS += \
-	-fvisibility=hidden \
-	-fPIC \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
-	$(CC_FLAGS.coverage)
-
 define CC_DEFS +=
 	REDISMODULE_EXPERIMENTAL_API
 	MODULE_NAME=$(MODULE_NAME)
@@ -75,19 +70,6 @@ ifeq ($(SSL),1)
 CC_INCLUDES += $(openssl_prefix)/include
 endif
 
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -O0
-LD_FLAGS += -g
-else
-CC_FLAGS += -O2 -Wno-unused-result
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
-
 #----------------------------------------------------------------------------------------------
 
 include $(MK)/rules
@@ -96,7 +78,7 @@ include $(MK)/rules
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) $(CC_C_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
