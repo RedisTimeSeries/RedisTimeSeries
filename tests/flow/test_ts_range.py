@@ -1299,28 +1299,28 @@ def test_aggreataion_alignment():
     env = Env(decodeResponses=True)
     with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester')
-    _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-    agg_size = 60
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
+        agg_size = 60
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
 
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
 
-    specific_ts = start_ts + 50
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
+        specific_ts = start_ts + 50
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
+        assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
 
-    end_ts = start_ts + samples_count - 1
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+        end_ts = start_ts + samples_count - 1
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
+        assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
 
 def test_empty():
     agg_size = 10

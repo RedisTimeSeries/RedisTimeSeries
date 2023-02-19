@@ -10,6 +10,7 @@ def test_alter_cmd():
     samples_count = 1500
     end_ts = start_ts + samples_count
     key = 'tester'
+    env = Env()
 
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
@@ -46,8 +47,8 @@ def test_alter_cmd():
                           expected_chunk_size, expected_labels)
 
         # test indexer was updated
-        assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key.encode('ascii')]
-        assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
+        assert env.getConnection(0).execute_command('TS.QUERYINDEX', 'A=1') == [key.encode('ascii')]
+        assert env.getConnection(0).execute_command('TS.QUERYINDEX', 'name=brown') == []
 
 
 def test_alter_key(self):

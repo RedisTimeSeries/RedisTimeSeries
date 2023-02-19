@@ -21,7 +21,7 @@ def test_mrange_with_expire_cmd():
         assert r.execute_command("EXPIRE","Y", 6)
         assert r.execute_command("EXPIRE","Z", 7)
         while time.time() < (current_ts+10):
-            reply = r.execute_command('TS.mrange', '-', '+', 'FILTER', 'type=DELAYED')
+            reply = env.getConnection(0).execute_command('TS.mrange', '-', '+', 'FILTER', 'type=DELAYED')
             assert(len(reply)>=0 and len(reply)<=3)
         assert r.execute_command("PING")
 
@@ -31,7 +31,7 @@ def testWithMultiExec(env):
         env.skip()
     if(not env.is_cluster()):
         env.skip()
-    with env.getConnection() as r:
+    with env.getConnection(0) as r:
         r.execute_command('multi', )
         r.execute_command('TS.mrange', '-', '+', 'FILTER', 'name=bob')
         if(is_rlec()):
@@ -68,81 +68,81 @@ def test_range_by_labels():
             _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
             expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [[b'tester1', [], expected_result]] == actual_result
 
             expected_result.reverse()
-            actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+            actual_result = env.getConnection(0).execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
             assert [[b'tester1', [], expected_result]] == actual_result
 
             def build_expected(val, time_bucket):
                 return [[int(i - i % time_bucket), str(val).encode('ascii')] for i in
                         range(start_ts, start_ts + samples_count + 1, time_bucket)]
 
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5,
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'LAST', 5,
                                             'FILTER', 'generation=x')
             expected_result = [[b'tester1', [], build_expected(5, 5)],
                             [b'tester2', [], build_expected(15, 5)],
                             [b'tester3', [], build_expected(25, 5)],
                             ]
             env.assertEqual(sorted(expected_result), sorted(actual_result))
-            assert expected_result[1:] == sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count,
+            assert expected_result[1:] == sorted(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count,
                                                             'AGGREGATION', 'LAST', 5, 'FILTER', 'generation=x',
                                                             'class!=middle'), key=lambda x:x[0])
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 3, 'AGGREGATION',
                                             'LAST', 5, 'FILTER', 'generation=x')
             assert expected_result[0][2][:3] == sorted(actual_result, key=lambda x:x[0])[0][2]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5,
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 5,
                                             'FILTER', 'generation=x')
             assert [[1511885905, b'1']] == actual_result[0][2][:1]
             assert expected_result[0][2][1:9] == actual_result[0][2][1:9]
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                             'COUNT', 4, 'FILTER', 'generation=x')
             assert 4 == len(actual_result[0][2])  # just checking that agg count before count works
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 4, 'AGGREGATION', 'COUNT', 3,
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 4, 'AGGREGATION', 'COUNT', 3,
                                             'FILTER', 'generation=x')
             assert 4 == len(actual_result[0][2])  # just checking that agg count after count works
-            actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
+            actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'COUNT', 3,
                                             'FILTER', 'generation=x')
             assert 18 == len(actual_result[0][2])  # just checking that agg count before count works
 
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3,
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'invalid', 3,
                                         'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string',
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'AGGREGATION', 'AVG', 'string',
                                         'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER',
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'COUNT', 'string', 'FILTER',
                                         'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', '-', '+' ,'FILTER')  # missing args
+                assert env.getConnection(0).execute_command('TS.mrange', '-', '+' ,'FILTER')  # missing args
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', '-', '+', 'RETLIF')  # no filter word
+                assert env.getConnection(0).execute_command('TS.mrange', '-', '+', 'RETLIF')  # no filter word
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x')
+                assert env.getConnection(0).execute_command('TS.mrange', 'string', start_ts + samples_count, 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, 'string', 'FILTER', 'generation=x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation+x')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation!=x')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'generation!=x')
 
             # issue 414
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,rudy,)')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,rudy,)')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER', 'name=(bob,,rudy)')
 
             # test SELECTED_LABELS
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'filter', 'k!=5')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
             with pytest.raises(redis.ResponseError) as excinfo:
-                assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
+                assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
         env.flush()
 
 def test_mrange_filterby():
@@ -160,38 +160,39 @@ def test_mrange_filterby():
 
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", 1 ,'FILTER', 'name=bob')
+            assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", 1 ,'FILTER', 'name=bob')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", "a" ,'FILTER', 'name=bob')
+            assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', "a", "a" ,'FILTER', 'name=bob')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 1, "a" ,'FILTER', 'name=bob')
+            assert env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 1, "a" ,'FILTER', 'name=bob')
 
         expected_result = [[b'tester1', [], []],
                            [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(samples_count)]],
                            [b'tester3', [], []],
                            ]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
 
         expected_result = [[b'tester1', [], []],
                            [b'tester2', [], [[start_ts + i, str(15).encode('ascii')] for i in range(9, 12)]],
                            [b'tester3', [], []],
                            ]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
 
-        actual_result = r.execute_command('TS.mrange', start_ts + 1000000, start_ts + 1000000 + samples_count, 'FILTER_BY_TS', start_ts + 1000000, 'FILTER', 'generation=x')
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts + 1000000, start_ts + 1000000 + samples_count, 'FILTER_BY_TS', start_ts + 1000000, 'FILTER', 'generation=x')
         assert sorted(actual_result) == sorted([[b'tester1', [], []], [b'tester2', [], []], [b'tester3', [], []]])
 
         assert r.execute_command('TS.CREATE', 'tester4', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'z')
         r.execute_command('ts.add', 'tester4', 1, 1)
         r.execute_command('ts.add', 'tester4', 8, 8)
-        actual_result = r.execute_command('TS.mrange', 4, 6, 'FILTER_BY_TS', 4, 'FILTER', 'generation=z')
+        actual_result = env.getConnection(0).execute_command('TS.mrange', 4, 6, 'FILTER_BY_TS', 4, 'FILTER', 'generation=z')
         assert actual_result == [[b'tester4', [], []]]
 
 def test_mrange_withlabels():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
 
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -202,17 +203,17 @@ def test_mrange_withlabels():
         _insert_data(r, 'tester3', start_ts, samples_count, 25)
 
         expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                                           'name=bob')
         assert [[b'tester1', [[b'name', b'bob'], [b'class', b'middle'], [b'generation', b'x']],
                  expected_result]] == actual_result
 
-        actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER',
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'SELECTED_LABELS', 'name', 'generation', 'FILTER',
                                           'name=bob')
         assert [[b'tester1', [[b'name', b'bob'], [b'generation', b'x']],
                  expected_result]] == actual_result
 
-        actual_result = r.execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
+        actual_result = env.getConnection(0).execute_command('TS.mrange', start_ts + 1, start_ts + samples_count, 'WITHLABELS',
                                           'AGGREGATION', 'COUNT', 1, 'FILTER', 'generation=x')
         # assert the labels length is 3 (name,class,generation) for each of the returned time-series
         try:
@@ -232,6 +233,7 @@ def test_mrange_withlabels():
 
 
 def test_multilabel_filter():
+    env = Env()
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
@@ -241,20 +243,21 @@ def test_multilabel_filter():
         assert r.execute_command('TS.ADD', 'tester2', 0, 2) == 0
         assert r.execute_command('TS.ADD', 'tester3', 0, 3) == 0
 
-        actual_result = r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
+        actual_result = env.getConnection(0).execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
         assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
 
-        actual_result = r.execute_command('TS.mrange', 0, '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
+        actual_result = env.getConnection(0).execute_command('TS.mrange', 0, '+', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)',
                                           'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
 
-        actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
+        actual_result = env.getConnection(0).execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)')
         assert set(item[0] for item in actual_result) == set([b'tester1', b'tester2'])
 
-        actual_result = r.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
+        actual_result = env.getConnection(0).execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
 
 def test_large_key_value_pairs():
+    env = Env()
     with Env().getClusterConnectionIfNeeded() as r:
         number_series = 100
         for i in range(0,number_series):
@@ -266,7 +269,7 @@ def test_large_key_value_pairs():
         kv_label4 = 'dataType=(PRICE_TICK)'
         kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
         for kv_label in kv_labels:
-            res = r.execute_command('TS.MRANGE', '-', '+', 'FILTER', kv_label1)
+            res = env.getConnection(0).execute_command('TS.MRANGE', '-', '+', 'FILTER', kv_label1)
             assert len(res) == number_series
 
 def ensure_replies_series_match(env,series_array_1, series_array_2):
@@ -348,6 +351,7 @@ def test_non_local_filtered_labels():
 def test_mrange_align():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
 
     with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -370,9 +374,9 @@ def test_mrange_align():
             ['tester3', [], build_expected_aligned_data(start_ts, start_ts + samples_count, agg_bucket_size, end_ts)],
         ]
 
-        assert expected_start_result == decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
+        assert expected_start_result == decode_if_needed(sorted(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-',
                                           'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')))
-        assert expected_end_result == decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
+        assert expected_end_result == decode_if_needed(sorted(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+',
                                                           'AGGREGATION', 'COUNT', agg_bucket_size, 'FILTER', 'generation=x')))
 
         def groupby(data):
@@ -385,16 +389,17 @@ def test_mrange_align():
         expected_groupby_start_result = [['generation=x', [], groupby(expected_start_result)]]
         expected_groupby_end_result = [['generation=x', [], groupby(expected_end_result)]]
 
-        assert expected_groupby_start_result == decode_if_needed(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
+        assert expected_groupby_start_result == decode_if_needed(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '-', 'AGGREGATION',
                                  'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
                                  'GROUPBY', 'generation', 'REDUCE', 'max'))
-        assert expected_groupby_end_result == decode_if_needed(r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
+        assert expected_groupby_end_result == decode_if_needed(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'ALIGN', '+', 'AGGREGATION',
                                                                   'COUNT', agg_bucket_size, 'FILTER', 'generation=x',
                                                                   'GROUPBY', 'generation', 'REDUCE', 'max'))
 
 def test_mrange_partial_range():
     start_ts = 0
     samples_count = 50
+    env = Env()
 
     with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
@@ -402,10 +407,10 @@ def test_mrange_partial_range():
         _insert_data(r, 'tester1{1}', start_ts, samples_count, 5)
         _insert_data(r, 'tester2{3}', start_ts, samples_count, 15)
         exp = [['tester1{1}', [], [[0, '2'], [2, '2'], [4, '2'], [6, '2'], [8, '2'], [10, '1']]]]
-        res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
+        res = decode_if_needed(sorted(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
         'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=bob')))
         exp = [['tester2{3}', [], [[0, '2'], [2, '2'], [4, '2'], [6, '2'], [8, '2'], [10, '1']]]]
-        res = decode_if_needed(sorted(r.execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
+        res = decode_if_needed(sorted(env.getConnection(0).execute_command('TS.mrange', start_ts, start_ts + 10, 'ALIGN', '-',
         'AGGREGATION', 'COUNT', 2, 'FILTER', 'name=fabi')))
         assert res == exp
 
