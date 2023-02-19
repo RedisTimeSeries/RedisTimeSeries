@@ -1,6 +1,6 @@
 
 ROOT=../..
-MK.pyver:=3
+
 include $(ROOT)/deps/readies/mk/main
 
 define HELPTEXT
@@ -13,7 +13,12 @@ MK_ALL_TARGETS=build
 
 #----------------------------------------------------------------------------------------------
 
+ifeq ($(FAST_DOUBLE_PARSER_C_BINDIR),)
 BINDIR=$(BINROOT)/fast_double_parser_c
+else
+override BINDIR=$(FAST_DOUBLE_PARSER_C_BINDIR)
+endif
+
 SRCDIR=$(ROOT)/src/fast_double_parser_c
 
 FAST_DOUBLE_PARSER_DIR=$(ROOT)/deps/fast_double_parser
@@ -26,8 +31,6 @@ MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
 
-CXX=g++
-
 _SOURCES=\
 	fast_double_parser_c.cpp
 
@@ -36,36 +39,13 @@ OBJECTS=$(patsubst $(SRCDIR)/%.cpp,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.cpp, $(BINDIR)/%.d, $(SOURCES))
 
-CC_FLAGS += \
-	-fPIC \
-	-Wall \
-	-Wextra \
-	-MMD -MF $(@:.o=.d) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
-	-I$(FAST_DOUBLE_PARSER_DIR)/include
+define CC_INCLUDES +=
+	$(SRCDIR)
+	$(BINDIR)
+	$(FAST_DOUBLE_PARSER_DIR)/include
+endef
 
-CXX_FLAGS=\
-	-std=c++11
-
-ifeq ($(PROFILE),1)
-CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
-endif
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0
-LD_FLAGS += -g
-else ifeq ($(PROFILE),1)
-CC_FLAGS += -O2
-else
-CC_FLAGS += -O3
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
+CC_CXX_STD=c++11
 
 #----------------------------------------------------------------------------------------------
 
