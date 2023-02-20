@@ -108,10 +108,7 @@ def test_extensive_ts_madd():
 
 def is_redis_version_smaller_than(con, _version):
     res = con.execute_command('INFO')
-    if(version.parse(res['redis_version']) < version.parse(_version)):
-        return True
-    else:
-        return False
+    return (version.parse(res['redis_version']) < version.parse(_version))
 
 def test_madd_some_failed_replicas():
     if not Env().useSlaves:
