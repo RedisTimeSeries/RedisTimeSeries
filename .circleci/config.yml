@@ -807,13 +807,11 @@ workflows:
       - valgrind:
           <<: *never
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *always
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
-              #@@platform: [jammy, focal, bionic, xenial, amzn2, centos7, rocky8, bullseye]
-              platform: [amzn2]
+              platform: [jammy, focal, bionic, xenial, amzn2, centos7, rocky8, bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
