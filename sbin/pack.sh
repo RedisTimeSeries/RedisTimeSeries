@@ -21,22 +21,23 @@ if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 		[ARGVARS...] pack.sh [--help|help]
 
 		Argument variables:
-		MODULE=path       Path of module .so
+		MODULE=path         Path of module .so
 
-		RAMP=1|0          Build RAMP file
-		DEPS=0|1          Build dependencies file
-		SYM=0|1           Build debug symbols file
+		RAMP=1|0            Build RAMP file
+		DEPS=0|1            Build dependencies file
+		SYM=0|1             Build debug symbols file
 
-		BRANCH=name       Branch name for snapshot packages
-		VERSION=ver       Version for release packages
-		WITH_GITSHA=1     Append Git SHA to shapshot package names
-		VARIANT=name      Build variant (default: empty)
+		BRANCH=name         Branch name for snapshot packages
+		VERSION=ver         Version for release packages
+		WITH_GITSHA=1       Append Git SHA to shapshot package names
+		VARIANT=name        Build variant
+		RAMP_VARIANT=name   RAMP variant (e.g. ramp-{name}.yml)
 
-		ARTDIR=dir        Directory in which packages are created (default: bin/artifacts)
+		ARTDIR=dir          Directory in which packages are created (default: bin/artifacts)
 
-		JUST_PRINT=1      Only print package names, do not generate
-		VERBOSE=1         Print commands
-		HELP=1            Show help
+		JUST_PRINT=1        Only print package names, do not generate
+		VERBOSE=1           Print commands
+		HELP=1              Show help
 
 	END
 	exit 0
@@ -96,7 +97,7 @@ pack_ramp() {
 	local platform="$OS-$OSNICK-$ARCH"
 	local stem=${PACKAGE_NAME}.${platform}
 
-	local verspec=${SEMVER}${VARIANT}
+	local verspec=${SEMVER}${_VARIANT}
 	
 	local fq_package=$stem.${verspec}.zip
 
@@ -107,10 +108,10 @@ pack_ramp() {
 	local xtx_vars=""
 	local dep_fname=${PACKAGE_NAME}.${platform}.${verspec}.tgz
 
-	if [[ -z $VARIANT ]]; then
+	if [[ -z $RAMP_VARIANT ]]; then
 		local rampfile=ramp.yml
 	else
-		local rampfile=ramp$VARIANT.yml
+		local rampfile=ramp${_RAMP_VARIANT}.yml
 	fi
 
 	python3 $READIES/bin/xtx \
@@ -128,7 +129,7 @@ pack_ramp() {
 
 	cd $ARTDIR/snapshots
 	if [[ ! -z $BRANCH ]]; then
-		local snap_package=$stem.${BRANCH}${VARIANT}.zip
+		local snap_package=$stem.${BRANCH}${_VARIANT}.zip
 		ln -sf ../$fq_package $snap_package
 	fi
 
@@ -144,7 +145,7 @@ pack_deps() {
 
 	local platform="$OS-$OSNICK-$ARCH"
 	local stem=${PACKAGE_NAME}.${dep}.${platform}
-	local verspec=${SEMVER}${VARIANT}
+	local verspec=${SEMVER}${_VARIANT}
 
 	local depdir=$(cat $ARTDIR/$dep.dir)
 
@@ -169,7 +170,7 @@ pack_deps() {
 
 	cd $ARTDIR/snapshots
 	if [[ -n $BRANCH ]]; then
-		local snap_dep=$stem.${BRANCH}${VARIANT}.tgz
+		local snap_dep=$stem.${BRANCH}${_VARIANT}.tgz
 		ln -sf ../$fq_dep $snap_dep
 		ln -sf ../$fq_dep.sha256 $snap_dep.sha256
 	fi
@@ -195,7 +196,10 @@ NUMVER=$(NUMERIC=1 $SBIN/getver)
 SEMVER=$($SBIN/getver)
 
 if [[ ! -z $VARIANT ]]; then
-	VARIANT=-${VARIANT}
+	_VARIANT="-${VARIANT}"
+fi
+if [[ ! -z $RAMP_VARIANT ]]; then
+	_RAMP_VARIANT="-${RAMP_VARIANT}"
 fi
 
 #----------------------------------------------------------------------------------------------
@@ -247,7 +251,7 @@ if [[ $RAMP == 1 ]]; then
 		exit 1
 	fi
 
-	echo "Building RAMP $VARIANT files ..."
+	echo "Building RAMP $RAMP_VARIANT files ..."
 	pack_ramp
 	echo "Done."
 fi
