@@ -4,7 +4,6 @@ parameters:
   run_default_flow:
     default: true
     type: boolean
-
   run_benchmark_flow_label:
     default: false
     type: boolean
@@ -68,10 +67,10 @@ commands:
             if [[ $(uname -s) == Darwin ]]; then rm -f /usr/local/bin/python3; fi
             ./deps/readies/bin/getpy3
       - run:
-          name: Setup automation (2)
+          name: Setup automation (part 2)
           shell: /bin/bash -l -eo pipefail
-          no_output_timeout: 30m
           command: |
+            export HOMEBREW_NO_AUTO_UPDATE=1
             ./deps/readies/bin/getaws
             ls -l /usr/local/bin/python* || true
             echo "python3: $(command -v python3)"
@@ -93,7 +92,7 @@ commands:
       - run:
           name: System setup
           command: |
-            SETUP_ARGS="<<parameters.setup_args>>" ./sbin/setup
+            VERBOSE=1 SETUP_ARGS="<<parameters.setup_args>>" ./sbin/setup
             python3 -m pip list
             if command -v gcc &> /dev/null; then gcc --version; fi
             if command -v clang &> /dev/null; then clang --version; fi
@@ -101,6 +100,7 @@ commands:
           name: Install Redis
           shell: /bin/bash -l -eo pipefail
           command: |
+            export HOMEBREW_NO_AUTO_UPDATE=1
             ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>
             redis-server --version
 
@@ -449,7 +449,7 @@ jobs:
           command: |
             ./sbin/setup
             ./deps/readies/bin/getredis
-            ./deps/readies/bin/getdocker --just-enable-exp
+            ./deps/readies/bin/getdocker
             docker version
             python3 -m pip list
       - install-arlecchino
