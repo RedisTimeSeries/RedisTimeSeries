@@ -15,7 +15,7 @@ RedisTimeSeries is a Redis module that adds a time series data structure to Redi
 * Query by start time and end-time
 * Aggregated queries (min, max, avg, sum, range, count, first, last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 * Configurable maximum retention period
-* Downsampling / compaction for automatically updated aggregated timeseries
+* Downsampling/compaction for automatically updated aggregated timeseries
 * Secondary indexing for time series entries. Each time series has labels (field value pairs) which will allows to query by labels
 
 ## Client libraries
@@ -29,9 +29,9 @@ See the [clients page](clients) for the full list.
 In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
-1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter) - read/write adapter to use RedisTimeSeries as backend db.
-2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource) - using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
-3. [Telegraph](https://github.com/RedisTimeSeries/telegraf)
+1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use RedisTimeSeries as backend db.
+2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource), using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
+3. [Telegraf](https://github.com/influxdata/telegraf). Download the plugin from [InfluxData](https://portal.influxdata.com/downloads/). 
 4. StatsD, Graphite exports using graphite protocol.
 
 ## Memory model

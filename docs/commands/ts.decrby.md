@@ -1,14 +1,14 @@
 ---
-syntax: 
+syntax: |
+  TS.DECRBY key value 
+    [TIMESTAMP timestamp] 
+    [RETENTION retentionPeriod] 
+    [UNCOMPRESSED] 
+    [CHUNK_SIZE size] 
+    [LABELS {label value}...]
 ---
 
 Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
-
-## Syntax
-
-{{< highlight bash >}}
-TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS {label value}...]
-{{< / highlight >}}
 
 ## Required arguments
 
@@ -23,9 +23,9 @@ is numeric data value of the sample (double)
 </details>
 
 <note><b>Notes</b>
-
- - If the time series does not exist, it is automatically created.
- - You can use this command as a counter or gauge that automatically gets history as a time series.
+- When specified key does not exist, a new time series is created.
+- You can use this command as a counter or gauge that automatically gets history as a time series.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 </note>
 
 ## Optional arguments
@@ -36,7 +36,9 @@ is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp a
 
 `timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `value`. 
 
-If the time series is empty, the value is set to `value`. When not specified, set the timestamp according to the server clock.
+If the time series is empty, the value is set to `value`.
+  
+When not specified, the timestamp is set according to the server clock.  
 </details>
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 
