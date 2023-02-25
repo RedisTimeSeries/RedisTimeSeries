@@ -29,6 +29,8 @@ SSL ?= 1
 
 MK_CUSTOM_CLEAN=1
 
+CC_C_STD=gnu99
+
 include $(MK)/defs
 
 _SOURCES=alloc.c async.c dict.c hiredis.c net.c read.c sds.c sockcompat.c
@@ -41,32 +43,14 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
 
-CC_FLAGS += \
-	-fPIC \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
-	$(CC_FLAGS.coverage)
-
-CC_INCLUDES += \
-	$(SRCDIR) \
+define CC_INCLUDES +=
+	$(SRCDIR)
 	$(BINDIR)
+endef
 
 ifeq ($(SSL),1)
 CC_INCLUDES += $(openssl_prefix)/include
 endif
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -O0
-LD_FLAGS += -g
-else
-CC_FLAGS += -O2 -Wno-unused-result
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
 
 #----------------------------------------------------------------------------------------------
 
@@ -77,13 +61,6 @@ include $(MK)/rules
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
 	$(SHOW)$(CC) $(CC_FLAGS) -fvisibility=hidden -c $< -o $@
-
-# $(SRCDIR)/.patched:
-# 	cd $(ROOT)/deps/hiredis ;\
-# 	patch -p1 -i $(ROOT)/build/hiredis/hiredis_patch
-# 	touch $@
-# 
-# $(TARGET): $(SRCDIR)/.patched $(OBJECTS)
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
