@@ -32,6 +32,7 @@ class RedisTimeSeriesSetup(paella.Setup):
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
+        self.install("which")
         self.run("%s/bin/getepel" % READIES, sudo=True)
         self.install("openssl-devel")
         self.run("%s/bin/getgcc --modern" % READIES)

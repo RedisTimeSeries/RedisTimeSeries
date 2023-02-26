@@ -1,14 +1,10 @@
 ---
-syntax: 
+syntax: |
+  TS.GET key 
+    [LATEST]
 ---
 
 Get the last sample
-
-## Syntax
-
-{{< highlight bash >}}
-TS.GET key [LATEST]
-{{< / highlight >}}
 
 [Examples](#examples)
 
