@@ -1108,7 +1108,7 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
                                                   const Series *series,
                                                   const RangeArgs *args) {
     bool is_valid = true;
-    if (!series->rules)
+    if (!series->rules || !series->retentionTime)
         return true;
 
     // Verify startTimestamp in retention period
