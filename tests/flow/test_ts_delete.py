@@ -373,3 +373,59 @@ def test_del_with_rules_with_alignment(self):
         e.assertEqual(len(res), 2)
         assert res == [[1005, b'9'], [2045, b'9']]
 
+def test_del_outside_retention_period(self):
+    e = Env()
+    t1 = 't1{1}'
+    t2 = 't2{1}'
+    t3 = 't3{1}'
+    t4 = 't4{1}'
+    t5 = 't5{1}'
+    t6 = 't6{1}'
+    with e.getClusterConnectionIfNeeded() as r:
+        r.execute_command("ts.create", t1, 'RETENTION', 20)
+        r.execute_command("ts.create", t2, 'RETENTION', 10)
+        r.execute_command('ts.createrule', t1, t2, 'AGGREGATION', 'sum', 10)
+
+        r.execute_command("ts.add", t1, 13, 13)
+        r.execute_command("ts.add", t1, 17, 17)
+        r.execute_command("ts.add", t1, 22, 22)
+        r.execute_command("ts.add", t1, 31, 31)
+
+
+        try:
+            r.execute_command("ts.del", t1, 5, 25)
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: Can't delete an event which is older than retention time, in such case no valid way to update the downsample"
+
+        try:
+            r.execute_command("ts.del", t1, 5, 25)
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: Can't delete an event which is older than retention time, in such case no valid way to update the downsample"
+
+
+        r.execute_command("ts.create", t3, 'RETENTION', 15)
+        r.execute_command("ts.create", t4, 'RETENTION', 10)
+        r.execute_command('ts.createrule', t3, t4, 'AGGREGATION', 'sum', 10)
+
+        r.execute_command("ts.add", t3, 13, 13)
+        r.execute_command("ts.add", t3, 19, 19)
+        r.execute_command("ts.add", t3, 22, 22)
+        r.execute_command("ts.add", t3, 30, 30)
+        try:
+            r.execute_command("ts.del", t3, 19, 25)
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: Can't delete an event which is older than retention time, in such case no valid way to update the downsample"
+
+        r.execute_command("ts.create", t5)
+        r.execute_command("ts.create", t6)
+        r.execute_command('ts.createrule', t5, t6, 'AGGREGATION', 'sum', 10)
+
+        r.execute_command("ts.add", t5, 13, 13)
+        r.execute_command("ts.add", t5, 19, 19)
+        r.execute_command("ts.add", t5, 22, 22)
+        r.execute_command("ts.add", t5, 30, 30)
+        assert r.execute_command("ts.del", t5, 5, 30) == 4
+        assert r.execute_command("ts.range", t6, 5, 30) == []
