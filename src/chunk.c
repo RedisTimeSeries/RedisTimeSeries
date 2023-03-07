@@ -83,6 +83,7 @@ static Sample *ChunkGetSample(Chunk *chunk, int index) {
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
     if (unlikely(((Chunk *)chunk)->num_samples == 0)) { // empty chunks are being removed
         RedisModule_Log(mr_staticCtx, "error", "Trying to get the last timestamp of empty chunk");
+        return 0;
     }
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
 }
@@ -90,6 +91,7 @@ timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
 double Uncompressed_GetLastValue(Chunk_t *chunk) {
     if (unlikely(((Chunk *)chunk)->num_samples == 0)) { // empty chunks are being removed
         RedisModule_Log(mr_staticCtx, "error", "Trying to get the last value of empty chunk");
+        return 0;
     }
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->value;
 }
