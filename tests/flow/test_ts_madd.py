@@ -1,7 +1,6 @@
 import os
 import time
 import aof_parser
-from packaging import version
 
 from RLTest import Env, StandardEnv
 from includes import *
@@ -105,10 +104,6 @@ def test_extensive_ts_madd():
         for pos,datapoint in enumerate(returned_floats,start=1):
             assert pos == datapoint[0]
             assert float_lines[pos-1] == float(datapoint[1])
-
-def is_redis_version_smaller_than(con, _version):
-    res = con.execute_command('INFO')
-    return (version.parse(res['redis_version']) < version.parse(_version))
 
 def test_madd_some_failed_replicas():
     if not Env().useSlaves:

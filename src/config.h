@@ -20,9 +20,10 @@ typedef struct
     short options;
     int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
-    long long numThreads;   // number of threads used by libMR
-    bool forceSaveCrossRef; // Internal debug configuration param
-    char *password;         // tls password which used by libmr
+    long long numThreads;      // number of threads used by libMR
+    bool forceSaveCrossRef;    // Internal debug configuration param
+    char *password;            // tls password which used by libmr
+    bool dontAssertOnFailiure; // Internal debug configuration param
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

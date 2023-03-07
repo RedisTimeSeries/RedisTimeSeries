@@ -454,10 +454,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        rule->aggClass->finalize(rule->aggContext, &aggVal);
-        internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
-        RedisModule_NotifyKeyspaceEvent(
-            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        }
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
@@ -1129,10 +1130,9 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
     }
 
     if (unlikely(!is_valid)) {
-        RTS_ReplyGeneralError(
-            ctx,
-            "TSDB: Can't delete an event which is older than retention time, in such case no "
-            "valid way to update the downsample");
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: Can't delete samples because raw samples expired and "
+                              "compacted data cannot be recalculated");
     }
 
     return is_valid;
