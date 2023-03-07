@@ -25,9 +25,19 @@ is end timestamp for the range deletion.
 
 The given timestamp interval is closed (inclusive), meaning that samples whose timestamp eqauls the `fromTimestamp` or `toTimestamp` are also deleted.
 
+<note><b>Notes:</b>
+  
+- If fromTimestamp is older than the retention period compared to the maximum existing timestamp, the deletion is discarded and an error is returned.
+- When deleting a sample from a time series for which compaction rules are defined:
+  - If all the original samples for an affected compaction bucket are available, the compacted value is recalculated based on the remaining original samples, or removed if all original samples within the compaction bucket  were deleted.
+  - If some or all the original samples for an affected compaction bucket were expired, the deletion is discarded and an error is returned.
+- Explicitly deleting samples from a compacted time series may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples. 
+
+</note>
+
 ## Return value
 
-Integer reply: The number of samples that were removed.
+Integer reply: The number of samples that were deleted.
 
 ## Examples 
 
