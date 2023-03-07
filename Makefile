@@ -133,6 +133,7 @@ define _SOURCES
 	compaction.c
 	compressed_chunk.c
 	config.c
+	consts.c
 	endianconv.c
 	filter_iterator.c
 	generic_chunk.c

@@ -98,9 +98,10 @@ void LastValueReset(void *contextPtr) {
     return;
 }
 
-void SingleValueFinalize(void *contextPtr, double *val) {
+int SingleValueFinalize(void *contextPtr, double *val) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     *val = context->value;
+    return TSDB_OK;
 }
 
 void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
@@ -139,9 +140,10 @@ void FirstValueReset(void *contextPtr) {
     context->isResetted = TRUE;
 }
 
-void FirstValueFinalize(void *contextPtr, double *val) {
+int FirstValueFinalize(void *contextPtr, double *val) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     *val = context->value;
+    return TSDB_OK;
 }
 
 void FirstValueWriteContext(void *contextPtr, RedisModuleIO *io) {
@@ -218,14 +220,19 @@ void AvgAddValue(void *contextPtr, double value, __attribute__((unused)) timesta
     }
 }
 
-void AvgFinalize(void *contextPtr, double *value) {
+int AvgFinalize(void *contextPtr, double *value) {
     AvgContext *context = (AvgContext *)contextPtr;
-    assert(context->cnt > 0);
+    if (unlikely(context->cnt == 0)) {
+        _log_if(context->cnt == 0, "AvgFinalize: context->cnt is 0");
+        return TSDB_ERROR;
+    }
+
     if (unlikely(context->isOverflow)) {
         *value = context->val;
     } else {
         *value = context->val / context->cnt;
     }
+    return TSDB_OK;
 }
 
 void AvgReset(void *contextPtr) {
@@ -358,7 +365,7 @@ void TwaAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts)
     context->last_ts = tb;
 }
 
-void TwaFinalize(void *contextPtr, double *value) {
+int TwaFinalize(void *contextPtr, double *value) {
     TwaContext *context = (TwaContext *)contextPtr;
     if (context->last_ts == context->first_ts) {
         // Or the size of the bucket is 0 with one sample in it,
@@ -367,7 +374,7 @@ void TwaFinalize(void *contextPtr, double *value) {
     } else {
         *value = context->res / llabs((int64_t)(context->last_ts - context->first_ts));
     }
-    return;
+    return TSDB_OK;
 }
 
 void TwaGetLastSample(void *contextPtr, Sample *sample) {
@@ -443,34 +450,44 @@ static inline double variance(double sum, double sum_2, double count) {
     return (sum_2 - 2 * sum * sum / count + pow(sum / count, 2) * count) / count;
 }
 
-void VarPopulationFinalize(void *contextPtr, double *value) {
+int VarPopulationFinalize(void *contextPtr, double *value) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    assert(count > 0);
+    if (unlikely(count == 0)) {
+        *value = 0;
+        return TSDB_ERROR;
+    }
     *value = variance(context->sum, context->sum_2, count);
+    return TSDB_OK;
 }
 
-void VarSamplesFinalize(void *contextPtr, double *value) {
+int VarSamplesFinalize(void *contextPtr, double *value) {
     StdContext *context = (StdContext *)contextPtr;
     uint64_t count = context->cnt;
-    assert(count > 0);
+    if (unlikely(count == 0)) {
+        *value = 0;
+        return TSDB_ERROR;
+    }
     if (count == 1) {
         *value = 0;
     } else {
         *value = variance(context->sum, context->sum_2, count) * count / (count - 1);
     }
+    return TSDB_OK;
 }
 
-void StdPopulationFinalize(void *contextPtr, double *value) {
+int StdPopulationFinalize(void *contextPtr, double *value) {
     double val;
-    VarPopulationFinalize(contextPtr, &val);
+    int ret = VarPopulationFinalize(contextPtr, &val);
     *value = sqrt(val);
+    return ret;
 }
 
-void StdSamplesFinalize(void *contextPtr, double *value) {
+int StdSamplesFinalize(void *contextPtr, double *value) {
     double val;
-    VarSamplesFinalize(contextPtr, &val);
+    int ret = VarSamplesFinalize(contextPtr, &val);
     *value = sqrt(val);
+    return ret;
 }
 
 void StdReset(void *contextPtr) {
@@ -640,19 +657,22 @@ void MaxMinAppendValue(void *contextPtr, double value, __attribute__((unused)) t
     }
 }
 
-void MaxFinalize(void *contextPtr, double *value) {
+int MaxFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     *value = context->maxValue;
+    return TSDB_OK;
 }
 
-void MinFinalize(void *contextPtr, double *value) {
+int MinFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     *value = context->minValue;
+    return TSDB_OK;
 }
 
-void RangeFinalize(void *contextPtr, double *value) {
+int RangeFinalize(void *contextPtr, double *value) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
     *value = context->maxValue - context->minValue;
+    return TSDB_OK;
 }
 
 void MaxMinReset(void *contextPtr) {
@@ -691,9 +711,10 @@ void CountAppendValue(void *contextPtr, double value, __attribute__((unused)) ti
     context->value++;
 }
 
-void CountFinalize(void *contextPtr, double *val) {
+int CountFinalize(void *contextPtr, double *val) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     *val = context->value;
+    return TSDB_OK;
 }
 
 void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
