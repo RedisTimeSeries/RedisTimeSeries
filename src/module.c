@@ -1131,8 +1131,8 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
 
     if (unlikely(!is_valid)) {
         RTS_ReplyGeneralError(ctx,
-                              "TSDB: Can't delete samples because raw samples expired and "
-                              "compacted data cannot be recalculated");
+                              "TSDB: When a series has compactions, deleting samples or compaction "
+                              "buckets beyond the series retention period is not possible");
     }
 
     return is_valid;

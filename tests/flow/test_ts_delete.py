@@ -396,13 +396,13 @@ def test_del_outside_retention_period(self):
             res = r.execute_command("ts.del", t1, 5, 25)
             assert False
         except Exception as e:
-            assert str(e) == "TSDB: Can't delete samples because raw samples expired and compacted data cannot be recalculated"
+            assert str(e) == "TSDB: When a series has compactions, deleting samples or compaction buckets beyond the series retention period is not possible"
 
         try:
             r.execute_command("ts.del", t1, 5, 25)
             assert False
         except Exception as e:
-            assert str(e) == "TSDB: Can't delete samples because raw samples expired and compacted data cannot be recalculated"
+            assert str(e) == "TSDB: When a series has compactions, deleting samples or compaction buckets beyond the series retention period is not possible"
 
 
         r.execute_command("ts.create", t3, 'RETENTION', 15)
@@ -417,7 +417,7 @@ def test_del_outside_retention_period(self):
             r.execute_command("ts.del", t3, 19, 25)
             assert False
         except Exception as e:
-            assert str(e) == "TSDB: Can't delete samples because raw samples expired and compacted data cannot be recalculated"
+            assert str(e) == "TSDB: When a series has compactions, deleting samples or compaction buckets beyond the series retention period is not possible"
 
         r.execute_command("ts.create", t5)
         r.execute_command("ts.create", t6)
