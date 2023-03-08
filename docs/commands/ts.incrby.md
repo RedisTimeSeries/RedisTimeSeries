@@ -69,6 +69,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 - When specified and the key doesn't exist, a new time series is created. Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
+## Return value
+
+@integer-reply - the timestamp of the upserted sample, or @error-reply.
+
 ## Examples
 
 <details open><summary><b>Store sum of data from several sources</b></summary> 

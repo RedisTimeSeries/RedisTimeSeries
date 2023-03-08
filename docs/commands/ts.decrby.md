@@ -70,6 +70,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
   Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
+## Return value
+
+@integer-reply - the timestamp of the upserted sample, or @error-reply.
+
 ## See also
 
 `TS.INCRBY` | `TS.CREATE` 
