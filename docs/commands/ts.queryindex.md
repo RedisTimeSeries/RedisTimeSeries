@@ -11,7 +11,7 @@ Get all time series keys matching a filter list
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filterExpr...</code></summary>
+<summary><code>filterExpr...</code></summary>
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value`, where `label` equals `value`
@@ -29,6 +29,13 @@ filters time series based on their labels and label values. Each filter expressi
 </details>
 
 <note><b>Note:</b> The `QUERYINDEX` command cannot be part of transaction when running on a Redis cluster.</note>
+
+## Return value
+
+Either
+
+- @array-reply where each element is a @bulk-string-reply: a time series key. The array is empty if no time series matches the filter.
+- @error-reply (e.g., on invalid filter expression)
 
 ## Examples
 
