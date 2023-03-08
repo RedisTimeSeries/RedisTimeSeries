@@ -38,7 +38,7 @@ is an optional flag to get a more detailed information about the chunks.
 | `chunkSize`       | @integer-reply<br> The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing the chunk size (using `TS.ALTER`) does not affect existing chunks.
 | `chunkType`       | @simple-string-reply<br> The chunks type: `compressed` or `uncompressed`
 | `duplicatePolicy` | @simple-string-reply or @nil-reply<br> The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
-| `labels`          | @array-reply or @nil-reply<br> Metadata labels of this time series<br> Each element is a 2-elements @array-reply of (@simple-string-reply, @simple-string-reply) representing (label, value)
+| `labels`          | @array-reply or @nil-reply<br> Metadata labels of this time series<br> Each element is a 2-elements @array-reply of (@bulk-string-reply, @bulk-string-reply) representing (label, value)
 | `sourceKey`       | @bulk-string-reply or @nil-reply<br>Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
 | `rules`           | @array-reply<br> [Compaction rules](/commands/ts.createrule/) defined in this time series<br> Each rule is an @array-reply with 4 elements:<br>- @bulk-string-reply: The compaction key<br>- @integer-reply: The bucket duration<br>- @simple-string-reply: The aggregator<br>- @integer-reply: The alignment (since RedisTimeSeries v1.8)
 
