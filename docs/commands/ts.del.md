@@ -37,7 +37,7 @@ The given timestamp interval is closed (inclusive), meaning that samples whose t
 
 ## Return value
 
-Integer reply: The number of samples that were deleted.
+@integer-reply: The number of samples that were deleted.
 
 ## Examples 
 
