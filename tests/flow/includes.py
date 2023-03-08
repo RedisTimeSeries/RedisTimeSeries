@@ -2,7 +2,7 @@ import os
 import sys
 from logging import exception
 from RLTest import Env as _rltestEnv
-
+from packaging import version
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
@@ -39,3 +39,16 @@ def decode_if_needed(data):
         return data.decode()
     else:
         return data
+
+def is_redis_version_smaller_than(con, _version, is_cluster=False):
+    res = con.execute_command('INFO')
+    ver = ""
+    if is_cluster:
+        try:
+            ver = ((list(res.values()))[0])['redis_version']
+        except:
+            ver = res['redis_version']
+        #print(((list(res.values()))[0]))
+    else:
+        ver = res['redis_version']
+    return (version.parse(ver) < version.parse(_version))

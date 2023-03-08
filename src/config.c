@@ -180,6 +180,28 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             TSGlobalConfig.forceSaveCrossRef = false;
         }
     }
+    TSGlobalConfig.dontAssertOnFailiure = false;
+    if (argc > 1 && RMUtil_ArgIndex("DONT_ASSERT_ON_FAILIURE", argv, argc) >= 0) {
+        RedisModuleString *dontAssertOnFailiure;
+        if (RMUtil_ParseArgsAfter(
+                "DONT_ASSERT_ON_FAILIURE", argv, argc, "s", &dontAssertOnFailiure) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(
+                ctx, "warning", "Unable to parse argument after DONT_ASSERT_ON_FAILIURE");
+            return TSDB_ERROR;
+        }
+        size_t dontAssertOnFailiure_len;
+        const char *dontAssertOnFailiure_cstr =
+            RedisModule_StringPtrLen(dontAssertOnFailiure, &dontAssertOnFailiure_len);
+        if (!strcasecmp(dontAssertOnFailiure_cstr, "enable")) {
+            TSGlobalConfig.dontAssertOnFailiure = true;
+        } else if (!strcasecmp(dontAssertOnFailiure_cstr, "disable")) {
+            TSGlobalConfig.dontAssertOnFailiure = false;
+        }
+
+        extern bool _dontAssertOnFailiure;
+        _dontAssertOnFailiure = TSGlobalConfig.dontAssertOnFailiure;
+    }
     RedisModule_Log(ctx,
                     "notice",
                     "Setting default series ENCODING to: %s",
