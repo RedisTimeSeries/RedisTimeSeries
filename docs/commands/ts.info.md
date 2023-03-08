@@ -47,7 +47,7 @@ When `DEBUG` is specified, the response also contains:
 | Name<br>@simple-string-reply | Description
 | ---------------------------- | -
 | `keySelfName`     | @bulk-string-reply<br> Name of the key
-| `Chunks`          | @array-reply with information about the chunks<br>Each element is an @array-reply of information about a single chunk in a name(@simple-string-reply)-value pairs:<br>- `startTimestamp` - @integer-reply - First timestamp present in the chunk<br>- `endTimestamp` - @integer-reply - Last timestamp present in the chunk<br>- `samples` - @integer-reply - Total number of samples in the chunk<br>- `size` - @integer-reply - Chunk internal data size in bytes (data only without overheads)<br>- `bytesPerSample` - @bulk-string-reply (double) - Ratio of `size` and `samples`
+| `Chunks`          | @array-reply with information about the chunks<br>Each element is an @array-reply of information about a single chunk in a name(@simple-string-reply)-value pairs:<br>- `startTimestamp` - @integer-reply - First timestamp present in the chunk<br>- `endTimestamp` - @integer-reply - Last timestamp present in the chunk<br>- `samples` - @integer-reply - Total number of samples in the chunk<br>- `size` - @integer-reply - the chunk's internal data size (without overheads) in bytes<br>- `bytesPerSample` - @bulk-string-reply (double) - Ratio of `size` and `samples`
 
 ## Examples
 
