@@ -35,7 +35,7 @@ typedef struct AggregationClass
         timestamp_t ts); // Should be called after appended all the rest of the samples.
     void (*getLastSample)(void *contextPtr,
                           Sample *sample); // Returns the last sample appended to the context
-    void (*finalize)(void *context, double *value);
+    int (*finalize)(void *context, double *value);
     void (*finalizeEmpty)(void *contextPtr, double *value); // assigns empty value to value
     void *(*cloneContext)(void *contextPtr);                // return cloned context
 } AggregationClass;

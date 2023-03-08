@@ -454,10 +454,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        rule->aggClass->finalize(rule->aggContext, &aggVal);
-        internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
-        RedisModule_NotifyKeyspaceEvent(
-            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        }
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
@@ -1108,7 +1109,7 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
                                                   const Series *series,
                                                   const RangeArgs *args) {
     bool is_valid = true;
-    if (!series->rules)
+    if (!series->rules || !series->retentionTime)
         return true;
 
     // Verify startTimestamp in retention period
@@ -1129,10 +1130,9 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
     }
 
     if (unlikely(!is_valid)) {
-        RTS_ReplyGeneralError(
-            ctx,
-            "TSDB: Can't delete an event which is older than retention time, in such case no "
-            "valid way to update the downsample");
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: When a series has compactions, deleting samples or compaction "
+                              "buckets beyond the series retention period is not possible");
     }
 
     return is_valid;

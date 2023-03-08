@@ -4,10 +4,10 @@
  *the server side public license v1 (ssplv1).
  */
 
-#include "consts.h"
-
 #ifndef ENRICHED_CHUNK_H
 #define ENRICHED_CHUNK_H
+
+#include "consts.h"
 
 typedef struct Samples
 {
