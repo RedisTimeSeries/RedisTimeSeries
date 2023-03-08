@@ -135,7 +135,7 @@ Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is report
 
 ## Return value
 
-- @array-reply of (@integer-reply, @simple-string-reply) pairs representing (timestamp, value(double)).
+- @array-reply of (@integer-reply, @simple-string-reply) pairs representing (timestamp, value(double))
 - @error-reply (e.g., on invalid filter value)
 
 ## Complexity
