@@ -7,6 +7,7 @@ syntax: |
 Delete a compaction rule
 
 ## Required arguments
+
 <details open><summary><code>sourceKey</code></summary>
 
 is key name for the source time series.
@@ -18,6 +19,10 @@ is key name for destination (compacted) time series.
 </details>
 
 <note><b>Note:</b> This command does not delete the compacted series.</note>
+
+## Return value
+
+@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
 
 ## See also
 
