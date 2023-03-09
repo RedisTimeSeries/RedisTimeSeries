@@ -91,7 +91,7 @@ You can also build and run RedisTimeSeries on your own machine.
 
 Major Linux distributions as well as macOS are supported.
 
-You should have Redis installed, of course. The following, for example, builds Redis on a clean Unubtu docker:
+You should have Redis installed, of course. The following, for example, builds Redis on a clean Unubtu docker (`docker pull ubuntu`):
 
 ```
 mkdir ~/Redis
