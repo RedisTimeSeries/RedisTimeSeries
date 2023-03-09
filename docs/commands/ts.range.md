@@ -135,6 +135,13 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
 
+## Return value
+
+Either
+
+- @array-reply of (@integer-reply, @simple-string-reply) pairs representing (timestamp, value(double))
+- @error-reply (e.g., on invalid filter value)
+
 ## Complexity
 
 TS.RANGE complexity can be improved in the future by using binary search to find the start of the range, which makes this `O(Log(n/m)+k*m)`.
