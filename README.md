@@ -106,7 +106,7 @@ make
 make install
 ```
 
-Next, you can the RedisTimeSeries repository from git and build it:
+Next, you should get the RedisTimeSeries repository from git and build it:
 
 ```
 apt-get install -y git python3 libssl-dev automake libtool cmake
@@ -117,7 +117,7 @@ cd RedisTimeSeries
 make
 ```
 
-Next, add RedisTimeSeries module to redis.conf:
+Next, add RedisTimeSeries module to `redis.conf`:
 
 ```
 cd ~/Redis/redis-stable
