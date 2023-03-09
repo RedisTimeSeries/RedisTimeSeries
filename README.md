@@ -87,11 +87,9 @@ docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 
 ### Build it yourself
 
-You can also build and run RedisTimeSeries on your own machine.
+You can also build RedisTimeSeries on your own machine. Major Linux distributions as well as macOS are supported.
 
-Major Linux distributions as well as macOS are supported.
-
-You should have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`):
+First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`):
 
 ```
 mkdir ~/Redis
@@ -109,15 +107,16 @@ make install
 Next, you should get the RedisTimeSeries repository from git and build it:
 
 ```
-apt-get install -y git python3 libssl-dev automake libtool cmake
+apt-get install -y git
 cd ~/Redis
-git clone --recurse-submodules -j8 https://github.com/RedisTimeSeries/RedisTimeSeries.git
+git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
 cd RedisTimeSeries
-./deps/readies/bin/getpy3
+./sbin/setup
+bash -l
 make
 ```
 
-Next, add RedisTimeSeries module to `redis.conf`:
+Next, add RedisTimeSeries module to `redis.conf`, so Redis will load when started:
 
 ```
 cd ~/Redis/redis-stable
