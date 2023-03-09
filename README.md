@@ -103,25 +103,9 @@ Then, to install required build artifacts, invoke the following:
 
 ```
 cd RedisTimeSeries
-make setup
+./sbin/setup
+bash -l
 ```
-Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
-
-If ```make``` is not yet available, the following commands are equivalent:
-
-```
-./deps/readies/bin/getpy3
-./system-setup.py
-```
-
-Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
-
-If you prefer to avoid that, you can:
-
-* Review system-setup.py and install packages manually,
-* Utilize a Python virtual environment,
-* Use Docker with the ```--volume``` option to create an isolated build environment.
-
 #### Build
 
 ```bash
@@ -132,7 +116,17 @@ Binary artifacts are placed under the ```bin``` directory.
 
 #### Run
 
-In your redis-server run: `loadmodule bin/redistimeseries.so`
+If Redis is not installed on your system, you can install it using:
+
+```
+./deps/readies/bin/getredis
+```
+
+Then:
+
+```
+make run
+```
 
 For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
 
@@ -175,7 +169,7 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] | [GitHub][phpRedisTimeSeries-url] |
 | [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] | [GitHub][redis-time-series-url] |
 | [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] | [GitHub][redistimeseries-js-url] |
-| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] | [GitHub][redis_ts-url] | 
+| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] | [GitHub][redis_ts-url] |
 | [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] | [GitHub][redistimeseries-url] |
 | [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] | [GitHub][redis-time-series-rb-url] |
 
