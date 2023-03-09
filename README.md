@@ -99,6 +99,8 @@ First, clone the RedisTimeSeries repository from git:
 git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
 ```
 
+Note that use of `--recursive` here is important - it will also clone submodules.
+
 Then, to install required build artifacts, invoke the following:
 
 ```
@@ -132,7 +134,7 @@ For more information about modules, go to the [Redis official documentation](htt
 
 ## Give it a try
 
-After you setup RedisTimeSeries, you can interact with it using redis-cli.
+After you setup RedisTimeSeries, you can interact with it using `redis-cli`.
 
 Here we'll create a time series representing sensor temperature measurements.
 After you create the time series, you can send temperature measurements.
@@ -242,25 +244,17 @@ To run all unit tests, follow these steps:
 **Integration tests**
 
 
-Integration tests are based on [RLTest](https://github.com/RedisLabsModules/RLTest), and specific setup parameters can be provided
-to configure tests. By default the tests will be ran for all common commands, and with variation of persistency and replication.
+Run:
 
-
-To run all integration tests in a Python virtualenv, follow these steps:
-
-    $ mkdir -p .env
-    $ virtualenv .env
-    $ source .env/bin/activate
-    $ pip install -r tests/flow/requirements.txt
-    $ make test
+    $ make flow_tests
 
 To understand what test options are available simply run:
 
-    $ make help
+    $ make flow_tests HELP=1
 
-For example, to run the tests strictly desigined for TS.ADD command, follow these steps:
+For example, to run the tests strictly desiginated for TS.ADD command, follow these steps:
 
-    $ make test TEST=test_ts_add.py
+    $ make flow_tests TEST=test_ts_add
 
 
 ## Documentation
