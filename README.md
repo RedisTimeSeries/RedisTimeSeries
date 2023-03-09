@@ -85,56 +85,59 @@ To quickly try out RedisTimeSeries, launch an instance using docker:
 docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 ```
 
-### Build and Run it yourself
+### Build it yourself
 
 You can also build and run RedisTimeSeries on your own machine.
 
 Major Linux distributions as well as macOS are supported.
 
-#### Requirements
-
-First, clone the RedisTimeSeries repository from git:
+You should have Redis installed, of course. The following, for example, builds Redis on a clean Unubtu docker:
 
 ```
-git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
+mkdir ~/Redis
+cd ~/Redis
+apt-get update -y && apt-get upgrade -y
+apt-get install -y wget make pkg-config build-essential
+wget https://download.redis.io/redis-stable.tar.gz
+tar -xzvf redis-stable.tar.gz
+cd redis-stable
+make distclean
+make
+make install
 ```
 
-Then, to install required build artifacts, invoke the following:
+Next, you can the RedisTimeSeries repository from git and build it:
 
 ```
+apt-get install -y git python3 libssl-dev automake libtool cmake
+cd ~/Redis
+git clone --recurse-submodules -j8 https://github.com/RedisTimeSeries/RedisTimeSeries.git
 cd RedisTimeSeries
-make setup
-```
-Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
-
-If ```make``` is not yet available, the following commands are equivalent:
-
-```
 ./deps/readies/bin/getpy3
-./system-setup.py
+make
 ```
 
-Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+Next, add RedisTimeSeries module to redis.conf:
 
-If you prefer to avoid that, you can:
-
-* Review system-setup.py and install packages manually,
-* Utilize a Python virtual environment,
-* Use Docker with the ```--volume``` option to create an isolated build environment.
-
-#### Build
-
-```bash
-make build
 ```
-
-Binary artifacts are placed under the ```bin``` directory.
-
-#### Run
-
-In your redis-server run: `loadmodule bin/redistimeseries.so`
+cd ~/Redis/redis-stable
+apt-get install -y vim
+vim redis.conf
+```
+add: `loadmodule ../RedisTimeSeries/bin/linux-x64-release/redistimeseries.so` under the MODULES section
+save and exit (ESC :wq ENTER)
 
 For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
+
+### Run
+
+Run redis-server in the background and then redis-cli:
+
+```
+cd ~/Redis/redis-stable
+redis-server redis.conf &
+redis-cli
+```
 
 ## Give it a try
 
