@@ -95,7 +95,7 @@ Now, also create a compacted time series named _dailyDiffTemp_. This time series
 127.0.0.1:6379> TS.CREATERULE temp:TLV dailyDiffTemp:TLV AGGREGATION range 86400000 21600000
 {{< / highlight >}}
   
-<details open>  
+</details>
 
 ## See also
 
