@@ -4,7 +4,7 @@ syntax: |
     [LATEST]
 ---
 
-Get the sample with the highest timestamp
+Get the sample with the highest timestamp from a given time serie
 
 [Examples](#examples)
 
