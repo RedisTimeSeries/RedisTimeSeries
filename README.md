@@ -7,6 +7,8 @@
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
+<img src="docs/docs/images/logo.svg" alt="logo" width="300"/>
+
 RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
 
 RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
@@ -85,56 +87,61 @@ To quickly try out RedisTimeSeries, launch an instance using docker:
 docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 ```
 
-### Build and Run it yourself
+### Build it yourself
 
-You can also build and run RedisTimeSeries on your own machine.
+You can also build RedisTimeSeries on your own machine. Major Linux distributions as well as macOS are supported.
 
-Major Linux distributions as well as macOS are supported.
-
-#### Requirements
-
-First, clone the RedisTimeSeries repository from git:
+First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`):
 
 ```
+mkdir ~/Redis
+cd ~/Redis
+apt-get update -y && apt-get upgrade -y
+apt-get install -y wget make pkg-config build-essential
+wget https://download.redis.io/redis-stable.tar.gz
+tar -xzvf redis-stable.tar.gz
+cd redis-stable
+make distclean
+make
+make install
+```
+
+Next, you should get the RedisTimeSeries repository from git and build it:
+
+```
+apt-get install -y git
+cd ~/Redis
 git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
-```
-
-Then, to install required build artifacts, invoke the following:
-
-```
 cd RedisTimeSeries
-make setup
-```
-Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
-
-If ```make``` is not yet available, the following commands are equivalent:
-
-```
-./deps/readies/bin/getpy3
-./system-setup.py
+./sbin/setup
+bash -l
+make
 ```
 
-Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+Next, run `make run -n` and copy the full path of the RedisTimeSeries executable (e.g., `/root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so`).
 
-If you prefer to avoid that, you can:
+Next, add RedisTimeSeries module to `redis.conf`, so Redis will load when started:
 
-* Review system-setup.py and install packages manually,
-* Utilize a Python virtual environment,
-* Use Docker with the ```--volume``` option to create an isolated build environment.
-
-#### Build
-
-```bash
-make build
 ```
+apt-get install -y vim
+cd ~/Redis/redis-stable
+vim redis.conf
+```
+Add: `loadmodule /root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so` under the MODULES section (use the full path copied above). 
 
-Binary artifacts are placed under the ```bin``` directory.
-
-#### Run
-
-In your redis-server run: `loadmodule bin/redistimeseries.so`
+Save and exit vim (ESC :wq ENTER)
 
 For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
+
+### Run
+
+Run redis-server in the background and then redis-cli:
+
+```
+cd ~/Redis/redis-stable
+redis-server redis.conf &
+redis-cli
+```
 
 ## Give it a try
 
