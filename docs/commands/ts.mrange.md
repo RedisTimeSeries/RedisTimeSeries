@@ -195,19 +195,31 @@ When combined with `AGGREGATION` the `GROUPBY`/`REDUCE` is applied post aggregat
     - `__reducer__`, the reducer used (e.g., `"count"`)
     - `__source__`, the list of time series keys used to compute the grouped series (e.g., `"key1,key2,key3"`)
 </note>
+
 </details>
+
+<note><b>Note:</b> An `MRANGE` command cannot be part of a transaction when running on a Redis cluster.</note>
 
 ## Return value
 
-For each time series matching the specified filters, the following is reported:
-- The key name
-- A list of label-value pairs
-  - By default, an empty list is reported
-  - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
-- Timestamp-value pairs for all samples/aggregations matching the range
+If `GROUPBY label REDUCE reducer` is not specified:
 
-<note><b>Note:</b> The `MRANGE` command cannot be part of transaction when running on a Redis cluster.</note>
+- @array-reply: for each time series matching the specified filters, the following is reported:
+  - bulk-string-reply: The time series key name
+  - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply)
+    - By default, an empty list is reported
+    - If `WITHLABELS` is specified, all labels associated with this time series are reported
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported
+  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
+
+If `GROUPBY label REDUCE reducer` is specified:
+
+- @array-reply: for each group of time series matching the specified filters, the following is reported:
+  - bulk-string-reply with the format `label=value` where `label` is the `GROUPBY` label argument
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply): the `GROUPBY` label argument and value
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply):  the string `__reducer__` and the reducer argument
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply): the string `__source__` and the time series key names separated by `,`
+  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
 
 ## Examples
 
