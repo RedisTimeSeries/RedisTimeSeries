@@ -7,6 +7,8 @@
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
+<img src="docs/docs/images/logo.svg" alt="logo" width="300"/>
+
 RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
 
 RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
@@ -116,15 +118,18 @@ bash -l
 make
 ```
 
+Next, run `make run -n` and copy the full path of the RedisTimeSeries executable (e.g., `/root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so`).
+
 Next, add RedisTimeSeries module to `redis.conf`, so Redis will load when started:
 
 ```
-cd ~/Redis/redis-stable
 apt-get install -y vim
+cd ~/Redis/redis-stable
 vim redis.conf
 ```
-add: `loadmodule ../RedisTimeSeries/bin/linux-x64-release/redistimeseries.so` under the MODULES section
-save and exit (ESC :wq ENTER)
+Add: `loadmodule /root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so` under the MODULES section (use the full path copied above). 
+
+Save and exit vim (ESC :wq ENTER)
 
 For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
 
