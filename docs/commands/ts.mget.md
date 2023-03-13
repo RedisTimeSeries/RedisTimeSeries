@@ -4,7 +4,7 @@ syntax: |
 
 ---
 
-Get the last samples matching a specific filter
+Get the sample with the highest timestamp from each time series matching a specific filter
 
 [Examples](#examples)
 

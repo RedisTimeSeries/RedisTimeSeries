@@ -5,6 +5,7 @@ Compactions
 Dani
 Duszynski
 Eaden
+ESC
 Grafana
 JRedisTimeSeries
 Jedis
@@ -53,3 +54,4 @@ twa
 virtualenv
 xyz
 rustis
+wq
