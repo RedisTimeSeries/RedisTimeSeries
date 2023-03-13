@@ -66,7 +66,7 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
     - By default, an empty array is reported
     - If `WITHLABELS` is specified, all labels associated with this time series are reported
     - If `SELECTED_LABELS label...` is specified, the selected labels are reported (null value when no such label defined)
-  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
+  - @array-reply: a single timestamp-value pair (@integer-reply, @simple-string-reply (double))
 
 ## Examples
 
