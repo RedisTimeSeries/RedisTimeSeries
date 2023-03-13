@@ -209,7 +209,7 @@ If `GROUPBY label REDUCE reducer` is not specified:
   - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply)
     - By default, an empty array is reported
     - If `WITHLABELS` is specified, all labels associated with this time series are reported
-    - If `SELECTED_LABELS label...` is specified, the selected labels are reported
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported (null value when no such label defined)
   - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
 
 If `GROUPBY label REDUCE reducer` is specified:
@@ -219,7 +219,7 @@ If `GROUPBY label REDUCE reducer` is specified:
   - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply):
     - By default, an empty array is reported
     - If `WITHLABELS` is specified, the `GROUPBY` label argument and value are reported
-    - If `SELECTED_LABELS label...` is specified, the selected labels are reported (with null value if no such label is defined or does not have the same value for all grouped time series)
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported (null value when no such label defined or label does not have the same value for all grouped time series)
   - @array-reply: either a single pair (@bulk-string-reply, @bulk-string-reply): the `GROUPBY` label argument and value, or empty array if 
   - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply):  the string `__reducer__` and the reducer argument
   - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply): the string `__source__` and the time series key names separated by `,`
