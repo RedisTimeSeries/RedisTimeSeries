@@ -118,7 +118,7 @@ bash -l
 make
 ```
 
-Then `exit` to exis bash.
+Then `exit` to exit bash.
 
 **Note:** to get a specific version of RedisTimeSeries, e.g. 1.8.9, add `-b v1.8.9` to the `git clone` command above.
 
