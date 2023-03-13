@@ -44,6 +44,7 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+
 </details>
 
 <details open>
@@ -52,19 +53,20 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+
 </details>
+
+<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Return value
 
-For each time series matching the specified filters, the following is reported:
-- The key name
-- A list of label-value pairs
-  - By default, an empty list is reported
-  - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
-- Timestamp-value pairs for all samples/aggregations matching the range
-
-<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
+- @array-reply: for each time series matching the specified filters, the following is reported:
+  - bulk-string-reply: The time series key name
+  - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply)
+    - By default, an empty array is reported
+    - If `WITHLABELS` is specified, all labels associated with this time series are reported
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported (null value when no such label defined)
+  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
 
 ## Examples
 
