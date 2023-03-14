@@ -1369,7 +1369,7 @@
             "group": "timeseries"
     },
     "TS.GET": {
-        "summary": "Get the last sample",
+        "summary": "Get the sample with the highest timestamp from a given time series",
         "complexity": "O(1)",
         "arguments": [
             {
@@ -1387,7 +1387,7 @@
         "group": "timeseries"
     },
     "TS.MGET": {
-        "summary": "Get the last samples matching a specific filter",
+        "summary": "Get the sample with the highest timestamp from each time series matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
