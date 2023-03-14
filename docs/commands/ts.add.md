@@ -89,7 +89,7 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 - Setting `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
-## Return value
+## Return
 
 @integer-reply - the timestamp of the upserted sample, or @error-reply.
 
