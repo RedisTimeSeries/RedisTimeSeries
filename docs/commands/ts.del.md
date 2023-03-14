@@ -35,7 +35,7 @@ The given timestamp interval is closed (inclusive), meaning that samples whose t
 
 </note>
 
-## Return value
+## Return
 
 @integer-reply: The number of samples that were deleted, or @error-reply.
 
