@@ -44,7 +44,7 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 If `LABELS` is specified, the given label list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs removes all existing labels. See `LABELS` in `TS.CREATE`.
 </details>
 
-## Return value
+## Return
 
 @simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
 
