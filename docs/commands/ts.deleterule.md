@@ -20,7 +20,7 @@ is key name for destination (compacted) time series.
 
 <note><b>Note:</b> This command does not delete the compacted series.</note>
 
-## Return value
+## Return
 
 @simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
 
