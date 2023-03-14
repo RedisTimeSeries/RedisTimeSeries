@@ -5,6 +5,7 @@ from includes import *
 
 
 def test_errors():
+    env = Env()
     with Env().getConnection() as r:
         # test wrong arity
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -24,15 +25,15 @@ def test_errors():
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.DELETERULE')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.QUERYINDEX')
+            assert env.getConnection(0).execute_command('TS.QUERYINDEX')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.GET')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET')
+            assert env.getConnection(0).execute_command('TS.MGET')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE')
+            assert env.getConnection(0).execute_command('TS.MRANGE')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.INFO')
 
@@ -63,18 +64,18 @@ def test_errors():
             assert r.execute_command('TS.ADD', 'values', '*', 'value')  # string
         with pytest.raises(redis.ResponseError) as excinfo:
             labels = ["abc"] * 51
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MGET', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
             labels = ["abc"] * 51
-            assert r.execute_command('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MRANGE', 'SELECTED_LABELS', *labels, 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MRANGE', '-', '+', 'ALIGN', '2dd2', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'start2', 'FILTER', 'metric=cpu')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
+            assert env.getConnection(0).execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
         assert r.execute_command('TS.CREATE', 'tester')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN')

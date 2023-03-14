@@ -17,19 +17,19 @@ def test_groupby_reduce_errors():
 
         # test wrong arity
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY')
+            assert env.getConnection(0).execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY')
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name')
+            assert env.getConnection(0).execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name')
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc')
+            assert env.getConnection(0).execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'abc', 'abc')
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla')
+            assert env.getConnection(0).execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'bla')
 
     with pytest.raises(redis.ResponseError) as excinfo:
-        assert r.execute_command('TS.MRANGE', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu')
+        assert env.getConnection(0).execute_command('TS.mrange', 0, 100, 'WITHLABELS', 'GROUPBY', 'metric_name', 'REDUCE', 'max', 'FILTER', 'metric=cpu')
 
 def test_groupby_reduce():
     env = Env()
@@ -39,7 +39,7 @@ def test_groupby_reduce():
         assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system')
         assert r.execute_command('TS.ADD', 's1', 2, 95)
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'max')
         serie1 = actual_result[0]
         serie1_name = serie1[0]
@@ -62,71 +62,71 @@ def test_groupby_reduce():
         env.assertEqual(sorted(serie2_labels[2][1].decode("ascii").split(",")), ['s1', 's2'])
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'95']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'sum')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'150']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'55']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'COUNT', 1, 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'COUNT', 1, 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'avg')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'75']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'count')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'1'], [2, b'2']])
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'range')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'0'], [2, b'40']])
 
         expected_res = [[1, b'0'], [2, str(statistics.pvariance([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.p')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(statistics.variance([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.s')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(int(statistics.pstdev([55, 95]))).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.p')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(statistics.stdev([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.s')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
@@ -140,7 +140,7 @@ def test_groupby_reduce_empty():
         assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'metric_family', 'cpu', 'metric_name', 'system')
         assert r.execute_command('TS.ADD', 's1', 2, 95)
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'labelX', 'REDUCE', 'max')
         env.assertEqual(actual_result, [])
 
@@ -152,7 +152,7 @@ def test_groupby_reduce_multiple_groups():
         assert r.execute_command('TS.ADD', 's2', 2, 90, 'LABELS', 'HOST', 'B', 'REGION', 'EU', 'PROVIDER', 'AWS')
         assert r.execute_command('TS.ADD', 's3', 2, 40, 'LABELS', 'HOST', 'C', 'REGION', 'US', 'PROVIDER', 'AWS')
 
-        actual_result = r.execute_command(
+        actual_result = env.getConnection(0).execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'PROVIDER=AWS', 'GROUPBY', 'REGION', 'REDUCE', 'max')
         serie1 = actual_result[0]
         serie1_name = serie1[0]
@@ -208,13 +208,13 @@ def test_filterby():
                     env.assertEqual(points[k], expected_results[country][k], message="timestamp {} not equal".format(k))
                 env.assertEqual(points, expected_results[country], message="country {} not eq".format(country))
 
-        results = r.execute_command("TS.MRANGE", "-", "+",
+        results = env.getConnection(0).execute_command("TS.MRANGE", "-", "+",
                           "withlabels", "FILTER_BY_VALUE", 30, 100,
                           "AGGREGATION", "count", 3600000,
                           "filter", "metric=temperature", "groupby", "country", "reduce", "sum")
         assert_results(results, high_temps)
 
-        results = r.execute_command("TS.MRANGE", "-", "+",
+        results = env.getConnection(0).execute_command("TS.MRANGE", "-", "+",
                                     "withlabels", "FILTER_BY_TS", 1335830400000, 1338508800000,
                                     "AGGREGATION", "count", 3600000,
                                     "filter", "metric=temperature", "groupby", "country", "reduce", "sum")
@@ -240,11 +240,11 @@ def test_empty():
         exp_samples = [[0, '2'], [10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '6'], [60, '9'], [70, '5']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
         exp_samples.reverse()
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 
         # test LAST + EMPTY
         #expected_agg_t1 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
@@ -252,11 +252,11 @@ def test_empty():
         exp_samples = [[0, '2'], [10, '6'], [20, '6'], [30, '6'], [40, '6'], [50, '6'], [60, '12'], [70, '3']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
         exp_samples.reverse()
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "LAST", agg_size, 'EMPTY', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 
 
 
@@ -281,11 +281,11 @@ def test_bucket_timestamp():
         exp_samples = [[0, '2'], [10, '4'], [50, '6'], [60, '9'], [70, '5']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command("TS.MRANGE", "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
         exp_samples.reverse()
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command('TS.MREVRANGE', "0", "100", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '-', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 
 
         #expected_agg_t1 = [[15, '4'], [55, '3'], [75, '5']]
@@ -293,20 +293,20 @@ def test_bucket_timestamp():
         exp_samples = [[5, '2'], [15, '4'], [55, '6'], [65, '9'], [75, '5']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
         exp_samples.reverse()
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '~', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 
         #expected_agg_t1 = [[20, '4'], [60, '3'], [80, '5']]
         #expected_agg_t2 = [[10, '2'], [60, '3'], [70, '9']]
         exp_samples = [[10, '2'], [20, '4'], [60, '6'], [70, '9'], [80, '5']]
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command("TS.MRANGE", "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
         exp_samples.reverse()
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
-        decode_if_needed(r.execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+        decode_if_needed(env.getConnection(0).execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
 

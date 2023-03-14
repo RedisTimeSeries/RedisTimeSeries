@@ -6,6 +6,8 @@ from includes import *
 def test_mrevrange():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
+
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
@@ -16,10 +18,10 @@ def test_mrevrange():
 
         expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
         expected_result.reverse()
-        actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
+        actual_result = env.getConnection(0).execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'FILTER', 'name=bob')
         assert [[b'tester1', [], expected_result]] == actual_result
 
-        actual_result = r.execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'COUNT', '5', 'FILTER',
+        actual_result = env.getConnection(0).execute_command('TS.mrevrange', start_ts, start_ts + samples_count, 'COUNT', '5', 'FILTER',
                                           'generation=x')
         actual_result.sort(key=lambda x:x[0])
         assert actual_result == [[b'tester1', [],
@@ -32,12 +34,12 @@ def test_mrevrange():
                                   [[1511885958, b'25'], [1511885957, b'25'], [1511885956, b'25'], [1511885955, b'25'],
                                    [1511885954, b'25']]]]
 
-        agg_result = r.execute_command('TS.mrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
-        rev_agg_result = r.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+        agg_result = env.getConnection(0).execute_command('TS.mrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
+        rev_agg_result = env.getConnection(0).execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'FILTER', 'name=bob')[0][2]
         rev_agg_result.reverse()
         assert rev_agg_result == agg_result
         last_results = list(agg_result)
         last_results.reverse()
         last_results = last_results[0:3]
-        assert r.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][
+        assert env.getConnection(0).execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][
                    2] == last_results
