@@ -82,7 +82,7 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 The `TS.MGET`, `TS.MRANGE`, and `TS.MREVRANGE` commands operate on multiple time series based on their labels. The `TS.QUERYINDEX` command returns all time series keys matching a given filter based on their labels.
 </details>
 
-## Return value
+## Return
 
 @simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
 
