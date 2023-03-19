@@ -118,6 +118,10 @@ bash -l
 make
 ```
 
+Then `exit` to exit bash.
+
+**Note:** to get a specific version of RedisTimeSeries, e.g. 1.8.9, add `-b v1.8.9` to the `git clone` command above.
+
 Next, run `make run -n` and copy the full path of the RedisTimeSeries executable (e.g., `/root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so`).
 
 Next, add RedisTimeSeries module to `redis.conf`, so Redis will load when started:
