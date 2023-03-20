@@ -416,7 +416,7 @@ jobs:
           platform: <<parameters.platform>>
           official: "0"
 
-  build-macos:
+  build-macos-x64:
     macos:
       xcode: 12.5.1
     resource_class: macos.x86.medium.gen2
@@ -432,6 +432,25 @@ jobs:
           command: |
             if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
                 make upload-artifacts SHOW=1
+            fi
+      - persist-artifacts
+
+  build-macos-m1:
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.large.gen1
+    parameters:
+      upload:
+        type: string
+        default: "yes"
+    steps:
+      - early-returns
+      - build-steps
+      - run:
+          name: Upload artifacts to S3
+          command: |
+            if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
+                make upload-artifacts SHOW=1 VERBOSE=1
             fi
       - persist-artifacts
 
@@ -818,9 +837,13 @@ workflows:
           matrix:
             parameters:
               platform: [jammy, focal, bionic]
-      - build-macos:
+      - build-macos-x64:
           context: common
           <<: *on-integ-and-version-tags
+      - build-macos-m1:
+          context: common
+          #@@<<: *on-integ-and-version-tags
+          <<: *always
       - coverage:
           <<: *on-any-branch
       - performance-ci-automation-oss-standalone:
@@ -855,7 +878,8 @@ workflows:
           requires:
             - build-platforms
             - build-arm-platforms
-            - build-macos
+            - build-macos-x64
+            - build-macos-m1
       - upload-artifacts:
           name: upload-release-artifacts
           context: common
@@ -863,7 +887,8 @@ workflows:
           requires:
             - build-platforms
             - build-arm-platforms
-            - build-macos
+            - build-macos-x64
+            - build-macos-m1
       - release-qa-tests:
           <<: *on-version-tags
           context: common
@@ -938,6 +963,8 @@ workflows:
           cron: "20 17 * * 0,3"
           <<: *on-integ-branch-cron
     jobs:
-      - build-macos:
+      - build-macos-x64:
+          upload: "no"
+      - build-macos-m1:
           upload: "no"
       - valgrind
