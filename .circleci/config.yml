@@ -838,8 +838,8 @@ workflows:
             parameters:
               platform: [jammy, focal, bionic]
       - build-macos-x64:
-          context: common
           <<: *on-integ-and-version-tags
+          context: common
       - build-macos-m1:
           context: common
           #@@<<: *on-integ-and-version-tags
@@ -872,9 +872,9 @@ workflows:
           <<: *on-integ-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
+          <<: *on-integ-branch
           staging-lab: "1"
           context: common
-          <<: *on-integ-branch
           requires:
             - build-platforms
             - build-arm-platforms
@@ -882,8 +882,8 @@ workflows:
             - build-macos-m1
       - upload-artifacts:
           name: upload-release-artifacts
-          context: common
           <<: *on-version-tags
+          context: common
           requires:
             - build-platforms
             - build-arm-platforms
