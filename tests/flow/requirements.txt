@@ -1,7 +1,7 @@
 pytest~=7.0.0
-redis ~= 4.5.0
-RLTest ~= 0.6.0
-ramp-packer~=2.5.2
+# redis~=3.5.3
+# RLTest~=0.4.2
+# ramp-packer~=2.5.2
 statistics
 hiredis==2.0.0
 gevent~=22.10.1
