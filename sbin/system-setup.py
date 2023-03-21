@@ -21,28 +21,28 @@ class RedisTimeSeriesSetup(paella.Setup):
     def common_first(self):
         self.install_downloaders()
         self.install("git jq")
-        self.run("%s/bin/enable-utf8" % READIES, sudo=self.os != 'macos')
+        self.run(f"{READIES}/bin/enable-utf8", sudo=self.os != 'macos')
 
         self.install("autoconf libtool m4 automake")
         self.install("openssl")
 
     def debian_compat(self):
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run(f"{READIES}/bin/getgcc --modern")
         self.install("libssl-dev")
 
     def redhat_compat(self):
         self.install("redhat-lsb-core")
         self.install("which")
-        self.run("%s/bin/getepel" % READIES, sudo=True)
+        self.run(f"{READIES}/bin/getepel", sudo=True)
         self.install("openssl-devel")
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run(f"{READIES}/bin/getgcc --modern")
 
     def archlinux(self):
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run(f"{READIES}/bin/getgcc --modern")
         self.install("lcov-git", aur=True)
 
     def fedora(self):
-        self.run("%s/bin/getgcc --modern" % READIES)
+        self.run(f"{READIES}/bin/getgcc --modern")
         self.install("openssl-devel")
         self.install("python3-networkx")
 
@@ -53,17 +53,17 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.install_gnu_utils()
 
     def common_last(self):
-        self.run("{PYTHON} {READIES}/bin/getcmake --usr".format(PYTHON=self.python, READIES=READIES))
+        self.run(f"{self.python} {READIES}/bin/getcmake --usr")
         if self.dist != "arch":
             self.install("lcov")
         else:
             self.install("lcov-git", aur=True)
-        self.run("{READIES}/bin/getaws".format(READIES=READIES))
+        self.run(f"{READIES}/bin/getaws")
         if self.pytools:
-            self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi --ramp-version github:redis-py-3.5".format(PYTHON=self.python, READIES=READIES))
-            # self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi --modern".format(PYTHON=self.python, READIES=READIES))
-            self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
-            self.run("NO_PY2=1 %s/bin/getpudb" % READIES)
+            self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --pypi --rltest-version github:0.4 --ramp-version github:redis-py-3.5")
+            # self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --pypi --modern")
+            self.pip_install(f"-r {ROOT}/tests/flow/requirements.txt")
+            self.run(f"NO_PY2=1 {READIES}/bin/getpudb")
 
 #----------------------------------------------------------------------------------------------
 
