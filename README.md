@@ -71,11 +71,7 @@ find projects that help you integrate RedisTimeSeries with other tools, includin
 3. [Telegraf](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
-## Memory model
-A time series is a linked list of memory chunks.
-Each chunk has a predefined size of samples.
-Each sample is a tuple of the time and the value of 128 bits,
-64 bits for the timestamp and 64 bits for the value.
+RedisTimeSeries is part of [Redis Stack](https://github.com/redis-stack).
 
 ## Setup
 
