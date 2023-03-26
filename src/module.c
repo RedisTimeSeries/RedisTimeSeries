@@ -951,7 +951,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
         return RedisModule_ReplyWithError(
-            ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
+            ctx, "TSDB: timestamp must be equal to or higher than the maximum existing timestamp");
     }
 
     double result = series->lastValue;
