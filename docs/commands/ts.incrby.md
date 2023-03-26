@@ -92,7 +92,7 @@ Note that the timestamps must arrive in non-decreasing order.
 
 {{< highlight bash >}}
 127.0.0.1:6379> ts.incrby a 100 TIMESTAMP 50
-(error) TSDB: for incrby/decrby, timestamp should be newer than the lastest one
+(error) TSDB: timestamp must be equal to or higher than the maximum existing timestamp
 {{< / highlight >}}
 
 You can achieve similar results without such protection using `TS.ADD key timestamp value ON_DUPLICATE sum`.
