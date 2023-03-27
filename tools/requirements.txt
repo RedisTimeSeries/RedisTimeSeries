@@ -1,4 +1,4 @@
-redis==2.10.5
+redis==4.5.3
 gevent==1.2.1
 Flask>=0.12
 Flask-Cors==3.0.9
