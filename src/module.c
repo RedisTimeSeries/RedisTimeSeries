@@ -25,6 +25,7 @@
 #include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
+#include "redismodule-rlec.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -57,11 +58,13 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
+    bool reply_map = _ReplyMap(ctx);
+
     int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithArray(ctx, 14 * 2);
+        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true);
     } else {
-        RedisModule_ReplyWithArray(ctx, 12 * 2);
+        RedisModule_ReplyWithMapOrArray(ctx, 12 * 2, true);
     }
 
     long long skippedSamples;
@@ -101,12 +104,17 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModule_ReplyWithSimpleString(ctx, "rules");
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_LEN, false);
     CompactionRule *rule = series->rules;
     int ruleCount = 0;
     while (rule != NULL) {
-        RedisModule_ReplyWithArray(ctx, 4);
+        if (!reply_map) {
+            RedisModule_ReplyWithArray(ctx, 4);
+        }
         RedisModule_ReplyWithString(ctx, rule->destKey);
+        if (reply_map) {
+            RedisModule_ReplyWithArray(ctx, 3);
+        }
         RedisModule_ReplyWithLongLong(ctx, rule->bucketDuration);
         RedisModule_ReplyWithSimpleString(ctx, AggTypeEnumToString(rule->aggType));
         RedisModule_ReplyWithLongLong(ctx, rule->timestampAlignment);
@@ -114,7 +122,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         rule = rule->nextRule;
         ruleCount++;
     }
-    RedisModule_ReplySetArrayLength(ctx, ruleCount);
+    RedisModule_ReplySetMapOrArrayLength(ctx, ruleCount, false);
 
     if (is_debug) {
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
@@ -127,17 +135,37 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
             u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
-            RedisModule_ReplyWithArray(ctx, 5 * 2);
+            if (!reply_map) {
+                RedisModule_ReplyWithArray(ctx, 5 * 2);
+            } else {
+                RedisModule_ReplyWithArray(ctx, 5);
+            }
+
+            if (reply_map) {
+                RedisModule_ReplyWithMap(ctx, 1);
+            }
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
             RedisModule_ReplyWithLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
+            if (reply_map) {
+                RedisModule_ReplyWithMap(ctx, 1);
+            }
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
             RedisModule_ReplyWithLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
+            if (reply_map) {
+                RedisModule_ReplyWithMap(ctx, 1);
+            }
             RedisModule_ReplyWithSimpleString(ctx, "samples");
             RedisModule_ReplyWithLongLong(ctx, numOfSamples);
+            if (reply_map) {
+                RedisModule_ReplyWithMap(ctx, 1);
+            }
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
+            if (reply_map) {
+                RedisModule_ReplyWithMap(ctx, 1);
+            }
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
             RedisModule_ReplyWithDouble(
                 ctx, (numOfSamples == 0) ? (float)0 : (float)chunkSize / numOfSamples);
@@ -154,7 +182,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count);
 
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModule_ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -165,7 +193,7 @@ void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         replylen++;
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetArrayLength(ctx, replylen);
+    RedisModule_ReplySetSetOrArrayLength(ctx, replylen);
 }
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -244,7 +272,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     // todo: this is duplicated in resultset.c
     // Apply the reducer
-    ResultSet_ApplyReducer(resultset, &args->rangeArgs, &args->gropuByReducerArgs);
+    ResultSet_ApplyReducer(ctx, resultset, &args->rangeArgs, &args->gropuByReducerArgs);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     RangeArgs minimizedArgs = args->rangeArgs;
@@ -272,7 +300,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                                     RedisModuleDict *result,
                                     const MRangeArgs *args) {
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -306,12 +334,13 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                             (RedisModuleString **)args->limitLabels,
                             args->numLimitLabels,
                             &args->rangeArgs,
-                            args->reverse);
+                            args->reverse,
+                            false);
         replylen++;
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetArrayLength(ctx, replylen);
+    RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
 
     return REDISMODULE_OK;
 }
@@ -1043,7 +1072,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleDict *result =
         QueryIndex(ctx, args.queryPredicates->list, args.queryPredicates->count);
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;
@@ -1066,8 +1095,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                             currentKey);
             continue;
         }
-        RedisModule_ReplyWithArray(ctx, 3);
+        if (!_ReplyMap(ctx)) {
+            RedisModule_ReplyWithArray(ctx, 3);
+        }
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        if (_ReplyMap(ctx)) {
+            RedisModule_ReplyWithArray(ctx, 2);
+        }
         if (args.withLabels) {
             ReplyWithSeriesLabels(ctx, series);
         } else if (args.numLimitLabels > 0) {
@@ -1092,7 +1126,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         replylen++;
         RedisModule_CloseKey(key);
     }
-    RedisModule_ReplySetArrayLength(ctx, replylen);
+    RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
     RedisModule_DictIteratorStop(iter);
     MGetArgs_Free(&args);
     free(limitLabelsStr);

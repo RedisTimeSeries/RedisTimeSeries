@@ -11,6 +11,13 @@ typedef struct MRangeData
     MRangeArgs args;
 } MRangeData;
 
+typedef struct MData
+{
+    RedisModuleBlockedClient *bc;
+    bool resp3;
+    bool is_mget;
+} MData;
+
 int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries);
 int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse);

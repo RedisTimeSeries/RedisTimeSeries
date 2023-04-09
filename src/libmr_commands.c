@@ -35,6 +35,95 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
     RedisModule_FreeThreadSafeContext(_rctx);
 }
 
+static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+    }
+    RedisModule_ReplyWithSet(rctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            r->recordType->sendReply(rctx, r);
+        }
+    }
+
+__done:
+    RTS_UnblockClient(bc, rctx);
+}
+
+static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_mapRecord->recordType != GetMapRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_mapRecord->recordType->type.type);
+            continue;
+        }
+        total_len += MapRecord_GetLen((MapRecord *)raw_mapRecord);
+    }
+
+    RedisModule_ReplyWithMap(rctx, total_len / 2);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_mapRecord->recordType != GetMapRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_mapRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t map_len = MapRecord_GetLen((MapRecord *)raw_mapRecord);
+        for (size_t j = 0; j < map_len; j++) {
+            Record *r = MapRecord_GetRecord((MapRecord *)raw_mapRecord, j);
+            r->recordType->sendReply(rctx, r);
+        }
+    }
+
+__done:
+    RTS_UnblockClient(bc, rctx);
+}
+
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
@@ -108,7 +197,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             }
             total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
         }
-        RedisModule_ReplyWithArray(rctx, total_len);
+        RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
     }
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
@@ -140,7 +229,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                                     data->args.limitLabels,
                                     data->args.numLimitLabels,
                                     &data->args.rangeArgs,
-                                    data->args.reverse);
+                                    data->args.reverse,
+                                    false);
             }
         }
     }
@@ -149,7 +239,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
         args.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(resultset, &args, &data->args.gropuByReducerArgs);
+        ResultSet_ApplyReducer(rctx, resultset, &args, &data->args.gropuByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
@@ -203,7 +293,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-
+    queryArg->resp3 = _ReplyMap(ctx);
     MRError *err = NULL;
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
 
@@ -217,7 +307,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
 
     MR_Run(exec);
 
@@ -290,6 +380,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
+    queryArg->resp3 = _ReplySet(ctx);
 
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
 
@@ -303,7 +394,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
 
     MR_Run(exec);
 

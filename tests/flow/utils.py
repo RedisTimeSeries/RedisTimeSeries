@@ -1,6 +1,7 @@
 import inspect
 
 from RLTest import Env as rltestEnv
+from packaging import version
 from includes import *
 import time
 
@@ -82,3 +83,10 @@ def timeit(method):
                   (method.__name__, (te - ts) * 1000))
         return result
     return timed
+
+def is_resp3_possible(con):
+    res = con.execute_command('INFO')
+    if(version.parse(res['redis_version']) < version.parse("7.0.0")):
+        return False
+    else:
+        return True
