@@ -86,7 +86,7 @@ def timeit(method):
 
 def is_resp3_possible(con):
     res = con.execute_command('INFO')
-    if(version.parse(res['redis_version']) < version.parse("7.0.0")):
+    if version.parse(res['redis_version']) < version.parse("7.0.0"):
         return False
     else:
         return True

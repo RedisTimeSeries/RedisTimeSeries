@@ -7,13 +7,13 @@
 #include "resultset.h"
 
 #include "indexer.h"
-#include "redismodule.h"
 #include "reply.h"
 #include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
-#include "utils/arr.h"
 
+#include "RedisModulesSDK/redismodule.h"
+#include "utils/arr.h"
 #include "rmutil/alloc.h"
 
 struct TS_ResultSet

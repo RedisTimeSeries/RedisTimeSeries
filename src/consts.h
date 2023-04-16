@@ -6,7 +6,7 @@
 #ifndef CONSTS_H
 #define CONSTS_H
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 #include <sys/types.h>
 #include <stdbool.h>

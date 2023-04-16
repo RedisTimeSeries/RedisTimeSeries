@@ -6,7 +6,7 @@
 #ifndef INDEXER_H
 #define INDEXER_H
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 #include <sys/types.h>
 

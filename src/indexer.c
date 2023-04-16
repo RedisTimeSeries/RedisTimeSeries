@@ -6,7 +6,6 @@
 #include "indexer.h"
 
 #include "consts.h"
-#include "redismodule-rlec.h"
 
 #include <assert.h>
 #include <limits.h>

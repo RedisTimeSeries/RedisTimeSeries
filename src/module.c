@@ -8,13 +8,9 @@
 
 #include "module.h"
 
-#include "LibMR/src/cluster.h"
-#include "LibMR/src/mr.h"
-#include "RedisModulesSDK/redismodule.h"
 #include "common.h"
 #include "compaction.h"
 #include "config.h"
-#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "indexer.h"
 #include "libmr_commands.h"
 #include "libmr_integration.h"
@@ -25,16 +21,20 @@
 #include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
-#include "redismodule-rlec.h"
+
+#include "fast_double_parser_c/fast_double_parser_c.h"
+#include "LibMR/src/cluster.h"
+#include "LibMR/src/mr.h"
+#include "RedisModulesSDK/redismodule.h"
+#include "rmutil/alloc.h"
+#include "rmutil/strings.h"
+#include "rmutil/util.h"
 
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
-#include "rmutil/alloc.h"
-#include "rmutil/strings.h"
-#include "rmutil/util.h"
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"

@@ -13,10 +13,9 @@ def test_resp3():
     t5 = 't5{1}'
     t6 = 't6{1}'
     samples_count = 1000
-    env = Env()
+    env = Env(protocol=3)
     rc = env.getClusterConnectionIfNeeded()
     with env.getConnection(1) as r:
-        rc.execute_command('HELLO 3')
         rc.execute_command('ts.create', t1, 'CHUNK_SIZE', 128, 'LABELS', 'name', 'mush')
         rc.execute_command('ts.create', t2, 'CHUNK_SIZE', 128, 'LABELS', 'name', 'mush')
         rc.execute_command('ts.createrule', t1, t2, 'AGGREGATION', 'COUNT', 10)

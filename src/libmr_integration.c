@@ -4,7 +4,6 @@
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
-#include "RedisModulesSDK/redismodule.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
@@ -12,6 +11,7 @@
 #include "query_language.h"
 #include "tsdb.h"
 
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 
 #define SeriesRecordName "SeriesRecord"

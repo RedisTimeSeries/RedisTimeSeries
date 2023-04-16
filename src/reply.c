@@ -6,13 +6,13 @@
 
 #include "reply.h"
 
-#include "dragonbox/dragonbox.h"
 #include "query_language.h"
-#include "redismodule.h"
 #include "series_iterator.h"
 #include "tsdb.h"
-#include "utils/arr.h"
 
+#include "dragonbox/dragonbox.h"
+#include "RedisModulesSDK/redismodule.h"
+#include "utils/arr.h"
 #include "rmutil/alloc.h"
 
 // double string presentation requires 15 digit integers +

@@ -3,11 +3,13 @@
  *licensed under your choice of the redis source available license 2.0 (rsalv2) or
  *the server side public license v1 (ssplv1).
  */
-#include "redismodule.h"
-#include "tsdb.h"
 
 #ifndef RDB_H
 #define RDB_H
+
+#include "tsdb.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 #define TS_ENC_VER 0
 #define TS_UNCOMPRESSED_VER 1

@@ -4,13 +4,14 @@
  *the server side public license v1 (ssplv1).
  */
 
-#include "generic_chunk.h"
-#include "query_language.h"
-#include "redismodule.h"
-#include "tsdb.h"
-
 #ifndef REDISTIMESERIES_REPLY_H
 #define REDISTIMESERIES_REPLY_H
+
+#include "generic_chunk.h"
+#include "query_language.h"
+#include "tsdb.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool devide_by_two);
 void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool devide_by_two);
