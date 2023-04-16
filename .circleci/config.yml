@@ -934,7 +934,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "7.2-rc1, "unstable"]
+              redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
 
   nightly-perf-once-a-week:
     triggers:
