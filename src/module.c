@@ -648,7 +648,14 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
-        RedisModule_Replicate(ctx, "TS.ADD", "sss", keyName, timestampStr, valueStr);
+        RedisModuleString **args_array =
+            (RedisModuleString **)malloc((argc - 1) * sizeof(RedisModuleString *));
+        for (int i = 0; i < argc - 1; i++) { // skip the command name
+            args_array[i] = argv[i + 1];
+        }
+        args_array[1] = timestampStr; // In case the timestamp was "*"
+        RedisModule_Replicate(ctx, "TS.ADD", "v", args_array, argc - 1);
+        free(args_array);
     }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
