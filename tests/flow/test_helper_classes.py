@@ -204,3 +204,10 @@ class TSInfo(object):
                self.chunk_size_bytes == other.chunk_size_bytes and \
                self.chunks == other.chunks and \
                self.key_SelfName == other.key_SelfName
+
+    def __str__(self):
+        return f"Info rules:{self.rules} sourceKey:{self.sourceKey} chunk_count:{self.chunk_count} " \
+            + f"memory_usage:{self.memory_usage} total_samples:{self.total_samples} " \
+                + f"retention_msecs:{self.retention_msecs} last_time_stamp:{self.last_time_stamp} " \
+                    + f"first_time_stamp:{self.first_time_stamp} chunk_size_bytes:{self.chunk_size_bytes} " \
+                        + f"chunk_type:{self.chunk_type} chunks:{self.chunks} key_SelfName:{self.key_SelfName}"
