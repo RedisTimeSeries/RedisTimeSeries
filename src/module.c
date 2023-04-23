@@ -8,7 +8,6 @@
 
 #include "module.h"
 
-#include "common.h"
 #include "compaction.h"
 #include "config.h"
 #include "indexer.h"
@@ -1538,3 +1537,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     return REDISMODULE_OK;
 }
+
+#if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
+#include "readies/cetara/diag/gdb.c"
+#endif

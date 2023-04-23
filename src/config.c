@@ -5,7 +5,6 @@
  */
 #include "config.h"
 
-#include "common.h"
 #include "consts.h"
 #include "module.h"
 #include "query_language.h"
