@@ -21,7 +21,7 @@ def test_resp3():
         rc.execute_command('ts.createrule', t1, t2, 'AGGREGATION', 'COUNT', 10)
         _insert_data(rc, t1, 1, samples_count, 5)
         res = rc.execute_command('ts.get', t1)
-        assert res == [1000, b'5']
+        assert res == [1000, 5.0]
         res = rc.execute_command('ts.info', t1, 'DEBUG')
         assert res == \
         {b'totalSamples': 1000, 
