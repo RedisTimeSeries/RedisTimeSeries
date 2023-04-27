@@ -148,7 +148,7 @@ commands:
         default: ""
       redis_version:
         type: string
-        default: "6"
+        default: "7"
       getredis_params:
         type: string
         default: ""
@@ -374,7 +374,7 @@ jobs:
     parameters:
       redis_version:
         type: string
-        default: "6"
+        default: "7"
       persist:
         type: string
         default: "yes"
