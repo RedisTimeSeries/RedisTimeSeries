@@ -87,7 +87,7 @@ docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 
 You can also build RedisTimeSeries on your own machine. Major Linux distributions as well as macOS are supported.
 
-First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`) or a clean Debian docker image ('docker pull debian:stable`):
+First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`) or a clean Debian docker image (`docker pull debian:stable`):
 
 ```
 mkdir ~/Redis
