@@ -816,7 +816,8 @@ workflows:
           <<: *not-on-integ-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
-          <<: *on-integ-branch
+          #@@<<: *on-integ-branch
+          <<: *always
           matrix:
             alias: build-with-redis-ver
             parameters:

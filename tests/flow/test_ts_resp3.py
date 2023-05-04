@@ -37,12 +37,12 @@ def test_resp3():
            {b'size': 128}, {b'bytesPerSample': 0.250980406999588}], 
            [{b'startTimestamp': 511}, {b'endTimestamp': 1000}, {b'samples': 490}, 
             {b'size': 128}, {b'bytesPerSample': 0.2612244784832001}]]}
-        
-        res = rc.execute_command('ts.mget', t1, 'WITHLABELS', 'FILTER', 'name=mush')
+
+        res = r.execute_command('ts.mget', t1, 'WITHLABELS', 'FILTER', 'name=mush')
         assert res == {b't1{1}': [{b'name': b'mush'}, [1000, 5.0]], 
                        b't2{1}': [{b'name': b'mush'}, [990, 10.0]]}
 
-        res = rc.execute_command('ts.queryindex', 'name=mush')
+        res = r.execute_command('ts.queryindex', 'name=mush')
         assert res == {b't1{1}', b't2{1}'}
 
         rc.execute_command('ts.create', t3, 'CHUNK_SIZE', 128, 'LABELS', 'name', 'bush')
@@ -61,7 +61,7 @@ def test_resp3():
                 b'name=rush': 
                 [{b'name': b'rush'}, {b'reducers': [b'count']}, {b'sources': [b't5{1}', b't6{1}']}, 
                  [[1, 2.0], [2, 2.0], [3, 2.0], [4, 2.0], [5, 2.0], [6, 2.0], [7, 2.0], [8, 2.0], [9, 2.0], [10, 2.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(rush,bush)', 'GROUPBY', 'name', 'REDUCE', 'COUNT')
         env.assertEqual(actual_result, exp)
 
@@ -71,7 +71,7 @@ def test_resp3():
                 b'name=rush': 
                 [{b'name': b'rush'}, {b'reducers': [b'count']}, {b'sources': [b't5{1}', b't6{1}']}, 
                  [[1, 2.0], [2, 2.0], [3, 2.0], [4, 2.0], [5, 2.0], [6, 2.0], [7, 2.0], [8, 2.0], [9, 2.0], [10, 2.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'SELECTED_LABELS', 'name', 'FILTER', 'name=(rush,bush)', 'GROUPBY', 'name', 'REDUCE', 'COUNT')
         env.assertEqual(actual_result, exp)
 
@@ -81,7 +81,7 @@ def test_resp3():
                 b'name=rush': 
                 [{b'fame': None}, {b'reducers': [b'count']}, {b'sources': [b't5{1}', b't6{1}']}, 
                  [[1, 2.0], [2, 2.0], [3, 2.0], [4, 2.0], [5, 2.0], [6, 2.0], [7, 2.0], [8, 2.0], [9, 2.0], [10, 2.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'SELECTED_LABELS', 'fame', 'FILTER', 'name=(rush,bush)', 'GROUPBY', 'name', 'REDUCE', 'COUNT')
         env.assertEqual(actual_result, exp)
 
@@ -98,7 +98,7 @@ def test_resp3():
                b't6{1}': 
                [{b'name': b'rush'}, {b'aggregators': []}, 
                 [[1, 6.0], [2, 6.0], [3, 6.0], [4, 6.0], [5, 6.0], [6, 6.0], [7, 6.0], [8, 6.0], [9, 6.0], [10, 6.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=(rush,bush)')
         env.assertEqual(actual_result, exp)
 
@@ -115,7 +115,7 @@ def test_resp3():
                b't6{1}': 
                [{b'name': b'rush'}, {b'aggregators': []}, 
                 [[1, 6.0], [2, 6.0], [3, 6.0], [4, 6.0], [5, 6.0], [6, 6.0], [7, 6.0], [8, 6.0], [9, 6.0], [10, 6.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'SELECTED_LABELS', 'name', 'FILTER', 'name=(rush,bush)')
         env.assertEqual(actual_result, exp)
 
@@ -131,6 +131,6 @@ def test_resp3():
                b't6{1}': 
                [{b'fame': None}, {b'aggregators': []}, 
                 [[1, 6.0], [2, 6.0], [3, 6.0], [4, 6.0], [5, 6.0], [6, 6.0], [7, 6.0], [8, 6.0], [9, 6.0], [10, 6.0]]]}
-        actual_result = rc.execute_command(
+        actual_result = r.execute_command(
             'TS.mrange', '-', '+', 'SELECTED_LABELS', 'fame', 'FILTER', 'name=(rush,bush)')
         env.assertEqual(actual_result, exp)
