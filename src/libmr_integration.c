@@ -134,7 +134,7 @@ static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
 static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCtx *sctx,
                                                            MRError **error) {
     size_t len;
-    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &len, error);
+    const char *temp = MR_SerializationCtxReadBuffer(sctx, &len, error);
     return RedisModule_CreateString(NULL, temp, len - 1);
 }
 
@@ -143,13 +143,13 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
     predicates->predicates = malloc(sizeof(QueryPredicateList));
-    predicates->predicates->count = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->predicates->count = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->predicates->ref = 1;
-    predicates->withLabels = MR_SerializationCtxReadeLongLong(sctx, error);
-    predicates->limitLabelsSize = MR_SerializationCtxReadeLongLong(sctx, error);
-    predicates->startTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
-    predicates->endTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
-    predicates->latest = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->withLabels = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->limitLabelsSize = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->startTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->endTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->latest = MR_SerializationCtxReadLongLong(sctx, error);
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof(char **));
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
@@ -160,13 +160,13 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     for (int i = 0; i < predicates->predicates->count; i++) {
         QueryPredicate *predicate = predicates->predicates->list + i;
         // decode type
-        predicate->type = MR_SerializationCtxReadeLongLong(sctx, error);
+        predicate->type = MR_SerializationCtxReadLongLong(sctx, error);
 
         // decode key
         predicate->key = SerializationCtxReadeRedisString(sctx, error);
 
         // decode values
-        predicate->valueListCount = MR_SerializationCtxReadeLongLong(sctx, error);
+        predicate->valueListCount = MR_SerializationCtxReadLongLong(sctx, error);
         predicate->valuesList = calloc(predicate->valueListCount, sizeof(RedisModuleString *));
 
         for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
@@ -566,7 +566,7 @@ static void StringRecord_Serialize(WriteSerializationCtx *sctx, void *base, MREr
 
 static void *StringRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     size_t size;
-    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, error);
+    const char *temp = MR_SerializationCtxReadBuffer(sctx, &size, error);
     char *temp1 = malloc(size);
     memcpy(temp1, temp, size);
     return StringRecord_Create(temp1, size);
@@ -650,7 +650,7 @@ static void ListRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError
 }
 
 static void *ListRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
-    size_t size = (size_t)MR_SerializationCtxReadeLongLong(sctx, error);
+    size_t size = (size_t)MR_SerializationCtxReadLongLong(sctx, error);
     Record *r = ListRecord_Create(size);
     for (size_t i = 0; i < size; ++i) {
         ListRecord_Add(r, MR_RecordDeSerialize(sctx));
@@ -751,17 +751,17 @@ void SeriesRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **er
 
 void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     SeriesRecord *series = (SeriesRecord *)MR_RecordCreate(SeriesRecordType, sizeof(*series));
-    series->chunkType = MR_SerializationCtxReadeLongLong(sctx, error);
+    series->chunkType = MR_SerializationCtxReadLongLong(sctx, error);
     series->funcs = GetChunkClass(series->chunkType);
     series->keyName = SerializationCtxReadeRedisString(sctx, error);
-    series->labelsCount = MR_SerializationCtxReadeLongLong(sctx, error);
+    series->labelsCount = MR_SerializationCtxReadLongLong(sctx, error);
     series->labels = calloc(series->labelsCount, sizeof(Label));
     for (int i = 0; i < series->labelsCount; i++) {
         series->labels[i].key = SerializationCtxReadeRedisString(sctx, error);
         series->labels[i].value = SerializationCtxReadeRedisString(sctx, error);
     }
 
-    series->chunkCount = MR_SerializationCtxReadeLongLong(sctx, error);
+    series->chunkCount = MR_SerializationCtxReadLongLong(sctx, error);
     series->chunks = calloc(series->chunkCount, sizeof(Chunk_t *));
     for (int i = 0; i < series->chunkCount; i++) {
         series->funcs->MRDeserialize(&series->chunks[i], sctx);
@@ -814,7 +814,7 @@ static void LongRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError
 }
 
 static void *LongRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
-    return LongRecord_Create(MR_SerializationCtxReadeLongLong(sctx, error));
+    return LongRecord_Create(MR_SerializationCtxReadLongLong(sctx, error));
 }
 
 static long LongRecordGet(Record *base) {
