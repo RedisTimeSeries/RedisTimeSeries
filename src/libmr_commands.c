@@ -168,6 +168,50 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
+static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+    }
+    RedisModule_ReplyWithSet(rctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            r->recordType->sendReply(rctx, r);
+        }
+    }
+
+__done:
+    RTS_UnblockClient(bc, rctx);
+}
+
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
@@ -394,7 +438,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
 
     MR_Run(exec);
 
