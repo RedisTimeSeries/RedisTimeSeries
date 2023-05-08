@@ -427,6 +427,8 @@ STATFILE=${STATFILE:-$ROOT/bin/artifacts/tests/status}
 
 #---------------------------------------------------------------------------------- Parallelism
 
+[[ $SLOW == 1 ]] && PARALLEL=0
+
 PARALLEL=${PARALLEL:-1}
 
 # due to Python "Can't pickle local object" problem in RLTest

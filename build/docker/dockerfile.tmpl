@@ -28,7 +28,7 @@ RUN set -e ;\
 
 {% if TEST == "1" %}
 RUN set -e ;\
-    TEST= make test ;\
+    TEST= make test SLOW=1 ;\
     cd /build/tests/flow/logs ;\
     rm -f *.aof *.rdb ;\
     tar -czf /build/bin/artifacts/tests-flow-logs-{{ARCH}}-{{OSNICK}}.tgz .

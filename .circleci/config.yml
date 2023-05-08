@@ -177,7 +177,7 @@ commands:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests <<parameters.test_params>> SHOW=1
+            make flow_tests <<parameters.test_params>> SHOW=1 SLOW=1
       - save-tests-logs
 
   build-platforms-steps:
@@ -494,7 +494,7 @@ jobs:
           command: |
             python3 -m pip list
             mkdir -p ~/workspace/tests
-            make flow_tests RLEC=1 SHOW=1
+            make flow_tests RLEC=1 SHOW=1 SLOW=1
       - save-tests-logs
 
   coverage:
@@ -538,7 +538,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1 SLOW=1
       - save-tests-logs
 
   upload-artifacts:
