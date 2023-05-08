@@ -7,8 +7,9 @@ syntax: |
     [WITHLABELS | SELECTED_LABELS label...]
     [COUNT count]
     [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
-    FILTER filter..
+    FILTER filterExpr...
     [GROUPBY label REDUCE reducer]
+
 ---
 
 Query a range across multiple time series by filters in reverse direction
@@ -20,32 +21,33 @@ Query a range across multiple time series by filters in reverse direction
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
+is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
+is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
-<summary><code>FILTER filter..</code></summary> 
+<summary><code>FILTER filterExpr...</code></summary> 
 
-uses these filters:
+filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:  
 
   - `label=value`, where `label` equals `value`
   - `label!=value`, where `label` does not equal `value`
   - `label=`, where `key` does not have label `label`
   - `label!=`, where `key` has label `label`
-  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
-</details>
 
 <note><b>Notes:</b> 
-   - When using filters, apply a minimum of one `label=value` filter.
+   - At least one `label=value` filter is required.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
+   - Don't use whitespaces in the filter expression.
    </note>
+</details>
 
 ## Optional arguments
 
@@ -107,25 +109,25 @@ Values include:
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary> 
 
-aggregates results into time buckets, where:
+per time series, aggregates samples into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
-    | `aggregator` &nbsp; &nbsp; &nbsp; | Description                                                      |
-    | ------------ | ---------------------------------------------------------------- |
-    | `avg`        | Arithmetic mean of all values                                    |
-    | `sum`        | Sum of all values                                                |
-    | `min`        | Minimum value                                                    |
-    | `max`        | Maximum value                                                    |
-    | `range`      | Difference between the highest and the lowest value              |
-    | `count`      | Number of values                                                 |
-    | `first`      | Value with lowest timestamp in the bucket                        |
-    | `last`       | Value with highest timestamp in the bucket                       |
-    | `std.p`      | Population standard deviation of the values                      |
-    | `std.s`      | Sample standard deviation of the values                          |
-    | `var.p`      | Population variance of the values                                |
-    | `var.s`      | Sample variance of the values                                    |
-    | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
+    | `aggregator` | Description                                                                    |
+    | ------------ | ------------------------------------------------------------------------------ |
+    | `avg`        | Arithmetic mean of all values                                                  |
+    | `sum`        | Sum of all values                                                              |
+    | `min`        | Minimum value                                                                  |
+    | `max`        | Maximum value                                                                  |
+    | `range`      | Difference between maximum value and minimum value                             |
+    | `count`      | Number of values                                                               |
+    | `first`      | Value with lowest timestamp in the bucket                                      |
+    | `last`       | Value with highest timestamp in the bucket                                     |
+    | `std.p`      | Population standard deviation of the values                                    |
+    | `std.s`      | Sample standard deviation of the values                                        |
+    | `var.p`      | Population variance of the values                                              |
+    | `var.s`      | Sample variance of the values                                                  |
+    | `twa`        | Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
   
@@ -156,9 +158,9 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
+| `last`               | The value of the last sample before the bucket's start. `NaN` when no such sample. |
+| `twa`                | Average value over the bucket's timeframe based on linear interpolation of the last sample before the bucket's start and the first sample after the bucket's end. `NaN` when no such samples. |
 | `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` | `NaN` |
-| `last`               | The value of the previous sample. `NaN` when no previous sample. |
-| `twa`                | Based on linear interpolation of previous and next samples. `NaN` when cannot interpolate. |
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
@@ -166,46 +168,57 @@ Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is report
 <details open>
 <summary><code>GROUPBY label REDUCE reducer</code> (since RedisTimeSeries v1.6)</summary>
 
-aggregates results across different time series, grouped by the provided label name. 
-When combined with `AGGREGATION` the groupby/reduce is applied post aggregation stage.
+splits time series into groups, each group contains time series that share the same value for the provided label name, then aggregates results in each group.
 
-  - `label` is label name to group a series by. A new series for each value is produced.
+When combined with `AGGREGATION` the `GROUPBY`/`REDUCE` is applied post aggregation stage.
 
-  - `reducer` is reducer type used to aggregate series that share the same label value.
+  - `label` is label name. A group is created for all time series that share the same value for this label.
 
+  - `reducer` is an aggregation type used to aggregate the results in each group.
 
-    | `reducer` | Description                         |
-    | --------- | ----------------------------------- |
-    | `avg`     | per label value: arithmetic mean of all values (since RedisTimeSeries v1.8)  |
-    | `sum`     | per label value: sum of all values  |
-    | `min`     | per label value: minimum value      |
-    | `max`     | per label value: maximum value      |
-    | `range` &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp;  | per label value: difference between the highest and the lowest value (since RedisTimeSeries v1.8) |
-    | `count`   | per label value: number of values (since RedisTimeSeries v1.8) |
-    | `std.p`   | per label value: population standard deviation of the values (since RedisTimeSeries v1.8) |
-    | `std.s`   | per label value: sample standard deviation of the values (since RedisTimeSeries v1.8) |
-    | `var.p`   | per label value: population variance of the values (since RedisTimeSeries v1.8) |
-    | `var.s`   | per label value: sample variance of the values (since RedisTimeSeries v1.8) |
+    | `reducer` | Description                                                                                     |
+    | --------- | ----------------------------------------------------------------------------------------------- |
+    | `avg`     | Arithmetic mean of all non-NaN values (since RedisTimeSeries v1.8)                              |
+    | `sum`     | Sum of all non-NaN values                                                                       |
+    | `min`     | Minimum non-NaN value                                                                           |
+    | `max`     | Maximum non-NaN value                                                                           |
+    | `range`   | Difference between maximum non-NaN value and minimum non-NaN value (since RedisTimeSeries v1.8) |
+    | `count`   | Number of non-NaN values (since RedisTimeSeries v1.8)                                           |
+    | `std.p`   | Population standard deviation of all non-NaN values (since RedisTimeSeries v1.8)                |
+    | `std.s`   | Sample standard deviation of all non-NaN values (since RedisTimeSeries v1.8)                    |
+    | `var.p`   | Population variance of all non-NaN values (since RedisTimeSeries v1.8)                          |
+    | `var.s`   | Sample variance of all non-NaN values (since RedisTimeSeries v1.8)                              |
 
 <note><b>Notes:</b> 
-  - The produced time series is named `<label>=<groupbyvalue>`
+  - The produced time series is named `<label>=<value>`
   - The produced time series contains two labels with these label array structures:
-    - `reducer`, the reducer used
-    - `source`, the time series keys used to compute the grouped series (`key1,key2,key3,...`)
+    - `__reducer__`, the reducer used (e.g., `"count"`)
+    - `__source__`, the list of time series keys used to compute the grouped series (e.g., `"key1,key2,key3"`)
 </note>
 </details>
 
+<note><b>Note:</b> An `MREVRANGE` command cannot be part of a transaction when running on a Redis cluster.</note>
+
 ## Return value
 
-For each time series matching the specified filters, the following is reported:
-- The key name
-- A list of label-value pairs
-  - By default, an empty list is reported
-  - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
-- Timestamp-value pairs for all samples/aggregations matching the range
+If `GROUPBY label REDUCE reducer` is not specified:
 
-<note><b>Note:</b> The `MREVRANGE` command cannot be part of transaction when running on a Redis cluster.</note>
+- @array-reply: for each time series matching the specified filters, the following is reported:
+  - bulk-string-reply: The time series key name
+  - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply)
+    - By default, an empty list is reported
+    - If `WITHLABELS` is specified, all labels associated with this time series are reported
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported
+  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
+
+If `GROUPBY label REDUCE reducer` is specified:
+
+- @array-reply: for each group of time series matching the specified filters, the following is reported:
+  - bulk-string-reply with the format `label=value` where `label` is the `GROUPBY` label argument
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply): the `GROUPBY` label argument and value
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply):  the string `__reducer__` and the reducer argument
+  - @array-reply: a single pair (@bulk-string-reply, @bulk-string-reply): the string `__source__` and the time series key names separated by `,`
+  - @array-reply: timestamp-value pairs (@integer-reply, @simple-string-reply (double)): all samples/aggregations matching the range
 
 ## Examples
 

@@ -1,26 +1,26 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
+ */
 #ifndef CONSTS_H
 #define CONSTS_H
 
 #include "redismodule.h"
 
-
 #include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 
-  #if defined(__GNUC__)
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
-  #elif _MSC_VER
-#define likely(x)       (x)
-#define unlikely(x)     (x)
-  #endif
+#if defined(__GNUC__)
+#define likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+#elif _MSC_VER
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif
 
 #define TRUE 1
 #define FALSE 0
@@ -44,13 +44,14 @@
 #define TSDB_ERR_TIMESTAMP_OCCUPIED -2
 
 /* TS.CREATE Defaults */
-#define RETENTION_TIME_DEFAULT          0LL
-#define Chunk_SIZE_BYTES_SECS           4096LL   // fills one page 4096
-#define SPLIT_FACTOR                    1.2
-#define DEFAULT_DUPLICATE_POLICY        DP_BLOCK
+#define RETENTION_TIME_DEFAULT 0LL
+#define Chunk_SIZE_BYTES_SECS 4096LL // fills one page 4096
+#define SPLIT_FACTOR 1.2
+#define DEFAULT_DUPLICATE_POLICY DP_BLOCK
 
 /* TS.Range Aggregation types */
-typedef enum {
+typedef enum
+{
     TS_AGG_INVALID = -1,
     TS_AGG_NONE = 0,
     TS_AGG_MIN,
@@ -69,8 +70,8 @@ typedef enum {
     TS_AGG_TYPES_MAX // 13
 } TS_AGG_TYPES_T;
 
-
-typedef enum DuplicatePolicy {
+typedef enum DuplicatePolicy
+{
     DP_INVALID = -1,
     DP_NONE = 0,
     DP_BLOCK = 1,
@@ -89,10 +90,11 @@ typedef enum DuplicatePolicy {
 #define SERIES_OPT_DEFAULT_COMPRESSION SERIES_OPT_COMPRESSED_GORILLA
 
 /* Chunk enum */
-typedef enum {
-  CR_OK = 0,    // RM_OK
-  CR_ERR = 1,   // RM_ERR
-  CR_END = 2,   // END_OF_CHUNK
+typedef enum
+{
+    CR_OK = 0,  // RM_OK
+    CR_ERR = 1, // RM_ERR
+    CR_END = 2, // END_OF_CHUNK
 } ChunkResult;
 
 /* parsing */
@@ -102,21 +104,22 @@ typedef enum {
 #define UNCOMPRESSED_ARG_STR "uncompressed"
 #define COMPRESSED_GORILLA_ARG_STR "compressed"
 
-// DC - Don't Care (Arbitrary value) 
+// DC - Don't Care (Arbitrary value)
 #define DC 0
 
 #define SAMPLES_TO_BYTES(size) (size * sizeof(Sample))
 
-#define min(a,b) (((a)<(b))?(a):(b))
+#define min(a, b) (((a) < (b)) ? (a) : (b))
 
-#define max(a,b) (((a)>(b))?(a):(b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
 
-#define __SWAP(x,y) do {  \
-  typeof(x) _x = x;      \
-  typeof(y) _y = y;      \
-  x = _y;                \
-  y = _x;                \
-} while(0)
+#define __SWAP(x, y)                                                                               \
+    do {                                                                                           \
+        typeof(x) _x = x;                                                                          \
+        typeof(y) _y = y;                                                                          \
+        x = _y;                                                                                    \
+        y = _x;                                                                                    \
+    } while (0)
 
 static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str) {
     size_t str_len;
@@ -129,13 +132,28 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
     return strcmp(input_upper, str);
 }
 
-#define _log_if(cond, format, ...) do {          \
-  extern RedisModuleCtx *rts_staticCtx;          \
-  if(unlikely(cond)){                            \
-    RedisModule_Log(rts_staticCtx,               \
-                    "warning",                   \
-                    format, ##__VA_ARGS__);      \
-  }                                              \
-} while(0)
+extern bool _dontAssertOnFailiure;
+
+#ifdef DEBUG
+#define _log_if(cond, ...)                                                                         \
+    do {                                                                                           \
+        if (!_dontAssertOnFailiure) {                                                              \
+            assert(!(cond));                                                                       \
+        } else {                                                                                   \
+            extern RedisModuleCtx *rts_staticCtx;                                                  \
+            if (unlikely(cond)) {                                                                  \
+                RedisModule_Log(rts_staticCtx, "warning", ##__VA_ARGS__);                          \
+            }                                                                                      \
+        }                                                                                          \
+    } while (0)
+#else
+#define _log_if(cond, ...)                                                                         \
+    do {                                                                                           \
+        extern RedisModuleCtx *rts_staticCtx;                                                      \
+        if (unlikely(cond)) {                                                                      \
+            RedisModule_Log(rts_staticCtx, "warning", ##__VA_ARGS__);                              \
+        }                                                                                          \
+    } while (0)
+#endif
 
 #endif

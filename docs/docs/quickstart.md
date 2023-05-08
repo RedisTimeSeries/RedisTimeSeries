@@ -20,14 +20,14 @@ RedisTimeSeries is available on all Redis Cloud managed services, including a co
 ### Docker
 To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
-docker run -p 6379:6379 -it --rm redislabs/redistimeseries
+docker run -p 6379:6379 -it --rm redis/redis-stack-server
 ```
 
 ### Download and running binaries
 
-First download the pre-compiled version from the [Redis download center](https://redis.com/redis-enterprise-software/download-center/modules/).
+First download the pre-compiled version from the [Redis download center](https://app.redislabs.com/#/rlec-downloads).
 
-Next, run Redis with RedisTimeSeries: 
+Next, run Redis with RedisTimeSeries:
 
 ```
 $ redis-server --loadmodule /path/to/module/redistimeseries.so
@@ -53,7 +53,7 @@ Then, to install required build artifacts, invoke the following:
 cd RedisTimeSeries
 make setup
 ```
-Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
+Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/sbin/system-setup.py).
 
 If ```make``` is not yet available, the following commands are equivalent:
 
@@ -102,7 +102,7 @@ A new timeseries can be created with the `TS.CREATE` command; for example, to cr
 TS.CREATE sensor1
 ```
 
-You can prevent your timeseries growing indefinitely by setting a maximum age for samples compared to the last event time (in milliseconds) with the `RETENTION` option. The default value for retention is `0`, which means the series will not be trimmed.  
+You can prevent your timeseries growing indefinitely by setting a maximum age for samples compared to the last event time (in milliseconds) with the `RETENTION` option. The default value for retention is `0`, which means the series will not be trimmed.
 
 ```
 TS.CREATE sensor1 RETENTION 2678400000
@@ -117,7 +117,7 @@ For adding new data points to a timeseries we use the `TS.ADD` command:
 TS.ADD key timestamp value
 ```
 
-The `timestamp` argument is the UNIX timestamp of the sample in milliseconds and `value` is the numeric data value of the sample. 
+The `timestamp` argument is the UNIX timestamp of the sample in milliseconds and `value` is the numeric data value of the sample.
 
 Example:
 ```
@@ -165,7 +165,7 @@ TS.CREATE sensor1 LABELS region east
 
 ## Downsampling
 Another useful feature of RedisTimeSeries is compacting data by creating a rule for downsampling (`TS.CREATERULE`). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s and twa`.
- 
+
 It's important to point out that there is no data rewriting on the original timeseries; the compaction happens in a new series, while the original one stays the same. In order to prevent the original timeseries from growing indefinitely, you can use the retention option, which will trim it down to a certain period of time.
 
 **NOTE:** You need to create the destination (the compacted) timeseries before creating the rule.
@@ -254,11 +254,11 @@ TS.RANGE sensor3 10 70 + AGGREGATION min 25
 
 ```
 Value:        |      (1000)     (2000)     (3000)     (4000)     (5000)     (6000)     (7000)
-Timestamp:    |-------|10|-------|20|-------|30|-------|40|-------|50|-------|60|-------|70|--->  
+Timestamp:    |-------|10|-------|20|-------|30|-------|40|-------|50|-------|60|-------|70|--->
 
 Bucket(25ms): |_________________________||_________________________||___________________________|
                            V                          V                           V
-                  min(1000, 2000)=1000      min(3000, 4000)=3000     min(5000, 6000, 7000)=5000                
+                  min(1000, 2000)=1000      min(3000, 4000)=3000     min(5000, 6000, 7000)=5000
 ```
 
 And we will get the following datapoints: 1000, 3000, 5000.
@@ -270,11 +270,11 @@ TS.RANGE sensor3 10 70 + AGGREGATION min 25 ALIGN start
 
 ```
 Value:        |      (1000)     (2000)     (3000)     (4000)     (5000)     (6000)     (7000)
-Timestamp:    |-------|10|-------|20|-------|30|-------|40|-------|50|-------|60|-------|70|--->  
+Timestamp:    |-------|10|-------|20|-------|30|-------|40|-------|50|-------|60|-------|70|--->
 
 Bucket(25ms):          |__________________________||_________________________||___________________________|
                                     V                          V                           V
-                        min(1000, 2000, 3000)=1000      min(4000, 5000)=4000     min(6000, 7000)=6000                
+                        min(1000, 2000, 3000)=1000      min(4000, 5000)=4000     min(6000, 7000)=6000
 ```
 The result array will contain the following datapoints: 1000, 4000 and 6000
 

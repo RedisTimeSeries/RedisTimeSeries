@@ -2,18 +2,61 @@ import pytest
 import redis
 import random
 from threading import Thread
-from time import sleep
+import time
 
 from utils import Env, Refresh_Cluster
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
     _get_ts_info, _insert_agg_data
 from includes import *
 
+def shardsConnections(env):
+    for s in range(1, env.shardsCount + 1):
+        yield env.getConnection(shardId=s)
+
+def verifyClusterInitialized(env):
+    for conn in shardsConnections(env):
+        allConnected = False
+        while not allConnected:
+            res = conn.execute_command('timeseries.INFOCLUSTER')
+            nodes = res[4]
+            allConnected = True
+            for n in nodes:
+                status = n[17]
+                if status != b'connected':
+                    allConnected = False
+            if not allConnected:
+                time.sleep(0.1)
+
+def _waitCluster(env, timeout_sec=40):
+
+    st = time.time()
+    ok = 0
+
+    while st + timeout_sec > time.time():
+        ok = 0
+        i = 0
+        for i in range(1, env.shardsCount + 1):
+            con = env.getConnection(i)
+            try:
+                status = con.execute_command('CLUSTER', 'INFO')
+            except Exception as e:
+                #print('got error on cluster info, will try again, %s' % str(e))
+                continue
+            if 'cluster_state:ok' in str(status):
+                ok += 1
+        if ok == env.shardsCount:
+            time.sleep(2)
+            return
+
+        time.sleep(0.1)
+    raise RuntimeError(
+        "Cluster OK wait loop timed out after %s seconds" % timeout_sec)
+
 def testLibmrFail():
     env = Env()
     if env.shardsCount < 3:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnAOF()
@@ -27,7 +70,6 @@ def testLibmrFail():
         except Exception as e:
             pass
 
-    Refresh_Cluster(env)
     try:
         actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                                 'name=bob')
@@ -36,7 +78,9 @@ def testLibmrFail():
         env.assertResponseError(e, "multi shard cmd failed")
     
     env.envRunner.shards[2].startEnv()
-    Refresh_Cluster(env)
+    _waitCluster(env)
+    env.getConnection(3).execute_command('timeseries.REFRESHCLUSTER')
+    verifyClusterInitialized(env)
     expected_res = [[b'tester1{1}', [[b'name', b'bob']], [[1, b'1'], [2, b'1'], [3, b'1'], [4, b'1'], [5, b'1'], [6, b'1'], [7, b'1'], [8, b'1'], [9, b'1'], [10, b'1']]]]
     actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                         'name=bob')
@@ -52,7 +96,7 @@ def testLibmr_client_disconnect():
     env = Env()
     if env.shardsCount < 2:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnAOF()

@@ -29,7 +29,7 @@ def testWithMultiExec(env):
     env = Env()
     if env.shardsCount < 2:
         env.skip()
-    if(not env.isCluster):
+    if(not env.is_cluster()):
         env.skip()
     with env.getConnection() as r:
         r.execute_command('multi', )
@@ -179,6 +179,15 @@ def test_mrange_filterby():
                            ]
         actual_result = r.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'FILTER_BY_TS', start_ts+9, start_ts+10, start_ts+11, 'FILTER_BY_VALUE', 10, 20,'FILTER', 'generation=x')
         env.assertEqual(sorted(actual_result), sorted(expected_result))
+
+        actual_result = r.execute_command('TS.mrange', start_ts + 1000000, start_ts + 1000000 + samples_count, 'FILTER_BY_TS', start_ts + 1000000, 'FILTER', 'generation=x')
+        assert sorted(actual_result) == sorted([[b'tester1', [], []], [b'tester2', [], []], [b'tester3', [], []]])
+
+        assert r.execute_command('TS.CREATE', 'tester4', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'z')
+        r.execute_command('ts.add', 'tester4', 1, 1)
+        r.execute_command('ts.add', 'tester4', 8, 8)
+        actual_result = r.execute_command('TS.mrange', 4, 6, 'FILTER_BY_TS', 4, 'FILTER', 'generation=z')
+        assert actual_result == [[b'tester4', [], []]]
 
 def test_mrange_withlabels():
     start_ts = 1511885909

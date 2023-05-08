@@ -1,12 +1,13 @@
 [![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?sort=semver&kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
-[![Dockerhub](https://img.shields.io/badge/dockerhub-redislabs%2Fredistimeseries-blue)](https://hub.docker.com/r/redislabs/redistimeseries/tags/)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/RedisTimeSeries/RedisTimeSeries.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/RedisTimeSeries/RedisTimeSeries/context:cpp)
+[![Dockerhub](https://img.shields.io/docker/pulls/redis/redis-stack-server?label=redis-stack-server)](https://hub.docker.com/r/redis/redis-stack-server/)
 [![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
+
+<img src="docs/docs/images/logo.svg" alt="logo" width="300"/>
 
 RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
 
@@ -70,11 +71,7 @@ find projects that help you integrate RedisTimeSeries with other tools, includin
 3. [Telegraf](https://github.com/RedisTimeSeries/telegraf)
 4. StatsD, Graphite exports using graphite protocol.
 
-## Memory model
-A time series is a linked list of memory chunks.
-Each chunk has a predefined size of samples.
-Each sample is a tuple of the time and the value of 128 bits,
-64 bits for the timestamp and 64 bits for the value.
+RedisTimeSeries is part of [Redis Stack](https://github.com/redis-stack).
 
 ## Setup
 
@@ -86,56 +83,65 @@ To quickly try out RedisTimeSeries, launch an instance using docker:
 docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 ```
 
-### Build and Run it yourself
+### Build it yourself
 
-You can also build and run RedisTimeSeries on your own machine.
+You can also build RedisTimeSeries on your own machine. Major Linux distributions as well as macOS are supported.
 
-Major Linux distributions as well as macOS are supported.
-
-#### Requirements
-
-First, clone the RedisTimeSeries repository from git:
+First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`) or a clean Debian docker image (`docker pull debian:stable`):
 
 ```
+mkdir ~/Redis
+cd ~/Redis
+apt-get update -y && apt-get upgrade -y
+apt-get install -y wget make pkg-config build-essential
+wget https://download.redis.io/redis-stable.tar.gz
+tar -xzvf redis-stable.tar.gz
+cd redis-stable
+make distclean
+make
+make install
+```
+
+Next, you should get the RedisTimeSeries repository from git and build it:
+
+```
+apt-get install -y git
+cd ~/Redis
 git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
-```
-
-Then, to install required build artifacts, invoke the following:
-
-```
 cd RedisTimeSeries
-make setup
-```
-Or you can install required dependencies manually listed in [system-setup.py](https://github.com/RedisTimeSeries/RedisTimeSeries/blob/master/system-setup.py).
-
-If ```make``` is not yet available, the following commands are equivalent:
-
-```
-./deps/readies/bin/getpy3
-./system-setup.py
+./sbin/setup
+bash -l
+make
 ```
 
-Note that ```system-setup.py``` **will install various packages on your system** using the native package manager and pip. This requires root permissions (i.e. sudo) on Linux.
+Then `exit` to exit bash.
 
-If you prefer to avoid that, you can:
+**Note:** to get a specific version of RedisTimeSeries, e.g. 1.8.10, add `-b v1.8.10` to the `git clone` command above.
 
-* Review system-setup.py and install packages manually,
-* Utilize a Python virtual environment,
-* Use Docker with the ```--volume``` option to create an isolated build environment.
+Next, run `make run -n` and copy the full path of the RedisTimeSeries executable (e.g., `/root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so`).
 
-#### Build
+Next, add RedisTimeSeries module to `redis.conf`, so Redis will load when started:
 
-```bash
-make build
 ```
+apt-get install -y vim
+cd ~/Redis/redis-stable
+vim redis.conf
+```
+Add: `loadmodule /root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so` under the MODULES section (use the full path copied above). 
 
-Binary artifacts are placed under the ```bin``` directory.
-
-#### Run
-
-In your redis-server run: `loadmodule bin/redistimeseries.so`
+Save and exit vim (ESC :wq ENTER)
 
 For more information about modules, go to the [Redis official documentation](https://redis.io/topics/modules-intro).
+
+### Run
+
+Run redis-server in the background and then redis-cli:
+
+```
+cd ~/Redis/redis-stable
+redis-server redis.conf &
+redis-cli
+```
 
 ## Give it a try
 
@@ -165,34 +171,39 @@ OK
 
 Some languages have client libraries that provide support for RedisTimeSeries commands:
 
-| Project | Language | License | Author | Stars | Comment |
-| ------- | -------- | ------- | ------ | --- | --- |
-| [Jedis][Jedis-url] | Java | MIT | [Redis][Jedis-author] |  [![Jedis-stars]][Jedis-url] |
-| [JRedisTimeSeries][JRedisTimeSeries-url] | Java | BSD-3 | [Redis][JRedisTimeSeries-author] |  [![JRedisTimeSeries-stars]][JRedisTimeSeries-url] | Deprecated |
-| [redis-modules-java][redis-modules-java-url] | Java | Apache-2 | [dengliming][redis-modules-java-author] | [![redis-modules-java-stars]][redis-modules-java-url] |
-| [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  |
-| [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  |
-| [redis-py][redis-py-url] | Python | MIT | [Redis][redis-py-author] | [![redis-py-stars]][redis-py-url] |
-| [NRedisTimeSeries][NRedisTimeSeries-url] | .NET | BSD-3 | [Redis][NRedisTimeSeries-author] |  [![NRedisTimeSeries-stars]][NRedisTimeSeries-url] |
-| [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] |
-| [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] |
-| [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] |
-| [redis-modules-sdk][redis-modules-sdk-url] | Typescript | BSD-3-Clause | [Dani Tseitlin][redis-modules-sdk-author] |[![redis-modules-sdk-stars]][redis-modules-sdk-url]|
-| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] |
-| [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] |
-| [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] |
+| Project | Language | License | Author | Stars | Package | Comment |
+| ------- | -------- | ------- | ------ | --- | --- | --- |
+| [jedis][jedis-url] | Java | MIT | [Redis][redis-url] | ![Stars][jedis-stars] | [Maven][jedis-package]||
+| [redis-py][redis-py-url] | Python | MIT | [Redis][redis-url] | ![Stars][redis-py-stars] | [pypi][redis-py-package]||
+| [node-redis][node-redis-url] | Node.js | MIT | [Redis][redis-url] | ![Stars][node-redis-stars] | [npm][node-redis-package]||
+| [nredisstack][nredisstack-url] | .NET | MIT | [Redis][redis-url] | ![Stars][nredisstack-stars] | [nuget][nredisstack-package]||
+| [redistimeseries-go][redistimeseries-go-url] | Go | Apache-2 | [Redis][redistimeseries-go-author] |  [![redistimeseries-go-stars]][redistimeseries-go-url]  | [GitHub][redistimeseries-go-url] |
+| [rueidis][rueidis-url] | Go | Apache-2 | [Rueian][rueidis-author] |  [![rueidis-stars]][rueidis-url]  | [GitHub][rueidis-url] |
+| [phpRedisTimeSeries][phpRedisTimeSeries-url] | PHP | MIT | [Alessandro Balasco][phpRedisTimeSeries-author] |  [![phpRedisTimeSeries-stars]][phpRedisTimeSeries-url] | [GitHub][phpRedisTimeSeries-url] |
+| [redis-time-series][redis-time-series-url] | JavaScript | MIT | [Rafa Campoy][redis-time-series-author] | [![redis-time-series-stars]][redis-time-series-url] | [GitHub][redis-time-series-url] |
+| [redistimeseries-js][redistimeseries-js-url] | JavaScript | MIT | [Milos Nikolovski][redistimeseries-js-author] | [![redistimeseries-js-stars]][redistimeseries-js-url] | [GitHub][redistimeseries-js-url] |
+| [redis_ts][redis_ts-url] | Rust | BSD-3 | [Thomas Profelt][redis_ts-author] | [![redis_ts-stars]][redis_ts-url] | [GitHub][redis_ts-url] | 
+| [redistimeseries][redistimeseries-url] | Ruby | MIT | [Eaden McKee][redistimeseries-author] | [![redistimeseries-stars]][redistimeseries-url] | [GitHub][redistimeseries-url] |
+| [redis-time-series][redis-time-series-rb-url] | Ruby | MIT | [Matt Duszynski][redis-time-series-rb-author] | [![redis-time-series-rb-stars]][redis-time-series-rb-url] | [GitHub][redis-time-series-rb-url] |
 
-[Jedis-url]: https://github.com/redis/jedis/
-[Jedis-author]: https://redis.com
-[Jedis-stars]: https://img.shields.io/github/stars/redis/jedis.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[redis-url]: https://redis.com
 
-[JRedisTimeSeries-url]: https://github.com/RedisTimeSeries/JRedisTimeSeries/
-[JRedisTimeSeries-author]: https://redis.com
-[JRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/JRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[redis-py-url]: https://github.com/redis/redis-py
+[redis-py-stars]: https://img.shields.io/github/stars/redis/redis-py.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[redis-py-package]: https://pypi.python.org/pypi/redis
 
-[redis-modules-java-url]: https://github.com/dengliming/redis-modules-java
-[redis-modules-java-author]: https://github.com/dengliming
-[redis-modules-java-stars]: https://img.shields.io/github/stars/dengliming/redis-modules-java.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[jedis-url]: https://github.com/redis/jedis
+[jedis-stars]: https://img.shields.io/github/stars/redis/jedis.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[Jedis-package]: https://search.maven.org/artifact/redis.clients/jedis
+
+[nredisstack-url]: https://github.com/redis/nredisstack
+[nredisstack-stars]: https://img.shields.io/github/stars/redis/nredisstack.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[nredisstack-package]: https://www.nuget.org/packages/nredisstack/
+
+[node-redis-url]: https://github.com/redis/node-redis
+[node-redis-stars]: https://img.shields.io/github/stars/redis/node-redis.svg?style=social&amp;label=Star&amp;maxAge=2592000
+[node-redis-package]: https://www.npmjs.com/package/redis
+
 
 [redistimeseries-go-url]: https://github.com/RedisTimeSeries/redistimeseries-go/
 [redistimeseries-go-author]: https://redis.com
@@ -201,14 +212,6 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [rueidis-url]: https://github.com/rueian/rueidis
 [rueidis-author]: https://github.com/rueian
 [rueidis-stars]: https://img.shields.io/github/stars/rueian/rueidis.svg?style=social&amp;label=Star&amp;maxAge=2592000
-
-[redis-py-url]: https://github.com/redis/redis-py/
-[redis-py-author]: https://redis.com
-[redis-py-stars]: https://img.shields.io/github/stars/redis/redis-py.svg?style=social&amp;label=Star&amp;maxAge=2592000
-
-[NRedisTimeSeries-url]: https://github.com/RedisTimeSeries/NRedisTimeSeries/
-[NRedisTimeSeries-author]: https://redis.com
-[NRedisTimeSeries-stars]: https://img.shields.io/github/stars/RedisTimeSeries/NRedisTimeSeries.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 [phpRedisTimeSeries-url]: https://github.com/palicao/phpRedisTimeSeries
 [phpRedisTimeSeries-author]: https://github.com/palicao
@@ -222,10 +225,6 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redistimeseries-js-author]: https://github.com/nikolovskimilos
 [redistimeseries-js-stars]: https://img.shields.io/github/stars/nikolovskimilos/redistimeseries-js.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
-[redis-modules-sdk-url]: https://github.com/danitseitlin/redis-modules-sdk
-[redis-modules-sdk-author]: https://github.com/danitseitlin
-[redis-modules-sdk-stars]: https://img.shields.io/github/stars/danitseitlin/redis-modules-sdk.svg?style=social&amp;label=Star&amp;maxAge=2592000
-
 [redis_ts-url]: https://github.com/tompro/redis_ts
 [redis_ts-author]: https://github.com/tompro
 [redis_ts-stars]: https://img.shields.io/github/stars/tompro/redis_ts.svg?style=social&amp;label=Star&amp;maxAge=2592000
@@ -237,6 +236,10 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 [redis-time-series-rb-url]: https://github.com/dzunk/redis-time-series
 [redis-time-series-rb-author]: https://github.com/dzunk
 [redis-time-series-rb-stars]: https://img.shields.io/github/stars/dzunk/redis-time-series.svg?style=social&amp;label=Star&amp;maxAge=2592000
+
+[rustis-url]: https://github.com/dahomey-technologies/rustis
+[rustis-author]: https://github.com/dahomey-technologies
+[rustis-stars]: https://img.shields.io/github/stars/dahomey-technologies/rustis.svg?style=social&amp;label=Star&amp;maxAge=2592000
 
 ## Tests
 
@@ -280,4 +283,4 @@ Read the docs at http://redistimeseries.io
 Got questions? Feel free to ask at the [RedisTimeSeries forum](https://forum.redis.com/c/modules/redistimeseries).
 
 ## License
-Redis Source Available License Agreement, see [LICENSE](LICENSE)
+RedisTimeSeries is licensed under the [Redis Source Available License 2.0 (RSALv2)](https://redis.com/legal/rsalv2-agreement) or the [Server Side Public License v1 (SSPLv1)](https://www.mongodb.com/licensing/server-side-public-license).

@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "config.h"
 
@@ -60,6 +60,22 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         RedisModule_Log(ctx, "notice", "loaded default compaction policy: %s", policy_cstr);
         TSGlobalConfig.hasGlobalConfig = TRUE;
+    }
+
+    if (argc > 1 && RMUtil_ArgIndex("OSS_GLOBAL_PASSWORD", argv, argc) >= 0) {
+        RedisModuleString *password;
+        size_t len;
+        if (RMUtil_ParseArgsAfter("OSS_GLOBAL_PASSWORD", argv, argc, "s", &password) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after OSS_GLOBAL_PASSWORD");
+            return TSDB_ERROR;
+        }
+
+        TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
+        RedisModule_Log(ctx, "notice", "loaded tls password");
+        TSGlobalConfig.hasGlobalConfig = TRUE;
+    } else {
+        TSGlobalConfig.password = NULL;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
@@ -163,6 +179,28 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else if (!strcasecmp(forceSaveCrossRef_cstr, "disable")) {
             TSGlobalConfig.forceSaveCrossRef = false;
         }
+    }
+    TSGlobalConfig.dontAssertOnFailiure = false;
+    if (argc > 1 && RMUtil_ArgIndex("DONT_ASSERT_ON_FAILIURE", argv, argc) >= 0) {
+        RedisModuleString *dontAssertOnFailiure;
+        if (RMUtil_ParseArgsAfter(
+                "DONT_ASSERT_ON_FAILIURE", argv, argc, "s", &dontAssertOnFailiure) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(
+                ctx, "warning", "Unable to parse argument after DONT_ASSERT_ON_FAILIURE");
+            return TSDB_ERROR;
+        }
+        size_t dontAssertOnFailiure_len;
+        const char *dontAssertOnFailiure_cstr =
+            RedisModule_StringPtrLen(dontAssertOnFailiure, &dontAssertOnFailiure_len);
+        if (!strcasecmp(dontAssertOnFailiure_cstr, "enable")) {
+            TSGlobalConfig.dontAssertOnFailiure = true;
+        } else if (!strcasecmp(dontAssertOnFailiure_cstr, "disable")) {
+            TSGlobalConfig.dontAssertOnFailiure = false;
+        }
+
+        extern bool _dontAssertOnFailiure;
+        _dontAssertOnFailiure = TSGlobalConfig.dontAssertOnFailiure;
     }
     RedisModule_Log(ctx,
                     "notice",

@@ -3,35 +3,27 @@ ROOT=../..
 
 include $(ROOT)/deps/readies/mk/main
 
+#----------------------------------------------------------------------------------------------
+
 MK_CUSTOM_CLEAN=1
 
+ifeq ($(RMUTIL_BINDIR),)
+override BINDIR=$(RMUTIL_BINDIR)
+else
 BINDIR=$(BINROOT)/rmutil
+endif
+
 SRCDIR=$(ROOT)/deps/RedisModulesSDK/rmutil
 
-CC_FLAGS=\
-	-I$(SRCDIR)/.. \
-	-DREDIS_MODULE_TARGET \
-	-Wall \
-	-fPIC \
-	-Wno-unused-function \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d)
+#----------------------------------------------------------------------------------------------
 
-ifeq ($(PROFILE),1)
-CC_FLAGS += -g -ggdb -fno-omit-frame-pointer
-endif
+define CC_INCLUDES +=
+	$(SRCDIR)/..
+endef
 
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -ggdb -O0
-else
-ifeq ($(PROFILE),1)
-CC_FLAGS += -O2
-else
-CC_FLAGS += -O3
-endif
-endif
-
-#	sds.c
+define CC_DEFS +=
+	REDIS_MODULE_TARGET
+endef
 
 _SOURCES=\
 	util.c \
@@ -57,18 +49,18 @@ all: bindirs $(TARGET)
 
 include $(MK)/rules
 
-clean:
-	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
-
 -include $(CC_DEPS)
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) $(CC_C_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
 	$(SHOW)ar rcs $@ $^
+
+clean:
+	-$(SHOW)[[ -e $(BINDIR) ]] && find $(BINDIR) -name '*.[oadh]' -type f -delete
 
 #----------------------------------------------------------------------------------------------
 

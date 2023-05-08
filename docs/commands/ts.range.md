@@ -39,9 +39,9 @@ is end timestamp for the range query (integer UNIX timestamp in milliseconds) or
 <details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary>
 
-is used when a time series is a compaction. With `LATEST`, TS.RANGE also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.RANGE does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
+is used when a time series is a compaction. With `LATEST`, TS.RANGE also reports the compacted value of the latest, possibly partial, bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.RANGE does not report the latest, possibly partial, bucket. When a time series is not a compaction, `LATEST` is ignored.
   
-The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest, possibly partial, bucket is also required. In such a case, use `LATEST`.
 </details>
 
 <details open>
@@ -79,25 +79,25 @@ is a time bucket alignment control for `AGGREGATION`. It controls the time bucke
 <details open>
 <summary><code>AGGREGATION aggregator bucketDuration</code></summary> 
 
-aggregates results into time buckets, where:
+aggregates samples into time buckets, where:
 
   - `aggregator` takes one of the following aggregation types:
 
-    | `aggregator `&nbsp; &nbsp; &nbsp; | Description                                                      |
-    | :----------- | :--------------------------------------------------------------- |
-    | `avg`        | Arithmetic mean of all values                                    |
-    | `sum`        | Sum of all values                                                |
-    | `min`        | Minimum value                                                    |
-    | `max`        | Maximum value                                                    |
-    | `range`      | Difference between the highest and the lowest value              |
-    | `count`      | Number of values                                                 |
-    | `first`      | Value with lowest timestamp in the bucket                        |
-    | `last`       | Value with highest timestamp in the bucket                       |
-    | `std.p`      | Population standard deviation of the values                      |
-    | `std.s`      | Sample standard deviation of the values                          |
-    | `var.p`      | Population variance of the values                                |
-    | `var.s`      | Sample variance of the values                                    |
-    | `twa`        | Time-weighted average of all values (since RedisTimeSeries v1.8) |
+    | `aggregator` | Description                                                                    |
+    | ------------ | ------------------------------------------------------------------------------ |
+    | `avg`        | Arithmetic mean of all values                                                  |
+    | `sum`        | Sum of all values                                                              |
+    | `min`        | Minimum value                                                                  |
+    | `max`        | Maximum value                                                                  |
+    | `range`      | Difference between the maximum and the minimum value                           |
+    | `count`      | Number of values                                                               |
+    | `first`      | Value with lowest timestamp in the bucket                                      |
+    | `last`       | Value with highest timestamp in the bucket                                     |
+    | `std.p`      | Population standard deviation of the values                                    |
+    | `std.s`      | Sample standard deviation of the values                                        |
+    | `var.p`      | Population variance of the values                                              |
+    | `var.s`      | Sample variance of the values                                                  |
+    | `twa`        | Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8) |
 
   - `bucketDuration` is duration of each bucket, in milliseconds.
   
@@ -128,12 +128,19 @@ is a flag, which, when specified, reports aggregations also for empty buckets.
 | `aggregator`         | Value reported for each empty bucket |
 | -------------------- | ------------------------------------ |
 | `sum`, `count`       | `0`                                  |
+| `last`               | The value of the last sample before the bucket's start. `NaN` when no such sample. |
+| `twa`                | Average value over the bucket's timeframe based on linear interpolation of the last sample before the bucket's start and the first sample after the bucket's end. `NaN` when no such samples. |
 | `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` | `NaN` |
-| `last`               | The value of the previous sample. `NaN` when no previous sample. |
-| `twa`                | Based on linear interpolation of previous and next samples. `NaN` when cannot interpolate. |
 
 Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
 </details>
+
+## Return value
+
+Either
+
+- @array-reply of (@integer-reply, @simple-string-reply) pairs representing (timestamp, value(double))
+- @error-reply (e.g., on invalid filter value)
 
 ## Complexity
 

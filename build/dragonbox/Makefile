@@ -11,8 +11,12 @@ endef
 
 #----------------------------------------------------------------------------------------------
 
-# BINDIR=$(BINROOT)/dragonbox
+ifeq ($(DRAGONBOX_BINDIR),)
 override BINDIR=$(DRAGONBOX_BINDIR)
+else
+BINDIR=$(BINROOT)/dragonbox
+endif
+
 SRCDIR=$(ROOT)/deps/dragonbox
 
 TARGET=$(BINDIR)/dragonbox.a
@@ -20,6 +24,8 @@ TARGET=$(BINDIR)/dragonbox.a
 #----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
+
+CC_CXX_STD=c++17
 
 include $(MK)/defs
 
@@ -30,29 +36,6 @@ OBJECTS=$(patsubst $(SRCDIR)/%.cpp,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.cpp, $(BINDIR)/%.d, $(SOURCES))
 
-CC_FLAGS += \
-	-fPIC \
-	-MMD -MF $(@:.o=.d) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
-	$(CC_FLAGS.coverage)
-
-CXX_FLAGS += \
-	-std=c++17
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -O0
-LD_FLAGS += -g
-else
-CC_FLAGS += -O2 -Wno-unused-result
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
-
 #----------------------------------------------------------------------------------------------
 
 include $(MK)/rules
@@ -61,7 +44,7 @@ include $(MK)/rules
 
 $(BINDIR)/%.o: $(SRCDIR)/%.cpp
 	@echo Compiling $<...
-	$(SHOW)$(CXX) $(CC_FLAGS) $(CXX_FLAGS) -fvisibility=hidden -c $< -o $@
+	$(SHOW)$(CXX) $(CC_FLAGS) $(CC_CXX_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...

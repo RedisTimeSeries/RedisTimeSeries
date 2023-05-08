@@ -29,7 +29,7 @@ is key name for the time series.
 
 <details open><summary><code>RETENTION retentionPeriod</code></summary> 
 
-is maximum age for samples compared to the highest reported timestamp, in milliseconds. Samples are expired based solely on the difference between their timestamp and the timestamps passed to subsequent `TS.ADD`, `TS.MADD`, `TS.INCRBY`, and `TS.DECRBY` calls.
+is maximum age for samples compared to the highest reported timestamp, in milliseconds. Samples are expired based solely on the difference between their timestamp and the timestamps passed to subsequent `TS.ADD`, `TS.MADD`, `TS.INCRBY`, and `TS.DECRBY` calls with this key.
 
 When set to 0, samples never expire. When not specified, the option is set to the global [RETENTION_POLICY](/docs/stack/timeseries/configuration/#retention_policy) configuration of the database, which by default is 0.
 </details>
@@ -49,9 +49,9 @@ When not specified, the option is set to `COMPRESSED`.
 
 is initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory. Changing chunkSize (using `TS.ALTER`) does not affect existing chunks.
 
-Must be a multiple of 8 in the range [48 .. 1048576]. When not specified, it is set to 4096 bytes (a single memory page).
+Must be a multiple of 8 in the range [48 .. 1048576]. When not specified, it is set to the global [CHUNK_SIZE_BYTES](/docs/stack/timeseries/configuration/#chunk_size_bytes) configuration of the database, which by default is 4096 (a single memory page).
 
-Note: Before v1.6.10 no minimum was enforced. Between v1.6.10 and v1.6.17 and in v1.8.0 The minimum value was 128. Since v1.8.1 the minimum value is 48.
+Note: Before v1.6.10 no minimum was enforced. Between v1.6.10 and v1.6.17 and in v1.8.0 the minimum value was 128. Since v1.8.1 the minimum value is 48.
 
 The data in each key is stored in chunks. Each chunk contains header and data for a given timeframe. An index contains all chunks. Iterations occur inside each chunk. Depending on your use case, consider these tradeoffs for having smaller or larger sizes of chunks:
 
@@ -64,8 +64,8 @@ The data in each key is stored in chunks. Each chunk contains header and data fo
 
 <details open><summary><code>DUPLICATE_POLICY policy</code></summary> 
 
-is policy for handling multiple samples with identical timestamps, with one of the following values:
-  - `BLOCK`: an error will occur for any out of order sample
+is policy for handling insertion (`TS.ADD` and `TS.MADD`) of multiple samples with identical timestamps, with one of the following values:
+  - `BLOCK`: ignore any newly reported value and reply with an error
   - `FIRST`: ignore any newly reported value
   - `LAST`: override with the newly reported value
   - `MIN`: only override if the value is lower than the existing value
@@ -81,6 +81,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 
 The `TS.MGET`, `TS.MRANGE`, and `TS.MREVRANGE` commands operate on multiple time series based on their labels. The `TS.QUERYINDEX` command returns all time series keys matching a given filter based on their labels.
 </details>
+
+## Return value
+
+@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
 
 ## Examples 
 

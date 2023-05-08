@@ -28,10 +28,17 @@ is (integer) UNIX sample timestamp in milliseconds or <code>*</code> to set the 
 is numeric data value of the sample (double). The double number should follow <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> (a JSON standard). The parser rejects overly large values that would not fit in binary64. It does not accept NaN or infinite values.
 </details>
 
-
 <note><b>Notes:</b>
-- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.  
+- If `timestamp` is older than the retention period compared to the maximum existing timestamp, the sample is discarded and an error is returned.
+- Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
 </note>
+
+## Return value
+
+Either
+
+- @array-reply of @integer-reply representing the timestamp of each added sample or an  @error-reply (e.g., on `DUPLICATE_POLICY` violation)
+- @error-reply (e.g., on wrong number of arguments)
 
 ## Complexity
 

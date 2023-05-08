@@ -20,6 +20,8 @@ TARGET=$(BINDIR)/unit_tests
 
 #----------------------------------------------------------------------------------------------
 
+CC_C_STD=gnu11
+
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
@@ -31,37 +33,16 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c, $(BINDIR)/%.d, $(SOURCES))
 
-CC_FLAGS += \
-	-fPIC \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
-	-I$(ROOT)/deps \
-	-I$(ROOT)/deps/RedisModulesSDK \
-	-I$(ROOT)/src \
-	-I$(ROOT)/deps/minunit \
-	$(CC_FLAGS.coverage)
+define CC_INCLUDES +=
+	$(SRCDIR)
+	$(BINDIR)
+	$(ROOT)/deps
+	$(ROOT)/deps/RedisModulesSDK
+	$(ROOT)/src
+	$(ROOT)/deps/minunit
+endef
 
-#	-I/usr/local/opt/openssl/include \
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -O0
-LD_FLAGS += -g
-else
-CC_FLAGS += -O2 -Wno-unused-result
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-LD_SHARED_EXT=dylib
-else
-LD_SHARED_EXT=so
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
-
-LD_LIBS += $(realpath $(BINROOT)/redistimeseries.$(LD_SHARED_EXT)) -lm
+LD_LIBS += $(realpath $(BINROOT)/redistimeseries.so)
 
 #----------------------------------------------------------------------------------------------
 
@@ -71,11 +52,11 @@ include $(MK)/rules
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -fvisibility=hidden -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) $(CC_C_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...
-	$(SHOW)$(CC) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
+	$(SHOW)$(CC) $(LD_SO_FLAGS) $(LD_FLAGS) -o $@ $(OBJECTS) $(LD_LIBS)
 
 clean:
 ifeq ($(ALL),1)

@@ -25,7 +25,7 @@ is numeric data value of the sample (double)
 </details>
 
 <note><b>Notes</b>
-- If the time series does not exist, it is automatically created.
+- When specified key does not exist, a new time series is created.  
 - You can use this command as a counter or gauge that automatically gets history as a time series.
 - Explicitly adding samples to a compacted time series (using `TS.ADD`, `TS.MADD`, `TS.INCRBY`, or `TS.DECRBY`) may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.  
 </note>
@@ -38,7 +38,9 @@ is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp a
 
 `timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
 
-If the time series is empty, the value is set to `value`. When not specified, set the timestamp according to the server clock.
+If the time series is empty, the value is set to `value`. 
+  
+When not specified, the timestamp is set according to the server clock.
 </details>
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 
@@ -67,6 +69,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 - When specified and the key doesn't exist, a new time series is created. Setting the `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
+## Return value
+
+@integer-reply - the timestamp of the upserted sample, or @error-reply.
+
 ## Examples
 
 <details open><summary><b>Store sum of data from several sources</b></summary> 
@@ -86,7 +92,7 @@ Note that the timestamps must arrive in non-decreasing order.
 
 {{< highlight bash >}}
 127.0.0.1:6379> ts.incrby a 100 TIMESTAMP 50
-(error) TSDB: for incrby/decrby, timestamp should be newer than the lastest one
+(error) TSDB: timestamp must be equal to or higher than the maximum existing timestamp
 {{< / highlight >}}
 
 You can achieve similar results without such protection using `TS.ADD key timestamp value ON_DUPLICATE sum`.

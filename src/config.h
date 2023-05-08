@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2020 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #ifndef CONFIG_H
 #define CONFIG_H
@@ -20,8 +20,10 @@ typedef struct
     short options;
     int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
-    long long numThreads;   // number of threads used by libMR
-    bool forceSaveCrossRef; // Internal debug configuration param
+    long long numThreads;      // number of threads used by libMR
+    bool forceSaveCrossRef;    // Internal debug configuration param
+    char *password;            // tls password which used by libmr
+    bool dontAssertOnFailiure; // Internal debug configuration param
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

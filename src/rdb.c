@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "rdb.h"
 
@@ -22,9 +22,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    double lastValue;
-    timestamp_t lastTimestamp;
-    uint64_t totalSamples;
+    double lastValue = 0;
+    timestamp_t lastTimestamp = 0;
+    uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;

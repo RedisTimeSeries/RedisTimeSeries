@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2021 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "filter_iterator.h"
 
@@ -23,16 +23,16 @@ typedef struct dfs_stack_val
 {
     size_t si;
     size_t ei;
-    size_t values_si;
-    size_t values_ei;
+    size_t filter_si;
+    size_t filter_ei;
 } dfs_stack_val;
 
-#define dfs_stack_val_init(_val, _si, _ei, _values_si, _values_ei)                                 \
+#define dfs_stack_val_init(_val, _si, _ei, _filter_si, _filter_ei)                                 \
     do {                                                                                           \
         (_val).si = (_si);                                                                         \
         (_val).ei = (_ei);                                                                         \
-        (_val).values_si = (_values_si);                                                           \
-        (_val).values_ei = (_values_ei);                                                           \
+        (_val).filter_si = (_filter_si);                                                           \
+        (_val).filter_ei = (_filter_ei);                                                           \
     } while (0)
 
 static inline timestamp_t calc_bucket_ts(BucketTimestamp bucketTS,
@@ -52,15 +52,15 @@ static inline timestamp_t calc_bucket_ts(BucketTimestamp bucketTS,
 
 // returns the number of matches
 static size_t filterSamples(Samples *samples,
-                            const timestamp_t *tsVals,
-                            size_t values_si,
-                            size_t values_ei) {
+                            const timestamp_t *filter,
+                            size_t filter_si,
+                            size_t filter_ei) {
     size_t count = 0;
     size_t num_samples = samples->num_samples;
     dfs_stack_val *dfs_stack =
         array_new(dfs_stack_val, ceil(log(num_samples)) + 1); // + 1 is for one left child
     dfs_stack_val first_frame = {
-        .si = 0, .ei = num_samples - 1, .values_si = values_si, .values_ei = values_ei
+        .si = 0, .ei = num_samples - 1, .filter_si = filter_si, .filter_ei = filter_ei
     };
     dfs_stack_val left_frame, right_frame;
     array_append(dfs_stack, first_frame);
@@ -69,10 +69,10 @@ static size_t filterSamples(Samples *samples,
     while (array_len(dfs_stack) > 0) {
         cur_frame = array_pop(dfs_stack);
         if (cur_frame.si == cur_frame.ei) {
-            assert((num_samples <= 1) || cur_frame.values_ei == cur_frame.values_si);
-            for (size_t i = cur_frame.values_si; i <= cur_frame.values_ei; ++i) {
+            assert((num_samples <= 1) || cur_frame.filter_ei == cur_frame.filter_si);
+            for (size_t i = cur_frame.filter_si; i <= cur_frame.filter_ei; ++i) {
                 const timestamp_t sample_ts = samples->timestamps[cur_frame.si];
-                if (sample_ts == tsVals[i]) {
+                if (sample_ts == filter[i]) {
                     double value = samples->values[cur_frame.si];
                     samples->timestamps[count] = sample_ts;
                     samples->values[count] = value;
@@ -85,41 +85,43 @@ static size_t filterSamples(Samples *samples,
 
         const size_t mid = (cur_frame.si + cur_frame.ei) / 2;
 
-        // find tsVals that fit into left bucket
+        // find filter values that fit into left bucket
         found_left = false;
-        size_t _siVals = cur_frame.values_si, _eiVals;
+        size_t _filter_si = cur_frame.filter_si, _filter_ei;
 
-        while (_siVals <= cur_frame.values_ei &&
-               tsVals[_siVals] < samples->timestamps[cur_frame.si]) {
-            ++_siVals;
+        while (_filter_si <= cur_frame.filter_ei &&
+               filter[_filter_si] < samples->timestamps[cur_frame.si]) {
+            ++_filter_si;
         }
 
-        _eiVals = _siVals;
-        while (_eiVals <= cur_frame.values_ei && tsVals[_eiVals] <= samples->timestamps[mid]) {
+        _filter_ei = _filter_si;
+        while (_filter_ei <= cur_frame.filter_ei &&
+               filter[_filter_ei] <= samples->timestamps[mid]) {
             found_left = true;
-            ++_eiVals;
+            ++_filter_ei;
         }
 
         if (found_left) {
-            dfs_stack_val_init(left_frame, cur_frame.si, mid, _siVals, _eiVals - 1);
+            dfs_stack_val_init(left_frame, cur_frame.si, mid, _filter_si, _filter_ei - 1);
         }
 
-        // find tsVals that fit into right bucket
+        // find filter that fit into right bucket
         found_right = false;
-        _siVals = _eiVals;
-        while (_siVals <= cur_frame.values_ei && tsVals[_siVals] < samples->timestamps[mid + 1]) {
-            ++_siVals;
+        _filter_si = _filter_ei;
+        while (_filter_si <= cur_frame.filter_ei &&
+               filter[_filter_si] < samples->timestamps[mid + 1]) {
+            ++_filter_si;
         }
 
-        _eiVals = _siVals;
-        while (_eiVals <= cur_frame.values_ei &&
-               tsVals[_eiVals] <= samples->timestamps[cur_frame.ei]) {
+        _filter_ei = _filter_si;
+        while (_filter_ei <= cur_frame.filter_ei &&
+               filter[_filter_ei] <= samples->timestamps[cur_frame.ei]) {
             found_right = true;
-            ++_eiVals;
+            ++_filter_ei;
         }
 
         if (found_right) {
-            dfs_stack_val_init(right_frame, mid + 1, cur_frame.ei, _siVals, _eiVals - 1);
+            dfs_stack_val_init(right_frame, mid + 1, cur_frame.ei, _filter_si, _filter_ei - 1);
         }
 
         if (found_right) {
@@ -144,7 +146,8 @@ EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base
     if (self->tsFilterIndex == self->ByTsArgs.count) {
         return NULL;
     }
-    while ((enrichedChunk = self->base.input->GetNext(self->base.input))) {
+    while ((enrichedChunk = self->base.input->GetNext(self->base.input)) &&
+           enrichedChunk->samples.num_samples > 0) {
         assert(!enrichedChunk->rev); // the impl assumes that the chunk isn't reversed
         count = filterSamples(&enrichedChunk->samples,
                               self->ByTsArgs.values,
@@ -315,7 +318,7 @@ static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
                                             bool reversed) {
     double val;
     for (size_t i = 0; i < n_empty_buckets; ++i) {
-        self->aggregation->finalizeEmpty(&val);
+        self->aggregation->finalizeEmpty(self->aggregationContext, &val);
         fillEmptyBucketWithValueIncIter(
             write_index,
             &cur_ts,
@@ -446,7 +449,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 
         // Calculate val
         if (is_nan_bucket) {
-            aggregation->finalizeEmpty(&val);
+            aggregation->finalizeEmpty(NULL, &val);
         } else if (has_before_and_after) {
             double delta_val = (sample_after.value - sample_before.value);
             double delta_ts = (sample_after.timestamp - sample_before.timestamp);
@@ -458,7 +461,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
         } else if (n_samples_after > 1) {
             timestamp_t delta = sample_afAfter.timestamp - sample_after.timestamp;
             if (tb + (delta / 2) <= sample_after.timestamp) {
-                aggregation->finalizeEmpty(&val);
+                aggregation->finalizeEmpty(NULL, &val);
             } else {
                 val = sample_after.value;
             }
@@ -466,7 +469,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
             RedisModule_Assert(n_samples_before > 1);
             timestamp_t delta = sample_before.timestamp - sample_befBefore.timestamp;
             if (sample_before.timestamp + (delta / 2) <= ta) {
-                aggregation->finalizeEmpty(&val);
+                aggregation->finalizeEmpty(NULL, &val);
             } else {
                 val = sample_before.value;
             }
@@ -506,7 +509,7 @@ static void fillEmptyBuckets(Samples *samples,
                            // users
     if (self->aggregation->type == TS_AGG_TWA) {
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-        timestamp_t ta, tb;
+        timestamp_t ta;
         int64_t agg_time_delta = self->aggregationTimeDelta;
         ta = twa_calc_ta(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
@@ -721,7 +724,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
     while (enrichedChunk) {
         // currently if the query reversed the chunk will be already revered here
-        assert(self->reverse == enrichedChunk->rev);
+        assert(self->reverse == enrichedChunk->rev || enrichedChunk->samples.num_samples == 0);
         Samples *samples = &enrichedChunk->samples;
         if (self->aggregation->type == TS_AGG_MAX &&
             !is_reversed) { // Currently only implemented vectorization for specific case

@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 
 #define REDISMODULE_MAIN
@@ -454,10 +454,11 @@ static void handleCompaction(RedisModuleCtx *ctx,
         }
 
         double aggVal;
-        rule->aggClass->finalize(rule->aggContext, &aggVal);
-        internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
-        RedisModule_NotifyKeyspaceEvent(
-            ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+            RedisModule_NotifyKeyspaceEvent(
+                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        }
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
@@ -537,13 +538,8 @@ static inline int add(RedisModuleCtx *ctx,
 
     long long timestampValue;
     if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
-        // if timestamp is "*", take current time (automatic timestamp)
-        if (RMUtil_StringEqualsC(timestampStr, "*")) {
-            timestampValue = RedisModule_Milliseconds();
-        } else {
-            RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
-            return REDISMODULE_ERR;
-        }
+        RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+        return REDISMODULE_ERR;
     }
 
     if (timestampValue < 0) {
@@ -580,12 +576,20 @@ static inline int add(RedisModuleCtx *ctx,
     return rv;
 }
 
+static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
+    char curTimeStr[sizeof(timestamp_t) * 8 + 1];
+    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
+    return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
+}
+
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
     if (argc < 4 || (argc - 1) % 3 != 0) {
         return RedisModule_WrongArity(ctx);
     }
+
+    RedisModuleString *curTimeStr = NULL;
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
     RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
@@ -594,6 +598,15 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModuleString *keyName = argv[i];
         RedisModuleString *timestampStr = argv[i + 1];
         RedisModuleString *valueStr = argv[i + 2];
+
+        if (RMUtil_StringEqualsC(timestampStr, "*")) {
+            // if timestamp is "*", take current time (automatic timestamp)
+            if (!curTimeStr) {
+                curTimeStr = getCurrentTime(ctx);
+            }
+            timestampStr = curTimeStr;
+        }
+
         if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
             replication_data[replication_count] = keyName;
             replication_data[replication_count + 1] = timestampStr;
@@ -628,9 +641,21 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *timestampStr = argv[2];
     RedisModuleString *valueStr = argv[3];
 
+    if (RMUtil_StringEqualsC(timestampStr, "*")) {
+        // if timestamp is "*", take current time (automatic timestamp)
+        timestampStr = getCurrentTime(ctx);
+    }
+
     int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
-        RedisModule_ReplicateVerbatim(ctx);
+        RedisModuleString **args_array =
+            (RedisModuleString **)malloc((argc - 1) * sizeof(RedisModuleString *));
+        for (int i = 0; i < argc - 1; i++) { // skip the command name
+            args_array[i] = argv[i + 1];
+        }
+        args_array[1] = timestampStr; // In case the timestamp was "*"
+        RedisModule_Replicate(ctx, "TS.ADD", "v", args_array, argc - 1);
+        free(args_array);
     }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
@@ -676,6 +701,9 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(key);
+        if (cCtx.labelsCount > 0) {
+            FreeLabels(cCtx.labels, cCtx.labelsCount);
+        }
         return RTS_ReplyGeneralError(ctx, "TSDB: key already exists");
     }
 
@@ -930,7 +958,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
         return RedisModule_ReplyWithError(
-            ctx, "TSDB: for incrby/decrby, timestamp should be newer than the lastest one");
+            ctx, "TSDB: timestamp must be equal to or higher than the maximum existing timestamp");
     }
 
     double result = series->lastValue;
@@ -1088,7 +1116,7 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
                                                   const Series *series,
                                                   const RangeArgs *args) {
     bool is_valid = true;
-    if (!series->rules)
+    if (!series->rules || !series->retentionTime)
         return true;
 
     // Verify startTimestamp in retention period
@@ -1109,10 +1137,9 @@ static inline bool verify_compaction_del_possible(RedisModuleCtx *ctx,
     }
 
     if (unlikely(!is_valid)) {
-        RTS_ReplyGeneralError(
-            ctx,
-            "TSDB: Can't delete an event which is older than retention time, in such case no "
-            "valid way to update the downsample");
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: When a series has compactions, deleting samples or compaction "
+                              "buckets beyond the series retention period is not possible");
     }
 
     return is_valid;

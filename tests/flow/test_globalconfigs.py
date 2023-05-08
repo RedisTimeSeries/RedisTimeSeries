@@ -1,5 +1,5 @@
 import pytest
-from RLTest import Env
+from utils import Env
 from test_helper_classes import TSInfo
 from includes import *
 
@@ -164,9 +164,9 @@ class testGlobalConfigTests():
 
 
 def test_negative_configuration():
+    Env().skip()
     Env().skipOnCluster()
     skip_on_rlec()
-
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; DUPLICATE_POLICY abc')
 
@@ -205,3 +205,6 @@ def test_negative_configuration():
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; CHUNK_SIZE_BYTES')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')

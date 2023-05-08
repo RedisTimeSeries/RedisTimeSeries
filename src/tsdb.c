@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "tsdb.h"
 
@@ -710,18 +710,56 @@ static int ContinuousDeletion(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
-void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) {
+static bool delete_sample_before(RedisModuleCtx *ctx,
+                                 RedisModuleString *series_name,
+                                 timestamp_t ts,
+                                 timestamp_t *deleted) {
+    RedisModuleKey *key;
+    Series *series;
+    bool rv = true;
+    if (!GetSeries(
+            ctx, series_name, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false)) {
+        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        return false;
+    }
+
+    timestamp_t rax_key;
+    Chunk_t *chunk;
+    seriesEncodeTimestamp(&rax_key, ts);
+    RedisModuleDictIter *dictIter =
+        RedisModule_DictIteratorStartC(series->chunks, "<", &rax_key, sizeof(rax_key));
+    void *chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
+    if (chunkKey == NULL || series->funcs->GetNumOfSample(chunk) == 0) {
+        rv = false;
+        goto _out;
+    }
+
+    *deleted = Uncompressed_GetLastTimestamp(chunk);
+    SeriesDelRange(series, *deleted, *deleted);
+
+_out:
+    RedisModule_CloseKey(key);
+    RedisModule_DictIteratorStop(dictIter);
+    return rv;
+}
+
+static void CompactionDelRange(Series *series,
+                               timestamp_t start_ts,
+                               timestamp_t end_ts,
+                               timestamp_t last_ts_before_deletion) {
     if (!series->rules)
         return;
 
     deleteReferenceToDeletedSeries(rts_staticCtx, series);
     CompactionRule *rule = series->rules;
+    bool is_empty;
 
     while (rule) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
         const timestamp_t curAggWindowStart =
-            CalcBucketStart(series->lastTimestamp, ruleTimebucket, rule->timestampAlignment);
+            CalcBucketStart(last_ts_before_deletion, ruleTimebucket, rule->timestampAlignment);
         const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
+        bool latest_timebucket_deleted = false;
 
         if (start_ts >= curAggWindowStartNormalized) {
             // All deletion range in latest timebucket - only update the context on the rule
@@ -730,11 +768,15 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
                                            curAggWindowStart + ruleTimebucket - 1,
                                            rule,
                                            NULL,
-                                           NULL);
+                                           &is_empty);
             if (rv == TSDB_ERROR) {
                 RedisModule_Log(
                     rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                 continue;
+            }
+
+            if (is_empty) {
+                latest_timebucket_deleted = true;
             }
         } else {
             const timestamp_t startTSWindowStart =
@@ -747,7 +789,6 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             timestamp_t continuous_deletion_start;
             timestamp_t continuous_deletion_end;
             double val = 0;
-            bool is_empty;
             int rv;
 
             // ---- handle start bucket ----
@@ -781,12 +822,17 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             if (end_ts >= curAggWindowStartNormalized) {
                 // deletion in latest timebucket
                 const int rv = SeriesCalcRange(
-                    series, curAggWindowStartNormalized, UINT64_MAX, rule, NULL, NULL);
+                    series, curAggWindowStartNormalized, UINT64_MAX, rule, NULL, &is_empty);
                 if (rv == TSDB_ERROR) {
                     RedisModule_Log(
                         rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
                     continue;
                 }
+
+                if (is_empty) {
+                    latest_timebucket_deleted = true;
+                }
+
                 // continuous deletion ends one bucket before endTSWindowStart
                 continuous_deletion_end = BucketStartNormalize(endTSWindowStart - ruleTimebucket);
             } else {
@@ -828,6 +874,34 @@ void CompactionDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts
             }
         }
 
+        // If the latest timebucket was deleted, we need to update the context to be the
+        // previous timebucket
+        if (latest_timebucket_deleted) {
+            timestamp_t last_ts;
+            // delete the last sample in the downsampled series
+            if (!delete_sample_before(
+                    rts_staticCtx, rule->destKey, last_ts_before_deletion, &last_ts)) {
+                // The compaction series is empty
+                last_ts = 0;
+            }
+
+            const timestamp_t wind_start =
+                CalcBucketStart(last_ts, ruleTimebucket, rule->timestampAlignment);
+            const timestamp_t wind_start_normalized = BucketStartNormalize(wind_start);
+
+            // update the context to be the latest timebucket
+            SeriesCalcRange(series,
+                            wind_start_normalized,
+                            wind_start_normalized + ruleTimebucket - 1,
+                            rule,
+                            NULL,
+                            &is_empty);
+
+            // if is_empty, it means that series is empty and we need to set startCurrentTimeBucket
+            // to -1
+            rule->startCurrentTimeBucket = is_empty ? -1LL : wind_start_normalized;
+        }
+
         rule = rule->nextRule;
     }
 }
@@ -848,6 +922,10 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
             funcs->GetFirstTimestamp(currentChunk) > end_ts) {
             // Having empty chunk means the series is empty
             break;
+        }
+
+        if (funcs->GetLastTimestamp(currentChunk) < start_ts) {
+            continue;
         }
 
         bool is_only_chunk =
@@ -896,7 +974,7 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
 
     RedisModule_DictIteratorStop(iter);
 
-    CompactionDelRange(series, start_ts, end_ts);
+    timestamp_t last_ts_before_deletion = series->lastTimestamp;
 
     // Check if last timestamp deleted
     if (end_ts >= series->lastTimestamp && start_ts <= series->lastTimestamp) {
@@ -912,6 +990,9 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
         }
         RedisModule_DictIteratorStop(iter);
     }
+
+    CompactionDelRange(series, start_ts, end_ts, last_ts_before_deletion);
+
     return deletedSamples;
 }
 
@@ -1302,6 +1383,12 @@ void calculate_latest_sample(Sample **sample, const Series *series) {
         *sample = NULL;
     } else {
         CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
+        if (rule->startCurrentTimeBucket == -1LL) {
+            // when srcSeries->totalSamples != 0 and rule->startCurrentTimeBucket == -1LL it means
+            // that on ts.createrule the src wasn't empty This means that the rule context is empty
+            *sample = NULL;
+            goto __out;
+        }
         void *clonedContext = rule->aggClass->cloneContext(rule->aggContext);
 
         double aggVal;
@@ -1312,6 +1399,7 @@ void calculate_latest_sample(Sample **sample, const Series *series) {
         free(clonedContext);
     }
 
+__out:
     if (srcKey) {
         RedisModule_CloseKey(srcKey);
     }

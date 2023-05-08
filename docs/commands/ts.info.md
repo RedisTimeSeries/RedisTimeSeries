@@ -25,32 +25,29 @@ is an optional flag to get a more detailed information about the chunks.
 
 ## Return value
 
-An array-reply with information about the time series:
+@array-reply with information about the time series (name-value pairs):
 
-| Name | Description
-| ---- | -
-| `totalSamples`    | Total number of samples in this time series
-| `memoryUsage`     | Total number of bytes allocated for this time series, which is the sum of <br> - The memory used for storing the series' configuration parameters (retention period, duplication policy, etc.)<br>- The memory used for storing the series' compaction rules<br>- The memory used for storing the series' labels (key-value pairs)<br>- The memory used for storing the chunks (chunk header + compressed/uncompressed data)
-| `firstTimestamp`  | First timestamp present in this time series
-| `lastTimestamp`   | Last timestamp present in this time series
-| `retentionTime`   | The retention period, in milliseconds, for this time series
-| `chunkCount`      | Number of chunks used for this time series
-| `chunkSize`       | The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing the chunk size (using `TS.ALTER`) does not affect existing chunks.
-| `chunkType`       | The chunks type: `compressed` or `uncompressed`
-| `duplicatePolicy` | The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
-| `labels`          | A nested array of label-value pairs that represent the metadata labels of this time series
-| `sourceKey`       | Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
-| `rules`           | A nested array of the [compaction rules](/commands/ts.createrule/) defined in this time series, with these elements  for each rule:<br>- The compaction key<br>- The bucket duration<br>- The aggregator<br>- The alignment (since RedisTimeSeries v1.8)
+| Name<br>@simple-string-reply | Description
+| ---------------------------- | -
+| `totalSamples`    | @integer-reply<br> Total number of samples in this time series
+| `memoryUsage`     | @integer-reply<br> Total number of bytes allocated for this time series, which is the sum of <br> - The memory used for storing the series' configuration parameters (retention period, duplication policy, etc.)<br>- The memory used for storing the series' compaction rules<br>- The memory used for storing the series' labels (key-value pairs)<br>- The memory used for storing the chunks (chunk header + compressed/uncompressed data)
+| `firstTimestamp`  | @integer-reply<br> First timestamp present in this time series
+| `lastTimestamp`   | @integer-reply<br> Last timestamp present in this time series
+| `retentionTime`   | @integer-reply<br> The retention period, in milliseconds, for this time series
+| `chunkCount`      | @integer-reply<br> Number of chunks used for this time series
+| `chunkSize`       | @integer-reply<br> The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing the chunk size (using `TS.ALTER`) does not affect existing chunks.
+| `chunkType`       | @simple-string-reply<br> The chunks type: `compressed` or `uncompressed`
+| `duplicatePolicy` | @simple-string-reply or @nil-reply<br> The [duplicate policy](/docs/stack/timeseries/configuration/#duplicate_policy) of this time series
+| `labels`          | @array-reply or @nil-reply<br> Metadata labels of this time series<br> Each element is a 2-elements @array-reply of (@bulk-string-reply, @bulk-string-reply) representing (label, value)
+| `sourceKey`       | @bulk-string-reply or @nil-reply<br>Key name for source time series in case the current series is a target of a [compaction rule](/commands/ts.createrule/)
+| `rules`           | @array-reply<br> [Compaction rules](/commands/ts.createrule/) defined in this time series<br> Each rule is an @array-reply with 4 elements:<br>- @bulk-string-reply: The compaction key<br>- @integer-reply: The bucket duration<br>- @simple-string-reply: The aggregator<br>- @integer-reply: The alignment (since RedisTimeSeries v1.8)
 
-When `DEBUG` is specified, the response contains an additional array field called `Chunks` with these elements:
+When `DEBUG` is specified, the response also contains:
 
-| Name | Description
-| ---- | -
-| `startTimestamp`  | First timestamp present in the chunk
-| `endTimestamp`    | Last timestamp present in the chunk
-| `samples`         | Total number of samples in the chunk
-| `size`            | The chunk data size in bytes. This is the exact size that used for data only inside the chunk. It does not include other overheads.
-| `bytesPerSample`  | Ratio of `size` and `samples`
+| Name<br>@simple-string-reply | Description
+| ---------------------------- | -
+| `keySelfName`     | @bulk-string-reply<br> Name of the key
+| `Chunks`          | @array-reply with information about the chunks<br>Each element is an @array-reply of information about a single chunk in a name(@simple-string-reply)-value pairs:<br>- `startTimestamp` - @integer-reply - First timestamp present in the chunk<br>- `endTimestamp` - @integer-reply - Last timestamp present in the chunk<br>- `samples` - @integer-reply - Total number of samples in the chunk<br>- `size` - @integer-reply - the chunk's internal data size (without overheads) in bytes<br>- `bytesPerSample` - @bulk-string-reply (double) - Ratio of `size` and `samples`
 
 ## Examples
 

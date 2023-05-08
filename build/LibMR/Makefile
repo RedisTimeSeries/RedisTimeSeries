@@ -15,7 +15,12 @@ MK_ALL_TARGETS=build
 
 MODULE_NAME=timeseries
 
+ifeq ($(LIBMR_BINDIR),)
+override BINDIR=$(LIBMR_BINDIR)
+else
 BINDIR=$(BINROOT)/LibMR
+endif
+
 SRCDIR=$(ROOT)/deps/LibMR/src
 
 TARGET=$(BINDIR)/libmr.a
@@ -25,6 +30,8 @@ SSL ?= 1
 #----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
+
+CC_C_STD=gnu99
 
 include $(MK)/defs
 
@@ -45,39 +52,23 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
-CC_FLAGS += \
-	-fvisibility=hidden \
-	-fPIC \
-	-std=gnu99 \
-	-MMD -MF $(@:.o=.d) \
-	-DREDISMODULE_API=extern \
-	-DREDISMODULE_EXPERIMENTAL_API \
-	-DMODULE_NAME=$(MODULE_NAME) \
-	-I$(SRCDIR) \
-	-I$(BINDIR) \
-	-I$(ROOT)/deps/LibMR/deps/hiredis \
-	-I$(ROOT)/deps/LibMR/deps/hiredis/adapters \
-	-I$(ROOT)/deps/LibMR/deps/libevent/include \
-	-I$(LIBEVENT_BINDIR)/include \
-	$(CC_FLAGS.coverage)
+define CC_DEFS +=
+	REDISMODULE_EXPERIMENTAL_API
+	MODULE_NAME=$(MODULE_NAME)
+endef
+
+define CC_INCLUDES +=
+	$(SRCDIR)
+	$(BINDIR)
+	$(ROOT)/deps/LibMR/deps/hiredis
+	$(ROOT)/deps/LibMR/deps/hiredis/adapters
+	$(ROOT)/deps/LibMR/deps/libevent/include
+	$(LIBEVENT_BINDIR)/include
+endef
 
 ifeq ($(SSL),1)
-CC_FLAGS += \
-	-I$(LIBSSL_PREFIX)/include
+CC_INCLUDES += $(openssl_prefix)/include
 endif
-
-ifeq ($(DEBUG),1)
-CC_FLAGS += -g -O0
-LD_FLAGS += -g
-else
-CC_FLAGS += -O2 -Wno-unused-result
-endif
-
-ifeq ($(OS),macos)
-LD_FLAGS += -undefined dynamic_lookup
-endif
-
-LD_FLAGS += $(LD_FLAGS.coverage)
 
 #----------------------------------------------------------------------------------------------
 
@@ -87,7 +78,7 @@ include $(MK)/rules
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
 	@echo Compiling $<...
-	$(SHOW)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(SHOW)$(CC) $(CC_FLAGS) $(CC_C_FLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	@echo Creating $@...

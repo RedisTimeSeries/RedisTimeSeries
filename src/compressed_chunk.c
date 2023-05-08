@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2020 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 
 #include "compressed_chunk.h"
@@ -77,7 +77,14 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
 static void trimChunk(CompressedChunk *chunk) {
     int excess = (chunk->size * BIT - chunk->idx) / BIT;
 
-    assert(excess >= 0); // else we have written beyond allocated memory
+    if (unlikely(chunk->size * BIT < chunk->idx)) {
+        _log_if(
+            true,
+            "Invalid chunk index, we have written beyond allocated memorye"); // else we have
+                                                                              // written beyond
+                                                                              // allocated memory
+        return;
+    }
 
     if (excess > 1) {
         size_t newSize = chunk->size - excess + 1;

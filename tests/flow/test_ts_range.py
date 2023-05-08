@@ -1081,8 +1081,7 @@ def test_sanity_pipeline():
         assert expected_result == actual_result
 
 def test_large_compressed_range():
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
@@ -1106,8 +1105,7 @@ def test_large_compressed_range():
                 assert len(res) == val2 - val1 + 1
 
 def test_large_compressed_revrange():
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
@@ -1228,8 +1226,7 @@ def test_max_extensive():
     max_samples_count = 40
     n_chunk_samples = 32
     random_values = [None]*(max_samples_count*3)
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     try:
         for i in range(0, max_samples_count*3):
             random_values[i] = random.uniform(0, max_samples_count)
@@ -1341,6 +1338,13 @@ def test_empty():
         expected_data.reverse()
         assert expected_data == \
         decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+
+        expected_data_2 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
+        assert expected_data_2 == \
+        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
+        expected_data_3 = [[70, '5'], [60, '5'], [50, '3'], [40, '3'], [30, '3'], [20, '3'], [10, '1']]
+        assert expected_data_3 == \
+        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
 
         expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
         assert expected_data == \
@@ -1458,3 +1462,22 @@ def test_latest_flag_revrange():
         assert res == [[0, '4']] or res == [[0, b'4']]
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+# issue: #1370
+def test_multi_chunk_revrange():
+    env = Env(decodeResponses=True)
+    t1 = 't1{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
+        n_samples = 10000
+
+        # Fill 1 chunks
+        for i in range(1, 103):
+            assert r.execute_command('TS.ADD', t1, i, i)
+
+        # fill 2 chunks
+        for i in range(120, 220):
+            assert r.execute_command('TS.ADD', t1, i, i)
+
+        res = r.execute_command('TS.revrange', t1, 110, 215, 'AGGREGATION', 'count', 2*n_samples)
+        assert res == [[0, '96']] or res == [[0, b'96']]

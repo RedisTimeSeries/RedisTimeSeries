@@ -1066,7 +1066,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1128,6 +1128,7 @@
     "TS.MREVRANGE": {
         "summary": "Query a range across multiple time-series by filters in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges",
+        "since": "1.4.0",
         "arguments": [
             {
                 "name": "fromTimestamp",
@@ -1309,7 +1310,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1365,11 +1366,10 @@
                 ]
             }
         ],
-        "since": "1.0.0",
-        "group": "timeseries"
+            "group": "timeseries"
     },
     "TS.GET": {
-        "summary": "Get the last sample",
+        "summary": "Get the sample with the highest timestamp from a given time series",
         "complexity": "O(1)",
         "arguments": [
             {
@@ -1387,7 +1387,7 @@
         "group": "timeseries"
     },
     "TS.MGET": {
-        "summary": "Get the last samples matching a specific filter",
+        "summary": "Get the sample with the highest timestamp from each time series matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
@@ -1425,7 +1425,7 @@
                 ]
             },
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "token": "FILTER",
                 "type": "oneof",
                 "arguments": [
@@ -1482,7 +1482,7 @@
         "complexity": "O(n) where n is the number of time-series that match the filters",
         "arguments": [
             {
-                "name": "filter",
+                "name": "filterExpr",
                 "type": "oneof",
                 "arguments": [
                     {

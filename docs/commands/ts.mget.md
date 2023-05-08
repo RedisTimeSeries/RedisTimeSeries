@@ -1,33 +1,33 @@
 ---
 syntax: |
-  TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filter...
+  TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filterExpr...
 
 ---
 
-Get the last samples matching a specific filter
+Get the sample with the highest timestamp from each time series matching a specific filter
 
 [Examples](#examples)
 
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filter..</code></summary> 
+<summary><code>FILTER filterExpr...</code></summary> 
 
-filters time series based on their labels and label values, with these options:
+filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value`, where `label` equals `value`
   - `label!=value`, where `label` does not equal `value`
   - `label=`, where `key` does not have label `label`
   - `label!=`, where `key` has label `label`
-  - `label=(_value1_,_value2_,...)`, where `key` with label `label` equals one of the values in the list
+  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
   - `label!=(value1,value2,...)` where key with label `label` does not equal any of the values in the list
 
   <note><b>NOTES:</b> 
-   - When using filters, apply a minimum of one `label=value` filter.
+   - At least one `label=value` filter is required.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
+   - Don't use whitespaces in the filter expression.
    </note>
-
-  </details>
+</details>
 
 ## Optional arguments
 
@@ -44,6 +44,7 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 
 includes in the reply all label-value pairs representing metadata labels of the time series. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+
 </details>
 
 <details open>
@@ -52,19 +53,20 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 returns a subset of the label-value pairs that represent metadata labels of the time series. 
 Use when a large number of labels exists per series, but only the values of some of the labels are required. 
 If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty list is reported as label-value pairs.
+
 </details>
+
+<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
 
 ## Return value
 
-For each time series matching the specified filters, the following is reported:
-- The key name
-- A list of label-value pairs
-  - By default, an empty list is reported
-  - If `WITHLABELS` is specified, all labels associated with this time series are reported
-  - If `SELECTED_LABELS label...` is specified, the selected labels are reported
-- Timestamp-value pairs for all samples/aggregations matching the range
-
-<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
+- @array-reply: for each time series matching the specified filters, the following is reported:
+  - bulk-string-reply: The time series key name
+  - @array-reply: label-value pairs (@bulk-string-reply, @bulk-string-reply)
+    - By default, an empty array is reported
+    - If `WITHLABELS` is specified, all labels associated with this time series are reported
+    - If `SELECTED_LABELS label...` is specified, the selected labels are reported (null value when no such label defined)
+  - @array-reply: a single timestamp-value pair (@integer-reply, @simple-string-reply (double))
 
 ## Examples
 

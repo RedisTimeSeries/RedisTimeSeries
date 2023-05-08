@@ -1,7 +1,7 @@
 /*
- * Copyright 2018-2019 Redis Labs Ltd. and Contributors
- *
- * This file is available under the Redis Labs Source Available License Agreement
+ *copyright redis ltd. 2017 - present
+ *licensed under your choice of the redis source available license 2.0 (rsalv2) or
+ *the server side public license v1 (ssplv1).
  */
 #include "chunk.h"
 
@@ -83,6 +83,7 @@ static Sample *ChunkGetSample(Chunk *chunk, int index) {
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
     if (unlikely(((Chunk *)chunk)->num_samples == 0)) { // empty chunks are being removed
         RedisModule_Log(mr_staticCtx, "error", "Trying to get the last timestamp of empty chunk");
+        return 0;
     }
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
 }
@@ -90,6 +91,7 @@ timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
 double Uncompressed_GetLastValue(Chunk_t *chunk) {
     if (unlikely(((Chunk *)chunk)->num_samples == 0)) { // empty chunks are being removed
         RedisModule_Log(mr_staticCtx, "error", "Trying to get the last value of empty chunk");
+        return 0;
     }
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->value;
 }
