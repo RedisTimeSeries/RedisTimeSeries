@@ -10,9 +10,8 @@ try:
 except exception:
     pass
 
-BB()
-Defaults.terminateRetries = 5
-Defaults.terminateRetriesSecs = 2
+Defaults.terminateRetries = 3
+Defaults.terminateRetriesSecs = 1
 
 OSNICK = paella.Platform().osnick
 
