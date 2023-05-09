@@ -8,8 +8,7 @@ from includes import *
 def test_mget_with_expire_cmd():
     env = Env()
     set_hertz(env)
-    with env.getClusterConnectionIfNeeded() as r:
-        r1 = env.getConnection(1)
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         # Lower hz value to make it more likely that mget triggers key expiration
         assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
         assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
@@ -33,9 +32,7 @@ def test_mget_cmd():
     kvlabels = []
 
     env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        r1 = env.getConnection(1)
-
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         # test for empty series
         assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
         assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")

@@ -177,7 +177,8 @@ commands:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests <<parameters.test_params>> SHOW=1 SLOW=1
+            make flow_tests <<parameters.test_params>> SHOW=1 SLOW=1 \
+                GEN=0 AOF=0 SLAVES=0 AOF_SLAVES=0 OSS_CLUSTER=1
       - save-tests-logs
 
   build-platforms-steps:
