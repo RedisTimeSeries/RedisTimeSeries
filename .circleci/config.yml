@@ -178,7 +178,7 @@ commands:
           command: |
             python3 -m RLTest --version
             make flow_tests <<parameters.test_params>> SHOW=1 SLOW=1 \
-                GEN=0 AOF=0 SLAVES=0 AOF_SLAVES=0 OSS_CLUSTER=1
+                GEN=1 AOF=1 SLAVES=1 AOF_SLAVES=0 OSS_CLUSTER=1
       - save-tests-logs
 
   build-platforms-steps:

@@ -129,8 +129,7 @@ def test_latest_flag_mget():
     env = Env(decodeResponses=True)
     key1 = 't1{1}'
     key2 = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        r1 = env.getConnection(1)
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', key1)
         assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
         assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)

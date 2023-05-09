@@ -174,8 +174,7 @@ def test_rename():
 def test_renamenx():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-        init(env, r)
-        r1 = env.getConnection(1)
+        r1 = init(env, r)
         
         assert r.execute_command('RENAMENX', 't{1}', 't{1}_renamed')
         res = r.execute_command('ts.info', 't{1}_agg')
@@ -197,7 +196,7 @@ def test_copy_compressed_uncompressed():
     env = Env()
     env.skipOnVersionSmaller("6.2.0")
     for compresssion in ["UNCOMPRESSED", 'COMPRESSED']:
-        with env.getClusterConnectionIfNeeded() as r:
+        with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
             r.execute_command('FLUSHALL')
             init(env, r, compression=compresssion)
             for i in range(1000):
@@ -221,9 +220,9 @@ def test_copy_compressed_uncompressed():
             copied_data = r.execute_command('TS.range', 't{1}_copied', '-', '+',)
             assert data == copied_data
 
-            res = env.getConnection(1).execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+            res = r1.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
             env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg', b't{1}_copied']))
-            res = env.getConnection(1).execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+            res = r1.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
             env.assertEqual(sorted(res), sorted([[b't{1}', [], [1638305649, b'999']],
                                                  [b't{2}', [], []],
                                                  [b't{1}_agg', [],  [1638305630, b'984.5']],
@@ -236,9 +235,9 @@ def test_copy_compressed_uncompressed():
             index = res.index(b'rules')
             env.assertEqual(res[index+1], [])
 
-            res = env.getConnection(1).execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
+            res = r1.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
             env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg', b't{1}_copied', b't{1}_agg_copied']))
-            res = env.getConnection(1).execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
+            res = r1.execute_command('TS.MGET', 'filter', 'name=(mush,zavi,rex)')
             env.assertEqual(sorted(res), sorted([[b't{1}', [], [1638305649, b'999']],
                                                  [b't{2}', [], []],
                                                  [b't{1}_agg', [],  [1638305630, b'984.5']],

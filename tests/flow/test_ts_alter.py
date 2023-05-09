@@ -11,9 +11,7 @@ def test_alter_cmd():
     end_ts = start_ts + samples_count
     key = 'tester'
     env = Env()
-    with env.getClusterConnectionIfNeeded() as r:
-        r1 = env.getConnection(1)
-
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
                                  'LABELS', 'name', 'brown', 'color', 'pink')
         _insert_data(r, key, start_ts, samples_count, 5)
