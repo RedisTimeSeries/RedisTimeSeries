@@ -6,7 +6,6 @@ from includes import *
 def test_rename_src():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-
         assert r.execute_command('TS.CREATE', 'a1{1}')
         assert r.execute_command('TS.CREATE', 'b{1}')
 
@@ -27,10 +26,8 @@ def test_rename_src():
 
 
 def test_rename_dst():
-
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
-
         assert r.execute_command('TS.CREATE', 'a{2}')
         assert r.execute_command('TS.CREATE', 'b{2}')
         assert r.execute_command('TS.CREATERULE', 'a{2}', 'b{2}', 'AGGREGATION', 'AVG', 5000)
@@ -53,23 +50,18 @@ def test_rename_dst():
         env.assertEqual(aInfo.rules[1][0], b'c1{2}')
         env.assertEqual(aInfo.rules[2][0], b'd{2}')
 
-
 def test_rename_indexed():
-
     env = Env()
-    with env.getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
 
         assert r.execute_command('TS.ADD', 'a{3}', 100, 200, 'LABELS', 'sensor_id', '2', 'area_id', '32')
-        env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a{3}', [], [100, b'200']]])
+        env.assertEqual(r1.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a{3}', [], [100, b'200']]])
 
         env.assertTrue(r.execute_command('RENAME', 'a{3}', 'a1{3}'))
 
-        env.assertEqual(r.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a1{3}', [], [100, b'200']]])
-
-
+        env.assertEqual(r1.execute_command('TS.MGET', 'FILTER', 'area_id=32'), [[b'a1{3}', [], [100, b'200']]])
 
 def test_rename_none_ts():
-
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
 

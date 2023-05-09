@@ -451,7 +451,7 @@ if [[ -n $TEST ]]; then
 	RLTEST_TEST_ARGS+=$(echo -n " "; echo "$TEST" | awk 'BEGIN { RS=" "; ORS=" " } { print "--test " $1 }')
 fi
 
-if [[ -n $TESTFILE ]]; then
+if [[ -n $TESTFILE && -z $TEST ]]; then
 	if ! is_abspath "$TESTFILE"; then
 		TESTFILE="$ROOT/$TESTFILE"
 	fi
@@ -463,6 +463,7 @@ if [[ -n $FAILEDFILE ]]; then
 		TESTFILE="$ROOT/$FAILEDFILE"
 	fi
 	RLTEST_TEST_ARGS+=" -F $FAILEDFILE"
+	RLTEST_TEST_ARGS_1+=" -F $FAILEDFILE"
 fi
 
 if [[ $LIST == 1 ]]; then
@@ -552,7 +553,8 @@ if [[ $OSS_CLUSTER == 1 ]]; then
 		RLTEST_ARGS_1="$RLTEST_ARGS"
 		[[ -z $TEST ]] && RLTEST_ARGS_1+=" --test test_ts_password"
 		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
-			run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
+		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
+		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
 fi
 
