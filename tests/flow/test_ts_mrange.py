@@ -189,9 +189,10 @@ def test_mrange_filterby():
         actual_result = r1.execute_command('TS.mrange', 4, 6, 'FILTER_BY_TS', 4, 'FILTER', 'generation=z')
         assert actual_result == [[b'tester4', [], []]]
 
-def test_mrange_withlabels(env):
+def test_mrange_withlabels():
     start_ts = 1511885909
     samples_count = 50
+    env = Env()
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -352,8 +353,7 @@ def test_mrange_align():
     samples_count = 50
 
     env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        r1 = env.getConnection(1)
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')

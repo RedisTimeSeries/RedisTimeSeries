@@ -62,71 +62,71 @@ def test_groupby_reduce():
         env.assertEqual(sorted(serie2_labels[2][1].decode("ascii").split(",")), ['s1', 's2'])
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'95']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'sum')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'150']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'55']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'COUNT', 1, 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'COUNT', 1, 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'min')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'avg')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'100'], [2, b'75']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'count')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'1'], [2, b'2']])
 
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'range')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, [[1, b'0'], [2, b'40']])
 
         expected_res = [[1, b'0'], [2, str(statistics.pvariance([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.p')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(statistics.variance([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'var.s')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(int(statistics.pstdev([55, 95]))).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.p')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
         env.assertEqual(serie2_values, expected_res)
 
         expected_res = [[1, b'0'], [2, str(statistics.stdev([55, 95])).encode('ascii')]]
-        actual_result = r.execute_command(
+        actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'metric_family=cpu', 'GROUPBY', 'metric_name', 'REDUCE', 'std.s')
         serie2 = actual_result[1]
         serie2_values = serie2[2]
