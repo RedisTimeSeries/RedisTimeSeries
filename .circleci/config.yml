@@ -531,7 +531,7 @@ jobs:
 
   sanitize:
     docker:
-      - image: redisfab/clang:16-x64-bullseye
+      - image: redisfab/clang:13-x64-bullseye
     parameters:
       san-type:
         type: string

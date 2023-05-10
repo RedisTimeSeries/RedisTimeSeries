@@ -35,9 +35,6 @@ include $(ROOT)/build/cpu_features/Makefile.defs
 #----------------------------------------------------------------------------------------------  
 
 define HELPTEXT
-make setup         # install packages required for build
-make fetch         # download and prepare dependant modules
-
 make build
   DEBUG=1          # build debug variant
   VARIANT=name     # use a build variant 'name'
@@ -45,6 +42,7 @@ make build
                    # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
+
 make clean         # remove binary files
   ALL=1            # remove binary directories
   DEPS=1           # also clean dependant modules
@@ -77,9 +75,13 @@ make benchmarks    # run all benchmarks
   BENCHMARK=file   # run benchmark specified by 'filename'
   BENCH_ARGS="..." # redisbench_admin  extra arguments
 
-make platform      # build artifacts for given platform
-  OSNICK=nick        # build for OSNICK `nick`
-  TEST=1             # also run tests
+make docker        # build for specified platform
+  OSNICK=nick        # platform to build for (default: host platform)
+  TEST=1             # run tests after build
+  PACK=1             # create package
+  ARTIFACTS=1        # copy artifacts to host
+
+make sanbox        # create container with CLang Sanitizer
 
 endef
 
@@ -225,7 +227,7 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: pack clean all install uninstall docker bindirs
+.PHONY: pack clean all bindirs
 
 all: bindirs $(TARGET)
 
@@ -488,15 +490,17 @@ callgrind: $(TARGET)
 
 #----------------------------------------------------------------------------------------------
 
-install: all
-	$(SHOW)mkdir -p $(INSTALL_LIB)
-	$(SHOW)$(INSTALL) $(TARGET) $(INSTALL_LIB)
-
-uninstall:
-	$(SHOW)rm -f $(INSTALL_LIB)/$(notdir $(TARGET))
-
 docker:
-	$(SHOW)cd .. && docker build -t redis-tsdb .
+	$(SHOW)$(MAKE) -C build/docker
+
+ifneq ($(wildcard /w/*),)
+SANBOX_ARGS += -v /w:/w
+endif
+
+sanbox:
+	@docker run -it -v $(PWD):/build -w /build --cap-add=SYS_PTRACE --security-opt seccomp=unconfined $(SANBOX_ARGS) redisfab/clang:13-x64-bullseye bash
+
+.PHONY: box sanbox
 
 #----------------------------------------------------------------------------------------------
 
