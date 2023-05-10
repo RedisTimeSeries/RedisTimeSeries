@@ -118,7 +118,7 @@ commands:
       - run:
           name: Cleanup test log dir
           command: |
-            rm -f tests/flow/logs/*.{aof,rdb}
+            rm -f tests/flow/logs/*.{aof,rdb} tests/flow/logs/appendonlydir/
           when: always
       - store_artifacts:
           path: tests/flow/logs
@@ -343,6 +343,7 @@ commands:
                   --auto-approve \
                   --pull-request ${CIRCLE_PULL_REQUEST##*/}
             fi
+
 #----------------------------------------------------------------------------------------------------------------------------------
 
 jobs:
@@ -426,7 +427,16 @@ jobs:
         default: "yes"
     steps:
       - early-returns
+      - run:
+          name: Brew update
+          command: brew update
       - build-steps
+      - run:
+          name: Persist artifacts?
+          command: |
+            if [[ "<<parameters.upload>>" != "yes" ]]; then
+              circleci step halt
+            fi
       - run:
           name: Upload artifacts to S3
           command: |
@@ -446,6 +456,12 @@ jobs:
     steps:
       - early-returns
       - build-steps
+      - run:
+          name: Persist artifacts?
+          command: |
+            if [[ "<<parameters.upload>>" != "yes" ]]; then
+              circleci step halt
+            fi
       - run:
           name: Upload artifacts to S3
           command: |

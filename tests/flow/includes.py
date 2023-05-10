@@ -37,8 +37,12 @@ def Env(*args, **kwargs):
         for shard in range(0, env.shardsCount):
             conn = env.getConnection(shard)
             modules = conn.execute_command('MODULE', 'LIST')
-            if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
-                break
+            if env.protocol == 2:
+                if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
+                    break
+            else:
+                if not any(module for module in modules if (module[b'name'] == b'timeseries' or module[b'name'] == 'timeseries')):
+                    break
             conn.execute_command('timeseries.REFRESHCLUSTER')
     return env
 
@@ -54,7 +58,6 @@ def is_rlec():
 def skip_on_rlec():
     if RLEC_CLUSTER:
         rltestEnv().skip()
-
 
 def decode_if_needed(data):
     if isinstance(data, list):

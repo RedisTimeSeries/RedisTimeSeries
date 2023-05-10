@@ -72,8 +72,8 @@ def timeit(method):
         return result
     return timed
 
-def is_resp3_possible(con):
-    res = con.execute_command('INFO')
+def is_resp3_possible(env):
+    res = env.execute_command('INFO')
     if version.parse(res['redis_version']) < version.parse("7.0.0"):
         return False
     else:
