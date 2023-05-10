@@ -74,10 +74,10 @@ E=0
 
 DIRS=
 if [[ $UNIT == 1 ]]; then
-	DIRS+=" ."
+	DIRS+=" unit"
 fi
 if [[ $FLOW == 1 ]]; then
-	DIRS+=" pytests"
+	DIRS+=" flow"
 fi
 
 if [[ $VG == 1 ]]; then

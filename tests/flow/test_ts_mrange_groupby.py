@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from utils import Env
+# from utils import Env
 import pytest
 import redis
 import create_test_rdb_file

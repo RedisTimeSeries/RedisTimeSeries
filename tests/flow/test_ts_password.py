@@ -1,9 +1,9 @@
-import redis
-from utils import Env
+# import redis
+# from utils import Env
 from includes import *
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, \
     _insert_data, _get_ts_info, _insert_agg_data
-import pytest
+# import pytest
 
 def test_password():
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; OSS_GLOBAL_PASSWORD password', freshEnv=True)

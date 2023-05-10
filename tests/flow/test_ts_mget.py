@@ -1,7 +1,7 @@
-import pytest
-import redis
+# import pytest
+# import redis
 import time
-from utils import Env, set_hertz
+from utils import set_hertz
 from includes import *
 
 

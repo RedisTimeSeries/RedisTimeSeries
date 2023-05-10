@@ -1,8 +1,8 @@
 import math
 
-import pytest
-import redis
-from RLTest import Env
+# import pytest
+# import redis
+# from RLTest import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
     _insert_agg_data
 from includes import *
@@ -10,6 +10,7 @@ from ctypes import *
 from utils import timeit
 import random
 from datetime import datetime
+
 
 def test_range_query():
     start_ts = 1488823384

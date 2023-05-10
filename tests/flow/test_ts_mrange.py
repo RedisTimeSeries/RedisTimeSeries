@@ -1,8 +1,8 @@
-import pytest
-import redis
+# import pytest
+# import redis
 import time
 from collections import defaultdict
-from utils import Env, set_hertz
+from utils import set_hertz
 from test_helper_classes import _insert_data
 from test_ts_range import build_expected_aligned_data
 from includes import *

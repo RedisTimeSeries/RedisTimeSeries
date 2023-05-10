@@ -4,6 +4,8 @@ from logging import exception
 from RLTest import Env as rltestEnv, Defaults
 from packaging import version
 import inspect
+import redis
+import pytest
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))

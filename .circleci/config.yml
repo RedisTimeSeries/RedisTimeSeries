@@ -178,7 +178,6 @@ commands:
           command: |
             python3 -m RLTest --version
             make flow_tests <<parameters.test_params>> SHOW=1
-            #    GEN=1 AOF=1 SLAVES=1 AOF_SLAVES=1 OSS_CLUSTER=1
       - save-tests-logs
 
   build-platforms-steps:
@@ -539,7 +538,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests SAN=<<parameters.san-type>> SHOW=1 NOFAIL=1 CLEAR_LOGS=0 SLOW=1
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 NOFAIL=1 CLEAR_LOGS=0
       - run:
           name: Check tests results
           command: ./sbin/check-tests
