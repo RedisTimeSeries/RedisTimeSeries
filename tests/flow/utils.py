@@ -1,6 +1,6 @@
 import inspect
 
-from RLTest import Env as rltestEnv
+from RLTest import Env as rltestEnv, Defaults
 from includes import *
 import time
 
@@ -21,11 +21,14 @@ def Env(*args, **kwargs):
     env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
     if not RLEC_CLUSTER:
         for shard in range(0, env.shardsCount):
-            modules = env.getConnection(shard).execute_command('MODULE', 'LIST')
+            conn = env.getConnection(shard)
+            modules = conn.execute_command('MODULE', 'LIST')
             if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
                 break
-            env.getConnection(shard).execute_command('timeseries.REFRESHCLUSTER')
+            conn.execute_command('timeseries.REFRESHCLUSTER')
     return env
+
+Defaults.env_factory = Env
 
 def set_hertz(env):
     if RLEC_CLUSTER:

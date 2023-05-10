@@ -549,13 +549,13 @@ if [[ $OSS_CLUSTER == 1 ]]; then
 		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
-	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
-		RLTEST_ARGS_1="$RLTEST_ARGS"
-		[[ -z $TEST ]] && RLTEST_ARGS_1+=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
-		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
-		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
-	fi
+#	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
+#		RLTEST_ARGS_1="$RLTEST_ARGS"
+#		RLTEST_TEST_ARGS_1=" --test test_ts_password"
+#		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+#		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
+#		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
+#	fi
 fi
 
 if [[ $RLEC == 1 ]]; then

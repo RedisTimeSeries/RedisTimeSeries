@@ -23,8 +23,7 @@ def init(env, r, compression="COMPRESSED"):
     env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg']))
     return r1
 
-def test_del():
-    env = Env()
+def test_del(env):
     with env.getClusterConnectionIfNeeded() as r:
         r1 = init(env, r)
         
