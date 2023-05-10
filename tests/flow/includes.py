@@ -1,7 +1,7 @@
 import os
 import sys
 from logging import exception
-from RLTest import Defaults, Env as _rltestEnv
+from RLTest import Env as _rltestEnv
 from packaging import version
 
 try:
@@ -9,9 +9,6 @@ try:
     import paella
 except exception:
     pass
-
-Defaults.terminateRetries = 3
-Defaults.terminateRetriesSecs = 1
 
 OSNICK = paella.Platform().osnick
 

@@ -539,7 +539,10 @@ jobs:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests SAN=<<parameters.san-type>> SHOW=1 SLOW=1
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 NOFAIL=1 CLEAR_LOGS=0 SLOW=1
+      - run:
+          name: Check tests results
+          command: ./sbin/check-tests
       - save-tests-logs
 
   upload-artifacts:
@@ -850,8 +853,6 @@ workflows:
             alias: build-with-redis-ver
             parameters:
               redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
-      - test-rlec:
-          <<: *on-any-branch
       - valgrind:
           <<: *never
       - build-platforms:
@@ -929,7 +930,6 @@ workflows:
           requires:
             - upload-release-artifacts
 
-
   benchmark_flow_label:
     when:
       << pipeline.parameters.run_benchmark_flow_label >>
@@ -969,7 +969,9 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "unstable"]
+              redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
+      - test-rlec:
+          <<: *on-integ-branch-cron
 
   nightly-perf-once-a-week:
     triggers:
