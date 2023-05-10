@@ -1,8 +1,8 @@
-import inspect
 
-from RLTest import Env as rltestEnv, Defaults
 from includes import *
 import time
+import inspect
+
 
 def Refresh_Cluster(env):
     for shard in range(0, env.shardsCount):
@@ -14,23 +14,6 @@ def Refresh_Cluster(env):
         if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
             break
         con.execute_command('timeseries.REFRESHCLUSTER')
-
-def Env(*args, **kwargs):
-    if 'testName' not in kwargs:
-        kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
-    if not RLEC_CLUSTER:
-        for shard in range(0, env.shardsCount):
-            conn = env.getConnection(shard)
-            modules = conn.execute_command('MODULE', 'LIST')
-            if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
-                break
-            conn.execute_command('timeseries.REFRESHCLUSTER')
-    return env
-
-Defaults.env_factory = Env
-Defaults.terminate_retries = 3
-Defaults.terminate_retries_secs = 1
 
 def set_hertz(env):
     if RLEC_CLUSTER:
