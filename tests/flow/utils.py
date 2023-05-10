@@ -29,8 +29,8 @@ def Env(*args, **kwargs):
     return env
 
 Defaults.env_factory = Env
-# Defaults.terminateRetries = 3
-# Defaults.terminateRetriesSecs = 1
+Defaults.terminate_retries = 3
+Defaults.terminate_retries_secs = 1
 
 def set_hertz(env):
     if RLEC_CLUSTER:

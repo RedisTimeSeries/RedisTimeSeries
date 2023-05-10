@@ -170,7 +170,6 @@ setup_clang_sanitizer() {
 		echo "fun:THPIsEnabled" >> $ignorelist
 	fi
 
-
 	# for RLTest
 	export SANITIZER="$SAN"
 	
@@ -182,7 +181,7 @@ setup_clang_sanitizer() {
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-asan ...
 			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix asan-$SAN_REDIS_VER --own-openssl --no-run \
-				--suffix asan --clang-asan \
+				--clang-asan \
 				--clang-san-blacklist $ignorelist
 		fi
 
@@ -196,7 +195,7 @@ setup_clang_sanitizer() {
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-msan ...
 			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix msan-$SAN_REDIS_VER --own-openssl --no-run \
-				--suffix msan --clang-msan --llvm-dir /opt/llvm-project/build-msan \
+				--clang-msan --llvm-dir /opt/llvm-project/build-msan \
 				--clang-san-blacklist $ignorelist
 		fi
 	fi
