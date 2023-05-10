@@ -84,7 +84,7 @@ commands:
         default: ""
       redis_version:
         type: string
-        default: "7.0"
+        default: "7"
       getredis_params:
         type: string
         default: ""

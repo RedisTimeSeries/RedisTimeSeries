@@ -134,7 +134,7 @@ def test_madd_some_failed_replicas():
     with env.getSlaveConnection() as r:
         env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"),  [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
 
-    if env.useAof and isinstance(env.envRunner, StandardEnv):
+    if env.useAof and isinstance(env.envRunner, StandardEnv) and not DISABLE_AOF_PARSER:
         dbDirPath = env.envRunner.dbDirPath
         if not is_less_than_ver7:
             dbDirPath = dbDirPath + "/appendonlydir/"

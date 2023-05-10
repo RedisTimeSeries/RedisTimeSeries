@@ -10,6 +10,8 @@ try:
 except exception:
     pass
 
+DISABLE_AOF_PARSER=True  # TODO: remove when hiredis RESP3-related problem is resolved
+
 OSNICK = paella.Platform().osnick
 
 RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'

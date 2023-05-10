@@ -59,7 +59,7 @@ def test_range_by_labels():
     for mode in ["UNCOMPRESSED", "COMPRESSED"]:
         env = Env()
 
-        with Env().getClusterConnectionIfNeeded() as r:
+        with env.getClusterConnectionIfNeeded() as r:
             assert r.execute_command('TS.CREATE', 'tester1', mode, 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
             assert r.execute_command('TS.CREATE', 'tester2', mode, 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
             assert r.execute_command('TS.CREATE', 'tester3', mode, 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
