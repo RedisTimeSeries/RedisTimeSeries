@@ -6,6 +6,7 @@ from packaging import version
 import inspect
 import redis
 import pytest
+from functools import wraps
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
@@ -82,3 +83,20 @@ def is_redis_version_smaller_than(con, _version, is_cluster=False):
     else:
         ver = res['redis_version']
     return (version.parse(ver) < version.parse(_version))
+
+def skip(always=False, on_cluster=False, on_macos=False, asan=False):
+    def decorate(f):
+        @wraps(f)
+        def wrapper(x, *args, **kwargs):
+            env = x if isinstance(x, rltestEnv) else x.env
+            if always:
+                env.skip()
+            if on_cluster and env.isCluster():
+                env.skip()
+            if on_macos and OS == 'macos':
+                env.skip()
+            if SANITIZER == 'address':
+                env.skip()
+            return f(x, *args, **kwargs)
+        return wrapper
+    return decorate

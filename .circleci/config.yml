@@ -354,7 +354,7 @@ jobs:
     steps:
       - build-steps:
           build_params: VG=1
-          test_params: VG=1 SIMPLE=1
+          test_params: VG=1 QUICK=1
           getredis_params: --valgrind
 
   lint:
@@ -531,7 +531,7 @@ jobs:
 
   sanitize:
     docker:
-      - image: redisfab/clang:13-x64-bullseye
+      - image: redisfab/clang:16-x64-bullseye
     parameters:
       san-type:
         type: string
@@ -869,10 +869,9 @@ workflows:
             alias: build-with-redis-ver
             parameters:
               redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
-      - valgrind:
-          <<: *never
       - build-platforms:
-          <<: *on-integ-and-version-tags
+          #@@<<: *on-integ-and-version-tags
+          <<: *always
           context: common
           matrix:
             parameters:
@@ -986,8 +985,8 @@ workflows:
           matrix:
             parameters:
               redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
-      - test-rlec:
-          <<: *on-integ-branch-cron
+      - test-rlec
+      - valgrind
 
   nightly-perf-once-a-week:
     triggers:
