@@ -118,7 +118,7 @@ commands:
       - run:
           name: Cleanup test log dir
           command: |
-            rm -f tests/flow/logs/*.{aof,rdb} tests/flow/logs/appendonlydir/
+            rm -rf tests/flow/logs/*.{aof,rdb} tests/flow/logs/appendonlydir/
           when: always
       - store_artifacts:
           path: tests/flow/logs
