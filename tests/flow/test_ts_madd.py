@@ -117,10 +117,16 @@ def test_madd_some_failed_replicas():
     with env.getClusterConnectionIfNeeded() as r:
         is_less_than_ver7 = is_redis_version_smaller_than(r, "7.0.0")
 
-        r.execute_command("ts.create", "test_key1", "DUPLICATE_POLICY", "block")
+        r.execute_command("ts.create", "test_key1", 'RETENTION', 100, 'ENCODING', 'UNCOMPRESSED', 'CHUNK_SIZE', 128, "DUPLICATE_POLICY", "block", 'LABELS', 'name', 'Or', 'color', 'pink')
         r.execute_command("set", "test_key3", "danni")
         r.execute_command("ts.madd", "test_key1", 123, 11, "test_key1", 124, 12)
         r.execute_command("ts.madd", "test_key1", 122, 11, "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
+        r.execute_command("ts.add", "test_key4", 110, 500.5, 'RETENTION' , 100, 'ENCODING', 'UNCOMPRESSED', 'CHUNK_SIZE', 128, 'ON_DUPLICATE', 'last', 'LABELS', 'name', 'Or', 'color', 'pink')
+        r.execute_command("ts.incrby", "test_key5", 110, 'TIMESTAMP', 50, 'RETENTION', 100, 'UNCOMPRESSED', 'CHUNK_SIZE', 128, 'LABELS', 'name', 'Or', 'color', 'pink')
+        r.execute_command("ts.decrby", "test_key6", 110, 'TIMESTAMP', 50, 'RETENTION', 100, 'UNCOMPRESSED', 'CHUNK_SIZE', 128, 'LABELS', 'name', 'Or', 'color', 'pink')
+        r.execute_command("ts.createrule", "test_key5", "test_key6", 'AGGREGATION', 'sum', 10, 5)
+        r.execute_command("ts.del", "test_key5", 100, 200)
+        r.execute_command("ts.alter", "test_key6", 'RETENTION', 100, 'CHUNK_SIZE', 128, 'DUPLICATE_POLICY', 'last', 'LABELS', 'name', 'Or', 'color', 'pink')
 
         # Check non existant key
         r.execute_command("ts.madd", "test_key3", 122, 11, "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
@@ -130,6 +136,7 @@ def test_madd_some_failed_replicas():
 
         r.execute_command("wait", 1, 0)
         env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"), [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
+        assert r.execute_command("ts.range", "test_key4", "-", "+") == [[110, b'500.5']]
 
     with env.getSlaveConnection() as r:
         env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"),  [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
@@ -145,9 +152,16 @@ def test_madd_some_failed_replicas():
         cmds_filtered = filter(lambda c: c[0].lower().startswith('ts.'), cmds)
         try:
             env.assertEqual(list(cmds_filtered),
-                            [['ts.create', 'test_key1', 'DUPLICATE_POLICY', 'block'],
+                            [['ts.create', "test_key1", 'RETENTION', '100', 'ENCODING', 'UNCOMPRESSED', 'CHUNK_SIZE', '128', "DUPLICATE_POLICY", "block", 'LABELS', 'name', 'Or', 'color', 'pink'],
                             ['TS.MADD', 'test_key1', '123', '11', 'test_key1', '124', '12'],
-                            ['TS.MADD', 'test_key1', '122', '11', 'test_key1', '125', '12']])
+                            ['TS.MADD', 'test_key1', '122', '11', 'test_key1', '125', '12'],
+                            ['TS.ADD', 'test_key4', '110', '500.5', 'RETENTION', '100', 'ENCODING', 'UNCOMPRESSED', 'CHUNK_SIZE', '128', 'ON_DUPLICATE', 'last', 'LABELS', 'name', 'Or', 'color', 'pink'],
+                            ["ts.incrby", "test_key5", '110', 'TIMESTAMP', '50', 'RETENTION', '100', 'UNCOMPRESSED', 'CHUNK_SIZE', '128', 'LABELS', 'name', 'Or', 'color', 'pink'],
+                            ["ts.decrby", "test_key6", '110', 'TIMESTAMP', '50', 'RETENTION', '100', 'UNCOMPRESSED', 'CHUNK_SIZE', '128', 'LABELS', 'name', 'Or', 'color', 'pink'],
+                            ["ts.createrule", "test_key5", "test_key6", 'AGGREGATION', 'sum', '10', '5'],
+                            ["ts.del", "test_key5", '100', '200'],
+                            ["ts.alter", "test_key6", 'RETENTION', '100', 'CHUNK_SIZE', '128', 'DUPLICATE_POLICY', 'last', 'LABELS', 'name', 'Or', 'color', 'pink']
+                            ])
         except Exception:
             print(cmds)
             print(cmds_filtered)

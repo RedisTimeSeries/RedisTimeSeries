@@ -1,5 +1,5 @@
-import pytest
-import redis
+# import pytest
+# import redis
 import random
 from threading import Thread
 import time
@@ -8,6 +8,7 @@ from utils import Env, Refresh_Cluster
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
     _get_ts_info, _insert_agg_data
 from includes import *
+
 
 def shardsConnections(env):
     for s in range(1, env.shardsCount + 1):

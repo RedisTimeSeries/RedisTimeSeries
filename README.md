@@ -1,6 +1,6 @@
 [![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?sort=semver&kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
-[![Dockerhub](https://img.shields.io/docker/pulls/redis/redis-stack-server?label=redis-stack-server)](https://img.shields.io/docker/pulls/redis/redis-stack-server)
+[![Dockerhub](https://img.shields.io/docker/pulls/redis/redis-stack-server?label=redis-stack-server)](https://hub.docker.com/r/redis/redis-stack-server/)
 [![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
@@ -87,7 +87,7 @@ docker run -p 6379:6379 -it --rm redis/redis-stack-server:latest
 
 You can also build RedisTimeSeries on your own machine. Major Linux distributions as well as macOS are supported.
 
-First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`):
+First step is to have Redis installed, of course. The following, for example, builds Redis on a clean Ubuntu docker image (`docker pull ubuntu`) or a clean Debian docker image (`docker pull debian:stable`):
 
 ```
 mkdir ~/Redis
@@ -116,7 +116,7 @@ make
 
 Then `exit` to exit bash.
 
-**Note:** to get a specific version of RedisTimeSeries, e.g. 1.8.9, add `-b v1.8.9` to the `git clone` command above.
+**Note:** to get a specific version of RedisTimeSeries, e.g. 1.8.10, add `-b v1.8.10` to the `git clone` command above.
 
 Next, run `make run -n` and copy the full path of the RedisTimeSeries executable (e.g., `/root/Redis/RedisTimeSeries/bin/linux-x64-release/redistimeseries.so`).
 

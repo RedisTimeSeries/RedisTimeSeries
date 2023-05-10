@@ -30,7 +30,7 @@ RUN set -e ;\
 RUN set -e ;\
     TEST= make test ;\
     cd /build/tests/flow/logs ;\
-    rm -f *.aof *.rdb ;\
+    rm -f *.{aof,rdb} ;\
     tar -czf /build/bin/artifacts/tests-flow-logs-{{ARCH}}-{{OSNICK}}.tgz .
 {% endif %}
 
