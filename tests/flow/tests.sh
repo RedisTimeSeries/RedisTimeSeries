@@ -10,8 +10,9 @@ READIES=$ROOT/deps/readies
 
 export PYTHONUNBUFFERED=1
 
-VALGRIND_REDIS_VER=6.2
-SAN_REDIS_VER=6.2
+VALGRIND_GETREDIS_VER=7
+SAN_REDIS_VER=7.2
+SAN_GETREDIS_VER=7
 
 cd $HERE
 
@@ -180,8 +181,9 @@ setup_clang_sanitizer() {
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-asan-$SAN_REDIS_VER}
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-asan ...
-			$READIES/bin/getredis --force -v $SAN_REDIS_VER --own-openssl --no-run \
-				--suffix asan --clang-asan --clang-san-blacklist $ignorelist
+			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix $SAN_REDIS_VER --own-openssl --no-run \
+				--suffix asan --clang-asan \
+				--clang-san-blacklist $ignorelist
 		fi
 
 		# RLTest places log file details in ASAN_OPTIONS
@@ -193,7 +195,7 @@ setup_clang_sanitizer() {
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-msan-$SAN_REDIS_VER}
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-msan ...
-			$READIES/bin/getredis --force -v $SAN_REDIS_VER  --no-run --own-openssl \
+			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix $SAN_REDIS_VER --own-openssl --no-run \
 				--suffix msan --clang-msan --llvm-dir /opt/llvm-project/build-msan \
 				--clang-san-blacklist $ignorelist
 		fi
@@ -217,7 +219,7 @@ setup_valgrind() {
 	REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
 	if ! is_command $REDIS_SERVER; then
 		echo Building Redis for Valgrind ...
-		$READIES/bin/getredis -v $VALGRIND_REDIS_VER --valgrind --suffix vg
+		$READIES/bin/getredis -v $VALGRIND_GETREDIS_VER --valgrind --suffix vg
 	fi
 
 	if [[ $VG_LEAKS == 0 ]]; then
@@ -549,17 +551,18 @@ if [[ $OSS_CLUSTER == 1 ]]; then
 		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
-#	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
-#		RLTEST_ARGS_1="$RLTEST_ARGS"
-#		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-#		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
-#		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
-#		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
-#	fi
+	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
+		RLTEST_ARGS_1="$RLTEST_ARGS"
+		RLTEST_TEST_ARGS_1=" --test test_ts_password"
+		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
+		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
+	fi
 fi
 
 if [[ $RLEC == 1 ]]; then
-	dhost=$(echo "$DOCKER_HOST" | awk -F[/:] '{print $4}')
+	dhost=$(echo "$DOCKER_HOST" | awk -F[/:] '{print $4}') # DOCKER_HOST=tcp://host:port
+	dhost=${dhost:-127.0.0.1}
 	{ (RLTEST_ARGS+="${RLTEST_ARGS} --env existing-env --existing-env-addr $dhost:$RLEC_PORT" \
 	   run_tests "tests on RLEC"); (( E |= $? )); } || true
 fi

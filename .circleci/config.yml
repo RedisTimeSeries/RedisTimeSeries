@@ -177,7 +177,7 @@ commands:
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests <<parameters.test_params>> SHOW=1 SLOW=1
+            make flow_tests <<parameters.test_params>> SHOW=1
             #    GEN=1 AOF=1 SLAVES=1 AOF_SLAVES=1 OSS_CLUSTER=1
       - save-tests-logs
 
@@ -516,7 +516,7 @@ jobs:
 
   sanitize:
     docker:
-      - image: redisfab/clang:13-x64-bullseye
+      - image: redisfab/clang:16-x64-bullseye
     parameters:
       san-type:
         type: string
@@ -525,21 +525,21 @@ jobs:
       - checkout-all
       - install-prerequisites
       - run:
-          name: Build & test
+          name: Build
           shell: /bin/bash -l -eo pipefail
-          command: make SAN=<<parameters.san-type>> build SHOW=1 VERBOSE=1
+          command: make SAN=<<parameters.san-type>> build SHOW=1
       - run:
           name: Unit Test
           shell: /bin/bash -l -eo pipefail
           command: |
-            make unit_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1
+            make unit_tests SAN=<<parameters.san-type>> SHOW=1
       - run:
           name: Flow test
           shell: /bin/bash -l -eo pipefail
           no_output_timeout: 30m
           command: |
             python3 -m RLTest --version
-            make flow_tests SAN=<<parameters.san-type>> SHOW=1 VERBOSE=1 SLOW=1
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 SLOW=1
       - save-tests-logs
 
   upload-artifacts:
