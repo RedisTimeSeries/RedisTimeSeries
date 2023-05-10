@@ -1,14 +1,18 @@
 import os
 import sys
 from logging import exception
-from RLTest import Env as _rltestEnv
+from RLTest import Env as rltestEnv, Defaults
 from packaging import version
+import inspect
+import redis
+import pytest
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
     import paella
 except exception:
     pass
+
 
 OSNICK = paella.Platform().osnick
 
@@ -18,6 +22,27 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = os.getenv('VALGRIND', '0') == '1'
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
+
+Defaults.terminate_retries = 3
+Defaults.terminate_retries_secs = 1
+
+
+def Env(*args, **kwargs):
+    if 'testName' not in kwargs:
+        kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
+    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    if not RLEC_CLUSTER:
+        for shard in range(0, env.shardsCount):
+            conn = env.getConnection(shard)
+            modules = conn.execute_command('MODULE', 'LIST')
+            if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
+                break
+            conn.execute_command('timeseries.REFRESHCLUSTER')
+    return env
+
+Defaults.env_factory = Env
+
+
 def is_rlec():
     if RLEC_CLUSTER:
         return True
@@ -26,7 +51,7 @@ def is_rlec():
 
 def skip_on_rlec():
     if RLEC_CLUSTER:
-        _rltestEnv().skip()
+        rltestEnv().skip()
 
 
 def decode_if_needed(data):

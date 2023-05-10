@@ -84,7 +84,7 @@ commands:
         default: ""
       redis_version:
         type: string
-        default: "6"
+        default: "7"
       getredis_params:
         type: string
         default: ""
@@ -148,7 +148,7 @@ commands:
         default: ""
       redis_version:
         type: string
-        default: "6"
+        default: "7"
       getredis_params:
         type: string
         default: ""
@@ -374,7 +374,7 @@ jobs:
     parameters:
       redis_version:
         type: string
-        default: "6"
+        default: "7"
       persist:
         type: string
         default: "yes"
@@ -494,7 +494,7 @@ jobs:
           command: |
             python3 -m pip list
             mkdir -p ~/workspace/tests
-            make flow_tests RLEC=1 SHOW=1
+            make flow_tests RLEC=1 SHOW=1 SLOW=1
       - save-tests-logs
 
   coverage:
@@ -511,6 +511,37 @@ jobs:
             make coverage
             make upload-cov
           no_output_timeout: 45m
+      - save-tests-logs
+
+  sanitize:
+    docker:
+      - image: redisfab/clang:16-x64-bullseye
+    parameters:
+      san-type:
+        type: string
+    steps:
+      - early-returns
+      - checkout-all
+      - install-prerequisites
+      - run:
+          name: Build
+          shell: /bin/bash -l -eo pipefail
+          command: make SAN=<<parameters.san-type>> build SHOW=1
+      - run:
+          name: Unit Test
+          shell: /bin/bash -l -eo pipefail
+          command: |
+            make unit_tests SAN=<<parameters.san-type>> SHOW=1
+      - run:
+          name: Flow test
+          shell: /bin/bash -l -eo pipefail
+          no_output_timeout: 30m
+          command: |
+            python3 -m RLTest --version
+            make flow_tests SAN=<<parameters.san-type>> SHOW=1 NOFAIL=1 CLEAR_LOGS=0
+      - run:
+          name: Check tests results
+          command: ./sbin/check-tests
       - save-tests-logs
 
   upload-artifacts:
@@ -820,9 +851,7 @@ workflows:
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.0", "6.2", "7.0"]
-      - test-rlec:
-          <<: *on-any-branch
+              redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
       - valgrind:
           <<: *never
       - build-platforms:
@@ -830,7 +859,7 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [jammy, focal, bionic, xenial, amzn2, centos7, rocky8, bullseye]
+              platform: [jammy, focal, bionic, amzn2, centos7, rocky8, bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
@@ -845,6 +874,12 @@ workflows:
           <<: *on-integ-and-version-tags
       - coverage:
           <<: *on-any-branch
+      - sanitize:
+          name: sanitize-<< matrix.san-type >>
+          <<: *on-any-branch
+          matrix:
+            parameters:
+              san-type: [address] # [memory]
       - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-integ-and-version-tags
@@ -894,7 +929,6 @@ workflows:
           requires:
             - upload-release-artifacts
 
-
   benchmark_flow_label:
     when:
       << pipeline.parameters.run_benchmark_flow_label >>
@@ -934,7 +968,9 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "unstable"]
+              redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
+      - test-rlec:
+          <<: *on-integ-branch-cron
 
   nightly-perf-once-a-week:
     triggers:

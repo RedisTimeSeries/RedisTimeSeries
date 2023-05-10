@@ -1,6 +1,6 @@
-import pytest
-import redis
-from utils import Env
+# import pytest
+# import redis
+# from utils import Env
 from test_helper_classes import _assert_alter_cmd, _ts_alter_cmd, _fill_data, _insert_data
 from includes import *
 
@@ -10,8 +10,8 @@ def test_alter_cmd():
     samples_count = 1500
     end_ts = start_ts + samples_count
     key = 'tester'
-
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', key, 'CHUNK_SIZE', '360',
                                  'LABELS', 'name', 'brown', 'color', 'pink')
         _insert_data(r, key, start_ts, samples_count, 5)
@@ -46,12 +46,13 @@ def test_alter_cmd():
                           expected_chunk_size, expected_labels)
 
         # test indexer was updated
-        assert r.execute_command('TS.QUERYINDEX', 'A=1') == [key.encode('ascii')]
-        assert r.execute_command('TS.QUERYINDEX', 'name=brown') == []
+        assert r1.execute_command('TS.QUERYINDEX', 'A=1') == [key.encode('ascii')]
+        assert r1.execute_command('TS.QUERYINDEX', 'name=brown') == []
 
 
-def test_alter_key(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+def test_alter_key():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
         key = 'tester'
         r.execute_command('TS.CREATE', key)
         date_ranges = _fill_data(r, key)

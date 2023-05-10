@@ -1,8 +1,8 @@
 import math
 
-import pytest
-import redis
-from RLTest import Env
+# import pytest
+# import redis
+# from RLTest import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
     _insert_agg_data
 from includes import *
@@ -10,6 +10,7 @@ from ctypes import *
 from utils import timeit
 import random
 from datetime import datetime
+
 
 def test_range_query():
     start_ts = 1488823384
@@ -287,7 +288,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts1', 23, 23)
         v1, v2, v3, v4, v5 = 9.0, 10.0, 13.0, 14.0, 23.0
         t1, t2, t3, t4, t5 = 9.0, 10.0, 13.0, 14.0, 23.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
@@ -307,7 +308,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts2', 23, 23)
         v1, v2, v3, v4 = 9.0, 13.0, 14.0, 23.0
         t1, t2, t3, t4 = 9.0, 13.0, 14.0, 23.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
@@ -328,7 +329,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts3', 26, 26)
         v1, v2, v3, v4 = 9.0, 13.0, 14.0, 26.0
         t1, t2, t3, t4 = 9.0, 13.0, 14.0, 26.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
@@ -349,7 +350,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts4', 27, 27)
         v1, v2, v3, v4 = 9.0, 13.0, 14.0, 27.0
         t1, t2, t3, t4 = 9.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
@@ -370,7 +371,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts5', 27, 27)
         v1, v2, v3, v4 = 7.0, 13.0, 14.0, 27.0
         t1, t2, t3, t4 = 7.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
@@ -391,7 +392,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts6', 27, 27)
         v1, v2, v3, v4 = 6.0, 13.0, 14.0, 27.0
         t1, t2, t3, t4 = 6.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
         s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
@@ -411,7 +412,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts7', 22, 22)
         v1, v2, v3 = 9.0, 13.0, 22.0
         t1, t2, t3 = 9.0, 13.0, 22.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
         s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
@@ -430,7 +431,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts8', 28, 28)
         v1, v2, v3 = 3.0, 13.0, 28.0
         t1, t2, t3 = 3.0, 13.0, 28.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
         s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
@@ -448,7 +449,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts9', 28, 28)
         v1, v2, = 13.0, 28.0
         t1, t2, = 13.0, 28.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
         s = (v1+vb)*(tb-t1)
         res = s / (2.0*(tb-t1))
@@ -465,7 +466,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts10', 21, 21)
         v1, v2, = 13.0, 21.0
         t1, t2, = 13.0, 21.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
         s = (v1+vb)*(tb-t1)
         res = s / (2.0*(tb-t1))
@@ -482,7 +483,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts11', 21, 21)
         v1, v2, = 17.0, 21.0
         t1, t2, = 17.0, 21.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
         s = (v1+vb)*(tb-t1)
         res = s / (2.0*(tb-t1))
@@ -498,7 +499,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts12', 17, 17)
         v1, v2, = 3.0, 17.0
         t1, t2, = 3.0, 17.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         s = (va+v2)*(t2-ta)
         res = s / (2.0*(t2-ta))
@@ -515,7 +516,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts14', 12, 12)
         v1, v2, = 5.0, 12.0
         t1, t2, = 5.0, 12.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         s = (va+v2)*(t2-ta)
         res = s / (2.0*(t2-ta))
@@ -532,7 +533,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts15', 15, 15)
         v1, v2, = 7.0, 15.0
         t1, t2, = 7.0, 15.0
-        ta, tb = 10.0, 20.0 
+        ta, tb = 10.0, 20.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         s = (va+v2)*(t2-ta)
         res = s / (2.0*(t2-ta))
@@ -560,7 +561,7 @@ def test_agg_twa():
         assert r.execute_command('TS.ADD', 'ts17', 9, 12)
         v1, v2, = 5, 12.0
         t1, t2, = 0, 9.0
-        ta, tb = 0, 10.0 
+        ta, tb = 0, 10.0
         va = v1+(v2-v1)*(ta-t1)/(t2-t1)
         s = (va+v2)*(t2-ta)
         res = s / (2.0*(t2-ta))
@@ -1010,7 +1011,7 @@ def test_agg_twa():
         expected_result.reverse()
         actual_result = r.execute_command('TS.REVRANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 10, 'EMPTY')
         assert actual_result == expected_result
-        
+
         # Test case 101:
         assert r.execute_command('TS.CREATE', 'ts23')
         assert r.execute_command('TS.ADD', 'ts23', 40, 100)
@@ -1294,30 +1295,30 @@ def test_aggreataion_alignment():
     start_ts = 1511885909
     samples_count = 1200
     env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester')
-    _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+        _insert_data(r1, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-    agg_size = 60
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
+        agg_size = 60
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+               decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
 
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+               decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
 
-    specific_ts = start_ts + 50
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
+        specific_ts = start_ts + 50
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
+        assert expected_data == \
+               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
 
-    end_ts = start_ts + samples_count - 1
-    expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
-    assert expected_data == \
-           decode_if_needed(r.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+        end_ts = start_ts + samples_count - 1
+        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
+        assert expected_data == \
+               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
+        assert expected_data == \
+               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
 
 def test_empty():
     agg_size = 10
