@@ -863,15 +863,13 @@ workflows:
           <<: *not-on-integ-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
-          #@@<<: *on-integ-branch
-          <<: *always
+          <<: *on-integ-branch
           matrix:
             alias: build-with-redis-ver
             parameters:
               redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
       - build-platforms:
-          #@@<<: *on-integ-and-version-tags
-          <<: *always
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
