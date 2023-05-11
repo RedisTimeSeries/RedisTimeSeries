@@ -6,8 +6,9 @@
 #ifndef MODULE_H
 #define MODULE_H
 
-#include "redismodule.h"
 #include "tsdb.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;

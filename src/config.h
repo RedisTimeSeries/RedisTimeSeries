@@ -7,7 +7,7 @@
 #define CONFIG_H
 
 #include "parse_policies.h"
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 #include <stdbool.h>
 

@@ -7,16 +7,17 @@
 #ifndef GENERIC__CHUNK_H
 #define GENERIC__CHUNK_H
 
-#include "LibMR/src/mr.h"
 #include "consts.h"
 #include "load_io_error_macros.h"
 #include "enriched_chunk.h"
+
+#include "LibMR/src/mr.h"
+#include "RedisModulesSDK/rmutil/strings.h"
 
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy, memmove
 #include <sys/types.h>
-#include <rmutil/strings.h>
 
 struct RedisModuleIO;
 

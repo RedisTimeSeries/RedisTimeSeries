@@ -35,9 +35,6 @@ include $(ROOT)/build/cpu_features/Makefile.defs
 #----------------------------------------------------------------------------------------------  
 
 define HELPTEXT
-make setup         # install packages required for build
-make fetch         # download and prepare dependant modules
-
 make build
   DEBUG=1          # build debug variant
   VARIANT=name     # use a build variant 'name'
@@ -45,6 +42,7 @@ make build
                    # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
+
 make clean         # remove binary files
   ALL=1            # remove binary directories
   DEPS=1           # also clean dependant modules
@@ -59,7 +57,7 @@ make unit_tests    # run unit tests
 make flow_tests    # run tests
   TEST=name        # run test matching 'name'
   TEST_ARGS="..."  # RLTest arguments
-  SIMPLE=1         # shortcut for GEN=1 AOF=0 SLAVES=0 AOF_SLAVES=0 OSS_CLUSTER=0
+  QUICK=1          # shortcut for GEN=1 AOF=0 SLAVES=0 AOF_SLAVES=0 OSS_CLUSTER=0
   GEN=1            # run general tests on a standalone Redis topology
   AOF=1            # run AOF persistency tests on a standalone Redis topology
   SLAVES=1         # run replication tests on standalone Redis topology
@@ -77,9 +75,13 @@ make benchmarks    # run all benchmarks
   BENCHMARK=file   # run benchmark specified by 'filename'
   BENCH_ARGS="..." # redisbench_admin  extra arguments
 
-make platform      # build artifacts for given platform
-  OSNICK=nick        # build for OSNICK `nick`
-  TEST=1             # also run tests
+make docker        # build for specified platform
+  OSNICK=nick        # platform to build for (default: host platform)
+  TEST=1             # run tests after build
+  PACK=1             # create package
+  ARTIFACTS=1        # copy artifacts to host
+
+make sanbox        # create container with CLang Sanitizer
 
 endef
 
@@ -105,7 +107,7 @@ endef
 define CC_DEFS +=
 	REDIS_MODULE_TARGET
 	REDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\"
-	REDISMODULE_EXPERIMENTAL_API
+	REDISMODULE_SDK_RLEC
 endef
 
 CC_PEDANTIC=1
@@ -225,7 +227,7 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: pack clean all install uninstall docker bindirs
+.PHONY: pack clean all bindirs
 
 all: bindirs $(TARGET)
 
@@ -370,7 +372,7 @@ unit_tests: $(UNITTESTS_RUNNER)
 
 #----------------------------------------------------------------------------------------------
 
-ifeq ($(SIMPLE),1)
+ifeq ($(QUICK),1)
 export GEN=1
 export SLAVES=0
 export AOF=0
@@ -488,15 +490,17 @@ callgrind: $(TARGET)
 
 #----------------------------------------------------------------------------------------------
 
-install: all
-	$(SHOW)mkdir -p $(INSTALL_LIB)
-	$(SHOW)$(INSTALL) $(TARGET) $(INSTALL_LIB)
-
-uninstall:
-	$(SHOW)rm -f $(INSTALL_LIB)/$(notdir $(TARGET))
-
 docker:
-	$(SHOW)cd .. && docker build -t redis-tsdb .
+	$(SHOW)$(MAKE) -C build/docker
+
+ifneq ($(wildcard /w/*),)
+SANBOX_ARGS += -v /w:/w
+endif
+
+sanbox:
+	@docker run -it -v $(PWD):/build -w /build --cap-add=SYS_PTRACE --security-opt seccomp=unconfined $(SANBOX_ARGS) redisfab/clang:16-x64-bullseye bash
+
+.PHONY: box sanbox
 
 #----------------------------------------------------------------------------------------------
 

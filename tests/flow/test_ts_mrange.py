@@ -8,8 +8,8 @@ from test_ts_range import build_expected_aligned_data
 from includes import *
 
 
-def test_mrange_with_expire_cmd():
-    env = Env()
+@skip(asan=True)
+def test_mrange_with_expire_cmd(env):
     set_hertz(env)
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
@@ -26,26 +26,25 @@ def test_mrange_with_expire_cmd():
         assert r.execute_command("PING")
 
 def testWithMultiExec(env):
-    env = Env()
     if env.shardsCount < 2:
         env.skip()
-    if(not env.is_cluster()):
+    if not env.is_cluster():
         env.skip()
     with env.getConnection() as r:
         r.execute_command('multi', )
         r.execute_command('TS.mrange', '-', '+', 'FILTER', 'name=bob')
-        if(is_rlec()):
+        if is_rlec():
             with pytest.raises(redis.ResponseError):
                 r.execute_command('exec')
         else:
             res = r.execute_command('exec')
             assert type(res[0]) is redis.ResponseError
 
-def test_mrange_expire_issue549():
-    Env().skipOnDebugger()
-    env = Env()
+@skip(asan=True)
+def test_mrange_expire_issue549(env):
+    env.skipOnDebugger()
     set_hertz(env)
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('ts.add', 'k1', 1, 10, 'LABELS', 'l', '1') == 1
         assert r.execute_command('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1') == 2
         assert r.execute_command('expire', 'k1', '1') == 1
@@ -145,10 +144,9 @@ def test_range_by_labels():
                 assert r1.execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
         env.flush()
 
-def test_mrange_filterby():
+def test_mrange_filterby(env):
     start_ts = 1511885909
     samples_count = 50
-    env = Env()
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -189,10 +187,9 @@ def test_mrange_filterby():
         actual_result = r1.execute_command('TS.mrange', 4, 6, 'FILTER_BY_TS', 4, 'FILTER', 'generation=z')
         assert actual_result == [[b'tester4', [], []]]
 
-def test_mrange_withlabels():
+def test_mrange_withlabels(env):
     start_ts = 1511885909
     samples_count = 50
-    env = Env()
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
@@ -232,8 +229,7 @@ def test_mrange_withlabels():
         assert len(actual_result[2][1]) == 3
 
 
-def test_multilabel_filter():
-    env = Env()
+def test_multilabel_filter(env):
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
@@ -256,8 +252,7 @@ def test_multilabel_filter():
         actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
 
-def test_large_key_value_pairs():
-    env = Env()
+def test_large_key_value_pairs(env):
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         number_series = 100
         for i in range(0,number_series):
@@ -285,8 +280,7 @@ def ensure_replies_series_match(env,series_array_1, series_array_2):
                 env.assertEqual(ts_labels,comparison_ts_labels)
                 env.assertEqual(ts_values,comparison_ts_values)
 
-def test_non_local_data():
-    env = Env()
+def test_non_local_data(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu')
         r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')
@@ -330,8 +324,7 @@ def test_non_local_filtered_data():
             ensure_replies_series_match(env,previous_result,actual_result)
         previous_results.append(actual_result)
 
-def test_non_local_filtered_labels():
-    env = Env()
+def test_non_local_filtered_labels(env):
     with env.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.ADD', '{host1}_metric_1', 1 ,100, 'LABELS', 'metric', 'cpu', '')
         r.execute_command('TS.ADD', '{host1}_metric_2', 2 ,40, 'LABELS', 'metric', 'cpu')

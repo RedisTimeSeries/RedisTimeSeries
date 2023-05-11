@@ -22,7 +22,8 @@ int ResultSet_SetLabelKey(TS_ResultSet *r, const char *labelKey);
 
 int ResultSet_SetLabelValue(TS_ResultSet *r, const char *label);
 
-int ResultSet_ApplyReducer(TS_ResultSet *r,
+int ResultSet_ApplyReducer(RedisModuleCtx *ctx,
+                           TS_ResultSet *r,
                            const RangeArgs *args,
                            const ReducerArgs *gropuByReducerArgs);
 

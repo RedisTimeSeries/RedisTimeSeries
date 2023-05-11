@@ -6,6 +6,13 @@
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
 #define REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
 
+typedef enum QueryType
+{
+    QUERY_MGET,
+    QUERY_QUERYINDEX,
+    QUERY_MRANGE,
+} QueryType;
+
 typedef struct QueryPredicates_Arg
 {
     bool shouldReturnNull;
@@ -18,6 +25,7 @@ typedef struct QueryPredicates_Arg
     unsigned short limitLabelsSize;
     RedisModuleString **limitLabels;
     bool latest;
+    bool resp3;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord
@@ -33,6 +41,12 @@ typedef struct ListRecord
     Record **records;
 } ListRecord;
 
+typedef struct MapRecord
+{
+    Record base;
+    Record **records;
+} MapRecord;
+
 typedef struct SeriesRecord
 {
     Record base;
@@ -45,14 +59,23 @@ typedef struct SeriesRecord
     size_t chunkCount;
 } SeriesRecord;
 
+typedef struct DoubleRecord
+{
+    Record base;
+    double num;
+} DoubleRecord;
+
 typedef struct LongRecord
 {
     Record base;
     long num;
 } LongRecord;
 
+MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
+Record *MapRecord_GetRecord(MapRecord *record, size_t index);
+size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
 size_t ListRecord_GetLen(ListRecord *record);
 Record *SeriesRecord_New(Series *series,

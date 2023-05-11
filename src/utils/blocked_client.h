@@ -4,7 +4,7 @@
  *the server side public license v1 (ssplv1).
  */
 
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 // create blocked client and report start time
 RedisModuleBlockedClient *RTS_BlockClient(RedisModuleCtx *ctx,

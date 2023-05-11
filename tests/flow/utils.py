@@ -1,5 +1,6 @@
 
 from includes import *
+from packaging import version
 import time
 import inspect
 
@@ -70,3 +71,10 @@ def timeit(method):
                   (method.__name__, (te - ts) * 1000))
         return result
     return timed
+
+def is_resp3_possible(env):
+    res = env.execute_command('INFO')
+    if version.parse(res['redis_version']) < version.parse("7.0.0"):
+        return False
+    else:
+        return True

@@ -180,7 +180,7 @@ setup_clang_sanitizer() {
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-asan-$SAN_REDIS_VER}
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-asan ...
-			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix asan-$SAN_REDIS_VER --own-openssl --no-run \
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix asan-$SAN_REDIS_VER --own-openssl --no-run \
 				--clang-asan \
 				--clang-san-blacklist $ignorelist
 		fi
@@ -194,7 +194,7 @@ setup_clang_sanitizer() {
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-msan-$SAN_REDIS_VER}
 		if ! command -v $REDIS_SERVER > /dev/null; then
 			echo Building Redis for clang-msan ...
-			$READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix msan-$SAN_REDIS_VER --own-openssl --no-run \
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix msan-$SAN_REDIS_VER --own-openssl --no-run \
 				--clang-msan --llvm-dir /opt/llvm-project/build-msan \
 				--clang-san-blacklist $ignorelist
 		fi
@@ -517,7 +517,7 @@ if [[ $QUICK != 1 ]]; then
 	SLAVES=${SLAVES:-1}
 	AOF=${AOF:-1}
 	AOF_SLAVES=${AOF_SLAVES:-1}
-	OSS_CLUSTER=${OSS_CLUSTER:-0}
+	OSS_CLUSTER=${OSS_CLUSTER:-1}
 else
 	GEN=1
 	SLAVES=0

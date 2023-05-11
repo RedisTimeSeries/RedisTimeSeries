@@ -118,7 +118,7 @@ commands:
       - run:
           name: Cleanup test log dir
           command: |
-            rm -f tests/flow/logs/*.{aof,rdb}
+            rm -rf tests/flow/logs/*.{aof,rdb} tests/flow/logs/appendonlydir/
           when: always
       - store_artifacts:
           path: tests/flow/logs
@@ -343,6 +343,7 @@ commands:
                   --auto-approve \
                   --pull-request ${CIRCLE_PULL_REQUEST##*/}
             fi
+
 #----------------------------------------------------------------------------------------------------------------------------------
 
 jobs:
@@ -353,7 +354,7 @@ jobs:
     steps:
       - build-steps:
           build_params: VG=1
-          test_params: VG=1 SIMPLE=1
+          test_params: VG=1 QUICK=1
           getredis_params: --valgrind
 
   lint:
@@ -426,7 +427,16 @@ jobs:
         default: "yes"
     steps:
       - early-returns
+      - run:
+          name: Brew update
+          command: brew update
       - build-steps
+      - run:
+          name: Persist artifacts?
+          command: |
+            if [[ "<<parameters.upload>>" != "yes" ]]; then
+              circleci step halt
+            fi
       - run:
           name: Upload artifacts to S3
           command: |
@@ -446,6 +456,12 @@ jobs:
     steps:
       - early-returns
       - build-steps
+      - run:
+          name: Persist artifacts?
+          command: |
+            if [[ "<<parameters.upload>>" != "yes" ]]; then
+              circleci step halt
+            fi
       - run:
           name: Upload artifacts to S3
           command: |
@@ -852,8 +868,6 @@ workflows:
             alias: build-with-redis-ver
             parameters:
               redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
-      - valgrind:
-          <<: *never
       - build-platforms:
           <<: *on-integ-and-version-tags
           context: common
@@ -969,8 +983,8 @@ workflows:
           matrix:
             parameters:
               redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
-      - test-rlec:
-          <<: *on-integ-branch-cron
+      - test-rlec
+      - valgrind
 
   nightly-perf-once-a-week:
     triggers:
