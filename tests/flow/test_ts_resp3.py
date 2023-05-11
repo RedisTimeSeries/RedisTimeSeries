@@ -1,9 +1,8 @@
-import pytest
-import redis
-import time
-from utils import Env, set_hertz, is_resp3_possible
 from includes import *
+import time
+from utils import set_hertz, is_resp3_possible
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data
+
 
 def test_resp3(env):
     if not is_resp3_possible(env):
