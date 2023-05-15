@@ -578,7 +578,7 @@ static inline int add(RedisModuleCtx *ctx,
 
 static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
     char curTimeStr[sizeof(timestamp_t) * 8 + 1];
-    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
+    sprintf(curTimeStr, "%llu", RedisModule_Microseconds());
     return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
 }
 
@@ -950,7 +950,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
     if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
-        currentUpdatedTime = RedisModule_Milliseconds();
+        currentUpdatedTime = RedisModule_Microseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
@@ -1372,7 +1372,7 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
-RETENTION_POLICY - long that represents the retention in milliseconds
+RETENTION_POLICY - long that represents the retention in microseconds
 MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
 redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY
