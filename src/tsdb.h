@@ -12,7 +12,8 @@
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "query_language.h"
-#include "redismodule.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 typedef struct CompactionRule
 {

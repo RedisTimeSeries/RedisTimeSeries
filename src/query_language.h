@@ -8,8 +8,8 @@
 #include "config.h"
 #include "generic_chunk.h"
 #include "indexer.h"
-#include "redismodule.h"
 
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"

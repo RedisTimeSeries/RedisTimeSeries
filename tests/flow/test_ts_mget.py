@@ -1,13 +1,14 @@
-import pytest
-import redis
+# import pytest
+# import redis
 import time
-from utils import Env, set_hertz
+from utils import set_hertz
 from includes import *
 
 
 def test_mget_with_expire_cmd():
-    set_hertz(Env())
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    set_hertz(env)
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         # Lower hz value to make it more likely that mget triggers key expiration
         assert r.execute_command("TS.ADD", "X" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
         assert r.execute_command("TS.ADD", "Y" ,"*" ,"1" ,"LABELS", "type", "DELAYED")
@@ -17,7 +18,7 @@ def test_mget_with_expire_cmd():
         assert r.execute_command("EXPIRE","Y", 6)
         assert r.execute_command("EXPIRE","Z", 7)
         while time.time() < (current_ts+10):
-            reply = r.execute_command('TS.MGET', 'FILTER', 'type=DELAYED')
+            reply = r1.execute_command('TS.MGET', 'FILTER', 'type=DELAYED')
             assert(len(reply)>=0 and len(reply)<=3)
         assert r.execute_command("PING")
 
@@ -30,7 +31,8 @@ def test_mget_cmd():
     values = [100, 200, 300]
     kvlabels = []
 
-    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         # test for empty series
         assert r.execute_command('TS.CREATE', "key4_empty", "LABELS", "NODATA", "TRUE")
         assert r.execute_command('TS.CREATE', "key5_empty", "LABELS", "NODATA", "TRUE")
@@ -40,7 +42,7 @@ def test_mget_cmd():
             ["key5_empty", [], []]
         ]
 
-        actual_result = r.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
+        actual_result = r1.execute_command('TS.MGET', 'FILTER', 'NODATA=TRUE')
         assert sorted(expected_result) == decode_if_needed(sorted(actual_result))
 
         # test for series with data
@@ -57,7 +59,7 @@ def test_mget_cmd():
             [keys[1], [], [time_stamp, str(values[1])]]
         ]
 
-        actual_result = r.execute_command('TS.MGET', 'FILTER', 'a=1')
+        actual_result = r1.execute_command('TS.MGET', 'FILTER', 'a=1')
         assert sorted(expected_result) == decode_if_needed(sorted(actual_result))
 
         # expect to received time-series k3 with labels
@@ -65,7 +67,7 @@ def test_mget_cmd():
             [keys[2], kvlabels[2], [time_stamp, str(values[2])]]
         ]
 
-        actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
+        actual_result = r1.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a!=1', 'b=1')
         assert expected_result_withlabels == decode_if_needed(actual_result)
 
         # expect to received time-series k1 and k2 with labels
@@ -74,7 +76,7 @@ def test_mget_cmd():
             [keys[1], kvlabels[1], [time_stamp, str(values[1])]]
         ]
 
-        actual_result = r.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
+        actual_result = r1.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
         assert sorted(expected_result_withlabels) == decode_if_needed(sorted(actual_result))
 
         # expect to recieve only some labels
@@ -84,31 +86,32 @@ def test_mget_cmd():
             [keys[1], expected_labels, [time_stamp, str(values[1])]]
         ]
 
-        actual_result = r.execute_command('TS.MGET', 'SELECTED_LABELS', 'metric', "new_label",'FILTER', 'a=1')
+        actual_result = r1.execute_command('TS.MGET', 'SELECTED_LABELS', 'metric', "new_label",'FILTER', 'a=1')
         assert sorted(expected_result_withlabels) == decode_if_needed(sorted(actual_result))
 
         # negative test
-        assert not r.execute_command('TS.MGET', 'FILTER', 'a=100')
-        assert not r.execute_command('TS.MGET', 'FILTER', 'k=1')
+        assert not r1.execute_command('TS.MGET', 'FILTER', 'a=100')
+        assert not r1.execute_command('TS.MGET', 'FILTER', 'k=1')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter')
+            assert r1.execute_command('TS.MGET', 'filter')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter', 'k+1')
+            assert r1.execute_command('TS.MGET', 'filter', 'k+1')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'filter', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'filter', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'retlif', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'retlif', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'SELECTED_LABELS', 'filter', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'SELECTED_LABELS', 'WITHLABELS', 'filter', 'k!=5')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.MGET', 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
+            assert r1.execute_command('TS.MGET', 'WITHLABELS', 'SELECTED_LABELS', 'filter', 'k!=5')
 
 def test_large_key_value_pairs():
-     with Env().getClusterConnectionIfNeeded() as r:
+     env = Env()
+     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         number_series = 100
         for i in range(0,number_series):
             assert r.execute_command('TS.CREATE', 'ts-{}'.format(i), 'LABELS', 'baseAsset', '17049', 'counterAsset', '840', 'source', '1000', 'dataType', 'PRICE_TICK')
@@ -119,14 +122,14 @@ def test_large_key_value_pairs():
         kv_label4 = 'dataType=(PRICE_TICK)'
         kv_labels = [kv_label1, kv_label2, kv_label3, kv_label4]
         for kv_label in kv_labels:
-            res = r.execute_command('TS.MGET', 'FILTER', kv_label1)
+            res = r1.execute_command('TS.MGET', 'FILTER', kv_label1)
             assert len(res) == number_series
 
 def test_latest_flag_mget():
     env = Env(decodeResponses=True)
     key1 = 't1{1}'
     key2 = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         assert r.execute_command('TS.CREATE', key1)
         assert r.execute_command('TS.CREATE', key2, 'LABELS', 'is_compaction', 'true')
         assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
@@ -136,9 +139,9 @@ def test_latest_flag_mget():
         assert r.execute_command('TS.add', key1, 13, 1)
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
-        res = r.execute_command('TS.mget', 'FILTER', 'is_compaction=true')
+        res = r1.execute_command('TS.mget', 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [0, '4']]] or res == [[b't2{1}', [], [0, b'4']]]
-        res = r.execute_command('TS.mget', "LATEST", 'FILTER', 'is_compaction=true')
+        res = r1.execute_command('TS.mget', "LATEST", 'FILTER', 'is_compaction=true')
         assert res == [['t2{1}', [], [10, '8']]] or res == [[b't2{1}', [], [10, b'8']]]
 
         # make sure LATEST haven't changed anything in the keys

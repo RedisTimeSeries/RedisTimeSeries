@@ -6,8 +6,8 @@
 #ifndef INDEXER_H
 #define INDEXER_H
 
-#include "redismodule.h"
-#include "redismodule-rlec.h"
+#include "RedisModulesSDK/redismodule.h"
+#include "RedisModulesSDK/redismodule-rlec.h"
 
 #include <sys/types.h>
 

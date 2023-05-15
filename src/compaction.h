@@ -3,11 +3,14 @@
  *licensed under your choice of the redis source available license 2.0 (rsalv2) or
  *the server side public license v1 (ssplv1).
  */
+
 #ifndef COMPACTION_H
 #define COMPACTION_H
+
 #include "consts.h"
-#include "redismodule.h"
 #include "generic_chunk.h"
+
+#include "RedisModulesSDK/redismodule.h"
 
 #include <sys/types.h>
 #include <rmutil/util.h>

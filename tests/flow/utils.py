@@ -1,8 +1,9 @@
+
+from includes import *
+from packaging import version
+import time
 import inspect
 
-from RLTest import Env as rltestEnv
-from includes import *
-import time
 
 def Refresh_Cluster(env):
     for shard in range(0, env.shardsCount):
@@ -14,18 +15,6 @@ def Refresh_Cluster(env):
         if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
             break
         con.execute_command('timeseries.REFRESHCLUSTER')
-
-def Env(*args, **kwargs):
-    if 'testName' not in kwargs:
-        kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
-    env = rltestEnv(*args, **kwargs)
-    if not RLEC_CLUSTER:
-        for shard in range(0, env.shardsCount):
-            modules = env.getConnection(shard).execute_command('MODULE', 'LIST')
-            if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
-                break
-            env.getConnection(shard).execute_command('timeseries.REFRESHCLUSTER')
-    return env
 
 def set_hertz(env):
     if RLEC_CLUSTER:
@@ -82,3 +71,10 @@ def timeit(method):
                   (method.__name__, (te - ts) * 1000))
         return result
     return timed
+
+def is_resp3_possible(env):
+    res = env.execute_command('INFO')
+    if version.parse(res['redis_version']) < version.parse("7.0.0"):
+        return False
+    else:
+        return True

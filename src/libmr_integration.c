@@ -4,7 +4,6 @@
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
-#include "RedisModulesSDK/redismodule.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
@@ -12,6 +11,7 @@
 #include "query_language.h"
 #include "tsdb.h"
 
+#include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 
 #define SeriesRecordName "SeriesRecord"
@@ -22,9 +22,15 @@ static MRRecordType *stringRecordType = NULL;
 static MRRecordType *listRecordType = NULL;
 static MRRecordType *SeriesRecordType = NULL;
 static MRRecordType *LongRecordType = NULL;
+static MRRecordType *DoubleRecordType = NULL;
+static MRRecordType *mapRecordType = NULL;
 
 static Record *GetNullRecord() {
     return &NullRecord;
+}
+
+MRRecordType *GetMapRecordType() {
+    return mapRecordType;
 }
 
 MRRecordType *GetListRecordType() {
@@ -72,12 +78,23 @@ static char *QueryPredicates_ToString(void *arg) {
     return strdup(out);
 }
 
+static Record *DoubleRecord_Create(double val);
+static void DoubleRecord_Free(void *base);
+static void DoubleRecord_Add(Record *base, Record *element);
+static void *DoubleRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
+static void DoubleRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
+static void DoubleRecord_SendReply(RedisModuleCtx *rctx, void *record);
 static Record *LongRecord_Create(long val);
 static void ListRecord_Free(void *base);
 static void ListRecord_Add(Record *base, Record *element);
 static void *ListRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 static void ListRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
 static void ListRecord_SendReply(RedisModuleCtx *rctx, void *record);
+static void MapRecord_Free(void *base);
+static void MapRecord_Add(Record *base, Record *element);
+static void *MapRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
+static void MapRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
+static void MapRecord_SendReply(RedisModuleCtx *rctx, void *record);
 static void StringRecord_Free(void *base);
 static void StringRecord_Serialize(WriteSerializationCtx *sctx, void *base, MRError **error);
 static void *StringRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
@@ -86,6 +103,10 @@ static void NullRecord_SendReply(RedisModuleCtx *rctx, void *base);
 static void NullRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
 static void *NullRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 static void NullRecord_Free(void *base);
+static void DoubleRecord_Free(void *arg);
+static void DoubleRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
+static void *DoubleRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
+static void DoubleRecord_SendReply(RedisModuleCtx *rctx, void *r);
 static void LongRecord_Free(void *arg);
 static void LongRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
 static void *LongRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
@@ -104,6 +125,8 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->startTimestamp, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->endTimestamp, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->latest, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->resp3, error);
+
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         SerializationCtxWriteRedisString(sctx, predicate_list->limitLabels[i], error);
     }
@@ -150,6 +173,7 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->startTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->endTimestamp = MR_SerializationCtxReadeLongLong(sctx, error);
     predicates->latest = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->resp3 = MR_SerializationCtxReadeLongLong(sctx, error);
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof(char **));
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
@@ -178,11 +202,22 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
 
 static Record *StringRecord_Create(char *val, size_t len);
 static Record *ListRecord_Create(size_t initSize);
+static Record *MapRecord_Create(size_t initSize);
 
 static Record *RedisStringRecord_Create(RedisModuleString *str) {
     size_t len = 0;
     const char *cstr = RedisModule_StringPtrLen(str, &len);
     return StringRecord_Create(strndup(cstr, len), len);
+}
+
+Record *ListSeriesLabels_resp3(const Series *series) {
+    Record *r = MapRecord_Create(series->labelsCount);
+
+    for (int i = 0; i < series->labelsCount; i++) {
+        MapRecord_Add(r, RedisStringRecord_Create(series->labels[i].key));
+        MapRecord_Add(r, RedisStringRecord_Create(series->labels[i].value));
+    }
+    return r;
 }
 
 Record *ListSeriesLabels(const Series *series) {
@@ -192,6 +227,30 @@ Record *ListSeriesLabels(const Series *series) {
         ListRecord_Add(internal_list, RedisStringRecord_Create(series->labels[i].key));
         ListRecord_Add(internal_list, RedisStringRecord_Create(series->labels[i].value));
         ListRecord_Add(r, internal_list);
+    }
+    return r;
+}
+
+Record *ListSeriesLabelsWithLimit_rep3(const Series *series,
+                                       const char *limitLabels[],
+                                       RedisModuleString **rLimitLabels,
+                                       ushort limitLabelsSize) {
+    Record *r = MapRecord_Create(series->labelsCount);
+    for (int i = 0; i < limitLabelsSize; i++) {
+        bool found = false;
+        for (int j = 0; j < series->labelsCount; ++j) {
+            const char *key = RedisModule_StringPtrLen(series->labels[j].key, NULL);
+            if (strcasecmp(key, limitLabels[i]) == 0) {
+                MapRecord_Add(r, RedisStringRecord_Create(series->labels[j].key));
+                MapRecord_Add(r, RedisStringRecord_Create(series->labels[j].value));
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            MapRecord_Add(r, RedisStringRecord_Create(rLimitLabels[i]));
+            MapRecord_Add(r, GetNullRecord());
+        }
     }
     return r;
 }
@@ -225,29 +284,34 @@ Record *ListSeriesLabelsWithLimit(const Series *series,
 }
 
 #define MAX_VAL_LEN 24
-Record *ListWithSample(u_int64_t timestamp, double value) {
+Record *ListWithSample(u_int64_t timestamp, double value, bool resp3) {
     Record *r = ListRecord_Create(2);
     ListRecord_Add(r, LongRecord_Create(timestamp));
-    char buf[MAX_VAL_LEN];
-    snprintf(buf, MAX_VAL_LEN, "%.15g", value);
-    ListRecord_Add(r, StringRecord_Create(strdup(buf), strlen(buf)));
+    if (resp3) {
+        ListRecord_Add(r, DoubleRecord_Create(value));
+        return r;
+    } else {
+        char buf[MAX_VAL_LEN];
+        snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+        ListRecord_Add(r, StringRecord_Create(strdup(buf), strlen(buf)));
+    }
     return r;
 }
 
-Record *ListWithSeriesLastDatapoint(const Series *series, bool latest) {
+Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp3) {
     if (should_finalize_last_bucket_get(latest, series)) {
         Sample sample;
         Sample *sample_ptr = &sample;
         calculate_latest_sample(&sample_ptr, series);
         if (sample_ptr) {
-            return ListWithSample(sample.timestamp, sample.value);
+            return ListWithSample(sample.timestamp, sample.value, resp3);
         }
     }
 
     if (SeriesGetNumSamples(series) == 0) {
         return ListRecord_Create(0);
     } else {
-        return ListWithSample(series->lastTimestamp, series->lastValue);
+        return ListWithSample(series->lastTimestamp, series->lastValue, resp3);
     }
 }
 
@@ -331,7 +395,12 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     size_t currentKeyLen;
 
     Series *series;
-    Record *series_list = ListRecord_Create(0);
+    Record *series_listOrMap;
+    if (predicates->resp3) {
+        series_listOrMap = MapRecord_Create(0);
+    } else {
+        series_listOrMap = ListRecord_Create(0);
+    }
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
@@ -350,31 +419,58 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
-        Record *key_record = ListRecord_Create(3);
-        ListRecord_Add(key_record,
-                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-        if (predicates->withLabels) {
-            ListRecord_Add(key_record, ListSeriesLabels(series));
-        } else if (predicates->limitLabelsSize > 0) {
+        if (predicates->resp3) {
+            MapRecord_Add(series_listOrMap,
+                          StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+            Record *list_record = ListRecord_Create(2);
+            if (predicates->withLabels) {
+                ListRecord_Add(list_record, ListSeriesLabels_resp3(series));
+            } else if (predicates->limitLabelsSize > 0) {
+                ListRecord_Add(list_record,
+                               ListSeriesLabelsWithLimit_rep3(series,
+                                                              limitLabelsStr,
+                                                              predicates->limitLabels,
+                                                              predicates->limitLabelsSize));
+            } else {
+                ListRecord_Add(list_record, MapRecord_Create(0));
+            }
+
+            ListRecord_Add(
+                list_record,
+                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+
+            RedisModule_CloseKey(key);
+            ListRecord_Add(series_listOrMap, list_record);
+        } else {
+            Record *key_record = ListRecord_Create(3);
+            ListRecord_Add(key_record,
+                           StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+            if (predicates->withLabels) {
+                ListRecord_Add(key_record, ListSeriesLabels(series));
+            } else if (predicates->limitLabelsSize > 0) {
+                ListRecord_Add(key_record,
+                               ListSeriesLabelsWithLimit(series,
+                                                         limitLabelsStr,
+                                                         predicates->limitLabels,
+                                                         predicates->limitLabelsSize));
+            } else {
+                ListRecord_Add(key_record, ListRecord_Create(0));
+            }
+
             ListRecord_Add(
                 key_record,
-                ListSeriesLabelsWithLimit(
-                    series, limitLabelsStr, predicates->limitLabels, predicates->limitLabelsSize));
-        } else {
-            ListRecord_Add(key_record, ListRecord_Create(0));
+                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+
+            RedisModule_CloseKey(key);
+            ListRecord_Add(series_listOrMap, key_record);
         }
-
-        ListRecord_Add(key_record, ListWithSeriesLastDatapoint(series, predicates->latest));
-
-        RedisModule_CloseKey(key);
-        ListRecord_Add(series_list, key_record);
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return series_list;
+    return series_listOrMap;
 }
 
 Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
@@ -486,6 +582,19 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
         return REDISMODULE_ERR;
     }
 
+    mapRecordType = MR_RecordTypeCreate("MapRecord",
+                                        MapRecord_Free,
+                                        NULL,
+                                        MapRecord_Serialize,
+                                        MapRecord_Deserialize,
+                                        NULL,
+                                        MapRecord_SendReply,
+                                        NULL);
+
+    if (MR_RegisterRecord(mapRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     stringRecordType = MR_RecordTypeCreate("StringRecord",
                                            StringRecord_Free,
                                            NULL,
@@ -540,6 +649,19 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
         return REDISMODULE_ERR;
     }
 
+    DoubleRecordType = MR_RecordTypeCreate("DoubleRecord",
+                                           DoubleRecord_Free,
+                                           NULL,
+                                           DoubleRecord_Serialize,
+                                           DoubleRecord_Deserialize,
+                                           NULL,
+                                           DoubleRecord_SendReply,
+                                           NULL);
+
+    if (MR_RegisterRecord(DoubleRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
@@ -591,6 +713,71 @@ static Record *StringRecord_Create(char *val, size_t len) {
     ret->str = val;
     ret->len = len;
     return &ret->base;
+}
+
+static size_t MapRecord_Len(Record *base) {
+    MapRecord *r = (MapRecord *)base;
+    return array_len(r->records);
+}
+
+static Record *MapRecord_Get(Record *base, size_t index) {
+    RedisModule_Assert(MapRecord_Len(base) > index);
+    MapRecord *r = (MapRecord *)base;
+    return r->records[index];
+}
+
+static void MapRecord_SendReply(RedisModuleCtx *rctx, void *record) {
+    size_t mapLen = MapRecord_Len(record);
+    RedisModule_ReplyWithMap(rctx, mapLen / 2);
+    for (int i = 0; i < mapLen; ++i) {
+        Record *r = MapRecord_Get(record, i);
+        r->recordType->sendReply(rctx, r);
+    }
+}
+
+Record *MapRecord_GetRecord(MapRecord *record, size_t index) {
+    return array_elem(record->records, index);
+}
+
+size_t MapRecord_GetLen(MapRecord *record) {
+    return array_len(record->records);
+}
+
+static Record *MapRecord_Create(size_t initSize) {
+    MapRecord *ret = (MapRecord *)MR_RecordCreate(mapRecordType, sizeof(*ret));
+    ret->records = array_new(Record *, initSize);
+    return &ret->base;
+}
+
+static void MapRecord_Free(void *base) {
+    MapRecord *record = (MapRecord *)base;
+    for (size_t i = 0; i < MapRecord_Len(base); ++i) {
+        MR_RecordFree(record->records[i]);
+    }
+    array_free(record->records);
+    free(record);
+}
+
+static void MapRecord_Add(Record *base, Record *element) {
+    MapRecord *r = (MapRecord *)base;
+    r->records = array_append(r->records, element);
+}
+
+static void MapRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
+    MapRecord *r = (MapRecord *)arg;
+    MR_SerializationCtxWriteLongLong(sctx, MapRecord_Len(arg), error);
+    for (size_t i = 0; i < MapRecord_Len(arg); ++i) {
+        MR_RecordSerialize(r->records[i], sctx);
+    }
+}
+
+static void *MapRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
+    size_t size = (size_t)MR_SerializationCtxReadeLongLong(sctx, error);
+    Record *r = MapRecord_Create(size);
+    for (size_t i = 0; i < size; ++i) {
+        MapRecord_Add(r, MR_RecordDeSerialize(sctx));
+    }
+    return r;
 }
 
 static size_t ListRecord_Len(Record *base) {
@@ -802,6 +989,35 @@ Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
         s->lastTimestamp = s->funcs->GetLastTimestamp(chunk);
     }
     return s;
+}
+
+static void DoubleRecord_Free(void *arg) {
+    free(arg);
+}
+
+static void DoubleRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
+    DoubleRecord *r = (DoubleRecord *)arg;
+    MR_SerializationCtxWriteDouble(sctx, r->num, error);
+}
+
+static void *DoubleRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
+    return DoubleRecord_Create(MR_SerializationCtxReadeDouble(sctx, error));
+}
+
+static double DoubleRecordGet(Record *base) {
+    RedisModule_Assert(base->recordType == DoubleRecordType);
+    DoubleRecord *r = (DoubleRecord *)base;
+    return r->num;
+}
+
+static void DoubleRecord_SendReply(RedisModuleCtx *rctx, void *r) {
+    RedisModule_ReplyWithDouble(rctx, DoubleRecordGet(r));
+}
+
+static Record *DoubleRecord_Create(double val) {
+    DoubleRecord *ret = (DoubleRecord *)MR_RecordCreate(DoubleRecordType, sizeof(*ret));
+    ret->num = val;
+    return &ret->base;
 }
 
 static void LongRecord_Free(void *arg) {

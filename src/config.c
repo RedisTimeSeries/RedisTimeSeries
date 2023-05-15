@@ -5,11 +5,10 @@
  */
 #include "config.h"
 
-#include "common.h"
 #include "consts.h"
 #include "module.h"
 #include "query_language.h"
-#include "redismodule.h"
+#include "RedisModulesSDK/redismodule.h"
 
 #include <assert.h>
 #include <string.h>
