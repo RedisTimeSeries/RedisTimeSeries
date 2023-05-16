@@ -137,34 +137,19 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             if (!reply_map) {
                 RedisModule_ReplyWithArray(ctx, 5 * 2);
             } else {
-                RedisModule_ReplyWithArray(ctx, 5);
+                RedisModule_ReplyWithMap(ctx, 5);
             }
 
-            if (reply_map) {
-                RedisModule_ReplyWithMap(ctx, 1);
-            }
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
             RedisModule_ReplyWithLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetFirstTimestamp(chunk));
-            if (reply_map) {
-                RedisModule_ReplyWithMap(ctx, 1);
-            }
             RedisModule_ReplyWithSimpleString(ctx, "endTimestamp");
             RedisModule_ReplyWithLongLong(
                 ctx, numOfSamples == 0 ? -1 : series->funcs->GetLastTimestamp(chunk));
-            if (reply_map) {
-                RedisModule_ReplyWithMap(ctx, 1);
-            }
             RedisModule_ReplyWithSimpleString(ctx, "samples");
             RedisModule_ReplyWithLongLong(ctx, numOfSamples);
-            if (reply_map) {
-                RedisModule_ReplyWithMap(ctx, 1);
-            }
             RedisModule_ReplyWithSimpleString(ctx, "size");
             RedisModule_ReplyWithLongLong(ctx, chunkSize);
-            if (reply_map) {
-                RedisModule_ReplyWithMap(ctx, 1);
-            }
             RedisModule_ReplyWithSimpleString(ctx, "bytesPerSample");
             RedisModule_ReplyWithDouble(
                 ctx, (numOfSamples == 0) ? (float)0 : (float)chunkSize / numOfSamples);
