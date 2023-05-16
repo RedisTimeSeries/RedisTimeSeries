@@ -1098,7 +1098,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else if (args.numLimitLabels > 0) {
             ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, args.numLimitLabels);
         } else {
-            RedisModule_ReplyWithArray(ctx, 0);
+            RedisModule_ReplyWithMapOrArray(ctx, 0, false);
         }
         // LATEST is ignored for a series that is not a compaction.
         bool should_finalize_last_bucket = should_finalize_last_bucket_get(args.latest, series);
