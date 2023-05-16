@@ -50,6 +50,9 @@ def test_resp3(env):
                     }
                 ]
         }
+        res = r1.execute_command('ts.mget', 'FILTER', 'name=mush')
+        assert res == {b't1{1}': [{}, [1000, 5.0]],
+                       b't2{1}': [{}, [990, 10.0]]}
 
         res = r1.execute_command('ts.mget', 'WITHLABELS', 'FILTER', 'name=mush')
         assert res == {b't1{1}': [{b'name': b'mush'}, [1000, 5.0]],
