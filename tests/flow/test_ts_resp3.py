@@ -23,8 +23,8 @@ def test_resp3(env):
         res = r.execute_command('ts.get', t1)
         assert res == [1000, 5.0]
         res = r.execute_command('ts.info', t1, 'DEBUG')
-        assert res == \
-            {b'totalSamples': 1000,
+        assert res == {
+            b'totalSamples': 1000,
             b'memoryUsage': 514, b'firstTimestamp': 1, b'lastTimestamp': 1000,
             b'retentionTime': 0, b'chunkCount': 2, b'chunkSize': 128,
             b'chunkType': b'compressed', b'duplicatePolicy': None,
@@ -33,10 +33,13 @@ def test_resp3(env):
             b'rules': {b't2{1}': [10, b'COUNT', 0]},
             b'keySelfName': b't1{1}',
             b'Chunks':
-            [[{b'startTimestamp': 1}, {b'endTimestamp': 510}, {b'samples': 510},
-            {b'size': 128}, {b'bytesPerSample': 0.250980406999588}],
-            [{b'startTimestamp': 511}, {b'endTimestamp': 1000}, {b'samples': 490},
-                {b'size': 128}, {b'bytesPerSample': 0.2612244784832001}]]}
+                [
+                    {b'startTimestamp': 1, b'endTimestamp': 510, b'samples': 510,
+                     b'size': 128, b'bytesPerSample': 0.250980406999588},
+                    {b'startTimestamp': 511, b'endTimestamp': 1000, b'samples': 490,
+                     b'size': 128, b'bytesPerSample': 0.2612244784832001}
+                ]
+        }
 
         res = r1.execute_command('ts.mget', 'WITHLABELS', 'FILTER', 'name=mush')
         assert res == {b't1{1}': [{b'name': b'mush'}, [1000, 5.0]],
