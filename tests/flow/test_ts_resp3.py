@@ -34,10 +34,20 @@ def test_resp3(env):
             b'keySelfName': b't1{1}',
             b'Chunks':
                 [
-                    {b'startTimestamp': 1, b'endTimestamp': 510, b'samples': 510,
-                     b'size': 128, b'bytesPerSample': 0.250980406999588},
-                    {b'startTimestamp': 511, b'endTimestamp': 1000, b'samples': 490,
-                     b'size': 128, b'bytesPerSample': 0.2612244784832001}
+                    {
+                        b'startTimestamp': 1,
+                        b'endTimestamp': 510,
+                        b'samples': 510,
+                        b'size': 128,
+                        b'bytesPerSample': 0.250980406999588
+                    },
+                    {
+                        b'startTimestamp': 511,
+                        b'endTimestamp': 1000,
+                        b'samples': 490,
+                        b'size': 128,
+                        b'bytesPerSample': 0.2612244784832001
+                    }
                 ]
         }
 
