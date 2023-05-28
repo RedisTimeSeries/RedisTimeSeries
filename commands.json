@@ -1515,5 +1515,33 @@
         ],
         "since": "1.0.0",
         "group": "timeseries"
+    },
+    "TS.CONFIG SET": {
+        "summary": "Sets runtime configuration options",
+        "complexity": "O(1)",
+        "arguments": [
+            {
+                "name": "option",
+                "type": "string"
+            },
+            {
+                "name": "value",
+                "type": "string"
+            }
+        ],
+        "since": "1.10.0",
+        "group": "timeseries"
+    },
+      "TS.CONFIG GET": {
+        "summary": "Retrieves runtime configuration options",
+        "complexity": "O(1)",
+        "arguments": [
+          {
+            "name": "option",
+            "type": "string"
+          }
+        ],
+        "since": "1.10.0",
+        "group": "timeseries"
     }
 }

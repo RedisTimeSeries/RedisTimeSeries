@@ -24,6 +24,7 @@ typedef struct
     bool forceSaveCrossRef;    // Internal debug configuration param
     char *password;            // tls password which used by libmr
     bool dontAssertOnFailiure; // Internal debug configuration param
+    size_t libmrTimeoutMS;     // Libmr timeout in ms
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
@@ -51,4 +52,6 @@ static inline int RTS_IsEnterprise() {
 
 int RTS_CheckSupportedVestion();
 void RTS_GetRedisVersion();
+int RuntimeConfigCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+
 #endif

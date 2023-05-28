@@ -162,9 +162,27 @@ class testGlobalConfigTests():
             r.execute_command('DEL', 'tester')
             r.execute_command('DEL', 'tester_agg')
 
+def test_libmr_timeout():
+    skip_on_rlec()
+    env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m; MULTI_SHARD_CMD_TIMEOUT 10000')
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
+        res = env.getConnection(1).execute_command('TS.CONFIG', 'GET', 'MULTI_SHARD_CMD_TIMEOUT')
+        assert res == [b'MULTI_SHARD_CMD_TIMEOUT', 10000]
+
+        env.getConnection(1).execute_command('TS.CONFIG', 'SET', 'MULTI_SHARD_CMD_TIMEOUT', 60000)
+        res = env.getConnection(1).execute_command('TS.CONFIG', 'GET', 'MULTI_SHARD_CMD_TIMEOUT')
+        assert res == [b'MULTI_SHARD_CMD_TIMEOUT', 60000]
+
+        if not env.isCluster():
+            return
+
+        for i in range(1000000):
+            r.execute_command('TS.create', 't1{' + str(i) + '}', 'LABELS', 'name', 'brown')
+        res = env.getConnection(1).execute_command('TS.mrange', '-', '+', 'FILTER', 'name=brown', 'GROUPBY', 'name', 'REDUCE', 'COUNT')
+        assert res == [[b'name=brown', [], []]]
 
 def test_negative_configuration():
-    Env().skip()
     Env().skipOnCluster()
     skip_on_rlec()
     with pytest.raises(Exception) as excinfo:
@@ -208,3 +226,6 @@ def test_negative_configuration():
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; MULTI_SHARD_CMD_TIMEOUT')
