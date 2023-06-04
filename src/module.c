@@ -287,19 +287,13 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
+    RedisModuleString *currentKey;
     size_t currentKeyLen;
     long long replylen = 0;
     Series *series;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status = GetSeries(ctx,
-                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                     &key,
-                                     &series,
-                                     REDISMODULE_READ,
-                                     false,
-                                     true);
+        const int status = GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true);
 
         if (!status) {
             RedisModule_Log(ctx,
@@ -309,7 +303,8 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                             currentKey);
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
+            iter = RedisModule_DictIteratorStart(result, ">", currentKey);
+            RedisModule_FreeString(ctx, currentKey);
             continue;
         }
         ReplySeriesArrayPos(ctx,
@@ -322,6 +317,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                             false);
         replylen++;
         RedisModule_CloseKey(key);
+        RedisModule_FreeString(ctx, currentKey);
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
