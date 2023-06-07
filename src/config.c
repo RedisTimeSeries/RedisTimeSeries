@@ -9,6 +9,7 @@
 #include "module.h"
 #include "query_language.h"
 #include "RedisModulesSDK/redismodule.h"
+#include "reply.h"
 
 #include <assert.h>
 #include <string.h>
@@ -16,6 +17,8 @@
 #include "rmutil/util.h"
 
 TSConfig TSGlobalConfig;
+
+#define LIBMR_EXECUTION_DEFAULT_MAX_IDLE_MS 5000
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
@@ -205,6 +208,23 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                     "notice",
                     "Setting default series ENCODING to: %s",
                     ChunkTypeToString(TSGlobalConfig.options));
+
+    if (argc > 1 && RMUtil_ArgIndex("MULTI_SHARD_CMD_TIMEOUT", argv, argc) >= 0) {
+        if (RMUtil_ParseArgsAfter(
+                "MULTI_SHARD_CMD_TIMEOUT", argv, argc, "l", &TSGlobalConfig.libmrTimeoutMS) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(
+                ctx, "warning", "Unable to parse argument after MULTI_SHARD_CMD_TIMEOUT");
+            return TSDB_ERROR;
+        }
+    } else {
+        TSGlobalConfig.libmrTimeoutMS = LIBMR_EXECUTION_DEFAULT_MAX_IDLE_MS;
+    }
+    RedisModule_Log(ctx,
+                    "notice",
+                    "loaded default MULTI_SHARD_CMD_TIMEOUT timeout: %zu",
+                    TSGlobalConfig.libmrTimeoutMS);
+
     return TSDB_OK;
 }
 
@@ -274,4 +294,50 @@ void RTS_GetRedisVersion() {
     }
 
     RedisModule_FreeCallReply(reply);
+}
+
+int RuntimeConfigCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    // CONFIG <GET|SET> <NAME> [value]
+    if (argc < 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+    const char *action = RedisModule_StringPtrLen(argv[1], NULL);
+    const char *name = RedisModule_StringPtrLen(argv[2], NULL);
+    if (!strcasecmp(action, "GET")) {
+        if (strcmp(name, "MULTI_SHARD_CMD_TIMEOUT") == 0) {
+            RedisModule_ReplyWithMapOrArray(ctx, 2, true);
+            RedisModule_ReplyWithSimpleString(ctx, name);
+            RedisModule_ReplyWithLongLong(ctx, TSGlobalConfig.libmrTimeoutMS);
+        } else {
+            RedisModule_ReplyWithSimpleString(ctx, "No such configuration name");
+            return REDISMODULE_OK;
+        }
+    } else if (!strcasecmp(action, "SET")) {
+        if (argc > 4) {
+            return RedisModule_WrongArity(ctx);
+        }
+
+        if (strcmp(name, "MULTI_SHARD_CMD_TIMEOUT") == 0) {
+            timestamp_t libmr_timeout;
+            if (RMUtil_ParseArgsAfter("MULTI_SHARD_CMD_TIMEOUT", argv, argc, "l", &libmr_timeout) !=
+                REDISMODULE_OK) {
+                RedisModule_Log(
+                    ctx, "warning", "Unable to parse argument after MULTI_SHARD_CMD_TIMEOUT");
+                return REDISMODULE_OK;
+            }
+
+            TSGlobalConfig.libmrTimeoutMS = libmr_timeout;
+            RedisModule_Log(ctx, "notice", "Successfully changed configuration for `%s`", name);
+            RedisModule_ReplyWithSimpleString(ctx, "OK");
+            return REDISMODULE_OK;
+        } else {
+            RedisModule_ReplyWithSimpleString(ctx, "No such configuration name");
+            return REDISMODULE_OK;
+        }
+    } else {
+        RedisModule_ReplyWithSimpleString(ctx, "No such configuration action");
+        return REDISMODULE_OK;
+    }
+
+    return REDISMODULE_OK;
 }

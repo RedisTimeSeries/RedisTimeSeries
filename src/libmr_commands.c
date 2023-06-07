@@ -362,6 +362,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.libmrTimeoutMS);
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
 
@@ -410,6 +411,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
 
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.libmrTimeoutMS);
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
@@ -449,6 +451,7 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         return REDISMODULE_OK;
     }
 
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.libmrTimeoutMS);
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
 

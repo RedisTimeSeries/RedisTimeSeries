@@ -12,6 +12,8 @@
 #include <string.h>
 #include <rmutil/alloc.h>
 
+#include <time.h>
+
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
 extern bool isTrimming;
@@ -246,14 +248,29 @@ void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
      */
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src, "^", NULL, 0);
     RedisModuleString *currentKey;
-    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
-        RedisModule_DictSet(dest, currentKey, (void *)1);
-        RedisModule_FreeString(ctx, currentKey);
+    time_t start_t, end_t;
+    double diff_t;
+    time(&start_t);
+
+    
+    while ((currentKey = RedisModule_DictNextC(iter, NULL, NULL)) != NULL) {
+        int kk = 1;
+        kk++;
+        //RedisModule_DictSet(dest, currentKey, (void *)1);
+        //RedisModule_FreeString(ctx, currentKey);
     }
+    time(&end_t);
+    diff_t = difftime(end_t, start_t);
+    printf("GGGGGGGGGGG took %lf seconds to execute \n", diff_t);
     RedisModule_DictIteratorStop(iter);
 }
 
 void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
+    bool isSwaped = false;
+    if(RedisModule_DictSize(left) > RedisModule_DictSize(right)) {
+        __SWAP(left, right);
+        isSwaped = true;
+    }
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;
@@ -267,6 +284,9 @@ void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *rig
         RedisModule_DictIteratorReseekC(iter, ">", currentKey, currentKeyLen);
     }
     RedisModule_DictIteratorStop(iter);
+    if(isSwaped) {
+        __SWAP(left, right);
+    }
 }
 
 void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
@@ -345,7 +365,18 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
     RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
     RedisModuleDict *currentLeaf;
     bool isCloned;
+    time_t start_t, end_t;
+    double diff_t;
+    time(&start_t);
+
     currentLeaf = GetPredicateKeysDict(ctx, predicate, &isCloned);
+    
+    time(&end_t);
+    diff_t = difftime(end_t, start_t);
+    printf("GetPredicateKeysDict took %lf seconds to execute \n", diff_t);
+
+    time(&start_t);
+    
 
     if (currentLeaf != NULL) {
         // Copy everything to new dict only in case this is the first predicate.
@@ -366,12 +397,20 @@ RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
         }
     }
 
+    time(&end_t);
+    diff_t = difftime(end_t, start_t);
+    printf("AAAAAA took %lf seconds to execute \n", diff_t);
+
     RedisModuleDict *result = NULL;
     if (prevResults != NULL) {
         if (predicate->type == EQ || predicate->type == CONTAINS) {
             _intersect(ctx, prevResults, localResult);
         } else if (predicate->type == LIST_MATCH) {
+            time(&start_t);
             _intersect(ctx, prevResults, localResult);
+            time(&end_t);
+            diff_t = difftime(end_t, start_t);
+            printf("BBBBB took %lf seconds to execute \n", diff_t);
         } else if (predicate->type == LIST_NOTMATCH) {
             _difference(ctx, prevResults, localResult);
         } else if (predicate->type == NCONTAINS) {
@@ -435,8 +474,19 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count) {
     RedisModuleDict *result = NULL;
+    time_t start_t, end_t;
+    double diff_t;
+    time(&start_t);
+
 
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
+
+    time(&end_t);
+    diff_t = difftime(end_t, start_t);
+    printf("PromoteSmallestPredicateToFront took %lf seconds to execute \n", diff_t);
+
+
+    time(&start_t);
 
     // EQ or Contains
     for (int i = 0; i < predicate_count; i++) {
@@ -448,6 +498,10 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
             }
         }
     }
+
+    time(&end_t);
+    diff_t = difftime(end_t, start_t);
+    printf("QueryIndexPredicate took %lf seconds to execute \n", diff_t);
 
     // The next two types of queries are reducers so we run them after the matcher
     // NCONTAINS or NEQ
