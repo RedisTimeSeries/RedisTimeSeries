@@ -15,10 +15,22 @@
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
-        RedisModule_ReplyWithError(rctx, "multi shard cmd failed");
         RedisModule_Log(rctx, "warning", "got libmr error:");
+        bool max_idle_reached = false;
         for (size_t i = 0; i < len; ++i) {
             RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
+            if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
+                max_idle_reached = true;
+            }
+        }
+
+        if (max_idle_reached) {
+            RedisModule_ReplyWithError(
+                rctx,
+                "Multi-shard command failed. This may happen if a shard needs to process too much "
+                "data. Try to apply strict filters, if possible.");
+        } else {
+            RedisModule_ReplyWithError(rctx, "multi shard cmd failed");
         }
         return true;
     }

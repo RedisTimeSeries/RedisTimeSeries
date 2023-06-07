@@ -75,7 +75,7 @@ def testLibmrFail():
                                 'name=bob')
         assert(False)
     except Exception as e:
-        env.assertResponseError(e, "multi shard cmd failed")
+        env.assertResponseError(e, "Multi-shard command failed. This may happen if a shard needs to process too much data. Try to apply strict filters, if possible.")
     
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)
