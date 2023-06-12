@@ -60,7 +60,6 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov-git", aur=True)
         self.run(f"{READIES}/bin/getaws")
         if self.pytools:
-            # self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --modern --redispy-version=v5.0.0b3")
             self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --modern")
             self.pip_install(f"-r {ROOT}/tests/flow/requirements.txt")
             self.run(f"NO_PY2=1 {READIES}/bin/getpudb")
