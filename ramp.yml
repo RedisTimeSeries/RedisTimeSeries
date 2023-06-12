@@ -1,4 +1,5 @@
 display_name: RedisTimeSeries
+capability_name: Time Series
 author: Redis
 email: danni@redis.com
 description: A time series database for Redis
