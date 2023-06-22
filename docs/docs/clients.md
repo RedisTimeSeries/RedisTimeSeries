@@ -4,6 +4,8 @@ linkTitle: "Clients"
 weight: 5
 description: >
     RedisTimeSeries Client Libraries
+aliases:
+    - /docs/stack/timeseries/clients    
 ---
 
 RedisTimeSeries has several client libraries, written by the module authors and community members - abstracting the API in different programming languages. 

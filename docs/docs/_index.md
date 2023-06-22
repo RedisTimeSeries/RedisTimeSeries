@@ -4,6 +4,8 @@ linkTitle: Time Series
 description: Ingest and query time series data with Redis
 type: docs
 stack: true
+aliases:
+    - /docs/stack/timeseries/
 ---
 
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)

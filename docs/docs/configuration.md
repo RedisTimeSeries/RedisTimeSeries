@@ -4,6 +4,8 @@ linkTitle: "Configuration"
 weight: 3
 description: >
     RedisTimeSeries supports multiple module configuration parameters. All of these parameters can only be set at load-time.
+aliases:
+    - /docs/stack/timeseries/configuration    
 ---
 
 ## Setting configuration parameters on module load
