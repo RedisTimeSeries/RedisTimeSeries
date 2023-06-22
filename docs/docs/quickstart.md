@@ -4,6 +4,8 @@ linkTitle: "Quickstart"
 weight: 2
 description: >
     Quick Start Guide to RedisTimeSeries
+aliases:
+    - /docs/stack/timeseries/quickstart    
 ---
 
 ## Setup

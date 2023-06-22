@@ -4,6 +4,8 @@ linkTitle: "Development"
 weight: 4
 description: >
     Developing RedisTimeSeries
+aliases:
+    - /docs/stack/timeseries/development    
 ---
 
 Developing RedisTimeSeries involves setting up the development environment (which can be either Linux-based or macOS-based), building RedisTimeSeries, running tests and benchmarks, and debugging both the RedisTimeSeries module and its tests.
