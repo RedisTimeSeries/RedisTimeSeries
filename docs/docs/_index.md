@@ -1,5 +1,5 @@
 ---
-title: RedisTimeSeries
+title: Time Series
 linkTitle: Time Series
 description: Ingest and query time series data with Redis
 type: docs
