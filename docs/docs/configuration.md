@@ -3,7 +3,7 @@ title: "Configuration Parameters"
 linkTitle: "Configuration"
 weight: 3
 description: >
-    RedisTimeSeries supports multiple module configuration parameters. All of these parameters can only be set at load-time.
+    Time Series supports multiple module configuration parameters. All of these parameters can only be set at load-time.
 ---
 
 ## Setting configuration parameters on module load
@@ -28,19 +28,19 @@ From the command line:
 $ redis-server --loadmodule ./redistimeseries.so [OPT VAL]...
 ```
 
-## RedisTimeSeries configuration parameters
+## Time Series configuration parameters
 
 The following table summarizes which configuration parameters can be set at module load-time and run-time:
 
 | Configuration Parameter                                                    | Load-time          | Run-time             |
 | :-------                                                                   | :-----             | :-----------         |
-| [NUM_THREADS](#num_threads) (since RedisTimeSeries v1.6)                   | :white_check_mark: | :white_large_square: |
+| [NUM_THREADS](#num_threads) (since Time Series v1.6)                   | :white_check_mark: | :white_large_square: |
 | [COMPACTION_POLICY](#compaction_policy)                                    | :white_check_mark: | :white_large_square: |
 | [RETENTION_POLICY](#retention_policy)                                      | :white_check_mark: | :white_large_square: |
 | [DUPLICATE_POLICY](#duplicate_policy)                                      | :white_check_mark: | :white_large_square: |
-| [ENCODING](#encoding) (since RedisTimeSeries v1.6)                         | :white_check_mark: | :white_large_square: |
+| [ENCODING](#encoding) (since Time Series v1.6)                         | :white_check_mark: | :white_large_square: |
 | [CHUNK_SIZE_BYTES](#chunk_size_bytes)                                      | :white_check_mark: | :white_large_square: |
-| [OSS_GLOBAL_PASSWORD](#oss_global_password) (since RedisTimeSeries v1.8.4) | :white_check_mark: | :white_large_square: |
+| [OSS_GLOBAL_PASSWORD](#oss_global_password) (since Time Series v1.8.4) | :white_check_mark: | :white_large_square: |
 
 ### NUM_THREADS
 
@@ -79,7 +79,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   | `std.s`    | sample standard deviation of the values                          |
   | `var.p`    | population variance of the values                                |
   | `var.s`    | sample variance of the values                                    |
-  | `twa`      | time-weighted average of all values (since RedisTimeSeries v1.8) |
+  | `twa`      | time-weighted average of all values (since Time Series v1.8) |
 
 * Duration of each time bucket - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
@@ -99,7 +99,7 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
     
   `0m`, `0s`, `0M`, `0h`, or `0d` means no expiration.
 
-* (since RedisTimeSeries v1.8):
+* (since Time Series v1.8):
 
   Optional: Time bucket alignment - number and the time representation (Example for one minute: `1M`, `60s`, or `60000m`)
 
@@ -113,11 +113,11 @@ Each rule is separated by a semicolon (`;`), the rule consists of multiple field
   
 When a compaction policy is defined, compaction rules will be created automatically for newly created time series, and their key would be set to:
   
-* Before RedisTimeSeries v1.8:
+* Before Time Series v1.8:
 
    _key_dur_agg_ where _key_ is the key of the source time series, _dur_ is the bucket duration, and _agg_ is the aggregator.
      
-* Since RedisTimeSeries v1.8:
+* Since Time Series v1.8:
 
    _key_dur_agg_aln_ where _key_ is the key of the source time series, _dur_ is the bucket duration, _agg_ is the aggregator, and _aln_ is the alignment timestamp.
 
@@ -195,7 +195,7 @@ Default chunk encoding for automatically created keys when [COMPACTION_POLICY](#
 
 Possible values: `COMPRESSED`, `UNCOMPRESSED`.
 
-Note: Before RedisTimeSeries 1.6 this configuration parameter was named `CHUNK_TYPE`.
+Note: Before Time Series 1.6 this configuration parameter was named `CHUNK_TYPE`.
 
 #### Default
 

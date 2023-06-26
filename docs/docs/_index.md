@@ -1,5 +1,5 @@
 ---
-title: RedisTimeSeries
+title: Time Series
 linkTitle: Time Series
 description: Ingest and query time series data with Redis
 type: docs
@@ -8,7 +8,7 @@ type: docs
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 [![Github](https://img.shields.io/static/v1?label=&message=repository&color=5961FF&logo=github)](https://github.com/RedisTimeSeries/RedisTimeSeries/)
 
-RedisTimeSeries is a Redis module that adds a time series data structure to Redis.
+Time Series is a Redis module that adds a time series data structure to Redis.
 
 ## Features
 * High volume inserts, low latency reads
@@ -26,10 +26,10 @@ See the [clients page](clients) for the full list.
 
 ## Using with other metrics tools
 
-In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
-find projects that help you integrate RedisTimeSeries with other tools, including:
+In the [Time Series](https://github.com/RedisTimeSeries) organization you can
+find projects that help you integrate Time Series with other tools, including:
 
-1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use RedisTimeSeries as backend db.
+1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use Time Series as backend db.
 2. [Grafana 7.1+](https://github.com/RedisTimeSeries/grafana-redis-datasource), using the [Redis Data Source](https://redislabs.com/blog/introducing-the-redis-data-source-plug-in-for-grafana/).
 3. [Telegraf](https://github.com/influxdata/telegraf). Download the plugin from [InfluxData](https://portal.influxdata.com/downloads/). 
 4. StatsD, Graphite exports using graphite protocol.
@@ -40,7 +40,7 @@ A time series is a linked list of memory chunks. Each chunk has a predefined siz
 
 ## Forum
 
-Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://forum.redislabs.com/c/modules/redistimeseries).
+Got questions? Feel free to ask at the [Time Series mailing list](https://forum.redislabs.com/c/modules/redistimeseries).
 
 ## License
-RedisTimeSeries is licensed under the [Redis Source Available License 2.0 (RSALv2)](https://redis.com/legal/rsalv2-agreement) or the [Server Side Public License v1 (SSPLv1)](https://www.mongodb.com/licensing/server-side-public-license).
+Redis Time Series is licensed under the [Redis Source Available License 2.0 (RSALv2)](https://redis.com/legal/rsalv2-agreement) or the [Server Side Public License v1 (SSPLv1)](https://www.mongodb.com/licensing/server-side-public-license).

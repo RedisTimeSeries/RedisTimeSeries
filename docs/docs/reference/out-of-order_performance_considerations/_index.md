@@ -15,7 +15,7 @@ Ingest performance is critical for us, which pushed  us to assess and be transpa
 To do so, we created a Go benchmark client that enabled us to control key factors that dictate overall system performance, like the out-of-order ratio, the compression of the series, the number of concurrent clients used, and command pipelining. For the full benchmark-driver configuration details and parameters, please refer to this [GitHub link](https://github.com/RedisTimeSeries/redistimeseries-ooo-benchmark).
 
 
-Furthermore, all benchmark variations were run on Amazon Web Services instances, provisioned through our benchmark-testing infrastructure. Both the benchmarking client and database servers were running on separate c5.9xlarge instances. The tests were executed on a single-shard setup, with RedisTimeSeries version 1.4.
+Furthermore, all benchmark variations were run on Amazon Web Services instances, provisioned through our benchmark-testing infrastructure. Both the benchmarking client and database servers were running on separate c5.9xlarge instances. The tests were executed on a single-shard setup, with Redis Time Series version 1.4.
 
 
 Below you can see the correlation between achievable ops/sec and out-of-order ratio for both compressed and uncompressed chunks.

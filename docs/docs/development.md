@@ -3,13 +3,13 @@ title: "Development"
 linkTitle: "Development"
 weight: 4
 description: >
-    Developing RedisTimeSeries
+    Developing Time Series
 ---
 
-Developing RedisTimeSeries involves setting up the development environment (which can be either Linux-based or macOS-based), building RedisTimeSeries, running tests and benchmarks, and debugging both the RedisTimeSeries module and its tests.
+Developing Time Series involves setting up the development environment (which can be either Linux-based or macOS-based), building Time Series, running tests and benchmarks, and debugging both the Time Series module and its tests.
 
 ## Cloning the git repository
-By invoking the following command, RedisTimeSeries module and its submodules are cloned:
+By invoking the following command, the Time Series module and its submodules are cloned:
 ```sh
 git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
 ```
@@ -33,7 +33,7 @@ docker exec -it $ts bash
 ```
 
 ## Installing prerequisites
-To build and test RedisTimeSeries one needs to install several packages, depending on the underlying OS. Currently, we support the Ubuntu/Debian, CentOS, Fedora, and macOS.
+To build and test Time Series one needs to install several packages, depending on the underlying OS. Currently, we support Ubuntu/Debian, CentOS, Fedora, and macOS.
 
 If you have `gnu make` installed, you can execute
 ```
@@ -66,14 +66,14 @@ Otherwise, you can invoke `./deps/readies/bin/getredis`.
 `make help` provides a quick summary of the development features.
 
 ## Building from source
-`make` will build RedisTimeSeries.
+`make` will build Time Series.
 
 Build artifacts are placed into `bin/linux-x64-release` (or similar, according to your platform and build options).
 
 Use `make clean` to remove built artifacts. `make clean ALL=1` will remove the entire binary artifacts directory.
 
-## Running Redis with RedisTimeSeries
-The following will run `redis` and load RedisTimeSeries module.
+## Running Redis with Time Series
+The following will run `redis` and load the Time Series module.
 ```
 make run
 ```
@@ -90,7 +90,7 @@ A single test can be run using the `TEST` parameter, e.g. `make flow_test TEST=f
 ## Debugging
 To build for debugging (enabling symbolic information and disabling optimization), run `make DEBUG=1`.
 One can the use `make run DEBUG=1` to invoke `gdb`.
-In addition to the usual way to set breakpoints in `gdb`, it is possible to use the `BB` macro to set a breakpoint inside RedisTimeSeries code. It will only have an effect when running under `gdb`.
+In addition to the usual way to set breakpoints in `gdb`, it is possible to use the `BB` macro to set a breakpoint inside the Time Series code. It will only have an effect when running under `gdb`.
 
 Similarly, Python tests in a single-test mode, one can set a breakpoint by using the `BB()` function inside a test. This will invoke `pudb`.
 

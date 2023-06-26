@@ -6,7 +6,7 @@ description: >
     Commands Overview
 ---
 
-### RedisTimeSeries API
+### Time Series API
 
 Details on module's [commands](/commands/?group=timeseries) can be filtered for a specific module or command, e.g., `TS.CREATE`.
 The details also include the syntax for the commands, where:

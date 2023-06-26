@@ -3,16 +3,16 @@ title: "Clients"
 linkTitle: "Clients"
 weight: 5
 description: >
-    RedisTimeSeries Client Libraries
+    Redis Time Series Client Libraries
 ---
 
-RedisTimeSeries has several client libraries, written by the module authors and community members - abstracting the API in different programming languages. 
+Time Series has several client libraries, written by the module authors and community members - abstracting the API in different programming languages. 
 
 While it is possible and simple to use the raw Redis commands API, in most cases it's more convenient to use a client library abstracting it. 
 
 ## Currently available Libraries
 
-Some languages have client libraries that provide support for RedisTimeSeries commands:
+Some languages have client libraries that provide support for Time Series commands:
 
 | Project | Language | License | Author | Stars |
 | ------- | -------- | ------- | ------ | --- |
