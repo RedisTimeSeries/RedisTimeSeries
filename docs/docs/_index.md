@@ -8,7 +8,7 @@ type: docs
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 [![Github](https://img.shields.io/static/v1?label=&message=repository&color=5961FF&logo=github)](https://github.com/RedisTimeSeries/RedisTimeSeries/)
 
-Time Series is a Redis module that adds a time series data structure to Redis.
+Time Series is a Redis feature that adds a time series data structure to Redis.
 
 ## Features
 * High volume inserts, low latency reads
@@ -26,7 +26,7 @@ See the [clients page](clients) for the full list.
 
 ## Using with other metrics tools
 
-In the [Time Series](https://github.com/RedisTimeSeries) organization you can
+In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
 find projects that help you integrate Time Series with other tools, including:
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use Time Series as backend db.
