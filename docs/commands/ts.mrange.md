@@ -93,7 +93,7 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 <details open>
 <summary><code>COUNT count</code></summary>
 
-When used without `AGGREGATION`: limits the number of reported samples.
+When used without `AGGREGATION`: limits the number of reported samples per time series.
 
 When used together with `AGGREGATION`: limits the number of reported buckets.
 </details>
