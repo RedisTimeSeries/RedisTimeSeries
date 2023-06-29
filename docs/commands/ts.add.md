@@ -67,13 +67,18 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 
 <details open><summary><code>ON_DUPLICATE policy</code></summary> 
 
-is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps. It is used with one of the following values:
+is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps.
+This override is effective only for this single command and does not set the time series duplication policy (which can be set with `TS.ALTER`).
+
+`policy` can be one of the following values:
   - `BLOCK`: ignore any newly reported value and reply with an error
   - `FIRST`: ignore any newly reported value
   - `LAST`: override with the newly reported value
   - `MIN`: only override if the value is lower than the existing value
   - `MAX`: only override if the value is higher than the existing value
   - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+
+This argument has no effect when a new time series is created by this command.
 </details>
 
 <details open><summary><code>LABELS {label value}...</code></summary> 
