@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.INCRBY key value 
+  TS.INCRBY key addend 
     [TIMESTAMP timestamp] 
     [RETENTION retentionPeriod] 
     [UNCOMPRESSED] 
@@ -19,9 +19,9 @@ Increase the value of the sample with the maximum existing timestamp, or create 
 is key name for the time series.
 </details>
 
-<details open><summary><code>value</code></summary> 
+<details open><summary><code>addend</code></summary> 
 
-is numeric value of the increment (double).
+is numeric value of the addend (double).
 </details>
 
 <note><b>Notes</b>
@@ -36,9 +36,9 @@ is numeric value of the increment (double).
 
 is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
 
-`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
+`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `addend`. 
 
-If the time series is empty, the value is set to `value`. 
+If the time series is empty, the value is set to `addend`. 
   
 When not specified, the timestamp is set according to the server clock.
 </details>
