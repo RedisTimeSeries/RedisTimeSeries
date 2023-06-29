@@ -328,7 +328,7 @@
         "group": "timeseries"
     },
     "TS.INCRBY": {
-        "summary": "Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given increment",
+        "summary": "Increase the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given addend",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -385,7 +385,7 @@
         "group": "timeseries"
     },
     "TS.DECRBY": {
-        "summary": "Decrease the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given decrement",
+        "summary": "Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given subtrahend",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
