@@ -8,7 +8,7 @@ syntax: |
     [LABELS {label value}...]
 ---
 
-Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given subtrahend
+Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
 
 [Examples](#examples)
 
