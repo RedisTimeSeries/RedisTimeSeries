@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.DECRBY key value 
+  TS.DECRBY key subtrahend 
     [TIMESTAMP timestamp] 
     [RETENTION retentionPeriod] 
     [UNCOMPRESSED] 
@@ -8,7 +8,7 @@ syntax: |
     [LABELS {label value}...]
 ---
 
-Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
+Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given subtrahend
 
 ## Required arguments
 
@@ -17,9 +17,9 @@ Decrease the value of the sample with the maximum existing timestamp, or create 
 is key name for the time series.
 </details>
 
-<details open><summary><code>value</code></summary> 
+<details open><summary><code>subtrahend</code></summary> 
 
-is numeric value of the decrement (double).
+is numeric value of the subtrahend (double).
 </details>
 
 <note><b>Notes</b>
@@ -34,9 +34,9 @@ is numeric value of the decrement (double).
 
 is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
 
-`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `value`. 
+`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `subtrahend`. 
 
-If the time series is empty, the value is set to `value`.
+If the time series is empty, the value is set to `subtrahend`.
   
 When not specified, the timestamp is set according to the server clock.  
 </details>
