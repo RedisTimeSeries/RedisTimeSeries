@@ -19,7 +19,7 @@ is key name for the time series.
 
 <details open><summary><code>value</code></summary> 
 
-is numeric data value of the decrement (double).
+is numeric value of the decrement (double).
 </details>
 
 <note><b>Notes</b>
