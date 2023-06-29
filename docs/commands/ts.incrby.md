@@ -21,7 +21,7 @@ is key name for the time series.
 
 <details open><summary><code>value</code></summary> 
 
-is numeric data value of the sample (double)
+is numeric data value of the increment (double)
 </details>
 
 <note><b>Notes</b>
