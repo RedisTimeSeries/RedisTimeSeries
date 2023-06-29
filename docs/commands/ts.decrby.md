@@ -10,6 +10,8 @@ syntax: |
 
 Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given subtrahend
 
+[Examples](#examples)
+
 ## Required arguments
 
 <details open><summary><code>key</code></summary> 
