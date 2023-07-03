@@ -35,10 +35,10 @@ is numeric data value of the sample (double). The double number should follow <a
 
 ## Return value
 
-Either
+Returns one of these replies:
 
-- @array-reply of @integer-reply representing the timestamp of each added sample or an  @error-reply (e.g., on `DUPLICATE_POLICY` violation)
-- @error-reply (e.g., on wrong number of arguments)
+- @array-reply of @integer-reply representing the timestamp of each added sample or an @error-reply (e.g., on `DUPLICATE_POLICY` violation)
+- @error-reply (invalid arguments, wrong key type, etc.)
 
 ## Complexity
 
