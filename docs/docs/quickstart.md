@@ -20,7 +20,7 @@ Redis Time Series are available on all Redis Cloud managed services, including a
 
 
 ### Docker
-To quickly try out Redis Time Series, launch an instance using docker:
+To quickly try out Redis Time Series, launch an instance of Redis Stack using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redis/redis-stack-server
 ```
@@ -165,8 +165,8 @@ TS.CREATE sensor1 LABELS region east
 
 
 
-## Downsampling
-Another useful feature of Redis TimeSeries is compacting data by creating a rule for downsampling (`TS.CREATERULE`). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s and twa`.
+## Compaction
+Another useful feature of Redis Time Series is compacting data by creating a rule for compaction (`TS.CREATERULE`). For example, if you have collected more than one billion data points in a day, you could aggregate the data by every minute in order to downsample it, thereby reducing the dataset size to 24 * 60 = 1,440 data points. You can choose one of the many available aggregation types in order to aggregate multiple data points from a certain minute into a single one. The currently supported aggregation types are: `avg, sum, min, max, range, count, first, last, std.p, std.s, var.p, var.s and twa`.
 
 It's important to point out that there is no data rewriting on the original timeseries; the compaction happens in a new series, while the original one stays the same. In order to prevent the original timeseries from growing indefinitely, you can use the retention option, which will trim it down to a certain period of time.
 
@@ -187,7 +187,7 @@ With this creation rule, datapoints added to the `sensor1` timeseries will be gr
 
 
 ## Filtering
-Redis Time Series allows to filter by value, timestamp and by labels:
+You can filter yor time series by value, timestamp and labels:
 
 ### Filtering by label
 You can retrieve datapoints from multiple timeseries in the same query, and the way to do this is by using label filters. For example:
