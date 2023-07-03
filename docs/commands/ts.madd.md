@@ -37,13 +37,13 @@ is numeric data value of the sample (double). The double number should follow <a
 
 Returns one of these replies:
 
-- @array-reply of @integer-reply representing the timestamp of each added sample or an @error-reply (e.g., on `DUPLICATE_POLICY` violation)
+- @array-reply, where each element is an @integer-reply representing the timestamp of a upserted sample or an @error-reply (when duplication policy is `BLOCK`, or when `timestamp` is older than the retention period compared to the maximum existing timestamp)
 - @error-reply (invalid arguments, wrong key type, etc.)
 
 ## Complexity
 
 If a compaction rule exits on a time series, TS.MADD performance might be reduced.
-The complexity of TS.MADD is always `O(N*M)`, where `N` is the amount of series updated and `M` is the amount of compaction rules or `O(N)` with no compaction.
+The complexity of TS.MADD is always `O(N*M)`, where `N` is the amount of series updated and `M` is the number of compaction rules or `O(N)` with no compaction.
 
 ## Examples
 
