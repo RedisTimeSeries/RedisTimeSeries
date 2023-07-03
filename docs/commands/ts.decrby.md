@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.DECRBY key value 
+  TS.DECRBY key subtrahend 
     [TIMESTAMP timestamp] 
     [RETENTION retentionPeriod] 
     [UNCOMPRESSED] 
@@ -10,6 +10,8 @@ syntax: |
 
 Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement
 
+[Examples](#examples)
+
 ## Required arguments
 
 <details open><summary><code>key</code></summary> 
@@ -17,9 +19,9 @@ Decrease the value of the sample with the maximum existing timestamp, or create 
 is key name for the time series.
 </details>
 
-<details open><summary><code>value</code></summary> 
+<details open><summary><code>subtrahend</code></summary> 
 
-is numeric data value of the sample (double)
+is numeric value of the subtrahend (double).
 </details>
 
 <note><b>Notes</b>
@@ -34,9 +36,9 @@ is numeric data value of the sample (double)
 
 is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
 
-`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `value`. 
+`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `subtrahend`. 
 
-If the time series is empty, the value is set to `value`.
+If the time series is empty, the value is set to `subtrahend`.
   
 When not specified, the timestamp is set according to the server clock.  
 </details>
@@ -46,7 +48,6 @@ When not specified, the timestamp is set according to the server clock.
 is maximum retention period, compared to the maximum existing timestamp, in milliseconds. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
 </details>
 
- 
 <details open><summary><code>UNCOMPRESSED</code></summary>
 
 changes data storage from compressed (default) to uncompressed. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
@@ -72,7 +73,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), or when `timestamp` is not equal to or higher than the maximum existing timestamp
 
 ## See also
 

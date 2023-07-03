@@ -49,17 +49,24 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
+
+When used together with `AGGREGATION`: samples are filtered before being aggregated.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by minimum and maximum values.
+
+When used together with `AGGREGATION`: samples are filtered before being aggregated.
 </details>
 
 <details open>
 <summary><code>COUNT count</code></summary>
-limits the number of returned samples.
+
+When used without `AGGREGATION`: limits the number of reported samples.
+
+When used together with `AGGREGATION`: limits the number of reported buckets.
 </details>
 
 <details open>
@@ -134,6 +141,8 @@ Regardless of the values of `fromTimestamp` and `toTimestamp`, no data is report
 </details>
 
 ## Return value
+
+Returns one of these replies:
 
 - @array-reply of (@integer-reply, @simple-string-reply) pairs representing (timestamp, value(double))
 - @error-reply (e.g., on invalid filter value)

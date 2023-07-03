@@ -32,7 +32,7 @@ filters time series based on their labels and label values. Each filter expressi
 
 ## Return value
 
-Either
+Returns one of these replies:
 
 - @array-reply where each element is a @bulk-string-reply: a time series key. The array is empty if no time series matches the filter.
 - @error-reply (e.g., on invalid filter expression)
