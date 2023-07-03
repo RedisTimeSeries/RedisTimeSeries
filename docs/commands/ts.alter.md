@@ -46,7 +46,10 @@ If `LABELS` is specified, the given label list is applied. Labels that are not p
 
 ## Return value
 
-@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
+Returns one of these replies:
+
+- @simple-string-reply - `OK` if executed correctly
+- @error-reply on error (invalid arguments, wrong key type, key does not exist, etc.)
 
 ## Examples
 
