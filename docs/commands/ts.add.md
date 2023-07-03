@@ -99,7 +99,7 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 Returns one of these replies:
 
 - @integer-reply - the timestamp of the upserted sample
-- @error-reply on error (invalid arguments, wrong key type, etc.), when duplication policy is BLOCK, or when timestamp is older than the retention period compared to the maximum existing timestamp
+- @error-reply on error (invalid arguments, wrong key type, etc.), when duplication policy is BLOCK, or when `timestamp` is older than the retention period compared to the maximum existing timestamp
 
 ## Complexity
 
