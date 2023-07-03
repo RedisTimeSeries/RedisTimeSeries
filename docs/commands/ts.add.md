@@ -76,7 +76,7 @@ This override is effective only for this single command and does not set the tim
   - `LAST`: override with the newly reported value
   - `MIN`: only override if the value is lower than the existing value
   - `MAX`: only override if the value is higher than the existing value
-  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is set to (previous + new). If no previous sample exists, the value is set to the new value.
 
 This argument has no effect when a new time series is created by this command.
 </details>
@@ -96,11 +96,14 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), when duplication policy is BLOCK, or when timestamp is older than the retention period compared to the maximum existing timestamp
 
 ## Complexity
 
-If a compaction rule exits on a time series, the performance of `TS.ADD` can be reduced.
+If a compaction rule exists on a time series, the performance of `TS.ADD` can be reduced.
 The complexity of `TS.ADD` is always `O(M)`, where `M` is the number of compaction rules or `O(1)` with no compaction.
 
 ## Examples
