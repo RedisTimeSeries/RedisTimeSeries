@@ -48,7 +48,6 @@ When not specified, the timestamp is set according to the server clock.
 is maximum retention period, compared to the maximum existing timestamp, in milliseconds. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
 </details>
 
- 
 <details open><summary><code>UNCOMPRESSED</code></summary>
 
 changes data storage from compressed (default) to uncompressed. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
@@ -74,7 +73,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), or when `timestamp` is not equal to or higher than the maximum existing timestamp
 
 ## See also
 
