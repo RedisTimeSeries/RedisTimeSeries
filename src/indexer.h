@@ -30,6 +30,8 @@ typedef enum
     // NREQ
 } PredicateType;
 
+#define IS_INCLUSION(type) ((type) == EQ || (type) == CONTAINS || (type) == LIST_MATCH)
+
 typedef struct QueryPredicate
 {
     PredicateType type;
