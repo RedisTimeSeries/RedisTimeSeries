@@ -13,7 +13,7 @@ aliases:
 
 Modern data centers have a lot of moving pieces, such as infrastructure (servers and networks) and software systems (applications and services) that need to be monitored around the clock.
 
-RedisTimeSeries allows you to plan for new resources upfront, optimize the utilization of existing resources, reconstruct the circumstances that led to outages, and identify application performance issues by analyzing and reporting on the following metrics:
+Redis Time Series allows you to plan for new resources upfront, optimize the utilization of existing resources, reconstruct the circumstances that led to outages, and identify application performance issues by analyzing and reporting on the following metrics:
 
 - Maximum CPU utilization per server
 - Maximum network latency between two services
@@ -22,7 +22,7 @@ RedisTimeSeries allows you to plan for new resources upfront, optimize the utili
 
 **Weather analysis (environment)**
 
-RedisTimeSeries can be used to track environmental measurements such as the number of daily sunshine hours and hourly rainfall depth, over a period of many years. Seasonally, you can measure average rainfall depth, average daily temperature, and the maximum number of sunny hours per day, for example. Watch the increase of the maximum daily temperature over the years. Predict the expected temperature and rainfall depth in a specific location for a particular week of the year.
+Redis Time Series can be used to track environmental measurements such as the number of daily sunshine hours and hourly rainfall depth, over a period of many years. Seasonally, you can measure average rainfall depth, average daily temperature, and the maximum number of sunny hours per day, for example. Watch the increase of the maximum daily temperature over the years. Predict the expected temperature and rainfall depth in a specific location for a particular week of the year.
 
 Multiple time series can be collected, each for a different location. By utilizing secondary indexes, measurements can be aggregated over given geographical regions (e.g., minimal and maximal daily temperature in Europe) or over locations with specific attributes (e.g., average rainfall depth in mountainous regions).
 
@@ -72,7 +72,7 @@ Modern cars are exposing several metrics via a standard interface. Use TimeSerie
 
 **Smart metering (sensor data and IoT)**
 
-Modern houses and facilities gather details about energy consumption/production. Use RedisTimeSeries to aggregate billing based on monthly consumption. Optimize the network by redirecting the energy delivery relative to the fluctuations in need. Provide recommendations on how to improve the energy consumption behavior. Example metrics include:
+Modern houses and facilities gather details about energy consumption/production. Use Redis Time Series to aggregate billing based on monthly consumption. Optimize the network by redirecting the energy delivery relative to the fluctuations in need. Provide recommendations on how to improve the energy consumption behavior. Example metrics include:
 
 - Consumption per location
 - Produced amount of electrical energy per location
@@ -87,7 +87,7 @@ Telecom providers need to ensure that they are providing the necessary infrastru
 
 Stock trading is highly automated today. Algorithms, and not just human beings, are trading, from the amount of bids and asks for the trading of a stock to the extreme volumes of trades per second (millions of ops per second). Computer-driven trading requires millisecond response times. It's necessary to keep a lot of data points within a very short period of time (for example, price fluctuations per second within a minute). In addition, the long-term history needs to be kept to make statements about trends or for regulatory purposes.  
 
-Use RedisTimeSeries to identify correlations between the trading behavior and other events (for example, social network posts). Discover a developing market. Detect anomalies to discover insider trades. Example metrics include:
+Use Redis Time Series to identify correlations between the trading behavior and other events (for example, social network posts). Discover a developing market. Detect anomalies to discover insider trades. Example metrics include:
 
 - Exact time and order of a trade by itself
 - Type of the event (trade/bid)
