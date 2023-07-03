@@ -69,7 +69,7 @@ ensures that there is a bucket that starts exactly at `alignTimestamp` and align
 Returns one of these replies:
 
 - @simple-string-reply - `OK` if executed correctly
-- @error-reply on error (invalid arguments, wrong key type), when `sourceKey` does not exist, when `destKey` does not exist, when `sourceKey` is already a destination of a compaction rule, when `destKey` is already a source or a destination of a compaction rule, or when `sourceKey` and `destKey` are identical
+- @error-reply on error (invalid arguments, wrong key type, etc.), when `sourceKey` does not exist, when `destKey` does not exist, when `sourceKey` is already a destination of a compaction rule, when `destKey` is already a source or a destination of a compaction rule, or when `sourceKey` and `destKey` are identical
 
 ## Examples
 
