@@ -1097,6 +1097,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     RedisModule_ReplySetArrayLength(ctx, replylen);
     RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, result);
     MGetArgs_Free(&args);
     free(limitLabelsStr);
     return REDISMODULE_OK;
