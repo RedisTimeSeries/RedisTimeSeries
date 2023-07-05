@@ -83,7 +83,7 @@ This argument has no effect when a new time series is created by this command.
 
 <details open><summary><code>LABELS {label value}...</code></summary> 
 
-is set of label-value pairs that represent metadata labels of the time series.
+is set of label-value pairs that represent metadata labels of the time series and serves as a secondary index. A value may not contain parentheses nor comma.
 
 Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
 </details>
