@@ -18,7 +18,7 @@ Redis Stack (specifically, its RedisTimeSeries module) adds a time series data s
 * Query by start time and end-time
 * Aggregated queries (min, max, avg, sum, range, count, first, last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 * Configurable maximum retention period
-* Compaction/compaction for automatically updated aggregated timeseries
+* Compaction for automatically updated aggregated timeseries
 * Secondary indexing for time series entries. Each time series has labels (field value pairs) which will allows to query by labels
 
 ## Client libraries
