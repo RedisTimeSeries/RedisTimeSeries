@@ -77,7 +77,7 @@ is policy for handling insertion (`TS.ADD` and `TS.MADD`) of multiple samples wi
 
 <details open><summary><code>LABELS {label value}...</code></summary> 
 
-is set of label-value pairs that represent metadata labels of the key and serve as a secondary index.
+is set of label-value pairs that represent metadata labels of the key and serve as a secondary index. A value may not contain parentheses nor comma.
 
 The `TS.MGET`, `TS.MRANGE`, and `TS.MREVRANGE` commands operate on multiple time series based on their labels. The `TS.QUERYINDEX` command returns all time series keys matching a given filter based on their labels.
 </details>
