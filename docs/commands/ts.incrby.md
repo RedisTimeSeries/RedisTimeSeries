@@ -71,7 +71,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), or when `timestamp` is not equal to or higher than the maximum existing timestamp
 
 ## Examples
 
@@ -100,7 +103,7 @@ You can achieve similar results without such protection using `TS.ADD key timest
 
 <details open><summary><b>Count sensor captures</b></summary>
 
-Supose a sensor ticks whenever a car is passed on a road, and you want to count occurrences. Whenever you get a tick from the sensor you can simply call:
+Suppose a sensor ticks whenever a car is passed on a road, and you want to count occurrences. Whenever you get a tick from the sensor you can simply call:
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.INCRBY a 1

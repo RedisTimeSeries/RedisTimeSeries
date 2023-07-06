@@ -26,11 +26,11 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 
 ## Return value
 
-One of:
+Returns one of these replies:
 
-- @array-reply of a single (@integer-reply, @simple-string-reply) pair representing (timestamp, value(double)) of the sample with the highest timetamp
+- @array-reply of a single (@integer-reply, @simple-string-reply) pair representing (timestamp, value(double)) of the sample with the highest timestamp
 - An empty @array-reply - when the time series is empty
-- @error-reply (e.g., when the key does not exist or when the number of arguments is wrong)
+- @error-reply (invalid arguments, wrong key type, key does not exist, etc.)
 
 ## Examples
 
