@@ -1416,6 +1416,12 @@ def test_latest_flag_range():
         assert res == [[0, '4'], [10, '8']] or res == [[0, b'4'], [10, b'8']]
         res = r.execute_command('TS.range', key2, 0, 9, "LATEST")
         assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key2, 0, 1, "LATEST")
+        assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key2, 20, 30, "LATEST")
+        assert res == []
+        res = r.execute_command('TS.range', key2, 11, 30, "LATEST")
+        assert res == []
 
         # make sure LATEST haven't changed anything in the keys
         res = r.execute_command('TS.range', key2, 0, 10)
