@@ -347,7 +347,8 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
         }
         free(dicts);
 
-        if (inclusion != found) {
+        if (inclusion && !found ||
+            !inclusion && found) {
             return false;
         }
     }
