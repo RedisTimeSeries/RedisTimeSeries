@@ -284,11 +284,13 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
         const int status = GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true);
 
         if (!status) {
+            size_t len;
+            const char *currentKeyStr = RedisModule_StringPtrLen(currentKey, &len);
             RedisModule_Log(ctx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
+                            (int)len,
+                            currentKeyStr);
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
             iter = RedisModule_DictIteratorStart(result, ">", currentKey);
