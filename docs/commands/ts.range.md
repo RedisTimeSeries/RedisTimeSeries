@@ -121,8 +121,8 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Timestamp reported for each bucket                            |
 | ---------------- | ------------------------------------------------------------- |
-| `-` or `low`     | the bucket's start time (default)                             |
-| `+` or `high`    | the bucket's end time                                         |
+| `-` or `start`   | the bucket's start time (default)                             |
+| `+` or `end`     | the bucket's end time                                         |
 | `~` or `mid`     | the bucket's mid time (rounded down if not an integer)        |
 </details>
 
