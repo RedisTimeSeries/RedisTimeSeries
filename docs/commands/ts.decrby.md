@@ -34,15 +34,15 @@ is numeric value of the subtrahend (double).
 
 <details open><summary><code>TIMESTAMP timestamp</code></summary> 
 
-is UNIX time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the UNIX time of the server's clock.
+is Unix time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the Unix time of the server's clock.
 
-UNIX time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
+Unix time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 
 `timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is decreased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp minus `subtrahend`. 
 
 If the time series is empty, the value is set to `subtrahend`.
   
-When not specified, the timestamp is set to the UNIX time of the server's clock.
+When not specified, the timestamp is set to the Unix time of the server's clock.
 </details>
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 
