@@ -21,7 +21,7 @@ is key name for the time series.
 
 <details open><summary><code>timestamp</code></summary> 
 
-is UNIX time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the UNIX time of the server's clock.
+is Unix time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the UNIX time of the server's clock.
 
 UNIX time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 </details>
