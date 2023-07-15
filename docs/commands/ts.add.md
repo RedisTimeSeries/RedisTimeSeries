@@ -21,7 +21,9 @@ is key name for the time series.
 
 <details open><summary><code>timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
+is UNIX time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the UNIX time of the server's clock.
+
+UNIX time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 </details>
 
 <details open><summary><code>value</code></summary> 
@@ -89,8 +91,8 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 </details>
 
 <note><b>Notes:</b>
-- You can use this command to add data to a nonexisting time series in a single command.
-  This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
+- You can use this command to create a new time series and add data to it in a single command.
+  `RETENTION`, `ENCODING`, `CHUNK_SIZE`, and `LABELS` are used only when creating a new time series, and ignored when adding samples to an existing time series.
 - Setting `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
@@ -119,7 +121,7 @@ Create a temperature time series, set its retention to 1 year, and append a samp
 
 <note><b>Note:</b> If a time series with such a name already exists, the sample is added, but the retention does not change.</note>
 
-Add a sample to the time series, setting the sample's timestamp according to the server clock.
+Add a sample to the time series, setting the sample's timestamp to the current UNIX time of the server's clock.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD temperature:3:11 * 30
