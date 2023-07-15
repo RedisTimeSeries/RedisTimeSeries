@@ -121,7 +121,7 @@ Create a temperature time series, set its retention to 1 year, and append a samp
 
 <note><b>Note:</b> If a time series with such a name already exists, the sample is added, but the retention does not change.</note>
 
-Add a sample to the time series, setting the sample's timestamp to the current UNIX time of the server's clock.
+Add a sample to the time series, setting the sample's timestamp to the current Unix time of the server's clock.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD temperature:3:11 * 30
