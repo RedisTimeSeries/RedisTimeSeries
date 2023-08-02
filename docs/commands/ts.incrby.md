@@ -34,13 +34,15 @@ is numeric value of the addend (double).
 
 <details open><summary><code>TIMESTAMP timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
+is Unix time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the Unix time of the server's clock.
+
+Unix time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 
 `timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `addend`. 
 
 If the time series is empty, the value is set to `addend`. 
   
-When not specified, the timestamp is set according to the server clock.
+When not specified, the timestamp is set to the Unix time of the server's clock.
 </details>
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 

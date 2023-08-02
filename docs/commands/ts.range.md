@@ -23,13 +23,13 @@ is the key name for the time series.
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
+is start timestamp for the range query (integer Unix timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample in the time series.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
+is end timestamp for the range query (integer Unix timestamp in milliseconds) or `+` to denote the timestamp of the latest sample in the time series.
 
 <note><b>Note:</b>    When the time series is a compaction, the last compacted value may aggregate raw values with timestamp beyond `toTimestamp`. That is because `toTimestamp` only limits the timestamp of the compacted value, which is the start time of the raw bucket that was compacted.</note>
 </details>
@@ -121,8 +121,8 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Timestamp reported for each bucket                            |
 | ---------------- | ------------------------------------------------------------- |
-| `-` or `low`     | the bucket's start time (default)                             |
-| `+` or `high`    | the bucket's end time                                         |
+| `-` or `start`   | the bucket's start time (default)                             |
+| `+` or `end`     | the bucket's end time                                         |
 | `~` or `mid`     | the bucket's mid time (rounded down if not an integer)        |
 </details>
 
