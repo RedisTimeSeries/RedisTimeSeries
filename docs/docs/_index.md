@@ -1,6 +1,6 @@
 ---
-title: Time Series
-linkTitle: Time Series
+title: Time series
+linkTitle: Time series
 description: Ingest and query time series data with Redis
 type: docs
 stack: true
