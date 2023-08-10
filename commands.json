@@ -106,7 +106,7 @@
             },
             {
                 "name": "from_timestamp",
-                "type": "string"
+                "type": "integer"
             },
             {
                 "name": "to_timestamp",
