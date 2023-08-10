@@ -205,7 +205,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "value",
@@ -314,7 +314,7 @@
                         "name": "key"
                     },
                     {
-                        "type": "integer",
+                        "type": "string",
                         "name": "timestamp"
                     },
                     {
@@ -341,7 +341,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer",
+                "type": "string",
                 "token": "TIMESTAMP",
                 "optional": true
             },
@@ -398,7 +398,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer",
+                "type": "string",
                 "token": "TIMESTAMP",
                 "optional": true
             },
@@ -566,11 +566,11 @@
             },
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -729,11 +729,11 @@
             },
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -888,11 +888,11 @@
         "arguments": [
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -1132,11 +1132,11 @@
         "arguments": [
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
