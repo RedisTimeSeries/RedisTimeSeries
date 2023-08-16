@@ -31,3 +31,4 @@ exclude_commands:
     - timeseries.CLUSTERSETFROMSHARD
     - timeseries.HELLO
     - timeseries.INNERCOMMUNICATION
+    - timeserias.FORCESHARDSCONNECTION
