@@ -338,5 +338,5 @@ void Uncompressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
 
 int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
     UNCOMPRESSED_DESERIALIZE(
-        chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
+        chunk, sctx, MR_SerializationCtxReadLongLongWrapper, MR_ownedBufferFrom);
 }
