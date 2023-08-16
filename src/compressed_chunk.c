@@ -535,6 +535,5 @@ void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
 }
 
 int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
-    COMPRESSED_DESERIALIZE(
-        chunk, sctx, MR_SerializationCtxReadeLongLongWrapper, MR_ownedBufferFrom);
+    COMPRESSED_DESERIALIZE(chunk, sctx, MR_SerializationCtxReadLongLongWrapper, MR_ownedBufferFrom);
 }
