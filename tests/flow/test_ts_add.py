@@ -301,5 +301,11 @@ def test_error():
             assert False
         except Exception as e:
             assert str(e) == "TSDB: the key is not a TSDB key"
-        
+        t2 = 't2{1}'
+        try:
+            r.execute_command('TS.CREATE', t2)
+            r.execute_command('TS.ADD', t2, 2, 5, 'ON_DUPLICATE', 'zzz')
+            assert False
+        except Exception as e:
+            assert str(e).find('Unknown DUPLICATE_POLICY') != -1        
         r.execute_command('DEL', t1)
