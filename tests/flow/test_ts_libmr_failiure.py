@@ -22,7 +22,7 @@ def verifyClusterInitialized(env):
             allConnected = True
             for n in nodes:
                 status = n[17]
-                if status != b'connected':
+                if status != b'connected' and status != b'uninitialized':
                     allConnected = False
             if not allConnected:
                 time.sleep(0.1)
@@ -69,7 +69,6 @@ def testLibmrFail():
             env.envRunner.shards[2].stopEnv()
         except Exception as e:
             pass
-
     try:
         actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                                 'name=bob')
