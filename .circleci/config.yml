@@ -174,7 +174,7 @@ commands:
       - run:
           name: Flow test
           shell: /bin/bash -l -eo pipefail
-          no_output_timeout: 30m
+          no_output_timeout: 60m
           command: |
             python3 -m RLTest --version
             make flow_tests <<parameters.test_params>> SHOW=1
