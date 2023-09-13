@@ -205,7 +205,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "value",
@@ -314,7 +314,7 @@
                         "name": "key"
                     },
                     {
-                        "type": "integer",
+                        "type": "string",
                         "name": "timestamp"
                     },
                     {
@@ -328,7 +328,7 @@
         "group": "timeseries"
     },
     "TS.INCRBY": {
-        "summary": "Increase the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given increment",
+        "summary": "Increase the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given increment",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -341,7 +341,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer",
+                "type": "string",
                 "token": "TIMESTAMP",
                 "optional": true
             },
@@ -385,7 +385,7 @@
         "group": "timeseries"
     },
     "TS.DECRBY": {
-        "summary": "Decrease the value of the sample with the maximal existing timestamp, or create a new sample with a value equal to the value of the sample with the maximal existing timestamp with a given decrement",
+        "summary": "Decrease the value of the sample with the maximum existing timestamp, or create a new sample with a value equal to the value of the sample with the maximum existing timestamp with a given decrement",
         "complexity": "O(M) when M is the amount of compaction rules or O(1) with no compaction",
         "arguments": [
             {
@@ -398,7 +398,7 @@
             },
             {
                 "name": "timestamp",
-                "type": "integer",
+                "type": "string",
                 "token": "TIMESTAMP",
                 "optional": true
             },
@@ -566,11 +566,11 @@
             },
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -729,11 +729,11 @@
             },
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -888,11 +888,11 @@
         "arguments": [
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",
@@ -1132,11 +1132,11 @@
         "arguments": [
             {
                 "name": "fromTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "toTimestamp",
-                "type": "integer"
+                "type": "string"
             },
             {
                 "name": "LATEST",

@@ -1,12 +1,13 @@
 display_name: RedisTimeSeries
+capability_name: Time Series
 author: Redis
 email: danni@redis.com
 description: A time series database for Redis
 homepage: https://oss.redis.com/redistimeseries/
 license: Redis Source Available License 2.0 (RSALv2) or the Server Side Public License v1 (SSPLv1)
 command_line_args: ""
-min_redis_version: "6.0"
-min_redis_pack_version: "6.2.8"
+min_redis_version: "7.1"
+min_redis_pack_version: "7.2.0"
 capabilities:
     - types
     - replica_of
@@ -23,3 +24,11 @@ capabilities:
     - intershard_tls_pass
     - flash
     - ipv6
+exclude_commands:
+    - timeseries.REFRESHCLUSTER
+    - timeseries.INFOCLUSTER
+    - timeseries.NETWORKTEST
+    - timeseries.CLUSTERSETFROMSHARD
+    - timeseries.HELLO
+    - timeseries.INNERCOMMUNICATION
+    - timeseries.FORCESHARDSCONNECTION

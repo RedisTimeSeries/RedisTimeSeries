@@ -23,7 +23,7 @@ def verifyClusterInitialized(env):
             allConnected = True
             for n in nodes:
                 status = n[17]
-                if status != b'connected':
+                if status != b'connected' and status != b'uninitialized':
                     allConnected = False
             if not allConnected:
                 time.sleep(0.1)
@@ -70,13 +70,12 @@ def testLibmrFail():
             env.envRunner.shards[2].stopEnv()
         except Exception as e:
             pass
-
     try:
         actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                                 'name=bob')
         assert(False)
     except Exception as e:
-        env.assertResponseError(e, "multi shard cmd failed")
+        env.assertResponseError(e, "Multi-shard command failed. This may happen if a shard needs to process too much data. Try to apply strict filters, if possible.")
     
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)

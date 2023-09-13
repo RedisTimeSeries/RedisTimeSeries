@@ -21,7 +21,9 @@ is key name for the time series.
 
 <details open><summary><code>timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
+is Unix time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the Unix time of the server's clock.
+
+Unix time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 </details>
 
 <details open><summary><code>value</code></summary> 
@@ -67,13 +69,18 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 
 <details open><summary><code>ON_DUPLICATE policy</code></summary> 
 
-is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps. It is used with one of the following values:
+is overwrite key and database configuration for [DUPLICATE_POLICY](/docs/stack/timeseries/configuration/#duplicate_policy), the policy for handling samples with identical timestamps.
+This override is effective only for this single command and does not set the time series duplication policy (which can be set with `TS.ALTER`).
+
+`policy` can be one of the following values:
   - `BLOCK`: ignore any newly reported value and reply with an error
   - `FIRST`: ignore any newly reported value
   - `LAST`: override with the newly reported value
   - `MIN`: only override if the value is lower than the existing value
   - `MAX`: only override if the value is higher than the existing value
-  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is equal to (previous + new). If no previous sample exists, set the updated value equal to the new value.
+  - `SUM`: If a previous sample exists, add the new sample to it so that the updated value is set to (previous + new). If no previous sample exists, the value is set to the new value.
+
+This argument has no effect when a new time series is created by this command.
 </details>
 
 <details open><summary><code>LABELS {label value}...</code></summary> 
@@ -84,18 +91,21 @@ Use it only if you are creating a new time series. It is ignored if you are addi
 </details>
 
 <note><b>Notes:</b>
-- You can use this command to add data to a nonexisting time series in a single command.
-  This is why `RETENTION`, `ENCODING`, `CHUNK_SIZE`, `ON_DUPLICATE`, and `LABELS` are optional arguments.
+- You can use this command to create a new time series and add data to it in a single command.
+  `RETENTION`, `ENCODING`, `CHUNK_SIZE`, and `LABELS` are used only when creating a new time series, and ignored when adding samples to an existing time series.
 - Setting `RETENTION` and `LABELS` introduces additional time complexity.
 </note>
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), when duplication policy is `BLOCK`, or when `timestamp` is older than the retention period compared to the maximum existing timestamp
 
 ## Complexity
 
-If a compaction rule exits on a time series, the performance of `TS.ADD` can be reduced.
+If a compaction rule exists on a time series, the performance of `TS.ADD` can be reduced.
 The complexity of `TS.ADD` is always `O(M)`, where `M` is the number of compaction rules or `O(1)` with no compaction.
 
 ## Examples
@@ -111,7 +121,7 @@ Create a temperature time series, set its retention to 1 year, and append a samp
 
 <note><b>Note:</b> If a time series with such a name already exists, the sample is added, but the retention does not change.</note>
 
-Add a sample to the time series, setting the sample's timestamp according to the server clock.
+Add a sample to the time series, setting the sample's timestamp to the current Unix time of the server's clock.
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.ADD temperature:3:11 * 30

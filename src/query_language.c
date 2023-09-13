@@ -329,11 +329,15 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         }
 
         if (alignmetTS) {
-            _parseAlignmentTS(ctx, argv, argc, alignmetTS, offset);
+            if (_parseAlignmentTS(ctx, argv, argc, alignmetTS, offset) != TSDB_OK) {
+                return TSDB_ERROR;
+            }
         }
 
         if (bucketTS) {
-            _parseBucketTS(ctx, argv, argc, bucketTS, offset);
+            if (_parseBucketTS(ctx, argv, argc, bucketTS, offset) != TSDB_OK) {
+                return TSDB_ERROR;
+            }
         }
 
         return TSDB_OK;

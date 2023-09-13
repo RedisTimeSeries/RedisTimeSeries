@@ -84,7 +84,10 @@ The `TS.MGET`, `TS.MRANGE`, and `TS.MREVRANGE` commands operate on multiple time
 
 ## Return value
 
-@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
+Returns one of these replies:
+
+- @simple-string-reply - `OK` if executed correctly
+- @error-reply on error (invalid arguments, key already exists, etc.)
 
 ## Examples 
 

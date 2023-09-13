@@ -59,15 +59,20 @@ aggregates results into time buckets.
 
 ## Optional arguments
 
-<details open><summary><code>alignTimestamp</code> (since RedisTimeSeries v1.8)</summary> 
+<details open><summary><code>alignTimestamp</code> (since RedisTimeSeries v1.8)</summary>
 
-ensures that there is a bucket that starts exactly at `alignTimestamp` and aligns all other buckets accordingly. It is expressed in milliseconds. The default value is 0 aligned with the epoch. For example, if `bucketDuration` is 24 hours (`24 * 3600 * 1000`), setting `alignTimestamp` to 6 hours after the epoch (`6 * 3600 * 1000`) ensures that each bucket’s timeframe is `[06:00 .. 06:00)`.
+ensures that there is a bucket that starts exactly at `alignTimestamp` and aligns all other buckets accordingly. It is expressed in milliseconds. The default value is 0: aligned with the Unix epoch.
+
+For example, if `bucketDuration` is 24 hours (`24 * 3600 * 1000`), setting `alignTimestamp` to 6 hours after the Unix epoch (`6 * 3600 * 1000`) ensures that each bucket’s timeframe is `[06:00 .. 06:00)`.
 </details>
 
 ## Return value
 
-@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
-  
+Returns one of these replies:
+
+- @simple-string-reply - `OK` if executed correctly
+- @error-reply on error (invalid arguments, wrong key type, etc.), when `sourceKey` does not exist, when `destKey` does not exist, when `sourceKey` is already a destination of a compaction rule, when `destKey` is already a source or a destination of a compaction rule, or when `sourceKey` and `destKey` are identical
+
 ## Examples
 
 <details open>

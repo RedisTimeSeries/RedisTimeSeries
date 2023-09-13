@@ -21,13 +21,13 @@ Query a range across multiple time series by filters in forward direction
 <details open>
 <summary><code>fromTimestamp</code></summary>
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
+is start timestamp for the range query (integer Unix timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary>
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
+is end timestamp for the range query (integer Unix timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
@@ -63,12 +63,16 @@ The data in the latest bucket of a compaction is possibly partial. A bucket is _
 <summary><code>FILTER_BY_TS ts...</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by a list of specific timestamps. A sample passes the filter if its exact timestamp is specified and falls within `[fromTimestamp, toTimestamp]`.
+
+When used together with `AGGREGATION`: samples are filtered before being aggregated.
 </details>
 
 <details open>
 <summary><code>FILTER_BY_VALUE min max</code> (since RedisTimeSeries v1.6)</summary>
 
 filters samples by minimum and maximum values.
+
+When used together with `AGGREGATION`: samples are filtered before being aggregated.
 </details>
 
 <details open>
@@ -89,7 +93,9 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 <details open>
 <summary><code>COUNT count</code></summary>
 
-limits the number of returned samples.
+When used without `AGGREGATION`: limits the number of reported samples per time series.
+
+When used together with `AGGREGATION`: limits the number of reported buckets.
 </details>
 
 <details open>
@@ -145,8 +151,8 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Timestamp reported for each bucket                            |
 | ---------------- | ------------------------------------------------------------- |
-| `-` or `low`     | the bucket's start time (default)                             |
-| `+` or `high`    | the bucket's end time                                         |
+| `-` or `start`   | the bucket's start time (default)                             |
+| `+` or `end`     | the bucket's end time                                         |
 | `~` or `mid`     | the bucket's mid time (rounded down if not an integer)        |
 </details>
 

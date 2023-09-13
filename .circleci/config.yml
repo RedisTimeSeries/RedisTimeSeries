@@ -900,24 +900,6 @@ workflows:
       - performance-ci-automation-oss-standalone-scaling:
           context: common
           <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-query:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-ingestion:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-standalone-scaling-profiler:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-standalone-tsbs-profiler:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-profiler-query:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-profiler-ingestion:
-          context: common
-          <<: *on-integ-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
           <<: *on-integ-branch
@@ -950,27 +932,6 @@ workflows:
       - performance-ci-automation-oss-standalone:
           context: common
           <<: *on-any-branch
-      - performance-ci-automation-oss-standalone-scaling:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-cluster-query:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-cluster-ingestion:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-standalone-scaling-profiler:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-standalone-tsbs-profiler:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-cluster-profiler-query:
-          context: common
-          <<: *on-any-branch
-      - performance-ci-automation-oss-cluster-profiler-ingestion:
-          context: common
-          <<: *on-any-branch
 
   nightly:
     triggers:
@@ -995,15 +956,7 @@ workflows:
             branches:
               only: master
     jobs:
-      - performance-ci-automation-oss-cluster-query:
-          context: common
-      - performance-ci-automation-oss-cluster-ingestion:
-          context: common
       - performance-ci-automation-oss-standalone:
-          context: common
-      - performance-ci-automation-oss-standalone-tsbs-profiler:
-          context: common
-      - performance-ci-automation-oss-standalone-scaling-profiler:
           context: common
 
   nightly-twice-a-week:

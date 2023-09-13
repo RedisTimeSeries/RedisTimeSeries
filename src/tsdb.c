@@ -1338,12 +1338,17 @@ AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **seri
                                                                    bool reverse,
                                                                    bool check_retention) {
     size_t i;
-    AbstractSampleIterator *iters[n_series];
+    AbstractSampleIterator **iters = malloc(n_series * sizeof(AbstractSampleIterator *));
     for (i = 0; i < n_series; ++i) {
         iters[i] = SeriesCreateSampleIterator(series[i], args, reverse, check_retention);
     }
-    return (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(
-        iters, n_series, reverse);
+
+    AbstractMultiSeriesSampleIterator *res =
+        (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(
+            iters, n_series, reverse);
+
+    free(iters);
+    return res;
 }
 
 // returns sample iterator over multiple series

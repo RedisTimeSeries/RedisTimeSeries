@@ -1,6 +1,6 @@
 ---
 syntax: |
-  TS.INCRBY key value 
+  TS.INCRBY key addend 
     [TIMESTAMP timestamp] 
     [RETENTION retentionPeriod] 
     [UNCOMPRESSED] 
@@ -19,9 +19,9 @@ Increase the value of the sample with the maximum existing timestamp, or create 
 is key name for the time series.
 </details>
 
-<details open><summary><code>value</code></summary> 
+<details open><summary><code>addend</code></summary> 
 
-is numeric data value of the sample (double)
+is numeric value of the addend (double).
 </details>
 
 <note><b>Notes</b>
@@ -34,13 +34,15 @@ is numeric data value of the sample (double)
 
 <details open><summary><code>TIMESTAMP timestamp</code></summary> 
 
-is (integer) UNIX sample timestamp in milliseconds or `*` to set the timestamp according to the server clock.
+is Unix time (integer, in milliseconds) specifying the sample timestamp or `*` to set the sample timestamp to the Unix time of the server's clock.
 
-`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `value`. 
+Unix time is the number of milliseconds that have elapsed since 00:00:00 UTC on 1 January 1970, the Unix epoch, without adjustments made due to leap seconds.
 
-If the time series is empty, the value is set to `value`. 
+`timestamp` must be equal to or higher than the maximum existing timestamp. When equal, the value of the sample with the maximum existing timestamp is increased. If it is higher, a new sample with a timestamp set to `timestamp` is created, and its value is set to the value of the sample with the maximum existing timestamp plus `addend`. 
+
+If the time series is empty, the value is set to `addend`. 
   
-When not specified, the timestamp is set according to the server clock.
+When not specified, the timestamp is set to the Unix time of the server's clock.
 </details>
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 
@@ -71,7 +73,10 @@ is set of label-value pairs that represent metadata labels of the key and serve 
 
 ## Return value
 
-@integer-reply - the timestamp of the upserted sample, or @error-reply.
+Returns one of these replies:
+
+- @integer-reply - the timestamp of the upserted sample
+- @error-reply on error (invalid arguments, wrong key type, etc.), or when `timestamp` is not equal to or higher than the maximum existing timestamp
 
 ## Examples
 
@@ -100,7 +105,7 @@ You can achieve similar results without such protection using `TS.ADD key timest
 
 <details open><summary><b>Count sensor captures</b></summary>
 
-Supose a sensor ticks whenever a car is passed on a road, and you want to count occurrences. Whenever you get a tick from the sensor you can simply call:
+Suppose a sensor ticks whenever a car is passed on a road, and you want to count occurrences. Whenever you get a tick from the sensor you can simply call:
 
 {{< highlight bash >}}
 127.0.0.1:6379> TS.INCRBY a 1

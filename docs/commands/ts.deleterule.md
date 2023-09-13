@@ -22,7 +22,10 @@ is key name for destination (compacted) time series.
 
 ## Return value
 
-@simple-string-reply - `OK` if executed correctly, or @error-reply otherwise.
+Returns one of these replies:
+
+- @simple-string-reply - `OK` if executed correctly
+- @error-reply on error (invalid arguments, etc.), or when such rule does not exist
 
 ## See also
 
