@@ -867,7 +867,7 @@ workflows:
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
+              redis_version: ["7.0", "7", "unstable"]
       - build-platforms:
           <<: *on-integ-and-version-tags
           context: common
@@ -943,7 +943,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
+              redis_version: ["7.0", "7.2-rc1", "unstable"]
       - test-rlec
       - valgrind
 
