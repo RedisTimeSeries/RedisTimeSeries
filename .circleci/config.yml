@@ -863,29 +863,29 @@ workflows:
           <<: *not-on-integ-branch
       - build:
           name: build-with-redis-<<matrix.redis_version>>
-          <<: *on-any-branch  # temp
+          <<: *on-integ-branch
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["7.0", "7", "unstable"]
+              redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
       - build-platforms:
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
               platform: [jammy, focal, bionic, amzn2, centos7, rocky8, bullseye, rocky9]
       - build-arm-platforms:
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
           matrix:
             parameters:
               platform: [jammy, focal, bionic]
       - build-macos-x64:
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
       - build-macos-m1:
           context: common
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
       - coverage:
           <<: *on-any-branch
       - sanitize:
@@ -902,7 +902,7 @@ workflows:
           <<: *on-integ-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
-          <<: *on-any-branch
+          <<: *on-integ-branch
           staging-lab: "1"
           context: common
           requires:
@@ -943,7 +943,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "7", "unstable"]
+              redis_version: ["6.2", "7.0", "7.2-rc1", "unstable"]
       - test-rlec
       - valgrind
 
