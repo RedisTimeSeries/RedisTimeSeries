@@ -18,12 +18,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-      - name: add permissions
-        run: chmod -R 777 ./
       - name: install dependencies
-        run: .install/mariner2.sh
+        run: |
+          bash .install/mariner2.sh
       - name: get redis latest
-        run: .install/get_redis.sh
+        run: |
+          bash .install/get_redis.sh
       - name: build and test
         run: make test
       - name: pack module
