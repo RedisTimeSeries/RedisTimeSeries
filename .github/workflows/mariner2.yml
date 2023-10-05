@@ -13,7 +13,7 @@ jobs:
       image: mcr.microsoft.com/cbl-mariner/base/core:2.0
     steps:
       - name: install pre-checkout dependencies
-        run: tdnf install --noplugins --skipsignature -y git
+        run: tdnf install --noplugins --skipsignature -y ca-certificates git
       - name: checkout
         uses: actions/checkout@v4
       - name: install dependencies
