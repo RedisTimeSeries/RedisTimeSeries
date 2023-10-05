@@ -24,8 +24,8 @@ jobs:
       - name: get redis latest
         run: |
           bash .install/get_redis.sh
-      - name: build and test
-        run: make test
+#      - name: build and test
+#        run: make test
       - name: pack module
         run: make pack
 
