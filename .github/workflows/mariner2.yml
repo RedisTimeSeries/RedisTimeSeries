@@ -16,6 +16,7 @@ jobs:
         run: tdnf install --noplugins --skipsignature -y ca-certificates git
       - name: checkout
         uses: actions/checkout@v4
+      - name: add permissions
         run: chmod -R 777 ./
       - name: install dependencies
         run: .install/mariner2.sh
