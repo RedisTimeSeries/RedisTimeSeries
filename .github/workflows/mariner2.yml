@@ -17,7 +17,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
-          - submodules: 'recursive'
+          submodules: 'recursive'
       - name: add permissions
         run: chmod -R 777 ./
       - name: install dependencies
