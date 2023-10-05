@@ -6,9 +6,14 @@ on:
 jobs:
   build-mariner2:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l -o pipefail {0}
     container:
       image: mcr.microsoft.com/cbl-mariner/base/core:2.0
     steps:
+      - name: install pre-checkout dependencies
+        run: tdnf install -y git tar
       - name: checkout
         uses: actions/checkout@v4
       - name: install dependencies
