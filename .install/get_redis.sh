@@ -2,7 +2,7 @@
 
 REDIS_VERSION=7.2.1
 
-curdir="$PWD"
+cur_dir=$PWD
 cd /tmp/
 
 # Download redis source from github archive and extract it.
@@ -12,5 +12,4 @@ tar -xvzf ${REDIS_VERSION}.tar.gz && cd redis-${REDIS_VERSION}
 # Build redis from source and install it.
 make && make install
 
-cd $curdir
-echo $PWD
+cd $cur_dir
