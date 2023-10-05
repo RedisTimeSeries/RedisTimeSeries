@@ -13,3 +13,4 @@ tar -xvzf ${REDIS_VERSION}.tar.gz && cd redis-${REDIS_VERSION}
 make && make install
 
 cd $curdir
+echo $PWD
