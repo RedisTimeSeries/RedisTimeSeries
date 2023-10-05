@@ -355,6 +355,7 @@ class Debug:
 
 def test_ShortRead():
     env = Env(decodeResponses=True)
+    env.skip()  # todo: this is temp until we have new rltest version that enables setting protected configs
     env.skipOnCluster()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnVersionSmaller("6.2.0")
