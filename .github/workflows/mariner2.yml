@@ -13,13 +13,13 @@ jobs:
       image: mcr.microsoft.com/cbl-mariner/base/core:2.0
     steps:
       - name: install pre-checkout dependencies
-        run: tdnf install --noplugins --skipsignature -y ca-certificates git
+        run: tdnf install -y ca-certificates git
       - name: checkout
         uses: actions/checkout@v4
       - name: install dependencies
-        run: ./install/mariner2.sh
+        run: .install/mariner2.sh
       - name: get redis latest
-        run: ./install/get_redis.sh
+        run: .install/get_redis.sh
       - name: build and test
         run: make test
       - name: pack module
