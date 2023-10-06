@@ -1,8 +1,11 @@
 #!/bin/bash
 
-tdnf install -y build-essential wget tar openssl-devel cmake python3 python3-pip which
-
-git config --global --add safe.directory $PWD
+tdnf install -y build-essential wget tar openssl-devel cmake python3 python3-pip which unzip
 
 pip install --upgrade setuptools
 pip install -r tests/flow/requirements.txt
+
+# Install aws-cli for uploading artifacts to s3
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+./aws/install
