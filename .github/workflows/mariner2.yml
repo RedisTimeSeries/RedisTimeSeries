@@ -32,7 +32,7 @@ jobs:
 #      - name: build and test
 #        run: make test
       - name: pack module
-        run: make pack
+        run: make pack BRANCH=${{ github.ref_name }} SHOW=1
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
