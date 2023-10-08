@@ -5,5 +5,3 @@ pytest~=7.0.0
 statistics
 hiredis==2.0.0
 gevent~=22.10.1
-jinja2
-ramp-packer
