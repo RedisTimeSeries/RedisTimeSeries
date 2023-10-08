@@ -29,6 +29,11 @@ jobs:
 #        run: make test
       - name: pack module
         run: make pack
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: upload to staging
         run: make upload-release SHOW=1 STAGING=1 VERBOSE=1
 
