@@ -39,7 +39,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: "eu-west-2"
+          aws-region: "us-east-1"
       - name: upload artifacts to s3 - staging
         run: make upload-artifacts SHOW=1 STAGING=1 VERBOSE=1
       - name: upload artifacts to s3 - release  # todo: trigger this manually instead
