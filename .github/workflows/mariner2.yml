@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - support_mariner2
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
@@ -30,8 +29,8 @@ jobs:
       - name: get redis latest
         run: |
           bash .install/get_redis.sh
-#      - name: build and test
-#        run: make test
+      - name: build and test
+        run: make test
       - name: pack module
         run: make pack BRANCH=${{ github.ref_name }} SHOW=1
       - name: Configure AWS credentials
