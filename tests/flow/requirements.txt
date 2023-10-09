@@ -1,6 +1,6 @@
 pytest~=7.0.0
 # redis~=5.0.0b3
-RLTest~=0.7.0
+RLTest~=0.7.2
 # ramp-packer~=2.5.3
 statistics
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
