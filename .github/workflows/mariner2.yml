@@ -23,7 +23,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          set-safe-directory: true
       - name: Install dependencies
         run: |
           bash .install/mariner2.sh
@@ -35,7 +34,7 @@ jobs:
           path: redis
       - name: Build Redis
         working-directory: redis
-        run: make install && cd ..
+        run: make install
       - name: Build and test TS
         run: make test
       - name: Pack module
