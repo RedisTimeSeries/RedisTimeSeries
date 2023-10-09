@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - support_mariner2
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
@@ -17,7 +16,7 @@ jobs:
     container:
       image: mcr.microsoft.com/cbl-mariner/base/core:2.0
     steps:
-      - name: install pre-checkout dependencies
+      - name: Install pre-checkout dependencies
         run: tdnf install --noplugins --skipsignature -y ca-certificates git
       - name: checkout
         uses: actions/checkout@v4
@@ -30,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: redis/redis
-          ref: '7.2.1'
+          ref: '7.2.1'  # todo: use this is a parameter when we have flows for multiple platforms
           path: redis
       - name: Build Redis
         working-directory: redis
