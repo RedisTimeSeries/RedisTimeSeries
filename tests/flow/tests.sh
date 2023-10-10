@@ -55,6 +55,117 @@ help() {
 
 #----------------------------------------------------------------------------------------------
 
+traps() {
+	local func="$1"
+	shift
+	local sig
+	for sig in "$@"; do
+		trap "$func $sig" "$sig"
+	done
+}
+
+linux_stop() {
+	local pgid=$(cat /proc/$PID/status | grep pgid | awk '{print $2}')
+	kill -9 -- -$pgid
+}
+
+macos_stop() {
+	local pgid=$(ps -o pid,pgid -p $PID | awk "/$PID/"'{ print $2 }' | tail -1)
+	pkill -9 -g $pgid
+}
+
+stop() {
+	trap - SIGINT
+	if [[ $OS == linux ]]; then
+		linux_stop
+	elif [[ $OS == macos ]]; then
+		macos_stop
+	fi
+	exit 1
+}
+
+traps 'stop' SIGINT
+
+#---------------------------------------------------------------------------------------------- 
+
+setup_rltest() {
+	if [[ $RLTEST == view ]]; then
+		if [[ ! -d $ROOT/../RLTest ]]; then
+			eprint "RLTest not found in view $ROOT"
+			exit 1
+		fi
+		RLTEST=$(cd $ROOT/../RLTest; pwd)
+	fi
+
+	if [[ -n $RLTEST ]]; then
+		if [[ ! -d $RLTEST ]]; then
+			eprint "Invalid RLTest location: $RLTEST"
+			exit 1
+		fi
+
+		# Specifically search for it in the specified location
+		export PYTHONPATH="$PYTHONPATH:$RLTEST"
+		if [[ $VERBOSE == 1 ]]; then
+			echo "PYTHONPATH=$PYTHONPATH"
+		fi
+	fi
+	
+	if [[ $RLTEST_VERBOSE == 1 ]]; then
+		RLTEST_ARGS+=" -v"
+	fi
+	if [[ $RLTEST_DEBUG == 1 ]]; then
+		RLTEST_ARGS+=" --debug-print"
+	fi
+	if [[ -n $RLTEST_LOG && $RLTEST_LOG != 1 ]]; then
+		RLTEST_ARGS+=" -s"
+	fi
+	if [[ $RLTEST_CONSOLE == 1 ]]; then
+		RLTEST_ARGS+=" -i"
+	fi
+	RLTEST_ARGS+=" --enable-debug-command --enable-protected-configs"
+}
+
+#----------------------------------------------------------------------------------------------
+
+setup_clang_sanitizer() {
+	local ignorelist=$ROOT/tests/memcheck/redis.san-ignorelist
+	if ! grep THPIsEnabled $ignorelist &> /dev/null; then
+		echo "fun:THPIsEnabled" >> $ignorelist
+	fi
+
+	# for RLTest
+	export SANITIZER="$SAN"
+	
+	# --no-output-catch --exit-on-failure --check-exitcode
+	RLTEST_SAN_ARGS="--sanitizer $SAN"
+
+	if [[ $SAN == addr || $SAN == address ]]; then
+		REDIS_SERVER=${REDIS_SERVER:-redis-server-asan-$SAN_REDIS_VER}
+		if ! command -v $REDIS_SERVER > /dev/null; then
+			echo Building Redis for clang-asan ...
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix asan-$SAN_REDIS_VER --own-openssl --no-run \
+				--clang-asan \
+				--clang-san-blacklist $ignorelist
+		fi
+
+		# RLTest places log file details in ASAN_OPTIONS
+		export ASAN_OPTIONS="detect_odr_violation=0:halt_on_error=0:detect_leaks=1"
+		export LSAN_OPTIONS="suppressions=$ROOT/tests/memcheck/asan.supp"
+		# :use_tls=0
+
+	elif [[ $SAN == mem || $SAN == memory ]]; then
+		REDIS_SERVER=${REDIS_SERVER:-redis-server-msan-$SAN_REDIS_VER}
+		if ! command -v $REDIS_SERVER > /dev/null; then
+			echo Building Redis for clang-msan ...
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix msan-$SAN_REDIS_VER --own-openssl --no-run \
+				--clang-msan --llvm-dir /opt/llvm-project/build-msan \
+				--clang-san-blacklist $ignorelist
+		fi
+	fi
+}
+
+#----------------------------------------------------------------------------------------------
+
 setup_redis_server() {
 	if [[ $VALGRIND == 1 ]]; then
 		REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
