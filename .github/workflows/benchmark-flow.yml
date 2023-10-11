@@ -91,7 +91,7 @@ jobs:
               --github_actor ${{ github.triggering_actor }}
               --github_repo ${{ github.event.repository.name }}
               --github_org ${{ github.repository_owner }}
-              --required-module ReJSON
+              --required-module RedisTimeSeries
               --github_sha ${{ github.sha }}
               --github_branch ${{ github.head_ref || github.ref_name }}
               --upload_results_s3
