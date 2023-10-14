@@ -30,6 +30,9 @@ on:
       benchmark_runner_group_total:
         type: number
         default: 1
+      required_module:
+        type: string
+        default: "timeseries"
 
 jobs:
   benchmark-steps:
@@ -91,7 +94,7 @@ jobs:
               --github_actor ${{ github.triggering_actor }}
               --github_repo ${{ github.event.repository.name }}
               --github_org ${{ github.repository_owner }}
-              --required-module RedisTimeSeries
+              --required-module ${{ inputs.required_module }}
               --github_sha ${{ github.sha }}
               --github_branch ${{ github.head_ref || github.ref_name }}
               --upload_results_s3
