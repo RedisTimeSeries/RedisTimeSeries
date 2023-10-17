@@ -204,15 +204,15 @@ def test_bad_del(self):
 def test_del_retention_with_rules(self):
     sample_len = 1010
     with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 1, 'compressed')
-        r.execute_command("ts.create", 'test_key_3', 'compressed')
-        r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'avg', 10)
+        r.execute_command("ts.create", 'test_key_2{1}', 'RETENTION', 1, 'compressed')
+        r.execute_command("ts.create", 'test_key_3{1}', 'compressed')
+        r.execute_command('ts.createrule', 'test_key_2{1}', 'test_key_3{1}', 'AGGREGATION', 'avg', 10)
 
         for i in range(sample_len):
-            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_2{1}', i, 1)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            r.execute_command("ts.del", "test_key_2", 1, 10)
+            r.execute_command("ts.del", "test_key_2{1}", 1, 10)
 
         r.execute_command("ts.create", 'test_key_4{4}', 'RETENTION', 25, 'compressed')
         r.execute_command("ts.create", 'test_key_5{4}', 'compressed')
@@ -229,57 +229,57 @@ def test_del_with_rules(self):
     sample_len = 1010
     e = Env()
     with e.getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 5000, 'compressed')
-        r.execute_command("ts.create", 'test_key_3', 'compressed')
-        r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'sum', 10)
+        r.execute_command("ts.create", 'test_key_2{1}', 'RETENTION', 5000, 'compressed')
+        r.execute_command("ts.create", 'test_key_3{1}', 'compressed')
+        r.execute_command('ts.createrule', 'test_key_2{1}', 'test_key_3{1}', 'AGGREGATION', 'sum', 10)
 
         for i in range(70):
-            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_2{1}', i, 1)
         for i in range(80, sample_len):
-            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_2{1}', i, 1)
 
-        res = r.execute_command('ts.range', 'test_key_3', 0, 9)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 0, 9)
         e.assertEqual(len(res), 1)
         assert res[0] == [0, b'10']
-        assert r.execute_command("ts.del", "test_key_2", 0, 9) == 10
-        res = r.execute_command('ts.range', 'test_key_3', 0, 9)
+        assert r.execute_command("ts.del", "test_key_2{1}", 0, 9) == 10
+        res = r.execute_command('ts.range', 'test_key_3{1}', 0, 9)
         e.assertEqual(len(res), 0)
 
-        res = r.execute_command('ts.range', 'test_key_3', 10, 19)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 10, 19)
         e.assertEqual(len(res), 1)
         assert res[0] == [10, b'10']
-        assert r.execute_command("ts.del", "test_key_2", 12, 14) == 3
-        res = r.execute_command('ts.range', 'test_key_3', 10, 19)
+        assert r.execute_command("ts.del", "test_key_2{1}", 12, 14) == 3
+        res = r.execute_command('ts.range', 'test_key_3{1}', 10, 19)
         e.assertEqual(len(res), 1)
         assert res[0] == [10, b'7']
 
-        res = r.execute_command('ts.range', 'test_key_3', 20, 39)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 20, 39)
         e.assertEqual(len(res), 2)
         assert res == [[20, b'10'], [30, b'10']]
-        assert r.execute_command("ts.del", "test_key_2", 28, 31) == 4
-        res = r.execute_command('ts.range', 'test_key_3', 20, 39)
+        assert r.execute_command("ts.del", "test_key_2{1}", 28, 31) == 4
+        res = r.execute_command('ts.range', 'test_key_3{1}', 20, 39)
         e.assertEqual(len(res), 2)
         assert res == [[20, b'8'], [30, b'8']]
 
-        res = r.execute_command('ts.range', 'test_key_3', 50, 89)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 50, 89)
         e.assertEqual(len(res), 3)
         assert res == [[50, b'10'], [60, b'10'], [80, b'10']]
         # Tests empty end bucket which is not the lastest bucket:
-        assert r.execute_command("ts.del", "test_key_2", 58, 79) == 12
-        assert r.execute_command("ts.del", "test_key_2", 80, 81) == 2
-        res = r.execute_command('ts.range', 'test_key_3', 50, 89)
+        assert r.execute_command("ts.del", "test_key_2{1}", 58, 79) == 12
+        assert r.execute_command("ts.del", "test_key_2{1}", 80, 81) == 2
+        res = r.execute_command('ts.range', 'test_key_3{1}', 50, 89)
         e.assertEqual(len(res), 2)
         assert res == [[50, b'8'], [80, b'8']]
 
-        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 990, 1009)
         e.assertEqual(len(res), 1)
         assert res[0] == [990, b'10']
-        assert r.execute_command("ts.del", "test_key_2", 995, 1002) == 8
-        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        assert r.execute_command("ts.del", "test_key_2{1}", 995, 1002) == 8
+        res = r.execute_command('ts.range', 'test_key_3{1}', 990, 1009)
         e.assertEqual(len(res), 1)
         assert res == [[990, b'5']]
-        assert 1010 == r.execute_command("ts.add", 'test_key_2', 1010, 1)
-        res = r.execute_command('ts.range', 'test_key_3', 990, 1009)
+        assert 1010 == r.execute_command("ts.add", 'test_key_2{1}', 1010, 1)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 990, 1009)
         e.assertEqual(len(res), 2)
         assert res == [[990, b'5'], [1000, b'7']]
 
@@ -304,57 +304,57 @@ def test_del_with_rules_with_alignment(self):
     sample_len = 1005
     e = Env()
     with e.getClusterConnectionIfNeeded() as r:
-        r.execute_command("ts.create", 'test_key_2', 'RETENTION', 5000, 'compressed')
-        r.execute_command("ts.create", 'test_key_3', 'compressed')
-        r.execute_command('ts.createrule', 'test_key_2', 'test_key_3', 'AGGREGATION', 'sum', 10, 5)
+        r.execute_command("ts.create", 'test_key_2{1}', 'RETENTION', 5000, 'compressed')
+        r.execute_command("ts.create", 'test_key_3{1}', 'compressed')
+        r.execute_command('ts.createrule', 'test_key_2{1}', 'test_key_3{1}', 'AGGREGATION', 'sum', 10, 5)
 
         for i in range(65):
-            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_2{1}', i, 1)
         for i in range(75, sample_len):
-            assert i == r.execute_command("ts.add", 'test_key_2', i, 1)
+            assert i == r.execute_command("ts.add", 'test_key_2{1}', i, 1)
 
-        res = r.execute_command('ts.range', 'test_key_3', 0, 4)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 0, 4)
         e.assertEqual(len(res), 1)
         assert res[0] == [0, b'5']
-        assert r.execute_command("ts.del", "test_key_2", 0, 4) == 5
-        res = r.execute_command('ts.range', 'test_key_3', 0, 4)
+        assert r.execute_command("ts.del", "test_key_2{1}", 0, 4) == 5
+        res = r.execute_command('ts.range', 'test_key_3{1}', 0, 4)
         e.assertEqual(len(res), 0)
 
-        res = r.execute_command('ts.range', 'test_key_3', 5, 14)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 5, 14)
         e.assertEqual(len(res), 1)
         assert res[0] == [5, b'10']
-        assert r.execute_command("ts.del", "test_key_2", 11, 13) == 3
-        res = r.execute_command('ts.range', 'test_key_3', 5, 14)
+        assert r.execute_command("ts.del", "test_key_2{1}", 11, 13) == 3
+        res = r.execute_command('ts.range', 'test_key_3{1}', 5, 14)
         e.assertEqual(len(res), 1)
         assert res[0] == [5, b'7']
 
-        res = r.execute_command('ts.range', 'test_key_3', 15, 34)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 15, 34)
         e.assertEqual(len(res), 2)
         assert res == [[15, b'10'], [25, b'10']]
-        assert r.execute_command("ts.del", "test_key_2", 23, 26) == 4
-        res = r.execute_command('ts.range', 'test_key_3', 15, 34)
+        assert r.execute_command("ts.del", "test_key_2{1}", 23, 26) == 4
+        res = r.execute_command('ts.range', 'test_key_3{1}', 15, 34)
         e.assertEqual(len(res), 2)
         assert res == [[15, b'8'], [25, b'8']]
 
-        res = r.execute_command('ts.range', 'test_key_3', 45, 84)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 45, 84)
         e.assertEqual(len(res), 3)
         assert res == [[45, b'10'], [55, b'10'], [75, b'10']]
         # Tests empty end bucket which is not the lastest bucket:
-        assert r.execute_command("ts.del", "test_key_2", 53, 74) == 12
-        assert r.execute_command("ts.del", "test_key_2", 75, 76) == 2
-        res = r.execute_command('ts.range', 'test_key_3', 45, 84)
+        assert r.execute_command("ts.del", "test_key_2{1}", 53, 74) == 12
+        assert r.execute_command("ts.del", "test_key_2{1}", 75, 76) == 2
+        res = r.execute_command('ts.range', 'test_key_3{1}', 45, 84)
         e.assertEqual(len(res), 2)
         assert res == [[45, b'8'], [75, b'8']]
 
-        res = r.execute_command('ts.range', 'test_key_3', 985, 1004)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 985, 1004)
         e.assertEqual(len(res), 1)
         assert res[0] == [985, b'10']
-        assert r.execute_command("ts.del", "test_key_2", 990, 997) == 8
-        res = r.execute_command('ts.range', 'test_key_3', 985, 1004)
+        assert r.execute_command("ts.del", "test_key_2{1}", 990, 997) == 8
+        res = r.execute_command('ts.range', 'test_key_3{1}', 985, 1004)
         e.assertEqual(len(res), 1)
         assert res == [[985, b'5']]
-        assert 1005 == r.execute_command("ts.add", 'test_key_2', 1005, 1)
-        res = r.execute_command('ts.range', 'test_key_3', 985, 1004)
+        assert 1005 == r.execute_command("ts.add", 'test_key_2{1}', 1005, 1)
+        res = r.execute_command('ts.range', 'test_key_3{1}', 985, 1004)
         e.assertEqual(len(res), 2)
         assert res == [[985, b'5'], [995, b'7']]
 
