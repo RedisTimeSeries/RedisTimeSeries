@@ -91,6 +91,7 @@ commands:
     steps:
       - run:
           name: System setup
+          no_output_timeout: 20m
           command: |
             VERBOSE=1 SETUP_ARGS="<<parameters.setup_args>>" ./sbin/setup
             python3 -m pip list
