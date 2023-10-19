@@ -547,6 +547,7 @@ E=0
 [[ $AOF == 1 ]]         && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "tests with AOF"); (( E |= $? )); } || true
 [[ $AOF_SLAVES == 1 ]]  && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 if [[ $OSS_CLUSTER == 1 ]]; then
+	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
 		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
