@@ -562,6 +562,7 @@ if [[ $OSS_CLUSTER == 1 ]]; then
 fi
 
 if [[ $RLEC == 1 ]]; then
+	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
 	dhost=$(echo "$DOCKER_HOST" | awk -F[/:] '{print $4}') # DOCKER_HOST=tcp://host:port
 	dhost=${dhost:-127.0.0.1}
 	{ (RLTEST_ARGS+="${RLTEST_ARGS} --env existing-env --existing-env-addr $dhost:$RLEC_PORT" \
