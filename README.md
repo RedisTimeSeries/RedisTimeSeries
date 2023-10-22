@@ -13,6 +13,7 @@ RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
 
 RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
 
+
 ## What is a Redis time series?
 
 A Redis time series comprises:
@@ -48,6 +49,20 @@ A Redis time series comprises:
   - An optional retention period. E.g., 10 year
 
   For example, the following compaction: {10 minutes; avg; 10 years} will store the average of the raw values measured in each 10-minutes time frame - for 10 years.
+
+### How do I Redis?
+
+[Learn for free at Redis University](https://university.redis.com/)
+
+[Build faster with the Redis Launchpad](https://launchpad.redis.com/)
+
+[Try the Redis Cloud](https://redis.com/try-free/)
+
+[Dive in developer tutorials](https://developer.redis.com/)
+
+[Join the Redis community](https://redis.com/community/)
+
+[Work at Redis](https://redis.com/company/careers/jobs/)
 
 ## Examples of time series
 - Sensor data: e.g., temperatures or fan velocity for a server in a server farm
