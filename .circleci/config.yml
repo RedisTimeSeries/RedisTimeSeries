@@ -102,15 +102,6 @@ commands:
             ./deps/readies/bin/getredis -v '<<parameters.redis_version>>' --force <<parameters.getredis_params>>
             redis-server --version
 
-  install-arlecchino:
-    steps:
-      - run:
-          name: Install Arlecchino
-          shell: /bin/bash -l -eo pipefail
-          command: |
-            cd
-            bash <(curl -fsSL https://raw.githubusercontent.com/RedisLabsModules/arlecchino/master/bin/setup-rlec)
-
   save-tests-logs:
     steps:
       - run:
@@ -386,49 +377,6 @@ jobs:
                 make upload-artifacts SHOW=1 VERBOSE=1
             fi
       - persist-artifacts
-
-  test-rlec:
-    machine:
-      enabled: true
-      image: ubuntu-2004:202010-01
-      resource_class: large
-    working_directory: ~/RedisTimeSeries
-    steps:
-      - early-returns
-      - checkout-all
-      - run:
-          name: Install prerequisites
-          command: |
-            ./sbin/setup
-            ./deps/readies/bin/getredis
-            ./deps/readies/bin/getdocker
-            docker version
-            python3 -m pip list
-      - install-arlecchino
-      - run:
-          name: Build
-          shell: /bin/bash -l -eo pipefail
-          command: |
-            make -C build/docker build OSNICK=bionic SHOW=1
-          no_output_timeout: 30m
-      - run:
-          name: Start RLEC
-          shell: /bin/bash -l -eo pipefail
-          command: |
-            cd
-            mkdir -p rlec && chmod 777 rlec
-            ./RedisTimeSeries/deps/readies/bin/xtx -dMODULE=$(cd RedisTimeSeries/bin/artifacts && ls *.zip) \
-                RedisTimeSeries/tests/flow/rlec/redis-modules.yaml > rlec/redis-modules.yaml
-            rlec start --verbose --version 6.2.8 --build 53 --os bionic
-      - run:
-          name: Flow Test
-          shell: /bin/bash -l -eo pipefail
-          no_output_timeout: 30m
-          command: |
-            python3 -m pip list
-            mkdir -p ~/workspace/tests
-            make flow_tests RLEC=1 SHOW=1 SLOW=1
-      - save-tests-logs
 
   coverage:
     docker:
