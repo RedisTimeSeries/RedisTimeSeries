@@ -7,9 +7,7 @@ description: '
   sample query: "TS.MGET" "SELECTED_LABELS" "hostname" "fieldname" "FILTER" "measurement=cpu" "hostname!="
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

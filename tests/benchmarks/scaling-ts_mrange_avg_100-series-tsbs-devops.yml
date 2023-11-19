@@ -12,9 +12,7 @@ description: '
   sample query: "TS.MRANGE" 1451606400000 1451610000000 AGGREGATION AVG 300000 FILTER "measurement=cpu" "hostname=host_9" fieldname=usage_nice
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

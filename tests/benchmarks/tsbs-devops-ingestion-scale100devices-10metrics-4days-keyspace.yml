@@ -1,8 +1,6 @@
 name: "tsbs-devops-ingestion-scale100-4days-keyspace"
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 dbconfig:
   - configuration-parameters:
