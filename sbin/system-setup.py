@@ -24,10 +24,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.run(f"{READIES}/bin/enable-utf8", sudo=self.os != 'macos')
 
         self.install("autoconf libtool m4 automake")
-        if self.osnick == 'amzn2':
-            self.install("openssl11")
-        else:
-            self.install("openssl")
+        self.install("openssl")
 
     def debian_compat(self):
         self.run(f"{READIES}/bin/getgcc --modern")
@@ -36,13 +33,7 @@ class RedisTimeSeriesSetup(paella.Setup):
     def redhat_compat(self):
         self.install("which")
         self.run(f"{READIES}/bin/getepel", sudo=True)
-        if self.osnick == 'amzn2':
-            self.install("openssl11-devel")
-            self.run(f"ln -s /usr/lib64/pkgconfig/libssl11.pc /usr/lib64/pkgconfig/libssl.pc", sudo=True)
-            self.run(f"ln -s /usr/lib64/pkgconfig/libcrypto11.pc /usr/lib64/pkgconfig/libcrypto.pc", sudo=True)
-            self.run(f"ln -s /usr/lib64/pkgconfig/openssl11.pc /usr/lib64/pkgconfig/openssl.pc", sudo=True)
-        else:
-            self.install("openssl-devel")
+        self.install("openssl-devel")
         self.run(f"{READIES}/bin/getgcc --modern")
 
     def archlinux(self):
