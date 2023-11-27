@@ -10,9 +10,7 @@ description: '
   sample query: "TS.QUERYINDEX" "measurement=cpu" "hostname=host_7"
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

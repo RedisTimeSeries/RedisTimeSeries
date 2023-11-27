@@ -7,9 +7,7 @@ description: '
   sample query: TS.MRANGE" "1451786984066" "1451830184066" "AGGREGATION" "AVG" "3600000" "FILTER" "measurement=cpu" "GROUPBY" "hostname" "REDUCE" "max"
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

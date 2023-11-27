@@ -12,9 +12,7 @@ description: '
       "TS.MRANGE" "1451631478487" "1451674678487" "FILTER_BY_TS" "1451631480000" "1451631490000" (...)
 '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

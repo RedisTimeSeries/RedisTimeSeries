@@ -13,9 +13,7 @@ description: '
   '
 
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-cluster-15-primaries
