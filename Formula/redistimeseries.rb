@@ -2,7 +2,7 @@ class redistimeseries < Formula
     desc "Time series module for persistent key-value database, with built-in net interface."
     homepage "https://github.com/RedisTimeSeries/RedisTimeSeries"
     url "https://github.com/waveman68/homebrew-RedisTimeSeries/releases/tag/v1.10.9"
-    sha256 :no_check does
+    sha256 :no_check
     license "RSALv2"
     # depends_on "cpu_features"  # exists as bottle
     # depends_on "rmutil"  
