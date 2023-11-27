@@ -10,9 +10,7 @@ description: '
   sample query: "TS.MGET" "FILTER" "measurement=cpu" "fieldname=usage_nice"
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone

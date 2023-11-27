@@ -13,9 +13,7 @@ description: '
   sample query: "TS.MRANGE" "1451695614264" "1451724414264" "WITHLABELS" "AGGREGATION" "MAX" "3600000" "FILTER" "measurement=cpu" "hostname=host_7"
   '
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-cluster-15-primaries

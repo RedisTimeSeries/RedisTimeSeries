@@ -1,8 +1,6 @@
 name: "tsbs-devops-ingestion-scale100-4days"
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-standalone
