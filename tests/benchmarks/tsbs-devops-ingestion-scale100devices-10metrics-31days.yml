@@ -1,8 +1,6 @@
 name: "tsbs-devops-ingestion-scale100devices-10metrics-31days"
 
-remote:
-  - type: oss-standalone
-  - setup: redistimeseries-m5
+
 
 setups:
   - oss-cluster-30-primaries

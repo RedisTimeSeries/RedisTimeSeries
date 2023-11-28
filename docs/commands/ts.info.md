@@ -31,8 +31,8 @@ is an optional flag to get a more detailed information about the chunks.
 | ---------------------------- | -
 | `totalSamples`    | @integer-reply<br> Total number of samples in this time series
 | `memoryUsage`     | @integer-reply<br> Total number of bytes allocated for this time series, which is the sum of <br> - The memory used for storing the series' configuration parameters (retention period, duplication policy, etc.)<br>- The memory used for storing the series' compaction rules<br>- The memory used for storing the series' labels (key-value pairs)<br>- The memory used for storing the chunks (chunk header + compressed/uncompressed data)
-| `firstTimestamp`  | @integer-reply<br> First timestamp present in this time series
-| `lastTimestamp`   | @integer-reply<br> Last timestamp present in this time series
+| `firstTimestamp`  | @integer-reply<br> First timestamp present in this time series (Unix timestamp in milliseconds)
+| `lastTimestamp`   | @integer-reply<br> Last timestamp present in this time series  (Unix timestamp in milliseconds)
 | `retentionTime`   | @integer-reply<br> The retention period, in milliseconds, for this time series
 | `chunkCount`      | @integer-reply<br> Number of chunks used for this time series
 | `chunkSize`       | @integer-reply<br> The initial allocation size, in bytes, for the data part of each new chunk.<br>Actual chunks may consume more memory. Changing the chunk size (using `TS.ALTER`) does not affect existing chunks.

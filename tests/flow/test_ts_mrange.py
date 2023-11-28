@@ -231,7 +231,7 @@ def test_mrange_withlabels(env):
 
 def test_multilabel_filter(env):
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
-        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x')
+        assert r.execute_command('TS.CREATE', 'tester1', 'LABELS', 'name', 'bob', 'class', 'middle', 'generation', 'x', 'special', 'yes')
         assert r.execute_command('TS.CREATE', 'tester2', 'LABELS', 'name', 'rudy', 'class', 'junior', 'generation', 'x')
         assert r.execute_command('TS.CREATE', 'tester3', 'LABELS', 'name', 'fabi', 'class', 'top', 'generation', 'x')
 
@@ -251,6 +251,24 @@ def test_multilabel_filter(env):
 
         actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)')
         assert actual_result[0][0] == b'tester2'
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)', 'generation=y')
+        assert actual_result == []
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)', 'generation!=x')
+        assert actual_result == []
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob,rudy)', 'class!=(middle,top)', 'generation=')
+        assert actual_result == []
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob)', 'class=(middle,top,junior)', 'generation!=y')
+        assert actual_result[0][0] == b'tester1'
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'name=(bob)', 'class=(middle,top,junior)', 'generation!=')
+        assert actual_result[0][0] == b'tester1'
+
+        actual_result = r1.execute_command('TS.mget', 'WITHLABELS', 'FILTER', 'class=(top,junior,middle)', 'generation!=', 'special!=')
+        assert actual_result[0][0] == b'tester1'
 
 def test_large_key_value_pairs(env):
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:

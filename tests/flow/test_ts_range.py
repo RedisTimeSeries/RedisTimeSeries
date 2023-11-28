@@ -1414,6 +1414,12 @@ def test_latest_flag_range():
         assert res == [[0, '4'], [10, '8']] or res == [[0, b'4'], [10, b'8']]
         res = r.execute_command('TS.range', key2, 0, 9, "LATEST")
         assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key2, 0, 1, "LATEST")
+        assert res == [[0, '4']] or res == [[0, b'4']]
+        res = r.execute_command('TS.range', key2, 20, 30, "LATEST")
+        assert res == []
+        res = r.execute_command('TS.range', key2, 11, 30, "LATEST")
+        assert res == []
 
         # make sure LATEST haven't changed anything in the keys
         res = r.execute_command('TS.range', key2, 0, 10)
@@ -1482,3 +1488,23 @@ def test_multi_chunk_revrange():
 
         res = r.execute_command('TS.revrange', t1, 110, 215, 'AGGREGATION', 'count', 2*n_samples)
         assert res == [[0, '96']] or res == [[0, b'96']]
+
+def test_errors():
+    env = Env(decodeResponses=True)
+    t1 = 't1{1}'
+    t2 = 't2{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
+        assert r.execute_command('ts.add', t1, 1, 1)
+        try:
+            r.execute_command('ts.range', t1, 0, 10, 'AGGREGATION', 'avg', 5, 'BUCKETTIMESTAMP', 'high')
+            assert False
+        except Exception as e:
+            assert str(e) == 'TSDB: unknown BUCKETTIMESTAMP parameter'
+
+        assert r.execute_command('TS.CREATE', t2, 'CHUNK_SIZE', 128)
+        try:
+            r.execute_command('TS.CREATERULE', t1, t2, 'AGGREGATION', 'avg', 5, 'high')
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: Couldn't parse alignTimestamp"

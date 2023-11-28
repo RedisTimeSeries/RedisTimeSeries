@@ -21,13 +21,13 @@ Query a range across multiple time series by filters in reverse direction
 <details open>
 <summary><code>fromTimestamp</code></summary> 
 
-is start timestamp for the range query (integer UNIX timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
+is start timestamp for the range query (integer Unix timestamp in milliseconds) or `-` to denote the timestamp of the earliest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
 <summary><code>toTimestamp</code></summary> 
 
-is end timestamp for the range query (integer UNIX timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
+is end timestamp for the range query (integer Unix timestamp in milliseconds) or `+` to denote the timestamp of the latest sample amongs all time series that passes `FILTER filterExpr...`.
 </details>
 
 <details open>
@@ -151,8 +151,8 @@ controls how bucket timestamps are reported.
 
 | `bt`             | Timestamp reported for each bucket                            |
 | ---------------- | ------------------------------------------------------------- |
-| `-` or `low`     | the bucket's start time (default)                             |
-| `+` or `high`    | the bucket's end time                                         |
+| `-` or `start`   | the bucket's start time (default)                             |
+| `+` or `end`     | the bucket's end time                                         |
 | `~` or `mid`     | the bucket's mid time (rounded down if not an integer)        |
 </details>
 

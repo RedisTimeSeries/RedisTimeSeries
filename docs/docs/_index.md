@@ -1,21 +1,24 @@
 ---
-title: RedisTimeSeries
-linkTitle: Time Series
+title: Time series
+linkTitle: Time series
 description: Ingest and query time series data with Redis
 type: docs
+stack: true
+aliases:
+    - /docs/stack/timeseries/
 ---
 
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 [![Github](https://img.shields.io/static/v1?label=&message=repository&color=5961FF&logo=github)](https://github.com/RedisTimeSeries/RedisTimeSeries/)
 
-RedisTimeSeries is a Redis module that adds a time series data structure to Redis.
+Redis Stack (specifically, its RedisTimeSeries module) adds a time series data structure to Redis.
 
 ## Features
 * High volume inserts, low latency reads
 * Query by start time and end-time
 * Aggregated queries (min, max, avg, sum, range, count, first, last, STD.P, STD.S, Var.P, Var.S, twa) for any time bucket
 * Configurable maximum retention period
-* Downsampling/compaction for automatically updated aggregated timeseries
+* Compaction for automatically updated aggregated timeseries
 * Secondary indexing for time series entries. Each time series has labels (field value pairs) which will allows to query by labels
 
 ## Client libraries
@@ -26,7 +29,7 @@ See the [clients page](clients) for the full list.
 
 ## Using with other metrics tools
 
-In the [RedisTimeSeries](https://github.com/RedisTimeSeries) organization you can
+In the [RedisTimeSeries](https://github.com/RedisTimeSeries) GitHub organization you can
 find projects that help you integrate RedisTimeSeries with other tools, including:
 
 1. [Prometheus](https://github.com/RedisTimeSeries/prometheus-redistimeseries-adapter), read/write adapter to use RedisTimeSeries as backend db.

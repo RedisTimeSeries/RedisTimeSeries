@@ -117,7 +117,8 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
 
 _handle_latest:
     calculate_latest_sample(&sample_ptr, iter->series);
-    if (sample_ptr && (sample.timestamp <= iter->maxTimestamp)) {
+    if (sample_ptr && (sample.timestamp <= iter->maxTimestamp) &&
+        (sample.timestamp >= iter->minTimestamp)) {
         if (iter->enrichedChunk->samples.size == 0) {
             ReallocSamplesArray(&iter->enrichedChunk->samples, 1);
         }

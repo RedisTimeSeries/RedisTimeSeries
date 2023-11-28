@@ -240,160 +240,47 @@ int IsKeyIndexed(RedisModuleString *ts_key) {
     return !nokey;
 }
 
-void _union(RedisModuleCtx *ctx, RedisModuleDict *dest, RedisModuleDict *src) {
-    /*
-     * Copy all elements from src to dest
-     */
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(src, "^", NULL, 0);
-    RedisModuleString *currentKey;
-    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
-        RedisModule_DictSet(dest, currentKey, (void *)1);
-        RedisModule_FreeString(ctx, currentKey);
-    }
-    RedisModule_DictIteratorStop(iter);
-}
-
-void _intersect(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        int doesNotExist = 0;
-        RedisModule_DictGetC(right, currentKey, currentKeyLen, &doesNotExist);
-        if (doesNotExist == 0) {
-            continue;
+static uint64_t _calc_dicts_total_size(RedisModuleDict **dicts, size_t dict_size) {
+    uint64_t total_size = 0;
+    for (size_t i = 0; i < dict_size; i++) {
+        if (dicts[i] != NULL) {
+            total_size += RedisModule_DictSize(dicts[i]);
         }
-        RedisModule_DictDelC(left, currentKey, currentKeyLen, NULL);
-        RedisModule_DictIteratorReseekC(iter, ">", currentKey, currentKeyLen);
     }
-    RedisModule_DictIteratorStop(iter);
+
+    return total_size;
 }
 
-void _difference(RedisModuleCtx *ctx, RedisModuleDict *left, RedisModuleDict *right) {
-    if (RedisModule_DictSize(right) == 0) {
-        // the right leaf is empty, this means that the diff is basically no-op since the left will
-        // remain intact.
-        return;
-    }
-
-    // iterating over the left dict (which is always smaller) will allow us to have less data to
-    // iterate over
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(left, "^", NULL, 0);
-
-    char *currentKey;
-    size_t currentKeyLen;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        int doesNotExist = 0;
-        RedisModule_DictGetC(right, currentKey, currentKeyLen, &doesNotExist);
-        if (doesNotExist == 1) {
-            continue;
-        }
-        RedisModule_DictDelC(left, currentKey, currentKeyLen, NULL);
-        RedisModule_DictIteratorReseekC(iter, ">", currentKey, currentKeyLen);
-    }
-    RedisModule_DictIteratorStop(iter);
-}
-
-RedisModuleDict *GetPredicateKeysDict(RedisModuleCtx *ctx,
-                                      QueryPredicate *predicate,
-                                      bool *isCloned) {
+void GetPredicateKeysDicts(RedisModuleCtx *ctx,
+                           const QueryPredicate *predicate,
+                           RedisModuleDict ***dicts,
+                           size_t *dicts_size) {
     /*
      * Return the dictionary of all the keys that match the predicate.
      */
-    RedisModuleDict *currentLeaf = NULL;
-    *isCloned = false;
     RedisModuleString *index_key;
     size_t _s;
     const char *key = RedisModule_StringPtrLen(predicate->key, &_s);
     const char *value;
 
-    int nokey;
-
     if (predicate->type == NCONTAINS || predicate->type == CONTAINS) {
+        *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *));
+        *dicts_size = 1;
         index_key = RedisModule_CreateStringPrintf(
             ctx, K_PREFIX, RedisModule_StringPtrLen(predicate->key, &_s));
-        currentLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+        (*dicts)[0] = RedisModule_DictGet(labelsIndex, index_key, NULL);
         RedisModule_FreeString(ctx, index_key);
     } else { // one or more entries
-        RedisModuleDict *singleEntryLeaf;
-        int unioned_count = 0;
+        *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *) * predicate->valueListCount);
+        *dicts_size = predicate->valueListCount;
         for (int i = 0; i < predicate->valueListCount; i++) {
             value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
             index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
-            singleEntryLeaf = RedisModule_DictGet(labelsIndex, index_key, &nokey);
+            (*dicts)[i] = RedisModule_DictGet(labelsIndex, index_key, NULL);
             RedisModule_FreeString(ctx, index_key);
-            if (singleEntryLeaf != NULL) {
-                // if there's only 1 item left to fetch from the index we can just return it
-                if (unioned_count == 0 && predicate->valueListCount - i == 1) {
-                    return singleEntryLeaf;
-                }
-                if (currentLeaf == NULL) {
-                    currentLeaf = RedisModule_CreateDict(ctx);
-                    *isCloned = true;
-                }
-                _union(ctx, currentLeaf, singleEntryLeaf);
-                unioned_count++;
-            }
         }
     }
-    return currentLeaf;
-}
-
-RedisModuleDict *QueryIndexPredicate(RedisModuleCtx *ctx,
-                                     QueryPredicate *predicate,
-                                     RedisModuleDict *prevResults) {
-    RedisModuleDict *localResult = RedisModule_CreateDict(ctx);
-    RedisModuleDict *currentLeaf;
-    bool isCloned;
-    currentLeaf = GetPredicateKeysDict(ctx, predicate, &isCloned);
-
-    if (currentLeaf != NULL) {
-        // Copy everything to new dict only in case this is the first predicate.
-        // In the next iteration, when prevResults is no longer NULL, there is
-        // no need to copy again. We can work on currentLeaf, since only the left dict is being
-        // changed during intersection / difference.
-        if (prevResults == NULL) {
-            RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentLeaf, "^", NULL, 0);
-            RedisModuleString *currentKey;
-            while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
-                RedisModule_DictSet(localResult, currentKey, (void *)1);
-                RedisModule_FreeString(ctx, currentKey);
-            }
-            RedisModule_DictIteratorStop(iter);
-        } else {
-            RedisModule_FreeDict(ctx, localResult);
-            localResult = currentLeaf;
-        }
-    }
-
-    RedisModuleDict *result = NULL;
-    if (prevResults != NULL) {
-        if (predicate->type == EQ || predicate->type == CONTAINS) {
-            _intersect(ctx, prevResults, localResult);
-        } else if (predicate->type == LIST_MATCH) {
-            _intersect(ctx, prevResults, localResult);
-        } else if (predicate->type == LIST_NOTMATCH) {
-            _difference(ctx, prevResults, localResult);
-        } else if (predicate->type == NCONTAINS) {
-            _difference(ctx, prevResults, localResult);
-        } else if (predicate->type == NEQ) {
-            _difference(ctx, prevResults, localResult);
-        }
-        result = prevResults;
-    } else if (predicate->type == EQ || predicate->type == CONTAINS ||
-               predicate->type == LIST_MATCH) {
-        result = localResult;
-    } else {
-        result = prevResults; // always NULL
-    }
-
-    if (result != localResult && localResult != currentLeaf && localResult != NULL) {
-        RedisModule_FreeDict(ctx, localResult);
-    }
-    if (isCloned && currentLeaf != result) {
-        RedisModule_FreeDict(ctx, currentLeaf);
-    }
-    return result;
+    return;
 }
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
@@ -404,76 +291,115 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
      * beginning of the predicate list so we will start our calculation from the smallest predicate.
      * This is an optimization, so we will copy the smallest dict possible.
      */
-    if (predicate_count > 1) {
-        int minIndex = 0;
-        unsigned int minDictSize = UINT_MAX;
-        bool isCloned;
-        for (int i = 0; i < predicate_count; i++) {
-            RedisModuleDict *currentPredicateKeys =
-                GetPredicateKeysDict(ctx, &index_predicate[i], &isCloned);
-            int currentDictSize =
-                (currentPredicateKeys != NULL) ? RedisModule_DictSize(currentPredicateKeys) : 0;
-            if (currentDictSize < minDictSize) {
-                minIndex = i;
-                minDictSize = currentDictSize;
-            }
-            if (currentPredicateKeys != NULL && isCloned) {
-                RedisModule_FreeDict(ctx, currentPredicateKeys);
-            }
+    if (predicate_count <= 1) {
+        return;
+    }
+
+    int minIndex = 0;
+    uint64_t minSize = UINT64_MAX;
+    bool isCloned;
+    uint64_t currentDictSize;
+    RedisModuleDict **dicts = NULL;
+    size_t dicts_size;
+    for (int i = 0; i < predicate_count; i++) {
+        if (!IS_INCLUSION(index_predicate[i].type)) {
+            // There is at least 1 inclusion predicate
+            continue;
         }
 
-        // switch between the minimal predicate and the predicate in the first place
-        if (minIndex != 0) {
-            QueryPredicate temp = index_predicate[minIndex];
-            index_predicate[minIndex] = index_predicate[0];
-            index_predicate[0] = temp;
+        GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
+        uint64_t curSize = _calc_dicts_total_size(dicts, dicts_size);
+        free(dicts);
+        if (curSize < minSize) {
+            minIndex = i;
+            minSize = curSize;
         }
     }
+
+    // switch between the minimal predicate and the predicate in the first place
+    if (minIndex != 0) {
+        __SWAP(index_predicate[minIndex], index_predicate[0]);
+    }
+}
+
+static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
+                                       const char *currentKey,
+                                       size_t currentKeyLen,
+                                       const QueryPredicate *index_predicate,
+                                       size_t predicate_count) {
+    RedisModuleDict **dicts = NULL;
+    size_t dicts_size;
+    for (size_t i = 1; i < predicate_count; i++) {
+        bool inclusion = IS_INCLUSION(index_predicate[i].type);
+        GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
+        bool found = false;
+        for (size_t j = 0; j < dicts_size; j++) {
+            RedisModuleDict *curDict = dicts[j];
+            if (!curDict) { // empty dict
+                continue;
+            }
+
+            int doesNotExist = 0;
+            RedisModule_DictGetC(curDict, (char *)currentKey, currentKeyLen, &doesNotExist);
+            if (!doesNotExist) {
+                found = true;
+            }
+        }
+        free(dicts);
+
+        if ((inclusion && !found) || (!inclusion && found)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count) {
-    RedisModuleDict *result = NULL;
-
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
-    // EQ or Contains
-    for (int i = 0; i < predicate_count; i++) {
-        if (index_predicate[i].type == EQ || index_predicate[i].type == CONTAINS ||
-            index_predicate[i].type == LIST_MATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
-            if (result == NULL) {
-                return RedisModule_CreateDict(ctx);
-            }
-        }
+    RedisModuleDict *res = RedisModule_CreateDict(ctx);
+    QueryPredicate *predicate = &index_predicate[0];
+
+    if (!IS_INCLUSION(predicate->type)) {
+        return res;
     }
 
-    // The next two types of queries are reducers so we run them after the matcher
-    // NCONTAINS or NEQ
-    for (int i = 0; i < predicate_count; i++) {
-        if (index_predicate[i].type == NCONTAINS || index_predicate[i].type == NEQ ||
-            index_predicate[i].type == LIST_NOTMATCH) {
-            result = QueryIndexPredicate(ctx, &index_predicate[i], result);
-            if (result == NULL) {
-                return RedisModule_CreateDict(ctx);
+    RedisModuleDict **dicts = NULL;
+    size_t dicts_size;
+    GetPredicateKeysDicts(ctx, &index_predicate[0], &dicts, &dicts_size);
+
+    for (size_t i = 0; i < dicts_size; i++) {
+        RedisModuleDict *dict = dicts[i];
+        if (dict == NULL) {
+            continue;
+        }
+
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
+        char *currentKey;
+        size_t currentKeyLen;
+        while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+            if (_isKeySatisfyAllPredicates(
+                    ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
+                RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
             }
         }
+        RedisModule_DictIteratorStop(iter);
     }
 
-    if (result == NULL) {
-        return RedisModule_CreateDict(ctx);
-    }
+    free(dicts);
 
     if (unlikely(isTrimming)) {
-        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
         RedisModuleString *currentKey;
         int slot, firstSlot, lastSlot;
         RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
         while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
             slot = RedisModule_ShardingGetKeySlot(currentKey);
             if (firstSlot > slot || lastSlot < slot) {
-                RedisModule_DictDel(result, currentKey, NULL);
+                RedisModule_DictDel(res, currentKey, NULL);
                 RedisModule_DictIteratorReseek(iter, ">", currentKey);
             }
             RedisModule_FreeString(NULL, currentKey);
@@ -481,7 +407,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         RedisModule_DictIteratorStop(iter);
     }
 
-    return result;
+    return res;
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {

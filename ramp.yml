@@ -24,3 +24,11 @@ capabilities:
     - intershard_tls_pass
     - flash
     - ipv6
+exclude_commands:
+    - timeseries.REFRESHCLUSTER
+    - timeseries.INFOCLUSTER
+    - timeseries.NETWORKTEST
+    - timeseries.CLUSTERSETFROMSHARD
+    - timeseries.HELLO
+    - timeseries.INNERCOMMUNICATION
+    - timeseries.FORCESHARDSCONNECTION
