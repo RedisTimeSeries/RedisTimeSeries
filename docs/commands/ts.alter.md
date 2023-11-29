@@ -39,7 +39,7 @@ is policy for handling multiple samples with identical timestamps. See `DUPLICAT
 
 <details open><summary><code>LABELS [{label value}...]</code></summary> 
 
-is set of label-value pairs that represent metadata labels of the time series and serves as a secondary index. A value may not contain parentheses nor comma.
+is set of label-value pairs that represent metadata labels of the time series and serves as a secondary index. A value may contain neither parentheses nor comma.
 
 If `LABELS` is specified, the given label list is applied. Labels that are not present in the given list are removed implicitly. Specifying `LABELS` with no label-value pairs removes all existing labels. See `LABELS` in `TS.CREATE`.
 </details>
