@@ -95,7 +95,7 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False):
                 env.skip()
             if on_macos and OS == 'macos':
                 env.skip()
-            if SANITIZER == 'address':
+            if asan and SANITIZER == 'address':
                 env.skip()
             return f(x, *args, **kwargs)
         return wrapper
