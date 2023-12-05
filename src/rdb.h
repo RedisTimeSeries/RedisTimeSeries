@@ -19,9 +19,10 @@
 #define TS_REPLICAOF_SUPPORT_VER 5
 #define TS_ALIGNMENT_TS_VER 6
 #define TS_LAST_AGGREGATION_EMPTY 7
+#define TS_CREATE_IGNORE_VER 8
 
 // This flag should be updated whenever a new rdb version is introduced
-#define TS_LATEST_ENCVER TS_LAST_AGGREGATION_EMPTY
+#define TS_LATEST_ENCVER TS_CREATE_IGNORE_VER
 
 extern int last_rdb_load_version;
 

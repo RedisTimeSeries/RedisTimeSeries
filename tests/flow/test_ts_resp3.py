@@ -48,7 +48,8 @@ def test_resp3(env):
                         b'size': 128,
                         b'bytesPerSample': 0.2612244784832001
                     }
-                ]
+                ],
+            b'ignoreMaxTimeDiff': 0, b'ignoreMaxValDiff': 0.0,
         }
         res = r1.execute_command('ts.mget', 'FILTER', 'name=mush')
         assert res == {b't1{1}': [{}, [1000, 5.0]],
