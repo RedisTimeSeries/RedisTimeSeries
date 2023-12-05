@@ -169,6 +169,8 @@ class TSInfo(object):
     retention_msecs = None
     last_time_stamp = None
     first_time_stamp = None
+    ignore_max_time_diff = None
+    ignore_max_val_diff = None
     chunk_size_bytes = None
     chunk_type = None
     chunks = None
@@ -185,6 +187,8 @@ class TSInfo(object):
         if b'retentionTime' in response: self.retention_msecs = response[b'retentionTime']
         if b'lastTimestamp' in response: self.last_time_stamp = response[b'lastTimestamp']
         if b'firstTimestamp' in response: self.first_time_stamp = response[b'firstTimestamp']
+        if b'ignoreMaxTimeDiff' in response: self.ignore_max_time_diff = response[b'ignoreMaxTimeDiff']
+        if b'ignoreMaxValDiff' in response: self.ignore_max_val_diff = response[b'ignoreMaxValDiff']
         if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
         if b'chunkType' in response: self.chunk_type = response[b'chunkType']
         if b'Chunks' in response: self.chunks = response[b'Chunks']
@@ -201,6 +205,8 @@ class TSInfo(object):
                self.retention_msecs == other.retention_msecs and \
                self.last_time_stamp == other.last_time_stamp and \
                self.first_time_stamp == other.first_time_stamp and \
+               self.ignore_max_time_diff == other.ignore_max_time_diff and \
+               self.ignore_max_val_diff == other.ignore_max_val_diff and \
                self.chunk_size_bytes == other.chunk_size_bytes and \
                self.chunks == other.chunks and \
                self.key_SelfName == other.key_SelfName
@@ -209,5 +215,6 @@ class TSInfo(object):
         return f"Info rules:{self.rules} sourceKey:{self.sourceKey} chunk_count:{self.chunk_count} " \
             + f"memory_usage:{self.memory_usage} total_samples:{self.total_samples} " \
                 + f"retention_msecs:{self.retention_msecs} last_time_stamp:{self.last_time_stamp} " \
-                    + f"first_time_stamp:{self.first_time_stamp} chunk_size_bytes:{self.chunk_size_bytes} " \
-                        + f"chunk_type:{self.chunk_type} chunks:{self.chunks} key_SelfName:{self.key_SelfName}"
+                    + f"first_time_stamp:{self.first_time_stamp} ignore_max_time_diff:{self.ignore_max_time_diff} " \
+                        + f"ignore_max_val_diff:{self.ignore_max_val_diff} chunk_size_bytes:{self.chunk_size_bytes} " \
+                            + f"chunk_type:{self.chunk_type} chunks:{self.chunks} key_SelfName:{self.key_SelfName}"

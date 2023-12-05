@@ -45,6 +45,8 @@ typedef struct Series
     const ChunkFuncs *funcs;
     size_t totalSamples;
     DuplicatePolicy duplicatePolicy;
+    long long ignoreMaxTimeDiff;
+    double ignoreMaxValDiff;
     bool in_ram; // false if the key is on flash (relevant only for RoF)
 } Series;
 

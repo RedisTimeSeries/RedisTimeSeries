@@ -26,6 +26,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     timestamp_t lastTimestamp = 0;
     uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
+    long long ignoreMaxTimeDiff = 0;
+    double ignoreMaxValDiff = 0.0;
     RedisModuleString *srcKey = NULL;
     Series *series = NULL;
     RedisModuleString *destKey = NULL;
@@ -57,6 +59,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         if (hasSrcKey) {
             srcKey = LoadString_IOError(io, goto err);
         }
+    }
+
+    if (encver >= TS_CREATE_IGNORE_VER) {
+        ignoreMaxTimeDiff = LoadUnsigned_IOError(io, goto err);
+        ignoreMaxValDiff = LoadDouble_IOError(io, goto err);
     }
 
     cCtx.labelsCount = LoadUnsigned_IOError(io, goto err);
@@ -132,6 +139,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
         series->lastChunk = chunk;
+        series->ignoreMaxTimeDiff = ignoreMaxTimeDiff;
+        series->ignoreMaxValDiff = ignoreMaxValDiff;
     }
 
     return series;
@@ -197,6 +206,9 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     } else {
         RedisModule_SaveUnsigned(io, FALSE);
     }
+
+    RedisModule_SaveUnsigned(io, series->ignoreMaxTimeDiff);
+    RedisModule_SaveDouble(io, series->ignoreMaxValDiff);
 
     RedisModule_SaveUnsigned(io, series->labelsCount);
     for (int i = 0; i < series->labelsCount; i++) {
