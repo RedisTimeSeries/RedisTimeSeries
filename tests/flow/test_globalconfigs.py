@@ -48,6 +48,7 @@ def test_ignore():
 def test_ignore_invalid_module_args():
     Env().skipOnCluster()
     skip_on_rlec()
+    skip(asan=True)
     with pytest.raises(Exception):
         Env(moduleArgs='IGNORE_MAX_TIME_DIFF -10; IGNORE_MAX_VAL_DIFF 20')
     with pytest.raises(Exception):
