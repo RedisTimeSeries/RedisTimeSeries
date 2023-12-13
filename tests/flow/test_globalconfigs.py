@@ -208,3 +208,80 @@ def test_negative_configuration():
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')
+
+
+def test_module_config_api_default_values():
+    Env().skipOnCluster()
+    skip_on_rlec()
+    env = Env()
+
+    def verify_default(name, value):
+        with env.getConnection() as r:
+            assert r.config_get(name) == {name: str(value)}
+
+    verify_default('timeseries.retention_policy', 0)
+    verify_default('timeseries.chunk_size_bytes', 4096)
+    verify_default('timeseries.num_threads', 3)
+    verify_default('timeseries.debug_force_rule_dump', 'no')
+    verify_default('timeseries.debug_dont_assert_on_failure', 'no')
+    verify_default('timeseries.compaction_policy', '')
+    verify_default('timeseries.oss_global_password', '')
+    verify_default('timeseries.duplicate_policy', 'block')
+    verify_default('timeseries.encoding', 'compressed')
+
+
+def test_module_config_api_success():
+    Env().skipOnCluster()
+    skip_on_rlec()
+
+    def verify_success(name, value):
+        env = Env(moduleArgs= '--' + name + ' ' + value)
+        with env.getConnection() as r:
+            assert r.config_get(name) == {name: str(value)}
+
+    verify_success('timeseries.encoding', 'uncompressed')
+    verify_success('timeseries.encoding', 'compressed')
+    verify_success('timeseries.retention_policy', '1')
+    verify_success('timeseries.retention_policy', '1000000')
+    verify_success('timeseries.chunk_size_bytes', '4096')
+    verify_success('timeseries.chunk_size_bytes', '65536')
+    verify_success('timeseries.debug_force_rule_dump', 'yes')
+    verify_success('timeseries.debug_force_rule_dump', 'no')
+    verify_success('timeseries.debug_dont_assert_on_failure', 'yes')
+    verify_success('timeseries.debug_dont_assert_on_failure', 'no')
+    verify_success('timeseries.num_threads', '0')
+    verify_success('timeseries.num_threads', '120')
+    verify_success('timeseries.compaction_policy', 'max:1s:0:500m')
+    verify_success('timeseries.compaction_policy', 'min:10s:1h')
+    verify_success('timeseries.oss_global_password', 'passwd1')
+    verify_success('timeseries.oss_global_password', '1111111111111111111111111111111')
+    verify_success('timeseries.duplicate_policy', 'block')
+    verify_success('timeseries.duplicate_policy', 'last')
+    verify_success('timeseries.duplicate_policy', 'first')
+    verify_success('timeseries.duplicate_policy', 'min')
+    verify_success('timeseries.duplicate_policy', 'max')
+    verify_success('timeseries.duplicate_policy', 'sum')
+
+
+def test_module_config_api_fail():
+    Env().skipOnCluster()
+    skip_on_rlec()
+
+    def verify_fail(name, value):
+        with pytest.raises(Exception):
+            Env(moduleArgs= '--' + name + ' ' + value)
+
+    verify_fail('timeseries.encoding', 'invalid')
+    verify_fail('timeseries.retention_policy', '-1')
+    verify_fail('timeseries.retention_policy', 'invalid')
+    verify_fail('timeseries.chunk_size_bytes', '0')
+    verify_fail('timeseries.chunk_size_bytes', '-1')
+    verify_fail('timeseries.chunk_size_bytes', '47')
+    verify_fail('timeseries.chunk_size_bytes', '63')
+    verify_fail('timeseries.chunk_size_bytes', '1048578')
+    verify_fail('timeseries.debug_force_rule_dump','invalid')
+    verify_fail('timeseries.dont_assert_on_failure','invalid')
+    verify_fail('timeseries.num_threads', '-1')
+    verify_fail('timeseries.num_threads', 'invalid')
+    verify_fail('timeseries.compaction_policy','invalid')
+    verify_fail('timeseries.duplicate_policy','invalid')

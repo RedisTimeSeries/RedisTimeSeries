@@ -1438,10 +1438,30 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
+    if (ModuleConfigInit(ctx) != TSDB_OK) {
         RedisModule_Log(
-            ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
+            ctx, "warning", "Failed to read RedisTimeSeries configuration. aborting...");
+        FreeGlobalConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
         return REDISMODULE_ERR;
+    }
+
+    if (argc > 0) {
+        RedisModule_Log(
+            ctx,
+            "warning",
+            "Configuration via module arguments is deprecated. Please use module configuration API:"
+            "In Redis configuration file, you can set a config in the format of: "
+            "'timeseries.retention_policy 1000' or from the command line, you can pass it as: "
+            "'--timeseries.retention_policy 1000'.");
+
+        if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
+            RedisModule_Log(
+                ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
+            FreeGlobalConfig();
+            RedisModule_FreeThreadSafeContext(rts_staticCtx);
+            return REDISMODULE_ERR;
+        }
     }
 
     initGlobalCompactionFunctions();

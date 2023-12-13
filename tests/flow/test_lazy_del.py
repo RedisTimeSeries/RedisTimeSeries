@@ -116,7 +116,7 @@ def test_dump_restore_dst_rule():
 def test_dump_restore_dst_rule_force_save_refs():
     Env().skipOnCluster()
     skip_on_rlec()
-    with Env(moduleArgs='DEUBG_FORCE_RULE_DUMP enable').getClusterConnectionIfNeeded() as r:
+    with Env(moduleArgs='--timeseries.DEBUG_FORCE_RULE_DUMP yes').getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
         key3 = 'ts3{a}'
