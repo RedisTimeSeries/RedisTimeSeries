@@ -1,4 +1,4 @@
-RLTest~=0.7.2
+RLTest~=0.7.7
 statistics
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 gevent~=22.10.1

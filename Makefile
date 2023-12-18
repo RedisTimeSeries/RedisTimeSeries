@@ -394,12 +394,13 @@ flow_tests: #$(TARGET)
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
+	RLTEST_ARGS='--no-progress' \
 	$(ROOT)/tests/flow/tests.sh
 
 else # RLEC
 
 flow_tests: #$(TARGET)
-	$(SHOW)RLEC=1 $(ROOT)/tests/flow/tests.sh
+	$(SHOW)RLEC=1 RLTEST_ARGS='--no-progress' $(ROOT)/tests/flow/tests.sh
 
 endif # RLEC
 
