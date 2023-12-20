@@ -801,7 +801,7 @@ workflows:
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.0", "6.2", "7.0"]
+              redis_version: ["6.0", "6.2"]
       - test-rlec:
           <<: *on-any-branch
       - valgrind:
@@ -910,7 +910,7 @@ workflows:
           name: build-with-redis-<<matrix.redis_version>>
           matrix:
             parameters:
-              redis_version: ["6.2", "7.0", "unstable"]
+              redis_version: ["6.2", "7.0"]
 
   nightly-perf-once-a-week:
     triggers:
