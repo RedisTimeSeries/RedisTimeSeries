@@ -12,6 +12,7 @@ Get all time series keys matching a filter list
 
 <details open>
 <summary><code>filterExpr...</code></summary>
+
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
   - `label=value` - the time series has a label named `label` with a value equal to `value`
@@ -24,7 +25,7 @@ filters time series based on their labels and label values. Each filter expressi
   <note><b>Notes:</b>
    - At least one `label=value` or `label=(value1,value2,...)` filter is required.
    - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means that a time series is a temperature time series of a study room.
-   - In a filter expression - Don't use whitespaces before or after the commas.
+   - In a filter expression - don't use whitespaces before or after the commas.
    </note>
 </details>
 
