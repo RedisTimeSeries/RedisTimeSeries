@@ -19,9 +19,9 @@ is key name for the time series.
 
 <details open><summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary> 
 
-is used when a time series is a compaction. With `LATEST`, TS.GET reports the compacted value of the latest, possibly partial, bucket. Without `LATEST`, TS.GET does not report the latest, possibly partial, bucket. When a time series is not a compaction, `LATEST` is ignored.
+is used when a time series is a compaction. With `LATEST`, TS.GET reports the compacted value of the latest (possibly partial) bucket. Without `LATEST`, TS.GET does not report the latest (possibly partial) bucket. When a time series is not a compaction, `LATEST` is ignored.
   
-The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest, possibly partial, bucket is also required. In such a case, use `LATEST`.
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. In such a case, use `LATEST`.
 </details>
 
 ## Return value
