@@ -12,23 +12,24 @@ Get all time series keys matching a filter list
 
 <details open>
 <summary><code>filterExpr...</code></summary>
+
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
-  - `label=value`, where `label` equals `value`
-  - `label!=value`, where `label` does not equal `value`
-  - `label=`, where `key` does not have label `label`
-  - `label!=`, where `key` has label `label`
-  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
-  - `label!=(value1,value2,...)`, where key with label `label` does not equal any of the values in the list
+  - `label=value` - the time series has a label named `label` with a value equal to `value`
+  - `label!=value` - the time series does not have a label named `label` with a value equal to `value`
+  - `label=` - the time series does not have a label named `label`
+  - `label!=` - the time series has a label named `label`
+  - `label=(value1,value2,...)` - the time series has a label named `label` with a value equal to one of the values in the list
+  - `label!=(value1,value2,...)` - the time series does not have a label named `label` with a value equal to any of the values in the list
 
   <note><b>Notes:</b>
-   - At least one `label=value` filter is required.
-   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
-   - Don't use whitespaces in the filter expression.
+   - At least one `label=value` or `label=(value1,value2,...)` filter is required.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means that a time series is a temperature time series of a study room.
+   - In a filter expression - don't use whitespaces before or after the commas.
    </note>
 </details>
 
-<note><b>Note:</b> The `QUERYINDEX` command cannot be part of transaction when running on a Redis cluster.</note>
+<note><b>Note:</b> The `QUERYINDEX` command cannot be part of a transaction when running on a Redis cluster.</note>
 
 ## Return value
 
