@@ -11,21 +11,21 @@ Get the sample with the highest timestamp from each time series matching a speci
 ## Required arguments
 
 <details open>
-<summary><code>FILTER filterExpr...</code></summary> 
+<summary><code>FILTER filterExpr...</code></summary>
 
 filters time series based on their labels and label values. Each filter expression has one of the following syntaxes:
 
-  - `label=value`, where `label` equals `value`
-  - `label!=value`, where `label` does not equal `value`
-  - `label=`, where `key` does not have label `label`
-  - `label!=`, where `key` has label `label`
-  - `label=(value1,value2,...)`, where `key` with label `label` equals one of the values in the list
-  - `label!=(value1,value2,...)` where key with label `label` does not equal any of the values in the list
+  - `label=value` - the time series has a label named `label` with a value equal to `value`
+  - `label!=value` - the time series does not have a label named `label` with a value equal to `value`
+  - `label=` - the time series does not have a label named `label`
+  - `label!=` - the time series has a label named `label`
+  - `label=(value1,value2,...)` - the time series has a label named `label` with a value equal to one of the values in the list
+  - `label!=(value1,value2,...)` - the time series does not have a label named `label` with a value equal to any of the values in the list
 
-  <note><b>NOTES:</b> 
-   - At least one `label=value` filter is required.
-   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means the a time series is a temperature time series of a study room.
-   - Don't use whitespaces in the filter expression.
+  <note><b>Notes:</b>
+   - At least one `label=value` or `label=(value1,value2,...)` filter is required.
+   - Filters are conjunctive. For example, the FILTER `type=temperature room=study` means that a time series is a temperature time series of a study room.
+   - In a filter expression - don't use whitespaces before or after the commas.
    </note>
 </details>
 
@@ -34,9 +34,9 @@ filters time series based on their labels and label values. Each filter expressi
 <details open>
 <summary><code>LATEST</code> (since RedisTimeSeries v1.8)</summary> 
 
-is used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest possibly partial bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MGET does not report the latest possibly partial bucket. When a time series is not a compaction, `LATEST` is ignored.
+is used when a time series is a compaction. With `LATEST`, TS.MGET also reports the compacted value of the latest (possibly partial) bucket, given that this bucket's start time falls within `[fromTimestamp, toTimestamp]`. Without `LATEST`, TS.MGET does not report the latest (possibly partial) bucket. When a time series is not a compaction, `LATEST` is ignored.
   
-The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest possibly partial bucket is also required. In such a case, use `LATEST`.
+The data in the latest bucket of a compaction is possibly partial. A bucket is _closed_ and compacted only upon the arrival of a new sample that _opens_ a new _latest_ bucket. There are cases, however, when the compacted value of the latest (possibly partial) bucket is also required. In such a case, use `LATEST`.
 </details>
 
 <details open>
@@ -56,7 +56,7 @@ If `WITHLABELS` or `SELECTED_LABELS` are not specified, by default, an empty lis
 
 </details>
 
-<note><b>Note:</b> The `MGET` command cannot be part of transaction when running on a Redis cluster.</note>
+<note><b>Note:</b> The `MGET` command cannot be part of a transaction when running on a Redis cluster.</note>
 
 ## Return value
 
