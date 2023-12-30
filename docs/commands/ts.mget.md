@@ -25,7 +25,7 @@ filters time series based on their labels and label values. Each filter expressi
   <note><b>Notes:</b>
    - At least one filter expression with a syntax `label=value` or `label=(value1,value2,...)` is required.
    - Filter expressions are conjunctive. For example, the filter `type=temperature room=study` means that a time series is a temperature time series of a study room.
-   - Whitespaces are not allowed in a filter expression except between quotes or double quotes in values - e.g., `x="y y"` or `x='(y y,z z)'`.
+   - Whitespaces are unallowed in a filter expression except between quotes or double quotes in values - e.g., `x="y y"` or `x='(y y,z z)'`.
    </note>
 </details>
 
