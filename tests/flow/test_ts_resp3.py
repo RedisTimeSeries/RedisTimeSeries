@@ -5,6 +5,8 @@ from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data
 
 
 def test_resp3(env):
+    if SANITIZER == 'address' and env.isCluster():
+        env.skip()
     if not is_resp3_possible(env):
         env.skip()
     t1 = 't1{1}'
@@ -62,6 +64,9 @@ def test_resp3(env):
         assert res == {b't1{1}', b't2{1}'}
 
 def test_resp3_mrange(env):
+    if SANITIZER == 'address' and env.isCluster():
+        env.skip()
+
     if not is_resp3_possible(env):
         env.skip()
     t1 = 't1{1}'
