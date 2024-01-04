@@ -187,7 +187,7 @@ With this creation rule, datapoints added to the `sensor1` timeseries will be gr
 
 
 ## Filtering
-You can filter yor time series by value, timestamp and labels:
+You can filter your time series by value, timestamp and labels:
 
 ### Filtering by label
 You can retrieve datapoints from multiple timeseries in the same query, and the way to do this is by using label filters. For example:
