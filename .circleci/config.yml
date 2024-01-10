@@ -869,7 +869,7 @@ workflows:
             - build-macos-x64
             - build-macos-m1
       - release-qa-tests:
-          <<: *on-version-tags
+          <<: *always
           context: common
           requires:
             - upload-release-artifacts
