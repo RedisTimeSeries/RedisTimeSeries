@@ -1081,8 +1081,7 @@ def test_sanity_pipeline():
         assert expected_result == actual_result
 
 def test_large_compressed_range():
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
@@ -1106,8 +1105,7 @@ def test_large_compressed_range():
                 assert len(res) == val2 - val1 + 1
 
 def test_large_compressed_revrange():
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
@@ -1228,8 +1226,7 @@ def test_max_extensive():
     max_samples_count = 40
     n_chunk_samples = 32
     random_values = [None]*(max_samples_count*3)
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     try:
         for i in range(0, max_samples_count*3):
             random_values[i] = random.uniform(0, max_samples_count)
