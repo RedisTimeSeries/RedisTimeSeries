@@ -497,9 +497,7 @@ never: &never
 on-master: &on-master
   filters:
     branches:
-      only:
-        - master
-        - fix-macos
+      only: master
     tags:
       ignore: /.*/
 
@@ -510,7 +508,6 @@ on-integ-branch: &on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-macos
     tags:
       ignore: /.*/
 
@@ -521,7 +518,6 @@ on-integ-branch-cron: &on-integ-branch-cron
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-macos
 
 not-on-integ-branch: &not-on-integ-branch
   filters:
@@ -530,7 +526,6 @@ not-on-integ-branch: &not-on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-macos
     tags:
       ignore: /.*/
 
@@ -548,7 +543,6 @@ on-integ-and-version-tags: &on-integ-and-version-tags
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-macos
     tags:
       only: /^v[0-9].*/
 
@@ -584,7 +578,7 @@ workflows:
             parameters:
               platform: [jammy, focal, bionic]
       - build-macos-x64:
-          <<: *on-any-branch
+          <<: *on-integ-and-version-tags
           context: common
       - build-macos-m1:
           context: common
