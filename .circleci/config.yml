@@ -499,7 +499,7 @@ on-master: &on-master
     branches:
       only:
         - master
-        - fix-ci
+        - fix-macos
     tags:
       ignore: /.*/
 
@@ -510,7 +510,7 @@ on-integ-branch: &on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-ci
+        - fix-macos
     tags:
       ignore: /.*/
 
@@ -521,7 +521,7 @@ on-integ-branch-cron: &on-integ-branch-cron
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-ci
+        - fix-macos
 
 not-on-integ-branch: &not-on-integ-branch
   filters:
@@ -530,7 +530,7 @@ not-on-integ-branch: &not-on-integ-branch
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-ci
+        - fix-macos
     tags:
       ignore: /.*/
 
@@ -548,7 +548,7 @@ on-integ-and-version-tags: &on-integ-and-version-tags
         - master
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
-        - fix-ci
+        - fix-macos
     tags:
       only: /^v[0-9].*/
 
