@@ -335,9 +335,6 @@ jobs:
         default: "yes"
     steps:
       - early-returns
-      - run:
-          name: Brew update
-          command: brew update
       - build-steps
       - run:
           name: Persist artifacts?
