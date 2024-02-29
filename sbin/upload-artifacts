@@ -7,7 +7,6 @@ READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
 
 set -e
-
 #----------------------------------------------------------------------------------------------
 
 if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
