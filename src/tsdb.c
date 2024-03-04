@@ -133,6 +133,8 @@ Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx) {
     newSeries->labelsCount = cCtx->labelsCount;
     newSeries->options = cCtx->options;
     newSeries->duplicatePolicy = cCtx->duplicatePolicy;
+    newSeries->ignoreMaxTimeDiff = cCtx->ignoreMaxTimeDiff;
+    newSeries->ignoreMaxValDiff = cCtx->ignoreMaxValDiff;
     newSeries->in_ram = true;
 
     if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
@@ -590,7 +592,7 @@ static inline void update_chunk_in_dict(RedisModuleDict *chunks,
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
-                       DuplicatePolicy dp_override) {
+                       DuplicatePolicy dp_policy) {
     bool latestChunk = true;
     void *chunkKey = NULL;
     const ChunkFuncs *funcs = series->funcs;
@@ -639,16 +641,6 @@ int SeriesUpsertSample(Series *series,
     };
 
     int size = 0;
-
-    // Use module level configuration if key level configuration doesn't exists
-    DuplicatePolicy dp_policy;
-    if (dp_override != DP_NONE) {
-        dp_policy = dp_override;
-    } else if (series->duplicatePolicy != DP_NONE) {
-        dp_policy = series->duplicatePolicy;
-    } else {
-        dp_policy = TSGlobalConfig.duplicatePolicy;
-    }
 
     ChunkResult rv = funcs->UpsertSample(&uCtx, &size, dp_policy);
     if (rv == CR_OK) {
