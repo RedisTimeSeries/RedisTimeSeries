@@ -541,21 +541,25 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
     double value;
+    int rv = REDISMODULE_OK;
     const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
     if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
-        return REDISMODULE_ERR;
+        rv = REDISMODULE_ERR;
+        goto _out;
     }
 
     long long timestampValue;
     if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
-        return REDISMODULE_ERR;
+        rv = REDISMODULE_ERR;
+        goto _out;
     }
 
     if (timestampValue < 0) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
-        return REDISMODULE_ERR;
+        rv = REDISMODULE_ERR;
+        goto _out;
     }
     api_timestamp_t timestamp = (u_int64_t)timestampValue;
 
@@ -566,23 +570,31 @@ static inline int add(RedisModuleCtx *ctx,
         // the key doesn't exist, lets check we have enough information to create one
         CreateCtx cCtx = { 0 };
         if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
-            return REDISMODULE_ERR;
+            rv = REDISMODULE_ERR;
+            goto _out;
         }
 
-        CreateTsKey(ctx, keyName, &cCtx, &series, &key);
+        if (CreateTsKey(ctx, keyName, &cCtx, &series, &key) != REDISMODULE_OK) {
+            rv = REDISMODULE_ERR;
+            goto _out;
+        }
         SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
     } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
         RTS_ReplyGeneralError(ctx, "TSDB: the key is not a TSDB key");
-        return REDISMODULE_ERR;
+        rv = REDISMODULE_ERR;
+        goto _out;
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
             ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
-            return REDISMODULE_ERR;
+            rv = REDISMODULE_ERR;
+            goto _out;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
+    rv = internalAdd(ctx, series, timestamp, value, dp, true);
+
+_out:
     RedisModule_CloseKey(key);
     return rv;
 }
