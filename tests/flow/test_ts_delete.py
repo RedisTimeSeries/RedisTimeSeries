@@ -548,7 +548,7 @@ def test_del_with_rules_bug_4972_4(self):
         assert res == [[0, b'4']]
 
 def test_del_with_rules_bug_4972_5(self):
-    e = Env(moduleArgs='DONT_ASSERT_ON_FAILIURE enable')
+    e = Env(moduleArgs='--timeseries.DEBUG_DONT_ASSERT_ON_FAILURE yes')
     t1 = 't1{1}'
     t2 = 't2{1}'
     with e.getClusterConnectionIfNeeded() as r:
@@ -580,7 +580,7 @@ def test_del_with_rules_bug_4972_5(self):
         assert res == [[5, b'5'], [31, b'31']]
 
 def test_del_with_rules_bug_4972_6(self):
-    e = Env(moduleArgs='DONT_ASSERT_ON_FAILIURE enable')
+    e = Env(moduleArgs='--timeseries.DEBUG_DONT_ASSERT_ON_FAILURE yes')
     t1 = 't1{1}'
     t2 = 't2{1}'
     with e.getClusterConnectionIfNeeded() as r:
