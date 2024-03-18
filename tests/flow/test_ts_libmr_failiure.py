@@ -22,7 +22,7 @@ def verifyClusterInitialized(env):
             allConnected = True
             for n in nodes:
                 status = n[17]
-                if status != b'connected':
+                if status != b'connected' and status != b'uninitialized':
                     allConnected = False
             if not allConnected:
                 time.sleep(0.1)

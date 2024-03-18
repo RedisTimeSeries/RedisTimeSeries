@@ -77,7 +77,7 @@ void MR_SerializationCtxWriteBufferWrapper(WriteSerializationCtx *sctx,
                                            const char *buff,
                                            size_t len);
 
-long long MR_SerializationCtxReadeLongLongWrapper(ReaderSerializationCtx *sctx);
+long long MR_SerializationCtxReadLongLongWrapper(ReaderSerializationCtx *sctx);
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len);
 
 #endif
