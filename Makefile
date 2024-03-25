@@ -381,7 +381,7 @@ export GEN ?= 1
 export SLAVES ?= 1
 export AOF ?= 1
 export AOF_SLAVES ?= 1
-export OSS_CLUSTER ?= 1
+export OSS_CLUSTER ?= 0
 endif
 
 ifneq ($(RLEC),1)

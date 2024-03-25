@@ -416,7 +416,7 @@ jobs:
           platform: <<parameters.platform>>
           official: "0"
 
-  build-macos:
+  build-macos-x64:
     macos:
       xcode: 12.5.1
     resource_class: macos.x86.medium.gen2
@@ -432,6 +432,25 @@ jobs:
           command: |
             if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
                 make upload-artifacts SHOW=1
+            fi
+      - persist-artifacts
+
+  build-macos-m1:
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.large.gen1
+    parameters:
+      upload:
+        type: string
+        default: "yes"
+    steps:
+      - early-returns
+      - build-steps
+      - run:
+          name: Upload artifacts to S3
+          command: |
+            if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
+                make upload-artifacts SHOW=1 VERBOSE=1
             fi
       - persist-artifacts
 
@@ -516,7 +535,7 @@ jobs:
             if [[ -n $CIRCLE_TAG && "<<parameters.staging-lab>>" != 1 ]]; then
                 make upload-release SHOW=1
             else
-                make upload-release SHOW=1 STAGING=1
+                make upload-release SHOW=1
             fi
 
   release-qa-tests:
@@ -802,68 +821,21 @@ workflows:
             alias: build-with-redis-ver
             parameters:
               redis_version: ["6.0", "6.2"]
-      - test-rlec:
-          <<: *on-any-branch
-      - valgrind:
-          <<: *never
-      - build-platforms:
-          <<: *on-integ-and-version-tags
-          context: common
-          matrix:
-            parameters:
-              platform: [jammy, focal, bionic, xenial, amzn2, centos7, rocky8, bullseye]
-      - build-arm-platforms:
-          <<: *on-integ-and-version-tags
-          context: common
-          matrix:
-            parameters:
-              platform: [jammy, focal, bionic]
-      - build-macos:
-          context: common
-          <<: *on-integ-and-version-tags
-      - coverage:
-          <<: *on-any-branch
-      - performance-ci-automation-oss-standalone:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-standalone-scaling:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-query:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-ingestion:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-standalone-scaling-profiler:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-standalone-tsbs-profiler:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-profiler-query:
-          context: common
-          <<: *on-integ-and-version-tags
-      - performance-ci-automation-oss-cluster-profiler-ingestion:
+      - build-macos-m1:
           context: common
           <<: *on-integ-and-version-tags
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
-          staging-lab: "1"
           context: common
           <<: *on-integ-branch
           requires:
-            - build-platforms
-            - build-arm-platforms
-            - build-macos
+            - build-macos-m1
       - upload-artifacts:
           name: upload-release-artifacts
           context: common
           <<: *on-version-tags
           requires:
-            - build-platforms
-            - build-arm-platforms
-            - build-macos
+            - build-macos-m1
       - release-qa-tests:
           <<: *on-version-tags
           context: common
@@ -938,6 +910,8 @@ workflows:
           cron: "20 17 * * 0,3"
           <<: *on-integ-branch-cron
     jobs:
-      - build-macos:
+      - build-macos-x64:
+          upload: "no"
+      - build-macos-m1:
           upload: "no"
       - valgrind
