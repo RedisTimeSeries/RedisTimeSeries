@@ -21,8 +21,7 @@ def test_ts_slowlog():
         assert env.getConnection(shard).execute_command('config set slowlog-log-slower-than 10') == b'OK'
 
     samples_count = 1000
-    seed = datetime.now()
-    random.seed(seed)
+    random.seed()
     with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
         assert r.execute_command('TS.CREATE', 'tester2{3}', 'LABELS', 'name', 'fabi')
