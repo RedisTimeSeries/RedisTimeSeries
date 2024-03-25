@@ -74,8 +74,8 @@ def testLibmrFail():
                                 'name=bob')
         assert(False)
     except Exception as e:
-        env.assertResponseError(e, "Multi-shard command failed. This may happen if a shard needs to process too much data. Try to apply strict filters, if possible.")
-    
+        assert str(e) == "A multi-shard command failed because at least one shard did not reply within the given timeframe."
+
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)
     env.getConnection(3).execute_command('timeseries.REFRESHCLUSTER')
