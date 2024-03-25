@@ -25,12 +25,17 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
         }
 
         if (max_idle_reached) {
-            RedisModule_ReplyWithError(
-                rctx,
-                "Multi-shard command failed. This may happen if a shard needs to process too much "
-                "data. Try to apply strict filters, if possible.");
+            RedisModule_ReplyWithError(rctx,
+                                       "A multi-shard command failed because at least one shard "
+                                       "did not reply within the given timeframe.");
         } else {
-            RedisModule_ReplyWithError(rctx, "multi shard cmd failed");
+            char buf[512] = { 0 };
+            snprintf(buf,
+                     sizeof(buf),
+                     "Multi-shard command failed. %s",
+                     MR_ExecutionCtxGetError(eCtx, 0));
+
+            RedisModule_ReplyWithError(rctx, buf);
         }
         return true;
     }
