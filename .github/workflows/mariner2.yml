@@ -1,6 +1,7 @@
 name: build for mariner2
 
 on:
+  pull_request:
   push:
     branches:
       - master
