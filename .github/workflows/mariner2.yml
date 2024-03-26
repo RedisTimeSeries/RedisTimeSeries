@@ -1,6 +1,7 @@
 name: build for mariner2
 
 on:
+  pull_request:
   push:
     branches:
       - master
@@ -38,7 +39,7 @@ jobs:
       - name: Build and test TS
         run: make test
       - name: Pack module
-        run: make pack BRANCH=${{ github.ref_name }} SHOW=1
+        run: make pack BRANCH=${{ github.head_ref }} SHOW=1
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -46,9 +47,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: "us-east-1"
       - name: Upload artifacts to s3 - staging
+        if: ${{ startsWith(github.head_ref, 'feature-') }}
         run: |
           make upload-artifacts SHOW=1 VERBOSE=1
           make upload-release SHOW=1 STAGING=1 VERBOSE=1
       - name: Upload artifacts to s3 - release  # todo: trigger this manually instead
-        if: ${{ github.ref != 'refs/heads/master' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: make upload-release SHOW=1 VERBOSE=1
