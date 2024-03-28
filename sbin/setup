@@ -8,13 +8,7 @@ READIES=$ROOT/deps/readies
 
 export HOMEBREW_NO_AUTO_UPDATE=1
 
-# Temporary fix for macos python installation issue
-if [[ $(uname) == Darwin ]]; then
-  FORCE=1 $READIES/bin/getpy3
-else
-  $READIES/bin/getpy3
-fi
-
+$READIES/bin/getpy3
 pyenv="$(get_profile_d)/pyenv.sh"
 if [[ -f $pyenv ]]; then
 	. $pyenv
