@@ -526,7 +526,7 @@ jobs:
             mkdir -p bin
             ln -s ~/workspace/artifacts bin/artifacts
             if [[ -n $CIRCLE_TAG && "<<parameters.staging-lab>>" != 1 ]]; then
-                make upload-release SHOW=1
+                make upload-release SHOW=1 VERSION=$CIRCLE_TAG
             else
                 make upload-release SHOW=1 STAGING=1
             fi
@@ -750,6 +750,13 @@ on-master: &on-master
     tags:
       ignore: /.*/
 
+on-any-branch-except-version: &on-any-branch-except-version
+  filters:
+    branches:
+      only: /.*/
+    tags:
+      ignore: /.*/
+
 on-integ-branch: &on-integ-branch
   filters:
     branches:
@@ -768,20 +775,11 @@ on-integ-branch-cron: &on-integ-branch-cron
         - /^\d+\.\d+.*$/
         - /^feature-.*$/
 
-not-on-integ-branch: &not-on-integ-branch
-  filters:
-    branches:
-      ignore:
-        - master
-        - /^\d+\.\d+.*$/
-        - /^feature-.*$/
-    tags:
-      ignore: /.*/
-
 on-version-tags: &on-version-tags
   filters:
     branches:
-      ignore: /.*/
+      only:
+        ignore: /.*/
     tags:
       only: /^v[0-9].*/
 
@@ -804,48 +802,46 @@ workflows:
       << pipeline.parameters.run_default_flow >>
     jobs:
       - lint:
-          <<: *on-any-branch
-      - build:
-          <<: *not-on-integ-branch
+          <<: *on-any-branch-except-version
       - build:
           name: build-with-redis-<<matrix.redis_version>>
-          <<: *on-integ-branch
+          <<: *on-any-branch-except-version
           matrix:
             alias: build-with-redis-ver
             parameters:
-              redis_version: ["6.0", "6.2", "7.0", "7", "unstable"]
+              redis_version: ["7.0", "7.2", "unstable"]
       - build-platforms:
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
           context: common
           matrix:
             parameters:
               platform: [jammy, focal, bionic, amzn2, centos7, rocky8, rocky9, bullseye]
       - build-arm-platforms:
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
           context: common
           matrix:
             parameters:
               platform: [jammy, focal, bionic]
       - build-macos-x64:
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
           context: common
       - build-macos-m1:
           context: common
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
       - coverage:
-          <<: *on-any-branch
+          <<: *on-any-branch-except-version
       - sanitize:
           name: sanitize-<< matrix.san-type >>
-          <<: *on-any-branch
+          <<: *on-any-branch-except-version
           matrix:
             parameters:
               san-type: [address] # [memory]
       - performance-ci-automation-oss-standalone:
           context: common
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
       - performance-ci-automation-oss-standalone-scaling:
           context: common
-          <<: *on-integ-and-version-tags
+          <<: *on-integ-branch
       - upload-artifacts:
           name: upload-artifacts-to-staging-lab
           <<: *on-integ-branch
@@ -860,11 +856,6 @@ workflows:
           name: upload-release-artifacts
           <<: *on-version-tags
           context: common
-          requires:
-            - build-platforms
-            - build-arm-platforms
-            - build-macos-x64
-            - build-macos-m1
       - release-qa-tests:
           <<: *on-version-tags
           context: common
