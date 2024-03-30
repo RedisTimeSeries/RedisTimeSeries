@@ -77,7 +77,6 @@ else
 	MAYBE_SNAP=
 fi
 
-cd artifacts${MAYBE_SNAP}
 [[ $VERBOSE == 1 ]] && du -ah --apparent-size *
 
 #----------------------------------------------------------------------------------------------
@@ -116,6 +115,18 @@ s3_upload() {
 	return 0
 }
 
+s3_move_artifacts_to_release_branch() {
+  echo "Moving artifacts from snapshots to release directory for version=${VERSION}"
+  local snapshot_version_files="${S3_URL}/redistimeseries/snapshots/"
+  local release_dir="${S3_URL}/redistimeseries"
+  $OP aws --debug s3 cp --recursive ${snapshot_version_files} ${release_dir} --exclude "*" --include "*${VERSION}*"
+}
+
 #----------------------------------------------------------------------------------------------
 
-PROD=redistimeseries PREFIX=redistimeseries s3_upload
+if [ ${RELEASE} == 1 ]; then
+  s3_move_artifacts_to_release_branch
+else
+  cd artifacts${MAYBE_SNAP}
+  PROD=redistimeseries PREFIX=redistimeseries s3_upload
+fi
