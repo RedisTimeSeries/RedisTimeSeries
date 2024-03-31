@@ -525,8 +525,8 @@ jobs:
           command: |
             mkdir -p bin
             ln -s ~/workspace/artifacts bin/artifacts
-            if [[ -n $CIRCLE_TAG && "<<parameters.staging-lab>>" != 1 ]]; then
-                make upload-release SHOW=1 VERSION=$CIRCLE_TAG
+            if [[ "<<parameters.staging-lab>>" != 1 ]]; then
+                make upload-release SHOW=1 VERSION=1.10.12
             else
                 make upload-release SHOW=1 STAGING=1
             fi
@@ -753,7 +753,7 @@ on-master: &on-master
 on-any-branch-except-version: &on-any-branch-except-version
   filters:
     branches:
-      only: /.*/
+      ignore: /^pre-rel-.*$/
     tags:
       ignore: /.*/
 
@@ -779,7 +779,7 @@ on-version-tags: &on-version-tags
   filters:
     branches:
       only:
-        ignore: /.*/
+        - /^pre-rel-.*$/
     tags:
       only: /^v[0-9].*/
 
