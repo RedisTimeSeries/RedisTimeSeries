@@ -45,8 +45,8 @@ def test_ignore():
         assert r.execute_command('TS.RANGE', 'key2', '0', '+') == [[1000, b'100'], [1005, b'110']]
 
 @skip(asan=True)
-def test_ignore_invalid_module_args():
-    Env().skipOnCluster()
+def test_ignore_invalid_module_args(env):
+    env.skipOnCluster()
     skip_on_rlec()
     with pytest.raises(Exception):
         Env(moduleArgs='IGNORE_MAX_TIME_DIFF -10; IGNORE_MAX_VAL_DIFF 20')
