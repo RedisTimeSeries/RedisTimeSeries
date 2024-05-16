@@ -129,6 +129,35 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+int parseIgnoreArgs(RedisModuleCtx *ctx,
+                    RedisModuleString **argv,
+                    int argc,
+                    long long int *ignoreMaxTimeDiff,
+                    double *ignoreMaxValDiff) {
+    int idx = RMUtil_ArgIndex("IGNORE", argv, argc);
+    if (idx > 0) {
+        long long maxTimeDiff;
+        double maxValDiff;
+
+        if (idx + 2 >= argc ||
+            RMUtil_ParseArgs(argv, argc, idx + 1, "ld", &maxTimeDiff, &maxValDiff) !=
+                REDISMODULE_OK) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse IGNORE");
+            return TSDB_ERROR;
+        }
+
+        if (maxTimeDiff < 0 || maxValDiff < 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: IGNORE arguments cannot be negative");
+            return TSDB_ERROR;
+        }
+
+        *ignoreMaxTimeDiff = maxTimeDiff;
+        *ignoreMaxValDiff = maxValDiff;
+    }
+
+    return TSDB_OK;
+}
+
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx) {
     cCtx->retentionTime = TSGlobalConfig.retentionPolicy;
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
@@ -161,6 +190,13 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
 
     cCtx->duplicatePolicy = DP_NONE;
     if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
+        TSDB_OK) {
+        goto err_exit;
+    }
+
+    cCtx->ignoreMaxTimeDiff = TSGlobalConfig.ignoreMaxTimeDiff;
+    cCtx->ignoreMaxValDiff = TSGlobalConfig.ignoreMaxValDiff;
+    if (parseIgnoreArgs(ctx, argv, argc, &cCtx->ignoreMaxTimeDiff, &cCtx->ignoreMaxValDiff) !=
         TSDB_OK) {
         goto err_exit;
     }
