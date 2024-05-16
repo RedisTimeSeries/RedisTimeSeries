@@ -8,7 +8,9 @@ class testModuleLoadTimeArguments(object):
         self.test_variations = [(True, 'CHUNK_SIZE_BYTES 2048'),
                                 (True, 'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'),
                                 (True, 'DUPLICATE_POLICY MAX'),
-                                (True, 'RETENTION_POLICY 30')
+                                (True, 'RETENTION_POLICY 30'),
+                                (True, 'IGNORE_MAX_TIME_DIFF 10'),
+                                (True, 'IGNORE_MAX_VAL_DIFF 20')
                                 ]
 
     def test(self):
@@ -24,6 +26,36 @@ class testModuleLoadTimeArguments(object):
             else:
                 with pytest.raises(Exception) as excinfo:
                     assert Env(testName="Test load time args: {}".format(variation[1]), moduleArgs=variation[1])
+
+
+def test_ignore():
+    Env().skipOnCluster()
+    skip_on_rlec()
+    env = Env(moduleArgs='IGNORE_MAX_TIME_DIFF 10; IGNORE_MAX_VAL_DIFF 20')
+    with env.getConnection() as r:
+        # Verify module args work as the default config
+        r.execute_command('TS.ADD', 'key1', '1000', '100', 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('TS.ADD', 'key1', '1005', '110')
+        assert r.execute_command('TS.RANGE', 'key1', '0', '+') == [[1000, b'100']]
+
+        # Verify create arguments override module args config
+        r.execute_command('TS.ADD', 'key2', '1000', '100', 'DUPLICATE_POLICY', 'LAST', 'IGNORE', '5', '3')
+        r.execute_command('TS.ADD', 'key2', '1005', '110')
+        r.execute_command('TS.ADD', 'key2', '1007', '112')
+        assert r.execute_command('TS.RANGE', 'key2', '0', '+') == [[1000, b'100'], [1005, b'110']]
+
+@skip(asan=True)
+def test_ignore_invalid_module_args(env):
+    env.skipOnCluster()
+    skip_on_rlec()
+    with pytest.raises(Exception):
+        Env(moduleArgs='IGNORE_MAX_TIME_DIFF -10; IGNORE_MAX_VAL_DIFF 20')
+    with pytest.raises(Exception):
+        Env(moduleArgs='IGNORE_MAX_TIME_DIFF invalid; IGNORE_MAX_VAL_DIFF 20')
+    with pytest.raises(Exception):
+        Env(moduleArgs='IGNORE_MAX_TIME_DIFF 10; IGNORE_MAX_VAL_DIFF -20')
+    with pytest.raises(Exception):
+        Env(moduleArgs='IGNORE_MAX_TIME_DIFF 10; IGNORE_MAX_VAL_DIFF invalid')
 
 
 def test_encoding_uncompressed():
@@ -91,13 +123,13 @@ def test_timestamp_alignment():
         assert res == [b't1', b't1_MAX_1000_500']
 
         info = r.execute_command('TS.INFO', 't1_MAX_1000_500')
-        assert info == [b'totalSamples', 2, b'memoryUsage', 4201, b'firstTimestamp', 0, b'lastTimestamp', 2500, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'uncompressed', b'duplicatePolicy', None, b'labels', [[b'aggregation', b'MAX'], [b'time_bucket', b'1000']], b'sourceKey', b't1', b'rules', []]
+        assert info == [b'totalSamples', 2, b'memoryUsage', 4201, b'firstTimestamp', 0, b'lastTimestamp', 2500, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'uncompressed', b'duplicatePolicy', None, b'labels', [[b'aggregation', b'MAX'], [b'time_bucket', b'1000']], b'sourceKey', b't1', b'rules', [],  b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
 
         info = r.execute_command('TS.INFO', 't1', 'DEBUG')
-        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'keySelfName', b't1', b'Chunks', [[b'startTimestamp', 1, b'endTimestamp', 5000, b'samples', 3, b'size', 4096, b'bytesPerSample', b'1365.3333740234375']]]
+        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0', b'keySelfName', b't1', b'Chunks', [[b'startTimestamp', 1, b'endTimestamp', 5000, b'samples', 3, b'size', 4096, b'bytesPerSample', b'1365.3333740234375']]]
 
         info = r.execute_command('TS.INFO', 't1')
-        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]]]
+        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
 
 class testGlobalConfigTests():
 
