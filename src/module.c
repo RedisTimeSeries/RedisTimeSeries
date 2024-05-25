@@ -429,6 +429,7 @@ static int internalAdd(RedisModuleCtx *ctx,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override,
+                       bool should_filter,
                        bool should_reply);
 
 static void handleCompaction(RedisModuleCtx *ctx,
@@ -472,7 +473,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
 
         double aggVal;
         if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+            internalAdd(
+                ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false, false);
             RedisModule_NotifyKeyspaceEvent(
                 ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
         }
@@ -502,6 +504,7 @@ static int internalAdd(RedisModuleCtx *ctx,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override,
+                       bool should_filter,
                        bool should_reply) {
     timestamp_t lastTS = series->lastTimestamp;
     uint64_t retention = series->retentionTime;
@@ -521,14 +524,16 @@ static int internalAdd(RedisModuleCtx *ctx,
         dp_policy = TSGlobalConfig.duplicatePolicy;
     }
 
-    // Insert filter for close samples. If configured, it's used to ignore last measurement if its
-    // value is negligible compared to the last sample.
-    if (dp_policy == DP_LAST && series->srcKey == NULL && series->totalSamples != 0 &&
-        timestamp >= series->lastTimestamp &&
-        timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
-        fabs(value - series->lastValue) <= series->ignoreMaxValDiff) {
-        RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
-        return REDISMODULE_ERR;
+    if (should_filter && (series->ignoreMaxTimeDiff != 0 || series->ignoreMaxValDiff != 0.0)) {
+        // Insert filter for close samples. If configured, it's used to ignore last measurement if
+        // its value is negligible compared to the last sample.
+        if (dp_policy == DP_LAST && series->srcKey == NULL && series->totalSamples != 0 &&
+            timestamp >= series->lastTimestamp &&
+            timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
+            fabs(value - series->lastValue) <= series->ignoreMaxValDiff) {
+            RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
+            return REDISMODULE_ERR;
+        }
     }
 
     if (timestamp <= series->lastTimestamp && series->totalSamples != 0) {
@@ -608,7 +613,7 @@ static inline int add(RedisModuleCtx *ctx,
             return REDISMODULE_ERR;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
+    int rv = internalAdd(ctx, series, timestamp, value, dp, true, true);
     RedisModule_CloseKey(key);
     return rv;
 }
@@ -1013,7 +1018,7 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result -= incrby;
     }
 
-    int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
+    int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, false, true);
     RedisModule_ReplicateVerbatim(ctx);
     RedisModule_CloseKey(key);
 

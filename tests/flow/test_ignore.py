@@ -83,20 +83,20 @@ def test_ignore_create():
         assert actual == expected
 
         # Create key with incrby/decrby
-        r.execute_command('TS.INCRBY', 'key3', '1', 'TIMESTAMP', '100', 'IGNORE', '100000', '5')
+        r.execute_command('TS.INCRBY', 'key3', '1', 'TIMESTAMP', '100', 'IGNORE', '100000', '5', 'DUPLICATE_POLICY', 'LAST')
         # Value diff is smaller than the limit, this sample will be ignored.
-        r.execute_command('TS.INCRBY', 'key3', '3', 'TIMESTAMP', '100')
+        r.execute_command('TS.ADD', 'key3', '100', '3')
         assert r.execute_command('TS.range', 'key3', 0, '+') == [[100, b'1']]
         # Value diff is larger than the limit.
-        r.execute_command('TS.INCRBY', 'key3', '7', 'TIMESTAMP', '100')
+        r.execute_command('TS.ADD', 'key3', '100', '8')
         assert r.execute_command('TS.range', 'key3', 0, '+') == [[100, b'8']]
 
-        r.execute_command('TS.DECRBY', 'key4', '1', 'TIMESTAMP', '100', 'IGNORE', '100000', '5')
+        r.execute_command('TS.DECRBY', 'key4', '1', 'TIMESTAMP', '100', 'IGNORE', '100000', '5', 'DUPLICATE_POLICY', 'LAST')
         # Value diff is smaller than the limit, this sample will be ignored.
-        r.execute_command('TS.DECRBY', 'key4', '3', 'TIMESTAMP', '100')
+        r.execute_command('TS.ADD', 'key4', '100', '3')
         assert r.execute_command('TS.range', 'key4', 0, '+') == [[100, b'-1']]
         # Value diff is larger than the limit.
-        r.execute_command('TS.DECRBY', 'key4', '7', 'TIMESTAMP', '100')
+        r.execute_command('TS.ADD', 'key4', '100', '-8')
         assert r.execute_command('TS.range', 'key4', 0, '+') == [[100, b'-8']]
 
 
@@ -231,4 +231,44 @@ def test_ignore_alter():
         r.execute_command('TS.ADD', 'key1', '1010', '19')
         expected = [[1000, b'1'], [1004, b'3'], [1006, b'10'], [1007, b'15.0001'], [1010, b'19']]
         actual = r.execute_command('TS.range', 'key1', 0, '+')
+        assert actual == expected
+
+
+def test_ignore_with_incrby():
+    # Verify insertion filter does not apply to incrby or decrby
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Call TS.INCRBY with a value that is in the range of insertion filter
+        r.execute_command('TS.CREATE', 'key1', 'IGNORE', '5000000000000', '5', 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('TS.ADD', 'key1', '1000', '1')
+        # Verify timestamp has changed and value is updated.
+        assert r.execute_command('TS.INCRBY', 'key1', '1') != 1000
+        assert r.execute_command('TS.range', 'key1', 0, '+')[1][1] == b'2'
+
+        # Call TS.DECRBY with a value that is in the range of insertion filter
+        r.execute_command('TS.CREATE', 'key2', 'IGNORE', '5000000000000', '5', 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('TS.ADD', 'key2', '1000', '1')
+        # Verify timestamp has changed and value is updated.
+        assert r.execute_command('TS.DECRBY', 'key2', '1') != 1000
+        assert r.execute_command('TS.range', 'key2', 0, '+')[1][1] == b'0'
+
+
+def test_ignore_with_zero_args():
+    # Test with either ignoreMaxTimeDiff = 0 or ignoreMaxValDiff = 0
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'key1', 'IGNORE', '0', '5', 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('TS.ADD', 'key1', '1000', '1')
+        r.execute_command('TS.ADD', 'key1', '1000', '2')
+        r.execute_command('TS.ADD', 'key1', '1000', '8')
+
+        expected = [[1000, b'8']]
+        actual = r.execute_command('TS.range', 'key1', 0, '+')
+        assert actual == expected
+
+        r.execute_command('TS.CREATE', 'key2', 'IGNORE', '5', '0', 'DUPLICATE_POLICY', 'LAST')
+        r.execute_command('TS.ADD', 'key2', '1000', '1')
+        r.execute_command('TS.ADD', 'key2', '1003', '1')
+        r.execute_command('TS.ADD', 'key2', '1008', '1')
+
+        expected = [[1000, b'1'], [1008, b'1']]
+        actual = r.execute_command('TS.range', 'key2', 0, '+')
         assert actual == expected
