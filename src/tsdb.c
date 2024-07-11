@@ -1355,21 +1355,6 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
     return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
 }
 
-CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName) {
-    bool ruleFound = false;
-    // find the rule which matches dstSeries
-    while (rules) {
-        if (RedisModule_StringCompare(keyName, rules->destKey) == 0) {
-            ruleFound = true;
-            break;
-        }
-        rules = rules->nextRule;
-    }
-
-    RedisModule_Assert(ruleFound);
-    return rules;
-}
-
 void calculate_latest_sample(Sample **sample, const Series *series) {
     RedisModuleKey *srcKey = NULL;
     Series *srcSeries;
@@ -1379,8 +1364,10 @@ void calculate_latest_sample(Sample **sample, const Series *series) {
         // LATEST is ignored for a series that is not a compaction.
         *sample = NULL;
     } else {
-        CompactionRule *rule = find_rule(srcSeries->rules, series->keyName);
-        if (rule->startCurrentTimeBucket == -1LL) {
+        /* If src key was deleted and recreated again, there is a chance that
+         * it may not have a rule to the destination key anymore. */
+        CompactionRule *rule = GetRule(srcSeries->rules, series->keyName);
+        if (!rule || rule->startCurrentTimeBucket == -1LL) {
             // when srcSeries->totalSamples != 0 and rule->startCurrentTimeBucket == -1LL it means
             // that on ts.createrule the src wasn't empty This means that the rule context is empty
             *sample = NULL;
