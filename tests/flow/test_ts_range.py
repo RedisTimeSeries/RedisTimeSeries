@@ -1554,3 +1554,25 @@ def test_latest_flag_with_deleted_source():
         assert r.execute_command('TS.ADD', src, '100', '100')
         assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
         assert r.execute_command('TS.GET', dst, 'LATEST') != []
+
+
+def test_ts_range_count_validation():
+    """
+    Validate COUNT argument is non-positive for TS.RANGE family commands
+    """
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        for i in range(10):
+            r.execute_command('TS.ADD', 'key', i, i)
+
+    env.expect('TS.RANGE', 'key', '-', '+', 'COUNT', '0').error().contains('TSDB: Invalid COUNT value')
+    env.expect('TS.RANGE', 'key', '-', '+', 'COUNT', '-1').error().contains('TSDB: Invalid COUNT value')
+    env.expect('TS.RANGE', 'key', '-', '+', 'COUNT', '-2').error().contains('TSDB: Invalid COUNT value')
+    env.expect('TS.REVRANGE', 'key', '-', '+', 'COUNT', '-1000').error().contains('TSDB: Invalid COUNT value')
+    env.expect('TS.MRANGE', '-', '+', 'COUNT', '-2', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
+    env.expect('TS.MREVRANGE', '-', '+', 'COUNT', '0', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
+
+    assert r.execute_command('TS.RANGE', 'key', '-', '+', 'COUNT', 2) == [[0, '0'], [1, '1']]
+    assert r.execute_command('TS.RANGE', 'key', '-', '+', 'COUNT', 2, 'AGGREGATION', 'sum', 5) == [[0, '10'], [5, '35']]
+
+
