@@ -1508,3 +1508,49 @@ def test_errors():
             assert False
         except Exception as e:
             assert str(e) == "TSDB: Couldn't parse alignTimestamp"
+
+
+def test_latest_flag_with_deleted_source():
+    """
+    Test scenario:
+     - Create a compaction key.
+     - Delete the source key and recreate it. It will not have the compaction rule.
+     - Query dst key with LATEST flag to test we handle this case without a crash.
+    """
+    env = Env(decodeResponses=True)
+    src = 't1{1}'
+    dst = 't2{1}'
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', src)
+        assert r.execute_command('TS.CREATE', dst)
+        assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
+
+        # Delete src, recreate it and query with LATEST flag
+        assert r.execute_command('DEL', src)
+        assert r.execute_command('TS.CREATE', src, '100', '100')
+        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+        assert r.execute_command('TS.REVRANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+        # Delete src, recreate it with a sample in it and query with LATEST flag
+        assert r.execute_command('DEL', src)
+        assert r.execute_command('TS.ADD', src, '100', '100')
+        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+        assert r.execute_command('TS.GET', dst, 'LATEST') == []
+
+        # Run the same test with non-empty key
+        r.execute_command('DEL', src, dst)
+        assert r.execute_command('TS.CREATE', src)
+        assert r.execute_command('TS.CREATE', dst)
+        assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
+        for i in range(100):
+            r.execute_command('TS.ADD', src, i, i)
+
+        # Delete src, recreate it and query with LATEST flag
+        assert r.execute_command('DEL', src)
+        assert r.execute_command('TS.CREATE', src, '100', '100')
+        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
+        assert r.execute_command('TS.GET', dst, 'LATEST') != []
+        # Delete src, recreate it with a sample in it and query with LATEST flag
+        assert r.execute_command('DEL', src)
+        assert r.execute_command('TS.ADD', src, '100', '100')
+        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
+        assert r.execute_command('TS.GET', dst, 'LATEST') != []
