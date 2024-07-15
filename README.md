@@ -124,6 +124,8 @@ apt-get install -y git
 cd ~/Redis
 git clone --recursive https://github.com/RedisTimeSeries/RedisTimeSeries.git
 cd RedisTimeSeries
+# If you forgot to clone the repo with submodules, you can fix it by running the following command
+# git submodule update --init --recursive
 ./sbin/setup
 bash -l
 make
