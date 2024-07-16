@@ -224,7 +224,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         // Remove references to other keys
         if (series->srcKey) {
             RedisModule_FreeString(NULL, series->srcKey);
-            series->srcKey = NULL;
+            series->srcKey = 0;
         }
 
         CompactionRule *rule = series->rules;
