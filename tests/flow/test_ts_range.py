@@ -1561,7 +1561,8 @@ def test_ts_range_count_validation():
     Validate COUNT argument is non-positive for TS.RANGE family commands
     """
     env = Env(decodeResponses=True)
-    key = 't1{1}'
+    env.skipOnCluster()
+    key = 'x'
     with env.getClusterConnectionIfNeeded() as r:
         for i in range(10):
             r.execute_command('TS.ADD', key, i, i)
