@@ -407,6 +407,11 @@ static int parseCountArgument(RedisModuleCtx *ctx,
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse COUNT");
             return TSDB_ERROR;
         }
+
+        if (*count < 1) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Invalid COUNT value");
+            return TSDB_ERROR;
+        }
     }
     return TSDB_OK;
 }
