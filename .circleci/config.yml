@@ -327,7 +327,7 @@ jobs:
 
   build-macos-x64:
     macos:
-      xcode: 12.5.1
+      xcode: 15.0.0
     resource_class: macos.x86.medium.gen2
     parameters:
       upload:
