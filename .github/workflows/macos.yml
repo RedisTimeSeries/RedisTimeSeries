@@ -69,7 +69,7 @@ jobs:
             echo "TAGGED=1" >> $GITHUB_OUTPUT
           else
             echo "This is not a tagged build"
-            echo "TAGGED=1" >> $GITHUB_OUTPUT
+            echo "TAGGED=0" >> $GITHUB_OUTPUT
           fi
 
   macos:
@@ -146,7 +146,7 @@ jobs:
 
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
-          if [[ TAGGED -eq 0 ]]; then
+          if [[ $TAGGED -eq 0 ]]; then
             gmake upload-artifacts SHOW=1 VERBOSE=1
           else
             gmake upload-release SHOW=1 VERBOSE=1
