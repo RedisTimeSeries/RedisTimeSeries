@@ -325,31 +325,6 @@ jobs:
           platform: <<parameters.platform>>
           official: "0"
 
-  build-macos-x64:
-    macos:
-      xcode: 12.5.1
-    resource_class: macos.x86.medium.gen2
-    parameters:
-      upload:
-        type: string
-        default: "yes"
-    steps:
-      - early-returns
-      - build-steps
-      - run:
-          name: Persist artifacts?
-          command: |
-            if [[ "<<parameters.upload>>" != "yes" ]]; then
-              circleci step halt
-            fi
-      - run:
-          name: Upload artifacts to S3
-          command: |
-            if [[ -n $CIRCLE_BRANCH && "<<parameters.upload>>" == "yes" ]]; then
-                make upload-artifacts SHOW=1
-            fi
-      - persist-artifacts
-
   build-macos-m1:
     macos:
       xcode: 14.2.0
@@ -577,9 +552,6 @@ workflows:
           matrix:
             parameters:
               platform: [jammy, focal, bionic]
-      - build-macos-x64:
-          <<: *on-integ-and-version-tags
-          context: common
       - build-macos-m1:
           context: common
           <<: *on-integ-and-version-tags
@@ -599,7 +571,6 @@ workflows:
           requires:
             - build-platforms
             - build-arm-platforms
-            - build-macos-x64
             - build-macos-m1
       - upload-artifacts:
           name: upload-release-artifacts
@@ -608,7 +579,6 @@ workflows:
           requires:
             - build-platforms
             - build-arm-platforms
-            - build-macos-x64
             - build-macos-m1
       - release-qa-tests:
           <<: *on-version-tags
@@ -635,8 +605,6 @@ workflows:
           cron: "20 17 * * 0,3"
           <<: *on-integ-branch-cron
     jobs:
-      - build-macos-x64:
-          upload: "no"
       - build-macos-m1:
           upload: "no"
       - valgrind
