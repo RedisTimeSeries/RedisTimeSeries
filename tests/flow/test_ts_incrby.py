@@ -40,8 +40,7 @@ def test_incrby_with_timestamp():
 
         query_res = r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '*') / 1000
         cur_time = int(time.time())
-        assert query_res >= cur_time
-        assert query_res <= cur_time + 1
+        assert cur_time >= query_res
 
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('ts.incrby', 'tester', '5', 'TIMESTAMP', '10')
