@@ -45,17 +45,6 @@ jobs:
       - name: System setup
         run: ./sbin/system-setup.py
 
-      - name: Get Redis
-        uses: actions/checkout@v4
-        with:
-          repository: redis/redis
-          ref: '7.2'
-          path: redis
-
-      - name: Build Redis
-        working-directory: redis
-        run: make install
-
       - name: Build RedisTimeseries
         run: |
           make build
