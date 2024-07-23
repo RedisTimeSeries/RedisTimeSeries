@@ -6,14 +6,14 @@ RedisTimeSeries is generally backwards compatible with very few exceptions, so w
 recommend users to always use the latest version to experience stability,
 performance and security.
 
-We generally backport security issues to a single previous major version,
+We generally backport security issues to a single previous version,
 unless this is not possible or feasible with a reasonable effort.
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 1.12    | :white_check_mark: |
 | 1.10    | :white_check_mark: |
-| 1.8     | :white_check_mark: |
-| < 1.8   | :x:                |
+| < 1.10  | :x:                |
 
 ## Reporting a Vulnerability
 
