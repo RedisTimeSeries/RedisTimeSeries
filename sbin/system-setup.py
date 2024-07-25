@@ -60,12 +60,9 @@ class RedisTimeSeriesSetup(paella.Setup):
             self.install("lcov-git", aur=True)
         self.run("{READIES}/bin/getaws".format(READIES=READIES))
         if self.pytools:
-            self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi --ramp-version github:redis-py-3.5".format(PYTHON=self.python, READIES=READIES))
-            # self.run("{PYTHON} {READIES}/bin/getrmpytools --reinstall --pypi --modern".format(PYTHON=self.python, READIES=READIES))
-            # self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --modern")
-            self.pip_install("-r {ROOT}/tests/flow/requirements.txt".format(ROOT=ROOT))
-            self.run("NO_PY2=1 %s/bin/getpudb" % READIES)
-
+            self.run(f"{self.python} {READIES}/bin/getrmpytools --reinstall --modern")
+            self.pip_install(f"-r {ROOT}/tests/flow/requirements.txt")
+            self.run(f"NO_PY2=1 {READIES}/bin/getpudb")
 #----------------------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(description='Set up system for build.')
