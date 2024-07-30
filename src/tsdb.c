@@ -514,7 +514,7 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
                    REDISMODULE_READ | REDISMODULE_WRITE,
                    false,
                    false)) {
-        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series.");
         return false;
     }
 
