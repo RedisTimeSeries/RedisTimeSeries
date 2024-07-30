@@ -118,7 +118,7 @@ jobs:
           path: 'redis'
       - name: Build Redis
         run: |
-          cd redis && gmake -j `sysctl -n hw.logicalcpu` CFLAGS="-Wnostrict-prototypes"
+          cd redis && gmake -j `sysctl -n hw.logicalcpu` REDIS_CFLAGS="-Wnostrict-prototypes"
           echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
           echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
           export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
