@@ -198,9 +198,9 @@ jobs:
           make --version
           gcc --version
           git --version
-          wget https://www.python.org/ftp/python/3.9.6/Python-3.9.6.tgz
-          tar -xvf Python-3.9.6.tgz
-          cd Python-3.9.6
+          wget https://www.python.org/ftp/python/3.7.16/Python-3.7.16.tgz
+          tar -xvf Python-3.7.16.tgz
+          cd Python-3.7.16
           ./configure
           make -j `nproc`
           make altinstall
@@ -304,9 +304,9 @@ jobs:
           . scl_source enable devtoolset-11 || true
           make --version
           git --version
-          wget https://www.python.org/ftp/python/3.9.6/Python-3.9.6.tgz
-          tar -xvf Python-3.9.6.tgz
-          cd Python-3.9.6
+          wget https://www.python.org/ftp/python/3.7.16/Python-3.7.16.tgz
+          tar -xvf Python-3.7.16.tgz
+          cd Python-3.7.16
           ./configure
           make -j `nproc`
           make altinstall
