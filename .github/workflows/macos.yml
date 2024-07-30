@@ -237,6 +237,7 @@ jobs:
       - name: Build RedisTimeseries
         run: |
           . scl_source enable devtoolset-11 || true
+          git submodule update --init --recursive
           make -j `nproc`
       - name: Run tests
         run: |
@@ -341,6 +342,7 @@ jobs:
       - name: Build RedisTimeseries
         run: |
           . scl_source enable devtoolset-11 || true
+          git submodule update --init --recursive
           make -j `nproc`
       - name: Run tests
         run: |

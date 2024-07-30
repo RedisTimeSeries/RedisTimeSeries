@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
 import hiredis
+
+if not DISABLE_AOF_PARSER:
+    import hiredis
+
 import sys
 
 def parse_file(path):
+    if DISABLE_AOF_PARSER:
+        return []
+
     def next_line(fp):
         line = fp.readline().strip()
         return line.strip() + "\r\n" if line else line

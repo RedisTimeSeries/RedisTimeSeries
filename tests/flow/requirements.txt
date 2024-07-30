@@ -3,5 +3,5 @@
 # RLTest~=0.6.0
 # ramp-packer~=2.5.2
 statistics
-hiredis==2.0.0
+# hiredis==2.0.0 # disabled until RESP3-related problem is resolved
 gevent~=22.10.1
