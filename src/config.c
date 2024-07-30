@@ -47,7 +47,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         if (RMUtil_ParseArgsAfter("COMPACTION_POLICY", argv, argc, "s", &policy) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY.");
             return TSDB_ERROR;
         }
         policy_cstr = RedisModule_StringPtrLen(policy, &len);

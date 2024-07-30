@@ -2,6 +2,6 @@
 # redis~=3.5.3
 # RLTest~=0.6.0
 # ramp-packer~=2.5.2
+# hiredis==2.0.0 # disabled until RESP3-related problem is resolved
 statistics
-hiredis==2.0.0
 gevent~=22.10.1
