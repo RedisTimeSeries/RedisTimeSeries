@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
+        redis-version: [["6.0.20", "6.2.14"]]
         # MacOS 13 - x86-64, MacOS 14 - ARM (Apple Chips).
         os: ["macos-13", "macos-14"]
     defaults:
@@ -164,7 +164,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["6.2.14", "7.2.4", "unstable"]
+        redis-version: ["6.0.20", "6.2.14"]
         builder: [
           {
             image: 'centos:7',
@@ -205,7 +205,7 @@ jobs:
           make -j `nproc`
           make altinstall
           cd ..
-          rm /usr/bin/python3 && ln -s `which python3.9` /usr/bin/python3
+          rm /usr/bin/python3 && ln -s `which python3.7` /usr/bin/python3
           ln -s `which cmake3` /usr/bin/cmake
           python3 --version
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -282,7 +282,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["6.0.20", "7.2.4", "unstable"]
+        redis-version: [["6.0.20", "6.2.14"]]
         builder: [
           {
             image: 'amazonlinux:2',
