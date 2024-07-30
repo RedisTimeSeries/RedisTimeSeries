@@ -93,8 +93,8 @@ jobs:
       - name: Install prerequisites
         run: |
           brew install make coreutils autoconf automake pyenv
-          pyenv install 3.11.0
-          pyenv global 3.11.0
+          pyenv install 3.7.16
+          pyenv global 3.7.16
           eval "$(command pyenv init -)"
 
       - name: Checkout sources
