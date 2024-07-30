@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import hiredis
-
 if not DISABLE_AOF_PARSER:
     import hiredis
 
