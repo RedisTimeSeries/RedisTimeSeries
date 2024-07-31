@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["6.0.20", "6.2.14"]
+        redis-version: ["7.2.5", "unstable"]
         # MacOS 13 - x86-64, MacOS 14 - ARM (Apple Chips).
         os: ["macos-13", "macos-14"]
     defaults:
