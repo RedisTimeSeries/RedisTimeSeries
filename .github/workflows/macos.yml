@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
+        redis-version: ["6.0.20", "6.2.14"]
         # MacOS 13 - x86-64, MacOS 14 - ARM (Apple Chips).
         os: ["macos-13", "macos-14"]
     defaults:
@@ -110,7 +110,6 @@ jobs:
           python3 -m pip install --upgrade pip setuptools wheel
           python3 -m pip install -r tests/flow/requirements.txt
           python3 -m pip install jinja2 ramp-packer
-          ./sbin/setup
       - name: Checkout Redis
         uses: actions/checkout@v3
         with:
