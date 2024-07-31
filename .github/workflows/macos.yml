@@ -92,7 +92,10 @@ jobs:
     steps:
       - name: Install prerequisites
         run: |
-          brew install make coreutils autoconf automake
+          brew install make coreutils autoconf automake pyenv
+          pyenv install 3.7.16
+          pyenv global 3.7.16
+          eval "$(command pyenv init -)"
 
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -100,6 +103,7 @@ jobs:
           submodules: true
       - name: Install Python dependencies
         run: |
+          eval "$(command pyenv init -)"
           python3 --version
           python3 -m venv .venv
           source .venv/bin/activate
@@ -122,17 +126,20 @@ jobs:
           redis-server --version
       - name: Build RedisTimeseries
         run: |
+          eval "$(command pyenv init -)"
           python3 --version
           source .venv/bin/activate
           git submodule update --init --recursive
           gmake build VERBOSE=1
       - name: Run tests
         run: |
+          eval "$(command pyenv init -)"
           python3 --version
           source .venv/bin/activate
           gmake test
       - name: Pack module
         run: |
+          eval "$(command pyenv init -)"
           python3 --version
           source .venv/bin/activate
           gmake pack BRANCH=$TAG_OR_BRANCH SHOW=1
@@ -144,6 +151,7 @@ jobs:
           aws-region: "us-east-1"
       - name: Upload artifacts to S3
         run: |
+          eval "$(command pyenv init -)"
           python3 --version
           source .venv/bin/activate
           # Upload script needs GNU du 
