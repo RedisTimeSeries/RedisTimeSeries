@@ -15,6 +15,7 @@ Setting configuration parameters at load-time is done by appending arguments aft
 In [redis.conf](/docs/manual/config/):
 
 ```sh
+# In a Redis Stack container image, the full path for the lib is /opt/redis-stack/lib/redistimeseries.so
 loadmodule ./redistimeseries.so [OPT VAL]...
 ```
 
