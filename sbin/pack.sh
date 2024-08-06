@@ -50,7 +50,7 @@ OP=""
 
 # RLEC naming conventions
 
-ARCH=$(uname -m)
+ARCH=$($READIES/bin/platform --arch)
 
 [[ $ARCH == x64 ]]     && ARCH=x86_64
 
