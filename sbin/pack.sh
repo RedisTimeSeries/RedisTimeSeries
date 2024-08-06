@@ -53,8 +53,6 @@ OP=""
 ARCH=$(uname -m)
 
 [[ $ARCH == x64 ]]     && ARCH=x86_64
-[[ $ARCH == arm64 ]]   && ARCH=aarch64
-[[ $ARCH == arm64v8 ]] && ARCH=aarch64
 
 OS=$($READIES/bin/platform --os)
 [[ $OS == linux ]] && OS=Linux
