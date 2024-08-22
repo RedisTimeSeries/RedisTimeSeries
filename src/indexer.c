@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
@@ -43,10 +44,12 @@ void FreeLabels(void *value, size_t labelsCount) {
 
 static int parseValueList(char *token, size_t *count, RedisModuleString ***values) {
     char *iter_ptr;
+
     if (token == NULL) {
         return TSDB_ERROR;
     }
-    size_t token_len = strlen(token);
+
+    const size_t token_len = strnlen(token, PTRDIFF_MAX);
 
     if (token[token_len - 1] == ')') {
         token[token_len - 1] = '\0'; // remove closing parentheses
@@ -54,20 +57,30 @@ static int parseValueList(char *token, size_t *count, RedisModuleString ***value
         return TSDB_ERROR;
     }
 
-    int filterCount = 0;
-    for (int i = 0; token[i] != '\0'; i++) {
+    size_t filterCount = 0;
+
+    for (size_t i = 0; token[i] != '\0' && i < token_len; i++) {
         if (token[i] == ',') {
             filterCount++;
         }
     }
+
     if (token_len <= 1) {
         // when the token is <=1 it means that we have an empty list
         *count = 0;
         *values = NULL;
         return TSDB_OK;
+    } else if (filterCount == SIZE_MAX) {
+        // Returning before the overflow.
+        return TSDB_ERROR;
     } else {
         *count = filterCount + 1;
     }
+
+    if (__builtin_mul_overflow_p(*count, sizeof(RedisModuleString *), (size_t) 0)) {
+        return TSDB_ERROR;
+    }
+
     *values = calloc(*count, sizeof(RedisModuleString *));
 
     char *subToken = strtok_r(token, ",", &iter_ptr);
