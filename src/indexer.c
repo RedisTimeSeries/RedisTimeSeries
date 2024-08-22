@@ -4,11 +4,14 @@
  *the server side public license v1 (ssplv1).
  */
 #include "indexer.h"
+#include "module.h"
 
 #include "consts.h"
+#include "utils/overflow.h"
 
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
@@ -43,10 +46,12 @@ void FreeLabels(void *value, size_t labelsCount) {
 
 static int parseValueList(char *token, size_t *count, RedisModuleString ***values) {
     char *iter_ptr;
+
     if (token == NULL) {
         return TSDB_ERROR;
     }
-    size_t token_len = strlen(token);
+
+    const size_t token_len = strnlen(token, PTRDIFF_MAX);
 
     if (token[token_len - 1] == ')') {
         token[token_len - 1] = '\0'; // remove closing parentheses
@@ -54,20 +59,30 @@ static int parseValueList(char *token, size_t *count, RedisModuleString ***value
         return TSDB_ERROR;
     }
 
-    int filterCount = 0;
-    for (int i = 0; token[i] != '\0'; i++) {
+    size_t filterCount = 0;
+
+    for (size_t i = 0; token[i] != '\0' && i < token_len; ++i) {
         if (token[i] == ',') {
             filterCount++;
         }
     }
+
     if (token_len <= 1) {
         // when the token is <=1 it means that we have an empty list
         *count = 0;
         *values = NULL;
         return TSDB_OK;
+    } else if (filterCount == SIZE_MAX) {
+        // Returning before the overflow.
+        return TSDB_ERROR;
     } else {
         *count = filterCount + 1;
     }
+
+    if (check_mul_overflow(*count, sizeof(RedisModuleString *))) {
+        return TSDB_ERROR;
+    }
+
     *values = calloc(*count, sizeof(RedisModuleString *));
 
     char *subToken = strtok_r(token, ",", &iter_ptr);
@@ -270,17 +285,27 @@ void GetPredicateKeysDicts(RedisModuleCtx *ctx,
             ctx, K_PREFIX, RedisModule_StringPtrLen(predicate->key, &_s));
         (*dicts)[0] = RedisModule_DictGet(labelsIndex, index_key, NULL);
         RedisModule_FreeString(ctx, index_key);
-    } else { // one or more entries
-        *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *) * predicate->valueListCount);
-        *dicts_size = predicate->valueListCount;
-        for (int i = 0; i < predicate->valueListCount; i++) {
-            value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
-            index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
-            (*dicts)[i] = RedisModule_DictGet(labelsIndex, index_key, NULL);
-            RedisModule_FreeString(ctx, index_key);
-        }
+
+        return;
     }
-    return;
+
+    size_t to_allocate = 0;
+
+    if (__builtin_mul_overflow(
+            predicate->valueListCount, sizeof(RedisModuleDict *), &to_allocate)) {
+        return;
+    }
+
+    // one or more entries
+    *dicts = (RedisModuleDict **)malloc(to_allocate);
+    *dicts_size = predicate->valueListCount;
+
+    for (size_t i = 0; i < predicate->valueListCount; ++i) {
+        value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
+        index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
+        (*dicts)[i] = RedisModule_DictGet(labelsIndex, index_key, NULL);
+        RedisModule_FreeString(ctx, index_key);
+    }
 }
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
@@ -301,12 +326,13 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
     uint64_t currentDictSize;
     RedisModuleDict **dicts = NULL;
     size_t dicts_size;
-    for (int i = 0; i < predicate_count; i++) {
+    for (size_t i = 0; i < predicate_count; ++i) {
         if (!IS_INCLUSION(index_predicate[i].type)) {
             // There is at least 1 inclusion predicate
             continue;
         }
 
+        dicts_size = 0;
         GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
         uint64_t curSize = _calc_dicts_total_size(dicts, dicts_size);
         free(dicts);
@@ -329,7 +355,7 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
                                        size_t predicate_count) {
     RedisModuleDict **dicts = NULL;
     size_t dicts_size;
-    for (size_t i = 1; i < predicate_count; i++) {
+    for (size_t i = 1; i < min(predicate_count, SIZE_MAX - 1); ++i) {
         bool inclusion = IS_INCLUSION(index_predicate[i].type);
         GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
         bool found = false;
@@ -357,7 +383,8 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
 
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count) {
+                            size_t predicate_count,
+                            bool *hasPermissionError) {
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
     RedisModuleDict *res = RedisModule_CreateDict(ctx);
@@ -368,7 +395,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     }
 
     RedisModuleDict **dicts = NULL;
-    size_t dicts_size;
+    size_t dicts_size = 0;
     GetPredicateKeysDicts(ctx, &index_predicate[0], &dicts, &dicts_size);
 
     for (size_t i = 0; i < dicts_size; i++) {
@@ -378,9 +405,15 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         }
 
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
-        char *currentKey;
-        size_t currentKeyLen;
+        char *currentKey = NULL;
+        size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+            const bool is_allowed = CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen);
+            if (!is_allowed) {
+                *hasPermissionError = true;
+                continue;
+            }
+
             if (_isKeySatisfyAllPredicates(
                     ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
                 RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
@@ -411,10 +444,10 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
-    for (int predicate_index = 0; predicate_index < count; predicate_index++) {
+    for (size_t predicate_index = 0; predicate_index < count; predicate_index++) {
         QueryPredicate *predicate = &predicate_list[predicate_index];
         if (predicate->valuesList != NULL) {
-            for (int i = 0; i < predicate->valueListCount; i++) {
+            for (size_t i = 0; i < predicate->valueListCount; i++) {
                 if (predicate->valuesList[i] != NULL) {
                     RedisModule_FreeString(NULL, predicate->valuesList[i]);
                 }
@@ -427,14 +460,16 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
     if (list->ref > 1) {
-        list->ref--;
+        --list->ref;
         return;
     }
+
     assert(list->ref == 1);
 
-    for (int i = 0; i < list->count; i++) {
+    for (size_t i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);
     }
+
     free(list->list);
     free(list);
 }
