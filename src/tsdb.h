@@ -15,6 +15,17 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
+typedef enum GetSeriesResult
+{
+    // The operation was successful.
+    GetSeriesResult_Success = 0,
+    // A generic error occurred.
+    GetSeriesResult_GenericError = 1,
+    // The user does not have the required permissions to perform the
+    // requested operation.
+    GetSeriesResult_PermissionError = 2,
+} GetSeriesResult;
+
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
@@ -78,13 +89,14 @@ CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
 void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
-int GetSeries(RedisModuleCtx *ctx,
+GetSeriesResult GetSeries(RedisModuleCtx *ctx,
               RedisModuleString *keyName,
               RedisModuleKey **key,
               Series **series,
               int mode,
               bool shouldDeleteRefs,
-              bool isSilent);
+              bool isSilent,
+              bool shouldCheckForAcls);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,

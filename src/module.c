@@ -112,7 +112,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, true, false);
+    int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, true, false, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -304,6 +304,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                      &series,
                                      REDISMODULE_READ,
                                      false,
+                                     true,
                                      true);
         if (!status) {
             RedisModule_Log(
@@ -359,7 +360,8 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     Series *series;
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
-        const int status = GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true);
+        const int status =
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true, true);
 
         if (!status) {
             size_t len;
@@ -459,7 +461,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false);
+    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false, true);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -520,6 +522,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
                                &destSeries,
                                REDISMODULE_READ | REDISMODULE_WRITE,
                                false,
+                               true,
                                true);
         if (!status) {
             // key doesn't exist anymore and we don't do anything
@@ -831,8 +834,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    const int status =
-        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false);
+    const int status = GetSeries(
+        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -888,8 +891,14 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // First try to remove the rule from the source key
     Series *srcSeries;
     RedisModuleKey *srcKey;
-    const int statusS = GetSeries(
-        ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ | REDISMODULE_WRITE, true, false);
+    const int statusS = GetSeries(ctx,
+                                  srcKeyName,
+                                  &srcKey,
+                                  &srcSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  true,
+                                  false,
+                                  false);
     if (!statusS) {
         return REDISMODULE_ERR;
     }
@@ -903,8 +912,14 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // If succeed to remove the rule from the source key remove from the destination too
     Series *destSeries;
     RedisModuleKey *destKey;
-    const int statusD = GetSeries(
-        ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE, true, false);
+    const int statusD = GetSeries(ctx,
+                                  destKeyName,
+                                  &destKey,
+                                  &destSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  true,
+                                  false,
+                                  false);
     if (!statusD) {
         RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;
@@ -956,8 +971,14 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *srcSeries;
     RedisModuleKey *srcKey;
-    const int statusS = GetSeries(
-        ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ | REDISMODULE_WRITE, true, false);
+    const int statusS = GetSeries(ctx,
+                                  srcKeyName,
+                                  &srcKey,
+                                  &srcSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  true,
+                                  false,
+                                  false);
     if (!statusS) {
         return REDISMODULE_ERR;
     }
@@ -970,8 +991,14 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *destSeries;
     RedisModuleKey *destKey;
-    const int statusD = GetSeries(
-        ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE, true, false);
+    const int statusD = GetSeries(ctx,
+                                  destKeyName,
+                                  &destKey,
+                                  &destSeries,
+                                  REDISMODULE_READ | REDISMODULE_WRITE,
+                                  true,
+                                  false,
+                                  false);
     if (!statusD) {
         RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;
@@ -1093,7 +1120,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     bool latest = false;
     Series *series;
     RedisModuleKey *key;
-    const int status = GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false);
+    const int status =
+        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
@@ -1159,27 +1187,57 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t currentKeyLen;
     long long replylen = 0;
     Series *series;
+    int exitStatus = REDISMODULE_OK;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const GetSeriesResult status =
+            GetSeries(ctx,
+                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                      &key,
+                      &series,
+                      REDISMODULE_READ,
+                      false,
+                      false,
+                      true);
+
+        switch (status) {
+            case GetSeriesResult_Success:
+                RedisModule_CloseKey(key);
+                break;
+            case GetSeriesResult_GenericError:
+                RedisModule_Log(ctx,
+                                "warning",
+                                "couldn't open key or key is not a Timeseries. key=%.*s",
+                                (int)currentKeyLen,
+                                currentKey);
+                break;
+            case GetSeriesResult_PermissionError:
+                RedisModule_Log(
+                    ctx,
+                    "warning",
+                    "The user lacks the required permissions for the key=%.*s, stopping.",
+                    (int)currentKeyLen,
+                    currentKey);
+
+                RTS_ReplyPermissionError(ctx, "the current user doesn't have the read permission to one or more keys that match the specified filter");
+
+                exitStatus = REDISMODULE_ERR;
+                goto exit;
+        }
+    }
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
 
-        const int status = GetSeries(ctx,
-                                     RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                                     &key,
-                                     &series,
-                                     REDISMODULE_READ,
-                                     false,
-                                     true);
-
-        if (!status) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
-            continue;
-        }
-
+        GetSeries(ctx,
+                  RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                  &key,
+                  &series,
+                  REDISMODULE_READ,
+                  false,
+                  true,
+                  true);
         if (!_ReplyMap(ctx)) {
             RedisModule_ReplyWithArray(ctx, 3);
         }
@@ -1212,12 +1270,13 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_CloseKey(key);
     }
 
+exit:
     RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
     MGetArgs_Free(&args);
     free(limitLabelsStr);
-    return REDISMODULE_OK;
+    return exitStatus;
 }
 
 static inline bool is_obsolete(timestamp_t ts,
@@ -1273,8 +1332,8 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *series;
     RedisModuleKey *key;
-    const int status =
-        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false);
+    const int status = GetSeries(
+        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false, false);
     if (!status) {
         return REDISMODULE_ERR;
     }
