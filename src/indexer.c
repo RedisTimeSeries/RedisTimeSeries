@@ -327,6 +327,7 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
             continue;
         }
 
+        dicts_size = 0;
         GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
         uint64_t curSize = _calc_dicts_total_size(dicts, dicts_size);
         free(dicts);
