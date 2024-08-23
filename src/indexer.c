@@ -59,7 +59,7 @@ static int parseValueList(char *token, size_t *count, RedisModuleString ***value
 
     size_t filterCount = 0;
 
-    for (size_t i = 0; token[i] != '\0' && i < token_len; i++) {
+    for (size_t i = 0; token[i] != '\0' && i < token_len; ++i) {
         if (token[i] == ',') {
             filterCount++;
         }
@@ -283,17 +283,24 @@ void GetPredicateKeysDicts(RedisModuleCtx *ctx,
             ctx, K_PREFIX, RedisModule_StringPtrLen(predicate->key, &_s));
         (*dicts)[0] = RedisModule_DictGet(labelsIndex, index_key, NULL);
         RedisModule_FreeString(ctx, index_key);
-    } else { // one or more entries
-        *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *) * predicate->valueListCount);
-        *dicts_size = predicate->valueListCount;
-        for (int i = 0; i < predicate->valueListCount; i++) {
-            value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
-            index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
-            (*dicts)[i] = RedisModule_DictGet(labelsIndex, index_key, NULL);
-            RedisModule_FreeString(ctx, index_key);
-        }
+
+        return;
     }
-    return;
+
+    if (__builtin_mul_overflow_p(predicate->valueListCount, sizeof(RedisModuleDict *), (size_t) 0)) {
+        return;
+    }
+
+    // one or more entries
+    *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *) * predicate->valueListCount);
+    *dicts_size = predicate->valueListCount;
+
+    for (size_t i = 0; i < predicate->valueListCount; ++i) {
+        value = RedisModule_StringPtrLen(predicate->valuesList[i], &_s);
+        index_key = RedisModule_CreateStringPrintf(ctx, KV_PREFIX, key, value);
+        (*dicts)[i] = RedisModule_DictGet(labelsIndex, index_key, NULL);
+        RedisModule_FreeString(ctx, index_key);
+    }
 }
 
 void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
@@ -314,7 +321,7 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
     uint64_t currentDictSize;
     RedisModuleDict **dicts = NULL;
     size_t dicts_size;
-    for (int i = 0; i < predicate_count; i++) {
+    for (size_t i = 0; i < predicate_count; ++i) {
         if (!IS_INCLUSION(index_predicate[i].type)) {
             // There is at least 1 inclusion predicate
             continue;
@@ -342,7 +349,7 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
                                        size_t predicate_count) {
     RedisModuleDict **dicts = NULL;
     size_t dicts_size;
-    for (size_t i = 1; i < predicate_count; i++) {
+    for (size_t i = 1; i < min(predicate_count, SIZE_MAX - 1); ++i) {
         bool inclusion = IS_INCLUSION(index_predicate[i].type);
         GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
         bool found = false;
@@ -381,7 +388,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     }
 
     RedisModuleDict **dicts = NULL;
-    size_t dicts_size;
+    size_t dicts_size = 0;
     GetPredicateKeysDicts(ctx, &index_predicate[0], &dicts, &dicts_size);
 
     for (size_t i = 0; i < dicts_size; i++) {
@@ -424,10 +431,10 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
-    for (int predicate_index = 0; predicate_index < count; predicate_index++) {
+    for (size_t predicate_index = 0; predicate_index < count; predicate_index++) {
         QueryPredicate *predicate = &predicate_list[predicate_index];
         if (predicate->valuesList != NULL) {
-            for (int i = 0; i < predicate->valueListCount; i++) {
+            for (size_t i = 0; i < predicate->valueListCount; i++) {
                 if (predicate->valuesList[i] != NULL) {
                     RedisModule_FreeString(NULL, predicate->valuesList[i]);
                 }
@@ -440,14 +447,16 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
     if (list->ref > 1) {
-        list->ref--;
+        --list->ref;
         return;
     }
+
     assert(list->ref == 1);
 
-    for (int i = 0; i < list->count; i++) {
+    for (size_t i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);
     }
+
     free(list->list);
     free(list);
 }
