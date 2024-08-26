@@ -195,21 +195,6 @@ commands:
           no_output_timeout: 30m
       - save-tests-logs
       - early-return-for-forked-pull-requests
-      - run:
-          name: Upload artifacts to S3
-          shell: /bin/bash -l -eo pipefail
-          command: |
-            if [[ -n $CIRCLE_BRANCH ]]; then
-                make upload-artifacts OSNICK=<<parameters.platform>> SHOW=1
-            fi
-      - run:
-          name: Publish container
-          shell: /bin/bash -l -eo pipefail
-          command: |
-            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION="$CIRCLE_TAG" BRANCH="$CIRCLE_BRANCH" OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
-      - persist-artifacts
 
   vm-build-platforms-steps:
     parameters:
@@ -238,19 +223,6 @@ commands:
           no_output_timeout: 30m
       - save-tests-logs
       - early-return-for-forked-pull-requests
-      - run:
-          name: Upload artifacts to S3
-          command: |
-            if [[ -n $CIRCLE_BRANCH ]]; then
-                make upload-artifacts OSNICK=<<parameters.platform>> SHOW=1
-            fi
-      - run:
-          name: Publish container
-          command: |
-            docker login -u redisfab -p $DOCKER_REDISFAB_PWD
-            cd build/docker
-            make publish OSNICK=<<parameters.platform>> VERSION=$CIRCLE_TAG BRANCH=$CIRCLE_BRANCH OFFICIAL=<<parameters.official>> SHOW=1 VERBOSE=1
-      - persist-artifacts
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -371,31 +343,6 @@ jobs:
           name: Check tests results
           command: ./sbin/check-tests
       - save-tests-logs
-
-  upload-artifacts:
-    parameters:
-      staging-lab:
-        type: string
-        default: "0"
-    docker:
-      - image: redisfab/rmbuilder:6.2.7-x64-bullseye
-    steps:
-      - early-returns
-      - early-return-for-forked-pull-requests
-      - checkout
-      - setup-automation
-      - attach_workspace:
-          at: ~/workspace
-      - run:
-          name: Upload artifacts to S3
-          command: |
-            mkdir -p bin
-            ln -s ~/workspace/artifacts bin/artifacts
-            if [[ -n $CIRCLE_TAG && "<<parameters.staging-lab>>" != 1 ]]; then
-                make upload-release SHOW=1
-            else
-                make upload-release SHOW=1 STAGING=1
-            fi
 
   release-qa-tests:
     docker:
@@ -535,26 +482,6 @@ workflows:
           matrix:
             parameters:
               san-type: [address] # [memory]
-      - upload-artifacts:
-          name: upload-artifacts-to-staging-lab
-          <<: *on-integ-branch
-          staging-lab: "1"
-          context: common
-          requires:
-            - build-platforms
-            - build-arm-platforms
-      - upload-artifacts:
-          name: upload-release-artifacts
-          <<: *on-version-tags
-          context: common
-          requires:
-            - build-platforms
-            - build-arm-platforms
-      - release-qa-tests:
-          <<: *on-version-tags
-          context: common
-          requires:
-            - upload-release-artifacts
 
   nightly:
     triggers:
