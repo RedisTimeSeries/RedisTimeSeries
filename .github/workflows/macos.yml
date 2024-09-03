@@ -100,14 +100,25 @@ jobs:
           submodules: true
       - name: Install Python dependencies
         run: |
+          echo ::group::Install Python dependecies
           brew uninstall --ignore-dependencies python
           brew install python@3.9
           python3 -m venv .venv
           source .venv/bin/activate
+          echo ::endgroup::
+          
+          echo ::group::pip setuptools wheel
           python3 -m pip install --upgrade pip setuptools wheel
+          echo ::endgroup::
+          echo ::group::flow req
           python3 -m pip install -r tests/flow/requirements.txt
+          echo ::endgroup::
+          echo ::group::packege req
           python3 -m pip install -r .install/build_package_requirements.txt
+          echo ::endgroup::
+          echo ::group::setup
           ./sbin/setup
+          echo ::endgroup::
       - name: Checkout Redis
         uses: actions/checkout@v3
         with:
