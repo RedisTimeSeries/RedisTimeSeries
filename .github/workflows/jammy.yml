@@ -26,6 +26,8 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Install dependencies
+        working-directory: .install
+        shell: bash
         run: |
           bash .install/ubuntu_22.04.sh
       - name: Get Redis
