@@ -1,7 +1,7 @@
 name: build for Jammy-x86
 
 on:
-  pull_request:
+#  pull_request:
   push:
 #    branches:
 #      - master
@@ -29,7 +29,7 @@ jobs:
         working-directory: .install
         shell: bash
         run: |
-          bash .install/ubuntu_22.04.sh
+          ./ubuntu_22.04.sh
       - name: Get Redis
         uses: actions/checkout@v4
         with:
