@@ -116,9 +116,9 @@ jobs:
           echo ::group::packege req
           python3 -m pip install -r .install/build_package_requirements.txt
           echo ::endgroup::
-          echo ::group::setup
-          ./sbin/setup
-          echo ::endgroup::
+          # echo ::group::setup
+          # ./sbin/setup
+          # echo ::endgroup::
       - name: Checkout Redis
         uses: actions/checkout@v3
         with:
