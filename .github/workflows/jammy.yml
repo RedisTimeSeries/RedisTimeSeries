@@ -21,11 +21,6 @@ jobs:
     steps:
       - name: Install pre-checkout dependencies
         run: apt-get update && apt-get install -y git
-      - name: Setup Python for testing
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          architecture: 'x64'
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -57,7 +52,7 @@ jobs:
         run: |
           source .venv/bin/activate
           git submodule update --init --recursive
-          make -j 4
+          make
       - name: Build and test TS
         shell: bash
         run: |
