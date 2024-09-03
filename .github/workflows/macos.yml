@@ -108,7 +108,7 @@ jobs:
           echo ::endgroup::
           
           echo ::group::pip setuptools wheel
-          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install --upgrade pip setuptools wheel libtool
           echo ::endgroup::
           echo ::group::flow req
           python3 -m pip install -r tests/flow/requirements.txt
