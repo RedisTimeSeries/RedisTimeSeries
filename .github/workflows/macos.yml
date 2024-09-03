@@ -19,20 +19,20 @@ name: CI Full suite
 
 on:
   push:
-    paths-ignore:
-      - '.circleci/**'
-      - 'docs/**'
-      - '*.md'
-    branches:
-      - main
-      - master
-      - '[0-9]+.[0-9]+.[0-9]+'
-      - '[0-9]+.[0-9]+'
-      - 'feature-*'
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-m[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+#    paths-ignore:
+#      - '.circleci/**'
+#      - 'docs/**'
+#      - '*.md'
+#    branches:
+#      - main
+#      - master
+#      - '[0-9]+.[0-9]+.[0-9]+'
+#      - '[0-9]+.[0-9]+'
+#      - 'feature-*'
+#    tags:
+#      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
+#      - 'v[0-9]+.[0-9]+.[0-9]+-m[0-9]+'
+#      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   setup-environment:
@@ -100,6 +100,7 @@ jobs:
           submodules: true
       - name: Install Python dependencies
         run: |
+          curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
           python3 -m venv .venv
           source .venv/bin/activate
           python3 -m pip install --upgrade pip setuptools wheel
