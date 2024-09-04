@@ -81,7 +81,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: "us-east-1"
       - name: Upload artifacts to s3 - staging
-        # if: ${{ startsWith(github.head_ref, 'feature-') }}
+        if: ${{ startsWith(github.head_ref, 'feature-') }}
         shell: bash
         run: |
           source .venv/bin/activate
