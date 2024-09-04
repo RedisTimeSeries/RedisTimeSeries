@@ -1,14 +1,14 @@
 name: build for Jammy-x86
 
 on:
-#  pull_request:
+  pull_request:
   push:
-#    branches:
-#      - master
-#      - 1.10
-#      - /^feature-.*$/
-#    tags:
-#      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - master
+      - 1.10
+      - /^feature-.*$/
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   recent-ubuntu:
