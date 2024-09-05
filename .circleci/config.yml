@@ -283,7 +283,7 @@ jobs:
     parameters:
       redis_version:
         type: string
-        default: "7"
+        default: "unstable"
       persist:
         type: string
         default: "yes"
@@ -520,7 +520,7 @@ workflows:
           context: common
           matrix:
             parameters:
-              platform: [jammy, focal, bionic, amzn2, centos7, rocky8, rocky9, bullseye]
+              platform: [bullseye]
       - build-arm-platforms:
           <<: *on-integ-and-version-tags
           context: common
