@@ -6,6 +6,7 @@
 #include "indexer.h"
 
 #include "consts.h"
+#include "utils/overflow.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -77,7 +78,7 @@ static int parseValueList(char *token, size_t *count, RedisModuleString ***value
         *count = filterCount + 1;
     }
 
-    if (__builtin_mul_overflow_p(*count, sizeof(RedisModuleString *), (size_t) 0)) {
+    if (check_mul_overflow(*count, sizeof(RedisModuleString *))) {
         return TSDB_ERROR;
     }
 
@@ -287,12 +288,14 @@ void GetPredicateKeysDicts(RedisModuleCtx *ctx,
         return;
     }
 
-    if (__builtin_mul_overflow_p(predicate->valueListCount, sizeof(RedisModuleDict *), (size_t) 0)) {
+    size_t to_allocate = 0;
+
+    if (__builtin_mul_overflow(predicate->valueListCount, sizeof(RedisModuleDict *), &to_allocate)) {
         return;
     }
 
     // one or more entries
-    *dicts = (RedisModuleDict **)malloc(sizeof(RedisModuleDict *) * predicate->valueListCount);
+    *dicts = (RedisModuleDict **)malloc(to_allocate);
     *dicts_size = predicate->valueListCount;
 
     for (size_t i = 0; i < predicate->valueListCount; ++i) {
