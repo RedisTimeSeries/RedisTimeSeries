@@ -290,7 +290,8 @@ void GetPredicateKeysDicts(RedisModuleCtx *ctx,
 
     size_t to_allocate = 0;
 
-    if (__builtin_mul_overflow(predicate->valueListCount, sizeof(RedisModuleDict *), &to_allocate)) {
+    if (__builtin_mul_overflow(
+            predicate->valueListCount, sizeof(RedisModuleDict *), &to_allocate)) {
         return;
     }
 
