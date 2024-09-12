@@ -1,0 +1,197 @@
+name: CI Basic
+# This is a basic workflow for the non-production branches and tags.
+# It will run the tests on the two latest Ubuntu LTS releases and run
+# the tests with a few supported Redis versions. It will not publish
+# the artifacts of the builds and will not test against all the
+# supported platforms.
+
+on:
+  push:
+    paths-ignore:
+      - '.circleci/**'
+      - 'docs/**'
+      - '*.md'
+    branches-ignore:
+      - main
+      - master
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+'
+      - 'feature-*'
+    tags-ignore:
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-m[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  linter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      - name: Linter
+        run: make lint
+
+  recent-ubuntu:
+    runs-on: ${{ matrix.builder.os }}
+    env:
+      TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
+      VERSION: ${{ needs.setup-environment.outputs.TAG }}
+      BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
+      TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
+    strategy:
+      fail-fast: false
+      matrix:
+        redis-version: ["unstable"]
+        builder: [
+          { os: 'ubuntu-22.04', nick: 'jammy' },
+        ]
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
+    steps:
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool cmake lcov valgrind
+      - name: Setup Python for testing
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install Python dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install -r tests/flow/requirements.txt
+          python3 -m pip install jinja2 ramp-packer
+          ./sbin/setup
+      - name: Checkout Redis
+        uses: actions/checkout@v3
+        with:
+          repository: 'redis/redis'
+          ref: ${{ matrix.redis-version }}
+          path: 'redis'
+      - name: Build Redis
+        run: |
+          cd redis && make -j `nproc`
+          echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
+          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
+          redis-server --version
+      - name: Build
+        run: |
+          source .venv/bin/activate
+          git submodule update --init --recursive
+          make -j 4
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          make test REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+
+  test-valgrind:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        redis-version: ["unstable"]
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
+    steps:
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool cmake lcov valgrind
+      - name: Setup Python for testing
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install Python dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install -r tests/flow/requirements.txt
+          python3 -m pip install jinja2 ramp-packer
+          ./sbin/setup
+      - name: Checkout Redis
+        uses: actions/checkout@v3
+        with:
+          repository: 'redis/redis'
+          ref: ${{ matrix.redis-version }}
+          path: 'redis'
+      - name: Build Redis
+        run: |
+          cd redis && make valgrind -j `nproc`
+          echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
+          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
+          redis-server --version
+      - name: Build
+        run: |
+          git submodule update --init --recursive
+          make VG=1 -j `nproc`
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          make test VG=1 QUICK=1 REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+
+  test-address-sanitizer:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        redis-version: ["unstable"]
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
+    steps:
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool cmake lcov valgrind
+      - name: Setup Python for testing
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install Python dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install -r tests/flow/requirements.txt
+          python3 -m pip install jinja2 ramp-packer
+          ./sbin/setup
+      - name: Checkout Redis
+        uses: actions/checkout@v3
+        with:
+          repository: 'redis/redis'
+          ref: ${{ matrix.redis-version }}
+          path: 'redis'
+      - name: Build Redis
+        run: |
+          cd redis && make SANITIZER=address -j `nproc`
+          echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
+          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
+          redis-server --version
+      - name: Build
+        run: |
+          git submodule update --init --recursive
+          make -j `nproc` SAN=addr
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          make test SAN=addr REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server

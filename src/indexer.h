@@ -8,7 +8,7 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-#include <sys/types.h>
+#include <stdint.h>
 
 typedef struct
 {
