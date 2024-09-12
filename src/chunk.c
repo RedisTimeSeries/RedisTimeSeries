@@ -72,7 +72,7 @@ static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->size / SAMPLE_SIZE;
 }
 
-u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
+uint64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
     return ((Chunk *)chunk)->num_samples;
 }
 
