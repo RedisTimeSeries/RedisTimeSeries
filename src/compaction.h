@@ -12,7 +12,7 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-#include <sys/types.h>
+#include <stdint.h>
 #include <rmutil/util.h>
 
 typedef struct AggregationClass
