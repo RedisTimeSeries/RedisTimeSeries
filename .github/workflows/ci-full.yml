@@ -1070,6 +1070,7 @@ jobs:
       - name: Pack module
         run: |
           source .venv/bin/activate
+          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
           gmake pack BRANCH=$TAG_OR_BRANCH SHOW=1
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
