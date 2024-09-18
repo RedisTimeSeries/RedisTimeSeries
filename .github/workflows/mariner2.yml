@@ -50,6 +50,7 @@ jobs:
           role-session-name: GitHub_to_AWS_S3_Upload
           aws-region: "us-east-1"
       - name: Upload artifacts to s3 - staging
+        if: ${{ startsWith(github.head_ref, 'feature-') }}
         run: |
           make upload-artifacts SHOW=1 VERBOSE=1
           make upload-release SHOW=1 STAGING=1 VERBOSE=1
