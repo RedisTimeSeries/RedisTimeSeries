@@ -10,6 +10,13 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
+env:
+  AWS_REGION: us-east-1
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: write   # This is required for actions/checkout
+
 jobs:
   recent-ubuntu:
     runs-on: ${{ matrix.builder.os }}
@@ -74,12 +81,12 @@ jobs:
         run: |
           source .venv/bin/activate
           make pack BRANCH=${{ github.head_ref }} SHOW=1
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: "us-east-1"
+          role-to-assume: arn:aws:iam::168085023892:role/GitHubRedisTimeSeriesS3Upload
+          role-session-name: GitHub_to_AWS_S3_Upload
+          aws-region: ${{ env.AWS_REGION }}
       - name: Upload artifacts to s3 - staging
         if: ${{ startsWith(github.head_ref, 'feature-') }}
         shell: bash
