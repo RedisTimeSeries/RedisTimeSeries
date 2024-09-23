@@ -50,7 +50,7 @@ void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                                      const char **limitLabels,
                                      ushort limitLabelsSize);
 
-void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value);
+void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value);
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 

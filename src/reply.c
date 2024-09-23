@@ -200,7 +200,7 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
     }
 }
 
-void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
+void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     RedisModule_ReplyWithDoubleOrString(ctx, value);

@@ -10,6 +10,10 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: write   # This is required for actions/checkout
+
 jobs:
   build-mariner2:
     runs-on: ubuntu-latest
@@ -42,13 +46,12 @@ jobs:
         shell: bash
         run: make test
       - name: Pack module
-        shell: bash
-        run: make pack BRANCH=${{ github.head_ref }} SHOW=1
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        run: make pack BRANCH=${{ github.ref_name }} SHOW=1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::168085023892:role/GitHubRedisTimeSeriesS3Upload
+          role-session-name: GitHub_to_AWS_S3_Upload
           aws-region: "us-east-1"
       - name: Upload artifacts to s3 - staging
         if: ${{ startsWith(github.head_ref, 'feature-') }}
