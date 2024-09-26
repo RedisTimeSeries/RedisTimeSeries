@@ -9,7 +9,7 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
@@ -32,7 +32,7 @@ include $(ROOT)/build/rmutil/Makefile.defs
 export CPU_FEATURES_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/cpu_features
 include $(ROOT)/build/cpu_features/Makefile.defs
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 define HELPTEXT
 make setup         # install packages required for build
@@ -83,7 +83,7 @@ make platform      # build artifacts for given platform
 
 endef
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
 
@@ -406,7 +406,7 @@ endif # RLEC
 BENCHMARK_ARGS = redisbench-admin run-local
 
 ifneq ($(REMOTE),)
-	BENCHMARK_ARGS = redisbench-admin run-remote 
+	BENCHMARK_ARGS = redisbench-admin run-remote
 endif
 
 BENCHMARK_ARGS += \
@@ -468,7 +468,7 @@ VALGRIND_ARGS=\
 	--show-reachable=no \
 	--show-possibly-lost=no \
 	--track-origins=yes \
-	--suppressions=$(ROOT)/tests/redis_valgrind.sup \
+	--suppressions=$(ROOT)/tests/memcheck/redis_valgrind.sup \
 	-v redis-server
 
 valgrind: $(TARGET)

@@ -116,7 +116,7 @@
 #define CMPR_L5 32
 
 // The powers of 2 from 0 to 63
-static u_int64_t bittt[] = {
+static uint64_t bittt[] = {
     1ULL << 0,  1ULL << 1,  1ULL << 2,  1ULL << 3,  1ULL << 4,  1ULL << 5,  1ULL << 6,  1ULL << 7,
     1ULL << 8,  1ULL << 9,  1ULL << 10, 1ULL << 11, 1ULL << 12, 1ULL << 13, 1ULL << 14, 1ULL << 15,
     1ULL << 16, 1ULL << 17, 1ULL << 18, 1ULL << 19, 1ULL << 20, 1ULL << 21, 1ULL << 22, 1ULL << 23,
@@ -145,13 +145,13 @@ static uint64_t bitmask[] = {
 };
 
 // 2^bit
-static inline u_int64_t BIT(u_int64_t bit) {
+static inline uint64_t BIT(uint64_t bit) {
     return bittt[bit];
 }
 
 // Logic to check Least Significant Bit (LSB) of a number
 // Clear most significant bits from position `bits`
-static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
+static inline uint64_t LSB(uint64_t x, uint64_t bits) {
     return x & bitmask[bits];
 }
 
@@ -177,7 +177,7 @@ static inline u_int64_t LSB(u_int64_t x, u_int64_t bits) {
 // Converts `x`, an int64, to binary representation with length `l` bits
 // The commented out code is the full implementation, left for readability.
 // Final code is an optimization.
-static inline binary_t int2bin(int64_t x, u_int8_t l) {
+static inline binary_t int2bin(int64_t x, uint8_t l) {
     /*  binary_t bin = LSB(x, l - 1);
      *  if (x >= 0) return bin;
      *  binary_t sign = 1 << (l - 1);
@@ -188,7 +188,7 @@ static inline binary_t int2bin(int64_t x, u_int8_t l) {
 }
 
 // Converts `bin`, a binary of length `l` bits, into an int64
-static int64_t bin2int(binary_t bin, u_int8_t l) {
+static int64_t bin2int(binary_t bin, uint8_t l) {
     if (!(bin & BIT(l - 1)))
         return bin;
     // return (int64_t) (bin | ~MASK(l)); // sign extend `bin`
@@ -196,39 +196,39 @@ static int64_t bin2int(binary_t bin, u_int8_t l) {
 }
 
 // note that return value is a signed int
-static inline int64_t Bin_MaxVal(u_int8_t nbits) {
+static inline int64_t Bin_MaxVal(uint8_t nbits) {
     return BIT(nbits - 1) - 1;
 }
 
 // note that return value is a signed int
-static inline int64_t Bin_MinVal(u_int8_t nbits) {
+static inline int64_t Bin_MinVal(uint8_t nbits) {
     return -BIT(nbits - 1);
 }
 
 // `bit` is a global bit (can be out of scope of a single binary_t)
 
-static inline u_int8_t localbit(const globalbit_t bit) {
+static inline uint8_t localbit(const globalbit_t bit) {
     return bit % BINW;
 }
 
 // return `true` if `x` is in [-(2^(n-1)), 2^(n-1)-1]
 // e.g. for n=6, range is [-32, 31]
 
-static inline bool Bin_InRange(int64_t x, u_int8_t nbits) {
+static inline bool Bin_InRange(int64_t x, uint8_t nbits) {
     return x >= Bin_MinVal(nbits) && x <= Bin_MaxVal(nbits);
 }
 
-static inline bool Bins_bitoff(const u_int64_t *bins, globalbit_t bit) {
+static inline bool Bins_bitoff(const uint64_t *bins, globalbit_t bit) {
     return !(bins[bit / BINW] & BIT(localbit(bit)));
 }
 
 // unused:
-// static inline bool Bins_biton(const u_int64_t *bins, globalbit_t bit) {
+// static inline bool Bins_biton(const uint64_t *bins, globalbit_t bit) {
 //    return !Bins_bitoff(bins, bit);
 //}
 
 // Append `dataLen` bits from `data` into `bins` at bit position `bit`
-static inline void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u_int8_t dataLen) {
+static inline void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, uint8_t dataLen) {
     binary_t *bin_it = &bins[(*bit) >> 6];
     localbit_t lbit = localbit(*bit);
     localbit_t available = BINW - lbit;
@@ -245,7 +245,7 @@ static inline void appendBits(binary_t *bins, globalbit_t *bit, binary_t data, u
 // Read `dataLen` bits from `bins` at position `bit`
 static inline binary_t readBits(const binary_t *bins,
                                 globalbit_t start_pos,
-                                const u_int8_t dataLen) {
+                                const uint8_t dataLen) {
     const localbit_t lbit = localbit(start_pos);
     const localbit_t available = BINW - lbit;
     if (available >= dataLen) {
@@ -257,8 +257,8 @@ static inline binary_t readBits(const binary_t *bins,
     }
 }
 
-static inline bool isSpaceAvailable(CompressedChunk *chunk, u_int8_t size) {
-    u_int64_t available = (chunk->size * 8) - chunk->idx;
+static inline bool isSpaceAvailable(CompressedChunk *chunk, uint8_t size) {
+    uint64_t available = (chunk->size * 8) - chunk->idx;
     return size <= available;
 }
 
@@ -324,7 +324,7 @@ static ChunkResult appendInteger(CompressedChunk *chunk, timestamp_t timestamp) 
 static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     union64bits val;
     val.d = value;
-    u_int64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
+    uint64_t xorWithPrevious = val.u ^ chunk->prevValue.u;
 
     binary_t *bins = chunk->data;
     globalbit_t *bit = &chunk->idx;
@@ -337,8 +337,8 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     }
     appendBits(bins, bit, 1, 1);
 
-    u_int64_t leading = LeadingZeros64(xorWithPrevious);
-    u_int64_t trailing = TrailingZeros64(xorWithPrevious);
+    uint64_t leading = LeadingZeros64(xorWithPrevious);
+    uint64_t trailing = TrailingZeros64(xorWithPrevious);
 
     // Prevent over flow of DOUBLE_LEADING
     if (leading > 31)
@@ -350,7 +350,7 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     assert(leading + trailing <= BINW);
 #endif
     localbit_t blockSize = BINW - leading - trailing;
-    u_int32_t expectedSize = DOUBLE_LEADING + DOUBLE_BLOCK_SIZE + blockSize;
+    uint32_t expectedSize = DOUBLE_LEADING + DOUBLE_BLOCK_SIZE + blockSize;
 #ifdef DEBUG
     assert(leading + trailing <= BINW);
 #endif
@@ -382,7 +382,7 @@ static ChunkResult appendFloat(CompressedChunk *chunk, double value) {
     return CR_OK;
 }
 
-static void zero_bits(u_int64_t *data, size_t data_size, globalbit_t start, globalbit_t end) {
+static void zero_bits(uint64_t *data, size_t data_size, globalbit_t start, globalbit_t end) {
 #ifdef DEBUG
     assert(start <= end);
 #endif
@@ -416,8 +416,8 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
         chunk->baseTimestamp = chunk->prevTimestamp = timestamp;
         chunk->prevTimestampDelta = 0;
     } else {
-        u_int64_t idx = chunk->idx;
-        u_int64_t prevTimestamp = chunk->prevTimestamp;
+        uint64_t idx = chunk->idx;
+        uint64_t prevTimestamp = chunk->prevTimestamp;
         int64_t prevTimestampDelta = chunk->prevTimestampDelta;
         if (appendInteger(chunk, timestamp) != CR_OK || appendFloat(chunk, value) != CR_OK) {
             zero_bits(chunk->data, chunk->size, idx, chunk->idx);
@@ -439,7 +439,7 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
  * then decodes the value back to an int64 and calculate the original value
  * using `prevTS` and `prevDelta`.
  */
-static inline u_int64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
+static inline uint64_t readInteger(Compressed_Iterator *iter, const uint64_t *bins) {
     if (Bins_bitoff(bins, iter->idx++)) {
         iter->prevDelta += bin2int(readBits(bins, iter->idx, CMPR_L1), CMPR_L1);
         iter->idx += CMPR_L1;
@@ -523,7 +523,7 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         iter->count++;
         return CR_OK;
     }
-    const u_int64_t *bins = iter->chunk->data;
+    const uint64_t *bins = iter->chunk->data;
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
     //

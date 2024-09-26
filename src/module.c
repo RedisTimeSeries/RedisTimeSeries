@@ -125,7 +125,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
-            u_int64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
+            uint64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
             size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
             RedisModule_ReplyWithArray(ctx, 5 * 2);
             RedisModule_ReplyWithSimpleString(ctx, "startTimestamp");
@@ -544,7 +544,7 @@ static inline int add(RedisModuleCtx *ctx,
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
         return REDISMODULE_ERR;
     }
-    api_timestamp_t timestamp = (u_int64_t)timestampValue;
+    api_timestamp_t timestamp = (uint64_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;

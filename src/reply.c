@@ -109,7 +109,7 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
-void ReplyWithSample(RedisModuleCtx *ctx, u_int64_t timestamp, double value) {
+void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     char buf[MAX_VAL_LEN + 1];
