@@ -806,7 +806,7 @@ workflows:
             - build-platforms
             - build-arm-platforms
       - release-qa-tests:
-          <<: *on-version-tags
+          <<: *always
           context: common
           requires:
             - upload-release-artifacts
