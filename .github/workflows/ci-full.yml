@@ -455,7 +455,7 @@ jobs:
           apt-get update && apt-get install -y software-properties-common
           add-apt-repository ppa:git-core/ppa -y
           apt-get update
-          apt-get install -y build-essential make autoconf automake libtool lcov git wget zlib1g-dev lsb-release libssl-dev openssl ca-certificates curl unzip
+          apt-get install -y libffi-dev build-essential make autoconf automake libtool lcov git wget zlib1g-dev lsb-release libssl-dev openssl ca-certificates curl unzip
           wget https://cmake.org/files/v3.28/cmake-3.28.0.tar.gz
           tar -xzvf cmake-3.28.0.tar.gz
           cd cmake-3.28.0
@@ -981,7 +981,7 @@ jobs:
     steps:
       - name: Install prerequisites
         run: |
-          brew install make coreutils autoconf automake
+          brew install make coreutils autoconf automake python@3.9
 
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -989,11 +989,11 @@ jobs:
           submodules: true
       - name: Install Python dependencies
         run: |
-          python3 -m venv .venv
+          python3.9 -m venv .venv
           source .venv/bin/activate
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install -r tests/flow/requirements.txt
-          python3 -m pip install jinja2 ramp-packer
+          python3.9 -m pip install --upgrade pip setuptools wheel
+          python3.9 -m pip install -r tests/flow/requirements.txt
+          python3.9 -m pip install jinja2 ramp-packer
           ./sbin/setup
       - name: Checkout Redis
         uses: actions/checkout@v3
@@ -1075,10 +1075,19 @@ jobs:
         run: |
           cp /etc/os-release /etc/os-release.bak
           sed -i 's/ID=alpine/ID=NotpineForGHA/g' /etc/os-release
+      # - name: Install prerequisites
+      #   shell: sh
+      #   run: |
+      #     apk add bash make libtool tar cmake python3 python3-dev py3-pip gcc git curl build-base autoconf automake py3-cryptography linux-headers musl-dev libffi-dev openssl-dev openssh py-virtualenv clang18-libclang gcompat libstdc++ libgcc g++ openblas-dev xsimd git xz bsd-compat-headers clang18
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
       - name: Install prerequisites
         shell: sh
         run: |
-          apk add bash make libtool tar cmake python3 python3-dev py3-pip gcc git curl build-base autoconf automake py3-cryptography linux-headers musl-dev libffi-dev openssl-dev openssh py-virtualenv clang18-libclang gcompat libstdc++ libgcc g++ openblas-dev xsimd git xz bsd-compat-headers clang18
+          apk add bash make libtool tar cmake gcc git curl build-base autoconf automake py3-cryptography linux-headers musl-dev libffi-dev openssl-dev openssh py-virtualenv clang18-libclang gcompat libstdc++ libgcc g++ openblas-dev xsimd git xz bsd-compat-headers clang18
       - name: Checkout the module
         uses: actions/checkout@v3
         with:

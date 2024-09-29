@@ -67,8 +67,10 @@ OSNICK=$($READIES/bin/platform --osnick)
 [[ $OSNICK == jammy ]]   && OSNICK=ubuntu22.04
 [[ $OSNICK == centos7 ]] && OSNICK=rhel7
 [[ $OSNICK == centos8 ]] && OSNICK=rhel8
+[[ $OSNICK == centos9 ]] && OSNICK=rhel9
 [[ $OSNICK == ol8 ]]     && OSNICK=rhel8
 [[ $OSNICK == rocky8 ]]  && OSNICK=rhel8
+[[ $OSNICK == rocky9 ]]  && OSNICK=rhel9
 
 if [[ $OS == macos ]]; then
 	# as we don't build on macOS for every platform, we converge to a least common denominator
@@ -112,7 +114,7 @@ pack_ramp() {
 	local stem=${PACKAGE_NAME}.${PLATFORM}
 
 	local verspec=${SEMVER}${_VARIANT}
-	
+
 	local fq_package=$stem.${verspec}.zip
 
 	[[ ! -d $ARTDIR ]] && mkdir -p $ARTDIR
@@ -140,7 +142,7 @@ pack_ramp() {
 	fi
 
 	runn rm -f /tmp/ramp.fname $packfile
-	
+
 	# ROOT is required so ramp will detect the right git commit
 	cd $ROOT
 	runn @ <<-EOF
@@ -190,7 +192,7 @@ pack_deps() {
 	local fq_dep=$stem.${verspec}.tgz
 	local tar_path=$ARTDIR/$fq_dep
 	local dep_prefix_dir=$(cat $ARTDIR/$dep.prefix)
-	
+
 	{ cd $depdir ;\
 	  cat $ARTDIR/$dep.files | \
 	  xargs tar -c --sort=name --owner=root:0 --group=root:0 --mtime='UTC 1970-01-01' \
