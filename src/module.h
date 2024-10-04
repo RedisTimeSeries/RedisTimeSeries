@@ -6,9 +6,25 @@
 #ifndef MODULE_H
 #define MODULE_H
 
+#include "common.h"
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
+
+#define CheckKeyIsAllowedByAcls(ctx, keyName, permissionFlags) \
+    { \
+        RedisModuleUser *user = GetCurrentUser(ctx); \
+        if (RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) != REDISMODULE_OK) { \
+            return RTS_ReplyGeneralError(ctx, "ERR operation not permitted"); \
+        } \
+    }
+
+/// Checks if the key with the key name passed is
+#define CheckKeyIsAllowedToRead(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
+#define CheckKeyIsAllowedToUpdate(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE)
+#define CheckKeyIsAllowedToInsert(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_INSERT)
+#define CheckKeyIsAllowedToDelete(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE)
+#define CheckKeyIsAllowedToWrite(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_UPDATE)
 
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;
