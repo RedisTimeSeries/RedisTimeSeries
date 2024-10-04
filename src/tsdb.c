@@ -78,7 +78,17 @@ int GetSeries(RedisModuleCtx *ctx,
     if (shouldDeleteRefs) {
         mode = mode | REDISMODULE_WRITE;
     }
+
+    if (mode & REDISMODULE_READ) {
+        CheckKeyIsAllowedToRead(ctx, keyName);
+    }
+
+    if (mode & REDISMODULE_WRITE) {
+        CheckKeyIsAllowedToWrite(ctx, keyName);
+    }
+
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
+
     if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(new_key);
         if (!isSilent) {
