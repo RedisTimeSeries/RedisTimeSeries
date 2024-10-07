@@ -10,58 +10,58 @@
 #include "consts.h"
 #include "generic_chunk.h"
 
-#include <stdbool.h> // bool
-#include <stdint.h>
+#include <stdbool.h>   // bool
+#include <sys/types.h> // u_int_t
 
-typedef uint64_t timestamp_t;
-typedef uint64_t binary_t;
-typedef uint64_t globalbit_t;
-typedef uint8_t localbit_t;
+typedef u_int64_t timestamp_t;
+typedef u_int64_t binary_t;
+typedef u_int64_t globalbit_t;
+typedef u_int8_t localbit_t;
 
 typedef union
 {
     double d;
     int64_t i;
-    uint64_t u;
+    u_int64_t u;
 } union64bits;
 
 typedef struct CompressedChunk
 {
-    uint64_t size;
-    uint64_t count;
-    uint64_t idx;
+    u_int64_t size;
+    u_int64_t count;
+    u_int64_t idx;
 
     union64bits baseValue;
-    uint64_t baseTimestamp;
+    u_int64_t baseTimestamp;
 
-    uint64_t *data;
+    u_int64_t *data;
 
-    uint64_t prevTimestamp;
+    u_int64_t prevTimestamp;
     int64_t prevTimestampDelta;
 
     union64bits prevValue;
-    uint8_t prevLeading;
-    uint8_t prevTrailing;
+    u_int8_t prevLeading;
+    u_int8_t prevTrailing;
 } CompressedChunk;
 
 typedef struct Compressed_Iterator
 {
     CompressedChunk *chunk;
-    uint64_t idx;
-    uint64_t count;
+    u_int64_t idx;
+    u_int64_t count;
 
     // timestamp vars
-    uint64_t prevTS;
+    u_int64_t prevTS;
     int64_t prevDelta;
 
     // value vars
     union64bits prevValue;
-    uint8_t leading;
-    uint8_t trailing;
-    uint8_t blocksize;
+    u_int8_t leading;
+    u_int8_t trailing;
+    u_int8_t blocksize;
 } Compressed_Iterator;
 
-ChunkResult Compressed_Append(CompressedChunk *chunk, uint64_t timestamp, double value);
+ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample *sample);
 
 #endif

@@ -24,9 +24,9 @@ void testIter() {
   CChunk_Append(chunk, 130, 2);
   CChunk_Append(chunk, 132, 22);
   CChunk_Append(chunk, 135, 0);
-
+  
   double value;
-  uint64_t timestamp;
+  u_int64_t timestamp;
   CChunk_Iterator *iter = CChunk_NewChunkIterator(chunk);
   printf("\n");
   for(int i = 0; i < 14; ++i) {
@@ -44,9 +44,9 @@ void testIterLoop() {
     int success = CChunk_Append(chunk, i, ((i + rand()) % 100)/* * 1.123*/);
     if (success != CR_OK) break;
   }
-
+  
   double value;
-  uint64_t timestamp;
+  u_int64_t timestamp;
   CChunk_Iterator *iter = CChunk_NewChunkIterator(chunk);
   printf("\n");
   for(int i = 1; i; ++i) {
@@ -70,10 +70,10 @@ int testBitRangeFunc() {
   CChunk_Append(chunk, 65, val++);
   CChunk_Append(chunk, 66, val++);
   CChunk_Append(chunk, 130, val++);
-  CChunk_Append(chunk, 131, val++);
-
+  CChunk_Append(chunk, 131, val++);  
+  
   double value;
-  uint64_t timestamp;
+  u_int64_t timestamp;
   CChunk_Iterator *iter = CChunk_NewChunkIterator(chunk);
   printf("\n");
   for(int i = 1; i; ++i) {
@@ -84,7 +84,7 @@ int testBitRangeFunc() {
       break;
     }
     printf("timestamp %lu\t value %3.3lf\n", timestamp, value);
-  }
+  } 
 }
 
 

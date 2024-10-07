@@ -8,7 +8,7 @@
 
 #include "consts.h"
 #include <stdint.h>
-#include <stdint.h>
+#include <sys/types.h>
 
 typedef struct SimpleCompactionRule
 {

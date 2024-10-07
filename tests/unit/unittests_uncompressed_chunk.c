@@ -112,7 +112,7 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
     rv = Uncompressed_UpsertSample(&uCtx, &size, DP_BLOCK);
     mu_assert(rv == CR_ERR, "duplicate block");
     mu_assert_int_eq(1, chunk->num_samples);
-    const uint64_t firstTs = Uncompressed_GetFirstTimestamp(chunk);
+    const u_int64_t firstTs = Uncompressed_GetFirstTimestamp(chunk);
     mu_assert_int_eq(1, firstTs);
     mu_assert_double_eq(-0.5, chunk->samples[0].value);
     // DP_MAX should keep -0.5 given that -0.4 is smaller

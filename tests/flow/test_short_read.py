@@ -14,7 +14,6 @@ import shutil
 import platform
 from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo
 from includes import *
-from itertools import chain
 
 OS = os.getenv('OS')
 
@@ -412,7 +411,7 @@ def sendShortReads(env, rdb_file):
     env.assertGreater(total_len, SHORT_READ_BYTES_DELTA)
     rg = range(0, total_len + 1, SHORT_READ_BYTES_DELTA)
     if (total_len % SHORT_READ_BYTES_DELTA) != 0:
-        rg = chain(rg, range(total_len, total_len + 1))
+        rg = rg + range(total_len, total_len + 1)
 
     try:
         for b in rg:

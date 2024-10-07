@@ -8,7 +8,7 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-#include <stdint.h>
+#include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
@@ -35,8 +35,8 @@
 
 #define SAMPLE_SIZE sizeof(Sample)
 
-#define timestamp_t uint64_t
-#define api_timestamp_t uint64_t
+#define timestamp_t u_int64_t
+#define api_timestamp_t u_int64_t
 #define TSDB_ERR_TIMESTAMP_TOO_OLD -1
 #define TSDB_OK 0
 #define TSDB_ERROR -1

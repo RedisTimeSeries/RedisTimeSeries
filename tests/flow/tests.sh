@@ -165,14 +165,41 @@ setup_rltest() {
 
 #----------------------------------------------------------------------------------------------
 
-setup_sanitizer() {
+setup_clang_sanitizer() {
+	local ignorelist=$ROOT/tests/memcheck/redis.san-ignorelist
+	if ! grep THPIsEnabled $ignorelist &> /dev/null; then
+		echo "fun:THPIsEnabled" >> $ignorelist
+	fi
+
 	# for RLTest
 	export SANITIZER="$SAN"
-	export SHORT_READ_BYTES_DELTA=512
-
-	export ASAN_OPTIONS="detect_odr_violation=0:halt_on_error=0:detect_leaks=1:allocator_may_return_null=1"
+	
 	# --no-output-catch --exit-on-failure --check-exitcode
 	RLTEST_SAN_ARGS="--sanitizer $SAN"
+
+	if [[ $SAN == addr || $SAN == address ]]; then
+		REDIS_SERVER=${REDIS_SERVER:-redis-server-asan-$SAN_REDIS_VER}
+		if ! command -v $REDIS_SERVER > /dev/null; then
+			echo Building Redis for clang-asan ...
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER --suffix asan-$SAN_REDIS_VER --own-openssl --no-run \
+				--clang-asan \
+				--clang-san-blacklist $ignorelist
+		fi
+
+		# RLTest places log file details in ASAN_OPTIONS
+		export ASAN_OPTIONS="detect_odr_violation=0:halt_on_error=0:detect_leaks=1"
+		export LSAN_OPTIONS="suppressions=$ROOT/tests/memcheck/asan.supp"
+		# :use_tls=0
+
+	elif [[ $SAN == mem || $SAN == memory ]]; then
+		REDIS_SERVER=${REDIS_SERVER:-redis-server-msan-$SAN_REDIS_VER}
+		if ! command -v $REDIS_SERVER > /dev/null; then
+			echo Building Redis for clang-msan ...
+			V="$VERBOSE" runn $READIES/bin/getredis --force -v $SAN_GETREDIS_VER  --suffix msan-$SAN_REDIS_VER --own-openssl --no-run \
+				--clang-msan --llvm-dir /opt/llvm-project/build-msan \
+				--clang-san-blacklist $ignorelist
+		fi
+	fi
 }
 
 #----------------------------------------------------------------------------------------------
@@ -189,6 +216,12 @@ setup_redis_server() {
 #----------------------------------------------------------------------------------------------
 
 setup_valgrind() {
+	REDIS_SERVER=${REDIS_SERVER:-redis-server-vg}
+	if ! is_command $REDIS_SERVER; then
+		echo Building Redis for Valgrind ...
+		$READIES/bin/getredis -v $VALGRIND_GETREDIS_VER --valgrind --suffix vg
+	fi
+
 	if [[ $VG_LEAKS == 0 ]]; then
 		VG_LEAK_CHECK=no
 		RLTEST_VG_NOLEAKS="--vg-no-leakcheck"
@@ -204,7 +237,7 @@ setup_valgrind() {
 		--track-origins=yes \
 		--show-possibly-lost=no"
 
-	VALGRIND_SUPRESSIONS=$ROOT/tests/memcheck/redis_valgrind.sup
+	VALGRIND_SUPRESSIONS=$ROOT/tests/memcheck/valgrind.supp
 
 	RLTEST_VG_ARGS+="\
 		--use-valgrind \
@@ -213,12 +246,7 @@ setup_valgrind() {
 		--vg-no-fail-on-errors \
 		--vg-suppressions $VALGRIND_SUPRESSIONS"
 
-
-	# for module
-	export RS_GLOBAL_DTORS=1
-
 	# for RLTest
-	export SHORT_READ_BYTES_DELTA=512
 	export VALGRIND=1
 	export VG_OPTIONS
 	export RLTEST_VG_ARGS
@@ -265,7 +293,6 @@ run_tests() {
 		else
 			cat <<-EOF > $rltest_config
 				$RLTEST_ARGS
-				$RLTEST_TEST_ARGS
 				$RLTEST_VG_ARGS
 
 				EOF
@@ -385,6 +412,12 @@ fi
 [[ $SAN == addr ]] && SAN=address
 [[ $SAN == mem ]] && SAN=memory
 
+if [[ -n $TEST ]]; then
+	[[ $LOG != 1 ]] && RLTEST_LOG=0
+	# export BB=${BB:-1}
+	export RUST_BACKTRACE=1
+fi
+
 #-------------------------------------------------------------------------------- Platform Mode
 
 if [[ $PLATFORM_MODE == 1 ]]; then
@@ -466,7 +499,7 @@ fi
 setup_rltest
 
 if [[ -n $SAN ]]; then
-	setup_sanitizer
+	setup_clang_sanitizer
 fi
 
 if [[ $VG == 1 ]]; then

@@ -10,8 +10,8 @@
 #include "generic_chunk.h"
 #include "gorilla.h"
 
-#include <stdbool.h> // bool
-#include <stdint.h>
+#include <stdbool.h>   // bool
+#include <sys/types.h> // u_int_t
 
 // Initialize compressed chunk
 Chunk_t *Compressed_NewChunk(size_t size);
@@ -37,7 +37,7 @@ void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous
 size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
-uint64_t Compressed_ChunkNumOfSample(Chunk_t *chunk);
+u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);
 double Compressed_GetLastValue(Chunk_t *chunk);
@@ -51,6 +51,6 @@ void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx);
 int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx);
 
 /* Used in tests */
-uint64_t getIterIdx(ChunkIter_t *iter);
+u_int64_t getIterIdx(ChunkIter_t *iter);
 
 #endif // COMPRESSED_CHUNK_H

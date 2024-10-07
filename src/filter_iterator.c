@@ -571,7 +571,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     AggregationClass *aggregation = self->aggregation;
     void *aggregationContext = self->aggregationContext;
-    uint64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    u_int64_t aggregationTimeDelta = self->aggregationTimeDelta;
     bool is_reversed = self->reverse;
     Sample sample;
 
@@ -720,7 +720,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     }
 
     void (*appendValue)(void *, double, timestamp_t) = aggregation->appendValue;
-    uint64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    u_int64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
     self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
     while (enrichedChunk) {
         // currently if the query reversed the chunk will be already revered here

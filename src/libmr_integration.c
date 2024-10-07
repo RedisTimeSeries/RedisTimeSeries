@@ -284,7 +284,7 @@ Record *ListSeriesLabelsWithLimit(const Series *series,
 }
 
 #define MAX_VAL_LEN 24
-Record *ListWithSample(uint64_t timestamp, double value, bool resp3) {
+Record *ListWithSample(u_int64_t timestamp, double value, bool resp3) {
     Record *r = ListRecord_Create(2);
     ListRecord_Add(r, LongRecord_Create(timestamp));
     if (resp3) {

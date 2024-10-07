@@ -9,7 +9,7 @@
 #include "consts.h"
 #include "generic_chunk.h"
 
-#include <stdint.h>
+#include <sys/types.h>
 
 typedef struct Chunk
 {
@@ -49,7 +49,7 @@ ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
 ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy duplicatePolicy);
 size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
 
-uint64_t Uncompressed_NumOfSample(Chunk_t *chunk);
+u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
 timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
 double Uncompressed_GetLastValue(Chunk_t *chunk);
 timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);

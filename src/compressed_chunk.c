@@ -27,7 +27,7 @@ Chunk_t *Compressed_NewChunk(size_t size) {
     _log_if(size % 8 != 0, "chunk size isn't multiplication of 8");
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
-    chunk->data = (uint64_t *)calloc(chunk->size, sizeof(char));
+    chunk->data = (u_int64_t *)calloc(chunk->size, sizeof(char));
 #ifdef DEBUG
     memset(chunk->data, 0, chunk->size);
 #endif
@@ -66,7 +66,7 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += CHUNK_RESIZE_STEP;
-        chunk->data = (uint64_t *)realloc(chunk->data, chunk->size * sizeof(char));
+        chunk->data = (u_int64_t *)realloc(chunk->data, chunk->size * sizeof(char));
         memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
@@ -88,7 +88,7 @@ static void trimChunk(CompressedChunk *chunk) {
 
     if (excess > 1) {
         size_t newSize = chunk->size - excess + 1;
-        // align to 8 bytes (uint64_t) otherwise we will have an heap overflow in gorilla.c because
+        // align to 8 bytes (u_int64_t) otherwise we will have an heap overflow in gorilla.c because
         // each write happens in 8 bytes blocks.
         newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
         chunk->data = realloc(chunk->data, newSize);
@@ -181,7 +181,7 @@ ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
     return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
 
-uint64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
+u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->count;
 }
 
@@ -412,7 +412,7 @@ _done:
  *  Iterator functions  *
  ************************/
 // LCOV_EXCL_START - used for debug
-uint64_t getIterIdx(ChunkIter_t *iter) {
+u_int64_t getIterIdx(ChunkIter_t *iter) {
     return ((Compressed_Iterator *)iter)->idx;
 }
 // LCOV_EXCL_STOP

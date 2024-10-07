@@ -60,7 +60,7 @@ typedef struct StdContext
 {
     double sum;
     double sum_2; // sum of (values^2)
-    uint64_t cnt;
+    u_int64_t cnt;
 } StdContext;
 
 void finalize_empty_with_NAN(__unused void *contextPtr, double *value) {
