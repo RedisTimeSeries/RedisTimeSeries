@@ -17,7 +17,7 @@
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy, memmove
-#include <sys/types.h>
+#include <stdint.h>
 
 struct RedisModuleIO;
 
@@ -60,10 +60,10 @@ typedef struct ChunkFuncs
                          bool reverse);
 
     size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
-    u_int64_t (*GetNumOfSample)(Chunk_t *chunk);
-    u_int64_t (*GetLastTimestamp)(Chunk_t *chunk);
+    uint64_t (*GetNumOfSample)(Chunk_t *chunk);
+    uint64_t (*GetLastTimestamp)(Chunk_t *chunk);
     double (*GetLastValue)(Chunk_t *chunk);
-    u_int64_t (*GetFirstTimestamp)(Chunk_t *chunk);
+    uint64_t (*GetFirstTimestamp)(Chunk_t *chunk);
 
     void (*SaveToRDB)(Chunk_t *chunk, struct RedisModuleIO *io);
     int (*LoadFromRDB)(Chunk_t **chunk, struct RedisModuleIO *io);
