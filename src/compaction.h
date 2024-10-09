@@ -9,7 +9,9 @@
 #include "redismodule.h"
 #include "generic_chunk.h"
 
-#include <sys/types.h>
+#include "RedisModulesSDK/redismodule.h"
+
+#include <stdint.h>
 #include <rmutil/util.h>
 
 typedef struct AggregationClass
