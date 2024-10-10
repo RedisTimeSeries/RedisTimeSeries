@@ -791,8 +791,7 @@ jobs:
     steps:
       - name: Install prerequisites
         run: |
-          brew install make coreutils autoconf automake python@3.9
-
+          brew install make coreutils autoconf automake python@3.9 pyenv-virtualenv libtool
       - name: Checkout sources
         uses: actions/checkout@v3
         with:
@@ -804,7 +803,6 @@ jobs:
           python3.9 -m pip install --upgrade pip setuptools wheel
           python3.9 -m pip install -r tests/flow/requirements.txt
           python3.9 -m pip install jinja2 ramp-packer
-          ./sbin/setup
       - name: Checkout Redis
         uses: actions/checkout@v3
         with:
