@@ -1,0 +1,21 @@
+FROM ubuntu:22.04
+
+ARG project_dir
+
+WORKDIR ${project_dir}
+
+# Install the stuff
+RUN	apt-get update && apt-get install -y bash build-essential autoconf automake libtool cmake lcov valgrind pkg-config \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y bash curl git checkinstall libreadline-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libz-dev openssl libffi-dev \
+    && curl -O https://www.python.org/ftp/python/3.9.20/Python-3.9.20.tgz \
+    && tar -xzvf Python-3.9.20.tgz \
+    && cd Python-3.9.20 \
+    && ./configure --enable-shared --enable-optimizations --prefix=/usr/local LDFLAGS="-Wl,--rpath=/usr/local/lib" \
+    && make install \
+    && python3 -m pip install --upgrade pip \
+    && python3 -m pip install virtualenv \
+    && git clone --recursive --depth=1 https://github.com/redis/redis.git \
+    && cd redis \
+    && make -j `nproc` \
+    && make install \
+    && redis-server --version
