@@ -24,3 +24,6 @@ site/
 wordlist.dic
 /1/
 *.clangd
+
+.venv
+redis/
