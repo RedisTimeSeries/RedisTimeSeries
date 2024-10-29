@@ -3,9 +3,6 @@ name: Run a Benchmark Flow
 on:
   workflow_call:
     inputs:
-      container:
-        type: string
-        default: redisfab/rmbuilder:6.2.7-x64-bullseye
       module_path:
         type: string
         default: bin/linux-x64-release/redistimeseries.so
@@ -37,7 +34,6 @@ on:
 jobs:
   benchmark-steps:
     runs-on: ubuntu-latest
-    container: ${{ inputs.container }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

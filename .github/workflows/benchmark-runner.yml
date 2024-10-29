@@ -3,13 +3,13 @@ name: Run RedisTimeSeries Benchmarks
 on:
   workflow_dispatch:
     inputs:
-      extended:
+      profiler:
         type: boolean
-        description: 'Run extended benchmarks'
+        description: 'Run profiler on benchmarks'
         default: false
   workflow_call:
     inputs:
-      extended:
+      profiler:
         type: boolean
         default: false
 
@@ -17,7 +17,7 @@ jobs:
   benchmark-timeseries-oss-standalone:
     strategy:
       matrix:
-        member_id: [1, 2, 3]
+        member_id: [1, 2, 3, 4]
     uses: ./.github/workflows/benchmark-flow.yml
     secrets: inherit
     with:
@@ -25,6 +25,7 @@ jobs:
       benchmark_runner_group_total: ${{ strategy.job-total }}
 
   benchmark-timeseries-oss-standalone-profiler:
+    if: inputs.profiler
     strategy:
       matrix:
         member_id: [1, 2, 3]
