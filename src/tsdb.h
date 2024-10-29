@@ -84,7 +84,8 @@ int GetSeries(RedisModuleCtx *ctx,
               Series **series,
               int mode,
               bool shouldDeleteRefs,
-              bool isSilent);
+              bool isSilent,
+              bool shouldCheckForAcls);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,

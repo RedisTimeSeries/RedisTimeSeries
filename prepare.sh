@@ -5,6 +5,7 @@
 
 set -e
 
+rm -rf .venv
 python3 -m venv .venv
 python3 -m pip install --upgrade pip virtualenv
 source .venv/bin/activate
