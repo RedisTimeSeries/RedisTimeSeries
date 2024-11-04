@@ -61,7 +61,7 @@ int asprintf(char **str, const char *format, ...) {
     }
 
     // Write the formatted string into the allocated memory
-    va_start(args, format);  // Restart the args for the second pass
+    va_start(args, format); // Restart the args for the second pass
     int result = vsnprintf(*str, size + 1, format, args);
     va_end(args);
 
@@ -73,27 +73,27 @@ int asprintf(char **str, const char *format, ...) {
     return result;
 }
 
-#define SetCommandAcls(ctx, cmd, acls) \
-    { \
-        RedisModuleCommand *command = RedisModule_GetCommand(ctx, cmd); \
-        if (command == NULL) { \
-            return REDISMODULE_ERR; \
-        } \
-        \
-        char *categories = NULL; \
-        if (!strcmp(acls, "")) { \
-            categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME; \
-        } else { \
-            asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME); \
-        }\
-        \
-        if (RedisModule_SetCommandACLCategories(command, categories) != REDISMODULE_OK) { \
-            return REDISMODULE_ERR; \
-        } \
+#define SetCommandAcls(ctx, cmd, acls)                                                             \
+    {                                                                                              \
+        RedisModuleCommand *command = RedisModule_GetCommand(ctx, cmd);                            \
+        if (command == NULL) {                                                                     \
+            return REDISMODULE_ERR;                                                                \
+        }                                                                                          \
+                                                                                                   \
+        char *categories = NULL;                                                                   \
+        if (!strcmp(acls, "")) {                                                                   \
+            categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME;                                      \
+        } else {                                                                                   \
+            asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME);             \
+        }                                                                                          \
+                                                                                                   \
+        if (RedisModule_SetCommandACLCategories(command, categories) != REDISMODULE_OK) {          \
+            return REDISMODULE_ERR;                                                                \
+        }                                                                                          \
     }
 
-#define RegisterCommandWithModesAndAcls(ctx, cmd, f, mode, acls) \
-    __rmutil_register_cmd(ctx, cmd, f, mode); \
+#define RegisterCommandWithModesAndAcls(ctx, cmd, f, mode, acls)                                   \
+    __rmutil_register_cmd(ctx, cmd, f, mode);                                                      \
     SetCommandAcls(ctx, cmd, acls);
 
 RedisModuleType *SeriesType;
