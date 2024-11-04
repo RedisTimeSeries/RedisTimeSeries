@@ -227,9 +227,9 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: pack clean all bindirs
+.PHONY: gen-compile-commands pack clean all bindirs
 
-all: bindirs $(TARGET)
+all: gen-compile-commands bindirs $(TARGET)
 
 include $(MK)/rules
 
@@ -295,6 +295,7 @@ endif # DEPS
 
 clean:
 	@echo Cleaning ...
+	$(SHOW)rm -rf compile_commands.json
 ifeq ($(ALL),1)
 	-$(SHOW)rm -rf $(BINROOT) $(LIBEVENT_BINDIR) $(DRAGONBOX_BINDIR) $(FAST_DOUBLE_PARSER_C_BINDIR) $(CPU_FEATURES_BINDIR)
 	$(SHOW)$(MAKE) -C $(ROOT)/build/libevent clean AUTOGEN=1
@@ -513,5 +514,15 @@ upload-release:
 
 upload-artifacts:
 	@SNAPSHOT=1 $(ROOT)/sbin/upload-artifacts
+
+ifeq ($(MAKELEVEL),0)
+gen-compile-commands:
+	@echo "Generating compile_commands.json..."
+	@$(MAKE) --always-make --dry-run \
+	| grep -wE 'gcc|g\+\+|c\+\+' \
+	| grep -w '\-c' \
+	| jq -nR '[inputs|{directory:"$(CURDIR)", command:., file: match(" [^ ]+$$").string[1:]}]' \
+	> compile_commands.json
+endif
 
 .PHONY: pack upload-release upload-artifacts

@@ -6,37 +6,9 @@
 #ifndef MODULE_H
 #define MODULE_H
 
-#include "common.h"
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
-
-#define CheckKeyIsAllowedByAcls(ctx, keyName, permissionFlags) \
-    { \
-        if (ctx != NULL) { \
-            RedisModuleUser *user = GetCurrentUser(ctx); \
-            \
-            if (!user) { \
-                size_t len = 0; \
-                const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len); \
-                RedisModule_Log(ctx, \
-                                "warning", \
-                                "No context user set, can't check for the ACLs for key %s", \
-                                currentKeyStr); \
-            } else if (RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) != REDISMODULE_OK) { \
-                return RTS_ReplyGeneralError(ctx, "ERR operation not permitted"); \
-            } \
-        } else { \
-            fprintf(stderr, "Cannot check for the ACLs: redis module context is not set."); \
-        } \
-    }
-
-/// Checks if the key with the key name passed is
-#define CheckKeyIsAllowedToRead(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_RO)
-#define CheckKeyIsAllowedToUpdate(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE | REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW)
-#define CheckKeyIsAllowedToInsert(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW)
-#define CheckKeyIsAllowedToDelete(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_RM)
-#define CheckKeyIsAllowedToWrite(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_UPDATE | REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW | REDISMODULE_CMD_KEY_RM)
 
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;
