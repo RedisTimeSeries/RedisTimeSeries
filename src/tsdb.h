@@ -15,7 +15,6 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
