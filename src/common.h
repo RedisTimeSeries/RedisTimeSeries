@@ -13,19 +13,6 @@ void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleStr
 #define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg);
 #define RTS_ReplyGeneralError(ctx, msg) RTS_ReplyError(ctx, RTS_ERR, msg);
 
-// Returns the current user of the context.
-static inline struct RedisModuleUser* GetCurrentUser(struct RedisModuleCtx *ctx) {
-    struct RedisModuleString *username = RedisModule_GetCurrentUserName(ctx);
-
-    if (!username) {
-        return NULL;
-    }
-
-    struct RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(username);
-    RedisModule_FreeString(ctx, username);
-
-    return user;
-}
 
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
 #include "readies/cetara/diag/gdb.h"

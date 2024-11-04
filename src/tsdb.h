@@ -15,6 +15,7 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
+
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
@@ -84,8 +85,7 @@ int GetSeries(RedisModuleCtx *ctx,
               Series **series,
               int mode,
               bool shouldDeleteRefs,
-              bool isSilent,
-              bool shouldCheckForAcls);
+              bool isSilent);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,
