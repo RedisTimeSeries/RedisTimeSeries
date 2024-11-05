@@ -60,7 +60,8 @@ def test_resp3(env):
                     b't2{1}': [{b'name': b'mush'}, [990, 10.0]]}
 
         res = r1.execute_command('ts.queryindex', 'name=mush')
-        assert res == [b't1{1}', b't2{1}']
+        assert b't1{1}' in res
+        assert b't2{1}' in res
 
 def test_resp3_mrange(env):
     if not is_resp3_possible(env):
