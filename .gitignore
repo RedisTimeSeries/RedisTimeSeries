@@ -23,4 +23,7 @@ site/
 /tests/benchmarks/profile_*
 wordlist.dic
 /1/
+*.clangd
 
+.venv
+redis/

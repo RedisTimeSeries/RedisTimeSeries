@@ -40,6 +40,65 @@
 #define REDISTIMESERIES_GIT_SHA "unknown"
 #endif
 
+#define TIMESERIES_MODULE_ACL_CATEGORY_NAME "timeseries"
+
+int asprintf(char **str, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    // First, determine the size of the formatted string
+    int size = vsnprintf(NULL, 0, format, args);
+    if (size < 0) {
+        va_end(args);
+        return -1;
+    }
+
+    // Allocate memory for the string
+    *str = (char *)malloc(size + 1);
+    if (!*str) {
+        va_end(args);
+        return -1;
+    }
+
+    // Write the formatted string into the allocated memory
+    va_start(args, format); // Restart the args for the second pass
+    int result = vsnprintf(*str, size + 1, format, args);
+    va_end(args);
+
+    if (result < 0) {
+        free(*str);
+        *str = NULL;
+    }
+
+    return result;
+}
+
+#define SetCommandAcls(ctx, cmd, acls)                                                             \
+    {                                                                                              \
+        RedisModuleCommand *command = RedisModule_GetCommand(ctx, cmd);                            \
+        if (command == NULL) {                                                                     \
+            return REDISMODULE_ERR;                                                                \
+        }                                                                                          \
+                                                                                                   \
+        char *categories = NULL;                                                                   \
+        if (!strcmp(acls, "")) {                                                                   \
+            categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME;                                      \
+        } else {                                                                                   \
+            asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME);             \
+        }                                                                                          \
+                                                                                                   \
+        const int ret = RedisModule_SetCommandACLCategories(command, categories);                  \
+        free(categories);                                                                          \
+                                                                                                   \
+        if (ret != REDISMODULE_OK) {                                                               \
+            return REDISMODULE_ERR;                                                                \
+        }                                                                                          \
+    }
+
+#define RegisterCommandWithModesAndAcls(ctx, cmd, f, mode, acls)                                   \
+    __rmutil_register_cmd(ctx, cmd, f, mode);                                                      \
+    SetCommandAcls(ctx, cmd, acls);
+
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
 bool isTrimming = false;
@@ -255,6 +314,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
             iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
             continue;
         }
+
         ResultSet_AddSerie(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
         RedisModule_CloseKey(key);
     }
@@ -1099,8 +1159,10 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     size_t currentKeyLen;
     long long replylen = 0;
     Series *series;
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
+
         const int status = GetSeries(ctx,
                                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
                                      &key,
@@ -1108,6 +1170,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                      REDISMODULE_READ,
                                      false,
                                      true);
+
         if (!status) {
             RedisModule_Log(ctx,
                             "warning",
@@ -1116,6 +1179,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                             currentKey);
             continue;
         }
+
         if (!_ReplyMap(ctx)) {
             RedisModule_ReplyWithArray(ctx, 3);
         }
@@ -1147,6 +1211,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         replylen++;
         RedisModule_CloseKey(key);
     }
+
     RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
@@ -1504,40 +1569,56 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         }
     }
 
+    if (RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "error", "Failed to add ACL category");
+
+        return REDISMODULE_ERR;
+    }
+
     IndexInit();
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.alter", TSDB_alter);
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.createrule", TSDB_createRule);
-    RMUtil_RegisterWriteCmd(ctx, "ts.deleterule", TSDB_deleteRule);
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.add", TSDB_add);
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.incrby", TSDB_incrby);
-    RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.decrby", TSDB_incrby);
-    RMUtil_RegisterReadCmd(ctx, "ts.range", TSDB_range);
-    RMUtil_RegisterReadCmd(ctx, "ts.revrange", TSDB_revrange);
+    RegisterCommandWithModesAndAcls(ctx, "ts.create", TSDB_create, "write deny-oom", "write fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.alter", TSDB_alter, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.createrule", TSDB_createRule, "write fast", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.deleterule", TSDB_deleteRule, "write", "write fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.add", TSDB_add, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.incrby", TSDB_incrby, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.decrby", TSDB_incrby, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.range", TSDB_range, "readonly", "read");
+    RegisterCommandWithModesAndAcls(ctx, "ts.revrange", TSDB_revrange, "readonly", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RMUtil_RegisterReadCmd(ctx, "ts.info", TSDB_info);
-    RMUtil_RegisterReadCmd(ctx, "ts.get", TSDB_get);
-    RMUtil_RegisterWriteCmd(ctx, "ts.del", TSDB_delete);
+    SetCommandAcls(ctx, "ts.queryindex", "read");
+
+    RegisterCommandWithModesAndAcls(ctx, "ts.info", TSDB_info, "readonly", "read fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.get", TSDB_get, "readonly", "read fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.del", TSDB_delete, "write", "write");
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    SetCommandAcls(ctx, "ts.madd", "write");
+
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+    SetCommandAcls(ctx, "ts.mrange", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    SetCommandAcls(ctx, "ts.mrevrange", "read");
+
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+    SetCommandAcls(ctx, "ts.mget", "read");
 
     RedisModule_SubscribeToKeyspaceEvents(
         ctx,

@@ -25,4 +25,4 @@ bool CheckVersionForBlockedClientMeasureTime();
 
 extern int persistence_in_progress;
 
-#endif
+#endif // MODULE_H
