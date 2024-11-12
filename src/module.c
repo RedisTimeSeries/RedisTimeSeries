@@ -1016,7 +1016,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                               REDISMODULE_READ | REDISMODULE_WRITE,
                                               true,
                                               false,
-                                              false);
+                                              true);
     if (statusS) {
         return REDISMODULE_ERR;
     }
@@ -1036,7 +1036,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                               REDISMODULE_READ | REDISMODULE_WRITE,
                                               true,
                                               false,
-                                              false);
+                                              true);
     if (statusD) {
         RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;

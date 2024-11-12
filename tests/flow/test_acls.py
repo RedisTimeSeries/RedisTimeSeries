@@ -24,7 +24,9 @@ def test_acl_with_ts_mget_mrange():
     conn.execute_command(
         'ACL', 'SETUSER', 'testuser',
         'on', '>password',
-        '+ACL', '+TS.MGET', '+TS.MRANGE', '+TS.MREVRANGE', '+@read',
+        '+ACL', '+TS.MGET', '+TS.MRANGE', '+TS.MREVRANGE',
+        '+TS.CREATERULE', '+TS.DELETERULE',
+        '+@read',
         '~series1'
     )
 
@@ -43,6 +45,12 @@ def test_acl_with_ts_mget_mrange():
         # TS.MREVRANGE with FILTER that includes both series
         result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
 
+    with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.CREATERULE', 'series1', 'series2', 'AGGREGATION', 'AVG', '1')
+
+    with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.CREATERULE', 'series2', 'series1', 'AGGREGATION', 'AVG', '1')
+
     # Now change the ACL to allow access to both series
     conn.execute_command('ACL', 'SETUSER', 'testuser', '+@read', '~series1', '~series2')
 
@@ -55,6 +63,16 @@ def test_acl_with_ts_mget_mrange():
 
     result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
     env.assertEqual(len(result), 2, message="TS.MREVRANGE should have returned two series")
+
+    result = conn.execute_command('TS.CREATERULE', 'series1', 'series2', 'AGGREGATION', 'AVG', '1')
+    env.assertEqual(result, b'OK')
+    result = conn.execute_command('TS.DELETERULE', 'series1', 'series2')
+    env.assertEqual(result, b'OK')
+
+    result = conn.execute_command('TS.CREATERULE', 'series2', 'series1', 'AGGREGATION', 'AVG', '1')
+    env.assertEqual(result, b'OK')
+    result = conn.execute_command('TS.DELETERULE', 'series2', 'series1')
+    env.assertEqual(result, b'OK')
 
     # Clean up
     conn.execute_command('AUTH', 'default', '')
