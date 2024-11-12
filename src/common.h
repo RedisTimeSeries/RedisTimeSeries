@@ -14,7 +14,6 @@ void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleStr
 #define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg);
 #define RTS_ReplyGeneralError(ctx, msg) RTS_ReplyError(ctx, RTS_ERR, msg);
 #define RTS_ReplyPermissionError(ctx, msg) RTS_ReplyError(ctx, RTS_NOPERM, msg);
-// #define RTS_ReplyPermissionError(ctx, msg) RTS_ReplyGeneralError(ctx, "ERR operation not permitted");
 
 // Returns the current user of the context.
 static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {
