@@ -1,16 +1,10 @@
 name: build for mariner2
-
 on:
   push:
     branches:
       - master
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-
-permissions:
-  id-token: write   # This is required for requesting the JWT
-  contents: write   # This is required for actions/checkout
-
 jobs:
   build-mariner2:
     runs-on: ubuntu-latest
@@ -33,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: redis/redis
-          ref: '7.2.1'  # todo: use this is a parameter when we have flows for multiple platforms
+          ref: '7.2.1' # todo: use this is a parameter when we have flows for multiple platforms
           path: redis
       - name: Build Redis
         working-directory: redis
@@ -42,16 +36,3 @@ jobs:
         run: make test
       - name: Pack module
         run: make pack BRANCH=${{ github.ref_name }} SHOW=1
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: arn:aws:iam::168085023892:role/GitHubRedisTimeSeriesS3Upload
-          role-session-name: GitHub_to_AWS_S3_Upload
-          aws-region: "us-east-1"
-      - name: Upload artifacts to s3 - staging
-        run: |
-          make upload-artifacts SHOW=1 VERBOSE=1
-          make upload-release SHOW=1 STAGING=1 VERBOSE=1
-      - name: Upload artifacts to s3 - release  # todo: trigger this manually instead
-        if: ${{ github.ref != 'refs/heads/master' }}
-        run: make upload-release SHOW=1 VERBOSE=1
