@@ -51,19 +51,6 @@ CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int per
         ctx, RedisModule_CreateString(ctx, keyName, strlen(keyName)), permissionFlags);
 }
 
-/// Checks if the key with the key name passed is
-// #define CheckKeyIsAllowedToRead(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
-// REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_RO) #define CheckKeyIsAllowedToUpdate(ctx,
-// keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE |
-// REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW) #define CheckKeyIsAllowedToReadWrite(ctx,
-// keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS |
-// REDISMODULE_CMD_KEY_UPDATE) #define CheckKeyIsAllowedToInsert(ctx, keyName)
-// CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_RW |
-// REDISMODULE_CMD_KEY_OW) #define CheckKeyIsAllowedToDelete(ctx, keyName)
-// CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_RM)
-// #define CheckKeyIsAllowedToWrite(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
-// REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_UPDATE |
-// REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW | REDISMODULE_CMD_KEY_RM)
 #define CheckKeyIsAllowedToRead(ctx, keyName)                                                      \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
 #define CheckKeyIsAllowedToReadC(ctx, keyName)                                                     \
@@ -76,13 +63,6 @@ CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int per
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
 #define CheckKeyIsAllowedToReadWriteC(ctx, keyName)                                                \
     CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
-// #define CheckKeyIsAllowedToInsert(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
-// REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW) #define
-// CheckKeyIsAllowedToDelete(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
-// REDISMODULE_CMD_KEY_DELETE | REDISMODULE_CMD_KEY_RM) #define CheckKeyIsAllowedToWrite(ctx,
-// keyName) CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_DELETE |
-// REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_UPDATE | REDISMODULE_CMD_KEY_RW |
-// REDISMODULE_CMD_KEY_OW | REDISMODULE_CMD_KEY_RM)
 
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;
