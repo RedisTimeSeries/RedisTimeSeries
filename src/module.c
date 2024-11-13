@@ -303,8 +303,46 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     char *currentKey = NULL;
     size_t currentKeyLen;
     Series *series = NULL;
+    int exitStatus = REDISMODULE_OK;
 
-    // TODO: check the ACLs first.
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const GetSeriesResult status =
+            GetSeries(ctx,
+                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
+                      &key,
+                      &series,
+                      REDISMODULE_READ,
+                      false,
+                      false,
+                      true);
+
+        switch (status) {
+            case GetSeriesResult_Success:
+                RedisModule_CloseKey(key);
+
+                break;
+            case GetSeriesResult_GenericError:
+                RedisModule_Log(ctx,
+                                "warning",
+                                "couldn't open key or key is not a Timeseries. key=%s",
+                                currentKey);
+
+                break;
+            case GetSeriesResult_PermissionError:
+                RedisModule_Log(ctx,
+                                "warning",
+                                "The user lacks the required permissions for the key=%s, stopping.",
+                                currentKey);
+                exitStatus = REDISMODULE_ERR;
+
+                goto exit;
+        }
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status =
@@ -317,8 +355,6 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                       true,
                       true);
         if (status) {
-            RedisModule_Log(
-                ctx, "warning", "couldn't open key or key is not a Timeseries. key=%s", currentKey);
             // The iterator may have been invalidated, stop and restart from after the current
             // key.
             RedisModule_DictIteratorStop(iter);
@@ -352,9 +388,9 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                    args->numLimitLabels,
                    &minimizedArgs,
                    args->reverse);
-
+exit:
     ResultSet_Free(resultset);
-    return REDISMODULE_OK;
+    return exitStatus;
 }
 
 // Previous multirange reply logic ( unchanged )

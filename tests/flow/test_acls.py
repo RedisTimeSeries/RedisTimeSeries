@@ -49,7 +49,13 @@ def test_acl_with_ts_mget_mrange():
         result = conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'group=test')
 
     with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'group=test', 'GROUPBY', 'name', 'REDUCE', 'MAX')
+
+    with pytest.raises(redis.exceptions.NoPermissionError):
         result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
+
+    with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test', 'GROUPBY', 'name', 'REDUCE', 'MAX')
 
     with pytest.raises(redis.exceptions.NoPermissionError):
         result = conn.execute_command('TS.CREATERULE', 'series1', 'series2', 'AGGREGATION', 'AVG', '1')
@@ -70,8 +76,12 @@ def test_acl_with_ts_mget_mrange():
 
     result = conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'group=test')
     env.assertEqual(len(result), 2, message="TS.MRANGE should have returned two series")
+    result = conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'group=test', 'GROUPBY', 'name', 'REDUCE', 'MAX')
+    env.assertEqual(len(result), 2, message="TS.MRANGE should have returned two series")
 
     result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
+    env.assertEqual(len(result), 2, message="TS.MREVRANGE should have returned two series")
+    result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test', 'GROUPBY', 'name', 'REDUCE', 'MAX')
     env.assertEqual(len(result), 2, message="TS.MREVRANGE should have returned two series")
 
     result = conn.execute_command('TS.QUERYINDEX', 'group=test')

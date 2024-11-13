@@ -86,57 +86,24 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
 
     if (shouldCheckForAcls) {
-        RedisModule_Log(
-            ctx, "warning", "Trying to check the ACL permission for the key=%s", currentKeyStr);
-
-        if (mode & REDISMODULE_READ) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Trying to check the READ ACL permission for the key=%s",
-                            currentKeyStr);
-
-            if (!CheckKeyIsAllowedToRead(ctx, keyName)) {
-                RedisModule_Log(ctx,
-                                "warning",
-                                "READ ACL permission check failed for the key=%s",
-                                currentKeyStr);
-
-                if (!isSilent) {
-                    RTS_ReplyPermissionError(ctx,
-                                             "the current user doesn't have the read permission to "
-                                             "one or more keys that match the specified filter");
-                }
-
-                return GetSeriesResult_PermissionError;
+        if (mode & REDISMODULE_READ && !CheckKeyIsAllowedToRead(ctx, keyName)) {
+            if (!isSilent) {
+                RTS_ReplyPermissionError(ctx,
+                                         "the current user doesn't have the read permission to "
+                                         "one or more keys that match the specified filter");
             }
 
-            RedisModule_Log(
-                ctx, "warning", "READ ACL permission is granted for the key=%s", currentKeyStr);
+            return GetSeriesResult_PermissionError;
         }
 
-        if (mode & REDISMODULE_WRITE) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Trying to check the WRITE ACL permission for the key=%s",
-                            currentKeyStr);
-
-            if (!CheckKeyIsAllowedToWrite(ctx, keyName)) {
-                RedisModule_Log(ctx,
-                                "warning",
-                                "WRITE ACL permission check failed for the key=%s",
-                                currentKeyStr);
-
-                if (!isSilent) {
-                    RTS_ReplyPermissionError(ctx,
-                                             "the current user doesn't have the write permission "
-                                             "to one or more keys that match the specified filter");
-                }
-
-                return GetSeriesResult_PermissionError;
+        if (mode & REDISMODULE_WRITE && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
+            if (!isSilent) {
+                RTS_ReplyPermissionError(ctx,
+                                         "the current user doesn't have the write permission "
+                                         "to one or more keys that match the specified filter");
             }
 
-            RedisModule_Log(
-                ctx, "warning", "WRITE ACL permission is granted for the key=%s", currentKeyStr);
+            return GetSeriesResult_PermissionError;
         }
     }
 
