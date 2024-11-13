@@ -40,6 +40,17 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
     return true;
 }
 
+/// @brief Check if the key is allowed by the ACLs for the current user.
+/// @param ctx The redis module context.
+/// @param keyName The name of the key to check the ACLs for (C String).
+/// @param permissionFlags The permissions to check for.
+/// @return true if the key is allowed by the ACLs, false otherwise.
+static inline __attribute__((always_inline)) bool
+CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int permissionFlags) {
+    return CheckKeyIsAllowedByAcls(
+        ctx, RedisModule_CreateString(ctx, keyName, strlen(keyName)), permissionFlags);
+}
+
 /// Checks if the key with the key name passed is
 // #define CheckKeyIsAllowedToRead(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
 // REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_RO) #define CheckKeyIsAllowedToUpdate(ctx,
@@ -55,10 +66,16 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
 // REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW | REDISMODULE_CMD_KEY_RM)
 #define CheckKeyIsAllowedToRead(ctx, keyName)                                                      \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
+#define CheckKeyIsAllowedToReadC(ctx, keyName)                                                     \
+    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
 #define CheckKeyIsAllowedToWrite(ctx, keyName)                                                     \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE)
+#define CheckKeyIsAllowedToWriteC(ctx, keyName)                                                    \
+    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE)
 #define CheckKeyIsAllowedToReadWrite(ctx, keyName)                                                 \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
+#define CheckKeyIsAllowedToReadWriteC(ctx, keyName)                                                \
+    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
 // #define CheckKeyIsAllowedToInsert(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,
 // REDISMODULE_CMD_KEY_INSERT | REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_OW) #define
 // CheckKeyIsAllowedToDelete(ctx, keyName) CheckKeyIsAllowedByAcls(ctx, keyName,

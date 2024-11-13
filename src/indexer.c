@@ -4,6 +4,7 @@
  *the server side public license v1 (ssplv1).
  */
 #include "indexer.h"
+#include "module.h"
 
 #include "consts.h"
 #include "utils/overflow.h"
@@ -382,7 +383,8 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
 
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count) {
+                            size_t predicate_count,
+                            bool *hasPermissionError) {
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
     RedisModuleDict *res = RedisModule_CreateDict(ctx);
@@ -406,7 +408,13 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         char *currentKey;
         size_t currentKeyLen;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-            if (_isKeySatisfyAllPredicates(
+            const bool is_allowed = CheckKeyIsAllowedToReadC(ctx, currentKey);
+            if (!is_allowed && hasPermissionError) {
+                *hasPermissionError = true;
+            }
+
+            if (is_allowed &&
+                _isKeySatisfyAllPredicates(
                     ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
                 RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
             }

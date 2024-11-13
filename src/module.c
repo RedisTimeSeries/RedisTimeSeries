@@ -9,6 +9,7 @@
 #include "module.h"
 
 #include "compaction.h"
+#include "common.h"
 #include "config.h"
 #include "indexer.h"
 #include "libmr_commands.h"
@@ -230,7 +231,13 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count);
+    bool hasPermissionError = false;
+    RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, &hasPermissionError);
+
+    if (hasPermissionError) {
+        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        return;
+    }
 
     RedisModule_ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
@@ -440,8 +447,14 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     }
     args.reverse = rev;
 
-    RedisModuleDict *resultSeries =
-        QueryIndex(ctx, args.queryPredicates->list, args.queryPredicates->count);
+    bool hasPermissionError = false;
+    RedisModuleDict *resultSeries = QueryIndex(
+        ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
+
+    if (hasPermissionError) {
+        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        return REDISMODULE_ERR;
+    }
 
     int result = REDISMODULE_OK;
     if (args.groupByLabel) {
@@ -1217,8 +1230,15 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(args.limitLabels[i], NULL);
     }
 
-    RedisModuleDict *result =
-        QueryIndex(ctx, args.queryPredicates->list, args.queryPredicates->count);
+    bool hasPermissionError = false;
+    RedisModuleDict *result = QueryIndex(
+        ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
+
+    if (hasPermissionError) {
+        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        return REDISMODULE_ERR;
+    }
+
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;

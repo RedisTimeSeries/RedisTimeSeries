@@ -329,8 +329,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -387,8 +388,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -483,8 +485,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;

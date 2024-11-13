@@ -24,8 +24,8 @@ def test_acl_with_ts_mget_mrange():
     conn.execute_command(
         'ACL', 'SETUSER', 'testuser',
         'on', '>password',
-        '+ACL', '+TS.MGET', '+TS.MRANGE', '+TS.MREVRANGE',
-        '+TS.CREATERULE', '+TS.DELETERULE',
+        '+ACL', '+TS.MGET', '+TS.MRANGE', '+TS.MREVRANGE', '+TS.INFO',
+        '+TS.CREATERULE', '+TS.DELETERULE', '+TS.QUERYINDEX',
         '+@read',
         '~series1'
     )
@@ -33,16 +33,22 @@ def test_acl_with_ts_mget_mrange():
     # Authenticate as 'testuser'
     conn.execute_command('AUTH', 'testuser', 'password')
 
-    # TS.MGET with FILTER that includes both serie
+    result = conn.execute_command('TS.INFO', 'series1')
+    env.assertGreaterEqual(len(result), 1)
+
+    with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.INFO', 'series2')
+
+    with pytest.raises(redis.exceptions.NoPermissionError):
+        result = conn.execute_command('TS.QUERYINDEX', 'group=test')
+
     with pytest.raises(redis.exceptions.NoPermissionError):
         result = conn.execute_command('TS.MGET', 'FILTER', 'group=test')
 
     with pytest.raises(redis.exceptions.NoPermissionError):
-        # TS.MRANGE with FILTER that includes both series
         result = conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'group=test')
 
     with pytest.raises(redis.exceptions.NoPermissionError):
-        # TS.MREVRANGE with FILTER that includes both series
         result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
 
     with pytest.raises(redis.exceptions.NoPermissionError):
@@ -54,7 +60,11 @@ def test_acl_with_ts_mget_mrange():
     # Now change the ACL to allow access to both series
     conn.execute_command('ACL', 'SETUSER', 'testuser', '+@read', '~series1', '~series2')
 
-    # Try TS.MGET again
+    result = conn.execute_command('TS.INFO', 'series1')
+    env.assertGreaterEqual(len(result), 1)
+    result = conn.execute_command('TS.INFO', 'series2')
+    env.assertGreaterEqual(len(result), 1)
+
     result = conn.execute_command('TS.MGET', 'FILTER', 'group=test')
     env.assertEqual(len(result), 2, message="TS.MGET should have returned two series")
 
@@ -63,6 +73,9 @@ def test_acl_with_ts_mget_mrange():
 
     result = conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', 'group=test')
     env.assertEqual(len(result), 2, message="TS.MREVRANGE should have returned two series")
+
+    result = conn.execute_command('TS.QUERYINDEX', 'group=test')
+    env.assertEqual(len(result), 2, message="TS.QUERYINDEX should have returned two series")
 
     result = conn.execute_command('TS.CREATERULE', 'series1', 'series2', 'AGGREGATION', 'AVG', '1')
     env.assertEqual(result, b'OK')
