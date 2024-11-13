@@ -34,7 +34,8 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
             return false;
         }
     } else {
-        fprintf(stderr, "Can't check for the ACLs: redis module context is not set.");
+        RedisModule_Log(
+            NULL, "warning", "Can't check for the ACLs: redis module context is not set.");
     }
 
     return true;
