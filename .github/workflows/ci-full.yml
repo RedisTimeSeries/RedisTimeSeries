@@ -165,7 +165,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -246,7 +246,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -363,7 +363,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -580,7 +580,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -675,7 +675,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -792,7 +792,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -898,7 +898,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -1002,7 +1002,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            make upload-artifacts SHOW=1 VERBOSE=1
+            make upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             make upload-release SHOW=1 VERBOSE=1
           fi
@@ -1085,7 +1085,7 @@ jobs:
           mkdir -p bin
           ln -s ~/workspace/artifacts bin/artifacts
           if [[ $TAGGED -eq 0 ]]; then
-            gmake upload-artifacts SHOW=1 VERBOSE=1
+            gmake upload-artifacts SHOW=1 VERBOSE=1 FORCE=1
           else
             gmake upload-release SHOW=1 VERBOSE=1
           fi
