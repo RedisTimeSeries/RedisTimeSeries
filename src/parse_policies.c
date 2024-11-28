@@ -138,3 +138,70 @@ int ParseCompactionPolicy(const char *policy_string,
     }
     return success;
 }
+
+
+// Helper function to convert milliseconds to a time string
+static inline void MillisecondsToTimeString(uint64_t millis, char *out) {
+    if (millis % (1000 * 60 * 60 * 24) == 0) {
+        snprintf(out, 32, "%" PRIu64 "d", millis / (1000 * 60 * 60 * 24));
+    } else if (millis % (1000 * 60 * 60) == 0) {
+        snprintf(out, 32, "%" PRIu64 "h", millis / (1000 * 60 * 60));
+    } else if (millis % (1000 * 60) == 0) {
+        snprintf(out, 32, "%" PRIu64 "m", millis / (1000 * 60));
+    } else {
+        snprintf(out, 32, "%" PRIu64 "s", millis / 1000);
+    }
+}
+
+char *CompactionRulesToString(const SimpleCompactionRule *compactionRules, const uint64_t compactionRulesCount) {
+    if (compactionRules == NULL || compactionRulesCount == 0) {
+        return NULL;
+    }
+
+    // Estimate a sufficiently large buffer size
+    size_t buffer_size = 256 * compactionRulesCount;
+    char *result = malloc(buffer_size);
+    if (!result) {
+        return NULL;
+    }
+    result[0] = '\0'; // Initialize the string
+
+    for (uint64_t i = 0; i < compactionRulesCount; ++i) {
+        const SimpleCompactionRule *rule = &compactionRules[i];
+
+        // Convert bucket duration and retention size to strings
+        char bucket_duration[32];
+        char retention[32];
+        char alignment[32] = ""; // Alignment is optional
+
+        MillisecondsToTimeString(rule->bucketDuration, bucket_duration);
+        MillisecondsToTimeString(rule->retentionSizeMillisec, retention);
+        if (rule->timestampAlignment > 0) {
+            MillisecondsToTimeString(rule->timestampAlignment, alignment);
+        }
+
+        // Get aggregation type as string
+        const char *aggTypeStr = AggTypeEnumToStringLowerCase(rule->aggType);
+        if (!aggTypeStr) {
+            free(result);
+            return NULL; // Invalid aggregation type
+        }
+
+        // Append the rule to the result string
+        if (rule->timestampAlignment > 0) {
+            snprintf(result + strlen(result), buffer_size - strlen(result),
+                     "%s:%s:%s:%s;", aggTypeStr, bucket_duration, retention, alignment);
+        } else {
+            snprintf(result + strlen(result), buffer_size - strlen(result),
+                     "%s:%s:%s;", aggTypeStr, bucket_duration, retention);
+        }
+    }
+
+    // Remove the trailing semicolon
+    size_t len = strlen(result);
+    if (len > 0 && result[len - 1] == ';') {
+        result[len - 1] = '\0';
+    }
+
+    return result;
+}
