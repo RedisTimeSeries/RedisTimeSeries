@@ -18,7 +18,6 @@ typedef struct
     long long retentionPolicy;
     long long chunkSizeBytes;
     short options;
-    int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
     long long numThreads;        // number of threads used by libMR
     bool forceSaveCrossRef;      // Internal debug configuration param
@@ -30,7 +29,8 @@ typedef struct
 
 extern TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+// int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+bool RegisterConfigurationOptions(RedisModuleCtx *ctx);
 const char *ChunkTypeToString(int options);
 typedef struct RTS_RedisVersion
 {

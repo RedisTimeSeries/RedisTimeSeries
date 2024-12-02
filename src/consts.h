@@ -82,6 +82,20 @@ typedef enum DuplicatePolicy
     DP_SUM = 6,
 } DuplicatePolicy;
 
+static inline  __attribute__((always_inline)) const char* DuplicatePolicyToString(const DuplicatePolicy policy) {
+    switch (policy) {
+        case DP_INVALID: return "DP_INVALID";
+        case DP_NONE: return "DP_NONE";
+        case DP_BLOCK: return "DP_BLOCK";
+        case DP_LAST: return "DP_LAST";
+        case DP_FIRST: return "DP_FIRST";
+        case DP_MIN: return "DP_MIN";
+        case DP_MAX: return "DP_MAX";
+        case DP_SUM: return "DP_SUM";
+        default: return "UNKNOWN";
+    }
+}
+
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1
 

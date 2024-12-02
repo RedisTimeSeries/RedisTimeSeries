@@ -101,27 +101,6 @@ const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     return NULL;
 }
 
-const char *DuplicatePolicyToString(DuplicatePolicy policy) {
-    switch (policy) {
-        case DP_NONE:
-            return "none";
-        case DP_BLOCK:
-            return "block";
-        case DP_LAST:
-            return "last";
-        case DP_FIRST:
-            return "first";
-        case DP_MAX:
-            return "max";
-        case DP_MIN:
-            return "min";
-        case DP_SUM:
-            return "sum";
-        default:
-            return "invalid";
-    }
-}
-
 int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
     size_t str_len;
     const char *aggTypeCStr = RedisModule_StringPtrLen(aggTypeStr, &str_len);
@@ -158,13 +137,13 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
 long long MR_SerializationCtxReadLongLongWrapper(ReaderSerializationCtx *sctx) {
     MRError *err;
-    return MR_SerializationCtxReadLongLong(sctx, &err);
+    return MR_SerializationCtxReadeLongLong(sctx, &err);
 }
 
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
     MRError *err;
     size_t size = 0;
-    const char *temp = MR_SerializationCtxReadBuffer(sctx, &size, &err);
+    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
     char *ret = malloc(size);
     memcpy(ret, temp, size);
     if (len != NULL) {
