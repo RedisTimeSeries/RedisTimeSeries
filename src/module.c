@@ -74,26 +74,28 @@ int asprintf(char **str, const char *format, ...) {
     return result;
 }
 
-#define SetCommandAcls(ctx, cmd, acls)                                                             \
-    {                                                                                              \
-        RedisModuleCommand *command = RedisModule_GetCommand(ctx, cmd);                            \
-        if (command == NULL) {                                                                     \
-            return REDISMODULE_ERR;                                                                \
-        }                                                                                          \
-                                                                                                   \
-        char *categories = NULL;                                                                   \
-        if (!strcmp(acls, "")) {                                                                   \
-            categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME;                                      \
-        } else {                                                                                   \
-            asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME);             \
-        }                                                                                          \
-                                                                                                   \
-        const int ret = RedisModule_SetCommandACLCategories(command, categories);                  \
-        free(categories);                                                                          \
-                                                                                                   \
-        if (ret != REDISMODULE_OK) {                                                               \
-            return REDISMODULE_ERR;                                                                \
-        }                                                                                          \
+#define SetCommandAcls(ctx, cmd, acls)                                                                     \
+    {                                                                                                      \
+        if (RedisModule_GetCommand && RedisModule_AddACLCategory && RedisModule_SetCommandACLCategories) { \
+            RedisModuleCommand *command = RedisModule_GetCommand(ctx, cmd);                                \
+            if (command == NULL) {                                                                         \
+                return REDISMODULE_ERR;                                                                    \
+            }                                                                                              \
+                                                                                                           \
+            char *categories = NULL;                                                                       \
+            if (!strcmp(acls, "")) {                                                                       \
+                categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME;                                          \
+            } else {                                                                                       \
+                asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME);                 \
+            }                                                                                              \
+                                                                                                           \
+            const int ret = RedisModule_SetCommandACLCategories(command, categories);                      \
+            free(categories);                                                                              \
+                                                                                                           \
+            if (ret != REDISMODULE_OK) {                                                                   \
+                return REDISMODULE_ERR;                                                                    \
+            }                                                                                              \
+        }                                                                                                  \
     }
 
 #define RegisterCommandWithModesAndAcls(ctx, cmd, f, mode, acls)                                   \
@@ -1678,6 +1680,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
+
     rts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
 
     RedisModule_Log(ctx,
@@ -1707,7 +1710,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (RTS_CheckSupportedVestion() != REDISMODULE_OK) {
         RedisModule_Log(ctx,
                         "warning",
-                        "Redis version is to old, please upgrade to redis "
+                        "Redis version is too old, please upgrade to redis "
                         "%d.%d.%d and above.",
                         RTS_minSupportedVersion.redisMajorVersion,
                         RTS_minSupportedVersion.redisMinorVersion,
@@ -1749,8 +1752,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         }
     }
 
-    if (RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "error", "Failed to add ACL category");
+    if (RedisModule_AddACLCategory && RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Failed to add ACL category");
 
         return REDISMODULE_ERR;
     }

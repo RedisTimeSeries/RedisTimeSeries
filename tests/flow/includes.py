@@ -84,7 +84,7 @@ def is_redis_version_smaller_than(con, _version, is_cluster=False):
         ver = res['redis_version']
     return (version.parse(ver) < version.parse(_version))
 
-def skip(always=False, on_cluster=False, on_macos=False, asan=False):
+def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None):
     def decorate(f):
         @wraps(f)
         def wrapper(x, *args, **kwargs):
@@ -96,6 +96,8 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False):
             if on_macos and OS == 'macos':
                 env.skip()
             if asan and SANITIZER == 'address':
+                env.skip()
+            if onVersionLowerThan and is_redis_version_smaller_than(env, onVersionLowerThan, env.isCluster()):
                 env.skip()
             return f(x, *args, **kwargs)
         return wrapper

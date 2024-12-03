@@ -82,7 +82,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         size_t len;
         if (RMUtil_ParseArgsAfter("ACL_USERNAME", argv, argc, "s", &username) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after OSS_GLOBAL_PASSWORD");
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after ACL_USERNAME");
             return TSDB_ERROR;
         }
 

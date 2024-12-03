@@ -1,14 +1,10 @@
 #pragma once
 
-// #include <stddef.h>
-
 struct RedisModuleUser;
 struct RedisModuleCtx;
 struct RedisModuleString;
 struct RedisModuleUser *(*RedisModule_GetModuleUserFromUserName)(struct RedisModuleString *name);
 struct RedisModuleString *(*RedisModule_GetCurrentUserName)(struct RedisModuleCtx *ctx);
-void (*RedisModule_FreeModuleUser)(struct RedisModuleUser *user);
-// struct RedisModuleString *(*RedisModule_CreateString)(struct RedisModuleCtx *ctx, const char *ptr, size_t len);
 void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleString *str);
 int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user, struct RedisModuleString *prefix, int flags);
 
