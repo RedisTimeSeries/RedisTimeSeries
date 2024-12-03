@@ -6,6 +6,8 @@ from packaging import version
 import inspect
 import redis
 import pytest
+import signal
+import time
 from functools import wraps
 
 try:
@@ -29,6 +31,44 @@ CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 Defaults.terminate_retries = 3
 Defaults.terminate_retries_secs = 1
 
+
+class TimeLimit(object):
+    """
+    A context manager that fires a TimeExpired exception if it does not
+    return within the specified amount of time.
+    """
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handler)
+        signal.setitimer(signal.ITIMER_REAL, self.timeout, 0)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+    def handler(self, signum, frame):
+        raise Exception('timeout')
+
+def shardsConnections(env: rltestEnv):
+    for s in range(1, env.shardsCount + 1):
+        yield env.getConnection(shardId=s)
+
+def verifyClusterInitialized(env):
+    for conn in shardsConnections(env):
+        allConnected = False
+        while not allConnected:
+            res = conn.execute_command('timeseries.INFOCLUSTER')
+            nodes = res[4]
+            allConnected = True
+            for n in nodes:
+                status = n[17]
+                if status != b'connected':
+                    allConnected = False
+            if not allConnected:
+                time.sleep(0.1)
 
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:

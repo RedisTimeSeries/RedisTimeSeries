@@ -147,3 +147,59 @@ def test_non_local_data_when_the_user_has_access(env):
 
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
+def do_test_libmr(env):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+        env.skip()
+
+    for shard in range(0, env.shardsCount):
+        conn = env.getConnection(shard)
+        conn.execute_command('timeseries.REFRESHCLUSTER')
+        # make sure cluster will not turn to failed state and we will not be
+        # able to execute commands on shards, on slow envs, run with valgrind,
+        # or mac, it is needed.
+        env.broadcast('CONFIG', 'set', 'cluster-node-timeout', '120000')
+        env.broadcast('timeseries.FORCESHARDSCONNECTION')
+        with TimeLimit(2):
+            verifyClusterInitialized(env)
+
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.ADD', '{host1}_metric_1', 1, 100, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host2}_metric_2', 2, 40, 'LABELS', 'metric', 'cpu')
+        r.execute_command('TS.ADD', '{host1}_metric_1', 2, 95)
+        r.execute_command('TS.ADD', '{host1}_metric_1', 10, 99)
+
+        # Create a user that cannot directly invoke the internal
+        # libmr commands.
+        r.execute_command(
+            'ACL', 'SETUSER', 'testuser4',
+            'on', '>password',
+            '+ts.mrange', '-@_timeseries_libmr_internal', '~*',
+        )
+
+        r1.execute_command('AUTH', 'testuser4', 'password')
+
+        env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
+
+def test_acl_libmr_username_with_password_in_config():
+    redisConfigFile = '/tmp/redis.conf'
+    if os.path.isfile(redisConfigFile):
+        os.unlink(redisConfigFile)
+    with open(redisConfigFile, 'w') as f:
+        f.write('user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal\n')
+
+    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME tslibmr; OSS_GLOBAL_PASSWORD tslibmrpassword')
+
+    do_test_libmr(env)
+
+def test_acl_libmr_username_with_password_in_config_set_incorrectly():
+    redisConfigFile = '/tmp/redis.conf'
+    if os.path.isfile(redisConfigFile):
+        os.unlink(redisConfigFile)
+    with open(redisConfigFile, 'w') as f:
+        f.write('user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal\n')
+
+    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME balda; OSS_GLOBAL_PASSWORD ivanovna')
+
+    # Should raise an error.
+    do_test_libmr(env)
+
