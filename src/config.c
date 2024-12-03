@@ -77,6 +77,22 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.password = NULL;
     }
 
+    if (argc > 1 && RMUtil_ArgIndex("ACL_USERNAME", argv, argc) >= 0) {
+        RedisModuleString *username;
+        size_t len;
+        if (RMUtil_ParseArgsAfter("ACL_USERNAME", argv, argc, "s", &username) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after OSS_GLOBAL_PASSWORD");
+            return TSDB_ERROR;
+        }
+
+        TSGlobalConfig.username = (char *)RedisModule_StringPtrLen(username, &len);
+        RedisModule_Log(ctx, "notice", "loaded tls username");
+        TSGlobalConfig.hasGlobalConfig = TRUE;
+    } else {
+        TSGlobalConfig.username = NULL;
+    }
+
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
         if (RMUtil_ParseArgsAfter(
                 "RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) !=

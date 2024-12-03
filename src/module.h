@@ -6,6 +6,8 @@
 #ifndef MODULE_H
 #define MODULE_H
 
+#include <stdbool.h>
+
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
@@ -64,6 +66,35 @@ CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int per
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
 #define CheckKeyIsAllowedToReadWriteC(ctx, keyName)                                                \
     CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
+
+// Returns true if the user is allowed to read all the keys.
+static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx, struct RedisModuleUser *user) {
+    struct RedisModuleString *prefix = RedisModule_CreateString(ctx, "*", 1);
+
+    if (!prefix) {
+        return false;
+    }
+
+    const bool ret = RedisModule_ACLCheckKeyPermissions(user, prefix, REDISMODULE_CMD_KEY_ACCESS) == REDISMODULE_OK;
+
+    RedisModule_FreeString(ctx, prefix);
+
+    return ret;
+}
+
+static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx) {
+    struct RedisModuleUser *user = GetCurrentUser(ctx);
+
+    if (!user) {
+        return false;
+    }
+
+    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
+
+    RedisModule_FreeModuleUser(user);
+
+    return ret;
+}
 
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;
