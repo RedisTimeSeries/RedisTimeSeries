@@ -6,6 +6,7 @@ import redis
 from RLTest import Env
 import redis.exceptions
 import redis.exceptions
+import redis.exceptions
 from includes import *
 
 
@@ -191,15 +192,36 @@ def test_acl_libmr_username_with_password_in_config():
 
     do_test_libmr(env)
 
-def test_acl_libmr_username_with_password_in_config_set_incorrectly():
-    redisConfigFile = '/tmp/redis.conf'
+def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+        env.skip()
+
+    redisConfigFile = '/tmp/redis2.conf'
     if os.path.isfile(redisConfigFile):
         os.unlink(redisConfigFile)
     with open(redisConfigFile, 'w') as f:
-        f.write('user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal\n')
+        f.write('user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal\nuser default on >password +@all -@_timeseries_libmr_internal +timeseries.REFRESHCLUSTER +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER\n')
 
-    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME balda; OSS_GLOBAL_PASSWORD ivanovna')
+    env = Env(password='password', redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME nonexistinguseeeer; OSS_GLOBAL_PASSWORD nonexistinguserpasswd')
 
-    # Should raise an error.
-    do_test_libmr(env)
+    # Should raise a timeout error, as we can't connect to the nodes
+    # due to the user having no permissions to invoke the corresponding
+    # commands.
+    with pytest.raises(ShardConnectionTimeoutException):
+        do_test_libmr(env)
+
+def test_acl_libmr_username_with_password_in_config_set_to_disallow():
+    redisConfigFile = '/tmp/redis3.conf'
+    if os.path.isfile(redisConfigFile):
+        os.unlink(redisConfigFile)
+    with open(redisConfigFile, 'w') as f:
+        f.write('user tslibmr3 on >tslibmrpassword +@all -@_timeseries_libmr_internal\n')
+
+    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME tslibmr3; OSS_GLOBAL_PASSWORD tslibmrpassword')
+
+    # Should raise a timeout error, as we can't connect to the nodes
+    # due to the user having no permissions to invoke the corresponding
+    # commands.
+    with pytest.raises(ShardConnectionTimeoutException):
+        do_test_libmr(env)
 

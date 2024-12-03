@@ -32,6 +32,9 @@ Defaults.terminate_retries = 3
 Defaults.terminate_retries_secs = 1
 
 
+class ShardConnectionTimeoutException(Exception):
+    pass
+
 class TimeLimit(object):
     """
     A context manager that fires a TimeExpired exception if it does not
@@ -50,7 +53,7 @@ class TimeLimit(object):
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
 
     def handler(self, signum, frame):
-        raise Exception('timeout')
+        raise ShardConnectionTimeoutException()
 
 def shardsConnections(env: rltestEnv):
     for s in range(1, env.shardsCount + 1):
