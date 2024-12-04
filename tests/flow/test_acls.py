@@ -200,7 +200,7 @@ def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
     if os.path.isfile(redisConfigFile):
         os.unlink(redisConfigFile)
     with open(redisConfigFile, 'w') as f:
-        f.write('user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal\nuser default on >password +@all -@_timeseries_libmr_internal +timeseries.REFRESHCLUSTER +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER\n')
+        f.write('user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal\nuser default on >password +@all -@_timeseries_libmr_internal +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER\n')
 
     env = Env(password='password', redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME nonexistinguseeeer; OSS_GLOBAL_PASSWORD nonexistinguserpasswd')
 
