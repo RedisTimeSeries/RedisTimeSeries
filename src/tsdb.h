@@ -90,13 +90,13 @@ void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
 GetSeriesResult GetSeries(RedisModuleCtx *ctx,
-              RedisModuleString *keyName,
-              RedisModuleKey **key,
-              Series **series,
-              int mode,
-              bool shouldDeleteRefs,
-              bool isSilent,
-              bool shouldCheckForAcls);
+                          RedisModuleString *keyName,
+                          RedisModuleKey **key,
+                          Series **series,
+                          int mode,
+                          bool shouldDeleteRefs,
+                          bool isSilent,
+                          bool shouldCheckForAcls);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,

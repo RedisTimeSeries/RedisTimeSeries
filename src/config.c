@@ -72,8 +72,10 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
         RedisModule_Log(ctx, "notice", "loaded tls password");
-        RedisModule_Log(ctx, "warning", "The 'OSS_GLOBAL_PASSWORD' configuration is deprecated. "
-                                        "Please use 'global-password' instead.");
+        RedisModule_Log(ctx,
+                        "warning",
+                        "The 'OSS_GLOBAL_PASSWORD' configuration is deprecated. "
+                        "Please use 'global-password' instead.");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.password = NULL;
@@ -98,8 +100,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc > 1 && RMUtil_ArgIndex("global-user", argv, argc) >= 0) {
         RedisModuleString *username;
         size_t len;
-        if (RMUtil_ParseArgsAfter("global-user", argv, argc, "s", &username) !=
-            REDISMODULE_OK) {
+        if (RMUtil_ParseArgsAfter("global-user", argv, argc, "s", &username) != REDISMODULE_OK) {
             RedisModule_Log(ctx, "warning", "Unable to parse argument after global-user");
             return TSDB_ERROR;
         }

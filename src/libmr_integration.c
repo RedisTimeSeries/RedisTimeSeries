@@ -554,7 +554,8 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 }
 
 int register_rg(RedisModuleCtx *ctx, long long numThreads) {
-    if (MR_Init(ctx, numThreads, TSGlobalConfig.username, TSGlobalConfig.password) != REDISMODULE_OK) {
+    if (MR_Init(ctx, numThreads, TSGlobalConfig.username, TSGlobalConfig.password) !=
+        REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
         return REDISMODULE_ERR;
     }
