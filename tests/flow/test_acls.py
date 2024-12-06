@@ -188,7 +188,7 @@ def test_acl_libmr_username_with_password_in_config():
     with open(redisConfigFile, 'w') as f:
         f.write('user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal\n')
 
-    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME tslibmr; OSS_GLOBAL_PASSWORD tslibmrpassword')
+    env = Env(redisConfigFile=redisConfigFile, moduleArgs='global-user tslibmr; global-password tslibmrpassword')
 
     do_test_libmr(env)
 
@@ -202,7 +202,7 @@ def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
     with open(redisConfigFile, 'w') as f:
         f.write('user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal\nuser default on >password +@all -@_timeseries_libmr_internal +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER\n')
 
-    env = Env(password='password', redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME nonexistinguseeeer; OSS_GLOBAL_PASSWORD nonexistinguserpasswd')
+    env = Env(password='password', redisConfigFile=redisConfigFile, moduleArgs='global-user nonexistinguseeeer; global-password nonexistinguserpasswd')
 
     # Should raise a timeout error, as we can't connect to the nodes
     # due to the user having no permissions to invoke the corresponding
@@ -217,7 +217,7 @@ def test_acl_libmr_username_with_password_in_config_set_to_disallow():
     with open(redisConfigFile, 'w') as f:
         f.write('user tslibmr3 on >tslibmrpassword +@all -@_timeseries_libmr_internal\n')
 
-    env = Env(redisConfigFile=redisConfigFile, moduleArgs='ACL_USERNAME tslibmr3; OSS_GLOBAL_PASSWORD tslibmrpassword')
+    env = Env(redisConfigFile=redisConfigFile, moduleArgs='global-user tslibmr3; global-password tslibmrpassword')
 
     # Should raise a timeout error, as we can't connect to the nodes
     # due to the user having no permissions to invoke the corresponding

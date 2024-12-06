@@ -72,22 +72,40 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
         RedisModule_Log(ctx, "notice", "loaded tls password");
+        RedisModule_Log(ctx, "warning", "The 'OSS_GLOBAL_PASSWORD' configuration is deprecated. "
+                                        "Please use 'global-password' instead.");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.password = NULL;
     }
 
-    if (argc > 1 && RMUtil_ArgIndex("ACL_USERNAME", argv, argc) >= 0) {
+    if (argc > 1 && RMUtil_ArgIndex("global-password", argv, argc) >= 0) {
+        RedisModuleString *password;
+        size_t len;
+        if (RMUtil_ParseArgsAfter("global-password", argv, argc, "s", &password) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after global-password");
+            return TSDB_ERROR;
+        }
+
+        TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
+        RedisModule_Log(ctx, "notice", "loaded global-password");
+        TSGlobalConfig.hasGlobalConfig = TRUE;
+    } else {
+        TSGlobalConfig.password = NULL;
+    }
+
+    if (argc > 1 && RMUtil_ArgIndex("global-user", argv, argc) >= 0) {
         RedisModuleString *username;
         size_t len;
-        if (RMUtil_ParseArgsAfter("ACL_USERNAME", argv, argc, "s", &username) !=
+        if (RMUtil_ParseArgsAfter("global-user", argv, argc, "s", &username) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after ACL_USERNAME");
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after global-user");
             return TSDB_ERROR;
         }
 
         TSGlobalConfig.username = (char *)RedisModule_StringPtrLen(username, &len);
-        RedisModule_Log(ctx, "notice", "loaded tls username");
+        RedisModule_Log(ctx, "notice", "loaded global-username");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.username = NULL;
