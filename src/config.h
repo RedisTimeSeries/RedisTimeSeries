@@ -22,6 +22,7 @@ typedef struct
     DuplicatePolicy duplicatePolicy;
     long long numThreads;        // number of threads used by libMR
     bool forceSaveCrossRef;      // Internal debug configuration param
+    char *username;              // tls username which used by libmr
     char *password;              // tls password which used by libmr
     bool dontAssertOnFailiure;   // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample

@@ -6,7 +6,7 @@ from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, \
 # import pytest
 
 def test_password():
-    env = Env(moduleArgs='ENCODING UNCOMPRESSED; OSS_GLOBAL_PASSWORD password', freshEnv=True)
+    env = Env(moduleArgs='ENCODING UNCOMPRESSED; global-password password', freshEnv=True)
     if not env.is_cluster():
         env.skip()
     skip_on_rlec()
@@ -21,7 +21,7 @@ def test_password():
         assert res != []
 
 def test_invalid_password():
-    env = Env(moduleArgs='ENCODING UNCOMPRESSED; OSS_GLOBAL_PASSWORD wrong_password', freshEnv=True)
+    env = Env(moduleArgs='ENCODING UNCOMPRESSED; global-password wrong_password', freshEnv=True)
     if not env.is_cluster():
         env.skip()
     skip_on_rlec()

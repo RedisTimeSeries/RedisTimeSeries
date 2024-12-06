@@ -9,7 +9,6 @@ name: CI Full suite
 #    right here in the workflow.
 #
 # More info: jobs.steps.uses: docker://alpine:3.8 for docker images,
-
 on:
   push:
     paths-ignore:
@@ -26,7 +25,6 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-m[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+'
-
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
@@ -77,7 +75,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential
       - name: Linter
         run: make lint
-
   recent-ubuntu:
     runs-on: ${{ matrix.builder.os }}
     env:
@@ -88,11 +85,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          { os: 'ubuntu-22.04', nick: 'jammy' },
-          { os: 'ubuntu-20.04', nick: 'focal' }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{os: 'ubuntu-22.04', nick: 'jammy'}, {os: 'ubuntu-20.04', nick: 'focal'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -142,13 +136,12 @@ jobs:
         run: |
           source .venv/bin/activate
           make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   test-valgrind:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5"]
+        redis-version: ["7.4"]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -192,13 +185,12 @@ jobs:
         run: |
           source .venv/bin/activate
           make test VG=1 QUICK=1 REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
-
   test-address-sanitizer:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5"]
+        redis-version: ["7.4"]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -242,7 +234,6 @@ jobs:
         run: |
           source .venv/bin/activate
           make test SAN=addr REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
-
   old-ubuntu:
     runs-on: ubuntu-latest
     container: ${{ matrix.builder.image }}
@@ -255,17 +246,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          {
-            image: 'ubuntu:focal',
-            nick: 'focal'
-          },
-          {
-            image: 'ubuntu:bionic',
-            nick: 'bionic'
-          }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{image: 'ubuntu:focal', nick: 'focal'}, {image: 'ubuntu:bionic', nick: 'bionic'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -336,7 +318,6 @@ jobs:
         run: |
           source .venv/bin/activate
           make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   debian:
     runs-on: ubuntu-latest
     container: ${{ matrix.builder.image }}
@@ -348,13 +329,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          {
-            image: 'debian:bullseye',
-            nick: 'bullseye'
-          }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{image: 'debian:bullseye', nick: 'bullseye'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -408,7 +384,6 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
           source .venv/bin/activate
           make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   centos:
     runs-on: ubuntu-latest
     container: ${{ matrix.builder.image }}
@@ -421,13 +396,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          {
-            image: 'centos:7',
-            nick: 'centos7'
-          }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{image: 'centos:7', nick: 'centos7'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -502,7 +472,6 @@ jobs:
         run: |
           . scl_source enable devtoolset-11 || true
           make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   amazon-linux:
     runs-on: ubuntu-latest
     container: ${{ matrix.builder.image }}
@@ -515,13 +484,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          {
-            image: 'amazonlinux:2',
-            nick: 'amzn2'
-          }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{image: 'amazonlinux:2', nick: 'amzn2'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -584,7 +548,6 @@ jobs:
         run: |
           . scl_source enable devtoolset-11 || true
           make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   rocky-linux:
     runs-on: ubuntu-latest
     container: ${{ matrix.builder.image }}
@@ -596,16 +559,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [{
-          image: 'rockylinux:8',
-          nick: 'rocky8'
-        },
-          {
-            image: 'rockylinux:9',
-            nick: 'rocky9'
-          }
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{image: 'rockylinux:8', nick: 'rocky8'}, {image: 'rockylinux:9', nick: 'rocky9'}]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -665,7 +620,6 @@ jobs:
           make test REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
       - name: Pack module
         run: make pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   macos:
     runs-on: ${{ matrix.os }}
     env:
@@ -676,7 +630,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
+        redis-version: ["7.4", "unstable"]
         # MacOS 13 - x86-64, MacOS 14 - ARM (Apple Chips).
         os: ["macos-12", "macos-13", "macos-14"]
     defaults:
@@ -725,7 +679,6 @@ jobs:
           source .venv/bin/activate
           export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
           gmake pack BRANCH=$TAG_OR_BRANCH SHOW=1
-
   alpine:
     runs-on: ${{ matrix.builder.os }}
     env:
@@ -743,10 +696,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        redis-version: ["7.2.5", "unstable"]
-        builder: [
-          { os: [ubuntu-latest], nick: 'ubuntu-latest-x86' },
-        ]
+        redis-version: ["7.4", "unstable"]
+        builder: [{os: [ubuntu-latest], nick: 'ubuntu-latest-x86'}]
     defaults:
       run:
         shell: bash
