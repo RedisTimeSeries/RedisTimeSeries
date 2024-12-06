@@ -323,7 +323,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                       &series,
                       REDISMODULE_READ,
                       false,
-                      false,
+                      true,
                       true);
 
         switch (status) {
@@ -337,7 +337,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                 "couldn't open key or key is not a Timeseries. key=%s",
                                 currentKey);
 
-                break;
+                continue;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
                                 "warning",
@@ -416,7 +416,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, false, true);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true, true);
 
         switch (status) {
             case GetSeriesResult_Success:
