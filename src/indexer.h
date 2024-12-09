@@ -9,6 +9,7 @@
 #include "RedisModulesSDK/redismodule.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct
 {
@@ -65,7 +66,8 @@ void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
 int IsKeyIndexed(RedisModuleString *ts_key);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count);
+                            size_t predicate_count,
+                            bool *hasPermissionError);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif
