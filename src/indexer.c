@@ -405,16 +405,16 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         }
 
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
-        char *currentKey;
-        size_t currentKeyLen;
+        char *currentKey = NULL;
+        size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
             const bool is_allowed = CheckKeyIsAllowedToReadC(ctx, currentKey);
-            if (!is_allowed && hasPermissionError) {
+            if (!is_allowed) {
                 *hasPermissionError = true;
+                continue;
             }
 
-            if (is_allowed &&
-                _isKeySatisfyAllPredicates(
+            if (_isKeySatisfyAllPredicates(
                     ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
                 RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
             }

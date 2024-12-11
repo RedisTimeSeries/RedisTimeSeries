@@ -31,8 +31,15 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
                             "warning",
                             "No context user set, can't check for the ACLs for key %s",
                             currentKeyStr);
-        } else if (RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) !=
-                   REDISMODULE_OK) {
+
+            return true;
+        }
+
+        const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
+
+        RedisModule_FreeModuleUser(user);
+
+        if (allowed != REDISMODULE_OK) {
             return false;
         }
     } else {
@@ -50,8 +57,12 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
 /// @return true if the key is allowed by the ACLs, false otherwise.
 static inline __attribute__((always_inline)) bool
 CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int permissionFlags) {
-    return CheckKeyIsAllowedByAcls(
-        ctx, RedisModule_CreateString(ctx, keyName, strlen(keyName)), permissionFlags);
+    RedisModuleString *key = RedisModule_CreateString(ctx, keyName, strlen(keyName));
+    const bool isAllowed = CheckKeyIsAllowedByAcls(ctx, key, permissionFlags);
+
+    RedisModule_FreeString(ctx, key);
+
+    return isAllowed;
 }
 
 #define CheckKeyIsAllowedToRead(ctx, keyName)                                                      \

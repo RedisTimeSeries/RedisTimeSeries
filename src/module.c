@@ -1295,6 +1295,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
 
     if (hasPermissionError) {
+        RedisModule_FreeDict(ctx, result);
         RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
         return REDISMODULE_ERR;
     }
@@ -1315,7 +1316,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                       &series,
                       REDISMODULE_READ,
                       false,
-                      false,
+                      true,
                       true);
 
         switch (status) {
@@ -1337,6 +1338,8 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                     (int)currentKeyLen,
                     currentKey);
 
+                RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+
                 exitStatus = REDISMODULE_ERR;
                 goto exit;
         }
@@ -1356,12 +1359,10 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                       REDISMODULE_READ,
                       false,
                       true,
-                      true);
+                      false);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_DictIteratorStop(iter);
-            RedisModuleString *s = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-            iter = RedisModule_DictIteratorStart(result, ">", s);
+            continue;
         }
 
         if (!_ReplyMap(ctx)) {
