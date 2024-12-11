@@ -83,15 +83,8 @@ int asprintf(char **str, const char *format, ...) {
                 return REDISMODULE_ERR;                                                            \
             }                                                                                      \
                                                                                                    \
-            char *categories = NULL;                                                               \
-            if (!strcmp(acls, "")) {                                                               \
-                categories = TIMESERIES_MODULE_ACL_CATEGORY_NAME;                                  \
-            } else {                                                                               \
-                asprintf(&categories, "%s %s", acls, TIMESERIES_MODULE_ACL_CATEGORY_NAME);         \
-            }                                                                                      \
-                                                                                                   \
+            const char *categories = acls " " TIMESERIES_MODULE_ACL_CATEGORY_NAME;                 \
             const int ret = RedisModule_SetCommandACLCategories(command, categories);              \
-            free(categories);                                                                      \
                                                                                                    \
             if (ret != REDISMODULE_OK) {                                                           \
                 return REDISMODULE_ERR;                                                            \
