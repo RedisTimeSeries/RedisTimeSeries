@@ -106,10 +106,10 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
 
         TSGlobalConfig.username = (char *)RedisModule_StringPtrLen(username, &len);
-        RedisModule_Log(ctx, "notice", "loaded global-username");
+        RedisModule_Log(ctx, "notice", "loaded global-user");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
-        TSGlobalConfig.username = NULL;
+        TSGlobalConfig.username = "default";
     }
 
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
