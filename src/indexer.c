@@ -408,7 +408,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         char *currentKey = NULL;
         size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-            const bool is_allowed = CheckKeyIsAllowedToReadC(ctx, currentKey);
+            const bool is_allowed = CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen);
             if (!is_allowed) {
                 *hasPermissionError = true;
                 continue;

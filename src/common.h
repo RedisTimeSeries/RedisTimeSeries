@@ -6,7 +6,9 @@ struct RedisModuleString;
 struct RedisModuleUser *(*RedisModule_GetModuleUserFromUserName)(struct RedisModuleString *name);
 struct RedisModuleString *(*RedisModule_GetCurrentUserName)(struct RedisModuleCtx *ctx);
 void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleString *str);
-int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user, struct RedisModuleString *prefix, int flags);
+int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
+                                                struct RedisModuleString *prefix,
+                                                int flags);
 
 #include <stdlib.h>
 
@@ -15,6 +17,8 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user, st
 #define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg);
 #define RTS_ReplyGeneralError(ctx, msg) RTS_ReplyError(ctx, RTS_ERR, msg);
 #define RTS_ReplyPermissionError(ctx, msg) RTS_ReplyError(ctx, RTS_NOPERM, msg);
+#define RTS_ReplyKeyPermissionsError(ctx)                                                          \
+    RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
 
 // Returns the current user of the context.
 static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {

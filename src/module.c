@@ -1296,7 +1296,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (hasPermissionError) {
         RedisModule_FreeDict(ctx, result);
-        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
 

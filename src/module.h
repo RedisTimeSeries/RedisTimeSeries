@@ -55,9 +55,12 @@ static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAcls(
 /// @param keyName The name of the key to check the ACLs for (C String).
 /// @param permissionFlags The permissions to check for.
 /// @return true if the key is allowed by the ACLs, false otherwise.
-static inline __attribute__((always_inline)) bool
-CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int permissionFlags) {
-    RedisModuleString *key = RedisModule_CreateString(ctx, keyName, strlen(keyName));
+static inline __attribute__((always_inline)) bool CheckKeyIsAllowedByAclsC(
+    RedisModuleCtx *ctx,
+    const char *keyName,
+    const size_t keyNameLength,
+    const int permissionFlags) {
+    RedisModuleString *key = RedisModule_CreateString(ctx, keyName, keyNameLength);
     const bool isAllowed = CheckKeyIsAllowedByAcls(ctx, key, permissionFlags);
 
     RedisModule_FreeString(ctx, key);
@@ -67,16 +70,22 @@ CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx, const char *keyName, const int per
 
 #define CheckKeyIsAllowedToRead(ctx, keyName)                                                      \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
-#define CheckKeyIsAllowedToReadC(ctx, keyName)                                                     \
-    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS)
+
+#define CheckKeyIsAllowedToReadC(ctx, keyName, keyNameLength)                                      \
+    CheckKeyIsAllowedByAclsC(ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS)
+
 #define CheckKeyIsAllowedToWrite(ctx, keyName)                                                     \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE)
-#define CheckKeyIsAllowedToWriteC(ctx, keyName)                                                    \
-    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE)
+
+#define CheckKeyIsAllowedToWriteC(ctx, keyName, keyNameLength)                                     \
+    CheckKeyIsAllowedByAclsC(ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_UPDATE)
+
 #define CheckKeyIsAllowedToReadWrite(ctx, keyName)                                                 \
     CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
-#define CheckKeyIsAllowedToReadWriteC(ctx, keyName)                                                \
-    CheckKeyIsAllowedByAclsC(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
+
+#define CheckKeyIsAllowedToReadWriteC(ctx, keyName, keyNameLength)                                 \
+    CheckKeyIsAllowedByAclsC(                                                                      \
+        ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE)
 
 // Returns true if the user is allowed to read all the keys.
 static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
