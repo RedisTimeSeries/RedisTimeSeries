@@ -196,7 +196,6 @@ class testGlobalConfigTests():
 
 
 def test_negative_configuration():
-    Env().skip()
     Env().skipOnCluster()
     skip_on_rlec()
     with pytest.raises(Exception) as excinfo:
@@ -242,4 +241,7 @@ def test_negative_configuration():
         env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')
 
     with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_TYPE compressed; ACL_USERNAME')
+        env = Env(moduleArgs='CHUNK_TYPE compressed; global-password')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; global-user')
