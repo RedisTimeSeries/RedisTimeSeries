@@ -85,8 +85,6 @@ typedef enum DuplicatePolicy
 static inline __attribute__((always_inline)) const char *DuplicatePolicyToString(
     const DuplicatePolicy policy) {
     switch (policy) {
-        case DP_INVALID:
-            return "invalid";
         case DP_NONE:
             return "none";
         case DP_BLOCK:
@@ -101,6 +99,8 @@ static inline __attribute__((always_inline)) const char *DuplicatePolicyToString
             return "max";
         case DP_SUM:
             return "sum";
+        case DP_INVALID:
+            return "invalid";
         default:
             return "unknown";
     }
