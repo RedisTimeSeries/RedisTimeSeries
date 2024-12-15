@@ -137,13 +137,13 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
 // this is just a temporary wrapper function that ignores error in order to preserve the common api
 long long MR_SerializationCtxReadLongLongWrapper(ReaderSerializationCtx *sctx) {
     MRError *err;
-    return MR_SerializationCtxReadeLongLong(sctx, &err);
+    return MR_SerializationCtxReadLongLong(sctx, &err);
 }
 
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
     MRError *err;
     size_t size = 0;
-    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &size, &err);
+    const char *temp = MR_SerializationCtxReadBuffer(sctx, &size, &err);
     char *ret = malloc(size);
     memcpy(ret, temp, size);
     if (len != NULL) {

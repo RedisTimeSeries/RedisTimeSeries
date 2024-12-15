@@ -157,7 +157,7 @@ static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
 static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCtx *sctx,
                                                            MRError **error) {
     size_t len;
-    const char *temp = MR_SerializationCtxReadeBuffer(sctx, &len, error);
+    const char *temp = MR_SerializationCtxReadBuffer(sctx, &len, error);
     return RedisModule_CreateString(NULL, temp, len - 1);
 }
 
@@ -166,7 +166,7 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
     predicates->predicates = malloc(sizeof(QueryPredicateList));
-    predicates->predicates->count = MR_SerializationCtxReadeLongLong(sctx, error);
+    predicates->predicates->count = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->predicates->ref = 1;
     predicates->withLabels = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->limitLabelsSize = MR_SerializationCtxReadLongLong(sctx, error);
