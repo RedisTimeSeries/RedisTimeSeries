@@ -279,4 +279,33 @@ def test_ts_upsert_bug():
         res2 = r.execute_command("ts.range", t1, first_chunk_last_ts, first_chunk_last_ts + 100)
         info2 = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
         assert res2 == [res[0], [first_chunk_last_ts + 100, first_chunk_last_val]]
-  
+
+def test_error():
+    t1 = 't1{1}'
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('HSET', t1, 'a', 'b')
+        try:
+            r.execute_command('TS.ADD', t1, 2, 5)
+        except Exception as e:
+            assert str(e) == "TSDB: the key is not a TSDB key"
+        try:
+            r.execute_command('TS.ADD', t1, -1, 5)
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: invalid timestamp, must be a nonnegative integer"
+
+        res = r.execute_command('HGET', t1, 'a')
+
+        try:
+            r.execute_command('TS.ADD', t1, 2, 5)
+            assert False
+        except Exception as e:
+            assert str(e) == "TSDB: the key is not a TSDB key"
+        t2 = 't2{1}'
+        try:
+            r.execute_command('TS.CREATE', t2)
+            r.execute_command('TS.ADD', t2, 2, 5, 'ON_DUPLICATE', 'zzz')
+            assert False
+        except Exception as e:
+            assert str(e).find('Unknown DUPLICATE_POLICY') != -1        
+        r.execute_command('DEL', t1)
