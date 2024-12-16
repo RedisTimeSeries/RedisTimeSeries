@@ -31,14 +31,14 @@ void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series) {
     Series *_series;
     RedisModuleKey *_key;
     GetSeriesResult status;
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     if (series->srcKey) {
-        status =
-            GetSeries(ctx, series->srcKey, &_key, &_series, REDISMODULE_READ, false, true, true);
-        if (status || (!GetRule(_series->rules, series->keyName))) {
+        status = GetSeries(ctx, series->srcKey, &_key, &_series, REDISMODULE_READ, flags);
+        if (status != GetSeriesResult_Success || (!GetRule(_series->rules, series->keyName))) {
             SeriesDeleteSrcRule(series, series->srcKey);
         }
-        if (!status) {
+        if (status == GetSeriesResult_Success) {
             RedisModule_CloseKey(_key);
         }
     }
@@ -46,13 +46,12 @@ void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series) {
     CompactionRule *rule = series->rules;
     while (rule) {
         CompactionRule *nextRule = rule->nextRule;
-        status =
-            GetSeries(ctx, rule->destKey, &_key, &_series, REDISMODULE_READ, false, true, true);
-        if (status || !_series->srcKey ||
+        status = GetSeries(ctx, rule->destKey, &_key, &_series, REDISMODULE_READ, flags);
+        if (status != GetSeriesResult_Success || !_series->srcKey ||
             (RedisModule_StringCompare(_series->srcKey, series->keyName) != 0)) {
             SeriesDeleteRule(series, rule->destKey);
         }
-        if (!status) {
+        if (status == GetSeriesResult_Success) {
             RedisModule_CloseKey(_key);
         }
         rule = nextRule;
@@ -75,18 +74,20 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
                           RedisModuleKey **key,
                           Series **series,
                           int mode,
-                          bool shouldDeleteRefs,
-                          bool isSilent,
-                          bool shouldCheckForAcls) {
+                          const GetSeriesFlags flags) {
+    const bool shouldDeleteRefs = flags & GetSeriesFlags_DeleteReferences;
+
     if (shouldDeleteRefs) {
         mode = mode | REDISMODULE_WRITE;
     }
 
-    size_t len;
+    const bool isSilent = flags & GetSeriesFlags_SilentOperation;
+
+    size_t len = 0;
     const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
 
-    if (shouldCheckForAcls) {
-        if (mode & REDISMODULE_READ && !CheckKeyIsAllowedToRead(ctx, keyName)) {
+    if (flags & GetSeriesFlags_CheckForAcls) {
+        if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(ctx, keyName)) {
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the read permission to "
@@ -96,7 +97,7 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
             return GetSeriesResult_PermissionError;
         }
 
-        if (mode & REDISMODULE_WRITE && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
+        if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the write permission "
@@ -230,14 +231,10 @@ void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
-    if (GetSeries(ctx,
-                  keyname,
-                  &key,
-                  &series,
-                  REDISMODULE_READ | REDISMODULE_WRITE,
-                  false,
-                  true,
-                  false) != GetSeriesResult_Success) {
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation;
+
+    if (GetSeries(ctx, keyname, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, flags) !=
+        GetSeriesResult_Success) {
         return;
     }
 
@@ -280,9 +277,10 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     Series *series;
     RedisModuleKey *key = NULL;
     RedisModuleString *_keyname = RedisModule_HoldString(ctx, keyname);
-    const GetSeriesResult status =
-        GetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ, false, true, false);
-    if (status) { // Not a timeseries key
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation;
+    const GetSeriesResult status = GetSeries(ctx, _keyname, &key, &series, REDISMODULE_READ, flags);
+    // Not a timeseries key
+    if (status != GetSeriesResult_Success) {
         goto cleanup;
     }
 
@@ -317,9 +315,10 @@ static void UpdateReferencesToRenamedSeries(RedisModuleCtx *ctx,
     if (series->srcKey) {
         Series *srcSeries;
         RedisModuleKey *srcKey;
-        const GetSeriesResult status = GetSeries(
-            ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE, false, false, true);
-        if (!status) {
+        const GetSeriesFlags flags = GetSeriesFlags_CheckForAcls;
+        const GetSeriesResult status =
+            GetSeries(ctx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_WRITE, flags);
+        if (status == GetSeriesResult_Success) {
             // Find the rule in the source key and rename the its destKey
             CompactionRule *rule = srcSeries->rules;
             while (rule) {
@@ -341,9 +340,10 @@ static void UpdateReferencesToRenamedSeries(RedisModuleCtx *ctx,
         Series *destSeries;
         RedisModuleKey *destKey;
         CompactionRule *nextRule = rule->nextRule; // avoid iterator invalidation
-        const GetSeriesResult status = GetSeries(
-            ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE, false, false, true);
-        if (!status) {
+        const GetSeriesFlags flags = GetSeriesFlags_CheckForAcls;
+        const GetSeriesResult status =
+            GetSeries(ctx, rule->destKey, &destKey, &destSeries, REDISMODULE_WRITE, flags);
+        if (status == GetSeriesResult_Success) {
             // rename the srcKey in the destKey
             RedisModule_FreeString(NULL, destSeries->srcKey);
             RedisModule_RetainString(NULL, keyTo);
@@ -360,8 +360,9 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *keyTo) {
     Series *series;
     RedisModuleKey *key = NULL;
     const GetSeriesResult status = GetSeries(
-        ctx, keyTo, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, true, true, true);
-    if (status) { // Not a timeseries key
+        ctx, keyTo, &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, GetSeriesFlags_All);
+    // Not a timeseries key
+    if (status != GetSeriesResult_Success) {
         goto cleanup;
     }
 
@@ -551,9 +552,7 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
                   &key,
                   &destSeries,
                   REDISMODULE_READ | REDISMODULE_WRITE,
-                  false,
-                  false,
-                  true)) {
+                  GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return false;
     }
@@ -728,9 +727,7 @@ static int ContinuousDeletion(RedisModuleCtx *ctx,
                   &key,
                   &destSeries,
                   REDISMODULE_READ | REDISMODULE_WRITE,
-                  false,
-                  false,
-                  true)) {
+                  GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return TSDB_ERROR;
     }
@@ -753,9 +750,7 @@ static bool delete_sample_before(RedisModuleCtx *ctx,
                   &key,
                   &series,
                   REDISMODULE_READ | REDISMODULE_WRITE,
-                  false,
-                  false,
-                  true)) {
+                  GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
         RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
         return false;
     }
@@ -1403,9 +1398,10 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
 void calculate_latest_sample(Sample **sample, const Series *series) {
     RedisModuleKey *srcKey = NULL;
     Series *srcSeries;
-    const GetSeriesResult status = GetSeries(
-        rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, false, true, true);
-    if (status || srcSeries->totalSamples == 0) {
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    const GetSeriesResult status =
+        GetSeries(rts_staticCtx, series->srcKey, &srcKey, &srcSeries, REDISMODULE_READ, flags);
+    if (status != GetSeriesResult_Success || srcSeries->totalSamples == 0) {
         // LATEST is ignored for a series that is not a compaction.
         *sample = NULL;
     } else {

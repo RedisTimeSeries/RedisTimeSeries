@@ -43,37 +43,6 @@
 
 #define TIMESERIES_MODULE_ACL_CATEGORY_NAME "timeseries"
 
-int asprintf(char **str, const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-
-    // First, determine the size of the formatted string
-    int size = vsnprintf(NULL, 0, format, args);
-    if (size < 0) {
-        va_end(args);
-        return -1;
-    }
-
-    // Allocate memory for the string
-    *str = (char *)malloc(size + 1);
-    if (!*str) {
-        va_end(args);
-        return -1;
-    }
-
-    // Write the formatted string into the allocated memory
-    va_start(args, format); // Restart the args for the second pass
-    int result = vsnprintf(*str, size + 1, format, args);
-    va_end(args);
-
-    if (result < 0) {
-        free(*str);
-        *str = NULL;
-    }
-
-    return result;
-}
-
 #define SetCommandAcls(ctx, cmd, acls)                                                             \
     {                                                                                              \
         if (RedisModule_GetCommand && RedisModule_AddACLCategory &&                                \
@@ -110,8 +79,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const GetSeriesResult status =
-        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, true, false, false);
-    if (status) {
+        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, GetSeriesFlags_DeleteReferences);
+    if (status != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 
@@ -231,7 +200,7 @@ void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, &hasPermissionError);
 
     if (hasPermissionError) {
-        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        RTS_ReplyKeyPermissionsError(ctx);
         return;
     }
 
@@ -305,6 +274,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     size_t currentKeyLen;
     Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
@@ -314,9 +284,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      false,
-                      true,
-                      true);
+                      flags);
 
         switch (status) {
             case GetSeriesResult_Success:
@@ -352,10 +320,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      false,
-                      true,
-                      true);
-        if (status) {
+                      flags);
+        if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current
             // key.
             RedisModule_DictIteratorStop(iter);
@@ -404,11 +370,12 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     long long replylen = 0;
     Series *series;
     int exitStatus = REDISMODULE_OK;
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true, true);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
 
         switch (status) {
             case GetSeriesResult_Success:
@@ -442,7 +409,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, false, true, true);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
 
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current key.
@@ -556,8 +523,8 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     Series *series;
     RedisModuleKey *key;
     const GetSeriesResult status =
-        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false, true);
-    if (status) {
+        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, GetSeriesFlags_CheckForAcls);
+    if (status != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 
@@ -611,15 +578,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
     if (currentTimestampNormalized > rule->startCurrentTimeBucket) {
         Series *destSeries;
         RedisModuleKey *key;
-        const GetSeriesResult status = GetSeries(ctx,
-                                                 rule->destKey,
-                                                 &key,
-                                                 &destSeries,
-                                                 REDISMODULE_READ | REDISMODULE_WRITE,
-                                                 false,
-                                                 true,
-                                                 true);
-        if (status) {
+        const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+        const GetSeriesResult status = GetSeries(
+            ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE, flags);
+        if (status != GetSeriesResult_Success) {
             // key doesn't exist anymore or some other error occurred,
             // and we don't do anything
             return;
@@ -931,8 +893,8 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     const GetSeriesResult status = GetSeries(
-        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false, false);
-    if (status) {
+        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, GetSeriesFlags_None);
+    if (status != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
     if (RMUtil_ArgIndex("RETENTION", argv, argc) > 0) {
@@ -992,10 +954,8 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                               &srcKey,
                                               &srcSeries,
                                               REDISMODULE_READ | REDISMODULE_WRITE,
-                                              true,
-                                              false,
-                                              false);
-    if (statusS) {
+                                              GetSeriesFlags_DeleteReferences);
+    if (statusS != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 
@@ -1013,10 +973,8 @@ int TSDB_deleteRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                               &destKey,
                                               &destSeries,
                                               REDISMODULE_READ | REDISMODULE_WRITE,
-                                              true,
-                                              false,
-                                              false);
-    if (statusD) {
+                                              GetSeriesFlags_DeleteReferences);
+    if (statusD != GetSeriesResult_Success) {
         RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;
     }
@@ -1067,15 +1025,10 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *srcSeries;
     RedisModuleKey *srcKey;
-    const GetSeriesResult statusS = GetSeries(ctx,
-                                              srcKeyName,
-                                              &srcKey,
-                                              &srcSeries,
-                                              REDISMODULE_READ | REDISMODULE_WRITE,
-                                              true,
-                                              false,
-                                              true);
-    if (statusS) {
+    const GetSeriesFlags flags = GetSeriesFlags_DeleteReferences | GetSeriesFlags_CheckForAcls;
+    const GetSeriesResult statusS = GetSeries(
+        ctx, srcKeyName, &srcKey, &srcSeries, REDISMODULE_READ | REDISMODULE_WRITE, flags);
+    if (statusS != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 
@@ -1087,15 +1040,9 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     Series *destSeries;
     RedisModuleKey *destKey;
-    const GetSeriesResult statusD = GetSeries(ctx,
-                                              destKeyName,
-                                              &destKey,
-                                              &destSeries,
-                                              REDISMODULE_READ | REDISMODULE_WRITE,
-                                              true,
-                                              false,
-                                              true);
-    if (statusD) {
+    const GetSeriesResult statusD = GetSeries(
+        ctx, destKeyName, &destKey, &destSeries, REDISMODULE_READ | REDISMODULE_WRITE, flags);
+    if (statusD != GetSeriesResult_Success) {
         RedisModule_CloseKey(srcKey);
         return REDISMODULE_ERR;
     }
@@ -1217,8 +1164,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const GetSeriesResult status =
-        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, false, false, false);
-    if (status) {
+        GetSeries(ctx, argv[1], &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
+    if (status != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 
@@ -1295,6 +1242,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long replylen = 0;
     Series *series;
     int exitStatus = REDISMODULE_OK;
+    const GetSeriesFlags checkFlags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
@@ -1304,9 +1252,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      false,
-                      true,
-                      true);
+                      checkFlags);
 
         switch (status) {
             case GetSeriesResult_Success:
@@ -1346,9 +1292,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      false,
-                      true,
-                      false);
+                      GetSeriesFlags_SilentOperation);
 
         if (status != GetSeriesResult_Success) {
             continue;
@@ -1451,8 +1395,8 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
     RedisModuleKey *key;
     const GetSeriesResult status = GetSeries(
-        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, false, false, false);
-    if (status) {
+        ctx, argv[1], &key, &series, REDISMODULE_READ | REDISMODULE_WRITE, GetSeriesFlags_None);
+    if (status != GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
 

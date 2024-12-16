@@ -35,9 +35,8 @@ const char *ChunkTypeToString(int options) {
 
 int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.hasGlobalConfig = FALSE;
-    TSGlobalConfig.options = 0;
-    // default serie encoding
-    TSGlobalConfig.options |= SERIES_OPT_DEFAULT_COMPRESSION;
+    TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
+    TSGlobalConfig.password = NULL;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
         RedisModuleString *policy;
@@ -77,8 +76,6 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                         "The 'OSS_GLOBAL_PASSWORD' configuration is deprecated. "
                         "Please use 'global-password' instead.");
         TSGlobalConfig.hasGlobalConfig = TRUE;
-    } else {
-        TSGlobalConfig.password = NULL;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-password", argv, argc) >= 0) {
@@ -93,8 +90,6 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
         RedisModule_Log(ctx, "notice", "loaded global-password");
         TSGlobalConfig.hasGlobalConfig = TRUE;
-    } else {
-        TSGlobalConfig.password = NULL;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-user", argv, argc) >= 0) {

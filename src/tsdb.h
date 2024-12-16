@@ -26,6 +26,21 @@ typedef enum GetSeriesResult
     GetSeriesResult_PermissionError = 2,
 } GetSeriesResult;
 
+typedef enum GetSeriesResultFlags
+{
+    // No flags are set.
+    GetSeriesFlags_None = 0,
+    // Delete references to deleted series.
+    GetSeriesFlags_DeleteReferences = 1 << 0,
+    // Perform the operation silently.
+    GetSeriesFlags_SilentOperation = 1 << 1,
+    // Check for ACLs.
+    GetSeriesFlags_CheckForAcls = 1 << 2,
+    // All the flags set.
+    GetSeriesFlags_All = GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation |
+                         GetSeriesFlags_CheckForAcls,
+} GetSeriesFlags;
+
 typedef struct CompactionRule
 {
     RedisModuleString *destKey;
@@ -94,9 +109,7 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
                           RedisModuleKey **key,
                           Series **series,
                           int mode,
-                          bool shouldDeleteRefs,
-                          bool isSilent,
-                          bool shouldCheckForAcls);
+                          const GetSeriesFlags flags);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,
