@@ -27,6 +27,5 @@ runs:
           python3 -m pip install --upgrade pip setuptools wheel
         echo ::endgroup::
         echo ::group::Install python dependencies
-          ./sbin/setup
           ./.install/common_installations.sh
         echo ::endgroup::
