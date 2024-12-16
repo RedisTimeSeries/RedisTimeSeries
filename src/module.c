@@ -273,8 +273,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
             QueryPredicateList_Free(queries);
-            return RTS_ReplyPermissionError(ctx,
-                                            "TSDB: no permission to access some or all the keys");
+            return RTS_ReplyKeyPermissionsError(ctx);
         }
 
         int ctxFlags = RedisModule_GetContextFlags(ctx);
@@ -511,8 +510,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyPermissionError(ctx,
-                                            "TSDB: no permission to access some or all the keys");
+            return RTS_ReplyKeyPermissionsError(ctx);
         }
 
         int ctxFlags = RedisModule_GetContextFlags(ctx);
@@ -533,8 +531,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyPermissionError(ctx,
-                                            "TSDB: no permission to access some or all the keys");
+            return RTS_ReplyKeyPermissionsError(ctx);
         }
 
         int ctxFlags = RedisModule_GetContextFlags(ctx);
@@ -1255,8 +1252,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyPermissionError(ctx,
-                                            "TSDB: no permission to access some or all the keys");
+            return RTS_ReplyKeyPermissionsError(ctx);
         }
 
         int ctxFlags = RedisModule_GetContextFlags(ctx);
