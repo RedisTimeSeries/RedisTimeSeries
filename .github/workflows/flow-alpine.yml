@@ -45,13 +45,7 @@ jobs:
           git fetch origin ${REF}
           git checkout ${REF}
       - name: Install python dependencies
-        run: |
-          pip install -q --upgrade setuptools wheel
-          pip install -q --upgrade pip
-          pip install -q -r tests/flow/requirements.txt
-          pip install -q -r .install/build_package_requirements.txt
-        env:
-          PIP_BREAK_SYSTEM_PACKAGES: 1
+        uses: ./.github/actions/install-python-deps
       - name: checkout redis
         run: |
           # Perform checkout

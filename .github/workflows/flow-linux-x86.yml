@@ -142,6 +142,8 @@ jobs:
         with:
           python-version: '3.9'
           architecture: 'x64'
+      - name: Install python dependencies
+        uses: ./.github/actions/install-python-deps
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:

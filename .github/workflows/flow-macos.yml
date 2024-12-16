@@ -113,6 +113,8 @@ jobs:
       - name: Setup specific
         working-directory: .install
         run: ./install_script.sh
+      - name: Install python dependencies
+        uses: ./.github/actions/install-python-deps
       - name: Build and test
         uses: ./.github/actions/build-and-test-macos
       - name: Upload test artifacts

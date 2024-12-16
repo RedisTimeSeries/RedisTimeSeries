@@ -1,0 +1,32 @@
+name: Run module tests
+
+inputs:
+  run_valgrind:
+    description: 'Run valgrind on the tests'
+    type: string
+    default: 0
+  run_sanitizer:
+    description: 'Run sanitizer on the tests'
+    type: string
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        if command -v scl_source &> /dev/null
+        then
+            . scl_source enable devtoolset-11 || true
+        fi
+        echo ::group::Activate virtual environment
+          python3 -m venv venv
+          echo "source $PWD/venv/bin/activate" >> ~/.bash_profile
+          source venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+        echo ::endgroup::
+        echo ::group::Install python dependencies
+          ./sbin/setup
+          ./.install/common_installations.sh
+        echo ::endgroup::
