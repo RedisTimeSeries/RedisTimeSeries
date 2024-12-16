@@ -456,7 +456,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
 
     if (hasPermissionError) {
-        RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+        RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
 
@@ -1273,7 +1273,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                     (int)currentKeyLen,
                     currentKey);
 
-                RTS_ReplyPermissionError(ctx, "TSDB: no permission to access one or more keys");
+                RTS_ReplyKeyPermissionsError(ctx);
 
                 exitStatus = REDISMODULE_ERR;
                 goto exit;
