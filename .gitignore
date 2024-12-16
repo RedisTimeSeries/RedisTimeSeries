@@ -24,6 +24,7 @@ site/
 wordlist.dic
 /1/
 *.clangd
+compile_commands.json
 
 .venv
 redis/
