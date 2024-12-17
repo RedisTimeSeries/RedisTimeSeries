@@ -20,12 +20,8 @@ runs:
         echo ::group::Activate virtual environment
           python3 -m venv venv
           echo "source $PWD/venv/bin/activate" >> ~/.bash_profile
-          source venv/bin/activate
-          python3 -m pip install --upgrade pip setuptools wheel
+          . venv/bin/activate
         echo ::endgroup::
         echo ::group::Install python dependencies
-          if [[ "${{inputs.image}}" != "amazonlinux:2" ]]; then
-            ./sbin/setup
-          fi
           ./.install/common_installations.sh
         echo ::endgroup::
