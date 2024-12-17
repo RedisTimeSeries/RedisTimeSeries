@@ -1,0 +1,31 @@
+name: Run module tests
+
+inputs:
+  image:
+    description: 'image that run on'
+    type: string
+    require: true
+  
+
+runs:
+  using: composite
+  steps:
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        if command -v scl_source &> /dev/null
+        then
+            . scl_source enable devtoolset-11 || true
+        fi
+        echo ::group::Activate virtual environment
+          python3 -m venv venv
+          echo "source $PWD/venv/bin/activate" >> ~/.bash_profile
+          source venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+        echo ::endgroup::
+        echo ::group::Install python dependencies
+          if [[ "${{inputs.image}}" != "amazonlinux:2" ]]; then
+            ./sbin/setup
+          fi
+          ./.install/common_installations.sh
+        echo ::endgroup::
