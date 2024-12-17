@@ -145,7 +145,7 @@ jobs:
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
         with: 
-          image: matrix.docker_image.image
+          image: ${{matrix.docker_image.image}}
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
