@@ -329,8 +329,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -338,17 +339,18 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     Series *series;
     Record *series_list = ListRecord_Create(0);
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName =
             RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const int status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, false, true);
+        const GetSeriesResult status =
+            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
 
         RedisModule_FreeString(rts_staticCtx, keyName);
 
-        if (!status) {
+        if (status != GetSeriesResult_Success) {
             RedisModule_Log(rts_staticCtx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
@@ -387,8 +389,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -402,15 +405,17 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         series_listOrMap = ListRecord_Create(0);
     }
 
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName =
             RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const int status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, false, true);
+        const GetSeriesResult status =
+            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
         RedisModule_FreeString(rts_staticCtx, keyName);
 
-        if (!status) {
+        if (status != GetSeriesResult_Success) {
             RedisModule_Log(rts_staticCtx,
                             "warning",
                             "couldn't open key or key is not a Timeseries. key=%.*s",
@@ -483,8 +488,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    RedisModuleDict *result =
-        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count);
+    // The permission error is ignored.
+    RedisModuleDict *result = QueryIndex(
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -551,7 +557,8 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 }
 
 int register_rg(RedisModuleCtx *ctx, long long numThreads) {
-    if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
+    if (MR_Init(ctx, numThreads, TSGlobalConfig.username, TSGlobalConfig.password) !=
+        REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
         return REDISMODULE_ERR;
     }

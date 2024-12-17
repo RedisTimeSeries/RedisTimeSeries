@@ -4,6 +4,7 @@
 *.xml
 *.pyc
 *.log
+*.rdb
 **/logs/**
 .vscode/
 __pycache__
@@ -23,4 +24,8 @@ site/
 /tests/benchmarks/profile_*
 wordlist.dic
 /1/
+*.clangd
+compile_commands.json
 
+.venv
+redis/

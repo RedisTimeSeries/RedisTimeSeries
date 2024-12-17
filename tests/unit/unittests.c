@@ -4,6 +4,7 @@
  *the server side public license v1 (ssplv1).
  */
 #define REDISMODULE_MAIN
+#define REDISMODULE_SDK_RLEC 1
 
 #include "minunit.h"
 
