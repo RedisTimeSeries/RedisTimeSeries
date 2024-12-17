@@ -137,13 +137,15 @@ jobs:
             ./install_script.sh 
           echo ::endgroup::
       - name: Setup Python for testing
-        if: contains(fromJSON('["ubuntu:jammy"]'), inputs.image)
+        if: contains(fromJSON('["ubuntu:jammy"]'), matrix.docker_image.image)
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           architecture: 'x64'
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
+        with: 
+          image: matrix.docker_image.image
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:

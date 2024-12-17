@@ -1,14 +1,11 @@
 name: Run module tests
 
 inputs:
-  run_valgrind:
-    description: 'Run valgrind on the tests'
+  image:
+    description: 'image that run on'
     type: string
-    default: 0
-  run_sanitizer:
-    description: 'Run sanitizer on the tests'
-    type: string
-    default: ''
+    require: true
+  
 
 runs:
   using: composite
@@ -27,5 +24,8 @@ runs:
           python3 -m pip install --upgrade pip setuptools wheel
         echo ::endgroup::
         echo ::group::Install python dependencies
+          if [[ "${{inputs.image}}" != "amazonlinux:2" ]]; then
+            ./sbin/setup
+          fi
           ./.install/common_installations.sh
         echo ::endgroup::
