@@ -600,12 +600,12 @@ jobs:
         builder: [{
           image: 'rockylinux:8',
           nick: 'rocky8'
-        },
-          {
-            image: 'rockylinux:9',
-            nick: 'rocky9'
-          }
-        ]
+          },
+            {
+              image: 'rockylinux:9',
+              nick: 'rocky9'
+            }
+          ]
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
