@@ -17,8 +17,10 @@
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule *parsedRules;
     uint64_t rulesCount;
-    int result = ParseCompactionPolicy(
-        "max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d", &parsedRules, &rulesCount);
+    int result =
+        ParseCompactionPolicy("max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d",
+                              &parsedRules,
+                              &rulesCount);
     mu_check(result == TRUE);
     mu_check(rulesCount == 5);
 
@@ -72,9 +74,34 @@ MU_TEST(test_invalid_policy) {
     result = ParseCompactionPolicy("max:abcdfeffas", &parsedRules, &rulesCount);
     mu_check(result == FALSE);
     mu_check(rulesCount == 0);
-    if(parsedRules) {
+    if (parsedRules) {
         free(parsedRules);
     }
+}
+
+static inline void PolicyStringCompare(const char *s, const char *expectedOverride) {
+    SimpleCompactionRule *parsedRules = NULL;
+    uint64_t rulesCount = 0;
+    const int result = ParseCompactionPolicy(s, &parsedRules, &rulesCount);
+    mu_check(result == TRUE);
+    char *actual = CompactionRulesToString(parsedRules, rulesCount);
+    if (expectedOverride) {
+        mu_assert_string_eq(expectedOverride, actual);
+    } else {
+        mu_assert_string_eq(s, actual);
+    }
+    free(actual);
+    free(parsedRules);
+}
+
+MU_TEST(test_PolicyToString) {
+    PolicyStringCompare("max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d",
+                        "max:1m:1h:1m;min:10s:10d;last:5M:10m;avg:2h:10d:1d;avg:3d:100d");
+    PolicyStringCompare("max:1m:1h:1m", NULL);
+    PolicyStringCompare("min:10s:10d:0m", "min:10s:10d");
+    PolicyStringCompare("last:5M:10m", NULL);
+    PolicyStringCompare("avg:2h:10d:1d", NULL);
+    PolicyStringCompare("avg:3d:100d", NULL);
 }
 
 MU_TEST(test_StringLenAggTypeToEnum) {
@@ -93,4 +120,5 @@ MU_TEST_SUITE(parse_policies_test_suite) {
     MU_RUN_TEST(test_valid_policy);
     MU_RUN_TEST(test_invalid_policy);
     MU_RUN_TEST(test_StringLenAggTypeToEnum);
+    MU_RUN_TEST(test_PolicyToString);
 }
