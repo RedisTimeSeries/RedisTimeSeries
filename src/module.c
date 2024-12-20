@@ -1656,9 +1656,23 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (ReadConfig(ctx, argv, argc) == TSDB_ERROR) {
+    InitConfig();
+    if (ReadDeprecatedLoadTimeConfig(ctx, argv, argc) == TSDB_ERROR) {
         RedisModule_Log(
-            ctx, "warning", "Failed to parse RedisTimeSeries configurations. aborting...");
+            ctx,
+            "warning",
+            "Failed to parse RedisTimeSeries configurations using the deprecated way, aborting...");
+        return REDISMODULE_ERR;
+    }
+
+    if (!RegisterConfigurationOptions(ctx)) {
+        RedisModule_Log(
+            ctx, "warning", "Failed to register the RedisTimeSeries configurations. aborting...");
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Failed to load the RedisTimeSeries configurations.");
         return REDISMODULE_ERR;
     }
 

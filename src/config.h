@@ -11,6 +11,22 @@
 
 #include <stdbool.h>
 
+#define DEFAULT_NUM_THREADS 3
+#define NUM_THREADS_MIN 1
+#define NUM_THREADS_MAX 16
+#define RETENTION_POLICY_MIN 0
+#define RETENTION_POLICY_MAX LLONG_MAX
+#define CHUNK_SIZE_BYTES_MIN 48
+#define CHUNK_SIZE_BYTES_MAX 1048576
+#define IGNORE_MAX_TIME_DIFF_DEFAULT 0
+#define IGNORE_MAX_TIME_DIFF_MIN 0
+#define IGNORE_MAX_TIME_DIFF_MAX LLONG_MAX
+#define IGNORE_MAX_VAL_DIFF_DEFAULT 0.0
+#define IGNORE_MAX_VAL_DIFF_MIN 0.0
+#define IGNORE_MAX_VAL_DIFF_MAX DBL_MAX
+#define DEFAULT_ENCODING_STRING COMPRESSED_GORILLA_ARG_STR
+#define DEFAULT_DUPLICATE_POLICY_STRING "block"
+
 typedef struct
 {
     SimpleCompactionRule *compactionRules;
@@ -18,20 +34,22 @@ typedef struct
     long long retentionPolicy;
     long long chunkSizeBytes;
     short options;
-    int hasGlobalConfig;
     DuplicatePolicy duplicatePolicy;
     long long numThreads;        // number of threads used by libMR
     bool forceSaveCrossRef;      // Internal debug configuration param
     char *username;              // tls username which used by libmr
     char *password;              // tls password which used by libmr
-    bool dontAssertOnFailiure;   // Internal debug configuration param
+    bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
 
-int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+void InitConfig();
+RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx);
+bool RegisterConfigurationOptions(RedisModuleCtx *ctx);
+int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 const char *ChunkTypeToString(int options);
 typedef struct RTS_RedisVersion
 {

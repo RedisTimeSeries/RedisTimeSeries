@@ -167,7 +167,8 @@ void MRangeArgs_Free(MRangeArgs *args);
 
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
-bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err);
+bool ValidateChunkSizeSimple(long long chunkSizeBytes);
 int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

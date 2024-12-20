@@ -10,6 +10,10 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "config.h"
+
+#define s(x) _s(x)
+#define _s(x) #x
 
 #define QUERY_TOKEN_SIZE 9
 static const char *QUERY_TOKENS[] = {
@@ -62,28 +66,32 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     return REDISMODULE_OK;
 }
 
-bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
-    if (chunkSizeBytes < 48) {
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
-        return false;
-    }
-
-    if (chunkSizeBytes > 1048576) {
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
-        return false;
-    }
-
-    if (chunkSizeBytes % 8 != 0) {
-        // Currently the gorilla algorithm implementation can only handle chunks of size
-        // multiplication of 8
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
+bool ValidateChunkSizeSimple(long long chunkSizeBytes) {
+    if (chunkSizeBytes < CHUNK_SIZE_BYTES_MIN || chunkSizeBytes > CHUNK_SIZE_BYTES_MAX ||
+        chunkSizeBytes % 8 != 0) {
         return false;
     }
 
     return true;
+}
+
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err) {
+    if (ValidateChunkSizeSimple(chunkSizeBytes)) {
+        return true;
+    }
+
+    if (!err) {
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" s(
+                                  CHUNK_SIZE_BYTES_MIN) " .. " s(CHUNK_SIZE_BYTES_MAX) "]");
+    } else {
+        const char *errorMessage =
+            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" s(
+                CHUNK_SIZE_BYTES_MIN) " .. " s(CHUNK_SIZE_BYTES_MAX) "]";
+        *err = RedisModule_CreateString(NULL, errorMessage, strlen(errorMessage));
+    }
+
+    return false;
 }
 
 int ParseChunkSize(RedisModuleCtx *ctx,
@@ -97,7 +105,7 @@ int ParseChunkSize(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        if (!ValidateChunkSize(ctx, *chunkSizeBytes)) {
+        if (!ValidateChunkSize(ctx, *chunkSizeBytes, NULL)) {
             return TSDB_ERROR;
         }
     }
