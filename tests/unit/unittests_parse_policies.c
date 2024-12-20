@@ -91,6 +91,7 @@ static inline void PolicyStringCompare(const char *s, const char *expectedOverri
         mu_assert_string_eq(s, actual);
     }
     free(actual);
+    free(parsedRules);
 }
 
 MU_TEST(test_PolicyToString) {
