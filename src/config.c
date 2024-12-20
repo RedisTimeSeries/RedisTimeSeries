@@ -212,6 +212,11 @@ static int setModernStringConfigValue(const char *name,
 
         size_t len = 0;
         const char *str = RedisModule_StringPtrLen(value, &len);
+
+        if (!str || len == 0) {
+            return REDISMODULE_OK;
+        }
+
         TSGlobalConfig.password = strndup(str, len);
         return REDISMODULE_OK;
     } else if (!strcasecmp("global-user", name)) {
@@ -222,6 +227,11 @@ static int setModernStringConfigValue(const char *name,
 
         size_t len = 0;
         const char *str = RedisModule_StringPtrLen(value, &len);
+
+        if (!str || len == 0) {
+            return REDISMODULE_OK;
+        }
+
         TSGlobalConfig.username = strndup(str, len);
         return REDISMODULE_OK;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
