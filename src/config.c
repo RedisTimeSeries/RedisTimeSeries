@@ -31,8 +31,8 @@ TSConfig TSGlobalConfig;
 
 void InitConfig() {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
-    TSGlobalConfig.password = "";
-    TSGlobalConfig.username = "";
+    TSGlobalConfig.password = NULL;
+    TSGlobalConfig.username = NULL;
 }
 
 RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
@@ -148,29 +148,39 @@ static double stringToDouble(const char *name,
     return value;
 }
 
+static inline void ClearCompactionRules() {
+    if (TSGlobalConfig.compactionRules) {
+        free(TSGlobalConfig.compactionRules);
+        TSGlobalConfig.compactionRules = NULL;
+        TSGlobalConfig.compactionRulesCount = 0;
+    }
+}
+
 static int setModernStringConfigValue(const char *name,
                                       RedisModuleString *value,
                                       void *data,
                                       RedisModuleString **err) {
     if (!strcasecmp("ts-compaction-policy", name)) {
-        // TODO: deallocate old compaction rules?
         size_t len;
         const char *policy_cstr = RedisModule_StringPtrLen(value, &len);
 
         if (len == 0) {
-            TSGlobalConfig.compactionRules = NULL;
-            TSGlobalConfig.compactionRulesCount = 0;
+            ClearCompactionRules();
 
             return REDISMODULE_OK;
         }
 
-        if (ParseCompactionPolicy(policy_cstr,
-                                  &TSGlobalConfig.compactionRules,
-                                  &TSGlobalConfig.compactionRulesCount) != TRUE) {
+        SimpleCompactionRule *compactionRules = NULL;
+        uint64_t compactionRulesCount = 0;
+
+        if (ParseCompactionPolicy(policy_cstr, &compactionRules, &compactionRulesCount) != TRUE) {
             *err =
                 RedisModule_CreateStringPrintf(NULL, "Invalid compaction policy: %s", policy_cstr);
             return REDISMODULE_ERR;
         }
+
+        TSGlobalConfig.compactionRules = compactionRules;
+        TSGlobalConfig.compactionRulesCount = compactionRulesCount;
 
         return REDISMODULE_OK;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
@@ -195,16 +205,24 @@ static int setModernStringConfigValue(const char *name,
         TSGlobalConfig.ignoreMaxValDiff = newValue;
         return REDISMODULE_OK;
     } else if (!strcasecmp("global-password", name)) {
+        if (TSGlobalConfig.password) {
+            free(TSGlobalConfig.password);
+            TSGlobalConfig.password = NULL;
+        }
+
         size_t len = 0;
         const char *str = RedisModule_StringPtrLen(value, &len);
-        TSGlobalConfig.password = (char *)str;
-        // TSGlobalConfig.password = strndup(str, len);
+        TSGlobalConfig.password = strndup(str, len);
         return REDISMODULE_OK;
     } else if (!strcasecmp("global-user", name)) {
+        if (TSGlobalConfig.username) {
+            free(TSGlobalConfig.username);
+            TSGlobalConfig.username = NULL;
+        }
+
         size_t len = 0;
         const char *str = RedisModule_StringPtrLen(value, &len);
-        // TSGlobalConfig.username = strndup(str, len);
-        TSGlobalConfig.username = (char *)str;
+        TSGlobalConfig.username = strndup(str, len);
         return REDISMODULE_OK;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
         const DuplicatePolicy newValue = RMStringLenDuplicationPolicyToEnum(value);
@@ -639,7 +657,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
+        const char *temp = (char *)RedisModule_StringPtrLen(password, &len);
+        TSGlobalConfig.password = strndup(temp, len);
         RedisModule_Log(ctx, "notice", "loaded tls password");
         isDeprecated = true;
     }
@@ -653,7 +672,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
+        const char *temp = (char *)RedisModule_StringPtrLen(password, &len);
+        TSGlobalConfig.password = strndup(temp, len);
         RedisModule_Log(ctx, "notice", "loaded global-password");
         isDeprecated = true;
     }
@@ -666,7 +686,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
 
-        TSGlobalConfig.username = (char *)RedisModule_StringPtrLen(username, &len);
+        const char *temp = (char *)RedisModule_StringPtrLen(username, &len);
+        TSGlobalConfig.username = strndup(temp, len);
         RedisModule_Log(ctx, "notice", "loaded global-user");
         isDeprecated = true;
     }
