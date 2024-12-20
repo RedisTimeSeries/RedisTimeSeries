@@ -14,6 +14,8 @@
 #include "rmutil/util.h"
 #include <rmutil/alloc.h>
 
+#define SINGLE_RULE_ITEM_STRING_LENGTH 32
+
 static const timestamp_t lookup_intervals[] = { ['m'] = 1,
                                                 ['s'] = 1000,
                                                 ['M'] = 1000 * 60,
@@ -169,18 +171,20 @@ char *CompactionRulesToString(const SimpleCompactionRule *compactionRules,
     result[0] = '\0'; // Initialize the string
 
     for (uint64_t i = 0; i < compactionRulesCount; ++i) {
-        static const size_t SINGLE_STRING_LENGTH = 32;
         const SimpleCompactionRule *rule = &compactionRules[i];
 
         // Convert bucket duration and retention size to strings
-        char bucket_duration[SINGLE_STRING_LENGTH];
-        char retention[SINGLE_STRING_LENGTH];
-        char alignment[SINGLE_STRING_LENGTH] = {};
+        char bucket_duration[SINGLE_RULE_ITEM_STRING_LENGTH] = { 0 };
+        char retention[SINGLE_RULE_ITEM_STRING_LENGTH] = { 0 };
+        char alignment[SINGLE_RULE_ITEM_STRING_LENGTH] = { 0 };
 
-        MillisecondsToTimeString(rule->bucketDuration, bucket_duration, SINGLE_STRING_LENGTH);
-        MillisecondsToTimeString(rule->retentionSizeMillisec, retention, SINGLE_STRING_LENGTH);
+        MillisecondsToTimeString(
+            rule->bucketDuration, bucket_duration, SINGLE_RULE_ITEM_STRING_LENGTH);
+        MillisecondsToTimeString(
+            rule->retentionSizeMillisec, retention, SINGLE_RULE_ITEM_STRING_LENGTH);
         if (rule->timestampAlignment > 0) {
-            MillisecondsToTimeString(rule->timestampAlignment, alignment, SINGLE_STRING_LENGTH);
+            MillisecondsToTimeString(
+                rule->timestampAlignment, alignment, SINGLE_RULE_ITEM_STRING_LENGTH);
         }
 
         // Get aggregation type as string
