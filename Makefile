@@ -9,7 +9,7 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
@@ -32,7 +32,7 @@ include $(ROOT)/build/rmutil/Makefile.defs
 export CPU_FEATURES_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/cpu_features
 include $(ROOT)/build/cpu_features/Makefile.defs
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 define HELPTEXT
 make build
@@ -85,7 +85,7 @@ make sanbox        # create container with CLang Sanitizer
 
 endef
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
 
@@ -298,11 +298,14 @@ clean:
 	@echo Cleaning ...
 	$(SHOW)rm -rf compile_commands.json
 ifeq ($(ALL),1)
+	@echo Cleaning ALL...
 	-$(SHOW)rm -rf $(BINROOT) $(LIBEVENT_BINDIR) $(DRAGONBOX_BINDIR) $(FAST_DOUBLE_PARSER_C_BINDIR) $(CPU_FEATURES_BINDIR)
 	$(SHOW)$(MAKE) -C $(ROOT)/build/libevent clean AUTOGEN=1
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 else
 	-$(SHOW)rm -rf $(BINDIR)
 ifeq ($(DEPS),1)
+	@echo Cleaning DEPS...
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
@@ -310,7 +313,6 @@ ifeq ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 endif
 endif
 
@@ -410,7 +412,7 @@ endif # RLEC
 BENCHMARK_ARGS = redisbench-admin run-local
 
 ifneq ($(REMOTE),)
-	BENCHMARK_ARGS = redisbench-admin run-remote 
+	BENCHMARK_ARGS = redisbench-admin run-remote
 endif
 
 BENCHMARK_ARGS += \
