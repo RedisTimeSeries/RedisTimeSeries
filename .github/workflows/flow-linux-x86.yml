@@ -141,9 +141,7 @@ jobs:
         working-directory: .install
         shell: bash
         run: |
-          echo ::group::Install dependencies
-            ./install_script.sh 
-          echo ::endgroup::
+          ./install_script.sh 
       - name: Setup Python for testing
         if: contains(fromJSON('["ubuntu:jammy"]'), inputs.image)
         uses: actions/setup-python@v5
