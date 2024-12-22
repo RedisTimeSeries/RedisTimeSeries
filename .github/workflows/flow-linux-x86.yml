@@ -154,11 +154,12 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           call-setup: ${{matrix.docker_image.call-setup}}
+          use-venv: ${{matrix.docker_image.use-venv}}
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
           build_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
-          use-venv: '1'
+          use-venv: ${{matrix.docker_image.use-venv}}
       - name: Run tests
         uses: ./.github/actions/run-tests
         with: 
