@@ -75,7 +75,7 @@ jobs:
                 MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git\"},"
                 ;;
               mariner2)
-                MATRIX="${MATRIX}{\"image\": \"mcr.microsoft.com/cbl-mariner/base/core:2.0\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"tdnf install --noplugins --skipsignature -y ca-certificates git\"},"
+                MATRIX="${MATRIX}{\"image\": \"mcr.microsoft.com/cbl-mariner/base/core:2.0\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"tdnf install --noplugins --skipsignature -y ca-certificates git\"},"
                 ;;
               *)
                 echo "Unknown OS: $os"
@@ -143,7 +143,7 @@ jobs:
         run: |
           ./install_script.sh 
       - name: Setup Python for testing
-        if: contains(fromJSON('["ubuntu:jammy"]'), inputs.image)
+        if: ${{matrix.docker_image.image == 'ubuntu:jammy'}}
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
