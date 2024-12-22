@@ -1,10 +1,12 @@
 name: Run module tests
 
 inputs:
-  image:
-    description: 'image that run on'
+  call-setup:
+    description: 'wheter to call ./sbin/setup or not'
     type: string
     require: true
+    default: '0'
+  
   
 
 runs:
@@ -24,4 +26,7 @@ runs:
         echo ::endgroup::
         echo ::group::Install python dependencies
           ./.install/common_installations.sh
+          if [[ "${{inputs.call-setup}}" == "1" ]]; then
+            ./sbin/setup
+          fi
         echo ::endgroup::
