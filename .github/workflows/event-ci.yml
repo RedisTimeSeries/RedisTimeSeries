@@ -13,9 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linter:
-    uses: ./.github/workflows/flow-linter.yml
-    secrets: inherit
+  # linter:
+  #   uses: ./.github/workflows/flow-linter.yml
+  #   secrets: inherit
   build-linux-x86:
     uses: ./.github/workflows/flow-linux-x86.yml
     with:

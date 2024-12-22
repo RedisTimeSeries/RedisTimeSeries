@@ -9,6 +9,15 @@ inputs:
     description: 'Run sanitizer on the tests'
     type: string
     default: ''
+  quick: 
+    description: 'Run with quick flag'
+    type: string
+    default: ''
+  use-venv:
+    type: string
+    description: "Specify whether to use the environment or not"
+    default: 'false'
+
 
 runs:
   using: composite
@@ -20,5 +29,7 @@ runs:
         then
             . scl_source enable devtoolset-11 || true
         fi
-        . venv/bin/activate
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        if [[ "${{ inputs.use-env }}" == "true" ]]; then
+          . venv/bin/activate
+        fi
+        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server

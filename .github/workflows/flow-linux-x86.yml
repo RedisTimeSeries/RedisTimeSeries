@@ -72,7 +72,7 @@ jobs:
                 MATRIX="${MATRIX}{\"image\": \"debian:bullseye\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
                 ;;
               amazonlinux2)
-                MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"pre_req_install_cmd\": \"yum update && yum install -y git\"},"
+                MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git\"},"
                 ;;
               mariner2)
                 MATRIX="${MATRIX}{\"image\": \"mcr.microsoft.com/cbl-mariner/base/core:2.0\", \"pre_req_install_cmd\": \"tdnf install --noplugins --skipsignature -y ca-certificates git\"},"
@@ -157,12 +157,15 @@ jobs:
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
+          build_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
+          use-venv: 'true'
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: 'true'
+          quick: '1'
+          run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
           run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
-      # - name: Run tests
-      #   uses: ./.github/actions/run-tests
-      #   with: 
-      #     run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
-      #     run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
       # - name: Upload test artifacts
       #   if: failure()
       #   uses: ./.github/actions/upload-artifacts
