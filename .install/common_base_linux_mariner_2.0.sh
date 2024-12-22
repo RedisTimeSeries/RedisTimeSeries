@@ -1,6 +1,6 @@
 #!/bin/bash
 
-tdnf install -y build-essential wget tar openssl-devel cmake python3 python3-pip which unzip
+tdnf install -y build-essential wget tar openssl-devel cmake python3 python3-pip which unzip jq
 git config --global --add safe.directory $PWD
 
 pip install --upgrade setuptools

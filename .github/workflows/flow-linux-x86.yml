@@ -158,11 +158,11 @@ jobs:
         uses: ./.github/actions/build-module-and-redis
         with:
           build_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
-          use-venv: 'true'
+          use-venv: '1'
       - name: Run tests
         uses: ./.github/actions/run-tests
         with: 
-          use-venv: 'true'
+          use-venv: '1'
           quick: '1'
           run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
           run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}

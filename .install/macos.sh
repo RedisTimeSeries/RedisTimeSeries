@@ -12,6 +12,7 @@ LLVM_VERSION="18"
 brew update
 brew install coreutils
 brew install make
+brew install jq
 brew install openssl
 brew install llvm@$LLVM_VERSION
 
