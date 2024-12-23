@@ -129,6 +129,14 @@ jobs:
           REF=${{github.sha}}
           git fetch origin ${REF}
           git checkout ${REF}
+
+          # Perform checkout
+          REPO_URL="https://github.com/redis/redis.git"
+          # Clone the repository to the current directory
+          git clone --recurse-submodules --depth=1 $REPO_URL redis
+          cd redis
+          git fetch origin ${{needs.prepare-values.outputs.redis-ref}}
+          git checkout ${{needs.prepare-values.outputs.redis-ref}}
       - name: Setup Python for testing
         if: matrix.docker.image == 'ubuntu:jammy'
         uses: actions/setup-python@v5
@@ -140,28 +148,29 @@ jobs:
           ${{ matrix.docker.install_deps }}
         env:
           DEBIAN_FRONTEND: noninteractive
-      - name: Get Redis
-        run: |
-          # Perform checkout
-          REPO_URL="https://github.com/redis/redis.git"
-          # Clone the repository to the current directory
-          git clone --recurse-submodules --depth=1 $REPO_URL redis
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
+        with: 
+          use-venv: '1'
       - name: build
         uses: ./.github/actions/build-module-and-redis
-      - name: Test
-        run: |
-          make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer && 'addr' || ''}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        with:
+          use-venv: '1'
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: '1'
+          quick: '1'
+      - name: Upload test artifacts
+        if: failure()
+        uses: ./.github/actions/upload-artifacts
+        with: 
+          image: ${{ matrix.docker.image }}
       - name: Pack module
-        run: |
-          . venv/bin/activate
-          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-          make pack BRANCH=$TAG_OR_BRANCH SHOW=1
+        uses: ./.github/actions/pack-module
+        with:
+          use-venv: '1'
       - name: Upload artifacts to S3
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           github-ref: ${{ github.ref }}
