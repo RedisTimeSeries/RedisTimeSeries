@@ -54,6 +54,8 @@ jobs:
           git checkout ${{needs.prepare-values.outputs.redis-ref}}
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
+        with: 
+          use-venv: '0'
       - name: Build Redis
         working-directory: redis
         run: make install

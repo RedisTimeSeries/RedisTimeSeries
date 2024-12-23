@@ -6,7 +6,6 @@ permissions:
 
 on:
   pull_request:
-  push:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,11 +15,11 @@ jobs:
   # linter:
   #   uses: ./.github/workflows/flow-linter.yml
   #   secrets: inherit
-  build-linux-x86:
-    uses: ./.github/workflows/flow-linux-x86.yml
-    with:
-      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2
-      redis-ref: ${{inputs.redis-ref || 'unstable'}}
+  # build-linux-x86:
+  #   uses: ./.github/workflows/flow-linux-x86.yml
+  #   with:
+  #     os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2
+  #     redis-ref: ${{inputs.redis-ref || 'unstable'}}
   mariner:
     uses: ./.github/workflows/mariner2.yml
     with:
