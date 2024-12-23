@@ -68,6 +68,7 @@ jobs:
       TAG: ${{ steps.set-env.outputs.TAG }}
       BRANCH: ${{ steps.set-env.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ steps.set-env.outputs.TAG }}${{ steps.set-env.outputs.BRANCH }}
+      os: ${{ steps.set-matrix.outputs.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
