@@ -10,6 +10,10 @@ inputs:
     type: string
     description: "Specify whether to use the environment or not"
     default: '0'
+  extra-packages-to-install:
+    type: string
+    default: ''
+    require: false
   
   
 
@@ -32,6 +36,9 @@ runs:
         fi
         echo ::group::Install python dependencies
           ./.install/common_installations.sh
+          if [[ "${{inputs.extra-packages-to-install}}" != "" ]]; then
+            pip install ${{extra-packages-to-install}}
+          fi
           if [[ "${{inputs.call-setup}}" == "1" ]]; then
             ./sbin/setup
           fi
