@@ -37,7 +37,7 @@ runs:
         echo ::group::Install python dependencies
           ./.install/common_installations.sh
           if [[ "${{inputs.extra-packages-to-install}}" != "" ]]; then
-            pip install ${{extra-packages-to-install}}
+            pip install ${{inputs.extra-packages-to-install}}
           fi
           if [[ "${{inputs.call-setup}}" == "1" ]]; then
             ./sbin/setup
