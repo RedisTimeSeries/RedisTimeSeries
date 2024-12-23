@@ -165,16 +165,18 @@ jobs:
           quick: '1'
           run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
           run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
-      # - name: Upload test artifacts
-      #   if: failure()
-      #   uses: ./.github/actions/upload-artifacts
-      #   with: 
-      #     image: ${{ matrix.docker_image.image }}
-      # - name: Pack module
-      #   uses: ./.github/actions/pack-module
-      # - name: Upload artifacts to S3
-      #   uses: ./.github/actions/upload-artifacts-to-s3-without-make
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     github-ref: ${{ github.ref }}
+      - name: Upload test artifacts
+        if: failure()
+        uses: ./.github/actions/upload-artifacts
+        with: 
+          image: ${{ matrix.docker_image.image }}
+      - name: Pack module
+        uses: ./.github/actions/pack-module
+        with:
+          use-venv: ${{matrix.docker_image.use-venv}}
+      - name: Upload artifacts to S3
+        uses: ./.github/actions/upload-artifacts-to-s3-without-make
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          github-ref: ${{ github.ref }}

@@ -97,7 +97,7 @@ jobs:
     steps:
       - name: Install prerequisites
         run: |
-          brew install make coreutils
+          brew install make coreutils autoconf automake pyenv-virtualenv libtool
       - name: Full checkout
         uses: actions/checkout@v4
         with:
@@ -114,15 +114,26 @@ jobs:
         run: ./install_script.sh
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
-      - name: Build and test
-        uses: ./.github/actions/build-and-test-macos
+        with: 
+          use-venv: '1'
+      - name: build
+        uses: ./.github/actions/build-module-and-redis
+        with:
+          use-venv: '1'
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: '1'
+          quick: '1'
       - name: Upload test artifacts
         if: failure()
         uses: ./.github/actions/upload-artifacts
         with: 
-          image: ${{ matrix.os }}
+          image: ${{ matrix.docker_image.image }}
       - name: Pack module
         uses: ./.github/actions/pack-module
+        with:
+          use-venv: '1'
       - name: Upload artifacts to S3
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:

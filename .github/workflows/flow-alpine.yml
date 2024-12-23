@@ -68,8 +68,9 @@ jobs:
           use-venv: '1'
           quick: '1'
       - name: Pack module
-        run: |
-          make pack BRANCH=${{ github.ref_name }}
+        uses: ./.github/actions/pack-module
+        with:
+          use-venv: '1'
       - name: Upload artifacts to S3
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
