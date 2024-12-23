@@ -62,9 +62,11 @@ jobs:
       - name: Build module
         run: |
           make build -j `nproc`
-      - name: Test
-        run: |
-          make test REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: '1'
+          quick: '1'
       - name: Pack module
         run: |
           make pack BRANCH=${{ github.ref_name }}
