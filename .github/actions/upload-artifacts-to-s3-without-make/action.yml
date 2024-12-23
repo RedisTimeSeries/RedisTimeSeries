@@ -14,12 +14,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::168085023892:role/GitHubRedisTimeSeriesS3Upload
-        role-session-name: GitHub_to_AWS_S3_Upload
-        aws-region: ${{ env.AWS_REGION }}
     - name: Configure AWS credentials and upload artifcats # todo - use aws role instead
       shell: bash
       run: |
