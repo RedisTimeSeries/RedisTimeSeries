@@ -53,18 +53,20 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #   secrets: inherit
-  # linux-valgrind:
-  #   uses: ./.github/workflows/flow-linux-x86.yml
-  #   with:
-  #     os: jammy
-  #     redis-ref: unstable
-  #     run_valgrind: true
-  #   secrets: inherit
-  # linux-sanitizer:
-  #   uses: ./.github/workflows/flow-linux-x86.yml
-  #   with:
-  #     os: jammy
-  #     redis-ref: unstable
-  #     run_sanitizer: true
-  #   secrets: inherit
+    secrets: inherit
+  linux-valgrind:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      run_valgrind: true
+    secrets: inherit
+  linux-sanitizer:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      run_sanitizer: true
+    secrets: inherit
