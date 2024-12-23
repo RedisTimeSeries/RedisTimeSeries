@@ -21,6 +21,10 @@ jobs:
     with:
       os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 mariner2
       redis-ref: ${{inputs.redis-ref || 'unstable'}}
+  mariner:
+    uses: ./.github/workflows/mariner2.yml
+    with:
+      redis-ref: ${{inputs.redis-ref || 'unstable'}}
     secrets: inherit
   # ubuntu-arm64:
   #   uses: ./.github/workflows/flow-ubuntu-arm.yml
