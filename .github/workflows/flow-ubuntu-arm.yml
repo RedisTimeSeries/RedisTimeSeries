@@ -20,7 +20,7 @@ on:
 
 
 jobs:
-  prepare-values:
+  setup-environment:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -40,7 +40,7 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
   ubuntu-arm64:
     runs-on: ubuntu24-arm64-4-16 # ubuntu24-arm64-2-8
-    needs: prepare-values
+    needs: setup-environment
     strategy:
       matrix:
         docker:
@@ -135,8 +135,8 @@ jobs:
           # Clone the repository to the current directory
           git clone --recurse-submodules --depth=1 $REPO_URL redis
           cd redis
-          git fetch origin ${{needs.prepare-values.outputs.redis-ref}}
-          git checkout ${{needs.prepare-values.outputs.redis-ref}}
+          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
+          git checkout ${{needs.setup-environment.outputs.redis-ref}}
       - name: Setup Python for testing
         if: matrix.docker.image == 'ubuntu:jammy'
         uses: actions/setup-python@v5

@@ -8,7 +8,7 @@ on:
         required: true
 
 jobs:
-  prepare-values:
+  setup-environment:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -28,7 +28,7 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
   build-mariner2:
     runs-on: ubuntu-latest
-    needs: prepare-values
+    needs: setup-environment
     defaults:
       run:
         shell: bash -l -o pipefail {0}
