@@ -3,6 +3,12 @@ description: |
   Uploads module artifacts to S3 bucket.
 
 inputs:
+  aws-access-key-id:
+    description: 'AWS Access Key ID'
+    required: false
+  aws-secret-access-key:
+    description: 'AWS Secret Access Key'
+    required: false
   github-ref:
     description: 'GitHub ref'
     required: true
