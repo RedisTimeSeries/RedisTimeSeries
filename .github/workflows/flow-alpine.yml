@@ -87,11 +87,11 @@ jobs:
       - name: Build module
         run: |
           make build -j `nproc`
-      # - name: Run tests
-      #   uses: ./.github/actions/run-tests
-      #   with: 
-      #     use-venv: '1'
-      #     quick: '1'
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: '1'
+          quick: '1'
       - name: Pack module
         uses: ./.github/actions/pack-module
         with:
