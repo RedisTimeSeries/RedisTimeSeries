@@ -81,6 +81,10 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           use-venv: '1'
+      - name: Upload artifacts to S3
+        uses: ./.github/actions/upload-artifacts-to-s3-without-make
+        with:
+          github-ref: ${{ github.ref }}
       - name: Build Redis
         working-directory: redis
         run: make install
