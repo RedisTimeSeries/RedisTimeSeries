@@ -51,8 +51,10 @@ runs:
           echo ::endgroup::
           
           echo ::group::upload production release
-            # todo: trigger this manually instead
-            if [[ "${{ inputs.github-ref}}" != 'refs/heads/master' ]]; then
+            REF="${{ inputs.github-ref }}"
+            PATTERN="refs/tags/v[0-9]+.*"
+            if [[ $REF =~ $PATTERN ]]; then
+              echo "This is a tagged build"
               RELEASE=1 SHOW=1 VERBOSE=1 ./sbin/upload-artifacts
             fi
           echo ::endgroup::
