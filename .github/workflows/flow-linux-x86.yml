@@ -159,6 +159,7 @@ jobs:
           REF=${{github.sha}}
           git fetch origin ${REF}
           git checkout ${REF}
+          git submodule update
 
           # Perform checkout
           REPO_URL="https://github.com/redis/redis.git"
@@ -167,6 +168,7 @@ jobs:
           cd redis
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
+          git submodule update
       - name: Setup
         working-directory: .install
         shell: bash
