@@ -2,3 +2,4 @@ addict
 toml
 jinja2
 ramp-packer==2.5.10
+jwt
