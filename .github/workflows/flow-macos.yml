@@ -37,6 +37,10 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
   workflow_call:
   # the defaults and options here are the same likes in "workflow_dispatch"
     inputs:
@@ -56,6 +60,10 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
 
 
 jobs:
@@ -137,12 +145,12 @@ jobs:
         uses: ./.github/actions/run-tests
         with: 
           use-venv: '1'
-          quick: '1'
+          quick: ${{inputs.quick && '1' || '0'}}
       - name: Upload test artifacts
         if: failure()
         uses: ./.github/actions/upload-artifacts
         with: 
-          image: ${{ matrix.docker_image.image }}
+          image: ${{ matrix.os }}
       - name: Pack module
         uses: ./.github/actions/pack-module
         with:

@@ -11,12 +11,20 @@ on:
         description: 'Redis ref to checkout'
         required: true
         default: 'unstable'
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
   workflow_call: # Allows to run this workflow from another workflow
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
         type: string
         required: true
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
 
 jobs:
   prepare-values:
@@ -90,7 +98,7 @@ jobs:
         uses: ./.github/actions/run-tests
         with: 
           use-venv: '1'
-          quick: '1'
+          quick: ${{inputs.quick && '1' || '0'}}
       - name: Pack module
         uses: ./.github/actions/pack-module
         with:

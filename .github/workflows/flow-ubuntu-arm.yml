@@ -11,19 +11,26 @@ on:
         description: 'Redis ref to checkout'
         required: true
         default: 'unstable'
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
   workflow_call: # Allows to run this workflow from another workflow
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
         type: string
         required: true
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
 
 
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       TAGGED: ${{ steps.set-env.outputs.TAGGED }}
       TAG: ${{ steps.set-env.outputs.TAG }}
@@ -160,7 +167,7 @@ jobs:
         uses: ./.github/actions/run-tests
         with: 
           use-venv: '1'
-          quick: '1'
+          quick: ${{inputs.quick && '1' || '0'}}
       - name: Upload test artifacts
         if: failure()
         uses: ./.github/actions/upload-artifacts

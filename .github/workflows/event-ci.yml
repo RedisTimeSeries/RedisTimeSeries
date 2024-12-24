@@ -30,18 +30,21 @@ jobs:
     with:
       os: jammy rocky9 bullseye amazonlinux2
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
     secrets: inherit
   mariner:
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
     secrets: inherit
   alpine:
     uses: ./.github/workflows/flow-alpine.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux-x86.yml
@@ -49,6 +52,7 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
       run_valgrind: true
     secrets: inherit
   linux-sanitizer:
@@ -57,5 +61,6 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
       run_sanitizer: true
     secrets: inherit

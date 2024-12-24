@@ -6,12 +6,15 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
 
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       TAGGED: ${{ steps.set-env.outputs.TAGGED }}
       TAG: ${{ steps.set-env.outputs.TAG }}
@@ -60,7 +63,7 @@ jobs:
         working-directory: redis
         run: make install
       - name: Build and test TS
-        run: make test
+        run: make test QUICK=${{inputs.quick && '1' || '0'}}
       - name: Pack module
         uses: ./.github/actions/pack-module
         with:
