@@ -81,12 +81,6 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           use-venv: '1'
-      - name: Upload artifacts to S3
-        uses: ./.github/actions/upload-artifacts-to-s3-without-make
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          github-ref: ${{ github.ref }}
       - name: Build Redis
         working-directory: redis
         run: make install
@@ -105,4 +99,6 @@ jobs:
       - name: Upload artifacts to S3
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           github-ref: ${{ github.ref }}
