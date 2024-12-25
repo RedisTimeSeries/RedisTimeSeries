@@ -1,5 +1,5 @@
 RLTest==0.7.5
 redis~=5.0.8
 statistics
-# hiredis==2.0.0  # disabled until RESP3-related problem is resolved
+hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 #gevent~=22.10.1
