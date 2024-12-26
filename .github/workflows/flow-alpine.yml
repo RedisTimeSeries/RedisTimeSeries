@@ -83,9 +83,8 @@ jobs:
           # Clone the repository to the current directory
           git clone --recurse-submodules --depth=1 $REPO_URL redis
           cd redis
-          git fetch
-          git checkout ${{needs.prepare-values.outputs.redis-ref}}
-          git submodule update
+          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
+          git checkout ${{needs.setup-environment.outputs.redis-ref}}
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
         with: 
