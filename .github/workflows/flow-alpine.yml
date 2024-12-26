@@ -51,10 +51,10 @@ jobs:
       run:
         shell: bash
     env:
-      TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
-      VERSION: ${{ needs.setup-environment.outputs.TAG }}
-      BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
-      TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
+      TAGGED: ${{ needs.prepare-values.outputs.TAGGED }}
+      VERSION: ${{ needs.prepare-values.outputs.TAG }}
+      BRANCH: ${{ needs.prepare-values.outputs.BRANCH }}
+      TAG_OR_BRANCH: ${{ needs.prepare-values.outputs.TAG_OR_BRANCH}}
       PIP_BREAK_SYSTEM_PACKAGES: 1
     container:
       image: alpine:3
@@ -83,8 +83,8 @@ jobs:
           # Clone the repository to the current directory
           git clone --recurse-submodules --depth=1 $REPO_URL redis
           cd redis
-          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
-          git checkout ${{needs.setup-environment.outputs.redis-ref}}
+          git fetch origin ${{needs.prepare-values.outputs.redis-ref}}
+          git checkout ${{needs.prepare-values.outputs.redis-ref}}
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
         with: 
