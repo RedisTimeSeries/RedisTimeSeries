@@ -174,7 +174,7 @@ jobs:
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           echo ::endgroup::
           echo ::group::checkout ${{needs.setup-environment.outputs.redis-ref}}
-          git checkout ${{needs.setup-environment.outputs.redis-ref}}
+          git checkout origin/${{needs.setup-environment.outputs.redis-ref}}
           echo ::endgroup::
       - name: Setup
         working-directory: .install
