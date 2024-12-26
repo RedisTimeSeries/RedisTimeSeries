@@ -167,7 +167,7 @@ jobs:
           # Perform checkout
           REPO_URL="https://github.com/redis/redis.git"
           # Clone the repository to the current directory
-          git clone --recurse-submodules --depth=1 $REPO_URL redis
+          git clone --recurse-submodules $REPO_URL redis
           cd redis
           echo ::endgroup::
           echo ::group::fetch redis
