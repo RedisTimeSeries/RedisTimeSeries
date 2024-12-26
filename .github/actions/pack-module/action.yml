@@ -1,6 +1,7 @@
 name: Run pack module script
 
-use-venv:
+inputs:
+  use-venv:
     type: string
     description: "Specify whether to use the environment or not"
     default: '0'
