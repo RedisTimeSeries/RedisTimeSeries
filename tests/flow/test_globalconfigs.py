@@ -338,5 +338,48 @@ def test_module_config_from_module_arguments_raises_deprecation_messages(env):
         assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
         assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
-# @skip(onVersionLowerThan='7.0', on_cluster=True)
-# def test_module_config_takes_precedence_over_module_arguments(env):
+@skip(onVersionLowerThan='7.0', on_cluster=True)
+def test_module_config_takes_precedence_over_module_arguments(env):
+    '''
+    Tests that using the deprecated module configuration options
+    (module arguments) while also using the the module configuration API
+    leads to the latter taking precedence.
+    '''
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    args = [
+        'CHUNK_TYPE', 'compressed',
+        'ENCODING', 'compressed',
+        'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d',
+        'DUPLICATE_POLICY', 'MAX',
+        'IGNORE_MAX_TIME_DIFF', '10',
+        'IGNORE_MAX_VAL_DIFF', '10',
+        'RETENTION_POLICY', '30',
+        'CHUNK_SIZE_BYTES', '2048',
+        'OSS_GLOBAL_PASSWORD', 'test',
+    ]
+
+    configFileContent = """
+    timeseries.ts-ignore-max-time-diff 20
+    timeseries.ts-chunk-size-bytes 4096
+    timeseries.ts-retention-policy 40
+    timeseries.ts-duplicate-policy last
+    timeseries.ts-compaction-policy max:1m:1d
+    timeseries.ts-encoding uncompressed
+    timeseries.global-password test2
+    """
+
+    env = Env(moduleArgs=args, redisConfigFileContent=configFileContent)
+    assert is_line_in_server_log(env, " is deprecated, please use")
+    assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+
+    with env.getConnection() as conn:
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-time-diff')[1], b'20')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-chunk-size-bytes')[1], b'4096')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-retention-policy')[1], b'40')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-duplicate-policy')[1], b'last')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-compaction-policy')[1], b'max:1m:1d')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-encoding')[1], b'uncompressed')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.global-password')[1], b'test2')

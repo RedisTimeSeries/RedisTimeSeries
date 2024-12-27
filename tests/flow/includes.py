@@ -8,6 +8,7 @@ import redis
 import pytest
 import signal
 import time
+import tempfile
 from functools import wraps
 
 try:
@@ -76,6 +77,9 @@ def verifyClusterInitialized(env):
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:
         kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
+    if 'redisConfigFileContent' in kwargs:
+        kwargs['redisConfigFile'] = create_config_file(kwargs['redisConfigFileContent'])
+        del kwargs['redisConfigFileContent']
     env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
     if not RLEC_CLUSTER:
         for shard in range(0, env.shardsCount):
@@ -174,3 +178,10 @@ def is_line_in_server_log(env, line):
             if line in file_line:
                 return True
     return False
+
+# Creates a temporary file with the content provided.
+# Returns the filepath of the created file.
+def create_config_file(content) -> str:
+    with tempfile.NamedTemporaryFile(prefix='temp-redis-config', delete=False, dir=f"{os.getcwd()}/logs/") as f:
+        f.write(content.encode())
+        return f.name
