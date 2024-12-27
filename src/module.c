@@ -1657,7 +1657,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     InitConfig();
-    if (ReadDeprecatedLoadTimeConfig(ctx, argv, argc) == TSDB_ERROR) {
+
+    const bool moduleConfigurationApiSupported = RTS_RedisSupportsModuleConfigApi();
+    if (ReadDeprecatedLoadTimeConfig(ctx, argv, argc, moduleConfigurationApiSupported) ==
+        TSDB_ERROR) {
         RedisModule_Log(
             ctx,
             "warning",
@@ -1665,15 +1668,18 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (!RegisterConfigurationOptions(ctx)) {
-        RedisModule_Log(
-            ctx, "warning", "Failed to register the RedisTimeSeries configurations. aborting...");
-        return REDISMODULE_ERR;
-    }
+    if (moduleConfigurationApiSupported) {
+        if (!RegisterConfigurationOptions(ctx)) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Failed to register the RedisTimeSeries configurations. aborting...");
+            return REDISMODULE_ERR;
+        }
 
-    if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Failed to load the RedisTimeSeries configurations.");
-        return REDISMODULE_ERR;
+        if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Failed to load the RedisTimeSeries configurations.");
+            return REDISMODULE_ERR;
+        }
     }
 
     initGlobalCompactionFunctions();

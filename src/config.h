@@ -49,7 +49,10 @@ extern TSConfig TSGlobalConfig;
 void InitConfig();
 RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx);
 bool RegisterConfigurationOptions(RedisModuleCtx *ctx);
-int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
+                                 RedisModuleString **argv,
+                                 int argc,
+                                 const bool showDeprecationWarning);
 const char *ChunkTypeToString(int options);
 typedef struct RTS_RedisVersion
 {
@@ -66,10 +69,21 @@ extern int RTS_RlecMinorVersion;
 extern int RTS_RlecPatchVersion;
 extern int RTS_RlecBuild;
 
-static inline int RTS_IsEnterprise() {
+static inline int RTS_IsEnterprise(void) {
     return RTS_RlecMajorVersion != -1;
 }
 
-int RTS_CheckSupportedVestion();
-void RTS_GetRedisVersion();
+/*
+ * Returns true if the current version of Redis supports the module
+ * configuration API.
+ */
+static inline bool RTS_RedisSupportsModuleConfigApi(void) {
+    return RTS_currVersion.redisMajorVersion >= 7 && RedisModule_RegisterEnumConfig &&
+           RedisModule_RegisterBoolConfig && RedisModule_RegisterStringConfig &&
+           RedisModule_RegisterNumericConfig && RedisModule_LoadConfigs;
+}
+
+int RTS_CheckSupportedVestion(void);
+void RTS_GetRedisVersion(void);
+
 #endif
