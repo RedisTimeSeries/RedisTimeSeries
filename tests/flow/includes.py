@@ -114,7 +114,13 @@ def decode_if_needed(data):
     else:
         return data
 
-def is_redis_version_smaller_than(con, _version, is_cluster=False):
+def _version_from_string(version_string):
+    if sys.version_info[1] > 12:
+        return version.Version(version_string)
+    else:
+        return version.parse(version_string)
+
+def get_redis_version(con, is_cluster=False):
     res = con.execute_command('INFO')
     ver = ""
     if is_cluster:
@@ -125,9 +131,18 @@ def is_redis_version_smaller_than(con, _version, is_cluster=False):
         #print(((list(res.values()))[0]))
     else:
         ver = res['redis_version']
-    return (version.parse(ver) < version.parse(_version))
 
-def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None):
+    return _version_from_string(ver)
+
+def is_redis_version_lower_than(con, _version, is_cluster=False):
+    version = get_redis_version(con, is_cluster)
+    return (version < _version_from_string(_version))
+
+def is_redis_version_higher_than(con, _version, is_cluster=False):
+    version = get_redis_version(con, is_cluster)
+    return (version > _version_from_string(_version))
+
+def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, onVersionHigherThan=None):
     def decorate(f):
         @wraps(f)
         def wrapper(x, *args, **kwargs):
@@ -140,8 +155,22 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLo
                 env.skip()
             if asan and SANITIZER == 'address':
                 env.skip()
-            if onVersionLowerThan and is_redis_version_smaller_than(env, onVersionLowerThan, env.isCluster()):
+            if onVersionLowerThan and is_redis_version_lower_than(env, onVersionLowerThan, env.isCluster()):
+                env.skip()
+            if onVersionHigherThan and is_redis_version_higher_than(env, onVersionHigherThan, env.isCluster()):
                 env.skip()
             return f(x, *args, **kwargs)
         return wrapper
     return decorate
+
+def get_server_log_path(env):
+    path = env.getConnection().execute_command('CONFIG', 'GET', 'logfile')[1].decode()
+    return os.path.abspath(f"{env.logDir}/{path}")
+
+def is_line_in_server_log(env, line):
+    path = get_server_log_path(env)
+    with open(path) as file:
+        for file_line in file:
+            if line in file_line:
+                return True
+    return False

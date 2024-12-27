@@ -117,13 +117,15 @@ int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
                    int argc,
                    const char *arg_prefix,
-                   long long *chunkSizeBytes);
+                   long long *chunkSizeBytes,
+                   bool *found);
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy);
+                         DuplicatePolicy *policy,
+                         bool *found);
 
 int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options);
 

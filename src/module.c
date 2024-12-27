@@ -725,7 +725,8 @@ static inline int add(RedisModuleCtx *ctx,
         series = RedisModule_ModuleTypeGetValue(key);
         //  overwride key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
-            ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp) != TSDB_OK) {
+            ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp, NULL) !=
+                TSDB_OK) {
             return REDISMODULE_ERR;
         }
     }
