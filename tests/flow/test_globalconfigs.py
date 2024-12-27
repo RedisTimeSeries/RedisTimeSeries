@@ -245,3 +245,98 @@ def test_negative_configuration():
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; global-user')
+
+@skip(onVersionLowerThan='6.2', onVersionHigherThan='7.0', on_cluster=True)
+def test_module_config_api_is_unused_on_old_versions(env):
+    '''
+    Tests that the module configuration API is not attempted to be used
+    on Redis versions older than 7.0 and no deprecation warnings are
+    emitted.
+    '''
+    skip_on_rlec()
+
+    with env.getConnection() as conn:
+        # with pytest.raises() as excinfo:
+        conn.execute_command('CONFIG', 'GET', 'global-user')
+        assert is_line_in_server_log(env, 'deprecated')
+
+@skip(onVersionLowerThan='7.0', on_cluster=True)
+def test_module_config_api_is_used_on_recent_redis_versions(env):
+    '''
+    Tests that the module configuration API is used on Redis versions
+    starting 7.0 and the deprecation warnings are emitted.
+    '''
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    with env.getConnection() as conn:
+        # String or floating-point value options:
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-compaction-policy')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.global-user')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.global-user', 'test')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.global-password')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.global-password', 'test')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-duplicate-policy')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-duplicate-policy', 'last')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-duplicate-policy', 'LAST')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-encoding')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-encoding', 'compressed')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-val-diff')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-val-diff', '10')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-val-diff', '10.0')
+
+        # Integer value options:
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-num-threads')
+
+        # Can't set an immutable config value.
+        with pytest.raises(redis.exceptions.ResponseError):
+            conn.execute_command('CONFIG', 'SET', 'timeseries.ts-num-threads', '2')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-retention-policy')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-retention-policy', '1')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-chunk-size-bytes')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-chunk-size-bytes', '2048')
+
+        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-time-diff')
+        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-time-diff', '5')
+
+        assert not is_line_in_server_log(env, 'is deprecated, please use')
+
+@skip(onVersionLowerThan='7.0', on_cluster=True)
+def test_module_config_from_module_arguments_raises_deprecation_messages(env):
+    '''
+    Tests that using the deprecated module configuration options
+    (module arguments) while the module configuration API is used at the
+    same time, leads to the deprecation messages.
+    '''
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    args = [
+        ['CHUNK_TYPE', 'compressed'],
+        ['ENCODING', 'compressed'],
+        ['COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'],
+        ['DUPLICATE_POLICY', 'MAX'],
+        ['IGNORE_MAX_TIME_DIFF', '10'],
+        ['IGNORE_MAX_VAL_DIFF', '10'],
+        ['RETENTION_POLICY', '30'],
+        ['CHUNK_SIZE_BYTES', '2048'],
+        ['OSS_GLOBAL_PASSWORD', 'test'],
+    ]
+
+    for arg in args:
+        env = Env(moduleArgs=f"{arg[0]} {arg[1]}")
+        assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
+        assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+
+# @skip(onVersionLowerThan='7.0', on_cluster=True)
+# def test_module_config_takes_precedence_over_module_arguments(env):

@@ -66,7 +66,8 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy);
+                         DuplicatePolicy *policy,
+                         bool *found);
 
 const char *ChunkTypeToString(int options) {
     if (options & SERIES_OPT_UNCOMPRESSED) {
@@ -82,23 +83,35 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
     if (!strcasecmp("ts-compaction-policy", name)) {
         char *rulesAsString = CompactionRulesToString(TSGlobalConfig.compactionRules,
                                                       TSGlobalConfig.compactionRulesCount);
+
+        if (!rulesAsString) {
+            return NULL;
+        }
+
         RedisModuleString *out =
             RedisModule_CreateString(rts_staticCtx, rulesAsString, strlen(rulesAsString));
+
         free(rulesAsString);
 
         return out;
-    } else if (!strcasecmp("global-password", name)) {
+    } else if (!strcasecmp("global-password", name) && TSGlobalConfig.password) {
         return RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
-    } else if (!strcasecmp("global-user", name)) {
+    } else if (!strcasecmp("global-user", name) && TSGlobalConfig.username) {
         return RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.username, strlen(TSGlobalConfig.username));
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
         const char *value = DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy);
-        return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        if (value) {
+            return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+        }
     } else if (!strcasecmp("ts-encoding", name)) {
         const char *value = ChunkTypeToString(TSGlobalConfig.options);
-        return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        if (value) {
+            return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+        }
     } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
         return RedisModule_CreateStringPrintf(
             rts_staticCtx, "%lf", TSGlobalConfig.ignoreMaxValDiff);
@@ -566,22 +579,44 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         return TSDB_ERROR;
     }
     TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
-    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE_BYTES", &TSGlobalConfig.chunkSizeBytes) !=
-        REDISMODULE_OK) {
+    bool chunkSizeBytesFound = false;
+    if (ParseChunkSize(ctx,
+                       argv,
+                       argc,
+                       "CHUNK_SIZE_BYTES",
+                       &TSGlobalConfig.chunkSizeBytes,
+                       &chunkSizeBytesFound) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
         return TSDB_ERROR;
     }
+
     RedisModule_Log(ctx,
                     "notice",
                     "loaded default CHUNK_SIZE_BYTES policy: %lld",
                     TSGlobalConfig.chunkSizeBytes);
 
+    LOG_DEPRECATED_OPTION(
+        "CHUNK_SIZE_BYTES", "ts-chunk-size-bytes", chunkSizeBytesFound && showDeprecationWarning);
+
+    isDeprecated = isDeprecated || chunkSizeBytesFound;
+
     TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
-    if (ParseDuplicatePolicy(
-            ctx, argv, argc, DUPLICATE_POLICY_ARG, &TSGlobalConfig.duplicatePolicy) != TSDB_OK) {
+    bool duplicatePolicyFound = false;
+    if (ParseDuplicatePolicy(ctx,
+                             argv,
+                             argc,
+                             DUPLICATE_POLICY_ARG,
+                             &TSGlobalConfig.duplicatePolicy,
+                             &duplicatePolicyFound) != TSDB_OK) {
         RedisModule_Log(ctx, "warning", "Unable to parse argument after DUPLICATE_POLICY");
         return TSDB_ERROR;
     }
+
+    isDeprecated = isDeprecated || duplicatePolicyFound;
+
+    LOG_DEPRECATED_OPTION(
+        "DUPLICATE_POLICY", "ts-duplicate-policy", duplicatePolicyFound && showDeprecationWarning);
+
     RedisModule_Log(ctx,
                     "notice",
                     "loaded server DUPLICATE_POLICY: %s",
@@ -591,7 +626,13 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
                      RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0)) {
         isDeprecated = true;
 
+        if (RMUtil_ArgIndex("ENCODING", argv, argc) >= 0) {
+            LOG_DEPRECATED_OPTION("ENCODING", "ts-encoding", showDeprecationWarning);
+        }
+
         if (RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0) {
+            LOG_DEPRECATED_OPTION("CHUNK_TYPE", "ts-encoding", showDeprecationWarning);
+
             RedisModule_Log(ctx,
                             "warning",
                             "CHUNK_TYPE and ENCODING configuration options were deprecated "
@@ -628,7 +669,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
         if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &TSGlobalConfig.numThreads) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after NUM_THREADS");
             return TSDB_ERROR;
         }
         LOG_DEPRECATED_OPTION("NUM_THREADS", "ts-num-threads", showDeprecationWarning);

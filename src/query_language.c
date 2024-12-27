@@ -98,8 +98,13 @@ int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
                    int argc,
                    const char *arg_prefix,
-                   long long *chunkSizeBytes) {
+                   long long *chunkSizeBytes,
+                   bool *found) {
     if (RMUtil_ArgIndex(arg_prefix, argv, argc) >= 0) {
+        if (found) {
+            *found = true;
+        }
+
         if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "l", chunkSizeBytes) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
             return TSDB_ERROR;
@@ -117,9 +122,14 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy) {
+                         DuplicatePolicy *policy,
+                         bool *found) {
     RedisModuleString *duplicationPolicyInput = NULL;
     if (RMUtil_ArgIndex(arg_prefix, argv, argc) != -1) {
+        if (found) {
+            *found = true;
+        }
+
         if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "s", &duplicationPolicyInput) !=
             REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse DUPLICATE_POLICY");
@@ -188,7 +198,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
-    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes) != TSDB_OK) {
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes, NULL) != TSDB_OK) {
         goto err_exit;
     }
 
@@ -197,7 +207,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     cCtx->duplicatePolicy = DP_NONE;
-    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
+    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy, NULL) !=
         TSDB_OK) {
         goto err_exit;
     }

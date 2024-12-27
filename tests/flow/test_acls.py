@@ -149,14 +149,14 @@ def test_non_local_data_when_the_user_has_access(env):
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
 def test_libmr_adds_acl_category(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
         env.skip()
 
     acl_category = '_timeseries_libmr_internal'
     env.expect('acl', 'cat').contains(acl_category.encode())
 
 def do_test_libmr(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
         env.skip()
 
     for shard in range(0, env.shardsCount):
@@ -200,7 +200,7 @@ def test_acl_libmr_username_with_password_in_config():
     do_test_libmr(env)
 
 def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
         env.skip()
 
     redisConfigFile = '/tmp/redis2.conf'

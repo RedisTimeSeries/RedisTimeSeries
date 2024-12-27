@@ -552,7 +552,7 @@ def test_del_with_rules_bug_4972_5(self):
     t1 = 't1{1}'
     t2 = 't2{1}'
     with e.getClusterConnectionIfNeeded() as r:
-        is_less_than_ver7_0_5 = is_redis_version_smaller_than(r, "7.0.5", e.is_cluster())
+        is_less_than_ver7_0_5 = is_redis_version_lower_than(r, "7.0.5", e.is_cluster())
         if is_less_than_ver7_0_5:
             return
         # data was taken from test_dump_restore_dst_rule on version TS_OVERFLOW_RDB_VER
@@ -584,7 +584,7 @@ def test_del_with_rules_bug_4972_6(self):
     t1 = 't1{1}'
     t2 = 't2{1}'
     with e.getClusterConnectionIfNeeded() as r:
-        is_less_than_ver7_0_5 = is_redis_version_smaller_than(r, "7.0.5", e.is_cluster())
+        is_less_than_ver7_0_5 = is_redis_version_lower_than(r, "7.0.5", e.is_cluster())
         if is_less_than_ver7_0_5:
             return
         # data was taken from test_dump_restore_dst_rule on version TS_OVERFLOW_RDB_VER
