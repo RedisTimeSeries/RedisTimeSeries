@@ -314,10 +314,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     {
         char *oldValue = CompactionRulesToString(TSGlobalConfig.compactionRules,
                                                  TSGlobalConfig.compactionRulesCount);
-        bool shouldFree = false;
         if (!oldValue) {
             oldValue = strdup("");
-            shouldFree = true;
         }
 
         if (RedisModule_RegisterStringConfig(ctx,
@@ -328,16 +326,12 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
                                              setModernStringConfigValue,
                                              NULL,
                                              NULL)) {
-            if (shouldFree) {
-                free(oldValue);
-            }
+            free(oldValue);
 
             return false;
         }
 
-        if (shouldFree) {
-            free(oldValue);
-        }
+        free(oldValue);
     }
 
     {
