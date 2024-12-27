@@ -256,9 +256,11 @@ def test_module_config_api_is_unused_on_old_versions(env):
     skip_on_rlec()
 
     with env.getConnection() as conn:
-        # with pytest.raises() as excinfo:
-        conn.execute_command('CONFIG', 'GET', 'global-user')
-        assert is_line_in_server_log(env, 'deprecated')
+        # It should return an empty array as the option is not supported.
+        # The command should not raise an exception and no deprecation
+        # warnings should be emitted.
+        conn.execute_command('CONFIG', 'GET', 'ts-global-user')
+        assert not is_line_in_server_log(env, 'ts-global-user is deprecated, please use ')
 
 @skip(onVersionLowerThan='7.0', on_cluster=True)
 def test_module_config_api_is_used_on_recent_redis_versions(env):
@@ -272,41 +274,41 @@ def test_module_config_api_is_used_on_recent_redis_versions(env):
     # check that no exception is raised, no crashes observed and so on.
     with env.getConnection() as conn:
         # String or floating-point value options:
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-compaction-policy')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
+        conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.global-user')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.global-user', 'test')
+        conn.execute_command('CONFIG', 'GET', 'ts-global-user')
+        conn.execute_command('CONFIG', 'SET', 'ts-global-user', 'test')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.global-password')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.global-password', 'test')
+        conn.execute_command('CONFIG', 'GET', 'ts-global-password')
+        conn.execute_command('CONFIG', 'SET', 'ts-global-password', 'test')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-duplicate-policy')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-duplicate-policy', 'last')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-duplicate-policy', 'LAST')
+        conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'last')
+        conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'LAST')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-encoding')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-encoding', 'compressed')
+        conn.execute_command('CONFIG', 'GET', 'ts-encoding')
+        conn.execute_command('CONFIG', 'SET', 'ts-encoding', 'compressed')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-val-diff')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-val-diff', '10')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-val-diff', '10.0')
+        conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-val-diff')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-val-diff', '10')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-val-diff', '10.0')
 
         # Integer value options:
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-num-threads')
+        conn.execute_command('CONFIG', 'GET', 'ts-num-threads')
 
         # Can't set an immutable config value.
         with pytest.raises(redis.exceptions.ResponseError):
-            conn.execute_command('CONFIG', 'SET', 'timeseries.ts-num-threads', '2')
+            conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '2')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-retention-policy')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-retention-policy', '1')
+        conn.execute_command('CONFIG', 'GET', 'ts-retention-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-retention-policy', '1')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-chunk-size-bytes')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-chunk-size-bytes', '2048')
+        conn.execute_command('CONFIG', 'GET', 'ts-chunk-size-bytes')
+        conn.execute_command('CONFIG', 'SET', 'ts-chunk-size-bytes', '2048')
 
-        conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-time-diff')
-        conn.execute_command('CONFIG', 'SET', 'timeseries.ts-ignore-max-time-diff', '5')
+        conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-time-diff')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-time-diff', '5')
 
         assert not is_line_in_server_log(env, 'is deprecated, please use')
 
@@ -362,13 +364,13 @@ def test_module_config_takes_precedence_over_module_arguments(env):
     ]
 
     configFileContent = """
-    timeseries.ts-ignore-max-time-diff 20
-    timeseries.ts-chunk-size-bytes 4096
-    timeseries.ts-retention-policy 40
-    timeseries.ts-duplicate-policy last
-    timeseries.ts-compaction-policy max:1m:1d
-    timeseries.ts-encoding uncompressed
-    timeseries.global-password test2
+    ts-ignore-max-time-diff 20
+    ts-chunk-size-bytes 4096
+    ts-retention-policy 40
+    ts-duplicate-policy last
+    ts-compaction-policy max:1m:1d
+    ts-encoding uncompressed
+    ts-global-password test2
     """
 
     env = Env(moduleArgs=args, redisConfigFileContent=configFileContent)
@@ -376,10 +378,10 @@ def test_module_config_takes_precedence_over_module_arguments(env):
     assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
     with env.getConnection() as conn:
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-ignore-max-time-diff')[1], b'20')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-chunk-size-bytes')[1], b'4096')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-retention-policy')[1], b'40')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-duplicate-policy')[1], b'last')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-compaction-policy')[1], b'max:1m:1d')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.ts-encoding')[1], b'uncompressed')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'timeseries.global-password')[1], b'test2')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-time-diff')[1], b'20')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-chunk-size-bytes')[1], b'4096')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-retention-policy')[1], b'40')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-global-password')[1], b'test2')
