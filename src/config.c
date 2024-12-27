@@ -20,12 +20,17 @@
 /*
  * Logs that a deprecated configuration option was used.
  */
-#define LOG_DEPRECATED_OPTION(deprecatedName, modernName)                                          \
-    RedisModule_Log(rts_staticCtx,                                                                 \
-                    "warning",                                                                     \
-                    "%s is deprecated, please use the '%s' instead",                               \
-                    deprecatedName,                                                                \
-                    modernName);
+#define LOG_DEPRECATED_OPTION(deprecatedName, modernName, show)                                    \
+    if (show) {                                                                                    \
+        RedisModule_Log(rts_staticCtx,                                                             \
+                        "warning",                                                                 \
+                        "%s is deprecated, please use the '%s' instead",                           \
+                        deprecatedName,                                                            \
+                        modernName);                                                               \
+    }
+
+#define LOG_DEPRECATED_OPTION_ALWAYS(deprecatedName, modernName)                                   \
+    LOG_DEPRECATED_OPTION(deprecatedName, modernName, true)
 
 TSConfig TSGlobalConfig;
 
@@ -100,15 +105,6 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
     }
 
     return NULL;
-}
-
-static RedisModuleString *getDeprecatedStringConfigValue(const char *deprecatedName,
-                                                         void *modernName) {
-    const char *modernNameStr = (const char *)modernName;
-
-    LOG_DEPRECATED_OPTION(deprecatedName, modernNameStr);
-
-    return getModernStringConfigValue(modernNameStr, NULL);
 }
 
 /*
@@ -265,17 +261,6 @@ static int setModernStringConfigValue(const char *name,
     return REDISMODULE_ERR;
 }
 
-static int setDeprecatedStringConfigValue(const char *deprecatedName,
-                                          RedisModuleString *value,
-                                          void *data,
-                                          RedisModuleString **err) {
-    const char *modernNameStr = (const char *)data;
-
-    LOG_DEPRECATED_OPTION(deprecatedName, modernNameStr);
-
-    return setModernStringConfigValue(modernNameStr, value, NULL, err);
-}
-
 static long long getModernIntegerConfigValue(const char *name, void *privdata) {
     if (!strcasecmp("ts-num-threads", name)) {
         return TSGlobalConfig.numThreads;
@@ -288,14 +273,6 @@ static long long getModernIntegerConfigValue(const char *name, void *privdata) {
     }
 
     return 0;
-}
-
-static long long getDeprecatedIntegerConfigValue(const char *deprecatedName, void *privdata) {
-    const char *modernNameStr = (const char *)privdata;
-
-    LOG_DEPRECATED_OPTION(deprecatedName, modernNameStr);
-
-    return getModernIntegerConfigValue(modernNameStr, NULL);
 }
 
 static int setModernIntegerConfigValue(const char *name,
@@ -331,132 +308,6 @@ static int setModernIntegerConfigValue(const char *name,
     }
 
     return REDISMODULE_ERR;
-}
-
-static int setDeprecatedIntegerConfigValue(const char *deprecatedName,
-                                           long long value,
-                                           void *data,
-                                           RedisModuleString **err) {
-    const char *modernNameStr = (const char *)data;
-
-    LOG_DEPRECATED_OPTION(deprecatedName, modernNameStr);
-
-    return setModernIntegerConfigValue(modernNameStr, value, NULL, err);
-}
-
-// Registers the options deprecated in 8.0.
-bool RegisterDeprecatedConfigurationOptions(RedisModuleCtx *ctx) {
-    if (RedisModule_RegisterStringConfig(ctx,
-                                         "OSS_GLOBAL_PASSWORD",
-                                         "",
-                                         REDISMODULE_CONFIG_IMMUTABLE |
-                                             REDISMODULE_CONFIG_SENSITIVE,
-                                         getDeprecatedStringConfigValue,
-                                         setDeprecatedStringConfigValue,
-                                         NULL,
-                                         "global-password")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterStringConfig(ctx,
-                                         "COMPACTION_POLICY",
-                                         "",
-                                         REDISMODULE_CONFIG_DEFAULT,
-                                         getDeprecatedStringConfigValue,
-                                         setDeprecatedStringConfigValue,
-                                         NULL,
-                                         "ts-compaction-policy")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterNumericConfig(ctx,
-                                          "NUM_THREADS",
-                                          DEFAULT_NUM_THREADS,
-                                          REDISMODULE_CONFIG_IMMUTABLE,
-                                          NUM_THREADS_MIN,
-                                          NUM_THREADS_MAX,
-                                          getDeprecatedIntegerConfigValue,
-                                          setDeprecatedIntegerConfigValue,
-                                          NULL,
-                                          "ts-num-threads")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterNumericConfig(ctx,
-                                          "RETENTION_POLICY",
-                                          RETENTION_TIME_DEFAULT,
-                                          REDISMODULE_CONFIG_DEFAULT,
-                                          RETENTION_POLICY_MIN,
-                                          RETENTION_POLICY_MAX,
-                                          getDeprecatedIntegerConfigValue,
-                                          setDeprecatedIntegerConfigValue,
-                                          NULL,
-                                          "ts-retention-policy")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterStringConfig(ctx,
-                                         "DUPLICATE_POLICY",
-                                         DEFAULT_DUPLICATE_POLICY_STRING,
-                                         REDISMODULE_CONFIG_DEFAULT,
-                                         getDeprecatedStringConfigValue,
-                                         setDeprecatedStringConfigValue,
-                                         NULL,
-                                         "ts-duplicate-policy")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterNumericConfig(ctx,
-                                          "CHUNK_SIZE_BYTES",
-                                          Chunk_SIZE_BYTES_SECS,
-                                          REDISMODULE_CONFIG_DEFAULT,
-                                          CHUNK_SIZE_BYTES_MIN,
-                                          CHUNK_SIZE_BYTES_MAX,
-                                          getDeprecatedIntegerConfigValue,
-                                          setDeprecatedIntegerConfigValue,
-                                          NULL,
-                                          "ts-chunk-size-bytes")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterStringConfig(ctx,
-                                         "ENCODING",
-                                         DEFAULT_ENCODING_STRING,
-                                         REDISMODULE_CONFIG_DEFAULT,
-                                         getDeprecatedStringConfigValue,
-                                         setDeprecatedStringConfigValue,
-                                         NULL,
-                                         "ts-encoding")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterNumericConfig(ctx,
-                                          "IGNORE_MAX_TIME_DIFF",
-                                          IGNORE_MAX_TIME_DIFF_DEFAULT,
-                                          REDISMODULE_CONFIG_DEFAULT,
-                                          IGNORE_MAX_TIME_DIFF_MIN,
-                                          IGNORE_MAX_TIME_DIFF_MAX,
-                                          getDeprecatedIntegerConfigValue,
-                                          setDeprecatedIntegerConfigValue,
-                                          NULL,
-                                          "ts-ignore-max-time-diff")) {
-        return false;
-    }
-
-    if (RedisModule_RegisterStringConfig(ctx,
-                                         "IGNORE_MAX_VAL_DIFF",
-                                         "0.0",
-                                         REDISMODULE_CONFIG_DEFAULT,
-                                         getDeprecatedStringConfigValue,
-                                         setDeprecatedStringConfigValue,
-                                         NULL,
-                                         "ts-ignore-max-val-diff")) {
-        return false;
-    }
-
-    RedisModule_Log(ctx, "debug", "Registered deprecated configuration options");
-
-    return true;
 }
 
 bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
@@ -623,17 +474,17 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 }
 
 bool RegisterConfigurationOptions(RedisModuleCtx *ctx) {
-    // return RegisterDeprecatedConfigurationOptions(ctx) &&
-    // RegisterModernConfigurationOptions(ctx);
     return RegisterModernConfigurationOptions(ctx);
-    // return RegisterDeprecatedConfigurationOptions(ctx);
 }
 
-int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
+                                 RedisModuleString **argv,
+                                 int argc,
+                                 const bool showDeprecationWarning) {
     bool isDeprecated = false;
 
     if (argc > 1 && RMUtil_ArgIndex("COMPACTION_POLICY", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("COMPACTION_POLICY", "ts-compaction-policy");
+        LOG_DEPRECATED_OPTION("COMPACTION_POLICY", "ts-compaction-policy", showDeprecationWarning);
 
         RedisModuleString *policy;
         const char *policy_cstr;
@@ -657,7 +508,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
     }
 
     if (argc > 1 && RMUtil_ArgIndex("OSS_GLOBAL_PASSWORD", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", "global-password");
+        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", "global-password", showDeprecationWarning);
 
         RedisModuleString *password;
         size_t len;
@@ -703,7 +554,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
     }
 
     if (argc > 1 && RMUtil_ArgIndex("RETENTION_POLICY", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("RETENTION_POLICY", "ts-retention-policy");
+        LOG_DEPRECATED_OPTION("RETENTION_POLICY", "ts-retention-policy", showDeprecationWarning);
 
         if (RMUtil_ParseArgsAfter(
                 "RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) !=
@@ -786,7 +637,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
             RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
-        LOG_DEPRECATED_OPTION("NUM_THREADS", "ts-num-threads");
+        LOG_DEPRECATED_OPTION("NUM_THREADS", "ts-num-threads", showDeprecationWarning);
         isDeprecated = true;
     } else {
         TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
@@ -848,7 +699,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
             return TSDB_ERROR;
         }
         TSGlobalConfig.ignoreMaxTimeDiff = ignoreMaxTimeDiff;
-        LOG_DEPRECATED_OPTION("IGNORE_MAX_TIME_DIFF", "ts-ignore-max-time-diff");
+        LOG_DEPRECATED_OPTION(
+            "IGNORE_MAX_TIME_DIFF", "ts-ignore-max-time-diff", showDeprecationWarning);
         isDeprecated = true;
     }
     RedisModule_Log(ctx,
@@ -870,7 +722,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
         }
         TSGlobalConfig.ignoreMaxValDiff = ignoreMaxValDiff;
 
-        LOG_DEPRECATED_OPTION("IGNORE_MAX_VAL_DIFF", "ts-ignore-max-val-diff");
+        LOG_DEPRECATED_OPTION(
+            "IGNORE_MAX_VAL_DIFF", "ts-ignore-max-val-diff", showDeprecationWarning);
         isDeprecated = true;
     }
     RedisModule_Log(
@@ -881,7 +734,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx, RedisModuleString **argv, 
                     "Setting default series ENCODING to: %s",
                     ChunkTypeToString(TSGlobalConfig.options));
 
-    if (isDeprecated) {
+    if (isDeprecated && showDeprecationWarning) {
         RedisModule_Log(ctx,
                         "warning",
                         "Deprecated load-time configuration options were used. These will be "
@@ -904,7 +757,7 @@ int RTS_RlecMinorVersion;
 int RTS_RlecPatchVersion;
 int RTS_RlecBuild;
 
-int RTS_CheckSupportedVestion() {
+int RTS_CheckSupportedVestion(void) {
     if (RTS_currVersion.redisMajorVersion < RTS_minSupportedVersion.redisMajorVersion) {
         return REDISMODULE_ERR;
     }
@@ -924,7 +777,7 @@ int RTS_CheckSupportedVestion() {
     return REDISMODULE_OK;
 }
 
-void RTS_GetRedisVersion() {
+void RTS_GetRedisVersion(void) {
     RedisModuleCallReply *reply = RedisModule_Call(rts_staticCtx, "info", "c", "server");
     assert(RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_STRING);
     size_t len;
