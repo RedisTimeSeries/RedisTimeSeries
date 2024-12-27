@@ -354,15 +354,9 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
             oldValue = "";
         }
 
-        RedisModule_Log(ctx,
-                        "warning",
-                        "Registering global password configuration option: \"%s\" - %s",
-                        oldValue,
-                        oldValue ? "is not null" : "is null");
-
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-global-password",
-                                             "",
+                                             oldValue,
                                              REDISMODULE_CONFIG_DEFAULT |
                                                  REDISMODULE_CONFIG_SENSITIVE |
                                                  REDISMODULE_CONFIG_UNPREFIXED,
