@@ -259,8 +259,10 @@ def test_module_config_api_is_unused_on_old_versions(env):
         # It should return an empty array as the option is not supported.
         # The command should not raise an exception and no deprecation
         # warnings should be emitted.
-        conn.execute_command('CONFIG', 'GET', 'ts-global-user')
-        assert not is_line_in_server_log(env, 'ts-global-user is deprecated, please use ')
+        env.expectEqual(len(conn.execute_command('CONFIG', 'GET', 'ts-global-user')), 0)
+
+    assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
+    assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
 @skip(onVersionLowerThan='7.0', on_cluster=True)
 def test_module_config_api_is_used_on_recent_redis_versions(env):
