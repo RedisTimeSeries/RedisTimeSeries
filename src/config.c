@@ -94,10 +94,10 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
         free(rulesAsString);
 
         return out;
-    } else if (!strcasecmp("global-password", name) && TSGlobalConfig.password) {
+    } else if (!strcasecmp("ts-global-password", name) && TSGlobalConfig.password) {
         return RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
-    } else if (!strcasecmp("global-user", name) && TSGlobalConfig.username) {
+    } else if (!strcasecmp("ts-global-user", name) && TSGlobalConfig.username) {
         return RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.username, strlen(TSGlobalConfig.username));
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
@@ -213,7 +213,7 @@ static int setModernStringConfigValue(const char *name,
 
         TSGlobalConfig.ignoreMaxValDiff = newValue;
         return REDISMODULE_OK;
-    } else if (!strcasecmp("global-password", name)) {
+    } else if (!strcasecmp("ts-global-password", name)) {
         if (TSGlobalConfig.password) {
             free(TSGlobalConfig.password);
             TSGlobalConfig.password = NULL;
@@ -228,7 +228,7 @@ static int setModernStringConfigValue(const char *name,
 
         TSGlobalConfig.password = strndup(str, len);
         return REDISMODULE_OK;
-    } else if (!strcasecmp("global-user", name)) {
+    } else if (!strcasecmp("ts-global-user", name)) {
         if (TSGlobalConfig.username) {
             free(TSGlobalConfig.username);
             TSGlobalConfig.username = NULL;
@@ -334,7 +334,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-compaction-policy",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT,
+                                             REDISMODULE_CONFIG_DEFAULT |
+                                                 REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
@@ -353,11 +354,18 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
             oldValue = "";
         }
 
+        RedisModule_Log(ctx,
+                        "warning",
+                        "Registering global password configuration option: \"%s\" - %s",
+                        oldValue,
+                        oldValue ? "is not null" : "is null");
+
         if (RedisModule_RegisterStringConfig(ctx,
-                                             "global-password",
-                                             oldValue,
+                                             "ts-global-password",
+                                             "",
                                              REDISMODULE_CONFIG_DEFAULT |
-                                                 REDISMODULE_CONFIG_SENSITIVE,
+                                                 REDISMODULE_CONFIG_SENSITIVE |
+                                                 REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
@@ -373,10 +381,11 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         }
 
         if (RedisModule_RegisterStringConfig(ctx,
-                                             "global-user",
+                                             "ts-global-user",
                                              oldValue,
                                              REDISMODULE_CONFIG_DEFAULT |
-                                                 REDISMODULE_CONFIG_SENSITIVE,
+                                                 REDISMODULE_CONFIG_SENSITIVE |
+                                                 REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
@@ -388,7 +397,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-num-threads",
                                           TSGlobalConfig.numThreads,
-                                          REDISMODULE_CONFIG_IMMUTABLE,
+                                          REDISMODULE_CONFIG_IMMUTABLE |
+                                              REDISMODULE_CONFIG_UNPREFIXED,
                                           NUM_THREADS_MIN,
                                           NUM_THREADS_MAX,
                                           getModernIntegerConfigValue,
@@ -401,7 +411,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-retention-policy",
                                           TSGlobalConfig.retentionPolicy,
-                                          REDISMODULE_CONFIG_DEFAULT,
+                                          REDISMODULE_CONFIG_DEFAULT |
+                                              REDISMODULE_CONFIG_UNPREFIXED,
                                           RETENTION_POLICY_MIN,
                                           RETENTION_POLICY_MAX,
                                           getModernIntegerConfigValue,
@@ -414,7 +425,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-duplicate-policy",
                                          DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy),
-                                         REDISMODULE_CONFIG_DEFAULT,
+                                         REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_UNPREFIXED,
                                          getModernStringConfigValue,
                                          setModernStringConfigValue,
                                          NULL,
@@ -425,7 +436,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-chunk-size-bytes",
                                           TSGlobalConfig.chunkSizeBytes,
-                                          REDISMODULE_CONFIG_DEFAULT,
+                                          REDISMODULE_CONFIG_DEFAULT |
+                                              REDISMODULE_CONFIG_UNPREFIXED,
                                           CHUNK_SIZE_BYTES_MIN,
                                           CHUNK_SIZE_BYTES_MAX,
                                           getModernIntegerConfigValue,
@@ -438,7 +450,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-encoding",
                                          ChunkTypeToString(TSGlobalConfig.options),
-                                         REDISMODULE_CONFIG_DEFAULT,
+                                         REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_UNPREFIXED,
                                          getModernStringConfigValue,
                                          setModernStringConfigValue,
                                          NULL,
@@ -449,7 +461,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-ignore-max-time-diff",
                                           TSGlobalConfig.ignoreMaxTimeDiff,
-                                          REDISMODULE_CONFIG_DEFAULT,
+                                          REDISMODULE_CONFIG_DEFAULT |
+                                              REDISMODULE_CONFIG_UNPREFIXED,
                                           IGNORE_MAX_TIME_DIFF_MIN,
                                           IGNORE_MAX_TIME_DIFF_MAX,
                                           getModernIntegerConfigValue,
@@ -466,7 +479,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-ignore-max-val-diff",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT,
+                                             REDISMODULE_CONFIG_DEFAULT |
+                                                 REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
@@ -532,6 +546,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-password", argv, argc) >= 0) {
+        LOG_DEPRECATED_OPTION("global-password", "ts-global-password", showDeprecationWarning);
         RedisModuleString *password;
         size_t len;
         if (RMUtil_ParseArgsAfter("global-password", argv, argc, "s", &password) !=
@@ -547,6 +562,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-user", argv, argc) >= 0) {
+        LOG_DEPRECATED_OPTION("global-user", "ts-global-user", showDeprecationWarning);
         RedisModuleString *username;
         size_t len;
         if (RMUtil_ParseArgsAfter("global-user", argv, argc, "s", &username) != REDISMODULE_OK) {
