@@ -182,6 +182,8 @@ def is_line_in_server_log(env, line):
 # Creates a temporary file with the content provided.
 # Returns the filepath of the created file.
 def create_config_file(content) -> str:
-    with tempfile.NamedTemporaryFile(prefix='temp-redis-config', delete=False, dir=f"{os.getcwd()}/logs/") as f:
+    dir = f"{os.getcwd()}/logs/"
+    os.makedirs(dir, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='temp-redis-config', delete=False, dir=dir) as f:
         f.write(content.encode())
         return f.name
