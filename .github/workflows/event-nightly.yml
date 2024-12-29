@@ -1,26 +1,19 @@
-name: Event Weekly
+name: Event Nightly
+
+permissions:
+  id-token: write
+  contents: read
 
 on:
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: '20 20 * * *' # 20:20 UTC every day
   workflow_dispatch:
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
         required: true
         default: 'unstable'
-
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
-  run-benchmarks:
-    uses: ./.github/workflows/benchmark-runner.yml
-    secrets: inherit
-    with:
-      extended: true
-
   prepare-values:
     runs-on: ubuntu-latest
     outputs:
@@ -39,30 +32,35 @@ jobs:
     with:
       os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   mariner:
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   ubuntu-arm64:
     uses: ./.github/workflows/flow-ubuntu-arm.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   alpine:
     uses: ./.github/workflows/flow-alpine.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux-x86.yml

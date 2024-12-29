@@ -1,0 +1,216 @@
+name: Flow Linux x86
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'  # todo change per version/tag
+        type: string
+        required: true
+      os:
+        description: 'OS to build on, bash array style'
+        type: string
+        required: true
+      run_valgrind:
+        description: 'Run valgrind on the tests'
+        type: boolean
+        default: false
+      run_sanitizer:
+        description: 'Run sanitizer on the tests'
+        type: boolean
+        default: false
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
+  workflow_call: # Allows to run this workflow from another workflow
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'  # todo change per version/tag
+        type: string
+        required: true
+      os:
+        description: 'OS to build on, bash array style'
+        type: string
+        required: true
+      run_valgrind:
+        description: 'Run valgrind on the tests'
+        type: boolean
+        default: false
+      run_sanitizer:
+        description: 'Run sanitizer on the tests'
+        type: boolean
+        default: false
+      quick: 
+        description: 'Run quick tests'
+        type: boolean
+        default: false
+
+jobs:
+  setup-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      redis-ref: ${{ steps.set-env.outputs.redis-ref }}
+      TAGGED: ${{ steps.set-env.outputs.TAGGED }}
+      TAG: ${{ steps.set-env.outputs.TAG }}
+      BRANCH: ${{ steps.set-env.outputs.BRANCH }}
+      TAG_OR_BRANCH: ${{ steps.set-env.outputs.TAG }}${{ steps.set-env.outputs.BRANCH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: set env
+        id: set-env
+        uses: ./.github/actions/setup-env
+        with:
+          github-ref: ${{ github.ref }}
+          redis-ref: ${{ inputs.redis-ref }}
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          OS="${{ inputs.os }}"
+          if [ -z "${OS}" ]; then
+            OS="bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 mariner2"
+          fi
+          MATRIX="["
+          for os in $OS; do
+            case $os in
+              bionic)
+                MATRIX="${MATRIX}{\"image\": \"ubuntu:bionic\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y software-properties-common && add-apt-repository ppa:git-core/ppa && apt-get update && apt-get install -y git\"},"
+                ;;
+              focal)
+                MATRIX="${MATRIX}{\"image\": \"ubuntu:focal\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y software-properties-common && add-apt-repository ppa:git-core/ppa && apt-get update && apt-get install -y git\"},"
+                ;;
+              jammy)
+                MATRIX="${MATRIX}{\"image\": \"ubuntu:jammy\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
+                ;;
+              rocky8)
+                MATRIX="${MATRIX}{\"image\": \"rockylinux:8\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"dnf install -y git\"},"
+                ;;
+              rocky9)
+                MATRIX="${MATRIX}{\"image\": \"rockylinux:9\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"dnf install -y git\"},"
+                ;;
+              bullseye)
+                MATRIX="${MATRIX}{\"image\": \"debian:bullseye\", \"use-venv\": \"1\", \"call-setup\": \"1\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
+                ;;
+              amazonlinux2)
+                MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git\"},"
+                ;;
+              mariner2)
+                MATRIX="${MATRIX}{\"image\": \"mcr.microsoft.com/cbl-mariner/base/core:2.0\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"tdnf install --noplugins --skipsignature -y ca-certificates git\"},"
+                ;;
+              *)
+                echo "Unknown OS: $os"
+                exit 1
+                ;;
+            esac
+          done
+          MATRIX="${MATRIX%?}]"
+          echo "${MATRIX}"
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+  
+  build-linux-matrix:
+    name: ${{matrix.docker_image.image}}, ${{needs.setup-environment.outputs.redis-ref}}
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    strategy:
+      fail-fast: false
+      matrix: 
+        docker_image: ${{fromJson(needs.setup-environment.outputs.matrix)}}
+    container:
+      image: ${{ matrix.docker_image.image }}
+    defaults:
+      run:
+        shell: bash -l -eo pipefail {0}
+    env:
+      TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
+      VERSION: ${{ needs.setup-environment.outputs.TAG }}
+      BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
+      TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
+      PIP_BREAK_SYSTEM_PACKAGES: 1
+    steps:
+      - name: Install git
+        run: ${{ matrix.docker_image.pre_req_install_cmd }}
+      - name: Checkout
+        if: matrix.docker_image.image != 'amazonlinux:2' && matrix.docker_image.image != 'ubuntu:bionic'
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Checkout Redis
+        if: matrix.docker_image.image != 'amazonlinux:2' && matrix.docker_image.image != 'ubuntu:bionic'
+        uses: actions/checkout@v4
+        with:
+          repository: redis/redis
+          ref: ${{needs.setup-environment.outputs.redis-ref}}
+          path: redis
+          submodules: 'recursive'
+      - name: git checkout
+        if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic'
+        run: |
+          # Perform checkout
+          REPO_URL="https://github.com/${{ github.repository }}.git"
+          # Clone the repository to the current directory
+          git config --global --add safe.directory /__w/${{ github.repository }}
+          git clone --recurse-submodules --depth=1 $REPO_URL .
+          REF=${{github.sha}}
+          git fetch origin ${REF}
+          git checkout ${REF}
+          git submodule update
+
+          # Perform checkout
+          REPO_URL="https://github.com/redis/redis.git"
+          # Clone the repository to the current directory
+          git clone --recurse-submodules $REPO_URL redis
+          cd redis
+          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
+          git checkout ${{needs.setup-environment.outputs.redis-ref}}
+          git submodule update
+      - name: Setup
+        working-directory: .install
+        shell: bash
+        run: |
+          ./install_script.sh 
+      - name: Setup Python for testing
+        if: ${{matrix.docker_image.image == 'ubuntu:jammy'}}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+      - name: Install python dependencies
+        uses: ./.github/actions/install-python-deps
+        with: 
+          call-setup: ${{matrix.docker_image.call-setup}}
+          use-venv: ${{matrix.docker_image.use-venv}}
+      - name: build
+        uses: ./.github/actions/build-module-and-redis
+        with:
+          build_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
+          use-venv: ${{matrix.docker_image.use-venv}}
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with: 
+          use-venv: ${{matrix.docker_image.use-venv}}
+          quick: ${{inputs.quick && '1' || '0'}}
+          run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
+          run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
+      - name: Upload test artifacts
+        if: failure()
+        uses: ./.github/actions/upload-artifacts
+        with: 
+          image: ${{ matrix.docker_image.image }}
+      - name: Pack module
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        uses: ./.github/actions/pack-module
+        with:
+          use-venv: ${{matrix.docker_image.use-venv}}
+      - name: Upload artifacts to S3
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        uses: ./.github/actions/upload-artifacts-to-s3-without-make
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          github-ref: ${{ github.ref }}
