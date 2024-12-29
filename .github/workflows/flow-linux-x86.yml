@@ -95,7 +95,7 @@ jobs:
                 MATRIX="${MATRIX}{\"image\": \"rockylinux:9\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"dnf install -y git\"},"
                 ;;
               bullseye)
-                MATRIX="${MATRIX}{\"image\": \"debian:bullseye\", \"use-venv\": \"0\", \"call-setup\": \"1\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
+                MATRIX="${MATRIX}{\"image\": \"debian:bullseye\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
                 ;;
               amazonlinux2)
                 MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git\"},"
