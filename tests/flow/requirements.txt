@@ -1,5 +1,5 @@
-redis~=5.0.8
+redis~=5.2.1
 RLTest==0.7.5
 statistics
-hiredis==2.0.0
+hiredis==3.1.0
 gevent~=22.10.1
