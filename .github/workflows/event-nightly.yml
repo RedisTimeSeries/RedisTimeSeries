@@ -32,30 +32,35 @@ jobs:
     with:
       os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   mariner:
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   ubuntu-arm64:
     uses: ./.github/workflows/flow-ubuntu-arm.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   alpine:
     uses: ./.github/workflows/flow-alpine.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux-x86.yml
