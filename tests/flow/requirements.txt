@@ -2,4 +2,4 @@ redis~=5.2.1
 RLTest==0.7.5
 statistics
 hiredis==3.1.0
-gevent~=22.10.1
+# gevent~=22.10.1
