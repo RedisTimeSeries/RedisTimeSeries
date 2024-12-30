@@ -169,6 +169,8 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLo
 
 def get_server_log_path(env):
     path = env.getConnection().execute_command('CONFIG', 'GET', 'logfile')[1].decode()
+    if os.path.isabs(path):
+        return path
     return os.path.abspath(f"{env.logDir}/{path}")
 
 def is_line_in_server_log(env, line):
