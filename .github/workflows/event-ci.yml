@@ -1,0 +1,66 @@
+name: Event CI
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-values:
+    runs-on: ubuntu-latest
+    outputs:
+      redis-ref: ${{ steps.set-env.outputs.redis-ref }}
+    steps:
+      - name: set env
+        id: set-env
+        run: |
+          echo "redis-ref=7.2" >> $GITHUB_OUTPUT  # todo change per version/tag
+  linter:
+    uses: ./.github/workflows/flow-linter.yml
+    secrets: inherit
+  build-linux-x86:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy rocky9 bullseye amazonlinux2
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
+    secrets: inherit
+  mariner:
+    uses: ./.github/workflows/mariner2.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
+    secrets: inherit
+  alpine:
+    uses: ./.github/workflows/flow-alpine.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
+    secrets: inherit
+  linux-valgrind:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
+      run_valgrind: true
+    secrets: inherit
+  linux-sanitizer:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: true
+      run_sanitizer: true
+    secrets: inherit
