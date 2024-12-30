@@ -1,4 +1,4 @@
-name: CI Full suite - MACOS
+name: Flow MACOS
 # This is a full workflow for the production branches and tags, which
 # includes building and testing on all supported platforms, and
 # uploading the artifacts to S3.
