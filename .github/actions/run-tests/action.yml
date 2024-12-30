@@ -9,7 +9,7 @@ inputs:
     description: 'Run sanitizer on the tests'
     type: string
     default: ''
-  quick: 
+  quick:
     description: 'Run with quick flag'
     type: string
     default: ''
@@ -32,4 +32,4 @@ runs:
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server -- --verbose
