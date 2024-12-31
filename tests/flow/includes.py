@@ -80,7 +80,19 @@ def Env(*args, **kwargs):
     if 'redisConfigFileContent' in kwargs:
         kwargs['redisConfigFile'] = create_config_file(kwargs['redisConfigFileContent'])
         del kwargs['redisConfigFileContent']
+
+    temp_no_log = Defaults.no_log
+    no_capture_output = Defaults.no_capture_output
+
+    if 'noLog' in kwargs:
+        Defaults.no_log = kwargs['noLog']
+        # Defaults.no_capture_output = True
+        del kwargs['noLog']
+
     env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    Defaults.no_log = temp_no_log
+    Defaults.no_capture_output = no_capture_output
+
     if not RLEC_CLUSTER:
         for shard in range(0, env.shardsCount):
             conn = env.getConnection(shard)
@@ -169,12 +181,17 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLo
 
 def get_server_log_path(env):
     path = env.getConnection().execute_command('CONFIG', 'GET', 'logfile')[1].decode()
+    # path = env.envRunner._getFileName('master', '.log')
     if os.path.isabs(path):
         return path
     return os.path.abspath(f"{env.logDir}/{path}")
 
 def is_line_in_server_log(env, line):
     path = get_server_log_path(env)
+
+    if path.endswith('/dev/null'):
+        raise Exception("Server log is redirected to /dev/null, can't check for the logs.")
+
     with open(path) as file:
         for file_line in file:
             if line in file_line:

@@ -248,6 +248,7 @@ def test_negative_configuration():
 
 @skip(onVersionLowerThan='6.2', onVersionHigherThan='7.0', on_cluster=True)
 def test_module_config_api_is_unused_on_old_versions(env):
+    env = Env(noLog=False)
     '''
     Tests that the module configuration API is not attempted to be used
     on Redis versions older than 7.0 and no deprecation warnings are
@@ -264,12 +265,14 @@ def test_module_config_api_is_unused_on_old_versions(env):
     assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
     assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
-@skip(onVersionLowerThan='7.0', on_cluster=True)
-def test_module_config_api_is_used_on_recent_redis_versions(env):
+def test_module_config_api_is_used_on_recent_redis_versions():
     '''
     Tests that the module configuration API is used on Redis versions
     starting 7.0 and the deprecation warnings are emitted.
     '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
     skip_on_rlec()
 
     # All these options are expected to return a valid value, so just
@@ -314,13 +317,15 @@ def test_module_config_api_is_used_on_recent_redis_versions(env):
 
         assert not is_line_in_server_log(env, 'is deprecated, please use')
 
-@skip(onVersionLowerThan='7.0', on_cluster=True)
-def test_module_config_from_module_arguments_raises_deprecation_messages(env):
+def test_module_config_from_module_arguments_raises_deprecation_messages():
     '''
     Tests that using the deprecated module configuration options
     (module arguments) while the module configuration API is used at the
     same time, leads to the deprecation messages.
     '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
     skip_on_rlec()
 
     # All these options are expected to return a valid value, so just
@@ -338,17 +343,19 @@ def test_module_config_from_module_arguments_raises_deprecation_messages(env):
     ]
 
     for arg in args:
-        env = Env(moduleArgs=f"{arg[0]} {arg[1]}")
+        env = Env(moduleArgs=f"{arg[0]} {arg[1]}", noLog=False)
         assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
         assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
-@skip(onVersionLowerThan='7.0', on_cluster=True)
-def test_module_config_takes_precedence_over_module_arguments(env):
+def test_module_config_takes_precedence_over_module_arguments():
     '''
     Tests that using the deprecated module configuration options
     (module arguments) while also using the the module configuration API
     leads to the latter taking precedence.
     '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
     skip_on_rlec()
 
     # All these options are expected to return a valid value, so just
@@ -375,7 +382,7 @@ def test_module_config_takes_precedence_over_module_arguments(env):
     ts-global-password test2
     """
 
-    env = Env(moduleArgs=args, redisConfigFileContent=configFileContent)
+    env = Env(moduleArgs=args, redisConfigFileContent=configFileContent, noLog=False)
     assert is_line_in_server_log(env, " is deprecated, please use")
     assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
