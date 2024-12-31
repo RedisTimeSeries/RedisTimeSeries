@@ -283,10 +283,8 @@ def test_module_config_api_is_used_on_recent_redis_versions():
         conn.execute_command('CONFIG', 'SET', 'ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
 
         conn.execute_command('CONFIG', 'GET', 'ts-global-user')
-        conn.execute_command('CONFIG', 'SET', 'ts-global-user', 'test')
 
         conn.execute_command('CONFIG', 'GET', 'ts-global-password')
-        conn.execute_command('CONFIG', 'SET', 'ts-global-password', 'test')
 
         conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')
         conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'last')

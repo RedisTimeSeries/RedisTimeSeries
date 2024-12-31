@@ -357,7 +357,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-global-password",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT |
+                                             REDISMODULE_CONFIG_IMMUTABLE |
                                                  REDISMODULE_CONFIG_SENSITIVE |
                                                  REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
@@ -377,7 +377,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-global-user",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT |
+                                             REDISMODULE_CONFIG_IMMUTABLE |
                                                  REDISMODULE_CONFIG_SENSITIVE |
                                                  REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
@@ -511,14 +511,21 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
         policy_cstr = RedisModule_StringPtrLen(policy, &len);
-        if (ParseCompactionPolicy(policy_cstr,
-                                  &TSGlobalConfig.compactionRules,
-                                  &TSGlobalConfig.compactionRulesCount) != TRUE) {
+        SimpleCompactionRule *compactionRules = NULL;
+        uint64_t compactionRulesCount = 0;
+        if (ParseCompactionPolicy(policy_cstr, &compactionRules, &compactionRulesCount) != TRUE) {
             RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
 
         RedisModule_Log(ctx, "notice", "loaded default compaction policy: %s", policy_cstr);
+
+        if (TSGlobalConfig.compactionRules) {
+            free(TSGlobalConfig.compactionRules);
+        }
+
+        TSGlobalConfig.compactionRules = compactionRules;
+        TSGlobalConfig.compactionRulesCount = compactionRulesCount;
         isDeprecated = true;
     }
 
