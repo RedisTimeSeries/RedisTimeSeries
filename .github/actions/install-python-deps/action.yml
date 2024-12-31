@@ -23,7 +23,6 @@ runs:
     - name: Install Python dependencies
       shell: bash
       run: |
-        pip list
         if command -v scl_source &> /dev/null
         then
             . scl_source enable devtoolset-11 || true
@@ -35,7 +34,6 @@ runs:
             . venv/bin/activate
           echo ::endgroup::
         fi
-        pip list
         echo ::group::Install python dependencies
           ./.install/common_installations.sh
           if [[ "${{inputs.extra-packages-to-install}}" != "" ]]; then
@@ -45,4 +43,3 @@ runs:
             ./sbin/setup
           fi
         echo ::endgroup::
-        pip list
