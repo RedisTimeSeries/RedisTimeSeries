@@ -12,8 +12,8 @@
 #include "rmutil/util.h"
 #include "config.h"
 
-#define s(x) _s(x)
-#define _s(x) #x
+#define stringify(x) stringify2(x)
+#define stringify2(x) #x
 
 #define QUERY_TOKEN_SIZE 9
 static const char *QUERY_TOKENS[] = {
@@ -81,13 +81,14 @@ bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModul
     }
 
     if (!err) {
-        RTS_ReplyGeneralError(ctx,
-                              "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" s(
-                                  CHUNK_SIZE_BYTES_MIN) " .. " s(CHUNK_SIZE_BYTES_MAX) "]");
+        RTS_ReplyGeneralError(
+            ctx,
+            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" stringify(
+                CHUNK_SIZE_BYTES_MIN) " .. " stringify(CHUNK_SIZE_BYTES_MAX) "]");
     } else {
         const char *errorMessage =
-            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" s(
-                CHUNK_SIZE_BYTES_MIN) " .. " s(CHUNK_SIZE_BYTES_MAX) "]";
+            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" stringify(
+                CHUNK_SIZE_BYTES_MIN) " .. " stringify(CHUNK_SIZE_BYTES_MAX) "]";
         *err = RedisModule_CreateString(NULL, errorMessage, strlen(errorMessage));
     }
 

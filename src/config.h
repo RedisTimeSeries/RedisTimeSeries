@@ -31,6 +31,7 @@ typedef struct
 {
     SimpleCompactionRule *compactionRules;
     uint64_t compactionRulesCount;
+    RedisModuleString *compactionRulesStringToJustReturnInTheGetter;
     long long retentionPolicy;
     long long chunkSizeBytes;
     short options;
@@ -46,7 +47,8 @@ typedef struct
 
 extern TSConfig TSGlobalConfig;
 
-void InitConfig();
+void InitConfig(void);
+void FreeConfig(void);
 RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx);
 bool RegisterConfigurationOptions(RedisModuleCtx *ctx);
 int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
