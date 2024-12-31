@@ -34,10 +34,39 @@
 
 TSConfig TSGlobalConfig;
 
-void InitConfig() {
+void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.password = NULL;
     TSGlobalConfig.username = NULL;
+    TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
+}
+
+static inline void ClearCompactionRules() {
+    if (TSGlobalConfig.compactionRules) {
+        free(TSGlobalConfig.compactionRules);
+        TSGlobalConfig.compactionRules = NULL;
+        TSGlobalConfig.compactionRulesCount = 0;
+    }
+}
+
+void FreeConfig(void) {
+    if (TSGlobalConfig.password) {
+        free(TSGlobalConfig.password);
+        TSGlobalConfig.password = NULL;
+    }
+
+    if (TSGlobalConfig.username) {
+        free(TSGlobalConfig.username);
+        TSGlobalConfig.username = NULL;
+    }
+
+    if (TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter) {
+        RedisModule_FreeString(rts_staticCtx,
+                               TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter);
+        TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
+    }
+
+    ClearCompactionRules();
 }
 
 RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
@@ -88,12 +117,17 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return NULL;
         }
 
-        RedisModuleString *out =
+        if (TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx,
+                                   TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter);
+        }
+
+        TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter =
             RedisModule_CreateString(rts_staticCtx, rulesAsString, strlen(rulesAsString));
 
         free(rulesAsString);
 
-        return out;
+        return TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter;
     } else if (!strcasecmp("ts-global-password", name) && TSGlobalConfig.password) {
         return RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
@@ -155,14 +189,6 @@ static double stringToDouble(const char *name,
     }
 
     return value;
-}
-
-static inline void ClearCompactionRules() {
-    if (TSGlobalConfig.compactionRules) {
-        free(TSGlobalConfig.compactionRules);
-        TSGlobalConfig.compactionRules = NULL;
-        TSGlobalConfig.compactionRulesCount = 0;
-    }
 }
 
 static int setModernStringConfigValue(const char *name,
@@ -649,13 +675,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
 
         if (RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0) {
             LOG_DEPRECATED_OPTION("CHUNK_TYPE", "ts-encoding", showDeprecationWarning);
-
-            RedisModule_Log(ctx,
-                            "warning",
-                            "CHUNK_TYPE and ENCODING configuration options were deprecated "
-                            "and will be removed in future versions of RedisTimeSeries. "
-                            "Please use the 'ts-encoding' configuration instead.");
         }
+
         RedisModuleString *chunk_type;
         size_t len;
         const char *chunk_type_cstr;

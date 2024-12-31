@@ -1605,6 +1605,17 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
     RedisModuleType *mt,
     RedisModuleTypeExtMethods *typemethods) REDISMODULE_ATTR = NULL;
 
+int RedisModule_OnUnload(RedisModuleCtx *ctx) {
+    if (rts_staticCtx) {
+        FreeConfig();
+
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+    }
+
+    return REDISMODULE_OK;
+}
+
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1654,6 +1665,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                         RTS_minSupportedVersion.redisMajorVersion,
                         RTS_minSupportedVersion.redisMinorVersion,
                         RTS_minSupportedVersion.redisPatchVersion);
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
     }
 
@@ -1665,7 +1679,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_Log(
             ctx,
             "warning",
-            "Failed to parse RedisTimeSeries configurations using the deprecated way, aborting...");
+            "Failed to parse the deprecated RedisTimeSeries configurations, aborting...");
+
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
     }
 
@@ -1673,12 +1692,23 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         if (!RegisterConfigurationOptions(ctx)) {
             RedisModule_Log(ctx,
                             "warning",
-                            "Failed to register the RedisTimeSeries configurations. aborting...");
+                            "Failed to register the RedisTimeSeries configurations, aborting...");
+
+            FreeConfig();
+            RedisModule_FreeThreadSafeContext(rts_staticCtx);
+            rts_staticCtx = NULL;
+
             return REDISMODULE_ERR;
         }
 
         if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Failed to load the RedisTimeSeries configurations.");
+            RedisModule_Log(
+                ctx, "warning", "Failed to load the RedisTimeSeries configurations, aborting...");
+
+            FreeConfig();
+            RedisModule_FreeThreadSafeContext(rts_staticCtx);
+            rts_staticCtx = NULL;
+
             return REDISMODULE_ERR;
         }
     }
@@ -1686,6 +1716,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     initGlobalCompactionFunctions();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
     }
 
@@ -1698,8 +1732,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .free = FreeSeries };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
-    if (SeriesType == NULL)
+    if (SeriesType == NULL) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     RedisModuleTypeExtMethods etm = { .version = REDISMODULE_TYPE_EXT_METHOD_VERSION,
                                       .key_added_to_db_dict = keyAddedToDbDict,
@@ -1707,6 +1746,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                       .get_key_metadata_for_rdb = NULL };
     if (RedisModule_SetDataTypeExtensions != NULL) {
         if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
+            FreeConfig();
+            RedisModule_FreeThreadSafeContext(rts_staticCtx);
+            rts_staticCtx = NULL;
+
             return REDISMODULE_ERR;
         }
     }
@@ -1714,6 +1757,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (RedisModule_AddACLCategory &&
         RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to add ACL category");
+
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
 
         return REDISMODULE_ERR;
     }
@@ -1730,8 +1777,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RegisterCommandWithModesAndAcls(ctx, "ts.revrange", TSDB_revrange, "readonly", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, -1) ==
-        REDISMODULE_ERR)
+        REDISMODULE_ERR) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     SetCommandAcls(ctx, "ts.queryindex", "read");
 
@@ -1740,26 +1792,46 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     RegisterCommandWithModesAndAcls(ctx, "ts.del", TSDB_delete, "write", "write");
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
-        REDISMODULE_ERR)
+        REDISMODULE_ERR) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     SetCommandAcls(ctx, "ts.madd", "write");
 
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, -1) ==
-        REDISMODULE_ERR)
+        REDISMODULE_ERR) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     SetCommandAcls(ctx, "ts.mrange", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, -1) ==
-        REDISMODULE_ERR)
+        REDISMODULE_ERR) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     SetCommandAcls(ctx, "ts.mrevrange", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
-        REDISMODULE_ERR)
+        REDISMODULE_ERR) {
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
         return REDISMODULE_ERR;
+    }
 
     SetCommandAcls(ctx, "ts.mget", "read");
 
