@@ -34,12 +34,17 @@
 
 TSConfig TSGlobalConfig;
 
+static RedisModuleString *tempStringStringToJustReturnInTheGetter = NULL;
+
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.password = NULL;
     TSGlobalConfig.username = NULL;
-    TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
-    TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter = NULL;
+
+    if (tempStringStringToJustReturnInTheGetter) {
+        RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        tempStringStringToJustReturnInTheGetter = NULL;
+    }
 }
 
 static inline void ClearCompactionRules() {
@@ -61,16 +66,9 @@ void FreeConfig(void) {
         TSGlobalConfig.username = NULL;
     }
 
-    if (TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter) {
-        RedisModule_FreeString(rts_staticCtx,
-                               TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter);
-        TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
-    }
-
-    if (TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter) {
-        RedisModule_FreeString(rts_staticCtx,
-                               TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter);
-        TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter = NULL;
+    if (tempStringStringToJustReturnInTheGetter) {
+        RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        tempStringStringToJustReturnInTheGetter = NULL;
     }
 
     ClearCompactionRules();
@@ -124,45 +122,73 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return NULL;
         }
 
-        if (TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx,
-                                   TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter);
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
         }
 
-        TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter =
+        tempStringStringToJustReturnInTheGetter =
             RedisModule_CreateString(rts_staticCtx, rulesAsString, strlen(rulesAsString));
 
         free(rulesAsString);
 
-        return TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter;
+        return tempStringStringToJustReturnInTheGetter;
     } else if (!strcasecmp("ts-global-password", name) && TSGlobalConfig.password) {
-        return RedisModule_CreateString(
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        }
+
+        tempStringStringToJustReturnInTheGetter = RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
+
+        return tempStringStringToJustReturnInTheGetter;
     } else if (!strcasecmp("ts-global-user", name) && TSGlobalConfig.username) {
-        return RedisModule_CreateString(
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        }
+
+        tempStringStringToJustReturnInTheGetter = RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.username, strlen(TSGlobalConfig.username));
+
+        return tempStringStringToJustReturnInTheGetter;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
         const char *value = DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy);
 
-        if (value) {
-            return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+        if (!value) {
+            return NULL;
         }
+
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        }
+
+        tempStringStringToJustReturnInTheGetter =
+            RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        return tempStringStringToJustReturnInTheGetter;
     } else if (!strcasecmp("ts-encoding", name)) {
         const char *value = ChunkTypeToString(TSGlobalConfig.options);
 
-        if (value) {
-            return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
-        }
-    } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
-        if (TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx,
-                                   TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter);
+        if (!value) {
+            return NULL;
         }
 
-        TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter =
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        }
+
+        tempStringStringToJustReturnInTheGetter =
+            RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        return tempStringStringToJustReturnInTheGetter;
+    } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
+        if (tempStringStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        }
+
+        tempStringStringToJustReturnInTheGetter =
             RedisModule_CreateStringPrintf(rts_staticCtx, "%lf", TSGlobalConfig.ignoreMaxValDiff);
 
-        return TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter;
+        return tempStringStringToJustReturnInTheGetter;
     }
 
     return NULL;
