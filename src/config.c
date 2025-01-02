@@ -39,6 +39,7 @@ void InitConfig(void) {
     TSGlobalConfig.password = NULL;
     TSGlobalConfig.username = NULL;
     TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
+    TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter = NULL;
 }
 
 static inline void ClearCompactionRules() {
@@ -64,6 +65,12 @@ void FreeConfig(void) {
         RedisModule_FreeString(rts_staticCtx,
                                TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter);
         TSGlobalConfig.compactionRulesStringToJustReturnInTheGetter = NULL;
+    }
+
+    if (TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter) {
+        RedisModule_FreeString(rts_staticCtx,
+                               TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter);
+        TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter = NULL;
     }
 
     ClearCompactionRules();
@@ -147,8 +154,15 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return RedisModule_CreateString(rts_staticCtx, value, strlen(value));
         }
     } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
-        return RedisModule_CreateStringPrintf(
-            rts_staticCtx, "%lf", TSGlobalConfig.ignoreMaxValDiff);
+        if (TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter) {
+            RedisModule_FreeString(rts_staticCtx,
+                                   TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter);
+        }
+
+        TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter =
+            RedisModule_CreateStringPrintf(rts_staticCtx, "%lf", TSGlobalConfig.ignoreMaxValDiff);
+
+        return TSGlobalConfig.ignoreMaxValDiffStringToJustReturnInTheGetter;
     }
 
     return NULL;

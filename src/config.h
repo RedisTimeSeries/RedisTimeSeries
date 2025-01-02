@@ -43,6 +43,7 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    RedisModuleString *ignoreMaxValDiffStringToJustReturnInTheGetter;
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
