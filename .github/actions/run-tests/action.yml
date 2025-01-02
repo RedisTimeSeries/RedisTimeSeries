@@ -9,7 +9,7 @@ inputs:
     description: 'Run sanitizer on the tests'
     type: string
     default: ''
-  quick: 
+  quick:
     description: 'Run with quick flag'
     type: string
     default: ''

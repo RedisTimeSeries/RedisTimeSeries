@@ -101,27 +101,6 @@ const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
     return NULL;
 }
 
-const char *DuplicatePolicyToString(DuplicatePolicy policy) {
-    switch (policy) {
-        case DP_NONE:
-            return "none";
-        case DP_BLOCK:
-            return "block";
-        case DP_LAST:
-            return "last";
-        case DP_FIRST:
-            return "first";
-        case DP_MAX:
-            return "max";
-        case DP_MIN:
-            return "min";
-        case DP_SUM:
-            return "sum";
-        default:
-            return "invalid";
-    }
-}
-
 int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
     size_t str_len;
     const char *aggTypeCStr = RedisModule_StringPtrLen(aggTypeStr, &str_len);
