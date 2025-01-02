@@ -14,13 +14,14 @@
 #include "rmutil/util.h"
 #include <rmutil/alloc.h>
 
-static const timestamp_t lookup_intervals[] = { ['m'] = 1,
-                                                ['s'] = 1000,
-                                                ['M'] = 1000 * 60,
-                                                ['h'] = 1000 * 60 * 60,
-                                                ['d'] = 1000 * 60 * 60 * 24 };
+static const timestamp_t lookup_intervals[] = { ['u'] = 1l,
+                                                ['m'] = 1000l,
+                                                ['s'] = 1000l*1000,
+                                                ['M'] = 1000l*1000 * 60,
+                                                ['h'] = 1000l*1000 * 60 * 60,
+                                                ['d'] = 1000l*1000 * 60 * 60 * 24 };
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
+static int parse_string_to_microseconds(const char *timeStr, timestamp_t *out, bool canBeZero) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
@@ -36,11 +37,11 @@ static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool
         return TRUE;
     }
 
-    timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
-    if (interval_in_millisecs == 0) {
+    timestamp_t interval_in_microseconds = lookup_intervals[interval_type];
+    if (interval_in_microseconds == 0) {
         return FALSE;
     }
-    *out = interval_in_millisecs * timeSize;
+    *out = interval_in_microseconds * timeSize;
     return TRUE;
 }
 
@@ -56,15 +57,15 @@ static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
         if (i == 0) { // first param its the aggregation type
             strcpy(agg_type, token);
         } else if (i == 1) { // the 2nd param is the bucket
-            if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == FALSE) {
+            if (parse_string_to_microseconds(token, &rule->bucketDuration, false) == FALSE) {
                 return FALSE;
             }
         } else if (i == 2) {
-            if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == FALSE) {
+            if (parse_string_to_microseconds(token, &rule->retentionSizeMillisec, true) == FALSE) {
                 return FALSE;
             }
         } else if (i == 3) {
-            if (parse_string_to_millisecs(token, &rule->timestampAlignment, false) == FALSE) {
+            if (parse_string_to_microseconds(token, &rule->timestampAlignment, false) == FALSE) {
                 return FALSE;
             }
         } else {
