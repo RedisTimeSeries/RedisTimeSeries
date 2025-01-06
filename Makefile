@@ -506,7 +506,8 @@ sanbox:
 
 pack: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
+	$(SHOW) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh $(realpath $(TARGET))
+
 
 upload-release:
 	@RELEASE=1 $(ROOT)/sbin/upload-artifacts
