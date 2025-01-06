@@ -27,7 +27,7 @@ if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 		RELEASE=1           Generate "release" packages (artifacts/release/)
 		SNAPSHOT=1          Generate "shapshot" packages (artifacts/snapshot/)
 
-		MODULE_NAME=name    Module name (default: redistimeseries)
+		MODULE_NAME=name    Module name (default: timeseries)
 		PACKAGE_NAME=name   Package stem name
 
 		BRANCH=name         Branch name for snapshot packages
@@ -58,6 +58,7 @@ OP=""
 
 ARCH=$($READIES/bin/platform --arch)
 [[ $ARCH == x64 ]] && ARCH=x86_64
+[[ $ARCH == arm64v8 ]] && ARCH=aarch64
 
 OS=$($READIES/bin/platform --os)
 [[ $OS == linux ]] && OS=Linux
