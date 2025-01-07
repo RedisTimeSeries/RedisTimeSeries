@@ -7,6 +7,7 @@
 #define INDEXER_H
 
 #include "RedisModulesSDK/redismodule.h"
+#include "RedisModulesSDK/redismodule-rlec.h"
 
 #include <stdint.h>
 #include <stdbool.h>
