@@ -22,7 +22,6 @@ if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 		RELEASE=1     Upload release artifacts
 		STAGING=1     Upload into staging area
 
-		FORCE=1       Allow uploading outside of CI
 		NOP=1         No operation
 		VERBOSE=1     Show artifacts details
 		HELP=1        Show help
@@ -33,9 +32,9 @@ fi
 
 #----------------------------------------------------------------------------------------------
 
-ARCH=$(uname -m)
-[[ $ARCH == arm64 ]] && ARCH="aarch64"
+ARCH=$($READIES/bin/platform --arch)
 [[ $ARCH == x64 ]] && ARCH="x86_64"
+[[ $ARCH == arm64v8 ]] && ARCH="aarch64"
 
 OS=$($READIES/bin/platform --os)
 [[ $OS == linux ]] && OS="Linux"
@@ -76,9 +75,11 @@ else
 	S3_URL=s3://redismodules
 fi
 
-if [[ -z $AWS_ACCESS_KEY_ID || -z $AWS_SECRET_ACCESS_KEY ]]; then
-  eprint "No credentials for S3 upload."
-  exit 1
+if [[ $FORCE != 1 ]]; then
+	if [[ -z $AWS_ACCESS_KEY_ID || -z $AWS_SECRET_ACCESS_KEY ]]; then
+		eprint "No credentials for S3 upload."
+		exit 1
+	fi
 fi
 
 cd $ROOT/bin
@@ -98,15 +99,17 @@ s3_upload_file() {
 	local file="$1"
 	local s3_dir="$2"
 	[[ $s3_dir != */ ]] && s3_dir="${s3_dir}/"
-	
-	$OP aws --debug s3 cp $file $s3_dir --acl public-read --no-progress
+
+	$OP aws s3 cp $file $s3_dir --acl public-read --no-progress
 }
 
 s3_ls() {
 	local s3_dir="$1"
 	[[ $s3_dir != */ ]] && s3_dir="${s3_dir}/"
-	
+
+	echo "::group::S3 ls $s3_dir"
 	$OP aws s3 ls $s3_dir
+	echo "::endgroup::"
 }
 
 s3_upload() {
@@ -115,18 +118,16 @@ s3_upload() {
 	local upload_dir="${S3_URL}/${prod_subdir}${MAYBE_SNAP}"
 	local file
 	if [[ $SNAPSHOT == 1 ]]; then
-		files=$(ls ${prefix}.*${PLATFORM}*.zip)
-		for file in $files; do
+		for file in `ls ${prefix}.*${PLATFORM}*.zip ${prefix}.*${PLATFORM}*.tgz 2> /dev/null`; do
 			s3_upload_file $file $upload_dir
 		done
 	else
-		files=$(ls ${prefix}.*.zip)
-		for file in $files; do
+		for file in `ls ${prefix}.*.zip ${prefix}.*.tgz 2> /dev/null`; do
 			s3_upload_file $file $upload_dir
 		done
 	fi
 	[[ $VERBOSE == 1 ]] && s3_ls $upload_dir
-	
+
 	return 0
 }
 
