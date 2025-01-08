@@ -581,6 +581,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         uint64_t compactionRulesCount = 0;
         if (ParseCompactionPolicy(policy_cstr, &compactionRules, &compactionRulesCount) != TRUE) {
             RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            free(compactionRules);
             return TSDB_ERROR;
         }
 
