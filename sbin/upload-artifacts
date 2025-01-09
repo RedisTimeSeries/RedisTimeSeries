@@ -52,15 +52,6 @@ OS=$($READIES/bin/platform --os)
 [[ $OSNICK == rocky8 ]]  && OSNICK=rhel8
 [[ $OSNICK == rocky9 ]]  && OSNICK=rhel9
 
-if [[ $OS == macos ]]; then
-	# as we don't build on macOS for every platform, we converge to a least common denominator
-	if [[ $ARCH == x86_64 ]]; then
-		OSNICK=catalina  # to be aligned with the rest of the modules in redis stack
-	else
-		[[ $OSNICK == ventura ]] && OSNICK=monterey
-		[[ $OSNICK == sonoma ]] && OSNICK=monterey
-	fi
-fi
 
 PLATFORM="$OS-$OSNICK-$ARCH"
 
@@ -91,7 +82,11 @@ else
 fi
 
 cd artifacts${MAYBE_SNAP}
-[[ $VERBOSE == 1 ]] && du -ah --apparent-size *
+if du --help | grep -q -- --apparent-size; then
+	DU_ARGS='--apparent-size'
+fi
+[[ $VERBOSE == 1 ]] && du -ah ${DU_ARGS} *
+
 
 #----------------------------------------------------------------------------------------------
 
