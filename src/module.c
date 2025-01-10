@@ -456,6 +456,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
 
     if (hasPermissionError) {
+        MRangeArgs_Free(&args);
         RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
@@ -1232,6 +1233,8 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
 
     if (hasPermissionError) {
+        free(limitLabelsStr);
+        MGetArgs_Free(&args);
         RedisModule_FreeDict(ctx, result);
         RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;

@@ -254,6 +254,8 @@ static int setModernStringConfigValue(const char *name,
             return REDISMODULE_ERR;
         }
 
+        ClearCompactionRules();
+
         TSGlobalConfig.compactionRules = compactionRules;
         TSGlobalConfig.compactionRulesCount = compactionRulesCount;
 
