@@ -1,6 +1,4 @@
-# This commit points to a non-versioned branch "eranhd-pin-poetry-to-use-version-lt-2".
-# This is a temporary solution until the issue with poetry is resolved.
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@bdc620e28d3e17c395d03166aebc06dbd0459f7c
+RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
 statistics
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 #gevent~=22.10.1
