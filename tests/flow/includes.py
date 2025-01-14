@@ -8,6 +8,7 @@ import redis
 import pytest
 import signal
 import time
+import tempfile
 from functools import wraps
 
 try:
@@ -76,7 +77,22 @@ def verifyClusterInitialized(env):
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:
         kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
+    if 'redisConfigFileContent' in kwargs:
+        kwargs['redisConfigFile'] = create_config_file(kwargs['redisConfigFileContent'])
+        del kwargs['redisConfigFileContent']
+
+    temp_no_log = Defaults.no_log
+    no_capture_output = Defaults.no_capture_output
+
+    if 'noLog' in kwargs:
+        Defaults.no_log = kwargs['noLog']
+        # Defaults.no_capture_output = True
+        del kwargs['noLog']
+
     env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    Defaults.no_log = temp_no_log
+    Defaults.no_capture_output = no_capture_output
+
     if not RLEC_CLUSTER:
         for shard in range(0, env.shardsCount):
             conn = env.getConnection(shard)
@@ -114,7 +130,13 @@ def decode_if_needed(data):
     else:
         return data
 
-def is_redis_version_smaller_than(con, _version, is_cluster=False):
+def _version_from_string(version_string):
+    if sys.version_info[1] > 12:
+        return version.Version(version_string)
+    else:
+        return version.parse(version_string)
+
+def get_redis_version(con, is_cluster=False):
     res = con.execute_command('INFO')
     ver = ""
     if is_cluster:
@@ -125,9 +147,18 @@ def is_redis_version_smaller_than(con, _version, is_cluster=False):
         #print(((list(res.values()))[0]))
     else:
         ver = res['redis_version']
-    return (version.parse(ver) < version.parse(_version))
 
-def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None):
+    return _version_from_string(ver)
+
+def is_redis_version_lower_than(con, _version, is_cluster=False):
+    version = get_redis_version(con, is_cluster)
+    return (version < _version_from_string(_version))
+
+def is_redis_version_higher_than(con, _version, is_cluster=False):
+    version = get_redis_version(con, is_cluster)
+    return (version > _version_from_string(_version))
+
+def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, onVersionHigherThan=None):
     def decorate(f):
         @wraps(f)
         def wrapper(x, *args, **kwargs):
@@ -140,8 +171,38 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLo
                 env.skip()
             if asan and SANITIZER == 'address':
                 env.skip()
-            if onVersionLowerThan and is_redis_version_smaller_than(env, onVersionLowerThan, env.isCluster()):
+            if onVersionLowerThan and is_redis_version_lower_than(env, onVersionLowerThan, env.isCluster()):
+                env.skip()
+            if onVersionHigherThan and is_redis_version_higher_than(env, onVersionHigherThan, env.isCluster()):
                 env.skip()
             return f(x, *args, **kwargs)
         return wrapper
     return decorate
+
+def get_server_log_path(env):
+    path = env.getConnection().execute_command('CONFIG', 'GET', 'logfile')[1].decode()
+    # path = env.envRunner._getFileName('master', '.log')
+    if os.path.isabs(path):
+        return path
+    return os.path.abspath(f"{env.logDir}/{path}")
+
+def is_line_in_server_log(env, line):
+    path = get_server_log_path(env)
+
+    if path.endswith('/dev/null'):
+        raise Exception("Server log is redirected to /dev/null, can't check for the logs.")
+
+    with open(path) as file:
+        for file_line in file:
+            if line in file_line:
+                return True
+    return False
+
+# Creates a temporary file with the content provided.
+# Returns the filepath of the created file.
+def create_config_file(content) -> str:
+    dir = f"{os.getcwd()}/logs/"
+    os.makedirs(dir, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix='temp-redis-config', delete=False, dir=dir) as f:
+        f.write(content.encode())
+        return f.name

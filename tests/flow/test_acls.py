@@ -148,8 +148,15 @@ def test_non_local_data_when_the_user_has_access(env):
 
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
+def test_libmr_adds_acl_category(env):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
+        env.skip()
+
+    acl_category = '_timeseries_libmr_internal'
+    env.expect('acl', 'cat').contains(acl_category.encode())
+
 def do_test_libmr(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
         env.skip()
 
     for shard in range(0, env.shardsCount):
@@ -182,27 +189,26 @@ def do_test_libmr(env):
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
 def test_acl_libmr_username_with_password_in_config():
-    redisConfigFile = '/tmp/redis.conf'
-    if os.path.isfile(redisConfigFile):
-        os.unlink(redisConfigFile)
-    with open(redisConfigFile, 'w') as f:
-        f.write('user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal\n')
-
-    env = Env(redisConfigFile=redisConfigFile, moduleArgs='global-user tslibmr; global-password tslibmrpassword')
+    configFileContent = """
+    user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal
+    ts-global-user tslibmr
+    ts-global-password tslibmrpassword
+    """
+    env = Env(redisConfigFileContent=configFileContent)
 
     do_test_libmr(env)
 
 def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_smaller_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
         env.skip()
 
-    redisConfigFile = '/tmp/redis2.conf'
-    if os.path.isfile(redisConfigFile):
-        os.unlink(redisConfigFile)
-    with open(redisConfigFile, 'w') as f:
-        f.write('user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal\nuser default on >password +@all -@_timeseries_libmr_internal +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER\n')
-
-    env = Env(password='password', redisConfigFile=redisConfigFile, moduleArgs='global-user nonexistinguseeeer; global-password nonexistinguserpasswd')
+    configFileContent = """
+    user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal
+    user default on >password +@all -@_timeseries_libmr_internal +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER
+    ts-global-user nonexistinguseeeer
+    ts-global-password nonexistinguserpasswd
+    """
+    env = Env(password='password', redisConfigFileContent=configFileContent)
 
     # Should raise a timeout error, as we can't connect to the nodes
     # due to the user having no permissions to invoke the corresponding
@@ -211,13 +217,12 @@ def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
         do_test_libmr(env)
 
 def test_acl_libmr_username_with_password_in_config_set_to_disallow():
-    redisConfigFile = '/tmp/redis3.conf'
-    if os.path.isfile(redisConfigFile):
-        os.unlink(redisConfigFile)
-    with open(redisConfigFile, 'w') as f:
-        f.write('user tslibmr3 on >tslibmrpassword +@all -@_timeseries_libmr_internal\n')
-
-    env = Env(redisConfigFile=redisConfigFile, moduleArgs='global-user tslibmr3; global-password tslibmrpassword')
+    configFileContent = """
+    user tslibmr3 on >tslibmrpassword +@all -@_timeseries_libmr_internal
+    ts-global-user tslibmr3
+    ts-global-password tslibmrpassword
+    """
+    env = Env(redisConfigFileContent=configFileContent)
 
     # Should raise a timeout error, as we can't connect to the nodes
     # due to the user having no permissions to invoke the corresponding
