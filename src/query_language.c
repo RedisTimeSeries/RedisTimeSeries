@@ -10,6 +10,10 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "config.h"
+
+#define stringify(x) stringify2(x)
+#define stringify2(x) #x
 
 #define QUERY_TOKEN_SIZE 9
 static const char *QUERY_TOKENS[] = {
@@ -62,42 +66,52 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
     return REDISMODULE_OK;
 }
 
-bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes) {
-    if (chunkSizeBytes < 48) {
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
-        return false;
-    }
-
-    if (chunkSizeBytes > 1048576) {
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
-        return false;
-    }
-
-    if (chunkSizeBytes % 8 != 0) {
-        // Currently the gorilla algorithm implementation can only handle chunks of size
-        // multiplication of 8
-        RTS_ReplyGeneralError(
-            ctx, "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [48 .. 1048576]");
+bool ValidateChunkSizeSimple(long long chunkSizeBytes) {
+    if (chunkSizeBytes < CHUNK_SIZE_BYTES_MIN || chunkSizeBytes > CHUNK_SIZE_BYTES_MAX ||
+        chunkSizeBytes % 8 != 0) {
         return false;
     }
 
     return true;
 }
 
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err) {
+    if (ValidateChunkSizeSimple(chunkSizeBytes)) {
+        return true;
+    }
+
+    if (!err) {
+        RTS_ReplyGeneralError(
+            ctx,
+            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" stringify(
+                CHUNK_SIZE_BYTES_MIN) " .. " stringify(CHUNK_SIZE_BYTES_MAX) "]");
+    } else {
+        const char *errorMessage =
+            "TSDB: CHUNK_SIZE value must be a multiple of 8 in the range [" stringify(
+                CHUNK_SIZE_BYTES_MIN) " .. " stringify(CHUNK_SIZE_BYTES_MAX) "]";
+        *err = RedisModule_CreateString(NULL, errorMessage, strlen(errorMessage));
+    }
+
+    return false;
+}
+
 int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
                    int argc,
                    const char *arg_prefix,
-                   long long *chunkSizeBytes) {
+                   long long *chunkSizeBytes,
+                   bool *found) {
     if (RMUtil_ArgIndex(arg_prefix, argv, argc) >= 0) {
+        if (found) {
+            *found = true;
+        }
+
         if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "l", chunkSizeBytes) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse CHUNK_SIZE");
             return TSDB_ERROR;
         }
 
-        if (!ValidateChunkSize(ctx, *chunkSizeBytes)) {
+        if (!ValidateChunkSize(ctx, *chunkSizeBytes, NULL)) {
             return TSDB_ERROR;
         }
     }
@@ -109,9 +123,14 @@ int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy) {
+                         DuplicatePolicy *policy,
+                         bool *found) {
     RedisModuleString *duplicationPolicyInput = NULL;
     if (RMUtil_ArgIndex(arg_prefix, argv, argc) != -1) {
+        if (found) {
+            *found = true;
+        }
+
         if (RMUtil_ParseArgsAfter(arg_prefix, argv, argc, "s", &duplicationPolicyInput) !=
             REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse DUPLICATE_POLICY");
@@ -180,7 +199,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
-    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes) != TSDB_OK) {
+    if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE", &cCtx->chunkSizeBytes, NULL) != TSDB_OK) {
         goto err_exit;
     }
 
@@ -189,7 +208,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     }
 
     cCtx->duplicatePolicy = DP_NONE;
-    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy) !=
+    if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy, NULL) !=
         TSDB_OK) {
         goto err_exit;
     }

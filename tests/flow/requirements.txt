@@ -1,4 +1,4 @@
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@32f298311a4594c5ac439b2c4f9ece214e7929a1 # should be chagne in the next RLTest version 
+RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
 statistics
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 #gevent~=22.10.1

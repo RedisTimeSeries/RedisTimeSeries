@@ -117,13 +117,15 @@ int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
                    int argc,
                    const char *arg_prefix,
-                   long long *chunkSizeBytes);
+                   long long *chunkSizeBytes,
+                   bool *found);
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy);
+                         DuplicatePolicy *policy,
+                         bool *found);
 
 int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options);
 
@@ -167,7 +169,8 @@ void MRangeArgs_Free(MRangeArgs *args);
 
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
-bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err);
+bool ValidateChunkSizeSimple(long long chunkSizeBytes);
 int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H
