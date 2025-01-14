@@ -34,20 +34,20 @@
 
 TSConfig TSGlobalConfig;
 
-static RedisModuleString *tempStringStringToJustReturnInTheGetter = NULL;
+static RedisModuleString *getConfigStringCache = NULL;
 
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.password = NULL;
     TSGlobalConfig.username = NULL;
 
-    if (tempStringStringToJustReturnInTheGetter) {
-        RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
-        tempStringStringToJustReturnInTheGetter = NULL;
+    if (getConfigStringCache) {
+        RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
+        getConfigStringCache = NULL;
     }
 }
 
-static inline void ClearCompactionRules() {
+static inline void ClearCompactionRules(void) {
     if (TSGlobalConfig.compactionRules) {
         free(TSGlobalConfig.compactionRules);
         TSGlobalConfig.compactionRules = NULL;
@@ -66,9 +66,9 @@ void FreeConfig(void) {
         TSGlobalConfig.username = NULL;
     }
 
-    if (tempStringStringToJustReturnInTheGetter) {
-        RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
-        tempStringStringToJustReturnInTheGetter = NULL;
+    if (getConfigStringCache) {
+        RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
+        getConfigStringCache = NULL;
     }
 
     ClearCompactionRules();
@@ -122,34 +122,34 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return NULL;
         }
 
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter =
+        getConfigStringCache =
             RedisModule_CreateString(rts_staticCtx, rulesAsString, strlen(rulesAsString));
 
         free(rulesAsString);
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     } else if (!strcasecmp("ts-global-password", name) && TSGlobalConfig.password) {
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter = RedisModule_CreateString(
+        getConfigStringCache = RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     } else if (!strcasecmp("ts-global-user", name) && TSGlobalConfig.username) {
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter = RedisModule_CreateString(
+        getConfigStringCache = RedisModule_CreateString(
             rts_staticCtx, TSGlobalConfig.username, strlen(TSGlobalConfig.username));
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
         const char *value = DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy);
 
@@ -157,14 +157,13 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return NULL;
         }
 
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter =
-            RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+        getConfigStringCache = RedisModule_CreateString(rts_staticCtx, value, strlen(value));
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     } else if (!strcasecmp("ts-encoding", name)) {
         const char *value = ChunkTypeToString(TSGlobalConfig.options);
 
@@ -172,23 +171,22 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             return NULL;
         }
 
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter =
-            RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+        getConfigStringCache = RedisModule_CreateString(rts_staticCtx, value, strlen(value));
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
-        if (tempStringStringToJustReturnInTheGetter) {
-            RedisModule_FreeString(rts_staticCtx, tempStringStringToJustReturnInTheGetter);
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         }
 
-        tempStringStringToJustReturnInTheGetter =
+        getConfigStringCache =
             RedisModule_CreateStringPrintf(rts_staticCtx, "%lf", TSGlobalConfig.ignoreMaxValDiff);
 
-        return tempStringStringToJustReturnInTheGetter;
+        return getConfigStringCache;
     }
 
     return NULL;
@@ -231,112 +229,130 @@ static double stringToDouble(const char *name,
     return value;
 }
 
+static bool Config_SetCompactionPolicyFromCStr(const char *policyString, RedisModuleString **err) {
+    if (!policyString || strlen(policyString) == 0) {
+        ClearCompactionRules();
+
+        return true;
+    }
+
+    SimpleCompactionRule *compactionRules = NULL;
+    uint64_t compactionRulesCount = 0;
+
+    if (ParseCompactionPolicy(policyString, &compactionRules, &compactionRulesCount) != TRUE) {
+        *err = RedisModule_CreateStringPrintf(NULL, "Invalid compaction policy: %s", policyString);
+        return false;
+    }
+
+    ClearCompactionRules();
+
+    TSGlobalConfig.compactionRules = compactionRules;
+    TSGlobalConfig.compactionRulesCount = compactionRulesCount;
+
+    return true;
+}
+
+static bool Config_SetDuplicationPolicyFromRedisString(RedisModuleString *value,
+                                                       RedisModuleString **err) {
+    const DuplicatePolicy newValue = RMStringLenDuplicationPolicyToEnum(value);
+
+    if (newValue == DP_INVALID) {
+        *err = RedisModule_CreateStringPrintf(
+            NULL, "Invalid duplicate policy: %s", RedisModule_StringPtrLen(value, NULL));
+        return false;
+    }
+
+    TSGlobalConfig.duplicatePolicy = newValue;
+    return true;
+}
+
+static bool Config_SetIgnoreMaxValDiffFromRedisString(RedisModuleString *value,
+                                                      RedisModuleString **err) {
+    const double newValue = stringToDouble(
+        "ts-ignore-max-val-diff", value, IGNORE_MAX_VAL_DIFF_MIN, IGNORE_MAX_VAL_DIFF_MAX, err);
+
+    if (err && *err) {
+        return false;
+    }
+
+    TSGlobalConfig.ignoreMaxValDiff = newValue;
+    return true;
+}
+
+static bool Config_SetGlobalPasswordFromRedisString(RedisModuleString *value) {
+    if (TSGlobalConfig.password) {
+        free(TSGlobalConfig.password);
+        TSGlobalConfig.password = NULL;
+    }
+
+    size_t len = 0;
+    const char *str = RedisModule_StringPtrLen(value, &len);
+
+    if (!str || len == 0) {
+        return true;
+    }
+
+    TSGlobalConfig.password = strndup(str, len);
+    return true;
+}
+
+static bool Config_SetGlobalUserFromRedisString(RedisModuleString *value) {
+    if (TSGlobalConfig.username) {
+        free(TSGlobalConfig.username);
+        TSGlobalConfig.username = NULL;
+    }
+
+    size_t len = 0;
+    const char *str = RedisModule_StringPtrLen(value, &len);
+
+    if (!str || len == 0) {
+        return true;
+    }
+
+    TSGlobalConfig.username = strndup(str, len);
+    return true;
+}
+
+static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisModuleString **err) {
+    size_t len = 0;
+    const char *encoding = RedisModule_StringPtrLen(value, &len);
+
+    if (!strcasecmp(encoding, UNCOMPRESSED_ARG_STR)) {
+        TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+        TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
+    } else if (!strcasecmp(encoding, COMPRESSED_GORILLA_ARG_STR)) {
+        TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
+        TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
+    } else {
+        *err = RedisModule_CreateStringPrintf(NULL, "Invalid encoding: %s", encoding);
+        return false;
+    }
+
+    return true;
+}
+
 static int setModernStringConfigValue(const char *name,
                                       RedisModuleString *value,
                                       void *data,
                                       RedisModuleString **err) {
     if (!strcasecmp("ts-compaction-policy", name)) {
-        size_t len;
-        const char *policy_cstr = RedisModule_StringPtrLen(value, &len);
+        size_t len = 0;
+        const char *policyString = RedisModule_StringPtrLen(value, &len);
 
-        if (len == 0) {
-            ClearCompactionRules();
-
-            return REDISMODULE_OK;
-        }
-
-        SimpleCompactionRule *compactionRules = NULL;
-        uint64_t compactionRulesCount = 0;
-
-        if (ParseCompactionPolicy(policy_cstr, &compactionRules, &compactionRulesCount) != TRUE) {
-            *err =
-                RedisModule_CreateStringPrintf(NULL, "Invalid compaction policy: %s", policy_cstr);
-            return REDISMODULE_ERR;
-        }
-
-        ClearCompactionRules();
-
-        TSGlobalConfig.compactionRules = compactionRules;
-        TSGlobalConfig.compactionRulesCount = compactionRulesCount;
-
-        return REDISMODULE_OK;
+        return Config_SetCompactionPolicyFromCStr(policyString, err) ? REDISMODULE_OK
+                                                                     : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
-        const DuplicatePolicy newValue = RMStringLenDuplicationPolicyToEnum(value);
-
-        if (newValue == DP_INVALID) {
-            *err = RedisModule_CreateStringPrintf(
-                NULL, "Invalid duplicate policy: %s", RedisModule_StringPtrLen(value, NULL));
-            return REDISMODULE_ERR;
-        }
-
-        TSGlobalConfig.duplicatePolicy = newValue;
-        return REDISMODULE_OK;
+        return Config_SetDuplicationPolicyFromRedisString(value, err) ? REDISMODULE_OK
+                                                                      : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
-        const double newValue = stringToDouble(
-            "ts-ignore-max-val-diff", value, IGNORE_MAX_VAL_DIFF_MIN, IGNORE_MAX_VAL_DIFF_MAX, err);
-
-        if (err && *err) {
-            return REDISMODULE_ERR;
-        }
-
-        TSGlobalConfig.ignoreMaxValDiff = newValue;
-        return REDISMODULE_OK;
+        return Config_SetIgnoreMaxValDiffFromRedisString(value, err) ? REDISMODULE_OK
+                                                                     : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-global-password", name)) {
-        if (TSGlobalConfig.password) {
-            free(TSGlobalConfig.password);
-            TSGlobalConfig.password = NULL;
-        }
-
-        size_t len = 0;
-        const char *str = RedisModule_StringPtrLen(value, &len);
-
-        if (!str || len == 0) {
-            return REDISMODULE_OK;
-        }
-
-        TSGlobalConfig.password = strndup(str, len);
-        return REDISMODULE_OK;
+        return Config_SetGlobalPasswordFromRedisString(value) ? REDISMODULE_OK : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-global-user", name)) {
-        if (TSGlobalConfig.username) {
-            free(TSGlobalConfig.username);
-            TSGlobalConfig.username = NULL;
-        }
-
-        size_t len = 0;
-        const char *str = RedisModule_StringPtrLen(value, &len);
-
-        if (!str || len == 0) {
-            return REDISMODULE_OK;
-        }
-
-        TSGlobalConfig.username = strndup(str, len);
-        return REDISMODULE_OK;
-    } else if (!strcasecmp("ts-duplicate-policy", name)) {
-        const DuplicatePolicy newValue = RMStringLenDuplicationPolicyToEnum(value);
-
-        if (newValue == DP_INVALID) {
-            *err = RedisModule_CreateStringPrintf(
-                NULL, "Invalid duplicate policy: %s", RedisModule_StringPtrLen(value, NULL));
-            return REDISMODULE_ERR;
-        }
-
-        TSGlobalConfig.duplicatePolicy = newValue;
-        return REDISMODULE_OK;
+        return Config_SetGlobalUserFromRedisString(value) ? REDISMODULE_OK : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-encoding", name)) {
-        size_t len;
-        const char *encoding = RedisModule_StringPtrLen(value, &len);
-        if (!strcasecmp(encoding, UNCOMPRESSED_ARG_STR)) {
-            TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
-            TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
-        } else if (!strcasecmp(encoding, COMPRESSED_GORILLA_ARG_STR)) {
-            TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
-            TSGlobalConfig.options |= SERIES_OPT_COMPRESSED_GORILLA;
-        } else {
-            *err = RedisModule_CreateStringPrintf(NULL, "Invalid encoding: %s", encoding);
-            return REDISMODULE_ERR;
-        }
-
-        return REDISMODULE_OK;
+        return Config_SetEncodingFromRedisString(value, err) ? REDISMODULE_OK : REDISMODULE_ERR;
     }
 
     return REDISMODULE_ERR;
@@ -402,8 +418,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-compaction-policy",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT |
-                                                 REDISMODULE_CONFIG_UNPREFIXED,
+                                             REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
@@ -473,8 +488,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-retention-policy",
                                           TSGlobalConfig.retentionPolicy,
-                                          REDISMODULE_CONFIG_DEFAULT |
-                                              REDISMODULE_CONFIG_UNPREFIXED,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
                                           RETENTION_POLICY_MIN,
                                           RETENTION_POLICY_MAX,
                                           getModernIntegerConfigValue,
@@ -487,7 +501,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-duplicate-policy",
                                          DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy),
-                                         REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_UNPREFIXED,
+                                         REDISMODULE_CONFIG_UNPREFIXED,
                                          getModernStringConfigValue,
                                          setModernStringConfigValue,
                                          NULL,
@@ -498,8 +512,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-chunk-size-bytes",
                                           TSGlobalConfig.chunkSizeBytes,
-                                          REDISMODULE_CONFIG_DEFAULT |
-                                              REDISMODULE_CONFIG_UNPREFIXED,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
                                           CHUNK_SIZE_BYTES_MIN,
                                           CHUNK_SIZE_BYTES_MAX,
                                           getModernIntegerConfigValue,
@@ -512,7 +525,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-encoding",
                                          ChunkTypeToString(TSGlobalConfig.options),
-                                         REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_UNPREFIXED,
+                                         REDISMODULE_CONFIG_UNPREFIXED,
                                          getModernStringConfigValue,
                                          setModernStringConfigValue,
                                          NULL,
@@ -523,8 +536,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-ignore-max-time-diff",
                                           TSGlobalConfig.ignoreMaxTimeDiff,
-                                          REDISMODULE_CONFIG_DEFAULT |
-                                              REDISMODULE_CONFIG_UNPREFIXED,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
                                           IGNORE_MAX_TIME_DIFF_MIN,
                                           IGNORE_MAX_TIME_DIFF_MAX,
                                           getModernIntegerConfigValue,
@@ -541,8 +553,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         if (RedisModule_RegisterStringConfig(ctx,
                                              "ts-ignore-max-val-diff",
                                              oldValue,
-                                             REDISMODULE_CONFIG_DEFAULT |
-                                                 REDISMODULE_CONFIG_UNPREFIXED,
+                                             REDISMODULE_CONFIG_UNPREFIXED,
                                              getModernStringConfigValue,
                                              setModernStringConfigValue,
                                              NULL,
