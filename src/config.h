@@ -79,9 +79,11 @@ static inline int RTS_IsEnterprise(void) {
  * configuration API.
  */
 static inline bool RTS_RedisSupportsModuleConfigApi(void) {
-    return RTS_currVersion.redisMajorVersion >= 7 && RedisModule_RegisterEnumConfig &&
-           RedisModule_RegisterBoolConfig && RedisModule_RegisterStringConfig &&
-           RedisModule_RegisterNumericConfig && RedisModule_LoadConfigs;
+    return (RTS_currVersion.redisMajorVersion > 7 ||
+            (RTS_currVersion.redisMajorVersion == 7 && RTS_currVersion.redisMinorVersion >= 9)) &&
+           RedisModule_RegisterEnumConfig && RedisModule_RegisterBoolConfig &&
+           RedisModule_RegisterStringConfig && RedisModule_RegisterNumericConfig &&
+           RedisModule_LoadConfigs;
 }
 
 int RTS_CheckSupportedVestion(void);
