@@ -465,9 +465,10 @@ void FreeSeries(void *value) {
 
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value) {
     Series *series = (Series *)*value;
-    defragPtr(ctx, series);
+    defragPtr(ctx, &series);
 
-    series->chunks = RedisModule_DefragRedisModuleDict(ctx, series->chunks);
+    // TODO: defragging the chunks is blocked until RedisModule_DefragRedisModuleDict is exposed
+    // series->chunks = RedisModule_DefragRedisModuleDict(ctx, series->chunks);
 
     for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
         defragPtr(ctx, &rule);
