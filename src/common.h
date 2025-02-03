@@ -11,6 +11,7 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                                                 int flags);
 
 #include <stdlib.h>
+#include "RedisModulesSDK/redismodule.h"
 
 #define RTS_ERR "ERR"
 #define RTS_NOPERM "NOPERM"
@@ -34,6 +35,10 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
     RedisModule_FreeString(ctx, username);
 
     return user;
+}
+
+static inline void *defragPtr(RedisModuleDefragCtx *ctx, void *ptr) {
+    return RedisModule_DefragAlloc(ctx, ptr) ?: ptr;
 }
 
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)

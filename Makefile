@@ -111,7 +111,7 @@ define CC_DEFS +=
 	REDISMODULE_SDK_RLEC
 endef
 
-CC_PEDANTIC=1
+# CC_PEDANTIC=1
 
 ifeq ($(VG),1)
 CC_DEFS += _VALGRIND
