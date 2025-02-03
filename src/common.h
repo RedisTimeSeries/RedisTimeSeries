@@ -11,6 +11,7 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                                                 int flags);
 
 #include <stdlib.h>
+#include "RedisModulesSDK/redismodule.h"
 
 #define RTS_ERR "ERR"
 #define RTS_NOPERM "NOPERM"
