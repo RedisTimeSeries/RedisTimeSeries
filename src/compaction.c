@@ -519,100 +519,112 @@ void rm_free(void *ptr) {
 }
 
 // time weighted avg
-static AggregationClass aggWAvg = { .type = TS_AGG_TWA,
-                                    .createContext = TwaCreateContext,
-                                    .appendValue = TwaAddValue,
-                                    .freeContext = rm_free,
-                                    .finalize = TwaFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = TwaWriteContext,
-                                    .readContext = TwaReadContext,
-                                    .addBucketParams = TwaAddBucketParams,
-                                    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
-                                    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
-                                    .getLastSample = TwaGetLastSample,
-                                    .resetContext = TwaReset,
-                                    .cloneContext = TwaCloneContext };
+static AggregationClass aggWAvg = {
+    .type = TS_AGG_TWA,
+    .createContext = TwaCreateContext,
+    .appendValue = TwaAddValue,
+    .freeContext = rm_free,
+    .finalize = TwaFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = TwaWriteContext,
+    .readContext = TwaReadContext,
+    .addBucketParams = TwaAddBucketParams,
+    .addPrevBucketLastSample = TwaAddPrevBucketLastSample,
+    .addNextBucketFirstSample = TwaAddNextBucketFirstSample,
+    .getLastSample = TwaGetLastSample,
+    .resetContext = TwaReset,
+    .cloneContext = TwaCloneContext,
+};
 
-static AggregationClass aggAvg = { .type = TS_AGG_AVG,
-                                   .createContext = AvgCreateContext,
-                                   .appendValue = AvgAddValue,
-                                   .appendValueVec = NULL, /* determined on run time */
-                                   .freeContext = rm_free,
-                                   .finalize = AvgFinalize,
-                                   .finalizeEmpty = finalize_empty_with_NAN,
-                                   .writeContext = AvgWriteContext,
-                                   .readContext = AvgReadContext,
-                                   .addBucketParams = NULL,
-                                   .addPrevBucketLastSample = NULL,
-                                   .addNextBucketFirstSample = NULL,
-                                   .getLastSample = NULL,
-                                   .resetContext = AvgReset,
-                                   .cloneContext = AvgCloneContext };
+static AggregationClass aggAvg = {
+    .type = TS_AGG_AVG,
+    .createContext = AvgCreateContext,
+    .appendValue = AvgAddValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = AvgFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = AvgWriteContext,
+    .readContext = AvgReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = AvgReset,
+    .cloneContext = AvgCloneContext,
+};
 
-static AggregationClass aggStdP = { .type = TS_AGG_STD_P,
-                                    .createContext = StdCreateContext,
-                                    .appendValue = StdAddValue,
-                                    .appendValueVec = NULL, /* determined on run time */
-                                    .freeContext = rm_free,
-                                    .finalize = StdPopulationFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = StdWriteContext,
-                                    .readContext = StdReadContext,
-                                    .addBucketParams = NULL,
-                                    .addPrevBucketLastSample = NULL,
-                                    .addNextBucketFirstSample = NULL,
-                                    .getLastSample = NULL,
-                                    .resetContext = StdReset,
-                                    .cloneContext = StdCloneContext };
+static AggregationClass aggStdP = {
+    .type = TS_AGG_STD_P,
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = StdPopulationFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = StdReset,
+    .cloneContext = StdCloneContext,
+};
 
-static AggregationClass aggStdS = { .type = TS_AGG_STD_S,
-                                    .createContext = StdCreateContext,
-                                    .appendValue = StdAddValue,
-                                    .appendValueVec = NULL, /* determined on run time */
-                                    .freeContext = rm_free,
-                                    .finalize = StdSamplesFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = StdWriteContext,
-                                    .readContext = StdReadContext,
-                                    .addBucketParams = NULL,
-                                    .addPrevBucketLastSample = NULL,
-                                    .addNextBucketFirstSample = NULL,
-                                    .getLastSample = NULL,
-                                    .resetContext = StdReset,
-                                    .cloneContext = StdCloneContext };
+static AggregationClass aggStdS = {
+    .type = TS_AGG_STD_S,
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = StdSamplesFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = StdReset,
+    .cloneContext = StdCloneContext,
+};
 
-static AggregationClass aggVarP = { .type = TS_AGG_VAR_P,
-                                    .createContext = StdCreateContext,
-                                    .appendValue = StdAddValue,
-                                    .appendValueVec = NULL, /* determined on run time */
-                                    .freeContext = rm_free,
-                                    .finalize = VarPopulationFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = StdWriteContext,
-                                    .readContext = StdReadContext,
-                                    .addBucketParams = NULL,
-                                    .addPrevBucketLastSample = NULL,
-                                    .addNextBucketFirstSample = NULL,
-                                    .getLastSample = NULL,
-                                    .resetContext = StdReset,
-                                    .cloneContext = StdCloneContext };
+static AggregationClass aggVarP = {
+    .type = TS_AGG_VAR_P,
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = VarPopulationFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = StdReset,
+    .cloneContext = StdCloneContext,
+};
 
-static AggregationClass aggVarS = { .type = TS_AGG_VAR_S,
-                                    .createContext = StdCreateContext,
-                                    .appendValue = StdAddValue,
-                                    .appendValueVec = NULL, /* determined on run time */
-                                    .freeContext = rm_free,
-                                    .finalize = VarSamplesFinalize,
-                                    .finalizeEmpty = finalize_empty_with_NAN,
-                                    .writeContext = StdWriteContext,
-                                    .readContext = StdReadContext,
-                                    .addBucketParams = NULL,
-                                    .addPrevBucketLastSample = NULL,
-                                    .addNextBucketFirstSample = NULL,
-                                    .getLastSample = NULL,
-                                    .resetContext = StdReset,
-                                    .cloneContext = StdCloneContext };
+static AggregationClass aggVarS = {
+    .type = TS_AGG_VAR_S,
+    .createContext = StdCreateContext,
+    .appendValue = StdAddValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = VarSamplesFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = StdWriteContext,
+    .readContext = StdReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = StdReset,
+    .cloneContext = StdCloneContext,
+};
 
 void *MaxMinCreateContext(__unused bool reverse) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
@@ -730,117 +742,131 @@ void LastAppendValue(void *contextPtr, double value, __attribute__((unused)) tim
     context->value = value;
 }
 
-static AggregationClass aggMax = { .type = TS_AGG_MAX,
-                                   .createContext = MaxMinCreateContext,
-                                   .appendValue = MaxAppendValue,
-                                   .appendValueVec = NULL, /* determined on run time */
-                                   .freeContext = rm_free,
-                                   .finalize = MaxFinalize,
-                                   .finalizeEmpty = finalize_empty_with_NAN,
-                                   .writeContext = MaxMinWriteContext,
-                                   .readContext = MaxMinReadContext,
-                                   .addBucketParams = NULL,
-                                   .addPrevBucketLastSample = NULL,
-                                   .addNextBucketFirstSample = NULL,
-                                   .getLastSample = NULL,
-                                   .resetContext = MaxMinReset,
-                                   .cloneContext = MaxMinCloneContext };
+static AggregationClass aggMax = {
+    .type = TS_AGG_MAX,
+    .createContext = MaxMinCreateContext,
+    .appendValue = MaxAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = MaxFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = MaxMinReset,
+    .cloneContext = MaxMinCloneContext,
+};
 
-static AggregationClass aggMin = { .type = TS_AGG_MIN,
-                                   .createContext = MaxMinCreateContext,
-                                   .appendValue = MinAppendValue,
-                                   .appendValueVec = NULL, /* determined on run time */
-                                   .freeContext = rm_free,
-                                   .finalize = MinFinalize,
-                                   .finalizeEmpty = finalize_empty_with_NAN,
-                                   .writeContext = MaxMinWriteContext,
-                                   .readContext = MaxMinReadContext,
-                                   .addBucketParams = NULL,
-                                   .addPrevBucketLastSample = NULL,
-                                   .addNextBucketFirstSample = NULL,
-                                   .getLastSample = NULL,
-                                   .resetContext = MaxMinReset,
-                                   .cloneContext = MaxMinCloneContext };
+static AggregationClass aggMin = {
+    .type = TS_AGG_MIN,
+    .createContext = MaxMinCreateContext,
+    .appendValue = MinAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = MinFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = MaxMinReset,
+    .cloneContext = MaxMinCloneContext,
+};
 
-static AggregationClass aggSum = { .type = TS_AGG_SUM,
-                                   .createContext = SingleValueCreateContext,
-                                   .appendValue = SumAppendValue,
-                                   .appendValueVec = NULL, /* determined on run time */
-                                   .freeContext = rm_free,
-                                   .finalize = SingleValueFinalize,
-                                   .finalizeEmpty = finalize_empty_with_ZERO,
-                                   .writeContext = SingleValueWriteContext,
-                                   .readContext = SingleValueReadContext,
-                                   .addBucketParams = NULL,
-                                   .addPrevBucketLastSample = NULL,
-                                   .addNextBucketFirstSample = NULL,
-                                   .getLastSample = NULL,
-                                   .resetContext = SingleValueReset,
-                                   .cloneContext = SingleValueCloneContext };
+static AggregationClass aggSum = {
+    .type = TS_AGG_SUM,
+    .createContext = SingleValueCreateContext,
+    .appendValue = SumAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = SingleValueFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+};
 
-static AggregationClass aggCount = { .type = TS_AGG_COUNT,
-                                     .createContext = SingleValueCreateContext,
-                                     .appendValue = CountAppendValue,
-                                     .appendValueVec = NULL, /* determined on run time */
-                                     .freeContext = rm_free,
-                                     .finalize = CountFinalize,
-                                     .finalizeEmpty = finalize_empty_with_ZERO,
-                                     .writeContext = SingleValueWriteContext,
-                                     .readContext = SingleValueReadContext,
-                                     .addBucketParams = NULL,
-                                     .addPrevBucketLastSample = NULL,
-                                     .addNextBucketFirstSample = NULL,
-                                     .getLastSample = NULL,
-                                     .resetContext = SingleValueReset,
-                                     .cloneContext = SingleValueCloneContext };
+static AggregationClass aggCount = {
+    .type = TS_AGG_COUNT,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+};
 
-static AggregationClass aggFirst = { .type = TS_AGG_FIRST,
-                                     .createContext = FirstValueCreateContext,
-                                     .appendValue = FirstAppendValue,
-                                     .appendValueVec = NULL, /* determined on run time */
-                                     .freeContext = rm_free,
-                                     .finalize = FirstValueFinalize,
-                                     .finalizeEmpty = finalize_empty_with_NAN,
-                                     .writeContext = FirstValueWriteContext,
-                                     .readContext = FirstValueReadContext,
-                                     .addBucketParams = NULL,
-                                     .addPrevBucketLastSample = NULL,
-                                     .addNextBucketFirstSample = NULL,
-                                     .getLastSample = NULL,
-                                     .resetContext = FirstValueReset,
-                                     .cloneContext = FirstValueCloneContext };
+static AggregationClass aggFirst = {
+    .type = TS_AGG_FIRST,
+    .createContext = FirstValueCreateContext,
+    .appendValue = FirstAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = FirstValueFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = FirstValueWriteContext,
+    .readContext = FirstValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = FirstValueReset,
+    .cloneContext = FirstValueCloneContext,
+};
 
-static AggregationClass aggLast = { .type = TS_AGG_LAST,
-                                    .createContext = SingleValueCreateContext,
-                                    .appendValue = LastAppendValue,
-                                    .appendValueVec = NULL, /* determined on run time */
-                                    .freeContext = rm_free,
-                                    .finalize = SingleValueFinalize,
-                                    .finalizeEmpty = finalize_empty_last_value,
-                                    .writeContext = SingleValueWriteContext,
-                                    .readContext = SingleValueReadContext,
-                                    .addBucketParams = NULL,
-                                    .addPrevBucketLastSample = NULL,
-                                    .addNextBucketFirstSample = NULL,
-                                    .getLastSample = NULL,
-                                    .resetContext = LastValueReset,
-                                    .cloneContext = SingleValueCloneContext };
+static AggregationClass aggLast = {
+    .type = TS_AGG_LAST,
+    .createContext = SingleValueCreateContext,
+    .appendValue = LastAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = SingleValueFinalize,
+    .finalizeEmpty = finalize_empty_last_value,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = LastValueReset,
+    .cloneContext = SingleValueCloneContext,
+};
 
-static AggregationClass aggRange = { .type = TS_AGG_RANGE,
-                                     .createContext = MaxMinCreateContext,
-                                     .appendValue = MaxMinAppendValue,
-                                     .appendValueVec = NULL, /* determined on run time */
-                                     .freeContext = rm_free,
-                                     .finalize = RangeFinalize,
-                                     .finalizeEmpty = finalize_empty_with_NAN,
-                                     .writeContext = MaxMinWriteContext,
-                                     .readContext = MaxMinReadContext,
-                                     .addBucketParams = NULL,
-                                     .addPrevBucketLastSample = NULL,
-                                     .addNextBucketFirstSample = NULL,
-                                     .getLastSample = NULL,
-                                     .resetContext = MaxMinReset,
-                                     .cloneContext = MaxMinCloneContext };
+static AggregationClass aggRange = {
+    .type = TS_AGG_RANGE,
+    .createContext = MaxMinCreateContext,
+    .appendValue = MaxMinAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = RangeFinalize,
+    .finalizeEmpty = finalize_empty_with_NAN,
+    .writeContext = MaxMinWriteContext,
+    .readContext = MaxMinReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = MaxMinReset,
+    .cloneContext = MaxMinCloneContext,
+};
 
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
