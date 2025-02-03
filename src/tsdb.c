@@ -447,7 +447,7 @@ void FreeSeries(void *value) {
 
     RedisModule_FreeDict(NULL, series->chunks);
 
-    for (CompactionRule *rule = series->rules; rule != NULL; ) {
+    for (CompactionRule *rule = series->rules; rule != NULL;) {
         CompactionRule *nextRule = rule->nextRule;
         FreeCompactionRule(rule);
         rule = nextRule;
