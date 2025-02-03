@@ -336,12 +336,14 @@ static size_t twa_get_samples_from_right(timestamp_t cur_ts,
                                          Sample *sample_rightRight) {
     size_t n_samples_right = 0;
     if (cur_ts < UINT64_MAX) {
-        RangeArgs args = { .aggregationArgs = { 0 },
-                           .filterByValueArgs = { 0 },
-                           .filterByTSArgs = { 0 },
-                           .startTimestamp = cur_ts,
-                           .endTimestamp = UINT64_MAX,
-                           .latest = false };
+        RangeArgs args = {
+            .aggregationArgs = { 0 },
+            .filterByValueArgs = { 0 },
+            .filterByTSArgs = { 0 },
+            .startTimestamp = cur_ts,
+            .endTimestamp = UINT64_MAX,
+            .latest = false,
+        };
         AbstractSampleIterator *sample_iterator =
             SeriesCreateSampleIterator(self->series, &args, false, true);
         if (sample_iterator->GetNext(sample_iterator, sample_right) == CR_OK) {
@@ -362,12 +364,14 @@ static size_t twa_get_samples_from_left(timestamp_t cur_ts,
                                         Sample *sample_leftLeft) {
     size_t n_samples_left = 0;
     if (cur_ts > 0) {
-        RangeArgs args = { .aggregationArgs = { 0 },
-                           .filterByValueArgs = { 0 },
-                           .filterByTSArgs = { 0 },
-                           .startTimestamp = 0,
-                           .endTimestamp = cur_ts - 1,
-                           .latest = false };
+        RangeArgs args = {
+            .aggregationArgs = { 0 },
+            .filterByValueArgs = { 0 },
+            .filterByTSArgs = { 0 },
+            .startTimestamp = 0,
+            .endTimestamp = cur_ts - 1,
+            .latest = false,
+        };
         AbstractSampleIterator *sample_iterator =
             SeriesCreateSampleIterator(self->series, &args, true, true);
         if (sample_iterator->GetNext(sample_iterator, sample_left) == CR_OK) {
@@ -703,12 +707,14 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         }
 
         if (aggregation->type == TS_AGG_TWA && !((!is_reversed) && init_ts == 0)) {
-            RangeArgs args = { .aggregationArgs = { 0 },
-                               .filterByValueArgs = { 0 },
-                               .filterByTSArgs = { 0 },
-                               .startTimestamp = is_reversed ? init_ts + 1 : 0,
-                               .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
-                               .latest = false };
+            RangeArgs args = {
+                .aggregationArgs = { 0 },
+                .filterByValueArgs = { 0 },
+                .filterByTSArgs = { 0 },
+                .startTimestamp = is_reversed ? init_ts + 1 : 0,
+                .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
+                .latest = false,
+            };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
             if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
@@ -882,12 +888,14 @@ _finalize:
         Sample last_sample;
         aggregation->getLastSample(aggregationContext, &last_sample);
         if (!(is_reversed && last_sample.timestamp == 0)) {
-            RangeArgs args = { .aggregationArgs = { 0 },
-                               .filterByValueArgs = { 0 },
-                               .filterByTSArgs = { 0 },
-                               .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
-                               .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
-                               .latest = false };
+            RangeArgs args = {
+                .aggregationArgs = { 0 },
+                .filterByValueArgs = { 0 },
+                .filterByTSArgs = { 0 },
+                .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
+                .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
+                .latest = false,
+            };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, is_reversed, true);
             if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {

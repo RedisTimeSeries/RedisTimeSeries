@@ -535,18 +535,19 @@ static MRRecordType *MR_RecordTypeCreate(char *type,
                                          ObjectToString tostring,
                                          SendAsRedisReply sendReply,
                                          HashTag hashTag) {
-    MRRecordType *ret = malloc(sizeof(MRRecordType));
-    *ret = (MRRecordType){ .type =
-                               (MRObjectType){
-                                   .type = strdup(type),
-                                   .free = free,
-                                   .dup = dup,
-                                   .serialize = serialize,
-                                   .deserialize = deserialize,
-                                   .tostring = tostring,
-                               },
-                           .sendReply = sendReply,
-                           .hashTag = hashTag };
+    MRRecordType *ret = malloc(sizeof *ret);
+    *ret = (MRRecordType){
+        .type = {
+            .type = strdup(type),
+            .free = free,
+            .dup = dup,
+            .serialize = serialize,
+            .deserialize = deserialize,
+            .tostring = tostring,
+        },
+        .sendReply = sendReply,
+        .hashTag = hashTag,
+    };
     return ret;
 }
 

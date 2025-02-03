@@ -77,14 +77,16 @@ typedef struct Series
 } Series;
 
 // process C's modulo result to translate from a negative modulo to a positive
-#define modulo(x, N) ((x % N + N) % N)
+static inline int64_t modulo(int64_t x, int64_t N) {
+    return ((x % N) + N) % N;
+}
 
 // Calculate the begining of aggregation bucket
 static inline timestamp_t CalcBucketStart(timestamp_t ts,
                                           timestamp_t bucketDuration,
                                           timestamp_t timestampAlignment) {
     const int64_t timestamp_diff = ts - timestampAlignment;
-    return ts - modulo(timestamp_diff, (int64_t)bucketDuration);
+    return ts - modulo(timestamp_diff, bucketDuration);
 }
 
 // If bucketTS is negative converts it to 0
@@ -94,6 +96,7 @@ static inline timestamp_t BucketStartNormalize(timestamp_t bucketTS) {
 
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
+int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value);
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
 void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);

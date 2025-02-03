@@ -36,6 +36,10 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
     return user;
 }
 
+static inline void defragPtr(RedisModuleDefragCtx *ctx, void **ptr) {
+    *ptr = RedisModule_DefragAlloc(ctx, *ptr) ?: *ptr;
+}
+
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
 #include "readies/cetara/diag/gdb.h"
 #endif
