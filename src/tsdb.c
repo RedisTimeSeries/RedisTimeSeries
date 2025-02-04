@@ -4,7 +4,7 @@
  *the server side public license v1 (ssplv1).
  */
 #include "tsdb.h"
-
+#include "common.h"
 #include "config.h"
 #include "consts.h"
 #include "endianconv.h"
@@ -447,8 +447,7 @@ void FreeSeries(void *value) {
 
     RedisModule_FreeDict(NULL, series->chunks);
 
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
+    for (CompactionRule *rule = series->rules; rule != NULL;) {
         CompactionRule *nextRule = rule->nextRule;
         FreeCompactionRule(rule);
         rule = nextRule;
@@ -462,6 +461,29 @@ void FreeSeries(void *value) {
     }
 
     free(series);
+}
+
+int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value) {
+    Series *series = (Series *)*value;
+    *value = defragPtr(ctx, series);
+
+    // TODO: defragging the chunks is blocked until RedisModule_DefragRedisModuleDict is exposed
+    // series->chunks = RedisModule_DefragRedisModuleDict(ctx, series->chunks);
+
+    for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
+        rule = defragPtr(ctx, rule);
+    }
+
+    series->labels = defragPtr(ctx, series->labels);
+    for (size_t i = 0; i < series->labelsCount; i++) {
+        series->labels[i].key = RedisModule_DefragRedisModuleString(ctx, series->labels[i].key);
+        series->labels[i].value = RedisModule_DefragRedisModuleString(ctx, series->labels[i].value);
+    }
+
+    series->srcKey = RedisModule_DefragRedisModuleString(ctx, series->srcKey);
+    series->keyName = RedisModule_DefragRedisModuleString(ctx, series->keyName);
+
+    return REDISMODULE_OK;
 }
 
 void FreeCompactionRule(void *value) {
@@ -674,7 +696,7 @@ int SeriesUpsertSample(Series *series,
 
     UpsertCtx uCtx = {
         .inChunk = chunk,
-        .sample = { .timestamp = timestamp, .value = value },
+        .sample = { .timestamp = timestamp, .value = value, },
     };
 
     int size = 0;
@@ -697,7 +719,10 @@ int SeriesUpsertSample(Series *series,
 
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     // backfilling or update
-    Sample sample = { .timestamp = timestamp, .value = value };
+    Sample sample = {
+        .timestamp = timestamp,
+        .value = value,
+    };
     ChunkResult ret = series->funcs->AddSample(series->lastChunk, &sample);
 
     if (ret == CR_END) {
@@ -1204,9 +1229,11 @@ int SeriesCalcRange(Series *series,
     void *context = aggObject->createContext(false);
     bool _is_empty = true;
     AbstractSampleIterator *iterator;
-    RangeArgs args = { .aggregationArgs = { 0 },
-                       .filterByValueArgs = { 0 },
-                       .filterByTSArgs = { 0 } };
+    RangeArgs args = {
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 },
+    };
 
     if (aggObject->type == TS_AGG_TWA) {
         aggObject->addBucketParams(context, start_ts, end_ts + 1);
@@ -1272,11 +1299,13 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
         minTimestamp = series->lastTimestamp - series->retentionTime;
     }
 
-    const RangeArgs args = { .startTimestamp = 0,
-                             .endTimestamp = series->lastTimestamp,
-                             .aggregationArgs = { 0 },
-                             .filterByValueArgs = { 0 },
-                             .filterByTSArgs = { 0 } };
+    const RangeArgs args = {
+        .startTimestamp = 0,
+        .endTimestamp = series->lastTimestamp,
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 },
+    };
     AbstractSampleIterator *iterator = SeriesCreateSampleIterator(series, &args, false, false);
 
     while (iterator->GetNext(iterator, &sample) == CR_OK) {

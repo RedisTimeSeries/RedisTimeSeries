@@ -1733,13 +1733,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    RedisModuleTypeMethods tm = { .version = REDISMODULE_TYPE_METHOD_VERSION,
-                                  .rdb_load = series_rdb_load,
-                                  .rdb_save = series_rdb_save,
-                                  .aof_rewrite = RMUtil_DefaultAofRewrite,
-                                  .mem_usage = SeriesMemUsage,
-                                  .copy = CopySeries,
-                                  .free = FreeSeries };
+    RedisModuleTypeMethods tm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = series_rdb_load,
+        .rdb_save = series_rdb_save,
+        .aof_rewrite = RMUtil_DefaultAofRewrite,
+        .mem_usage = SeriesMemUsage,
+        .copy = CopySeries,
+        .free = FreeSeries,
+        .defrag = DefragSeries,
+    };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
     if (SeriesType == NULL) {
@@ -1750,10 +1753,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    RedisModuleTypeExtMethods etm = { .version = REDISMODULE_TYPE_EXT_METHOD_VERSION,
-                                      .key_added_to_db_dict = keyAddedToDbDict,
-                                      .removing_key_from_db_dict = keyRemovedFromDbDict,
-                                      .get_key_metadata_for_rdb = NULL };
+    RedisModuleTypeExtMethods etm = {
+        .version = REDISMODULE_TYPE_EXT_METHOD_VERSION,
+        .key_added_to_db_dict = keyAddedToDbDict,
+        .removing_key_from_db_dict = keyRemovedFromDbDict,
+        .get_key_metadata_for_rdb = NULL,
+    };
     if (RedisModule_SetDataTypeExtensions != NULL) {
         if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
             FreeConfig();
