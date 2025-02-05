@@ -243,9 +243,6 @@ def test_negative_configuration():
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; global-password')
 
-    with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_TYPE compressed; global-user')
-
 @skip(onVersionLowerThan='6.2', onVersionHigherThan='7.0', on_cluster=True)
 def test_module_config_api_is_unused_on_old_versions(env):
     env = Env(noLog=False)

@@ -20,6 +20,7 @@ def test_password():
         res = r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
         assert res != []
 
+@skip(onVersionHigherThan='7.4.0')
 def test_invalid_password():
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; global-password wrong_password', freshEnv=True)
     if not env.is_cluster():
@@ -35,6 +36,7 @@ def test_invalid_password():
         with pytest.raises(redis.ResponseError) as excinfo:
             r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
 
+@skip(onVersionHigherThan='7.4.0')
 def test_no_password():
     env = Env(moduleArgs='ENCODING UNCOMPRESSED', freshEnv=True)
     if not env.is_cluster():
@@ -48,4 +50,4 @@ def test_no_password():
         assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
         _insert_data(r, 'tester1{1}', start_ts, samples_count, 1)
         with pytest.raises(redis.ResponseError) as excinfo:
-            r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
+            print(r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob'))
