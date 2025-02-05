@@ -281,8 +281,6 @@ def test_module_config_api_is_used_on_recent_redis_versions():
 
         conn.execute_command('CONFIG', 'GET', 'ts-global-user')
 
-        conn.execute_command('CONFIG', 'GET', 'ts-global-password')
-
         conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')
         conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'last')
         conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'LAST')
@@ -374,7 +372,6 @@ def test_module_config_takes_precedence_over_module_arguments():
     ts-duplicate-policy last
     ts-compaction-policy max:1m:1d
     ts-encoding uncompressed
-    ts-global-password test2
     """
 
     env = Env(moduleArgs=args, redisConfigFileContent=configFileContent, noLog=False)
@@ -388,4 +385,3 @@ def test_module_config_takes_precedence_over_module_arguments():
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-global-password')[1], b'test2')
