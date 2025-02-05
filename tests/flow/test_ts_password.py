@@ -50,4 +50,4 @@ def test_no_password():
         assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
         _insert_data(r, 'tester1{1}', start_ts, samples_count, 1)
         with pytest.raises(redis.ResponseError) as excinfo:
-            print(r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob'))
+            r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
