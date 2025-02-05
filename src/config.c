@@ -29,10 +29,7 @@
                             deprecatedName,                                                        \
                             modernName);                                                           \
         } else {                                                                                   \
-            RedisModule_Log(rts_staticCtx,                                                         \
-                            "warning",                                                             \
-                            "%s is deprecated.",                                                   \
-                            deprecatedName);                                                       \
+            RedisModule_Log(rts_staticCtx, "warning", "%s is deprecated.", deprecatedName);        \
         }                                                                                          \
     }
 
