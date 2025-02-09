@@ -47,23 +47,31 @@ When not specified, the timestamp is set to the Unix time of the server's clock.
 
 <details open><summary><code>RETENTION retentionPeriod</code></summmary> 
 
-is maximum retention period, compared to the maximum existing timestamp, in milliseconds. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
+is maximum retention period, compared to the maximum existing timestamp, in milliseconds.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `RETENTION` in `TS.CREATE`.
 </details>
 
  
 <details open><summary><code>UNCOMPRESSED</code></summary>
 
-changes data storage from compressed (default) to uncompressed. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
+changes data storage from compressed (default) to uncompressed.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `ENCODING` in `TS.CREATE`.
 </details>
 
 <details open><summary><code>CHUNK_SIZE size</code></summary> 
 
-is memory size, in bytes, allocated for each data chunk. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
+is memory size, in bytes, allocated for each data chunk.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `CHUNK_SIZE` in `TS.CREATE`.
 </details>
 
 <details open><summary><code>LABELS [{label value}...]</code></summary> 
 
-is set of label-value pairs that represent metadata labels of the key and serve as a secondary index. Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
+is set of label-value pairs that represent metadata labels of the time series and serves as a secondary index. A value may contain neither parentheses nor commas.
+
+Use it only if you are creating a new time series. It is ignored if you are adding samples to an existing time series. See `LABELS` in `TS.CREATE`.
 </details>
 
 <note><b>Notes</b>
