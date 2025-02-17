@@ -62,6 +62,10 @@ def shardsConnections(env: rltestEnv):
 
 def verifyClusterInitialized(env):
     for conn in shardsConnections(env):
+        try:
+            conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
+        except Exception:
+            pass # in case we run on older version of redis
         allConnected = False
         while not allConnected:
             res = conn.execute_command('timeseries.INFOCLUSTER')

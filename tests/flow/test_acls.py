@@ -148,27 +148,21 @@ def test_non_local_data_when_the_user_has_access(env):
 
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
-def test_libmr_adds_acl_category(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
-        env.skip()
-
-    acl_category = '_timeseries_libmr_internal'
-    env.expect('acl', 'cat').contains(acl_category.encode())
-
 def do_test_libmr(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
+    if not env.isCluster() or SANITIZER == 'address':
         env.skip()
 
     for shard in range(0, env.shardsCount):
         conn = env.getConnection(shard)
+        conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
         conn.execute_command('timeseries.REFRESHCLUSTER')
         # make sure cluster will not turn to failed state and we will not be
         # able to execute commands on shards, on slow envs, run with valgrind,
         # or mac, it is needed.
-        env.broadcast('CONFIG', 'set', 'cluster-node-timeout', '120000')
-        env.broadcast('timeseries.FORCESHARDSCONNECTION')
-        with TimeLimit(2):
-            verifyClusterInitialized(env)
+        conn.execute_command('CONFIG', 'set', 'cluster-node-timeout', '120000')
+        conn.execute_command('timeseries.FORCESHARDSCONNECTION')
+    with TimeLimit(2):
+        verifyClusterInitialized(env)
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         r.execute_command('TS.ADD', '{host1}_metric_1', 1, 100, 'LABELS', 'metric', 'cpu')
@@ -181,52 +175,24 @@ def do_test_libmr(env):
         r.execute_command(
             'ACL', 'SETUSER', 'testuser4',
             'on', '>password',
-            '+ts.mrange', '-@_timeseries_libmr_internal', '~*',
+            '+ts.mrange', '~*',
         )
 
         r1.execute_command('AUTH', 'testuser4', 'password')
 
         env.assertEqual(len(r1.execute_command('TS.MRANGE - + FILTER metric=cpu')), 2)
 
-def test_acl_libmr_username_with_password_in_config():
-    configFileContent = """
-    user tslibmr on >tslibmrpassword -@all +@_timeseries_libmr_internal
-    ts-global-user tslibmr
-    ts-global-password tslibmrpassword
-    """
-    env = Env(redisConfigFileContent=configFileContent)
-
+@skip(onVersionLowerThan='8.0.0')
+def test_libmr_with_internal_secret_support(env):
     do_test_libmr(env)
 
-def test_acl_libmr_username_with_password_in_config_set_incorrectly(env):
-    if not env.isCluster() or SANITIZER == 'address' or is_redis_version_lower_than(env, '7.4.0', env.isCluster()):
-        env.skip()
-
-    configFileContent = """
-    user tslibmr2 on >tslibmrpassword +@all -@_timeseries_libmr_internal
-    user default on >password +@all -@_timeseries_libmr_internal +timeseries.FORCESHARDSCONNECTION +timeseries.INFOCLUSTER
-    ts-global-user nonexistinguseeeer
-    ts-global-password nonexistinguserpasswd
-    """
-    env = Env(password='password', redisConfigFileContent=configFileContent)
-
-    # Should raise a timeout error, as we can't connect to the nodes
-    # due to the user having no permissions to invoke the corresponding
-    # commands.
-    with pytest.raises(ShardConnectionTimeoutException):
-        do_test_libmr(env)
-
-def test_acl_libmr_username_with_password_in_config_set_to_disallow():
-    configFileContent = """
-    user tslibmr3 on >tslibmrpassword +@all -@_timeseries_libmr_internal
-    ts-global-user tslibmr3
-    ts-global-password tslibmrpassword
-    """
-    env = Env(redisConfigFileContent=configFileContent)
-
-    # Should raise a timeout error, as we can't connect to the nodes
-    # due to the user having no permissions to invoke the corresponding
-    # commands.
-    with pytest.raises(ShardConnectionTimeoutException):
-        do_test_libmr(env)
+@skip(onVersionLowerThan='8.0.0')
+def test_libmr_internal_commands_is_not_allowed(env):
+    env.expect('timeseries.CLUSTERSET').error().contains('unknown command')
+    env.expect('timeseries.INNERCOMMUNICATION').error().contains('unknown command')
+    env.expect('timeseries.HELLO').error().contains('unknown command')
+    env.expect('timeseries.CLUSTERSETFROMSHARD').error().contains('unknown command')
+    env.expect('timeseries.INFOCLUSTER').error().contains('unknown command')
+    env.expect('timeseries.NETWORKTEST').error().contains('unknown command')
+    env.expect('timeseries.FORCESHARDSCONNECTION').error().contains('unknown command')
 
