@@ -22,11 +22,15 @@
  */
 #define LOG_DEPRECATED_OPTION(deprecatedName, modernName, show)                                    \
     if (show) {                                                                                    \
-        RedisModule_Log(rts_staticCtx,                                                             \
-                        "warning",                                                                 \
-                        "%s is deprecated, please use the '%s' instead",                           \
-                        deprecatedName,                                                            \
-                        modernName);                                                               \
+        if (modernName) {                                                                          \
+            RedisModule_Log(rts_staticCtx,                                                         \
+                            "warning",                                                             \
+                            "%s is deprecated, please use the '%s' instead",                       \
+                            deprecatedName,                                                        \
+                            modernName);                                                           \
+        } else {                                                                                   \
+            RedisModule_Log(rts_staticCtx, "warning", "%s is deprecated.", deprecatedName);        \
+        }                                                                                          \
     }
 
 #define LOG_DEPRECATED_OPTION_ALWAYS(deprecatedName, modernName)                                   \
@@ -39,7 +43,6 @@ static RedisModuleString *getConfigStringCache = NULL;
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.password = NULL;
-    TSGlobalConfig.username = NULL;
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -59,11 +62,6 @@ void FreeConfig(void) {
     if (TSGlobalConfig.password) {
         free(TSGlobalConfig.password);
         TSGlobalConfig.password = NULL;
-    }
-
-    if (TSGlobalConfig.username) {
-        free(TSGlobalConfig.username);
-        TSGlobalConfig.username = NULL;
     }
 
     if (getConfigStringCache) {
@@ -130,24 +128,6 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
             RedisModule_CreateString(rts_staticCtx, rulesAsString, strlen(rulesAsString));
 
         free(rulesAsString);
-
-        return getConfigStringCache;
-    } else if (!strcasecmp("ts-global-password", name) && TSGlobalConfig.password) {
-        if (getConfigStringCache) {
-            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
-        }
-
-        getConfigStringCache = RedisModule_CreateString(
-            rts_staticCtx, TSGlobalConfig.password, strlen(TSGlobalConfig.password));
-
-        return getConfigStringCache;
-    } else if (!strcasecmp("ts-global-user", name) && TSGlobalConfig.username) {
-        if (getConfigStringCache) {
-            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
-        }
-
-        getConfigStringCache = RedisModule_CreateString(
-            rts_staticCtx, TSGlobalConfig.username, strlen(TSGlobalConfig.username));
 
         return getConfigStringCache;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
@@ -296,23 +276,6 @@ static bool Config_SetGlobalPasswordFromRedisString(RedisModuleString *value) {
     return true;
 }
 
-static bool Config_SetGlobalUserFromRedisString(RedisModuleString *value) {
-    if (TSGlobalConfig.username) {
-        free(TSGlobalConfig.username);
-        TSGlobalConfig.username = NULL;
-    }
-
-    size_t len = 0;
-    const char *str = RedisModule_StringPtrLen(value, &len);
-
-    if (!str || len == 0) {
-        return true;
-    }
-
-    TSGlobalConfig.username = strndup(str, len);
-    return true;
-}
-
 static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisModuleString **err) {
     size_t len = 0;
     const char *encoding = RedisModule_StringPtrLen(value, &len);
@@ -347,10 +310,6 @@ static int setModernStringConfigValue(const char *name,
     } else if (!strcasecmp("ts-ignore-max-val-diff", name)) {
         return Config_SetIgnoreMaxValDiffFromRedisString(value, err) ? REDISMODULE_OK
                                                                      : REDISMODULE_ERR;
-    } else if (!strcasecmp("ts-global-password", name)) {
-        return Config_SetGlobalPasswordFromRedisString(value) ? REDISMODULE_OK : REDISMODULE_ERR;
-    } else if (!strcasecmp("ts-global-user", name)) {
-        return Config_SetGlobalUserFromRedisString(value) ? REDISMODULE_OK : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-encoding", name)) {
         return Config_SetEncodingFromRedisString(value, err) ? REDISMODULE_OK : REDISMODULE_ERR;
     }
@@ -429,46 +388,6 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         }
 
         free(oldValue);
-    }
-
-    {
-        char *oldValue = TSGlobalConfig.password;
-        if (!oldValue) {
-            oldValue = "";
-        }
-
-        if (RedisModule_RegisterStringConfig(ctx,
-                                             "ts-global-password",
-                                             oldValue,
-                                             REDISMODULE_CONFIG_IMMUTABLE |
-                                                 REDISMODULE_CONFIG_SENSITIVE |
-                                                 REDISMODULE_CONFIG_UNPREFIXED,
-                                             getModernStringConfigValue,
-                                             setModernStringConfigValue,
-                                             NULL,
-                                             NULL)) {
-            return false;
-        }
-    }
-
-    {
-        char *oldValue = TSGlobalConfig.username;
-        if (!oldValue) {
-            oldValue = "";
-        }
-
-        if (RedisModule_RegisterStringConfig(ctx,
-                                             "ts-global-user",
-                                             oldValue,
-                                             REDISMODULE_CONFIG_IMMUTABLE |
-                                                 REDISMODULE_CONFIG_SENSITIVE |
-                                                 REDISMODULE_CONFIG_UNPREFIXED,
-                                             getModernStringConfigValue,
-                                             setModernStringConfigValue,
-                                             NULL,
-                                             NULL)) {
-            return false;
-        }
     }
 
     if (RedisModule_RegisterNumericConfig(ctx,
@@ -610,7 +529,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("OSS_GLOBAL_PASSWORD", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", "global-password", showDeprecationWarning);
+        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", NULL, showDeprecationWarning);
 
         RedisModuleString *password;
         size_t len;
@@ -627,7 +546,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-password", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("global-password", "ts-global-password", showDeprecationWarning);
+        LOG_DEPRECATED_OPTION("global-password", NULL, showDeprecationWarning);
         RedisModuleString *password;
         size_t len;
         if (RMUtil_ParseArgsAfter("global-password", argv, argc, "s", &password) !=
@@ -639,21 +558,6 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         const char *temp = (char *)RedisModule_StringPtrLen(password, &len);
         TSGlobalConfig.password = strndup(temp, len);
         RedisModule_Log(ctx, "notice", "loaded global-password");
-        isDeprecated = true;
-    }
-
-    if (argc > 1 && RMUtil_ArgIndex("global-user", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("global-user", "ts-global-user", showDeprecationWarning);
-        RedisModuleString *username;
-        size_t len;
-        if (RMUtil_ParseArgsAfter("global-user", argv, argc, "s", &username) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after global-user");
-            return TSDB_ERROR;
-        }
-
-        const char *temp = (char *)RedisModule_StringPtrLen(username, &len);
-        TSGlobalConfig.username = strndup(temp, len);
-        RedisModule_Log(ctx, "notice", "loaded global-user");
         isDeprecated = true;
     }
 

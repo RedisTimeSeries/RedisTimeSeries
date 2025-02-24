@@ -243,9 +243,6 @@ def test_negative_configuration():
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; global-password')
 
-    with pytest.raises(Exception) as excinfo:
-        env = Env(moduleArgs='CHUNK_TYPE compressed; global-user')
-
 @skip(onVersionLowerThan='6.2', onVersionHigherThan='7.0', on_cluster=True)
 def test_module_config_api_is_unused_on_old_versions(env):
     env = Env(noLog=False)
@@ -262,7 +259,7 @@ def test_module_config_api_is_unused_on_old_versions(env):
         # warnings should be emitted.
         env.expectEqual(len(conn.execute_command('CONFIG', 'GET', 'ts-global-user')), 0)
 
-    assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
+    assert is_line_in_server_log(env, f"{arg[0]} is deprecated")
     assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
 def test_module_config_api_is_used_on_recent_redis_versions():
@@ -283,8 +280,6 @@ def test_module_config_api_is_used_on_recent_redis_versions():
         conn.execute_command('CONFIG', 'SET', 'ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
 
         conn.execute_command('CONFIG', 'GET', 'ts-global-user')
-
-        conn.execute_command('CONFIG', 'GET', 'ts-global-password')
 
         conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')
         conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'last')
@@ -342,7 +337,7 @@ def test_module_config_from_module_arguments_raises_deprecation_messages():
 
     for arg in args:
         env = Env(moduleArgs=f"{arg[0]} {arg[1]}", noLog=False)
-        assert is_line_in_server_log(env, f"{arg[0]} is deprecated, please use")
+        assert is_line_in_server_log(env, f"{arg[0]} is deprecated")
         assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
 def test_module_config_takes_precedence_over_module_arguments():
@@ -377,11 +372,10 @@ def test_module_config_takes_precedence_over_module_arguments():
     ts-duplicate-policy last
     ts-compaction-policy max:1m:1d
     ts-encoding uncompressed
-    ts-global-password test2
     """
 
     env = Env(moduleArgs=args, redisConfigFileContent=configFileContent, noLog=False)
-    assert is_line_in_server_log(env, " is deprecated, please use")
+    assert is_line_in_server_log(env, " is deprecated")
     assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
     with env.getConnection() as conn:
@@ -391,4 +385,3 @@ def test_module_config_takes_precedence_over_module_arguments():
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-global-password')[1], b'test2')
