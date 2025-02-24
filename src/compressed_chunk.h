@@ -18,6 +18,10 @@ Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
 Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk);
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
+void *Compressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                             void *data,
+                             unsigned char *key,
+                             size_t keylen);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);

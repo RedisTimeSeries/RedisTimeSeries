@@ -464,25 +464,27 @@ void FreeSeries(void *value) {
 }
 
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value) {
+    static RedisModuleString *seekTo = NULL;
     Series *series = (Series *)*value;
-    *value = defragPtr(ctx, series);
 
-    // TODO: defragging the chunks is blocked until RedisModule_DefragRedisModuleDict is exposed
-    // series->chunks = RedisModule_DefragRedisModuleDict(ctx, series->chunks);
+    // first defrag of this key
+    if (seekTo == NULL) {
+        *value = defragPtr(ctx, series);
+        for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
+            rule = defragPtr(ctx, rule);
+        }
 
-    for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
-        rule = defragPtr(ctx, rule);
+        series->labels = defragPtr(ctx, series->labels);
+        for (size_t i = 0; i < series->labelsCount; i++) {
+            series->labels[i].key = defragString(ctx, series->labels[i].key);
+            series->labels[i].value = defragString(ctx, series->labels[i].value);
+        }
+
+        series->srcKey = defragString(ctx, series->srcKey);
+        series->keyName = defragString(ctx, series->keyName);
     }
 
-    series->labels = defragPtr(ctx, series->labels);
-    for (size_t i = 0; i < series->labelsCount; i++) {
-        series->labels[i].key = RedisModule_DefragRedisModuleString(ctx, series->labels[i].key);
-        series->labels[i].value = RedisModule_DefragRedisModuleString(ctx, series->labels[i].value);
-    }
-
-    series->srcKey = RedisModule_DefragRedisModuleString(ctx, series->srcKey);
-    series->keyName = RedisModule_DefragRedisModuleString(ctx, series->keyName);
-
+    series->chunks = defragDict(ctx, series->chunks, series->funcs->DefragChunk, &seekTo);
     return REDISMODULE_OK;
 }
 

@@ -40,6 +40,12 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
 static inline void *defragPtr(RedisModuleDefragCtx *ctx, void *ptr) {
     return RedisModule_DefragAlloc(ctx, ptr) ?: ptr;
 }
+static inline RedisModuleString *defragString(RedisModuleDefragCtx *ctx, RedisModuleString *str) {
+    return RedisModule_DefragRedisModuleString(ctx, str) ?: str;
+}
+static inline RedisModuleDict *defragDict(RedisModuleDefragCtx *ctx, RedisModuleDict *dict, RedisModuleDefragDictValueCallback valueCB, RedisModuleString **seekTo) {
+    return RedisModule_DefragRedisModuleDict(ctx, dict, valueCB, seekTo) ?: dict;
+}
 
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
 #include "readies/cetara/diag/gdb.h"

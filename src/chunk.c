@@ -4,6 +4,7 @@
  *the server side public license v1 (ssplv1).
  */
 #include "chunk.h"
+#include "common.h"
 
 #include "libmr_integration.h"
 
@@ -66,6 +67,16 @@ Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src) {
     dst->samples = (Sample *)malloc(dst->size);
     memcpy(dst->samples, _src->samples, dst->size);
     return dst;
+}
+
+void *Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                               void *data,
+                               __unused unsigned char *key,
+                               __unused size_t keylen) {
+    Chunk *chunk = (Chunk *)data;
+    chunk = defragPtr(ctx, chunk);
+    chunk->samples = defragPtr(ctx, chunk->samples);
+    return (void *)chunk;
 }
 
 static int IsChunkFull(Chunk *chunk) {
