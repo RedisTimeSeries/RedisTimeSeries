@@ -464,6 +464,11 @@ void FreeSeries(void *value) {
 }
 
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value) {
+    enum {
+        DefragStatus_Finished = 0,
+        DefragStatus_Paused = 1,
+    };
+
     static RedisModuleString *seekTo = NULL;
     Series *series = (Series *)*value;
 
@@ -485,7 +490,7 @@ int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value
     }
 
     series->chunks = defragDict(ctx, series->chunks, series->funcs->DefragChunk, &seekTo);
-    return REDISMODULE_OK;
+    return seekTo == NULL ? DefragStatus_Finished : DefragStatus_Paused;
 }
 
 void FreeCompactionRule(void *value) {
