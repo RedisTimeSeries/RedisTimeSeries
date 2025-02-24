@@ -49,18 +49,27 @@ static void *DefragIndexLeaf(RedisModuleDefragCtx *ctx,
     return (void *)defragDict(ctx, (RedisModuleDict *)data, NullDefrag, &seekTo);
 }
 
-void DefragIndex(RedisModuleDefragCtx *ctx) {
+int DefragIndex(RedisModuleDefragCtx *ctx) {
+    enum {
+        DefragStatus_Finished = 0,
+        DefragStatus_Paused = 1,
+    };
+
     static RedisModuleString *seekTo = NULL;
     static RedisModuleDict **index = &labelsIndex;
 
     // can only defrag one index at a time
     *index = defragDict(ctx, *index, DefragIndexLeaf, &seekTo);
-    if (seekTo == NULL) { // finished defragging the current index
-        index = (index == &labelsIndex) ? &tsLabelIndex : &labelsIndex;
-        if (index == &tsLabelIndex) { // defragged only one index, continue to the next
-            DefragIndex(ctx);
-        }
+    if (seekTo != NULL) { // defrag paused
+        return DefragStatus_Paused;
     }
+
+    index = (index == &labelsIndex) ? &tsLabelIndex : &labelsIndex;
+    if (index == &labelsIndex) { // defragged both indexes, done
+        return DefragStatus_Finished;
+    }
+
+    return DefragIndex(ctx);
 }
 
 void FreeLabels(void *value, size_t labelsCount) {

@@ -1781,7 +1781,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     IndexInit();
-    if (RedisModule_RegisterDefragFunc(ctx, DefragIndex) != REDISMODULE_OK) {
+    if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to register defrag function");
         FreeConfig();
         RedisModule_FreeThreadSafeContext(rts_staticCtx);
