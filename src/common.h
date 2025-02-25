@@ -37,6 +37,11 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
     return user;
 }
 
+enum {
+    DefragStatus_Finished = 0,
+    DefragStatus_Paused = 1,
+};
+
 static inline void *defragPtr(RedisModuleDefragCtx *ctx, void *ptr) {
     return RedisModule_DefragAlloc(ctx, ptr) ?: ptr;
 }

@@ -464,11 +464,6 @@ void FreeSeries(void *value) {
 }
 
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value) {
-    enum {
-        DefragStatus_Finished = 0,
-        DefragStatus_Paused = 1,
-    };
-
     static RedisModuleString *seekTo = NULL;
     Series *series = (Series *)*value;
 

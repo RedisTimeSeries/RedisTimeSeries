@@ -50,11 +50,6 @@ static void *DefragIndexLeaf(RedisModuleDefragCtx *ctx,
 }
 
 int DefragIndex(RedisModuleDefragCtx *ctx) {
-    enum {
-        DefragStatus_Finished = 0,
-        DefragStatus_Paused = 1,
-    };
-
     static RedisModuleString *seekTo = NULL;
     static RedisModuleDict **index = &labelsIndex;
 
