@@ -5,6 +5,7 @@
  */
 
 #include "compressed_chunk.h"
+#include "common.h"
 
 #include "LibMR/src/mr.h"
 #include "chunk.h"
@@ -53,6 +54,16 @@ Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     newChunk->data = malloc(newChunk->size);
     memcpy(newChunk->data, oldChunk->data, oldChunk->size);
     return newChunk;
+}
+
+void *Compressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                             void *data,
+                             __unused unsigned char *key,
+                             __unused size_t keylen) {
+    CompressedChunk *chunk = data;
+    chunk = defragPtr(ctx, chunk);
+    chunk->data = defragPtr(ctx, chunk->data);
+    return (void *)chunk;
 }
 
 static void swapChunks(CompressedChunk *a, CompressedChunk *b) {

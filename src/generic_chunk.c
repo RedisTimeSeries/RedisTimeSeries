@@ -12,6 +12,7 @@ static const ChunkFuncs regChunk = {
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
     .CloneChunk = Uncompressed_CloneChunk,
+    .DefragChunk = Uncompressed_DefragChunk,
 
     .AddSample = Uncompressed_AddSample,
     .UpsertSample = Uncompressed_UpsertSample,
@@ -36,6 +37,7 @@ static const ChunkFuncs comprChunk = {
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,
     .SplitChunk = Compressed_SplitChunk,
+    .DefragChunk = Compressed_DefragChunk,
 
     .AddSample = Compressed_AddSample,
     .UpsertSample = Compressed_UpsertSample,
