@@ -69,14 +69,16 @@ Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src) {
     return dst;
 }
 
-void *Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
-                               void *data,
-                               __unused unsigned char *key,
-                               __unused size_t keylen) {
+int Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                             void *data,
+                             __unused unsigned char *key,
+                             __unused size_t keylen,
+                             void **newptr) {
     Chunk *chunk = (Chunk *)data;
     chunk = defragPtr(ctx, chunk);
     chunk->samples = defragPtr(ctx, chunk->samples);
-    return (void *)chunk;
+    *newptr = (void *)chunk;
+    return DefragStatus_Finished;
 }
 
 static int IsChunkFull(Chunk *chunk) {

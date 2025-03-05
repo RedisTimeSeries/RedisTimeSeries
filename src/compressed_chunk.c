@@ -56,14 +56,16 @@ Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     return newChunk;
 }
 
-void *Compressed_DefragChunk(RedisModuleDefragCtx *ctx,
-                             void *data,
-                             __unused unsigned char *key,
-                             __unused size_t keylen) {
+int Compressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                           void *data,
+                           __unused unsigned char *key,
+                           __unused size_t keylen,
+                           void **newptr) {
     CompressedChunk *chunk = data;
     chunk = defragPtr(ctx, chunk);
     chunk->data = defragPtr(ctx, chunk->data);
-    return (void *)chunk;
+    *newptr = (void *)chunk;
+    return DefragStatus_Finished;
 }
 
 static void swapChunks(CompressedChunk *a, CompressedChunk *b) {

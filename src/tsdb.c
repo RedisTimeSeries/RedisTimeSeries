@@ -469,7 +469,8 @@ int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value
 
     // first defrag of this key
     if (seekTo == NULL) {
-        *value = defragPtr(ctx, series);
+        series = defragPtr(ctx, series);
+
         for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
             rule = defragPtr(ctx, rule);
         }
@@ -485,7 +486,17 @@ int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value
     }
 
     series->chunks = defragDict(ctx, series->chunks, series->funcs->DefragChunk, &seekTo);
-    return seekTo == NULL ? DefragStatus_Finished : DefragStatus_Paused;
+    if (seekTo == NULL) { // defrag finished. lastChunk must be updated to the new address
+        RedisModuleDictIter *lastChunkIter =
+            RedisModule_DictIteratorStartC(series->chunks, "$", NULL, 0);
+        RedisModule_DictNextC(lastChunkIter, NULL, (void **)&series->lastChunk);
+        RedisModule_DictIteratorStop(lastChunkIter);
+        *value = series;
+        return DefragStatus_Finished;
+    } else {
+        *value = series;
+        return DefragStatus_Paused;
+    }
 }
 
 void FreeCompactionRule(void *value) {

@@ -34,19 +34,14 @@ void IndexInit() {
     tsLabelIndex = RedisModule_CreateDict(NULL);
 }
 
-static void *NullDefrag(__unused RedisModuleDefragCtx *ctx,
-                        void *data,
-                        __unused unsigned char *key,
-                        __unused size_t keylen) {
-    return data;
-}
-
-static void *DefragIndexLeaf(RedisModuleDefragCtx *ctx,
+static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
                              void *data,
                              __unused unsigned char *key,
-                             __unused size_t keylen) {
+                             __unused size_t keylen,
+                             void **newptr) {
     static RedisModuleString *seekTo = NULL;
-    return (void *)defragDict(ctx, (RedisModuleDict *)data, NullDefrag, &seekTo);
+    *newptr = (void *)defragDict(ctx, (RedisModuleDict *)data, NULL, &seekTo);
+    return (seekTo == NULL) ? DefragStatus_Finished : DefragStatus_Paused;
 }
 
 int DefragIndex(RedisModuleDefragCtx *ctx) {
