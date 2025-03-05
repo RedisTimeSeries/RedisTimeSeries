@@ -35,10 +35,10 @@ void IndexInit() {
 }
 
 static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
-                             void *data,
-                             __unused unsigned char *key,
-                             __unused size_t keylen,
-                             void **newptr) {
+                           void *data,
+                           __unused unsigned char *key,
+                           __unused size_t keylen,
+                           void **newptr) {
     static RedisModuleString *seekTo = NULL;
     *newptr = (void *)defragDict(ctx, (RedisModuleDict *)data, NULL, &seekTo);
     return (seekTo == NULL) ? DefragStatus_Finished : DefragStatus_Paused;
