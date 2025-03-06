@@ -29,6 +29,11 @@ void Uncompressed_FreeChunk(Chunk_t *chunk);
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
 Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src);
+int Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                             void *data,
+                             unsigned char *key,
+                             size_t keylen,
+                             void **newptr);
 size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
 
 /**

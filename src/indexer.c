@@ -5,6 +5,7 @@
  */
 #include "indexer.h"
 #include "module.h"
+#include "common.h"
 
 #include "consts.h"
 #include "utils/overflow.h"
@@ -31,6 +32,34 @@ typedef enum
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
     tsLabelIndex = RedisModule_CreateDict(NULL);
+}
+
+static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
+                           void *data,
+                           __unused unsigned char *key,
+                           __unused size_t keylen,
+                           void **newptr) {
+    static RedisModuleString *seekTo = NULL;
+    *newptr = (void *)defragDict(ctx, (RedisModuleDict *)data, NULL, &seekTo);
+    return (seekTo == NULL) ? DefragStatus_Finished : DefragStatus_Paused;
+}
+
+int DefragIndex(RedisModuleDefragCtx *ctx) {
+    static RedisModuleString *seekTo = NULL;
+    static RedisModuleDict **index = &labelsIndex;
+
+    // can only defrag one index at a time
+    *index = defragDict(ctx, *index, DefragIndexLeaf, &seekTo);
+    if (seekTo != NULL) { // defrag paused
+        return DefragStatus_Paused;
+    }
+
+    index = (index == &labelsIndex) ? &tsLabelIndex : &labelsIndex;
+    if (index == &labelsIndex) { // defragged both indexes, done
+        return DefragStatus_Finished;
+    }
+
+    return DefragIndex(ctx);
 }
 
 void FreeLabels(void *value, size_t labelsCount) {

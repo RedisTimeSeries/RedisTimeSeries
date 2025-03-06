@@ -37,8 +37,28 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
     return user;
 }
 
+enum {
+    DefragStatus_Finished = 0,
+    DefragStatus_Paused = 1,
+};
+
 static inline void *defragPtr(RedisModuleDefragCtx *ctx, void *ptr) {
+    if (ptr == NULL) {
+        return NULL;
+    }
     return RedisModule_DefragAlloc(ctx, ptr) ?: ptr;
+}
+static inline RedisModuleString *defragString(RedisModuleDefragCtx *ctx, RedisModuleString *str) {
+    if (str == NULL) {
+        return NULL;
+    }
+    return RedisModule_DefragRedisModuleString(ctx, str) ?: str;
+}
+static inline RedisModuleDict *defragDict(RedisModuleDefragCtx *ctx, RedisModuleDict *dict, RedisModuleDefragDictValueCallback valueCB, RedisModuleString **seekTo) {
+    if (dict == NULL) {
+        return NULL;
+    }
+    return RedisModule_DefragRedisModuleDict(ctx, dict, valueCB, seekTo) ?: dict;
 }
 
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
