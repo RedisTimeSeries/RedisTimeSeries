@@ -48,6 +48,7 @@ typedef struct ChunkFuncs
     void (*FreeChunk)(Chunk_t *chunk);
     Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
+    RedisModuleDefragDictValueCallback DefragChunk;
 
     size_t (*DelRange)(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
