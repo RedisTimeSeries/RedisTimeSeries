@@ -1781,6 +1781,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     IndexInit();
+    if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Failed to register defrag function");
+        FreeConfig();
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+
+        return REDISMODULE_ERR;
+    }
+
     RegisterCommandWithModesAndAcls(ctx, "ts.create", TSDB_create, "write deny-oom", "write fast");
     RegisterCommandWithModesAndAcls(ctx, "ts.alter", TSDB_alter, "write deny-oom", "write");
     RegisterCommandWithModesAndAcls(ctx, "ts.createrule", TSDB_createRule, "write fast", "write");
