@@ -57,6 +57,7 @@ void QueryPredicate_Free(QueryPredicate *predicate, size_t count);
 void QueryPredicateList_Free(QueryPredicateList *list);
 
 void IndexInit();
+int DefragIndex(RedisModuleDefragCtx *ctx);
 void FreeLabels(void *value, size_t labelsCount);
 void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count);
 void RemoveIndexedMetric(RedisModuleString *ts_key);
