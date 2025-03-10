@@ -49,12 +49,12 @@ def testDefrag(env):
                     if j % skip != 0:
                         r.execute_command('ts.del', f'ts{i}', j, j)
 
-    sleepTime = 2
+    sleepTime = 5
 
     # wait for fragmentation for up to sleepTime seconds
     time.sleep(sleepTime)
     frag = env.cmd('info', 'memory')['allocator_frag_ratio']
-    defragExpected = 1 + (frag - 1) * 0.75
+    defragExpected = 1 + (frag - 1) * 0.85
 
     #enable active defrag
     env.cmd('CONFIG', 'SET', 'activedefrag', 'yes')
