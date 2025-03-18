@@ -407,7 +407,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
+    RedisModule_Log(
+        ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-retention-policy",
@@ -422,7 +423,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-retention-policy", 12, TSGlobalConfig.retentionPolicy);
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-retention-policy",
+                    12,
+                    TSGlobalConfig.retentionPolicy);
 
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-duplicate-policy",
@@ -435,7 +442,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-duplicate-policy", 12, DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-duplicate-policy",
+                    12,
+                    DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-chunk-size-bytes",
@@ -450,7 +463,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-chunk-size-bytes", 12, TSGlobalConfig.chunkSizeBytes);
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-chunk-size-bytes",
+                    12,
+                    TSGlobalConfig.chunkSizeBytes);
 
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-encoding",
@@ -463,7 +482,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-encoding", 12, ChunkTypeToString(TSGlobalConfig.options));
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-encoding",
+                    12,
+                    ChunkTypeToString(TSGlobalConfig.options));
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-ignore-max-time-diff",
@@ -478,7 +503,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         return false;
     }
 
-    RedisModule_Log(ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-ignore-max-time-diff", 12, TSGlobalConfig.ignoreMaxTimeDiff);
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-ignore-max-time-diff",
+                    12,
+                    TSGlobalConfig.ignoreMaxTimeDiff);
 
     {
         char oldValue[32] = { 0 };
@@ -495,7 +526,8 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
             return false;
         }
 
-        RedisModule_Log(ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
+        RedisModule_Log(
+            ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
 
     RedisModule_Log(ctx, "notice", "]");
