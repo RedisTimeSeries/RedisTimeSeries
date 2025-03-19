@@ -182,7 +182,7 @@ def test_info_doesnt_delete_acl_restricted():
         try:
             _get_ts_info(r, 'b')
             assert False
-        except redis.exceptions.NoPermissionError as e:
+        except redis.exceptions.NoPermissionError:
             pass
         
         r.execute_command('AUTH default ""')
