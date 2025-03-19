@@ -27,7 +27,9 @@
 
 static RedisModuleString *renameFromKey = NULL;
 
-void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series, const GetSeriesFlags flags) {
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx,
+                                    Series *series,
+                                    const GetSeriesFlags flags) {
     Series *_series;
     RedisModuleKey *_key;
     GetSeriesResult status;
@@ -128,7 +130,8 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     *key = new_key;
 
     if (shouldDeleteRefs) {
-        const GetSeriesFlags deletion_flags = flags & ~GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation;
+        const GetSeriesFlags deletion_flags =
+            flags & ~GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation;
         deleteReferenceToDeletedSeries(ctx, *series, deletion_flags);
     }
 

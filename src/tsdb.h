@@ -104,7 +104,9 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
 CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
-void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series, const GetSeriesFlags flags);
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx,
+                                    Series *series,
+                                    const GetSeriesFlags flags);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
 GetSeriesResult GetSeries(RedisModuleCtx *ctx,
