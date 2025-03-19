@@ -130,6 +130,8 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     *key = new_key;
 
     if (shouldDeleteRefs) {
+        // deleteReferenceToDeletedSeries calls GetSeries with the flags it was provide. avoid infinite loop.
+        // deleteReferenceToDeletedSeries should be silent irrespective of the flags provided.
         const GetSeriesFlags deletion_flags =
             flags & ~GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation;
         deleteReferenceToDeletedSeries(ctx, *series, deletion_flags);
