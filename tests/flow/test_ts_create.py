@@ -104,7 +104,7 @@ def test_uncompressed():
         assert [[1, b'3.5'], [2, b'4.5'], [3, b'5.5']] == \
                r.execute_command('ts.range', 'not_compressed', 0, '+')
         info = _get_ts_info(r, 'not_compressed')
-        assert info.total_samples == 3 and info.memory_usage == 4272
+        assert info.total_samples == 3 and info.memory_usage == 4808
 
         # rdb load
         data = r.execute_command('dump', 'not_compressed')
@@ -115,7 +115,7 @@ def test_uncompressed():
         assert [[1, b'3.5'], [2, b'4.5'], [3, b'5.5']] == \
                r.execute_command('ts.range', 'not_compressed', 0, "+")
         info = _get_ts_info(r, 'not_compressed')
-        assert info.total_samples == 3 and info.memory_usage == 4272
+        assert info.total_samples == 3 and info.memory_usage == 4808
         # test deletion
         assert r.delete('not_compressed')
 

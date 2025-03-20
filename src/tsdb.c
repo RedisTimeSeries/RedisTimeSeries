@@ -507,7 +507,7 @@ void FreeCompactionRule(void *value) {
 }
 
 size_t SeriesChunksSize(const Series *series) {
-    size_t chunksSize = 0;
+    size_t chunksSize = RedisModule_MallocSizeDict(series->chunks);
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
@@ -520,11 +520,8 @@ size_t SeriesChunksSize(const Series *series) {
 size_t SeriesLabelsSize(const Series *series) {
     size_t labelsSize = series->labelsCount * sizeof *series->labels;
     for (size_t i = 0; i < series->labelsCount; ++i) {
-        size_t labelLen;
-        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
-        labelsSize += labelLen + 1;
-        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
-        labelsSize += labelLen + 1;
+        labelsSize += RedisModule_MallocSizeString(series->labels[i].key);
+        labelsSize += RedisModule_MallocSizeString(series->labels[i].value);
     }
     return labelsSize;
 }
@@ -533,6 +530,7 @@ size_t SeriesRulesSize(const Series *series) {
     size_t rulesSize = 0;
     for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
         rulesSize += sizeof *rule;
+        rulesSize += AggClassSize(rule->aggType);
     }
     return rulesSize;
 }
@@ -551,8 +549,8 @@ char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
 
 size_t SeriesMemUsage(const void *value) {
     const Series *series = (const Series *)value;
-    return sizeof *series + SeriesRulesSize(series) + SeriesLabelsSize(series) +
-           SeriesChunksSize(series);
+    return RedisModule_MallocSize((void *)series) + SeriesRulesSize(series) +
+           SeriesLabelsSize(series) + SeriesChunksSize(series);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
