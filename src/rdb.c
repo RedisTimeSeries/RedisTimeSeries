@@ -201,10 +201,10 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
     RedisModule_SaveUnsigned(io, series->duplicatePolicy);
     if ((series->srcKey != NULL) && (should_save_cross_references(series))) {
         // on dump command (restore) we don't keep the cross references
-        RedisModule_SaveUnsigned(io, TRUE);
+        RedisModule_SaveUnsigned(io, true);
         RedisModule_SaveString(io, series->srcKey);
     } else {
-        RedisModule_SaveUnsigned(io, FALSE);
+        RedisModule_SaveUnsigned(io, false);
     }
 
     RedisModule_SaveUnsigned(io, series->ignoreMaxTimeDiff);

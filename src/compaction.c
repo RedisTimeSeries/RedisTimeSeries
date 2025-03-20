@@ -124,7 +124,7 @@ err:
 void *FirstValueCreateContext(__unused bool reverse) {
     FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
     context->value = 0;
-    context->isResetted = TRUE;
+    context->isResetted = true;
     return context;
 }
 
@@ -137,7 +137,7 @@ void *FirstValueCloneContext(void *contextPtr) {
 void FirstValueReset(void *contextPtr) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value = 0;
-    context->isResetted = TRUE;
+    context->isResetted = true;
 }
 
 int FirstValueFinalize(void *contextPtr, double *val) {
@@ -732,7 +732,7 @@ int CountFinalize(void *contextPtr, double *val) {
 void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     if (context->isResetted) {
-        context->isResetted = FALSE;
+        context->isResetted = false;
         context->value = value;
     }
 }

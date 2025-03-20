@@ -18,9 +18,10 @@ typedef struct SimpleCompactionRule
     timestamp_t timestampAlignment;
 } SimpleCompactionRule;
 
-int ParseCompactionPolicy(const char *policy_string,
-                          SimpleCompactionRule **parsed_rules,
-                          uint64_t *count_rules);
+bool ParseCompactionPolicy(const char *policy_string,
+                           size_t len,
+                           SimpleCompactionRule **parsed_rules,
+                           uint64_t *count_rules);
 
 /* Converts the compaction rules back to a string. The returned string
 must be deallocated by the user using free(). Note that it might use the
