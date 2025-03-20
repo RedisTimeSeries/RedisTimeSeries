@@ -576,7 +576,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("OSS_GLOBAL_PASSWORD", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", NULL, showDeprecationWarning);
+        LOG_DEPRECATED_OPTION("OSS_GLOBAL_PASSWORD", (char *)NULL, showDeprecationWarning);
 
         RedisModuleString *password;
         size_t len;
@@ -593,7 +593,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("global-password", argv, argc) >= 0) {
-        LOG_DEPRECATED_OPTION("global-password", NULL, showDeprecationWarning);
+        LOG_DEPRECATED_OPTION("global-password", (char *)NULL, showDeprecationWarning);
         RedisModuleString *password;
         size_t len;
         if (RMUtil_ParseArgsAfter("global-password", argv, argc, "s", &password) !=
