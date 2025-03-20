@@ -506,15 +506,35 @@ void FreeCompactionRule(void *value) {
     free(rule);
 }
 
-size_t SeriesGetChunksSize(Series *series) {
-    size_t size = 0;
+size_t SeriesChunksSize(const Series *series) {
+    size_t chunksSize = 0;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
     while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
-        size += series->funcs->GetChunkSize(currentChunk, true);
+        chunksSize += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
-    return size;
+    return chunksSize;
+}
+
+size_t SeriesLabelsSize(const Series *series) {
+    size_t labelsSize = series->labelsCount * sizeof *series->labels;
+    for (size_t i = 0; i < series->labelsCount; ++i) {
+        size_t labelLen;
+        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
+        labelsSize += labelLen + 1;
+        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
+        labelsSize += labelLen + 1;
+    }
+    return labelsSize;
+}
+
+size_t SeriesRulesSize(const Series *series) {
+    size_t rulesSize = 0;
+    for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
+        rulesSize += sizeof *rule;
+    }
+    return rulesSize;
 }
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
@@ -530,26 +550,9 @@ char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
 }
 
 size_t SeriesMemUsage(const void *value) {
-    Series *series = (Series *)value;
-
-    size_t labelLen = 0;
-    uint32_t labelsLen = 0;
-    for (int i = 0; i < series->labelsCount; i++) {
-        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
-        labelsLen += (labelLen + 1);
-        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
-        labelsLen += (labelLen + 1);
-    }
-
-    size_t rulesSize = 0;
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        rulesSize += sizeof(CompactionRule);
-        rule = rule->nextRule;
-    }
-
-    return sizeof(series) + rulesSize + labelsLen + sizeof(Label) * series->labelsCount +
-           SeriesGetChunksSize(series);
+    const Series *series = (const Series *)value;
+    return sizeof *series + SeriesRulesSize(series) + SeriesLabelsSize(series) +
+           SeriesChunksSize(series);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
