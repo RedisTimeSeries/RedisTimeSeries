@@ -145,9 +145,9 @@ int SeriesUpsertSample(Series *series,
                        double value,
                        DuplicatePolicy dp_override);
 
-int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
+bool SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName);
-int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
+bool SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,

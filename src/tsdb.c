@@ -1190,7 +1190,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
     return rule;
 }
 
-int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
+bool SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
     CompactionRule *rule = series->rules;
     CompactionRule *prev_rule = NULL;
     while (rule != NULL) {
@@ -1204,12 +1204,12 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
                 // make the next one to be the first rule
                 series->rules = next;
             }
-            return TRUE;
+            return true;
         }
         prev_rule = rule;
         rule = rule->nextRule;
     }
-    return FALSE;
+    return false;
 }
 
 void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName) {
@@ -1217,13 +1217,13 @@ void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *sr
     series->srcKey = srcKeyName;
 }
 
-int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
+bool SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
     if (RMUtil_StringEquals(series->srcKey, srctKey)) {
         RedisModule_FreeString(NULL, series->srcKey);
         series->srcKey = NULL;
-        return TRUE;
+        return true;
     }
-    return FALSE;
+    return false;
 }
 
 /*
