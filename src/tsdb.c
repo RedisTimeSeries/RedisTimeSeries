@@ -27,11 +27,12 @@
 
 static RedisModuleString *renameFromKey = NULL;
 
-void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series) {
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx,
+                                    Series *series,
+                                    const GetSeriesFlags flags) {
     Series *_series;
     RedisModuleKey *_key;
     GetSeriesResult status;
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
     if (series->srcKey) {
         status = GetSeries(ctx, series->srcKey, &_key, &_series, REDISMODULE_READ, flags);
@@ -129,7 +130,12 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     *key = new_key;
 
     if (shouldDeleteRefs) {
-        deleteReferenceToDeletedSeries(ctx, *series);
+        // deleteReferenceToDeletedSeries calls GetSeries with the flags it was provided. avoid
+        // infinite loop. deleteReferenceToDeletedSeries should be silent irrespective of the flags
+        // provided.
+        const GetSeriesFlags deletion_flags =
+            flags & ~GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation;
+        deleteReferenceToDeletedSeries(ctx, *series, deletion_flags);
     }
 
     return GetSeriesResult_Success;
@@ -606,7 +612,8 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     if (series->rules == NULL) {
         return;
     }
-    deleteReferenceToDeletedSeries(rts_staticCtx, series);
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    deleteReferenceToDeletedSeries(rts_staticCtx, series, flags);
     CompactionRule *rule = series->rules;
     const timestamp_t upsertTimestamp = uCtx->sample.timestamp;
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
@@ -820,7 +827,8 @@ static void CompactionDelRange(Series *series,
     if (!series->rules)
         return;
 
-    deleteReferenceToDeletedSeries(rts_staticCtx, series);
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    deleteReferenceToDeletedSeries(rts_staticCtx, series, flags);
     CompactionRule *rule = series->rules;
     bool is_empty;
 
