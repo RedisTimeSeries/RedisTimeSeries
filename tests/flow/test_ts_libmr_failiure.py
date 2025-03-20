@@ -124,6 +124,6 @@ def testLibmr_client_disconnect():
         # wait for processes to join
         [th.join() for th in threads]
 
-        # make sure we did not crashed
+        # make sure we did not crash
         r.ping()
         r.close()
