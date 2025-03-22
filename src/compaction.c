@@ -1047,3 +1047,32 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
     }
     return NULL;
 }
+
+size_t AggClassSize(TS_AGG_TYPES_T aggType) {
+    switch (aggType) {
+        case TS_AGG_MIN:
+        case TS_AGG_MAX:
+        case TS_AGG_RANGE:
+            return sizeof(MaxMinContext);
+        case TS_AGG_AVG:
+            return sizeof(AvgContext);
+        case TS_AGG_TWA:
+            return sizeof(TwaContext);
+        case TS_AGG_STD_P:
+        case TS_AGG_STD_S:
+        case TS_AGG_VAR_P:
+        case TS_AGG_VAR_S:
+            return sizeof(StdContext);
+        case TS_AGG_FIRST:
+            return sizeof(FirstValueContext);
+        case TS_AGG_SUM:
+        case TS_AGG_COUNT:
+        case TS_AGG_LAST:
+            return sizeof(SingleValueContext);
+        case TS_AGG_NONE:
+        case TS_AGG_INVALID:
+        case TS_AGG_TYPES_MAX:
+        default:
+            __builtin_unreachable();
+    }
+}

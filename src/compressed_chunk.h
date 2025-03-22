@@ -41,7 +41,7 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous
-size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
+size_t Compressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct);
 uint64_t Compressed_ChunkNumOfSample(Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);
