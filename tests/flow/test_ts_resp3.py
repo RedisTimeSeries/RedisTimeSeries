@@ -23,6 +23,7 @@ def test_resp3(env):
         res = r.execute_command('ts.get', t1)
         assert res == [1000, 5.0]
         res = r.execute_command('ts.info', t1, 'DEBUG')
+        res.pop(b'memoryUsage')
         assert res == {
             b'totalSamples': 1000,
             b'firstTimestamp': 1, b'lastTimestamp': 1000,
