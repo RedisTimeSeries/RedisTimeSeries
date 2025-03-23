@@ -515,7 +515,7 @@ void FreeCompactionRule(void *value) {
 size_t SeriesChunksSize(const Series *series) {
     size_t chunksSize = RedisModule_MallocSizeDict(series->chunks);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    for (const Chunk_t *currentChunk; RedisModule_DictNextC(iter, NULL, (void *)&currentChunk); ) {
+    for (const Chunk_t *currentChunk; RedisModule_DictNextC(iter, NULL, (void *)&currentChunk);) {
         chunksSize += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
