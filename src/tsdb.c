@@ -508,9 +508,8 @@ void FreeCompactionRule(void *value) {
 
 size_t SeriesChunksSize(const Series *series) {
     size_t chunksSize = RedisModule_MallocSizeDict(series->chunks);
-    Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
+    for (const Chunk_t *currentChunk; RedisModule_DictNextC(iter, NULL, (void *)&currentChunk); ) {
         chunksSize += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
@@ -518,7 +517,7 @@ size_t SeriesChunksSize(const Series *series) {
 }
 
 size_t SeriesLabelsSize(const Series *series) {
-    size_t labelsSize = series->labelsCount * sizeof *series->labels;
+    size_t labelsSize = series->labels ? RedisModule_MallocSize(series->labels) : 0;
     for (size_t i = 0; i < series->labelsCount; ++i) {
         labelsSize += RedisModule_MallocSizeString(series->labels[i].key);
         labelsSize += RedisModule_MallocSizeString(series->labels[i].value);
@@ -528,8 +527,8 @@ size_t SeriesLabelsSize(const Series *series) {
 
 size_t SeriesRulesSize(const Series *series) {
     size_t rulesSize = 0;
-    for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
-        rulesSize += sizeof *rule;
+    for (const CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
+        rulesSize += RedisModule_MallocSize((void *)rule);
         rulesSize += AggClassSize(rule->aggType);
     }
     return rulesSize;
