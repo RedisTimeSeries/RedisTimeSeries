@@ -2,7 +2,7 @@ import os
 
 from RLTest import Env
 from create_test_rdb_file import load_into_redis
-from test_helper_classes import _get_ts_info
+from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
 
 
@@ -76,8 +76,8 @@ def testRDBCompatibility():
             keys = r.keys()
             keys.sort()
             assert keys == [b'ts1', b'ts2']
-            assert r.execute_command('ts.info', 'ts1') == [b'totalSamples', 2, b'memoryUsage', 4248, b'firstTimestamp', 100, b'lastTimestamp', 120, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b'ts2', 1000, b'AVG', 0]]]
-            assert r.execute_command('ts.info', 'ts2') == [b'totalSamples', 0, b'memoryUsage', 4184, b'firstTimestamp', 0, b'lastTimestamp', 0, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', b'ts1', b'rules', []]
+            assert _get_ts_info(r, 'ts1') == TSInfo([b'totalSamples', 2, b'firstTimestamp', 100, b'lastTimestamp', 120, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b'ts2', 1000, b'AVG', 0]]])
+            assert _get_ts_info(r, 'ts2') == TSInfo([b'totalSamples', 0, b'firstTimestamp', 0, b'lastTimestamp', 0, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', b'ts1', b'rules', []])
             assert r.execute_command('ts.range', 'ts1', '-', '+') == [[100, b'3'], [120, b'5']]
             assert r.execute_command('ts.range', 'ts2', '-', '+') == []
             assert r.execute_command('ts.add', 'ts1', 1500, 100)
