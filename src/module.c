@@ -709,7 +709,9 @@ static int internalAdd(RedisModuleCtx *ctx,
         }
         // handle compaction rules
         if (series->rules) {
-            deleteReferenceToDeletedSeries(ctx, series);
+            const GetSeriesFlags flags =
+                GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+            deleteReferenceToDeletedSeries(ctx, series, flags);
         }
         CompactionRule *rule = series->rules;
         while (rule != NULL) {
