@@ -44,7 +44,6 @@ typedef struct AggregationClass
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
-size_t AggClassSize(TS_AGG_TYPES_T aggType);
 int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);

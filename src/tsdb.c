@@ -535,7 +535,7 @@ size_t SeriesRulesSize(const Series *series) {
     size_t rulesSize = 0;
     for (const CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
         rulesSize += RedisModule_MallocSize((void *)rule);
-        rulesSize += AggClassSize(rule->aggType);
+        rulesSize += RedisModule_MallocSize(rule->aggContext);
     }
     return rulesSize;
 }
