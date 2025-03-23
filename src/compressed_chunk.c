@@ -220,10 +220,11 @@ double Compressed_GetLastValue(Chunk_t *chunk) {
     return ((CompressedChunk *)chunk)->prevValue.d;
 }
 
-size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
-    CompressedChunk *cmpChunk = chunk;
-    size_t size = cmpChunk->size * sizeof(char);
-    size += includeStruct ? sizeof(*cmpChunk) : 0;
+size_t Compressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct) {
+    const CompressedChunk *cmpChunk = chunk;
+    size_t size = includeStruct ? RedisModule_MallocSize((void *)cmpChunk) +
+                                      RedisModule_MallocSize(cmpChunk->data)
+                                : cmpChunk->size;
     return size;
 }
 
