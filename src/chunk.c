@@ -275,10 +275,11 @@ void Uncompressed_ProcessChunk(const Chunk_t *chunk,
     return;
 }
 
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct) {
-    Chunk *uncompChunk = chunk;
-    size_t size = uncompChunk->size;
-    size += includeStruct ? sizeof(*uncompChunk) : 0;
+size_t Uncompressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct) {
+    const Chunk *uncompChunk = chunk;
+    size_t size = includeStruct ? RedisModule_MallocSize((void *)uncompChunk) +
+                                      RedisModule_MallocSize(uncompChunk->samples)
+                                : uncompChunk->size;
     return size;
 }
 

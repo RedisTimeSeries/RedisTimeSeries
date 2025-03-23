@@ -59,7 +59,7 @@ typedef struct ChunkFuncs
                          EnrichedChunk *enrichedChunk,
                          bool reverse);
 
-    size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
+    size_t (*GetChunkSize)(const Chunk_t *chunk, bool includeStruct);
     uint64_t (*GetNumOfSample)(Chunk_t *chunk);
     uint64_t (*GetLastTimestamp)(Chunk_t *chunk);
     double (*GetLastValue)(Chunk_t *chunk);
