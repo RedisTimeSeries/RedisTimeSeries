@@ -34,7 +34,7 @@ int Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
                              unsigned char *key,
                              size_t keylen,
                              void **newptr);
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
+size_t Uncompressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct);
 
 /**
  * TODO: describe me
