@@ -566,11 +566,11 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest,
-                     Series **series,
-                     size_t n_series,
-                     const ReducerArgs *gropuByReducerArgs,
-                     RangeArgs *args) {
+void MultiSerieReduce(Series *dest,
+                      Series **series,
+                      size_t n_series,
+                      const ReducerArgs *gropuByReducerArgs,
+                      RangeArgs *args) {
     Sample sample;
     AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
         series, n_series, args, false, true, gropuByReducerArgs);
@@ -578,7 +578,6 @@ int MultiSerieReduce(Series *dest,
         SeriesAddSample(dest, sample.timestamp, sample.value);
     }
     iterator->Close(iterator);
-    return 1;
 }
 
 static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,

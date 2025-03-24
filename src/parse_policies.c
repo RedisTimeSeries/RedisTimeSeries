@@ -16,20 +16,16 @@
 
 #define SINGLE_RULE_ITEM_STRING_LENGTH 32
 
-static const timestamp_t lookup_intervals[] = { ['m'] = 1,
-                                                ['s'] = 1000,
-                                                ['M'] = 1000 * 60,
-                                                ['h'] = 1000 * 60 * 60,
-                                                ['d'] = 1000 * 60 * 60 * 24 };
+static const timestamp_t lookup_intervals[] = {
+    ['m'] = 1, ['s'] = 1000, ['M'] = 1000 * 60, ['h'] = 1000 * 60 * 60, ['d'] = 1000 * 60 * 60 * 24,
+};
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
+static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
-    int ret;
-    ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
-    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
-    if (!valid_state) {
+    int ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
+    if (!((ret == 2) || (ret == 1 && timeSize == 0))) {
         return false;
     }
 
