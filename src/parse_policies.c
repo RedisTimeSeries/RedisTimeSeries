@@ -21,17 +21,25 @@ static const timestamp_t lookup_intervals[] = {
 };
 
 static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
+    if (*timeStr == '-') {
+        return false;
+    }
+
     char should_be_empty;
     unsigned char interval_type;
     timestamp_t timeSize;
     int ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
-    if (!((ret == 2) || (ret == 1 && timeSize == 0))) {
+    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
+    if (!valid_state) {
         return false;
     }
 
-    if (canBeZero && timeSize == 0) {
-        *out = 0;
-        return true;
+    if (timeSize == 0) {
+        if (canBeZero) {
+            *out = 0;
+            return true;
+        }
+        return false;
     }
 
     timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
@@ -55,18 +63,15 @@ static bool parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
                     return false;
                 break;
             case 1: // bucket
-                if (*token == '0' || *token == '-' ||
-                    parse_string_to_millisecs(token, &rule->bucketDuration, false) == false)
+                if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == false)
                     return false;
                 break;
             case 2: // retention
-                if (*token == '-' ||
-                    parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == false)
+                if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == false)
                     return false;
                 break;
             case 3: // timestamp alignment
-                if (*token == '-' ||
-                    parse_string_to_millisecs(token, &rule->timestampAlignment, false) == false)
+                if (parse_string_to_millisecs(token, &rule->timestampAlignment, true) == false)
                     return false;
                 break;
             default:
