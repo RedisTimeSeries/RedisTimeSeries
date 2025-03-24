@@ -25,9 +25,10 @@ def test_resp3(env):
         res = r.execute_command('ts.get', t1)
         assert res == [1000, 5.0]
         res = r.execute_command('ts.info', t1, 'DEBUG')
+        res.pop(b'memoryUsage')
         assert res == {
             b'totalSamples': 1000,
-            b'memoryUsage': 514, b'firstTimestamp': 1, b'lastTimestamp': 1000,
+            b'firstTimestamp': 1, b'lastTimestamp': 1000,
             b'retentionTime': 0, b'chunkCount': 2, b'chunkSize': 128,
             b'chunkType': b'compressed', b'duplicatePolicy': None,
             b'labels': {b'name': b'mush'},

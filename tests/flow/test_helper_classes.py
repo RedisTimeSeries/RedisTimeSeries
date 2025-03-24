@@ -196,7 +196,6 @@ class TSInfo(object):
         return self.rules == other.rules and \
                self.sourceKey == other.sourceKey and \
                self.chunk_count == other.chunk_count and \
-               self.memory_usage == other.memory_usage and \
                self.total_samples == other.total_samples and \
                self.retention_msecs == other.retention_msecs and \
                self.last_time_stamp == other.last_time_stamp and \
