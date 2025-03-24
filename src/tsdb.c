@@ -1130,7 +1130,8 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
 
         // check if dstkey and srckey has the same hashslot
         bool isCluster = RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER;
-        if (isCluster && RedisModule_ClusterKeySlot(destKey) != RedisModule_ClusterKeySlot(keyName)) {
+        if (isCluster && 
+            RedisModule_ClusterKeySlot(destKey) != RedisModule_ClusterKeySlot(keyName)) {
             RM_LOG_WARNING(ctx,
                            "Cannot create compacted key, key '%s' and '%s' are in different slots",
                            RedisModule_StringPtrLen(destKey, NULL),
