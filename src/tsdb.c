@@ -512,15 +512,32 @@ void FreeCompactionRule(void *value) {
     free(rule);
 }
 
-size_t SeriesGetChunksSize(Series *series) {
-    size_t size = 0;
-    Chunk_t *currentChunk;
+size_t SeriesChunksSize(const Series *series) {
+    size_t chunksSize = RedisModule_MallocSizeDict(series->chunks);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
-        size += series->funcs->GetChunkSize(currentChunk, true);
+    for (const Chunk_t *currentChunk; RedisModule_DictNextC(iter, NULL, (void *)&currentChunk);) {
+        chunksSize += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
-    return size;
+    return chunksSize;
+}
+
+size_t SeriesLabelsSize(const Series *series) {
+    size_t labelsSize = series->labels ? RedisModule_MallocSize(series->labels) : 0;
+    for (size_t i = 0; i < series->labelsCount; ++i) {
+        labelsSize += RedisModule_MallocSizeString(series->labels[i].key);
+        labelsSize += RedisModule_MallocSizeString(series->labels[i].value);
+    }
+    return labelsSize;
+}
+
+size_t SeriesRulesSize(const Series *series) {
+    size_t rulesSize = 0;
+    for (const CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
+        rulesSize += RedisModule_MallocSize((void *)rule);
+        rulesSize += RedisModule_MallocSize(rule->aggContext);
+    }
+    return rulesSize;
 }
 
 char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
@@ -536,26 +553,9 @@ char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
 }
 
 size_t SeriesMemUsage(const void *value) {
-    Series *series = (Series *)value;
-
-    size_t labelLen = 0;
-    uint32_t labelsLen = 0;
-    for (int i = 0; i < series->labelsCount; i++) {
-        RedisModule_StringPtrLen(series->labels[i].key, &labelLen);
-        labelsLen += (labelLen + 1);
-        RedisModule_StringPtrLen(series->labels[i].value, &labelLen);
-        labelsLen += (labelLen + 1);
-    }
-
-    size_t rulesSize = 0;
-    CompactionRule *rule = series->rules;
-    while (rule != NULL) {
-        rulesSize += sizeof(CompactionRule);
-        rule = rule->nextRule;
-    }
-
-    return sizeof(series) + rulesSize + labelsLen + sizeof(Label) * series->labelsCount +
-           SeriesGetChunksSize(series);
+    const Series *series = (const Series *)value;
+    return RedisModule_MallocSize((void *)series) + SeriesRulesSize(series) +
+           SeriesLabelsSize(series) + SeriesChunksSize(series);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
