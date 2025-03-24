@@ -21,7 +21,7 @@ static const timestamp_t lookup_intervals[] = {
 };
 
 static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
-    if (*timeStr == '-') {
+    if (!isdigit(*timeStr)) {
         return false;
     }
 
