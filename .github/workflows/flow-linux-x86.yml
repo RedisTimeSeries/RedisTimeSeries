@@ -174,12 +174,6 @@ jobs:
         shell: bash
         run: |
           ./install_script.sh 
-      - name: Setup Python for testing
-        if: ${{matrix.docker_image.image == 'ubuntu:jammy'}}
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          architecture: 'x64'
       - name: Install python dependencies
         uses: ./.github/actions/install-python-deps
         with: 
