@@ -803,8 +803,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                 // - mod where 0 <= mod from (1)+(2) contextScope > chunk->samples.timestamps[0]
                 // from (3) chunk->samples.timestamps[0] >= self->aggregationLastTimestamp so the
                 // following condition should always be false on the first iteration
-                if ((is_reversed == false && sample.timestamp >= contextScope) ||
-                    (is_reversed == true && sample.timestamp < self->aggregationLastTimestamp)) {
+                if ((!is_reversed && sample.timestamp >= contextScope) ||
+                    (is_reversed && sample.timestamp < self->aggregationLastTimestamp)) {
                     if (aggregation->type == TS_AGG_TWA) {
                         aggregation->addNextBucketFirstSample(
                             aggregationContext, sample.value, sample.timestamp);

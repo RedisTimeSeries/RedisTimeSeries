@@ -54,24 +54,24 @@ static bool parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
     char *saveptr;
     rule->timestampAlignment = 0; // the default alignment is 0
 
-    int i = 0;
+    int num_tokens = 0;
     for (char *token = strtok_r(policy, ":", &saveptr); token != NULL;
          token = strtok_r(NULL, ":", &saveptr)) {
-        switch (i++) {
+        switch (num_tokens++) {
             case 0: // agg type
                 if ((rule->aggType = StringAggTypeToEnum(token)) == TS_AGG_INVALID)
                     return false;
                 break;
-            case 1: // bucket
-                if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == false)
+            case 1: // bucket duration
+                if (!parse_string_to_millisecs(token, &rule->bucketDuration, false))
                     return false;
                 break;
-            case 2: // retention
-                if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == false)
+            case 2: // retention size
+                if (!parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true))
                     return false;
                 break;
-            case 3: // timestamp alignment
-                if (parse_string_to_millisecs(token, &rule->timestampAlignment, true) == false)
+            case 3: // timestamp alignment (optional)
+                if (!parse_string_to_millisecs(token, &rule->timestampAlignment, true))
                     return false;
                 break;
             default:
@@ -79,7 +79,9 @@ static bool parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
         }
     }
 
-    return i == 3 || i == 4;
+    // we expect 3 or 4 tokens. the tokens are:
+    // aggType:bucketDuration:retentionSize:timestampAlignment (optional)
+    return num_tokens == 3 || num_tokens == 4;
 }
 
 static size_t count_char_in_str(const char *string, size_t len, char lookup) {
@@ -114,7 +116,7 @@ bool ParseCompactionPolicy(const char *policy_string,
     bool success = true;
     while (token != NULL) {
         bool result = parse_interval_policy(token, parsed_rules_runner);
-        if (result == false) {
+        if (!result) {
             success = false;
             break;
         }
@@ -124,7 +126,7 @@ bool ParseCompactionPolicy(const char *policy_string,
     }
 
     free(rest);
-    if (success == false) {
+    if (!success) {
         // all or nothing, don't allow partial parsing
         *rules_count = 0;
         if (*parsed_rules_out) {

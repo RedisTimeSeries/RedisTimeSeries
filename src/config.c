@@ -221,7 +221,7 @@ static bool Config_SetCompactionPolicyFromCStr(const char *policyString,
     SimpleCompactionRule *compactionRules = NULL;
     uint64_t compactionRulesCount = 0;
 
-    if (ParseCompactionPolicy(policyString, len, &compactionRules, &compactionRulesCount) != true) {
+    if (!ParseCompactionPolicy(policyString, len, &compactionRules, &compactionRulesCount)) {
         *err = RedisModule_CreateStringPrintf(NULL, "Invalid compaction policy: %s", policyString);
         return false;
     }
