@@ -16,8 +16,8 @@
 
 #define SINGLE_RULE_ITEM_STRING_LENGTH 32
 
-static const timestamp_t lookup_intervals[] = {
-    ['m'] = 1, ['s'] = 1000, ['M'] = 1000 * 60, ['h'] = 1000 * 60 * 60, ['d'] = 1000 * 60 * 60 * 24,
+static const timestamp_t lookup_intervals[CHAR_MAX] = {
+    ['\0'] = 1, ['m'] = 1, ['s'] = 1000, ['M'] = 1000 * 60, ['h'] = 1000 * 60 * 60, ['d'] = 1000 * 60 * 60 * 24,
 };
 
 static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
@@ -26,11 +26,16 @@ static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, boo
     }
 
     char should_be_empty;
-    unsigned char interval_type;
+    unsigned char interval_type = '\0';
     timestamp_t timeSize;
     int ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
     bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
     if (!valid_state) {
+        return false;
+    }
+
+    timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
+    if (interval_in_millisecs == 0) {
         return false;
     }
 
@@ -42,10 +47,6 @@ static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, boo
         return false;
     }
 
-    timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
-    if (interval_in_millisecs == 0) {
-        return false;
-    }
     *out = interval_in_millisecs * timeSize;
     return true;
 }
@@ -115,8 +116,7 @@ bool ParseCompactionPolicy(const char *policy_string,
     token = strtok_r(rest, ";", &token_iter_ptr);
     bool success = true;
     while (token != NULL) {
-        bool result = parse_interval_policy(token, parsed_rules_runner);
-        if (!result) {
+        if (!parse_interval_policy(token, parsed_rules_runner)) {
             success = false;
             break;
         }
