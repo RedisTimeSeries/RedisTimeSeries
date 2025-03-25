@@ -9,7 +9,7 @@ import random
 import struct
 
 def test_add_different_slot_range():
-    env = Env(DecodeResponses=True)
+    env = Env(decodeResponses=True)
     if not env.isCluster():
         env.skip()
     with env.getClusterConnectionIfNeeded() as r:
