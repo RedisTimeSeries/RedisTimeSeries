@@ -17,7 +17,12 @@
 #define SINGLE_RULE_ITEM_STRING_LENGTH 32
 
 static const timestamp_t lookup_intervals[CHAR_MAX] = {
-    ['\0'] = 1, ['m'] = 1, ['s'] = 1000, ['M'] = 1000 * 60, ['h'] = 1000 * 60 * 60, ['d'] = 1000 * 60 * 60 * 24,
+    ['\0'] = 1,
+    ['m'] = 1,
+    ['s'] = 1000,
+    ['M'] = 1000 * 60,
+    ['h'] = 1000 * 60 * 60,
+    ['d'] = 1000 * 60 * 60 * 24,
 };
 
 static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
