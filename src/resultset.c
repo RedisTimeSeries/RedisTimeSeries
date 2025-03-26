@@ -22,12 +22,12 @@ struct TS_ResultSet
     char *labelkey;
 };
 
-struct TS_GroupList
+typedef struct TS_GroupList
 {
     char *labelValue;
     size_t count;
     Series **list;
-};
+} TS_GroupList;
 
 TS_GroupList *GroupList_Create();
 
@@ -138,20 +138,18 @@ TS_ResultSet *ResultSet_Create() {
     return r;
 }
 
-int GroupList_SetLabelValue(TS_GroupList *r, const char *label) {
+void GroupList_SetLabelValue(TS_GroupList *r, const char *label) {
     r->labelValue = strdup(label);
-    return true;
 }
 
-int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
+void ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
     r->labelkey = strdup(label);
-    return true;
 }
 
-int ResultSet_ApplyReducer(RedisModuleCtx *ctx,
-                           TS_ResultSet *r,
-                           const RangeArgs *args,
-                           const ReducerArgs *gropuByReducerArgs) {
+void ResultSet_ApplyReducer(RedisModuleCtx *ctx,
+                            TS_ResultSet *r,
+                            const RangeArgs *args,
+                            const ReducerArgs *gropuByReducerArgs) {
     // ^ seek the smallest element of the radix tree.
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     TS_GroupList *groupList;
@@ -159,8 +157,6 @@ int ResultSet_ApplyReducer(RedisModuleCtx *ctx,
         GroupList_ApplyReducer(ctx, groupList, r->labelkey, args, gropuByReducerArgs);
     }
     RedisModule_DictIteratorStop(iter);
-
-    return TSDB_OK;
 }
 void GroupList_ApplyReducer(RedisModuleCtx *ctx,
                             TS_GroupList *group,
@@ -215,8 +211,8 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     free(serie_name);
 }
 
-int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
-    int result = false;
+bool ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
+    bool result = false;
 
     char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey);
     if (labelValue != NULL) {

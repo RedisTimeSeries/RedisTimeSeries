@@ -209,8 +209,10 @@ static double stringToDouble(const char *name,
     return value;
 }
 
-static bool Config_SetCompactionPolicyFromCStr(const char *policyString, RedisModuleString **err) {
-    if (!policyString || strlen(policyString) == 0) {
+static bool Config_SetCompactionPolicyFromCStr(const char *policyString,
+                                               size_t len,
+                                               RedisModuleString **err) {
+    if (!policyString || len == 0) {
         ClearCompactionRules();
 
         return true;
@@ -219,7 +221,7 @@ static bool Config_SetCompactionPolicyFromCStr(const char *policyString, RedisMo
     SimpleCompactionRule *compactionRules = NULL;
     uint64_t compactionRulesCount = 0;
 
-    if (ParseCompactionPolicy(policyString, &compactionRules, &compactionRulesCount) != TRUE) {
+    if (!ParseCompactionPolicy(policyString, len, &compactionRules, &compactionRulesCount)) {
         *err = RedisModule_CreateStringPrintf(NULL, "Invalid compaction policy: %s", policyString);
         return false;
     }
@@ -302,8 +304,8 @@ static int setModernStringConfigValue(const char *name,
         size_t len = 0;
         const char *policyString = RedisModule_StringPtrLen(value, &len);
 
-        return Config_SetCompactionPolicyFromCStr(policyString, err) ? REDISMODULE_OK
-                                                                     : REDISMODULE_ERR;
+        return Config_SetCompactionPolicyFromCStr(policyString, len, err) ? REDISMODULE_OK
+                                                                          : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-duplicate-policy", name)) {
         return Config_SetDuplicationPolicyFromRedisString(value, err) ? REDISMODULE_OK
                                                                       : REDISMODULE_ERR;
@@ -560,7 +562,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         policy_cstr = RedisModule_StringPtrLen(policy, &len);
         SimpleCompactionRule *compactionRules = NULL;
         uint64_t compactionRulesCount = 0;
-        if (ParseCompactionPolicy(policy_cstr, &compactionRules, &compactionRulesCount) != TRUE) {
+        if (!ParseCompactionPolicy(policy_cstr, len, &compactionRules, &compactionRulesCount)) {
             RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
             free(compactionRules);
             return TSDB_ERROR;
