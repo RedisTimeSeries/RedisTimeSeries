@@ -207,7 +207,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {
             uint64_t numOfSamples = series->funcs->GetNumOfSample(chunk);
-            size_t chunkSize = series->funcs->GetChunkSize(chunk, FALSE);
+            size_t chunkSize = series->funcs->GetChunkSize(chunk, false);
             if (!reply_map) {
                 RedisModule_ReplyWithArray(ctx, 5 * 2);
             } else {

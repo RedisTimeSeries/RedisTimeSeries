@@ -567,11 +567,11 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-int MultiSerieReduce(Series *dest,
-                     Series **series,
-                     size_t n_series,
-                     const ReducerArgs *gropuByReducerArgs,
-                     RangeArgs *args) {
+void MultiSerieReduce(Series *dest,
+                      Series **series,
+                      size_t n_series,
+                      const ReducerArgs *gropuByReducerArgs,
+                      RangeArgs *args) {
     Sample sample;
     AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
         series, n_series, args, false, true, gropuByReducerArgs);
@@ -579,7 +579,6 @@ int MultiSerieReduce(Series *dest,
         SeriesAddSample(dest, sample.timestamp, sample.value);
     }
     iterator->Close(iterator);
-    return 1;
 }
 
 static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
@@ -1211,7 +1210,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
     return rule;
 }
 
-int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
+bool SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
     CompactionRule *rule = series->rules;
     CompactionRule *prev_rule = NULL;
     while (rule != NULL) {
@@ -1225,12 +1224,12 @@ int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
                 // make the next one to be the first rule
                 series->rules = next;
             }
-            return TRUE;
+            return true;
         }
         prev_rule = rule;
         rule = rule->nextRule;
     }
-    return FALSE;
+    return false;
 }
 
 void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName) {
@@ -1238,13 +1237,13 @@ void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *sr
     series->srcKey = srcKeyName;
 }
 
-int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
+bool SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
     if (RMUtil_StringEquals(series->srcKey, srctKey)) {
         RedisModule_FreeString(NULL, series->srcKey);
         series->srcKey = NULL;
-        return TRUE;
+        return true;
     }
-    return FALSE;
+    return false;
 }
 
 /*
