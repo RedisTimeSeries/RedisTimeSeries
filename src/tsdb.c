@@ -16,6 +16,7 @@
 #include "multiseries_sample_iterator.h"
 #include "multiseries_agg_dup_sample_iterator.h"
 #include "rdb.h"
+#include "libmr_integration.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -1125,6 +1126,18 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                                      RedisModule_StringPtrLen(keyName, &len),
                                                      aggString,
                                                      rule->bucketDuration);
+        }
+
+        // check if dstkey and srckey has the same hashslot
+        bool isCluster = RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER;
+        if (isCluster &&
+            RedisModule_ClusterKeySlot(destKey) != RedisModule_ClusterKeySlot(keyName)) {
+            RM_LOG_WARNING(ctx,
+                           "Cannot create compacted key, key '%s' and '%s' are in different slots",
+                           RedisModule_StringPtrLen(destKey, NULL),
+                           RedisModule_StringPtrLen(keyName, NULL));
+            RedisModule_FreeString(ctx, destKey);
+            continue;
         }
 
         compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
