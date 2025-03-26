@@ -16,76 +16,78 @@
 
 #define SINGLE_RULE_ITEM_STRING_LENGTH 32
 
-static const timestamp_t lookup_intervals[] = { ['m'] = 1,
-                                                ['s'] = 1000,
-                                                ['M'] = 1000 * 60,
-                                                ['h'] = 1000 * 60 * 60,
-                                                ['d'] = 1000 * 60 * 60 * 24 };
+static const timestamp_t lookup_intervals[CHAR_MAX] = {
+    ['\0'] = 1,
+    ['m'] = 1,
+    ['s'] = 1000,
+    ['M'] = 1000 * 60,
+    ['h'] = 1000 * 60 * 60,
+    ['d'] = 1000 * 60 * 60 * 24,
+};
 
-static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
-    char should_be_empty;
-    unsigned char interval_type;
-    timestamp_t timeSize;
-    int ret;
-    ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
-    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
-    if (!valid_state) {
-        return FALSE;
+static bool parse_string_to_millisecs(const char *timeStr, timestamp_t *out, bool canBeZero) {
+    if (!isdigit(*timeStr)) {
+        return false;
     }
 
-    if (canBeZero && timeSize == 0) {
-        *out = 0;
-        return TRUE;
+    char should_be_empty;
+    unsigned char interval_type = '\0';
+    timestamp_t timeSize;
+    int ret = sscanf(timeStr, "%" SCNu64 "%c%c", &timeSize, &interval_type, &should_be_empty);
+    bool valid_state = (ret == 2) || (ret == 1 && timeSize == 0);
+    if (!valid_state) {
+        return false;
     }
 
     timestamp_t interval_in_millisecs = lookup_intervals[interval_type];
     if (interval_in_millisecs == 0) {
-        return FALSE;
+        return false;
     }
+
+    if (timeSize == 0) {
+        if (canBeZero) {
+            *out = 0;
+            return true;
+        }
+        return false;
+    }
+
     *out = interval_in_millisecs * timeSize;
-    return TRUE;
+    return true;
 }
 
-static int parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
-    char *token;
-    char *token_iter_ptr;
-    char agg_type[20];
+static bool parse_interval_policy(char *policy, SimpleCompactionRule *rule) {
+    char *saveptr;
     rule->timestampAlignment = 0; // the default alignment is 0
 
-    token = strtok_r(policy, ":", &token_iter_ptr);
-    int i = 0;
-    while (token) {
-        if (i == 0) { // first param its the aggregation type
-            strcpy(agg_type, token);
-        } else if (i == 1) { // the 2nd param is the bucket
-            if (parse_string_to_millisecs(token, &rule->bucketDuration, false) == FALSE) {
-                return FALSE;
-            }
-        } else if (i == 2) {
-            if (parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true) == FALSE) {
-                return FALSE;
-            }
-        } else if (i == 3) {
-            if (parse_string_to_millisecs(token, &rule->timestampAlignment, false) == FALSE) {
-                return FALSE;
-            }
-        } else {
-            return FALSE;
+    int num_tokens = 0;
+    for (char *token = strtok_r(policy, ":", &saveptr); token != NULL;
+         token = strtok_r(NULL, ":", &saveptr)) {
+        switch (num_tokens++) {
+            case 0: // agg type
+                if ((rule->aggType = StringAggTypeToEnum(token)) == TS_AGG_INVALID)
+                    return false;
+                break;
+            case 1: // bucket duration
+                if (!parse_string_to_millisecs(token, &rule->bucketDuration, false))
+                    return false;
+                break;
+            case 2: // retention size
+                if (!parse_string_to_millisecs(token, &rule->retentionSizeMillisec, true))
+                    return false;
+                break;
+            case 3: // timestamp alignment (optional)
+                if (!parse_string_to_millisecs(token, &rule->timestampAlignment, true))
+                    return false;
+                break;
+            default:
+                return false;
         }
+    }
 
-        i++;
-        token = strtok_r(NULL, ":", &token_iter_ptr);
-    }
-    if (i < 3) {
-        return FALSE;
-    }
-    int agg_type_index = StringAggTypeToEnum(agg_type);
-    if (agg_type_index == TS_AGG_INVALID) {
-        return FALSE;
-    }
-    rule->aggType = agg_type_index;
-
-    return TRUE;
+    // we expect 3 or 4 tokens. the tokens are:
+    // aggType:bucketDuration:retentionSize:timestampAlignment (optional)
+    return num_tokens == 3 || num_tokens == 4;
 }
 
 static size_t count_char_in_str(const char *string, size_t len, char lookup) {
@@ -100,12 +102,12 @@ static size_t count_char_in_str(const char *string, size_t len, char lookup) {
 
 // parse compaction policies in the following format: "max:1m;min:10s;avg:2h;avg:3d"
 // the format is AGGREGATION_FUNCTION:\d[s|m|h|d];
-int ParseCompactionPolicy(const char *policy_string,
-                          SimpleCompactionRule **parsed_rules_out,
-                          uint64_t *rules_count) {
+bool ParseCompactionPolicy(const char *policy_string,
+                           size_t len,
+                           SimpleCompactionRule **parsed_rules_out,
+                           uint64_t *rules_count) {
     char *token;
     char *token_iter_ptr;
-    size_t len = strlen(policy_string);
     char *rest = malloc(len + 1);
     memcpy(rest, policy_string, len + 1);
     *parsed_rules_out = NULL;
@@ -113,15 +115,14 @@ int ParseCompactionPolicy(const char *policy_string,
 
     // the ';' is a separator so we need to add +1 for the policy count
     uint64_t policies_count = count_char_in_str(policy_string, len, ';') + 1;
-    *parsed_rules_out = malloc(sizeof(SimpleCompactionRule) * policies_count);
+    *parsed_rules_out = malloc(policies_count * sizeof **parsed_rules_out);
     SimpleCompactionRule *parsed_rules_runner = *parsed_rules_out;
 
     token = strtok_r(rest, ";", &token_iter_ptr);
-    int success = TRUE;
+    bool success = true;
     while (token != NULL) {
-        int result = parse_interval_policy(token, parsed_rules_runner);
-        if (result == FALSE) {
-            success = FALSE;
+        if (!parse_interval_policy(token, parsed_rules_runner)) {
+            success = false;
             break;
         }
         token = strtok_r(NULL, ";", &token_iter_ptr);
@@ -130,7 +131,7 @@ int ParseCompactionPolicy(const char *policy_string,
     }
 
     free(rest);
-    if (success == FALSE) {
+    if (!success) {
         // all or nothing, don't allow partial parsing
         *rules_count = 0;
         if (*parsed_rules_out) {
