@@ -22,9 +22,6 @@
 #define unlikely(x) (x)
 #endif
 
-#define TRUE 1
-#define FALSE 0
-
 #ifndef really_inline
 #define really_inline __attribute__((always_inline)) inline
 #endif // really_inline
