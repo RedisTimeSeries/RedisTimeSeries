@@ -9,6 +9,24 @@ import redis.exceptions
 import redis.exceptions
 from includes import *
 
+@skip(onVersionLowerThan='7.4.0')
+def test_acl_ignore_on_metadata(env):
+    with env.getClusterConnectionIfNeeded() as conn, env.getConnection(1) as conn1:
+        conn.execute_command('TS.CREATE', 'a{x}', 'LABELS', 'x', 'y')
+        conn.execute_command('TS.CREATE', 'b{x}', 'LABELS', 'x', 'y')
+        conn.execute_command('TS.CREATERULE', 'a{x}', 'b{x}', 'AGGREGATION', 'SUM', 100)
+
+        # Create a user with permissions only for 'a{x}'
+        conn.execute_command(
+            'ACL', 'SETUSER', 'usr1',
+            'on', '>pw1', 'resetkeys', '~a*',
+            '+@timeseries', '+@keyspace'
+        )
+        conn.execute_command('AUTH', 'usr1', 'pw1')
+
+        # The user should be able to access the metadata of 'b{x}'
+        result = conn1.execute_command('TS.QUERYINDEX', 'x=y')
+        env.assertEqual(len(result), 2)
 
 @skip(onVersionLowerThan='7.4.0')
 def test_acl_with_ts_mget_mrange(env):
@@ -42,9 +60,6 @@ def test_acl_with_ts_mget_mrange(env):
 
         with pytest.raises(redis.exceptions.NoPermissionError):
             result = conn1.execute_command('TS.INFO', 'series2')
-
-        with pytest.raises(redis.exceptions.NoPermissionError):
-            result = conn1.execute_command('TS.QUERYINDEX', 'group=test')
 
         with pytest.raises(redis.exceptions.NoPermissionError):
             result = conn1.execute_command('TS.MGET', 'FILTER', 'group=test')

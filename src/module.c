@@ -238,13 +238,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    bool hasPermissionError = false;
-    RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, &hasPermissionError);
-
-    if (hasPermissionError) {
-        RTS_ReplyKeyPermissionsError(ctx);
-        return;
-    }
+    RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, NULL);
 
     RedisModule_ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
@@ -282,11 +276,6 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (IsMRCluster()) {
-        if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            QueryPredicateList_Free(queries);
-            return RTS_ReplyKeyPermissionsError(ctx);
-        }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
