@@ -292,4 +292,18 @@ def test_ts_upsert_bug():
         res2 = r.execute_command("ts.range", t1, first_chunk_last_ts, first_chunk_last_ts + 100)
         info2 = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
         assert res2 == [res[0], [first_chunk_last_ts + 100, first_chunk_last_val]]
-  
+
+def test_ts_add_fail():
+    with Env().getClusterConnectionIfNeeded() as r:
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '1a')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '1.')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '1.0.0')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '.1')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '1,0')
+        with pytest.raises(redis.ResponseError) as excinfo:
+            r.execute_command('TS.ADD', 'k', 1, '0x1')
