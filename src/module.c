@@ -31,7 +31,6 @@
 #include "rmutil/util.h"
 
 #include <ctype.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <string.h>
 #include <strings.h>
@@ -777,7 +776,7 @@ static inline int add(RedisModuleCtx *ctx,
 
 static inline RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
     char curTimeStr[21] = { 0 }; // base 10 digits = 64 bits * log10(2) digits / bit
-    sprintf(curTimeStr, "%lld", RedisModule_Milliseconds());
+    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
     return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
 }
 
