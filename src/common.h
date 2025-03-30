@@ -15,13 +15,13 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
 
 #define RTS_ERR "ERR"
 #define RTS_NOPERM "NOPERM"
-#define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg);
-#define RTS_ReplyGeneralError(ctx, msg) RTS_ReplyError(ctx, RTS_ERR, msg);
-#define RTS_ReplyPermissionError(ctx, msg) RTS_ReplyError(ctx, RTS_NOPERM, msg);
+#define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg)
+#define RTS_ReplyGeneralError(ctx, msg) RTS_ReplyError(ctx, RTS_ERR, msg)
+#define RTS_ReplyPermissionError(ctx, msg) RTS_ReplyError(ctx, RTS_NOPERM, msg)
 #define RTS_ReplyKeyPermissionsError(ctx)                                                          \
     RTS_ReplyPermissionError(ctx,                                                                  \
                              "TSDB: current user doesn't have read permission to one or more "     \
-                             "keys that match the specified filter");
+                             "keys that match the specified filter")
 
 // Returns the current user of the context.
 static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {
