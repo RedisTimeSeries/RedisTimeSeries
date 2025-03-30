@@ -714,7 +714,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline bool parse_double(RedisModuleString *valueStr, double *value) {
+static inline bool parse_double(const RedisModuleString *valueStr, double *value) {
     size_t len;
     char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
     char const *const endptr = fast_double_parser_c_parse_number(valueCStr, value);
@@ -723,8 +723,8 @@ static inline bool parse_double(RedisModuleString *valueStr, double *value) {
 
 static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString *keyName,
-                      RedisModuleString *timestampStr,
-                      RedisModuleString *valueStr,
+                      const RedisModuleString *timestampStr,
+                      const RedisModuleString *valueStr,
                       RedisModuleString **argv,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
@@ -775,9 +775,9 @@ static inline int add(RedisModuleCtx *ctx,
     return rv;
 }
 
-static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
+static inline RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
     char curTimeStr[21] = { 0 }; // base 10 digits = 64 bits * log10(2) digits / bit
-    sprintf(curTimeStr, "%" PRIi64, RedisModule_Milliseconds());
+    sprintf(curTimeStr, "%lld", RedisModule_Milliseconds());
     return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
 }
 
