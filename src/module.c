@@ -728,7 +728,7 @@ static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString **argv,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
-    
+
     double value;
     if (!parse_double(valueStr, &value)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
