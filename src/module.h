@@ -136,7 +136,7 @@ extern RedisModuleCtx *rts_staticCtx;
 // RedisModule_CloseKey The function assumes the key doesn't exists
 int CreateTsKey(RedisModuleCtx *ctx,
                 RedisModuleString *keyName,
-                CreateCtx *cCtx,
+                const CreateCtx *cCtx,
                 Series **series,
                 RedisModuleKey **key);
 

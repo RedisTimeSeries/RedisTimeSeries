@@ -650,10 +650,10 @@ static void handleCompaction(RedisModuleCtx *ctx,
     rule->aggClass->appendValue(rule->aggContext, value, timestamp);
 }
 
-static inline bool filter_close_samples(const DuplicatePolicy dp_policy,
+static inline bool filter_close_samples(DuplicatePolicy dp_policy,
                                         const Series *series,
-                                        const api_timestamp_t timestamp,
-                                        const double value) {
+                                        api_timestamp_t timestamp,
+                                        double value) {
     return dp_policy == DP_LAST && series->totalSamples != 0 &&
            timestamp >= series->lastTimestamp &&
            timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
@@ -662,10 +662,10 @@ static inline bool filter_close_samples(const DuplicatePolicy dp_policy,
 
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
-                       const api_timestamp_t timestamp,
-                       const double value,
-                       const DuplicatePolicy dp_override,
-                       const bool should_reply) {
+                       api_timestamp_t timestamp,
+                       double value,
+                       DuplicatePolicy dp_override,
+                       bool should_reply) {
     const timestamp_t lastTS = series->lastTimestamp;
     const uint64_t retention = series->retentionTime;
     // ensure inside retention period.
@@ -713,11 +713,12 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline bool parse_double(const RedisModuleString *valueStr, double *value) {
+static inline bool parse_double(const RedisModuleString *valueStr) {
     size_t len;
     char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, value);
-    return endptr && endptr - valueCStr == len;
+    double value;
+    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, &value);
+    return endptr && endptr - valueCStr == len ? value : NAN;
 }
 
 static inline int add(RedisModuleCtx *ctx,
@@ -728,8 +729,8 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
 
-    double value;
-    if (!parse_double(valueStr, &value)) {
+    const double value = parse_double(valueStr);
+    if (isnan(value)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
         return REDISMODULE_ERR;
     }
@@ -863,7 +864,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int CreateTsKey(RedisModuleCtx *ctx,
                 RedisModuleString *keyName,
-                CreateCtx *cCtx,
+                const CreateCtx *cCtx,
                 Series **series,
                 RedisModuleKey **key) {
     if (*key == NULL) {
