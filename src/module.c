@@ -743,7 +743,7 @@ static inline int add(RedisModuleCtx *ctx,
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
         return REDISMODULE_ERR;
     }
-    api_timestamp_t timestamp = (api_timestamp_t)timestampValue;
+    const api_timestamp_t timestamp = (api_timestamp_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;
@@ -769,15 +769,15 @@ static inline int add(RedisModuleCtx *ctx,
             return REDISMODULE_ERR;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
+    const int rv = internalAdd(ctx, series, timestamp, value, dp, true);
     RedisModule_CloseKey(key);
     return rv;
 }
 
 static inline RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
     char curTimeStr[21] = { 0 }; // base 10 digits = 64 bits * log10(2) digits / bit
-    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
-    return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
+    const size_t nchars = sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
+    return RedisModule_CreateString(ctx, curTimeStr, nchars);
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -811,7 +811,7 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             *offset++ = valueStr;
         }
     }
-    size_t replArgc = offset - replArgv;
+    const size_t replArgc = offset - replArgv;
 
     if (replArgc > 0) {
         // we want to replicate only successful sample inserts to avoid errors on the replica, when
@@ -836,17 +836,17 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
+    const RedisModuleString *timestampStr = argv[2];
+    const RedisModuleString *valueStr = argv[3];
 
     if (RMUtil_StringEqualsC(timestampStr, "*")) {
         // if timestamp is "*", take current time (automatic timestamp)
         timestampStr = getCurrentTime(ctx);
     }
 
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    const int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
-        size_t replArgc = argc - 1;
+        const size_t replArgc = argc - 1;
         RedisModuleString **replArgv = malloc(replArgc * sizeof *replArgv);
         for (int i = 0; i < replArgc; i++) { // skip the command name
             replArgv[i] = argv[i + 1];
