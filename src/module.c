@@ -836,7 +836,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *keyName = argv[1];
-    const RedisModuleString *timestampStr = argv[2];
+    RedisModuleString *timestampStr = argv[2];
     const RedisModuleString *valueStr = argv[3];
 
     if (RMUtil_StringEqualsC(timestampStr, "*")) {
@@ -847,7 +847,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     const int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
         const size_t replArgc = argc - 1;
-        RedisModuleString **replArgv = malloc(replArgc * sizeof *replArgv);
+        const RedisModuleString **replArgv = malloc(replArgc * sizeof *replArgv);
         for (int i = 0; i < replArgc; i++) { // skip the command name
             replArgv[i] = argv[i + 1];
         }
