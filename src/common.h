@@ -11,6 +11,7 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                                                 int flags);
 
 #include <stdlib.h>
+#include <string.h>
 #include "RedisModulesSDK/redismodule.h"
 
 #define RTS_ERR "ERR"
@@ -35,6 +36,12 @@ static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx)
     RedisModule_FreeString(ctx, username);
 
     return user;
+}
+
+static inline int stringEqualsC(const RedisModuleString *s1, const char *s2) {
+    size_t len;
+    const char *s1Str = RedisModule_StringPtrLen(s1, &len);
+    return len == strlen(s2) && strncmp(s1Str, s2, len) == 0;
 }
 
 enum {

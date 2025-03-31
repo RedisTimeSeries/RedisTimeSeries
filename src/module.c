@@ -776,9 +776,7 @@ static inline int add(RedisModuleCtx *ctx,
 }
 
 static inline RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
-    char curTimeStr[21] = { 0 }; // base 10 digits = 64 bits * log10(2) digits / bit
-    const size_t nchars = sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
-    return RedisModule_CreateString(ctx, curTimeStr, nchars);
+    return RedisModule_CreateStringPrintf(ctx, "%llu", RedisModule_Milliseconds());
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -791,14 +789,14 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *curTimeStr = NULL;
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
-    RedisModuleString **replArgv = malloc((argc - 1) * sizeof *replArgv);
-    RedisModuleString **offset = replArgv;
+    const RedisModuleString **replArgv = malloc((argc - 1) * sizeof *replArgv);
+    const RedisModuleString **offset = replArgv;
     for (int i = 1; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
-        RedisModuleString *timestampStr = argv[i + 1];
-        RedisModuleString *valueStr = argv[i + 2];
+        const RedisModuleString *timestampStr = argv[i + 1];
+        const RedisModuleString *valueStr = argv[i + 2];
 
-        if (RMUtil_StringEqualsC(timestampStr, "*")) {
+        if (stringEqualsC(timestampStr, "*")) {
             // if timestamp is "*", take current time (automatic timestamp)
             if (!curTimeStr) {
                 curTimeStr = getCurrentTime(ctx);
@@ -837,10 +835,10 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
+    const RedisModuleString *timestampStr = argv[2];
     const RedisModuleString *valueStr = argv[3];
 
-    if (RMUtil_StringEqualsC(timestampStr, "*")) {
+    if (stringEqualsC(timestampStr, "*")) {
         // if timestamp is "*", take current time (automatic timestamp)
         timestampStr = getCurrentTime(ctx);
     }
