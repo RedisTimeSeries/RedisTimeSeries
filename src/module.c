@@ -713,7 +713,7 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline bool parse_double(const RedisModuleString *valueStr) {
+static inline double parse_double(const RedisModuleString *valueStr) {
     size_t len;
     char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
     double value;
