@@ -59,3 +59,19 @@ def test_large_key_value_pairs():
         for kv_label in kv_labels:
             res = r1.execute_command('TS.QUERYINDEX', kv_label1)
             assert len(res) == number_series
+
+@skip(on_non_cluster=True)
+def test_keyless_commands_aggregating_cross_shard(env):
+    def assert_data(query, expected_data):
+        with env.getConnection() as r:
+            res = r.execute_command(*query)
+            assert sorted(expected_data) == sorted(res)
+
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'series1', 'LABELS', 'group', 'test', 'name', 'series1')
+        r.execute_command('TS.CREATE', 'series2', 'LABELS', 'group', 'test', 'name', 'series2')
+        r.execute_command('TS.ADD', 'series1', '1', '1')
+        r.execute_command('TS.ADD', 'series2', '2', '2')
+        assert_data(['TS.QUERYINDEX', 'group=test'], [b'series1', b'series2'])
+        r.execute_command('TS.GET', 'series1')
+        assert_data(['TS.QUERYINDEX', 'group=test'], [b'series1', b'series2'])
