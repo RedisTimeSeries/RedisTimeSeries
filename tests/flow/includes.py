@@ -162,7 +162,7 @@ def is_redis_version_higher_than(con, _version, is_cluster=False):
     version = get_redis_version(con, is_cluster)
     return (version > _version_from_string(_version))
 
-def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, onVersionHigherThan=None):
+def skip(always=False, on_cluster=False, on_non_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, onVersionHigherThan=None):
     def decorate(f):
         @wraps(f)
         def wrapper(x, *args, **kwargs):
@@ -170,6 +170,8 @@ def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLo
             if always:
                 env.skip()
             if on_cluster and env.isCluster():
+                env.skip()
+            if on_non_cluster and not env.isCluster():
                 env.skip()
             if on_macos and OS == 'macos':
                 env.skip()

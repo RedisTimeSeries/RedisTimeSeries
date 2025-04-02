@@ -59,3 +59,14 @@ def test_large_key_value_pairs():
         for kv_label in kv_labels:
             res = r1.execute_command('TS.QUERYINDEX', kv_label1)
             assert len(res) == number_series
+
+def test_keyless_commands_aggregating_cross_shard():
+    env = Env(decodeResponses=True)
+    if not env.isCluster():
+        env.skip()
+
+    env.expect('TS.CREATE', 's1', 'LABELS', 'x', 'y').error().contains('MOVED')
+    env.expect('TS.CREATE', 's2', 'LABELS', 'x', 'y').contains('OK')
+    env.assertEqual(sorted(env.cmd('TS.QUERYINDEX', 'x=y')), ['s1', 's2'])
+    env.expect('TS.GET', 's1').error().contains('MOVED')
+    env.assertEqual(sorted(env.cmd('TS.QUERYINDEX', 'x=y')), ['s1', 's2'])

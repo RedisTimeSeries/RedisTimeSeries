@@ -261,10 +261,10 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    int query_count = argc - 1;
-
+    const int query_count = argc - 1;
     int response = 0;
-    QueryPredicateList *queries = parseLabelListFromArgs(ctx, argv, 1, query_count, &response);
+    QueryPredicateList *const queries =
+        parseLabelListFromArgs(ctx, argv, 1, query_count, &response);
     if (response == TSDB_ERROR) {
         QueryPredicateList_Free(queries);
         return RTS_ReplyGeneralError(ctx, "TSDB: failed parsing labels");
@@ -275,22 +275,31 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RTS_ReplyGeneralError(ctx, "TSDB: please provide at least one matcher");
     }
 
+    const int ctxFlags = RedisModule_GetContextFlags(ctx);
+    RedisModule_Log(ctx, "warning", "context flags: { LUA: %d, MULTI: %d, DENY_BLOCKING: %d, IS_CLUSTER: %d }, MR_CLUSTER: { INITIALIZED: %d, NUM_SHARDS: %ld }",
+                    ctxFlags & REDISMODULE_CTX_FLAGS_LUA,
+                    ctxFlags & REDISMODULE_CTX_FLAGS_MULTI,
+                    ctxFlags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING,
+                    ctxFlags & REDISMODULE_CTX_FLAGS_CLUSTER,
+                    MR_IsClusterInitialize(),
+                    MR_ClusterGetSize());
     if (IsMRCluster()) {
-        int ctxFlags = RedisModule_GetContextFlags(ctx);
+        const bool cantRunMultiSharded =
+            ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING);
 
-        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
-                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+        if (cantRunMultiSharded) {
             RedisModule_ReplyWithError(ctx,
                                        "Can not run multi sharded command inside a multi exec, "
                                        "lua, or when blocking is not allowed");
             return REDISMODULE_OK;
         }
+        RedisModule_Log(ctx, "warning", "Running TSDB_queryindex in multi-sharded mode");
         TSDB_queryindex_RG(ctx, queries);
-        QueryPredicateList_Free(queries);
     } else {
         _TSDB_queryindex_impl(ctx, queries);
-        QueryPredicateList_Free(queries);
     }
+    QueryPredicateList_Free(queries);
 
     return REDISMODULE_OK;
 }
