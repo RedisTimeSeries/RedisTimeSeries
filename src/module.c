@@ -659,36 +659,36 @@ static void handleCompaction(RedisModuleCtx *ctx,
     rule->aggClass->appendValue(rule->aggContext, value, timestamp);
 }
 
+static inline bool filter_close_samples(DuplicatePolicy dp_policy,
+                                        const Series *series,
+                                        api_timestamp_t timestamp,
+                                        double value) {
+    return dp_policy == DP_LAST && series->totalSamples != 0 &&
+           timestamp >= series->lastTimestamp &&
+           timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
+           fabs(value - series->lastValue) <= series->ignoreMaxValDiff;
+}
+
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
                        double value,
                        DuplicatePolicy dp_override,
                        bool should_reply) {
-    timestamp_t lastTS = series->lastTimestamp;
-    uint64_t retention = series->retentionTime;
+    const timestamp_t lastTS = series->lastTimestamp;
+    const uint64_t retention = series->retentionTime;
     // ensure inside retention period.
     if (retention && timestamp < lastTS && retention < lastTS - timestamp) {
         RTS_ReplyGeneralError(ctx, "TSDB: Timestamp is older than retention");
         return REDISMODULE_ERR;
     }
 
-    // Use module level configuration if key level configuration doesn't exists
-    DuplicatePolicy dp_policy;
-    if (dp_override != DP_NONE) {
-        dp_policy = dp_override;
-    } else if (series->duplicatePolicy != DP_NONE) {
-        dp_policy = series->duplicatePolicy;
-    } else {
-        dp_policy = TSGlobalConfig.duplicatePolicy;
-    }
+    // Use module level configuration if key level configuration doesn't exist
+    const DuplicatePolicy dp_policy = dp_override ?: series->duplicatePolicy ?: TSGlobalConfig.duplicatePolicy;
 
     // Insert filter for close samples. If configured, it's used to ignore last measurement if its
     // value is negligible compared to the last sample.
-    if (dp_policy == DP_LAST && series->srcKey == NULL && series->totalSamples != 0 &&
-        timestamp >= series->lastTimestamp &&
-        timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
-        fabs(value - series->lastValue) <= series->ignoreMaxValDiff) {
+    if (filter_close_samples(dp_policy, series, timestamp, value)) {
         RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
         return REDISMODULE_ERR;
     }
@@ -711,10 +711,9 @@ static int internalAdd(RedisModuleCtx *ctx,
                 GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
             deleteReferenceToDeletedSeries(ctx, series, flags);
         }
-        CompactionRule *rule = series->rules;
-        while (rule != NULL) {
+
+        for (CompactionRule *rule = series->rules; rule != NULL; rule = rule->nextRule) {
             handleCompaction(ctx, series, rule, timestamp, value);
-            rule = rule->nextRule;
         }
     }
     if (should_reply) {
@@ -723,31 +722,38 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
+static inline double parse_double(const RedisModuleString *valueStr) {
+    size_t len;
+    char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
+    double value;
+    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, &value);
+    return endptr && endptr - valueCStr == len ? value : NAN;
+}
+
 static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString *keyName,
-                      RedisModuleString *timestampStr,
-                      RedisModuleString *valueStr,
+                      const RedisModuleString *timestampStr,
+                      const RedisModuleString *valueStr,
                       RedisModuleString **argv,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
-    double value;
-    const char *valueCStr = RedisModule_StringPtrLen(valueStr, NULL);
-    if ((fast_double_parser_c_parse_number(valueCStr, &value) == NULL)) {
+
+    const double value = parse_double(valueStr);
+    if (isnan(value)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
         return REDISMODULE_ERR;
     }
 
     long long timestampValue;
-    if ((RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK)) {
+    if (RedisModule_StringToLongLong(timestampStr, &timestampValue) != REDISMODULE_OK) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
         return REDISMODULE_ERR;
     }
-
     if (timestampValue < 0) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp, must be a nonnegative integer");
         return REDISMODULE_ERR;
     }
-    api_timestamp_t timestamp = (uint64_t)timestampValue;
+    const api_timestamp_t timestamp = (api_timestamp_t)timestampValue;
 
     Series *series = NULL;
     DuplicatePolicy dp = DP_NONE;
@@ -766,22 +772,20 @@ static inline int add(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
-        //  overwride key and database configuration for DUPLICATE_POLICY
+        //  override key and database configuration for DUPLICATE_POLICY
         if (argv != NULL &&
             ParseDuplicatePolicy(ctx, argv, argc, TS_ADD_DUPLICATE_POLICY_ARG, &dp, NULL) !=
                 TSDB_OK) {
             return REDISMODULE_ERR;
         }
     }
-    int rv = internalAdd(ctx, series, timestamp, value, dp, true);
+    const int rv = internalAdd(ctx, series, timestamp, value, dp, true);
     RedisModule_CloseKey(key);
     return rv;
 }
 
-static RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
-    char curTimeStr[sizeof(timestamp_t) * 8 + 1];
-    sprintf(curTimeStr, "%llu", RedisModule_Milliseconds());
-    return RedisModule_CreateString(ctx, curTimeStr, strlen(curTimeStr));
+static inline RedisModuleString *getCurrentTime(RedisModuleCtx *ctx) {
+    return RedisModule_CreateStringPrintf(ctx, "%llu", RedisModule_Milliseconds());
 }
 
 int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -794,14 +798,14 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *curTimeStr = NULL;
 
     RedisModule_ReplyWithArray(ctx, (argc - 1) / 3);
-    RedisModuleString **replication_data = malloc(sizeof(RedisModuleString *) * (argc - 1));
-    size_t replication_count = 0;
+    const RedisModuleString **replArgv = malloc((argc - 1) * sizeof *replArgv);
+    const RedisModuleString **offset = replArgv;
     for (int i = 1; i < argc; i += 3) {
         RedisModuleString *keyName = argv[i];
-        RedisModuleString *timestampStr = argv[i + 1];
-        RedisModuleString *valueStr = argv[i + 2];
+        const RedisModuleString *timestampStr = argv[i + 1];
+        const RedisModuleString *valueStr = argv[i + 2];
 
-        if (RMUtil_StringEqualsC(timestampStr, "*")) {
+        if (stringEqualsC(timestampStr, "*")) {
             // if timestamp is "*", take current time (automatic timestamp)
             if (!curTimeStr) {
                 curTimeStr = getCurrentTime(ctx);
@@ -810,20 +814,20 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
 
         if (add(ctx, keyName, timestampStr, valueStr, NULL, -1) == REDISMODULE_OK) {
-            replication_data[replication_count] = keyName;
-            replication_data[replication_count + 1] = timestampStr;
-            replication_data[replication_count + 2] = valueStr;
-            replication_count += 3;
+            *offset++ = keyName;
+            *offset++ = timestampStr;
+            *offset++ = valueStr;
         }
     }
+    const size_t replArgc = offset - replArgv;
 
-    if (replication_count > 0) {
+    if (replArgc > 0) {
         // we want to replicate only successful sample inserts to avoid errors on the replica, when
         // this errors occurs, redis will CRITICAL error to its log and potentially fill up the disk
         // depending on the actual traffic.
-        RedisModule_Replicate(ctx, "TS.MADD", "v", replication_data, replication_count);
+        RedisModule_Replicate(ctx, "TS.MADD", "v", replArgv, replArgc);
     }
-    free(replication_data);
+    free(replArgv);
 
     for (int i = 1; i < argc; i += 3) {
         RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", argv[i]);
@@ -840,24 +844,24 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleString *keyName = argv[1];
-    RedisModuleString *timestampStr = argv[2];
-    RedisModuleString *valueStr = argv[3];
+    const RedisModuleString *timestampStr = argv[2];
+    const RedisModuleString *valueStr = argv[3];
 
-    if (RMUtil_StringEqualsC(timestampStr, "*")) {
+    if (stringEqualsC(timestampStr, "*")) {
         // if timestamp is "*", take current time (automatic timestamp)
         timestampStr = getCurrentTime(ctx);
     }
 
-    int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
+    const int result = add(ctx, keyName, timestampStr, valueStr, argv, argc);
     if (result == REDISMODULE_OK) {
-        RedisModuleString **args_array =
-            (RedisModuleString **)malloc((argc - 1) * sizeof(RedisModuleString *));
-        for (int i = 0; i < argc - 1; i++) { // skip the command name
-            args_array[i] = argv[i + 1];
+        const size_t replArgc = argc - 1;
+        const RedisModuleString **replArgv = malloc(replArgc * sizeof *replArgv);
+        for (int i = 0; i < replArgc; i++) { // skip the command name
+            replArgv[i] = argv[i + 1];
         }
-        args_array[1] = timestampStr; // In case the timestamp was "*"
-        RedisModule_Replicate(ctx, "TS.ADD", "v", args_array, argc - 1);
-        free(args_array);
+        replArgv[1] = timestampStr; // In case the timestamp was "*"
+        RedisModule_Replicate(ctx, "TS.ADD", "v", replArgv, replArgc);
+        free(replArgv);
     }
 
     RedisModule_NotifyKeyspaceEvent(ctx, REDISMODULE_NOTIFY_MODULE, "ts.add", keyName);
@@ -867,7 +871,7 @@ int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int CreateTsKey(RedisModuleCtx *ctx,
                 RedisModuleString *keyName,
-                CreateCtx *cCtx,
+                const CreateCtx *cCtx,
                 Series **series,
                 RedisModuleKey **key) {
     if (*key == NULL) {
