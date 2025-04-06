@@ -12,6 +12,7 @@
 
 tdnf -y update && \
     tdnf install -y \
+        build-essential \
         git \
         wget \
         gcc \
@@ -20,14 +21,12 @@ tdnf -y update && \
         cmake \
         libffi-devel \
         openssl-devel \
-        build-essential \
         zlib-devel \
         bzip2-devel \
         readline-devel \
         which \
         unzip \
-        jq \ 
-        ca-certificates
+        jq ca-certificates
 git config --global --add safe.directory $PWD
 
 wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz && \
