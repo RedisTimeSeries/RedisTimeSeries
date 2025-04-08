@@ -276,7 +276,10 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     const int ctxFlags = RedisModule_GetContextFlags(ctx);
-    RedisModule_Log(ctx, "warning", "context flags: { LUA: %d, MULTI: %d, DENY_BLOCKING: %d, IS_CLUSTER: %d }, MR_CLUSTER: { INITIALIZED: %d, NUM_SHARDS: %ld }",
+    RedisModule_Log(ctx,
+                    "warning",
+                    "context flags: { LUA: %d, MULTI: %d, DENY_BLOCKING: %d, IS_CLUSTER: %d }, "
+                    "MR_CLUSTER: { INITIALIZED: %d, NUM_SHARDS: %ld }",
                     ctxFlags & REDISMODULE_CTX_FLAGS_LUA,
                     ctxFlags & REDISMODULE_CTX_FLAGS_MULTI,
                     ctxFlags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING,
