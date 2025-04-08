@@ -28,7 +28,7 @@ jobs:
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
-      os: jammy rocky9 bullseye amazonlinux2
+      os: jammy rocky9 bullseye amazonlinux2 azurelinux3
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: true
     secrets: inherit
