@@ -245,6 +245,9 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
             }
         }
     }
+
+    // if deserialization was successful, the buffer should be depleted.
+    // if not, it means that the buffer was corrupted - it did not have a resp value.
     if (unlikely(expect_resp && !MR_SerializationCtxReaderIsDepleted(sctx))) {
         goto err;
     }
