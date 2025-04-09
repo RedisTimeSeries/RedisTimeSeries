@@ -203,7 +203,9 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     predicates->endTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->latest = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->resp3 = expect_resp ? MR_SerializationCtxReadLongLong(sctx, error) : false;
-    if (unlikely(expect_resp && *error)) {
+    // check that the value read is a boolean.
+    // *error must be NULL here, as ReadLongLong checks that we do not exceed the buffer.
+    if (unlikely(expect_resp && (bool)predicates->resp3 != predicates->resp3)) {
         goto err;
     }
 
