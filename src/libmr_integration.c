@@ -161,11 +161,40 @@ static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCt
     return RedisModule_CreateString(NULL, temp, len - 1);
 }
 
-static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRError **error) {
-    QueryPredicates_Arg *predicates = malloc(sizeof(*predicates));
+static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
+    if (predicates->predicates->list) {
+        for (int i = 0; i < predicates->predicates->count; i++) {
+            QueryPredicate *predicate = &predicates->predicates->list[i];
+            if (!predicate->key)
+                break;
+
+            if (predicate->valuesList) {
+                for (int j = 0; j < predicate->valueListCount && predicate->valuesList[j]; j++) {
+                    RedisModule_FreeString(NULL, predicate->valuesList[j]);
+                }
+                free(predicate->valuesList);
+            }
+            RedisModule_FreeString(NULL, predicate->key);
+        }
+        free(predicates->predicates->list);
+    }
+    free(predicates->predicates);
+    if (predicates->limitLabels) {
+        for (int i = 0; i < predicates->limitLabelsSize && predicates->limitLabels[i]; ++i) {
+            RedisModule_FreeString(NULL, predicates->limitLabels[i]);
+        }
+        free(predicates->limitLabels);
+    }
+    free(predicates);
+}
+
+static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
+                                                 MRError **error,
+                                                 bool expect_resp) {
+    QueryPredicates_Arg *predicates = calloc(1, sizeof *predicates);
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
-    predicates->predicates = malloc(sizeof(QueryPredicateList));
+    predicates->predicates = calloc(1, sizeof *predicates->predicates);
     predicates->predicates->count = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->predicates->ref = 1;
     predicates->withLabels = MR_SerializationCtxReadLongLong(sctx, error);
@@ -173,31 +202,70 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
     predicates->startTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->endTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->latest = MR_SerializationCtxReadLongLong(sctx, error);
-    predicates->resp3 = MR_SerializationCtxReadLongLong(sctx, error);
-
-    predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof(char **));
-    for (int i = 0; i < predicates->limitLabelsSize; ++i) {
-        predicates->limitLabels[i] = SerializationCtxReadeRedisString(sctx, error);
+    predicates->resp3 = expect_resp ? MR_SerializationCtxReadLongLong(sctx, error) : false;
+    // check that the value read is a boolean.
+    // *error must be NULL here, as ReadLongLong checks that we do not exceed the buffer.
+    if (unlikely(expect_resp && (bool)predicates->resp3 != predicates->resp3)) {
+        goto err;
     }
 
-    predicates->predicates->list = calloc(predicates->predicates->count, sizeof(QueryPredicate));
+    predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof *predicates->limitLabels);
+    for (int i = 0; i < predicates->limitLabelsSize; ++i) {
+        predicates->limitLabels[i] = SerializationCtxReadeRedisString(sctx, error);
+        if (unlikely(expect_resp && *error)) {
+            goto err;
+        }
+    }
+
+    predicates->predicates->list =
+        calloc(predicates->predicates->count, sizeof *predicates->predicates->list);
     for (int i = 0; i < predicates->predicates->count; i++) {
-        QueryPredicate *predicate = predicates->predicates->list + i;
+        QueryPredicate *predicate = &predicates->predicates->list[i];
         // decode type
         predicate->type = MR_SerializationCtxReadLongLong(sctx, error);
+        if (unlikely(expect_resp && *error)) {
+            goto err;
+        }
 
         // decode key
         predicate->key = SerializationCtxReadeRedisString(sctx, error);
+        if (unlikely(expect_resp && *error)) {
+            goto err;
+        }
 
         // decode values
         predicate->valueListCount = MR_SerializationCtxReadLongLong(sctx, error);
-        predicate->valuesList = calloc(predicate->valueListCount, sizeof(RedisModuleString *));
+        if (unlikely(expect_resp && *error)) {
+            goto err;
+        }
 
+        predicate->valuesList = calloc(predicate->valueListCount, sizeof *predicate->valuesList);
         for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
             predicate->valuesList[value_index] = SerializationCtxReadeRedisString(sctx, error);
+            if (unlikely(expect_resp && *error)) {
+                goto err;
+            }
         }
     }
+
+    // if deserialization was successful, the buffer should be depleted.
+    // if not, it means that the buffer was corrupted - it did not have a resp value.
+    if (unlikely(expect_resp && !MR_SerializationCtxReaderIsDepleted(sctx))) {
+        goto err;
+    }
+
     return predicates;
+
+err:
+    *error = NULL;
+    MR_SerializationCtxReaderRewind(sctx);
+    QueryPredicates_CleanupFailedDeserialization(predicates);
+    return NULL;
+}
+
+static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRError **error) {
+    return QueryPredicates_ArgDeserialize_impl(sctx, error, true)
+               ?: QueryPredicates_ArgDeserialize_impl(sctx, error, false);
 }
 
 static Record *StringRecord_Create(char *val, size_t len);
