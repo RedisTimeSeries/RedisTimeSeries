@@ -610,3 +610,20 @@ def test_del_with_rules_bug_4972_6(self):
         res = r.execute_command('ts.range', t1, '-', '+')
         assert res == [[5, b'5'], [7, b'7'], [19, b'19']]
         res = r.execute_command('ts.range', t2, '-', '+')
+
+
+def test_ts_delete_with_rule_when_latest_timebucket_deleted(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Use a tag to make sure the samples and compacted keys have the same hashslot
+        # (otherwise the oss-cluster test will complain)
+        r.execute_command("TS.CREATE", "samples{tag}")
+        r.execute_command("TS.CREATE", "compacted{tag}")
+        r.execute_command("TS.CREATERULE", "samples{tag}", "compacted{tag}", "AGGREGATION", "avg", 1000)
+
+        r.execute_command("TS.ADD", "samples{tag}", 1000, 17)
+        r.execute_command("TS.ADD", "samples{tag}", 2000, 19)
+        r.execute_command("TS.ADD", "samples{tag}", 3000, 23)
+
+        # Now delete the sample in the latest time-bucket
+        r.execute_command("TS.DEL", "samples{tag}", 3000, 3000)
+
