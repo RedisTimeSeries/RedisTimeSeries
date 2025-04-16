@@ -203,7 +203,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
@@ -214,9 +214,10 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
-    queryArg->limitLabels = calloc(args.numLimitLabels, sizeof(RedisModuleString *));
-    memcpy(
-        queryArg->limitLabels, args.limitLabels, sizeof(RedisModuleString *) * args.numLimitLabels);
+    queryArg->limitLabels = calloc(args.numLimitLabels, sizeof *queryArg->limitLabels);
+    memcpy(queryArg->limitLabels,
+           args.limitLabels,
+           args.numLimitLabels * sizeof *queryArg->limitLabels);
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
@@ -250,7 +251,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     args.reverse = reverse;
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
@@ -261,9 +262,10 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
-    queryArg->limitLabels = calloc(args.numLimitLabels, sizeof(RedisModuleString *));
-    memcpy(
-        queryArg->limitLabels, args.limitLabels, sizeof(RedisModuleString *) * args.numLimitLabels);
+    queryArg->limitLabels = calloc(args.numLimitLabels, sizeof *queryArg->limitLabels);
+    memcpy(queryArg->limitLabels,
+           args.limitLabels,
+           args.numLimitLabels * sizeof *queryArg->limitLabels);
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
