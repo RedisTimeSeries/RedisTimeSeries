@@ -811,7 +811,7 @@ static bool delete_sample_before(RedisModuleCtx *ctx,
         goto _out;
     }
 
-    *deleted = Uncompressed_GetLastTimestamp(chunk);
+    *deleted = series->funcs->GetLastTimestamp(chunk);
     SeriesDelRange(series, *deleted, *deleted);
 
 _out:
