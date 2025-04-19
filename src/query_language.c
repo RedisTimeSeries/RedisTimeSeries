@@ -207,7 +207,7 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
         goto err_exit;
     }
 
-    cCtx->duplicatePolicy = DP_NONE;
+    cCtx->duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
     if (ParseDuplicatePolicy(ctx, argv, argc, DUPLICATE_POLICY_ARG, &cCtx->duplicatePolicy, NULL) !=
         TSDB_OK) {
         goto err_exit;
