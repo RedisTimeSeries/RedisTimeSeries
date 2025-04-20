@@ -643,7 +643,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
 
     isDeprecated = isDeprecated || chunkSizeBytesFound;
 
-    TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
+    TSGlobalConfig.duplicatePolicy = TSGlobalConfig.duplicatePolicy;
     bool duplicatePolicyFound = false;
     if (ParseDuplicatePolicy(ctx,
                              argv,
