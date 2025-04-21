@@ -88,4 +88,8 @@ def testRDBCompatibility():
         env.assertEqual(OLD_KEYS, KEYS)
         for key in OLD_KEYS:
             assert r.execute_command('ts.range', key, "-", "+") == TSRANGE_RESULTS[key]
-            assert normalize_info(r.execute_command('ts.info', key)) == TSINFO_RESULTS[key]
+            normalized_info = normalize_info(r.execute_command('ts.info', key))
+            # The rdb files were dumped when the duplicate policy was none. Let's verify that and adjust to the correct value
+            assert normalized_info[b"duplicatePolicy"] is None
+            normalized_info[b"duplicatePolicy"] = TSINFO_RESULTS[key][b"duplicatePolicy"]
+            assert normalized_info == TSINFO_RESULTS[key]
