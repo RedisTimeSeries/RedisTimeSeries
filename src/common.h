@@ -44,7 +44,8 @@ static inline int stringEqualsC(const RedisModuleString *s1, const char *s2) {
     return len == strlen(s2) && strncmp(s1Str, s2, len) == 0;
 }
 
-enum {
+enum
+{
     DefragStatus_Finished = 0,
     DefragStatus_Paused = 1,
 };
@@ -61,7 +62,10 @@ static inline RedisModuleString *defragString(RedisModuleDefragCtx *ctx, RedisMo
     }
     return RedisModule_DefragRedisModuleString(ctx, str) ?: str;
 }
-static inline RedisModuleDict *defragDict(RedisModuleDefragCtx *ctx, RedisModuleDict *dict, RedisModuleDefragDictValueCallback valueCB, RedisModuleString **seekTo) {
+static inline RedisModuleDict *defragDict(RedisModuleDefragCtx *ctx,
+                                          RedisModuleDict *dict,
+                                          RedisModuleDefragDictValueCallback valueCB,
+                                          RedisModuleString **seekTo) {
     if (dict == NULL) {
         return NULL;
     }
@@ -76,8 +80,8 @@ static inline void lazyModuleInitialize(RedisModuleCtx *ctx) {
         RedisModule_SubscribeToKeyspaceEvents(
             ctx,
             REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
-                REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED |
-                REDISMODULE_NOTIFY_TRIMMED,
+                REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED |
+                REDISMODULE_NOTIFY_LOADED | REDISMODULE_NOTIFY_TRIMMED,
             NotifyCallback);
         lazy_initialized = 1;
     }
