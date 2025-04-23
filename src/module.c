@@ -675,7 +675,8 @@ static int internalAdd(RedisModuleCtx *ctx,
     }
 
     // Use module level configuration if key level configuration doesn't exist
-    const DuplicatePolicy dp_policy = dp_override ?: series->duplicatePolicy ?: TSGlobalConfig.duplicatePolicy;
+    const DuplicatePolicy dp_policy =
+        dp_override ?: series->duplicatePolicy ?: TSGlobalConfig.duplicatePolicy;
 
     // Insert filter for close samples. If configured, it's used to ignore last measurement if its
     // value is negligible compared to the last sample.

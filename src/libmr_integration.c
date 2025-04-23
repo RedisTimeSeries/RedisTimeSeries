@@ -1036,7 +1036,8 @@ void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record) {
 Series *SeriesRecord_IntoSeries(RedisModuleCtx *ctx, SeriesRecord *record) {
     CreateCtx createArgs = { 0 };
     createArgs.skipChunkCreation = true;
-    Series *s = NewSeries(ctx, RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
+    Series *s =
+        NewSeries(ctx, RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
     s->labelsCount = record->labelsCount;
     s->labels = calloc(s->labelsCount, sizeof(Label));
     for (int i = 0; i < s->labelsCount; i++) {
