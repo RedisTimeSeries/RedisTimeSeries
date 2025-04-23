@@ -68,6 +68,21 @@ static inline RedisModuleDict *defragDict(RedisModuleDefragCtx *ctx, RedisModule
     return RedisModule_DefragRedisModuleDict(ctx, dict, valueCB, seekTo) ?: dict;
 }
 
+int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key);
+
+static inline void lazyModuleInitialize(RedisModuleCtx *ctx) {
+    static int lazy_initialized = 0;
+    if (!lazy_initialized) {
+        RedisModule_SubscribeToKeyspaceEvents(
+            ctx,
+            REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
+                REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED |
+                REDISMODULE_NOTIFY_TRIMMED,
+            NotifyCallback);
+        lazy_initialized = 1;
+    }
+}
+
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(NDEBUG)
 #include "readies/cetara/diag/gdb.h"
 #endif

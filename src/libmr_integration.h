@@ -86,7 +86,7 @@ void SeriesRecord_ObjectFree(void *series);
 void SeriesRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error);
 void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record);
-Series *SeriesRecord_IntoSeries(SeriesRecord *record);
+Series *SeriesRecord_IntoSeries(RedisModuleCtx *ctx, SeriesRecord *record);
 
 int register_rg(RedisModuleCtx *ctx, long long numThreads);
 bool IsMRCluster();

@@ -278,7 +278,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             if (raw_record->recordType != GetSeriesRecordType()) {
                 continue;
             }
-            Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
+            Series *s = SeriesRecord_IntoSeries(rctx, (SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
             if (data->args.groupByLabel) {
