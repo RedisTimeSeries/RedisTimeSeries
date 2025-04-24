@@ -871,7 +871,7 @@ int CreateTsKey(RedisModuleCtx *ctx,
     }
 
     RedisModule_RetainString(ctx, keyName);
-    *series = NewSeries(ctx, keyName, cCtx);
+    *series = NewSeries(rts_staticCtx, keyName, cCtx);
     if (RedisModule_ModuleTypeSetValue(*key, SeriesType, *series) == REDISMODULE_ERR) {
         return TSDB_ERROR;
     }
