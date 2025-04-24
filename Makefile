@@ -133,6 +133,7 @@ LD_FLAGS.macos += -L$(openssl_prefix)/lib
 
 define _SOURCES
 	chunk.c
+	common.c
 	compaction.c
 	compressed_chunk.c
 	config.c
