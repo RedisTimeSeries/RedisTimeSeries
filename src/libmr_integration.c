@@ -1033,7 +1033,7 @@ void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record) {
     RedisModule_ReplyWithLongLong(rctx, series->labelsCount);
 }
 
-Series *SeriesRecord_IntoSeries(RedisModuleCtx *ctx, SeriesRecord *record) {
+Series *SeriesRecord_IntoSeries(SeriesRecord *record) {
     CreateCtx createArgs = { 0 };
     createArgs.skipChunkCreation = true;
     Series *s = NewSeries(RedisModule_CreateStringFromString(NULL, record->keyName), &createArgs);
