@@ -75,7 +75,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     uint64_t rulesCount = LoadUnsigned_IOError(io, goto err);
 
-    series = NewSeries(rts_staticCtx, keyName, &cCtx);
+    series = NewSeries(keyName, &cCtx);
 
     CompactionRule *lastRule = NULL;
 

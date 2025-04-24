@@ -11,6 +11,7 @@
 #include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
+#include "module.h"
 
 #include "RedisModulesSDK/redismodule.h"
 #include "utils/arr.h"
@@ -175,7 +176,7 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     cCtx.options |= SERIES_OPT_UNCOMPRESSED;
 
     Series *reduced =
-        NewSeries(mr_staticCtx, RedisModule_CreateString(NULL, serie_name, serie_name_len), &cCtx);
+        NewSeries(RedisModule_CreateString(NULL, serie_name, serie_name_len), &cCtx);
     if (_ReplyMap(ctx)) {
         // abuse srckey to store the source keys
         reduced->srcKey = (RedisModuleString *)array_new(RedisModuleString *, 1);

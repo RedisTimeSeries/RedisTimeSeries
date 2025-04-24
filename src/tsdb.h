@@ -94,7 +94,7 @@ static inline timestamp_t BucketStartNormalize(timestamp_t bucketTS) {
     return max(0, (int64_t)bucketTS);
 }
 
-Series *NewSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, const CreateCtx *cCtx);
+Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx);
 void FreeSeries(void *value);
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value);
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
