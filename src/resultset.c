@@ -11,6 +11,7 @@
 #include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
+#include "module.h"
 
 #include "RedisModulesSDK/redismodule.h"
 #include "utils/arr.h"

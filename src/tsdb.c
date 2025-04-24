@@ -157,6 +157,7 @@ int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
 }
 
 Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx) {
+    lazyModuleInitialize(rts_staticCtx);
     Series *newSeries = (Series *)calloc(1, sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);

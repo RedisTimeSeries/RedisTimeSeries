@@ -675,7 +675,8 @@ static int internalAdd(RedisModuleCtx *ctx,
     }
 
     // Use module level configuration if key level configuration doesn't exist
-    const DuplicatePolicy dp_policy = dp_override ?: series->duplicatePolicy ?: TSGlobalConfig.duplicatePolicy;
+    const DuplicatePolicy dp_policy =
+        dp_override ?: series->duplicatePolicy ?: TSGlobalConfig.duplicatePolicy;
 
     // Insert filter for close samples. If configured, it's used to ignore last measurement if its
     // value is negligible compared to the last sample.
@@ -1552,42 +1553,6 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
     }
 }
 
-int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
-    if (strcasecmp(event, "del") ==
-            0 || // unlink also notifies with del with freeseries called before
-        strcasecmp(event, "set") == 0 ||
-        strcasecmp(event, "expired") == 0 || strcasecmp(event, "evict") == 0 ||
-        strcasecmp(event, "evicted") == 0 || strcasecmp(event, "trimmed") == 0 // only on enterprise
-    ) {
-        RemoveIndexedMetric(key);
-        return REDISMODULE_OK;
-    }
-
-    if (strcasecmp(event, "restore") == 0) {
-        RestoreKey(ctx, key);
-        return REDISMODULE_OK;
-    }
-
-    if (strcasecmp(event, "rename_from") == 0) { // include also renamenx
-        RenameSeriesFrom(ctx, key);
-        return REDISMODULE_OK;
-    }
-
-    if (strcasecmp(event, "rename_to") == 0) { // include also renamenx
-        RenameSeriesTo(ctx, key);
-        return REDISMODULE_OK;
-    }
-
-    // Will be called in replicaof or on load rdb on load time
-    if (strcasecmp(event, "loaded") == 0) {
-        IndexMetricFromName(ctx, key);
-        return REDISMODULE_OK;
-    }
-
-    // if (strcasecmp(event, "short read") == 0) // Nothing should be done
-    return REDISMODULE_OK;
-}
-
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
                            uint64_t subevent,
@@ -1853,13 +1818,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.mget", "read");
-
-    RedisModule_SubscribeToKeyspaceEvents(
-        ctx,
-        REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
-            REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED | REDISMODULE_NOTIFY_LOADED |
-            REDISMODULE_NOTIFY_TRIMMED,
-        NotifyCallback);
 
     if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
         // we have server events support, lets subscribe to relevan events.
