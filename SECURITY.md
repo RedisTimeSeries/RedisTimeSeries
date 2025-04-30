@@ -9,11 +9,12 @@ performance and security.
 We generally backport security issues to a single previous version,
 unless this is not possible or feasible with a reasonable effort.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.12    | :white_check_mark: |
-| 1.10    | :white_check_mark: |
-| < 1.10  | :x:                |
+| Version                        | Supported                                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| (no newer standalone versions) | RedisTimeSeries is now an integral part of Redis. See https://github.com/redis/redis/security/policy |
+| 1.12                           | :white_check_mark:                                                                                   |
+| 1.10                           | :white_check_mark:                                                                                   |
+| < 1.10                         | :x:                                                                                                  |
 
 ## Reporting a Vulnerability
 
