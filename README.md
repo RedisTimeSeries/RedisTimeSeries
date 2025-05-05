@@ -12,7 +12,7 @@
 > [!NOTE]
 > Starting with Redis 8, the Time Series data structure is integral to Redis. You don't need to install this module separately.
 >
-> Therefore, we no longer release standalone versions of RedisTimeSeries.
+> We no longer release standalone versions of RedisTimeSeries.
 >
 > See https://github.com/redis/redis
 
