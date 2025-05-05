@@ -7,15 +7,22 @@
 [![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
+<picture>
 <img src="docs/docs/images/logo.svg" alt="logo" width="300"/>
+</picture>
 
-Starting with version 8.0, RedisXXX is an integral part of Redis. See https://github.com/redis/redis
-RedisTimeSeries is a time-series database (TSDB) module for Redis, by Redis.
+> [!NOTE]
+> Starting with Redis 8, the Time Series data structures are an integral part of Redis. There is no need to install this module separately.
+>
+> Therefore, we no longer release standalone versions of RedisTimeSeries.
+>
+> See https://github.com/redis/redis
+
+## Overview
 
 RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
 
-
-## What is a Redis time series?
+### What is a Redis time series?
 
 A Redis time series comprises:
 
