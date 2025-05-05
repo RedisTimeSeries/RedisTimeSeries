@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
-[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redis.com/c/modules/redistimeseries)
+
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/KExRgMb)
 
 <img src="docs/docs/images/logo.svg" alt="logo" width="300"/>
