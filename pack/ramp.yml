@@ -33,7 +33,7 @@ exclude_commands:
     - timeseries.INNERCOMMUNICATION
     - timeseries.FORCESHARDSCONNECTION
 overide_command:
-    - { "command_name": "TS.MREVRANGE", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
-    - { "command_name": "TS.MRANGE", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
-    - { "command_name": "TS.MGET", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
-    - { "command_name": "TS.QUERYINDEX", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "ts.mrevrange", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "ts.mrange", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "ts.mget", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "ts.queryindex", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
