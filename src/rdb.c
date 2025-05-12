@@ -38,7 +38,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     CreateCtx cCtx = { 0 };
     RedisModuleString *keyName = NULL;
     bool err = false;
-
     errdefer(err, {
         if (destKey) { // clean if there is a key name which been alloced but not added to series yet
             RedisModule_FreeString(NULL, destKey);
@@ -67,6 +66,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             }
         }
     });
+    
     keyName = LoadString_IOError(io, err, NULL);
 
     cCtx.retentionTime = LoadUnsigned_IOError(io, err, NULL);
