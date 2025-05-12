@@ -4,7 +4,7 @@ author: Redis
 email: danni@redis.com
 description: A time series database for Redis
 homepage: https://oss.redis.com/redistimeseries/
-license: Redis Source Available License 2.0 (RSALv2) or the Server Side Public License v1 (SSPLv1)
+license: Redis Source Available License 2.0 (RSALv2) or the Server Side Public License v1 (SSPLv1) or the GNU Affero General Public License version 3 (AGPLv3)
 command_line_args: ""
 compatible_redis_version: "7.2"
 min_redis_version: "7.1"
@@ -33,3 +33,8 @@ exclude_commands:
     - timeseries.HELLO
     - timeseries.INNERCOMMUNICATION
     - timeseries.FORCESHARDSCONNECTION
+overide_command:
+    - { "command_name": "TS.MREVRANGE", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "TS.MRANGE", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "TS.MGET", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }
+    - { "command_name": "TS.QUERYINDEX", "command_arity": -1, "flags": [ "readonly", "module" ], "first_key": 0, "last_key": 0, "step": -1 }

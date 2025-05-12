@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #ifndef CONFIG_H
 #define CONFIG_H
@@ -18,14 +21,10 @@
 #define RETENTION_POLICY_MAX LLONG_MAX
 #define CHUNK_SIZE_BYTES_MIN 48
 #define CHUNK_SIZE_BYTES_MAX 1048576
-#define IGNORE_MAX_TIME_DIFF_DEFAULT 0
 #define IGNORE_MAX_TIME_DIFF_MIN 0
 #define IGNORE_MAX_TIME_DIFF_MAX LLONG_MAX
-#define IGNORE_MAX_VAL_DIFF_DEFAULT 0.0
 #define IGNORE_MAX_VAL_DIFF_MIN 0.0
 #define IGNORE_MAX_VAL_DIFF_MAX DBL_MAX
-#define DEFAULT_ENCODING_STRING COMPRESSED_GORILLA_ARG_STR
-#define DEFAULT_DUPLICATE_POLICY_STRING "block"
 
 typedef struct
 {
