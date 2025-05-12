@@ -9,8 +9,9 @@
 #define DEFERER_(N, M) DEFERER(N, M)
 #define defer DEFERER_(__LINE__, __COUNTER__)
 #define errdefer(err, ...)                                                                         \
-    if (err) {                                                                                     \
-        defer __VA_ARGS__;                                                                         \
+    defer {                                                                                        \
+        if (err)                                                                                   \
+            __VA_ARGS__;                                                                           \
     }
 
 #define LoadDouble_IOError(rdb, is_err, ret)                                                       \
