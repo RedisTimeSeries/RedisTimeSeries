@@ -323,12 +323,12 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
 }
 
 int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
     bool err = false;
-    errdefer(err, {
-        *chunk = NULL;
-        Uncompressed_FreeChunk(uncompchunk);
-    });
+    errdefer(err, *chunk = NULL);
+
+    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
+    errdefer(err, Uncompressed_FreeChunk(uncompchunk));
+
     uncompchunk->base_timestamp = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     uncompchunk->num_samples = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     uncompchunk->size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
@@ -336,6 +336,7 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     uncompchunk->samples =
         (Sample *)LoadStringBuffer_IOError(io, &string_buffer_size, err, TSDB_ERROR);
     *chunk = (Chunk_t *)uncompchunk;
+
     return TSDB_OK;
 }
 

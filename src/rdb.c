@@ -25,52 +25,23 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
+    bool err = false;
     double lastValue = 0;
     timestamp_t lastTimestamp = 0;
     uint64_t totalSamples = 0;
     DuplicatePolicy duplicatePolicy = DP_NONE;
     long long ignoreMaxTimeDiff = 0;
     double ignoreMaxValDiff = 0.0;
-    RedisModuleString *srcKey = NULL;
     Series *series = NULL;
-    RedisModuleString *destKey = NULL;
+
+    RedisModuleString *srcKey = NULL;
+    // clean if there is a key name which been alloced but not added to series yet
+    errdefer(err, if (srcKey) RedisModule_FreeString(NULL, srcKey));
+
+    RedisModuleString *keyName = LoadString_IOError(io, err, NULL);
+    errdefer(err, if (!series) RedisModule_FreeString(NULL, keyName));
 
     CreateCtx cCtx = { 0 };
-    RedisModuleString *keyName = NULL;
-    bool err = false;
-    errdefer(err, {
-        // clean if there is a key name which been alloced but not added to series yet
-        if (destKey) {
-            RedisModule_FreeString(NULL, destKey);
-        }
-        // clean if there is a key name which been alloced but not added to series yet
-        if (srcKey) {
-            RedisModule_FreeString(NULL, srcKey);
-        }
-        if (series) {
-            // Note that we aren't calling RemoveIndexedMetric(series->keyName) since
-            // the series only being indexed on loaded notification
-            FreeSeries(series);
-        } else {
-            if (keyName) {
-                RedisModule_FreeString(NULL, keyName);
-            }
-            if (cCtx.labels) {
-                for (int i = 0; i < cCtx.labelsCount; i++) {
-                    if (cCtx.labels[i].key) {
-                        RedisModule_FreeString(NULL, cCtx.labels[i].key);
-                    }
-                    if (cCtx.labels[i].value) {
-                        RedisModule_FreeString(NULL, cCtx.labels[i].value);
-                    }
-                }
-                free(cCtx.labels);
-            }
-        }
-    });
-
-    keyName = LoadString_IOError(io, err, NULL);
-
     cCtx.retentionTime = LoadUnsigned_IOError(io, err, NULL);
     cCtx.chunkSizeBytes = LoadUnsigned_IOError(io, err, NULL);
     if (encver < TS_SIZE_RDB_VER) {
@@ -102,42 +73,41 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     }
 
     cCtx.labelsCount = LoadUnsigned_IOError(io, err, NULL);
-    cCtx.labels = calloc(cCtx.labelsCount, sizeof(Label));
+    cCtx.labels = calloc(cCtx.labelsCount, sizeof *cCtx.labels);
+    errdefer(err, if (!series) FreeLabels(cCtx.labels, cCtx.labelsCount));
     for (int i = 0; i < cCtx.labelsCount; i++) {
         cCtx.labels[i].key = LoadString_IOError(io, err, NULL);
         cCtx.labels[i].value = LoadString_IOError(io, err, NULL);
     }
 
-    uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
-
     series = NewSeries(keyName, &cCtx);
+    // Note that we aren't calling RemoveIndexedMetric(series->keyName) since
+    // the series only being indexed on loaded notification
+    errdefer(err, FreeSeries(series));
 
-    CompactionRule *lastRule = NULL;
-
+    uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
     for (int i = 0; i < rulesCount; i++) {
-        destKey = LoadString_IOError(io, err, NULL);
-        uint64_t bucketDuration = LoadUnsigned_IOError(io, err, NULL);
-        uint64_t timestampAlignment = 0;
-        if (encver >= TS_ALIGNMENT_TS_VER) {
-            timestampAlignment = LoadUnsigned_IOError(io, err, NULL);
-        }
-        uint64_t aggType = LoadUnsigned_IOError(io, err, NULL);
-        timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, err, NULL);
+        RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
+        // clean if there is a key name which been alloced but not added to series yet
+        errdefer(err, if (destKey) RedisModule_FreeString(NULL, destKey));
+
+        const uint64_t bucketDuration = LoadUnsigned_IOError(io, err, NULL);
+        const uint64_t timestampAlignment =
+            encver < TS_ALIGNMENT_TS_VER ? 0 : LoadUnsigned_IOError(io, err, NULL);
+        const uint64_t aggType = LoadUnsigned_IOError(io, err, NULL);
+        const timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, err, NULL);
 
         CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
         destKey = NULL;
-        rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
-        if (i == 0) {
-            series->rules = rule;
-        } else {
-            lastRule->nextRule = rule;
-        }
+        rule->startCurrentTimeBucket = startCurrentTimeBucket;
+        rule->nextRule = series->rules;
+        series->rules = rule;
+
         if (rule->aggClass->readContext(rule->aggContext, io, encver)) {
             err = true;
             return NULL;
         }
-        lastRule = rule;
     }
 
     if (encver < TS_SIZE_RDB_VER) {

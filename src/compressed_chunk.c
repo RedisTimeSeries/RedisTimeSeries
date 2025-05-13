@@ -512,12 +512,12 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
 }
 
 int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
-    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
     bool err = false;
-    errdefer(err, {
-        *chunk = NULL;
-        Compressed_FreeChunk(compchunk);
-    });
+    errdefer(err, *chunk = NULL);
+
+    CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+    errdefer(err, Compressed_FreeChunk(compchunk));
+
     compchunk->data = NULL;
     compchunk->size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     compchunk->count = LoadUnsigned_IOError(io, err, TSDB_ERROR);
@@ -533,6 +533,7 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     size_t len;
     compchunk->data = (uint64_t *)LoadStringBuffer_IOError(io, &len, err, TSDB_ERROR);
     *chunk = (Chunk_t *)compchunk;
+
     return TSDB_OK;
 }
 
