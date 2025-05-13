@@ -117,10 +117,6 @@ ifeq ($(VG),1)
 CC_DEFS += _VALGRIND
 endif
 
-ifeq ($(CC),clang)
-CC_FLAGS += -fblocks
-endif
-
 define LD_LIBS.deps +=
 	  $(LIBMR)
 	  $(FAST_DOUBLE_PARSER_C)
@@ -186,6 +182,10 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
 include $(MK)/defs
+
+ifeq ($(CC),clang)
+CC_FLAGS += -fblocks
+endif
 
 #----------------------------------------------------------------------------------------------
 
