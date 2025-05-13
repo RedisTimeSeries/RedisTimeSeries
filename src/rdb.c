@@ -25,18 +25,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
-    bool err = false;
-    double lastValue = 0;
-    timestamp_t lastTimestamp = 0;
-    uint64_t totalSamples = 0;
-    DuplicatePolicy duplicatePolicy = DP_NONE;
-    long long ignoreMaxTimeDiff = 0;
-    double ignoreMaxValDiff = 0.0;
-    Series *series = NULL;
 
-    RedisModuleString *srcKey = NULL;
-    // clean if there is a key name which been alloced but not added to series yet
-    errdefer(err, if (srcKey) RedisModule_FreeString(NULL, srcKey));
+    bool err = false;
+    Series *series = NULL;
 
     RedisModuleString *keyName = LoadString_IOError(io, err, NULL);
     errdefer(err, if (!series) RedisModule_FreeString(NULL, keyName));
@@ -47,30 +38,26 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     if (encver < TS_SIZE_RDB_VER) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
+    cCtx.options = Load_IOError_OrDefault(
+        io, err, NULL, encver >= TS_UNCOMPRESSED_VER, SERIES_OPT_UNCOMPRESSED);
 
-    if (encver >= TS_UNCOMPRESSED_VER) {
-        cCtx.options = LoadUnsigned_IOError(io, err, NULL);
-    } else {
-        cCtx.options |= SERIES_OPT_UNCOMPRESSED;
-    }
+    const timestamp_t lastTimestamp =
+        Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, 0);
+    const double lastValue = Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, 0.0);
+    const uint64_t totalSamples =
+        Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, 0);
+    const DuplicatePolicy duplicatePolicy =
+        Load_IOError_OrDefault(io, err, NULL, encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER, DP_NONE);
 
-    if (encver >= TS_SIZE_RDB_VER) {
-        lastTimestamp = LoadUnsigned_IOError(io, err, NULL);
-        lastValue = LoadDouble_IOError(io, err, NULL);
-        totalSamples = LoadUnsigned_IOError(io, err, NULL);
-        if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
-            duplicatePolicy = LoadUnsigned_IOError(io, err, NULL);
-        }
-        uint64_t hasSrcKey = LoadUnsigned_IOError(io, err, NULL);
-        if (hasSrcKey) {
-            srcKey = LoadString_IOError(io, err, NULL);
-        }
-    }
+    const bool hasSrcKey = Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, false);
+    RedisModuleString *srcKey = Load_IOError_OrDefault(io, err, NULL, hasSrcKey, NULL);
+    // clean if there is a key name which been alloced but not added to series yet
+    errdefer(err, if (srcKey) RedisModule_FreeString(NULL, srcKey));
 
-    if (encver >= TS_CREATE_IGNORE_VER) {
-        ignoreMaxTimeDiff = LoadUnsigned_IOError(io, err, NULL);
-        ignoreMaxValDiff = LoadDouble_IOError(io, err, NULL);
-    }
+    const long long ignoreMaxTimeDiff =
+        Load_IOError_OrDefault(io, err, NULL, encver >= TS_CREATE_IGNORE_VER, 0);
+    const double ignoreMaxValDiff =
+        Load_IOError_OrDefault(io, err, NULL, encver >= TS_CREATE_IGNORE_VER, 0.0);
 
     cCtx.labelsCount = LoadUnsigned_IOError(io, err, NULL);
     cCtx.labels = calloc(cCtx.labelsCount, sizeof *cCtx.labels);
@@ -85,7 +72,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     // the series only being indexed on loaded notification
     errdefer(err, FreeSeries(series));
 
-    uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
+    const uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
     for (int i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
         // clean if there is a key name which been alloced but not added to series yet
@@ -93,7 +80,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
         const uint64_t bucketDuration = LoadUnsigned_IOError(io, err, NULL);
         const uint64_t timestampAlignment =
-            encver < TS_ALIGNMENT_TS_VER ? 0 : LoadUnsigned_IOError(io, err, NULL);
+            Load_IOError_OrDefault(io, err, NULL, encver >= TS_ALIGNMENT_TS_VER, 0);
         const uint64_t aggType = LoadUnsigned_IOError(io, err, NULL);
         const timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, err, NULL);
 
@@ -111,11 +98,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     }
 
     if (encver < TS_SIZE_RDB_VER) {
-        uint64_t samplesCount = LoadUnsigned_IOError(io, err, NULL);
+        const uint64_t samplesCount = LoadUnsigned_IOError(io, err, NULL);
         for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
-            timestamp_t ts = LoadUnsigned_IOError(io, err, NULL);
-            double val = LoadDouble_IOError(io, err, NULL);
-            int result = SeriesAddSample(series, ts, val);
+            const timestamp_t ts = LoadUnsigned_IOError(io, err, NULL);
+            const double val = LoadDouble_IOError(io, err, NULL);
+            const int result = SeriesAddSample(series, ts, val);
             if (result != TSDB_OK) {
                 RedisModule_LogIOError(
                     io, "warning", "couldn't load sample: %" PRIu64 " %lf", ts, val);
@@ -124,13 +111,13 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     } else {
         Chunk_t *chunk = NULL;
         // Free the default allocated chunk given LoadFromRDB will allocate a proper sized chunk
-        timestamp_t rax_key = htonu64(0);
+        timestamp_t rax_key = 0;
         chunk = (Chunk_t *)RedisModule_DictGetC(series->chunks, &rax_key, sizeof(rax_key), NULL);
         if (chunk != NULL) {
             series->funcs->FreeChunk(chunk);
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
-        uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
+        const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
         for (int i = 0; i < numChunks; ++i) {
             if (series->funcs->LoadFromRDB(&chunk, io)) {
                 err = true;
@@ -142,7 +129,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->totalSamples = totalSamples;
         series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
-        srcKey = NULL;
         series->lastTimestamp = lastTimestamp;
         series->lastValue = lastValue;
         series->lastChunk = chunk;
