@@ -54,7 +54,7 @@ endif
 
 ifneq ($(SAN),)
 CC_FLAGS += -fblocks
-LD_LIBS += BlocksRuntime
+LD_LIBS += -lBlocksRuntime
 endif
 
 -include $(CC_DEPS)
