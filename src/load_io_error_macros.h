@@ -12,6 +12,7 @@
     void F(__attribute__((__unused__)) int *_)
 #define DEFERER_(L, C) DEFER_(DEFER_FUNC_##L##C, DEFER_VAR_##L##C)
 #elif defined(__clang__)
+#include <Block.h>
 static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*block)(void)) { (*block)(); }
 #define DEFER_(B) __attribute__((__cleanup__(defer_cleanup_))) void (^B)(void) = ^
 #define DEFERER_(L, C) DEFER_(DEFER_BLOCK_##L##C)

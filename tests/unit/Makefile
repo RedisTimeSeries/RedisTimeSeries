@@ -48,8 +48,13 @@ LD_LIBS += $(realpath $(BINROOT)/redistimeseries.so)
 
 include $(MK)/rules
 
-ifeq ($(CC),clang)
+ifeq ($(OS),macos)
 CC_FLAGS += -fblocks
+endif
+
+ifneq ($(SAN),)
+CC_FLAGS += -fblocks
+LD_LIBS += BlocksRuntime
 endif
 
 -include $(CC_DEPS)
