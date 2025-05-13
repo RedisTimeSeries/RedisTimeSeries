@@ -183,10 +183,6 @@ CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
 include $(MK)/defs
 
-ifeq ($(CC),clang)
-CC_FLAGS += -fblocks
-endif
-
 #----------------------------------------------------------------------------------------------
 
 MISSING_DEPS:=
@@ -238,6 +234,10 @@ endif
 all: gen-compile-commands bindirs $(TARGET)
 
 include $(MK)/rules
+
+ifeq ($(CC),clang)
+CC_FLAGS += -fblocks
+endif
 
 #----------------------------------------------------------------------------------------------
 
