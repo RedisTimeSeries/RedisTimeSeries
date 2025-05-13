@@ -27,7 +27,7 @@ tdnf -y update && \
         which \
         unzip \
         jq ca-certificates \
-        libblocksruntime-dev
+        libblocksruntime-devel
 git config --global --add safe.directory $PWD
 
 wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz && \

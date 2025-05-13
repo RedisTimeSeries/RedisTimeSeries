@@ -1,6 +1,6 @@
 #!/bin/bash
 yum -y install epel-release
-yum -y install gcc make cmake3 git openssl-devel bzip2-devel libffi-devel zlib-devel wget scl-utils which gcc-toolset-11-gcc gcc-toolset-11-gcc-c++ gcc-toolset-11-libatomic-devel jq libblocksruntime-dev
+yum -y install gcc make cmake3 git openssl-devel bzip2-devel libffi-devel zlib-devel wget scl-utils which gcc-toolset-11-gcc gcc-toolset-11-gcc-c++ gcc-toolset-11-libatomic-devel jq libblocksruntime-devel
 yum groupinstall "Development Tools" -y
 cp /opt/rh/gcc-toolset-11/enable /etc/profile.d/gcc-toolset-11.sh
 

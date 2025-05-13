@@ -2,7 +2,7 @@
 amazon-linux-extras install epel -y
 yum -y install epel-release yum-utils
 yum-config-manager --add-repo http://vault.centos.org/centos/7/sclo/x86_64/rh/
-yum -y install gcc make autogen automake libtool cmake3 git python-pip openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq libblocksruntime-dev
+yum -y install gcc make autogen automake libtool cmake3 git python-pip openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq libblocksruntime-devel
 yum -y install devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-make --nogpgcheck
 . scl_source enable devtoolset-11 || true
 make --version
