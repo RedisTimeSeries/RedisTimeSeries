@@ -10,16 +10,16 @@
     auto inline __attribute__((__always_inline__)) void F(int *);                                  \
     int V __attribute__((__cleanup__(F)));                                                         \
     void F(__attribute__((__unused__)) int *_)
-#define DEFERER(L, C) DEFER_(DEFER_FUNC_##L##C, DEFER_VAR_##L##C)
-#define GCC_DEFERER_(L, C) DEFERER(L, C)
+#define DEFERER_(L, C) DEFER_(DEFER_FUNC_##L##C, DEFER_VAR_##L##C)
 #elif defined(__clang__) && defined(__BLOCKS__)
-static inline __attribute((__always_inline__)) void defer_cleanup(void (^*block)(void)) { block(); }
-#define DEFERER_BLOCK(L, C) DEFER_BLOCK_##L##C
-#define CLANG_DEFERER_(L, C) __attribute__((__cleanup__(defer_cleanup))) void (^DEFERER_BLOCK(L, C))(void) = ^
+static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*block)(void)) { (*block)(); }
+#define DEFER_(B) __attribute__((__cleanup__(defer_cleanup_))) void (^B)(void) = ^
+#define DEFERER_(L, C) DEFER_(DEFER_BLOCK_##L##C)
 #else
 #error "defer is not supported on this compiler"
 #endif
 
+#define DEFERER(L, C) DEFERER_(L, C)
 
 /// defer is used to execute code unconditionally at the end of the current scope.
 /// usage: `defer compound-statement`
@@ -28,13 +28,7 @@ static inline __attribute((__always_inline__)) void defer_cleanup(void (^*block)
 /// FILE *f = fopen(some_file, "r");
 /// defer { fclose(f); }
 /// ```
-#if defined(__GNUC__) && !defined(__clang__)
-#define defer GCC_DEFERER_(__LINE__, __COUNTER__)
-#elif defined(__clang__)
-#define defer CLANG_DEFERER_(__LINE__, __COUNTER__)
-#else
-#error "defer is not supported on this compiler"
-#endif
+#define defer DEFERER(__LINE__, __COUNTER__)
 
 /// errdefer is used to execute code at the end of the current scope only if an error occurred.
 /// usage: `errdefer(err, compound-statement)`
