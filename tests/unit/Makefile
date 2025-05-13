@@ -48,6 +48,10 @@ LD_LIBS += $(realpath $(BINROOT)/redistimeseries.so)
 
 include $(MK)/rules
 
+ifeq ($(CC),clang)
+CC_FLAGS += -fblocks
+endif
+
 -include $(CC_DEPS)
 
 $(BINDIR)/%.o: $(SRCDIR)/%.c
