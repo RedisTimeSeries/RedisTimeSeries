@@ -117,6 +117,14 @@ ifeq ($(VG),1)
 CC_DEFS += _VALGRIND
 endif
 
+ifeq ($(OS),macos)
+CC_FLAGS += -fblocks
+endif
+
+ifneq ($(SAN),)
+CC_FLAGS += -fblocks
+endif
+
 define LD_LIBS.deps +=
 	  $(LIBMR)
 	  $(FAST_DOUBLE_PARSER_C)
