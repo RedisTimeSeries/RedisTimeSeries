@@ -117,11 +117,7 @@ ifeq ($(VG),1)
 CC_DEFS += _VALGRIND
 endif
 
-ifeq ($(OS),macos)
-CC_FLAGS += -fblocks
-endif
-
-ifneq ($(SAN),)
+ifeq ($(CC),clang)
 CC_FLAGS += -fblocks
 endif
 
