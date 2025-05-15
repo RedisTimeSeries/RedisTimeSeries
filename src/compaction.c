@@ -114,14 +114,13 @@ void SingleValueWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
-    context->value = LoadDouble_IOError(io, goto err);
+    bool err = false;
+    context->value = LoadDouble_IOError(io, err, TSDB_ERROR);
     if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER && encver < TS_LAST_AGGREGATION_EMPTY) {
         // In old rdbs there was is_resetted flag
-        LoadUnsigned_IOError(io, goto err);
+        LoadUnsigned_IOError(io, err, TSDB_ERROR);
     }
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 void *FirstValueCreateContext(__unused bool reverse) {
@@ -157,13 +156,12 @@ void FirstValueWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int FirstValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
-    context->value = LoadDouble_IOError(io, goto err);
+    bool err = false;
+    context->value = LoadDouble_IOError(io, err, TSDB_ERROR);
     if (encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER) {
-        context->isResetted = LoadUnsigned_IOError(io, goto err);
+        context->isResetted = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     }
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 static inline void _AvgInitContext(AvgContext *context) {
@@ -251,15 +249,14 @@ void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int AvgReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     AvgContext *context = (AvgContext *)contextPtr;
-    context->val = LoadDouble_IOError(io, goto err);
-    context->cnt = LoadDouble_IOError(io, goto err);
+    bool err = false;
+    context->val = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->cnt = LoadDouble_IOError(io, err, TSDB_ERROR);
     context->isOverflow = false;
     if (encver >= TS_OVERFLOW_RDB_VER) {
-        context->isOverflow = !!(LoadUnsigned_IOError(io, goto err));
+        context->isOverflow = !!(LoadUnsigned_IOError(io, err, TSDB_ERROR));
     }
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 static inline void _TwainitContext(TwaContext *context, bool reverse) {
@@ -407,19 +404,18 @@ void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     TwaContext *context = (TwaContext *)contextPtr;
-    context->res = LoadDouble_IOError(io, goto err);
-    context->prevTS = LoadUnsigned_IOError(io, goto err);
-    context->prevValue = LoadDouble_IOError(io, goto err);
-    context->bucketStartTS = LoadUnsigned_IOError(io, goto err);
-    context->bucketEndTS = LoadUnsigned_IOError(io, goto err);
-    context->first_ts = LoadUnsigned_IOError(io, goto err);
-    context->last_ts = LoadUnsigned_IOError(io, goto err);
-    context->is_first_bucket = LoadUnsigned_IOError(io, goto err);
-    context->iteration = LoadUnsigned_IOError(io, goto err);
-    context->reverse = LoadUnsigned_IOError(io, goto err);
+    bool err = false;
+    context->res = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->prevTS = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->prevValue = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->bucketStartTS = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->bucketEndTS = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->first_ts = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->last_ts = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->is_first_bucket = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->iteration = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    context->reverse = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 void *StdCreateContext(__unused bool reverse) {
@@ -509,12 +505,11 @@ void StdWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int StdReadContext(void *contextPtr, RedisModuleIO *io, REDISMODULE_ATTR_UNUSED int encver) {
     StdContext *context = (StdContext *)contextPtr;
-    context->sum = LoadDouble_IOError(io, goto err);
-    context->sum_2 = LoadDouble_IOError(io, goto err);
-    context->cnt = LoadUnsigned_IOError(io, goto err);
+    bool err = false;
+    context->sum = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->sum_2 = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->cnt = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 void rm_free(void *ptr) {
@@ -704,16 +699,15 @@ void MaxMinWriteContext(void *contextPtr, RedisModuleIO *io) {
 
 int MaxMinReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     MaxMinContext *context = (MaxMinContext *)contextPtr;
-    context->maxValue = LoadDouble_IOError(io, goto err);
-    context->minValue = LoadDouble_IOError(io, goto err);
+    bool err = false;
+    context->maxValue = LoadDouble_IOError(io, err, TSDB_ERROR);
+    context->minValue = LoadDouble_IOError(io, err, TSDB_ERROR);
     if (encver < TS_ALIGNMENT_TS_VER) {
         size_t len = 1;
-        char *sb = LoadStringBuffer_IOError(io, &len, goto err);
+        char *sb = LoadStringBuffer_IOError(io, &len, err, TSDB_ERROR);
         RedisModule_Free(sb);
     }
     return TSDB_OK;
-err:
-    return TSDB_ERROR;
 }
 
 void SumAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {

@@ -15,6 +15,7 @@ brew install make
 brew install jq
 brew install openssl
 brew install llvm@$LLVM_VERSION
+brew install libblocksruntime
 
 BREW_PREFIX=$(brew --prefix)
 GNUBIN=$BREW_PREFIX/opt/make/libexec/gnubin
