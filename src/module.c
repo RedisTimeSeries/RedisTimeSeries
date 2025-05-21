@@ -1590,10 +1590,9 @@ int CheckVersionForShortRead() {
         return REDISMODULE_OK;
     if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion > 2)
         return REDISMODULE_OK;
-    if (RTS_currVersion.redisMajorVersion == 6 &&
-        RTS_currVersion.redisMinorVersion == 2 &&
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion == 2 &&
         RTS_currVersion.redisPatchVersion >= 5)
-         return REDISMODULE_OK;
+        return REDISMODULE_OK;
     return REDISMODULE_ERR;
 }
 
