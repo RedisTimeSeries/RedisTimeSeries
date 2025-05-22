@@ -1576,24 +1576,23 @@ void ReplicaBackupCallback(RedisModuleCtx *ctx,
 
 bool CheckVersionForBlockedClientMeasureTime() {
     // Minimal versions: 6.2.0
-    if (RTS_currVersion.redisMajorVersion >= 6 && RTS_currVersion.redisMinorVersion >= 2) {
+    if (RTS_currVersion.redisMajorVersion > 6)
         return true;
-    } else {
-        return false;
-    }
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion >= 2)
+        return true;
+    return false;
 }
 
 int CheckVersionForShortRead() {
     // Minimal versions: 6.2.5
     // (6.0.15 is not supporting the required event notification for modules)
-    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion == 2) {
-        return RTS_currVersion.redisPatchVersion >= 5 ? REDISMODULE_OK : REDISMODULE_ERR;
-    } else if (RTS_currVersion.redisMajorVersion == 255 &&
-               RTS_currVersion.redisMinorVersion == 255 &&
-               RTS_currVersion.redisPatchVersion == 255) {
-        // Also supported on master (version=255.255.255)
+    if (RTS_currVersion.redisMajorVersion > 6)
         return REDISMODULE_OK;
-    }
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion > 2)
+        return REDISMODULE_OK;
+    if (RTS_currVersion.redisMajorVersion == 6 && RTS_currVersion.redisMinorVersion == 2 &&
+        RTS_currVersion.redisPatchVersion >= 5)
+        return REDISMODULE_OK;
     return REDISMODULE_ERR;
 }
 
