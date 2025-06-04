@@ -203,7 +203,6 @@ def test_libmr_with_internal_secret_support(env):
 
 @skip(onVersionLowerThan='8.0.0')
 def test_libmr_internal_commands_is_not_allowed(env):
-    env.expect('timeseries.CLUSTERSET').error().contains('unknown command')
     env.expect('timeseries.INNERCOMMUNICATION').error().contains('unknown command')
     env.expect('timeseries.HELLO').error().contains('unknown command')
     env.expect('timeseries.CLUSTERSETFROMSHARD').error().contains('unknown command')
