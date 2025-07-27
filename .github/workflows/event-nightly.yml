@@ -47,8 +47,8 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
     secrets: inherit
-  ubuntu-arm64:
-    uses: ./.github/workflows/flow-ubuntu-arm.yml
+  arm64:
+    uses: ./.github/workflows/flow-linux-arm.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
@@ -56,13 +56,6 @@ jobs:
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-    secrets: inherit
-  alpine:
-    uses: ./.github/workflows/flow-alpine.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
