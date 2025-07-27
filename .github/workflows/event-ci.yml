@@ -39,12 +39,12 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: true
     secrets: inherit
-  alpine:
-    uses: ./.github/workflows/flow-alpine.yml
+  arm64:
+    uses: ./.github/workflows/flow-linux-arm.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
+      quick: false
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux-x86.yml
