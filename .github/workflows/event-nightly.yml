@@ -48,7 +48,7 @@ jobs:
       quick: false
     secrets: inherit
   arm64:
-    uses: ./.github/workflows/flow-ubuntu-arm.yml
+    uses: ./.github/workflows/flow-linux-arm.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
