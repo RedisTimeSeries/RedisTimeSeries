@@ -1623,6 +1623,18 @@ int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     return REDISMODULE_OK;
 }
 
+// Some of the defrag funcionality might be missing in different versions of redis (e.g., redis 8 + RoF).
+// To avoid calling unimplemented functions we prepare do-nothing stubs for the defrag registration functions
+// and pointthe missing function pointers to them.
+static int Stub_RegisterDefragFunc(RedisModuleCtx *ctx, RedisModuleDefragFunc func) {
+    return REDISMODULE_OK;
+}
+static int Stub_RegisterDefragFunc2(RedisModuleCtx *ctx, RedisModuleDefragFunc2 func) {
+    return REDISMODULE_OK;
+}
+static int Stub_RegisterDefragCallbacks(RedisModuleCtx *ctx, RedisModuleDefragFunc start, RedisModuleDefragFunc end) {
+    return REDISMODULE_OK;
+}
 /*
 module loading function, possible arguments:
 COMPACTION_POLICY - compaction policy from parse_policies,h
@@ -1637,6 +1649,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
+
+    if (RedisModule_RegisterDefragFunc == NULL)
+        RedisModule_RegisterDefragFunc = Stub_RegisterDefragFunc;
+    if (RedisModule_RegisterDefragFunc2 == NULL)
+        RedisModule_RegisterDefragFunc2 = Stub_RegisterDefragFunc2;
+    if (RedisModule_RegisterDefragCallbacks == NULL)
+        RedisModule_RegisterDefragCallbacks = Stub_RegisterDefragCallbacks;
 
     rts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
 
