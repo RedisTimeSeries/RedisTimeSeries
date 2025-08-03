@@ -1623,16 +1623,18 @@ int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     return REDISMODULE_OK;
 }
 
-// Some of the defrag funcionality might be missing in different versions of redis (e.g., redis 8 + RoF).
-// To avoid calling unimplemented functions we prepare do-nothing stubs for the defrag registration functions
-// and pointthe missing function pointers to them.
+// Some of the defrag funcionality might be missing in different versions of redis (e.g., redis 8 +
+// RoF). To avoid calling unimplemented functions we prepare do-nothing stubs for the defrag
+// registration functions and pointthe missing function pointers to them.
 static int Stub_RegisterDefragFunc(RedisModuleCtx *ctx, RedisModuleDefragFunc func) {
     return REDISMODULE_OK;
 }
 static int Stub_RegisterDefragFunc2(RedisModuleCtx *ctx, RedisModuleDefragFunc2 func) {
     return REDISMODULE_OK;
 }
-static int Stub_RegisterDefragCallbacks(RedisModuleCtx *ctx, RedisModuleDefragFunc start, RedisModuleDefragFunc end) {
+static int Stub_RegisterDefragCallbacks(RedisModuleCtx *ctx,
+                                        RedisModuleDefragFunc start,
+                                        RedisModuleDefragFunc end) {
     return REDISMODULE_OK;
 }
 /*
