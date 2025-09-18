@@ -177,7 +177,7 @@ _SOURCES += $(_SOURCES_AVX512) $(_SOURCES_AVX2)
 endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(call flatten,$(_SOURCES)))
-HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
+HEADERS=$(wildcard $(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES)))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
