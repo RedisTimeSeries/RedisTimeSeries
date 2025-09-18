@@ -41,6 +41,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      beta-version:
+        description: 'Beta version for S3 uploads'
+        type: string
+        required: false
+        default: ''
   workflow_call:
   # the defaults and options here are the same likes in "workflow_dispatch"
     inputs:
@@ -64,6 +69,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      beta-version:
+        description: 'Beta version for S3 uploads'
+        type: string
+        required: false
+        default: ''
 
 
 jobs:
@@ -161,3 +171,4 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           github-ref: ${{ github.ref }}
+          beta-version: ${{ inputs.beta-version }}

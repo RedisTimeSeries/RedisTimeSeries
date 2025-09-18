@@ -24,11 +24,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
+      beta-timestamp: ${{ steps.set-env.outputs.beta-timestamp }}
+      beta-version: ${{ steps.set-env.outputs.beta-version }}
     steps:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref=${{ inputs.redis-ref || 'unstable' }}" >> $GITHUB_OUTPUT  # todo change per version/tag
+          echo "redis-ref=${{ inputs.redis-ref || 'unstable' }}" >> $GITHUB_OUTPUT
+          
+          # Generate timestamp at workflow start for consistent beta versioning
+          TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
+          WORKFLOW_NUM=${{ github.run_number }}
+          BETA_VERSION="99.99.99.${TIMESTAMP}.${WORKFLOW_NUM}"
+          
+          echo "beta-timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "beta-version=${BETA_VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated beta version: ${BETA_VERSION}"
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
@@ -38,6 +49,7 @@ jobs:
     with:
       os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 azurelinux3
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
   mariner:
@@ -45,6 +57,7 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
   arm64:
@@ -52,6 +65,7 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
   macos:
@@ -59,6 +73,7 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
   linux-valgrind:
@@ -67,6 +82,7 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_valgrind: true
     secrets: inherit
   linux-sanitizer:
@@ -75,5 +91,6 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_sanitizer: true
     secrets: inherit
