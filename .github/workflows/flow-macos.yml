@@ -165,6 +165,7 @@ jobs:
         uses: ./.github/actions/pack-module
         with:
           use-venv: '1'
+          beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:

@@ -210,6 +210,7 @@ jobs:
         uses: ./.github/actions/pack-module
         with:
           use-venv: ${{matrix.docker_image.use-venv}}
+          beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
