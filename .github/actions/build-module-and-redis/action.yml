@@ -24,7 +24,12 @@ runs:
         then
             . scl_source enable devtoolset-11 || true
         fi
-        make SANITIZER=${{inputs.build_sanitizer == 'addr' && 'address' || ''}} install -j `nproc`
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          NPROC=$(sysctl -n hw.ncpu)
+        else
+          NPROC=$(nproc)
+        fi
+        make SANITIZER=${{inputs.build_sanitizer == 'addr' && 'address' || ''}} install -j $NPROC
         echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
         echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
         export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
@@ -40,6 +45,11 @@ runs:
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           . venv/bin/activate
         fi
-        make SAN=${{inputs.build_sanitizer}} -j `nproc`
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          NPROC=$(sysctl -n hw.ncpu)
+        else
+          NPROC=$(nproc)
+        fi
+        make SAN=${{inputs.build_sanitizer}} -j $NPROC
         echo ::endgroup::
 
