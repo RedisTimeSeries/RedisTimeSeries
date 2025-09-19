@@ -514,17 +514,22 @@ E=0
 [[ $AOF == 1 ]]         && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "tests with AOF"); (( E |= $? )); } || true
 [[ $AOF_SLAVES == 1 ]]  && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 if [[ $OSS_CLUSTER == 1 ]]; then
-	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
-	if [[ -z $TEST || $TEST != test_ts_password ]]; then
-		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
-			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
-	fi
-	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
-		RLTEST_ARGS_1="$RLTEST_ARGS"
-		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
-		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
-		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
+	# Skip OSS cluster tests when running with Valgrind (too slow and prone to timeout)
+	if [[ $VALGRIND == 1 ]]; then
+		echo "# Skipping OSS cluster tests for Valgrind (too slow)"
+	else
+		RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
+		if [[ -z $TEST || $TEST != test_ts_password ]]; then
+			{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
+				run_tests "tests on OSS cluster"); (( E |= $? )); } || true
+		fi
+		if [[ -z $TEST || $TEST == test_ts_password* ]]; then
+			RLTEST_ARGS_1="$RLTEST_ARGS"
+			RLTEST_TEST_ARGS_1=" --test test_ts_password"
+			{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+			   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
+			   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
+		fi
 	fi
 fi
 
