@@ -9,6 +9,11 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
+# Fix for CMake 3.0 compatibility issue in cpu_features on macOS
+ifeq ($(OS),macos)
+CMAKE_FLAGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+endif
+
 #----------------------------------------------------------------------------------------------
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
