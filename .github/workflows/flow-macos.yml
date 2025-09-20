@@ -114,6 +114,9 @@ jobs:
       BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
       PIP_BREAK_SYSTEM_PACKAGES: 1
+      # Fix for macOS SDK version detection issues
+      OSX_MIN_SDK_VER: 14.0
+      MACOSX_DEPLOYMENT_TARGET: 14.0
     runs-on: ${{matrix.os}}
     needs: setup-environment
     strategy:
