@@ -402,6 +402,8 @@ PARALLEL=${PARALLEL:-1}
 
 # due to Python "Can't pickle local object" problem in RLTest
 [[ $OS == macos ]] && PARALLEL=0
+# Valgrind tests are too slow to run in parallel
+[[ $VALGRIND == 1 ]] && PARALLEL=0
 
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 
@@ -500,6 +502,13 @@ if [[ $RLEC == 1 ]]; then
 	AOF=0
 	AOF_SLAVES=0
 	OSS_CLUSTER=0
+fi
+
+# Valgrind tests: skip slower test categories to prevent 2+ hour hangs
+if [[ $VALGRIND == 1 ]]; then
+	SLAVES=0          # Skip slave tests (too slow under Valgrind)
+	AOF_SLAVES=0      # Skip AOF+slave tests (too slow under Valgrind)  
+	OSS_CLUSTER=0     # Already disabled in the OSS cluster section, but make explicit
 fi
 
 #-------------------------------------------------------------------------------- Running tests
