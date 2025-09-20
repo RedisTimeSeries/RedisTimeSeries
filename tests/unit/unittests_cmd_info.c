@@ -40,6 +40,19 @@ MU_TEST(test_ts_alter_command_info_structure) {
     mu_check(strstr(TS_ALTER_INFO.complexity, "O(N)") != NULL);
 }
 
+// Test that TS.CREATE command info is properly structured  
+MU_TEST(test_ts_create_command_info_structure) {
+    // Test that TS_CREATE_INFO has correct basic properties
+    mu_check(TS_CREATE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_CREATE_INFO.arity == -2); // At least 2 arguments: TS.CREATE key
+    mu_check(TS_CREATE_INFO.since != NULL);
+    mu_check(strcmp(TS_CREATE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_CREATE_INFO.summary != NULL);
+    mu_check(strstr(TS_CREATE_INFO.summary, "Create a new time series") != NULL);
+    mu_check(TS_CREATE_INFO.complexity != NULL);
+    mu_check(strstr(TS_CREATE_INFO.complexity, "O(1)") != NULL);
+}
+
 // Test that key specifications are correct
 MU_TEST(test_command_key_specs) {
     // TS.ADD should have RW and INSERT flags
@@ -53,6 +66,12 @@ MU_TEST(test_command_key_specs) {
     mu_check(!(TS_ALTER_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT));
     mu_check(TS_ALTER_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_ALTER_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.CREATE should have RW and INSERT flags (creates new time series)
+    mu_check(TS_CREATE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_CREATE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT);
+    mu_check(TS_CREATE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_CREATE_KEYSPECS[0].bs.index.pos == 1);
 }
 
 // Test that arguments are properly defined
@@ -65,6 +84,9 @@ MU_TEST(test_command_arguments) {
     // Test TS.ALTER has key argument
     mu_check(TS_ALTER_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
     
+    // Test TS.CREATE has key argument
+    mu_check(TS_CREATE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
     for (int i = 0; TS_ADD_ARGS[i].name != NULL; i++) {
@@ -75,6 +97,17 @@ MU_TEST(test_command_arguments) {
         }
     }
     mu_check(found_optional_retention);
+    
+    // Test that TS.CREATE also has optional RETENTION
+    int found_create_retention = 0;
+    for (int i = 0; TS_CREATE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_CREATE_ARGS[i].name, "RETENTION") == 0) {
+            mu_check(TS_CREATE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            found_create_retention = 1;
+            break;
+        }
+    }
+    mu_check(found_create_retention);
 }
 
 // Test that duplicate policy options are correctly defined
@@ -169,6 +202,7 @@ MU_TEST(test_labels_argument_structure) {
 MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_add_command_info_structure);
     MU_RUN_TEST(test_ts_alter_command_info_structure);
+    MU_RUN_TEST(test_ts_create_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
     MU_RUN_TEST(test_command_arguments);
     MU_RUN_TEST(test_duplicate_policy_options);
