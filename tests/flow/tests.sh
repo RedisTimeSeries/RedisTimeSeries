@@ -507,6 +507,7 @@ fi
 # Valgrind tests: skip slower test categories to prevent 2+ hour hangs
 if [[ $VALGRIND == 1 ]]; then
 	SLAVES=0          # Skip slave tests (too slow under Valgrind)
+	AOF=0             # Skip AOF tests (too slow under Valgrind)
 	AOF_SLAVES=0      # Skip AOF+slave tests (too slow under Valgrind)  
 	OSS_CLUSTER=0     # Already disabled in the OSS cluster section, but make explicit
 fi
