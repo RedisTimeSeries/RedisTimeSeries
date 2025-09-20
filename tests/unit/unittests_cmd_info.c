@@ -53,6 +53,19 @@ MU_TEST(test_ts_create_command_info_structure) {
     mu_check(strstr(TS_CREATE_INFO.complexity, "O(1)") != NULL);
 }
 
+// Test that TS.CREATERULE command info is properly structured  
+MU_TEST(test_ts_createrule_command_info_structure) {
+    // Test that TS_CREATERULE_INFO has correct basic properties
+    mu_check(TS_CREATERULE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_CREATERULE_INFO.arity == -5); // At least 5 arguments: TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+    mu_check(TS_CREATERULE_INFO.since != NULL);
+    mu_check(strcmp(TS_CREATERULE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_CREATERULE_INFO.summary != NULL);
+    mu_check(strstr(TS_CREATERULE_INFO.summary, "Create a compaction rule") != NULL);
+    mu_check(TS_CREATERULE_INFO.complexity != NULL);
+    mu_check(strstr(TS_CREATERULE_INFO.complexity, "O(1)") != NULL);
+}
+
 // Test that key specifications are correct
 MU_TEST(test_command_key_specs) {
     // TS.ADD should have RW and INSERT flags
@@ -72,6 +85,17 @@ MU_TEST(test_command_key_specs) {
     mu_check(TS_CREATE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT);
     mu_check(TS_CREATE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_CREATE_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.CREATERULE should have two keys: source (RO) and dest (RW)
+    mu_check(TS_CREATERULE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO); // source key
+    mu_check(!(TS_CREATERULE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT));
+    mu_check(TS_CREATERULE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_CREATERULE_KEYSPECS[0].bs.index.pos == 1);
+    
+    mu_check(TS_CREATERULE_KEYSPECS[1].flags & REDISMODULE_CMD_KEY_RW); // dest key
+    mu_check(!(TS_CREATERULE_KEYSPECS[1].flags & REDISMODULE_CMD_KEY_INSERT));
+    mu_check(TS_CREATERULE_KEYSPECS[1].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_CREATERULE_KEYSPECS[1].bs.index.pos == 2);
 }
 
 // Test that arguments are properly defined
@@ -159,6 +183,64 @@ MU_TEST(test_duplicate_policy_options) {
     mu_check(found_duplicate_policy);
 }
 
+// Test that aggregation options are correctly defined for TS.CREATERULE
+MU_TEST(test_createrule_aggregation_options) {
+    // Find AGGREGATION argument in TS.CREATERULE
+    int found_aggregation = 0;
+    for (int i = 0; TS_CREATERULE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_CREATERULE_ARGS[i].name, "AGGREGATION") == 0) {
+            found_aggregation = 1;
+            mu_check(TS_CREATERULE_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            
+            // Check that aggregation options are available
+            const RedisModuleCommandArg *subargs = TS_CREATERULE_ARGS[i].subargs;
+            mu_check(subargs != NULL);
+            
+            // Find the aggregator oneof argument
+            int found_aggregator_oneof = 0;
+            for (int j = 0; subargs[j].name != NULL; j++) {
+                if (strcmp(subargs[j].name, "aggregator") == 0) {
+                    found_aggregator_oneof = 1;
+                    mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_ONEOF);
+                    
+                    // Check that all aggregation types exist
+                    const RedisModuleCommandArg *agg_options = subargs[j].subargs;
+                    mu_check(agg_options != NULL);
+                    
+                    int found_avg = 0, found_sum = 0, found_min = 0, found_max = 0;
+                    int found_range = 0, found_count = 0, found_first = 0, found_last = 0;
+                    int found_std_p = 0, found_std_s = 0, found_var_p = 0, found_var_s = 0, found_twa = 0;
+                    
+                    for (int k = 0; agg_options[k].name != NULL; k++) {
+                        if (strcmp(agg_options[k].name, "avg") == 0) found_avg = 1;
+                        if (strcmp(agg_options[k].name, "sum") == 0) found_sum = 1;
+                        if (strcmp(agg_options[k].name, "min") == 0) found_min = 1;
+                        if (strcmp(agg_options[k].name, "max") == 0) found_max = 1;
+                        if (strcmp(agg_options[k].name, "range") == 0) found_range = 1;
+                        if (strcmp(agg_options[k].name, "count") == 0) found_count = 1;
+                        if (strcmp(agg_options[k].name, "first") == 0) found_first = 1;
+                        if (strcmp(agg_options[k].name, "last") == 0) found_last = 1;
+                        if (strcmp(agg_options[k].name, "std.p") == 0) found_std_p = 1;
+                        if (strcmp(agg_options[k].name, "std.s") == 0) found_std_s = 1;
+                        if (strcmp(agg_options[k].name, "var.p") == 0) found_var_p = 1;
+                        if (strcmp(agg_options[k].name, "var.s") == 0) found_var_s = 1;
+                        if (strcmp(agg_options[k].name, "twa") == 0) found_twa = 1;
+                    }
+                    
+                    // Verify all 13 aggregation types are present
+                    mu_check(found_avg && found_sum && found_min && found_max && found_range && 
+                             found_count && found_first && found_last && found_std_p && found_std_s && 
+                             found_var_p && found_var_s && found_twa);
+                    break;
+                }
+            }
+            mu_check(found_aggregator_oneof);
+            break;
+        }
+    }
+    mu_check(found_aggregation);
+}
+
 // Test that RegisterTSCommandInfos function exists and has correct signature
 MU_TEST(test_register_function_exists) {
     // Just verify the function exists by checking it's not NULL
@@ -203,9 +285,11 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_add_command_info_structure);
     MU_RUN_TEST(test_ts_alter_command_info_structure);
     MU_RUN_TEST(test_ts_create_command_info_structure);
+    MU_RUN_TEST(test_ts_createrule_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
     MU_RUN_TEST(test_command_arguments);
     MU_RUN_TEST(test_duplicate_policy_options);
+    MU_RUN_TEST(test_createrule_aggregation_options);
     MU_RUN_TEST(test_register_function_exists);
     MU_RUN_TEST(test_labels_argument_structure);
 }

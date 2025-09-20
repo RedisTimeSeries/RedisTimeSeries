@@ -348,6 +348,94 @@ static const RedisModuleCommandInfo TS_CREATE_INFO = {
 };
 
 // ===============================
+// TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
+// ===============================
+static const RedisModuleCommandKeySpec TS_CREATERULE_KEYSPECS[] = {
+    { .notes = "Source time series key",
+      .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { .notes = "Destination time series key",
+      .flags = REDISMODULE_CMD_KEY_RW,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 2 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_CREATERULE_ARGS[] = {
+    { .name = "sourceKey", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "destKey", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 1 },
+    { .name = "AGGREGATION",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "AGGREGATION", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "AGGREGATION" },
+              { .name = "aggregator",
+                .type = REDISMODULE_ARG_TYPE_ONEOF,
+                .subargs =
+                    (RedisModuleCommandArg[]){ { .name = "avg",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "avg" },
+                                               { .name = "sum",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "sum" },
+                                               { .name = "min",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "min" },
+                                               { .name = "max",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "max" },
+                                               { .name = "range",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "range" },
+                                               { .name = "count",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "count" },
+                                               { .name = "first",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "first" },
+                                               { .name = "last",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "last" },
+                                               { .name = "std.p",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "std.p" },
+                                               { .name = "std.s",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "std.s" },
+                                               { .name = "var.p",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "var.p" },
+                                               { .name = "var.s",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "var.s" },
+                                               { .name = "twa",
+                                                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                 .token = "twa" },
+                                               { 0 } } },
+              { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { 0 } } },
+    { .name = "alignTimestamp",
+      .type = REDISMODULE_ARG_TYPE_INTEGER,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_CREATERULE_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Create a compaction rule",
+    .complexity = "O(1)",
+    .since = "1.0.0",
+    .arity = -5,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_CREATERULE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_CREATERULE_ARGS,
+};
+
+// ===============================
 // TS.REVRANGE key fromTimestamp toTimestamp [options...]
 // ===============================
 static const RedisModuleCommandKeySpec TS_REVRANGE_KEYSPECS[] = {
@@ -518,6 +606,15 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
         return REDISMODULE_ERR;
     }
     if (RedisModule_SetCommandInfo(cmd_create, &TS_CREATE_INFO) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    // Register TS.CREATERULE command info
+    RedisModuleCommand *cmd_createrule = RedisModule_GetCommand(ctx, "TS.CREATERULE");
+    if (!cmd_createrule) {
+        return REDISMODULE_ERR;
+    }
+    if (RedisModule_SetCommandInfo(cmd_createrule, &TS_CREATERULE_INFO) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
