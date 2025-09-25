@@ -1,10 +1,10 @@
 #include "command_info.h"
 
 // ===============================
-// TS.GET key [LATEST]
+// TS.DEL key fromTimestamp toTimestamp
 // ===============================
-static const RedisModuleCommandKeySpec TS_GET_KEYSPECS[] = {
-    { .flags = REDISMODULE_CMD_KEY_RO,
+static const RedisModuleCommandKeySpec TS_DEL_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RW,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
       .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
@@ -12,27 +12,25 @@ static const RedisModuleCommandKeySpec TS_GET_KEYSPECS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandArg TS_GET_ARGS[] = {
+static const RedisModuleCommandArg TS_DEL_ARGS[] = {
     { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
-    { .name = "latest",
-      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
-      .token = "LATEST" },
+    { .name = "fromTimestamp", .type = REDISMODULE_ARG_TYPE_INTEGER },
+    { .name = "toTimestamp", .type = REDISMODULE_ARG_TYPE_INTEGER },
     { 0 }
 };
 
-static const RedisModuleCommandInfo TS_GET_INFO = {
+static const RedisModuleCommandInfo TS_DEL_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
-    .summary = "Get the sample with the highest timestamp from a given time series",
-    .complexity = "O(1)",
-    .since = "1.0.0",
-    .arity = -2,
-    .key_specs = (RedisModuleCommandKeySpec *)TS_GET_KEYSPECS,
-    .args = (RedisModuleCommandArg *)TS_GET_ARGS,
+    .summary = "Delete all samples between two timestamps for a given time series",
+    .complexity = "O(N) where N is the number of data points that will be removed",
+    .since = "1.6.0",
+    .arity = 4,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_DEL_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_DEL_ARGS,
 };
 
 // ===============================
-// TS.DELETERULE source_key dest_key
+// TS.DELETERULE sourceKey destKey
 // ===============================
 static const RedisModuleCommandKeySpec TS_DELETERULE_KEYSPECS[] = {
     { .flags = REDISMODULE_CMD_KEY_RO,
@@ -62,6 +60,37 @@ static const RedisModuleCommandInfo TS_DELETERULE_INFO = {
     .arity = 3,
     .key_specs = (RedisModuleCommandKeySpec *)TS_DELETERULE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_DELETERULE_ARGS,
+};
+
+// ===============================
+// TS.GET key [LATEST]
+// ===============================
+static const RedisModuleCommandKeySpec TS_GET_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_GET_ARGS[] = {
+    { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "latest",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LATEST" },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_GET_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get the sample with the highest timestamp from a given time series",
+    .complexity = "O(1)",
+    .since = "1.0.0",
+    .arity = -2,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_GET_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_GET_ARGS,
 };
 
 // ===============================
@@ -221,13 +250,17 @@ static const RedisModuleCommandInfo TS_REVRANGE_INFO = {
 };
 
 int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
-    RedisModuleCommand *cmd_get = RedisModule_GetCommand(ctx, "TS.GET");
-    if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
+    RedisModuleCommand *cmd_del = RedisModule_GetCommand(ctx, "TS.DEL");
+    if (!cmd_del || RedisModule_SetCommandInfo(cmd_del, &TS_DEL_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     RedisModuleCommand *cmd_deleterule = RedisModule_GetCommand(ctx, "TS.DELETERULE");
     if (!cmd_deleterule ||
         RedisModule_SetCommandInfo(cmd_deleterule, &TS_DELETERULE_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    RedisModuleCommand *cmd_get = RedisModule_GetCommand(ctx, "TS.GET");
+    if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     RedisModuleCommand *cmd_revrange = RedisModule_GetCommand(ctx, "TS.REVRANGE");
