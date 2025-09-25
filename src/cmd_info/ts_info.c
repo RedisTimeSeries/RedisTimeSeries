@@ -9,8 +9,7 @@
 //  [[ALIGN align] AGGREGATION aggregator bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 // ===============================
 static const RedisModuleCommandKeySpec TS_REVRANGE_KEYSPECS[] = {
-    { .notes = "",
-      .flags = REDISMODULE_CMD_KEY_RO,
+    { .flags = REDISMODULE_CMD_KEY_RO,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
       .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
@@ -161,8 +160,7 @@ static const RedisModuleCommandInfo TS_REVRANGE_INFO = {
 // TS.GET key [LATEST]
 // ===============================
 static const RedisModuleCommandKeySpec TS_GET_KEYSPECS[] = {
-    { .notes = "",
-      .flags = REDISMODULE_CMD_KEY_RO,
+    { .flags = REDISMODULE_CMD_KEY_RO,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
       .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
@@ -189,6 +187,39 @@ static const RedisModuleCommandInfo TS_GET_INFO = {
     .args = (RedisModuleCommandArg *)TS_GET_ARGS,
 };
 
+// ===============================
+// TS.DELETERULE source_key dest_key
+// ===============================
+static const RedisModuleCommandKeySpec TS_DELETERULE_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { .flags = REDISMODULE_CMD_KEY_RW,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 2 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_DELETERULE_ARGS[] = {
+    { .name = "sourceKey", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "destKey", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 1 },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_DELETERULE_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Delete a compaction rule",
+    .complexity = "O(1)",
+    .since = "1.0.0",
+    .arity = 3,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_DELETERULE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_DELETERULE_ARGS,
+};
+
 int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_revrange = RedisModule_GetCommand(ctx, "TS.REVRANGE");
     if (!cmd_revrange ||
@@ -197,6 +228,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
 
     RedisModuleCommand *cmd_get = RedisModule_GetCommand(ctx, "TS.GET");
     if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    RedisModuleCommand *cmd_deleterule = RedisModule_GetCommand(ctx, "TS.DELETERULE");
+    if (!cmd_deleterule ||
+        RedisModule_SetCommandInfo(cmd_deleterule, &TS_DELETERULE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;
