@@ -21,6 +21,7 @@ if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
 
 		RELEASE=1     Upload release artifacts
 		STAGING=1     Upload into staging area
+		BETA=1        Upload to beta folder with version
 
 		NOP=1         No operation
 		VERBOSE=1     Show artifacts details
@@ -128,4 +129,9 @@ s3_upload() {
 
 #----------------------------------------------------------------------------------------------
 
-PROD=redistimeseries PREFIX=redistimeseries s3_upload
+# Set S3 directory based on BETA flag
+if [[ $BETA == 1 && -n $BETA_VERSION ]]; then
+	PROD=redistimeseries/beta PREFIX=redistimeseries s3_upload
+else
+	PROD=redistimeseries PREFIX=redistimeseries s3_upload
+fi
