@@ -157,13 +157,47 @@ static const RedisModuleCommandInfo TS_REVRANGE_INFO = {
     .args = (RedisModuleCommandArg *)TS_REVRANGE_ARGS,
 };
 
+// ===============================
+// TS.GET key [LATEST]
+// ===============================
+static const RedisModuleCommandKeySpec TS_GET_KEYSPECS[] = {
+    { .notes = "",
+      .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_GET_ARGS[] = {
+    { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "latest",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LATEST" },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_GET_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get the sample with the highest timestamp from a given time series",
+    .complexity = "O(1)",
+    .since = "1.0.0",
+    .arity = -2,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_GET_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_GET_ARGS,
+};
+
 int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_revrange = RedisModule_GetCommand(ctx, "TS.REVRANGE");
-    if (!cmd_revrange) {
+    if (!cmd_revrange ||
+        RedisModule_SetCommandInfo(cmd_revrange, &TS_REVRANGE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
-    }
-    if (RedisModule_SetCommandInfo(cmd_revrange, &TS_REVRANGE_INFO) == REDISMODULE_ERR) {
+
+    RedisModuleCommand *cmd_get = RedisModule_GetCommand(ctx, "TS.GET");
+    if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
-    }
+
     return REDISMODULE_OK;
 }
