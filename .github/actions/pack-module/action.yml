@@ -5,6 +5,9 @@ inputs:
     type: string
     description: "Specify whether to use the environment or not"
     default: '0'
+  beta-version:
+    description: 'Beta version for S3 uploads'
+    required: false
 
 runs:
   using: composite
@@ -21,4 +24,7 @@ runs:
         fi
         export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
         git config --global --add safe.directory $GITHUB_WORKSPACE
+        if [[ -n "${{ inputs.beta-version }}" ]]; then
+          export BETA_VERSION="${{ inputs.beta-version }}"
+        fi
         make pack BRANCH=$TAG_OR_BRANCH SHOW=1

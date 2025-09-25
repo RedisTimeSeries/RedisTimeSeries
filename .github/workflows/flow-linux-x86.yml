@@ -25,6 +25,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      beta-version:
+        description: 'Beta version for S3 uploads'
+        type: string
+        required: false
+        default: ''
   workflow_call: # Allows to run this workflow from another workflow
     inputs:
       redis-ref:
@@ -47,6 +52,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      beta-version:
+        description: 'Beta version for S3 uploads'
+        type: string
+        required: false
+        default: ''
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
@@ -200,6 +210,7 @@ jobs:
         uses: ./.github/actions/pack-module
         with:
           use-venv: ${{matrix.docker_image.use-venv}}
+          beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
@@ -207,3 +218,4 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           github-ref: ${{ github.ref }}
+          beta-version: ${{ inputs.beta-version }}
