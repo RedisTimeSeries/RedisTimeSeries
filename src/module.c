@@ -32,6 +32,7 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "cmd_info/command_info.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -113,6 +114,14 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
 bool isTrimming = false;
+
+static void FreeConfigAndStaticCtx(void) {
+    FreeConfig();
+    if (rts_staticCtx != NULL) {
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+    }
+}
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -1614,10 +1623,7 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
 
 int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     if (rts_staticCtx) {
-        FreeConfig();
-
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
     }
 
     return REDISMODULE_OK;
@@ -1709,9 +1715,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     initGlobalCompactionFunctions();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1729,9 +1733,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
     if (SeriesType == NULL) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1744,9 +1746,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     };
     if (RedisModule_SetDataTypeExtensions != NULL) {
         if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
-            FreeConfig();
-            RedisModule_FreeThreadSafeContext(rts_staticCtx);
-            rts_staticCtx = NULL;
+            FreeConfigAndStaticCtx();
 
             return REDISMODULE_ERR;
         }
@@ -1756,9 +1756,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to add ACL category");
 
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1766,9 +1764,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     IndexInit();
     if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to register defrag function");
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1785,9 +1781,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1800,9 +1794,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1811,9 +1803,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1822,9 +1812,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1833,14 +1821,19 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
 
     SetCommandAcls(ctx, "ts.mget", "read");
+
+    if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Failed to register timeseries command infos");
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
 
     if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
         // we have server events support, lets subscribe to relevan events.
