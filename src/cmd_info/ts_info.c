@@ -806,9 +806,7 @@ static const RedisModuleCommandInfo TS_REVRANGE_INFO = {
 // ===============================
 // TS.MRANGE fromTimestamp toTimestamp [options...]
 // ===============================
-static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = {
-    { 0 }
-};
+static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
 
 static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
     { .name = "fromTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
@@ -820,14 +818,13 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
     { .name = "FILTER_BY_TS",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_MULTIPLE | REDISMODULE_CMD_ARG_OPTIONAL,
-      .subargs =
-          (RedisModuleCommandArg[]){ { .name = "FILTER_BY_TS",
-                                       .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                                       .token = "FILTER_BY_TS" },
-                                     { .name = "timestamp",
-                                       .type = REDISMODULE_ARG_TYPE_STRING,
-                                       .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-                                     { 0 } } },
+      .subargs = (RedisModuleCommandArg[]){ { .name = "FILTER_BY_TS",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_TS" },
+                                            { .name = "timestamp",
+                                              .type = REDISMODULE_ARG_TYPE_STRING,
+                                              .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                            { 0 } } },
     { .name = "FILTER_BY_VALUE",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
@@ -847,15 +844,13 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                 .token = "WITHLABELS" },
               { .name = "SELECTED_LABELS",
                 .type = REDISMODULE_ARG_TYPE_BLOCK,
-                .subargs =
-                    (RedisModuleCommandArg[]){
-                        { .name = "SELECTED_LABELS",
-                          .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                          .token = "SELECTED_LABELS" },
-                        { .name = "label",
-                          .type = REDISMODULE_ARG_TYPE_STRING,
-                          .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-                        { 0 } } },
+                .subargs = (RedisModuleCommandArg[]){ { .name = "SELECTED_LABELS",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "SELECTED_LABELS" },
+                                                      { .name = "label",
+                                                        .type = REDISMODULE_ARG_TYPE_STRING,
+                                                        .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                                      { 0 } } },
               { 0 } } },
     { .name = "COUNT",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -932,16 +927,25 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                           .flags = REDISMODULE_CMD_ARG_OPTIONAL,
                           .token = "BUCKETTIMESTAMP",
                           .subargs =
-                              (RedisModuleCommandArg[]){
-                                  { .name = "mid", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "mid" },
-                                  { .name = "start",
-                                    .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                                    .token = "start" },
-                                  { .name = "end", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "end" },
-                                  { .name = "+", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "+" },
-                                  { .name = "-", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "-" },
-                                  { .name = "~", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "~" },
-                                  { 0 } } },
+                              (RedisModuleCommandArg[]){ { .name = "mid",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "mid" },
+                                                         { .name = "start",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "start" },
+                                                         { .name = "end",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "end" },
+                                                         { .name = "+",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "+" },
+                                                         { .name = "-",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "-" },
+                                                         { .name = "~",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "~" },
+                                                         { 0 } } },
                         { .name = "EMPTY",
                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                           .flags = REDISMODULE_CMD_ARG_OPTIONAL,
@@ -1017,9 +1021,7 @@ static const RedisModuleCommandInfo TS_MRANGE_INFO = {
 // ===============================
 // TS.MREVRANGE fromTimestamp toTimestamp [options...]
 // ===============================
-static const RedisModuleCommandKeySpec TS_MREVRANGE_KEYSPECS[] = {
-    { 0 }
-};
+static const RedisModuleCommandKeySpec TS_MREVRANGE_KEYSPECS[] = { { 0 } };
 
 static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
     { .name = "fromTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
@@ -1031,14 +1033,13 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
     { .name = "FILTER_BY_TS",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_MULTIPLE | REDISMODULE_CMD_ARG_OPTIONAL,
-      .subargs =
-          (RedisModuleCommandArg[]){ { .name = "FILTER_BY_TS",
-                                       .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                                       .token = "FILTER_BY_TS" },
-                                     { .name = "timestamp",
-                                       .type = REDISMODULE_ARG_TYPE_STRING,
-                                       .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-                                     { 0 } } },
+      .subargs = (RedisModuleCommandArg[]){ { .name = "FILTER_BY_TS",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_TS" },
+                                            { .name = "timestamp",
+                                              .type = REDISMODULE_ARG_TYPE_STRING,
+                                              .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                            { 0 } } },
     { .name = "FILTER_BY_VALUE",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
@@ -1058,15 +1059,13 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                 .token = "WITHLABELS" },
               { .name = "SELECTED_LABELS",
                 .type = REDISMODULE_ARG_TYPE_BLOCK,
-                .subargs =
-                    (RedisModuleCommandArg[]){
-                        { .name = "SELECTED_LABELS",
-                          .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                          .token = "SELECTED_LABELS" },
-                        { .name = "label",
-                          .type = REDISMODULE_ARG_TYPE_STRING,
-                          .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-                        { 0 } } },
+                .subargs = (RedisModuleCommandArg[]){ { .name = "SELECTED_LABELS",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "SELECTED_LABELS" },
+                                                      { .name = "label",
+                                                        .type = REDISMODULE_ARG_TYPE_STRING,
+                                                        .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                                      { 0 } } },
               { 0 } } },
     { .name = "COUNT",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -1143,16 +1142,25 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                           .flags = REDISMODULE_CMD_ARG_OPTIONAL,
                           .token = "BUCKETTIMESTAMP",
                           .subargs =
-                              (RedisModuleCommandArg[]){
-                                  { .name = "mid", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "mid" },
-                                  { .name = "start",
-                                    .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                                    .token = "start" },
-                                  { .name = "end", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "end" },
-                                  { .name = "+", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "+" },
-                                  { .name = "-", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "-" },
-                                  { .name = "~", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "~" },
-                                  { 0 } } },
+                              (RedisModuleCommandArg[]){ { .name = "mid",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "mid" },
+                                                         { .name = "start",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "start" },
+                                                         { .name = "end",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "end" },
+                                                         { .name = "+",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "+" },
+                                                         { .name = "-",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "-" },
+                                                         { .name = "~",
+                                                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                           .token = "~" },
+                                                         { 0 } } },
                         { .name = "EMPTY",
                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                           .flags = REDISMODULE_CMD_ARG_OPTIONAL,
