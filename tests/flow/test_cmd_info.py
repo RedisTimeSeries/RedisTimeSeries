@@ -5,6 +5,46 @@ class testCommandDocsAndHelp():
     def __init__(self):
         self.env = Env(decodeResponses=True)
 
+    def test_command_info_ts_add(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.ADD')
+            assert res
+            assert_docs(env, 'TS.ADD', summary='Append a sample to a time series', complexity='O(M) where M is the number of compaction rules or O(1) with no compaction', arity='-4', since='1.0.0', group='module')
+
+    def test_command_info_ts_alter(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.ALTER')
+            assert res
+            assert_docs(env, 'TS.ALTER', summary='Update the retention, chunk size, duplicate policy, and labels of an existing time series', complexity='O(N) where N is the number of labels requested to update', arity='-2', since='1.0.0', group='module')
+
+    def test_command_info_ts_create(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.CREATE')
+            assert res
+            assert_docs(env, 'TS.CREATE', summary='Create a new time series', complexity='O(1)', arity='-2', since='1.0.0', group='module')
+
+    def test_command_info_ts_createrule(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.CREATERULE')
+            assert res
+            assert_docs(env, 'TS.CREATERULE', summary='Create a compaction rule', complexity='O(1)', arity='-5', since='1.0.0', group='module')
+
     def test_command_info_ts_revrange(self):
         env = self.env
         con = env.getConnection()
@@ -14,6 +54,26 @@ class testCommandDocsAndHelp():
             res = r.execute_command('COMMAND', 'INFO', 'TS.REVRANGE')
             assert res
             assert_docs(env, 'TS.REVRANGE', summary='Query a range in reverse direction', complexity='O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range', arity='-4', since='1.4.0', group='module')
+
+    def test_command_info_ts_mrange(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.MRANGE')
+            assert res
+            assert_docs(env, 'TS.MRANGE', summary='Query a range across multiple time series by filters in forward direction', complexity='O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges', arity='-4', since='1.0.0', group='module')
+
+    def test_command_info_ts_mrevrange(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.MREVRANGE')
+            assert res
+            assert_docs(env, 'TS.MREVRANGE', summary='Query a range across multiple time series by filters in reverse direction', complexity='O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges', arity='-4', since='1.4.0', group='module')
 
     # NOTE: Skipping COMMAND DOCS test for now due to client parsing differences across redis-py versions
 
