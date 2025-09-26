@@ -281,13 +281,192 @@ MU_TEST(test_labels_argument_structure) {
     mu_check(found_labels);
 }
 
+// Test that TS.MRANGE command info is properly structured
+MU_TEST(test_ts_mrange_command_info_structure) {
+    // Test that TS_MRANGE_INFO has correct basic properties
+    mu_check(TS_MRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MRANGE_INFO.arity == -4); // At least 4 arguments: TS.MRANGE fromTimestamp toTimestamp FILTER filterExpr
+    mu_check(TS_MRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_MRANGE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_MRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_MRANGE_INFO.summary, "Query a range across multiple time series") != NULL);
+    mu_check(strstr(TS_MRANGE_INFO.summary, "forward direction") != NULL);
+    mu_check(TS_MRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_MRANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.MREVRANGE command info is properly structured
+MU_TEST(test_ts_mrevrange_command_info_structure) {
+    // Test that TS_MREVRANGE_INFO has correct basic properties
+    mu_check(TS_MREVRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MREVRANGE_INFO.arity == -4); // At least 4 arguments: TS.MREVRANGE fromTimestamp toTimestamp FILTER filterExpr
+    mu_check(TS_MREVRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_MREVRANGE_INFO.since, "1.4.0") == 0);
+    mu_check(TS_MREVRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_MREVRANGE_INFO.summary, "Query a range across multiple time series") != NULL);
+    mu_check(strstr(TS_MREVRANGE_INFO.summary, "reverse direction") != NULL);
+    mu_check(TS_MREVRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_MREVRANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.MRANGE has required arguments
+MU_TEST(test_mrange_command_arguments) {
+    // Test TS.MRANGE has required arguments
+    mu_check(TS_MRANGE_ARGS[0].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
+    mu_check(strcmp(TS_MRANGE_ARGS[0].name, "fromTimestamp") == 0);
+    mu_check(TS_MRANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
+    mu_check(strcmp(TS_MRANGE_ARGS[1].name, "toTimestamp") == 0);
+    
+    // Find FILTER argument which is required
+    int found_filter = 0;
+    for (int i = 0; TS_MRANGE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_MRANGE_ARGS[i].name, "FILTER") == 0) {
+            found_filter = 1;
+            mu_check(TS_MRANGE_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            mu_check(!(TS_MRANGE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL)); // FILTER is required
+            
+            // Check that filterExpr supports multiple expressions
+            const RedisModuleCommandArg *subargs = TS_MRANGE_ARGS[i].subargs;
+            mu_check(subargs != NULL);
+            
+            int found_filter_expr = 0;
+            for (int j = 0; subargs[j].name != NULL; j++) {
+                if (strcmp(subargs[j].name, "filterExpr") == 0) {
+                    found_filter_expr = 1;
+                    mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_STRING);
+                    mu_check(subargs[j].flags & REDISMODULE_CMD_ARG_MULTIPLE);
+                    break;
+                }
+            }
+            mu_check(found_filter_expr);
+            break;
+        }
+    }
+    mu_check(found_filter);
+}
+
+// Test that TS.MRANGE has optional arguments like LATEST, FILTER_BY_TS, etc.
+MU_TEST(test_mrange_optional_arguments) {
+    // Check LATEST is optional
+    int found_latest = 0;
+    for (int i = 0; TS_MRANGE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_MRANGE_ARGS[i].name, "LATEST") == 0) {
+            found_latest = 1;
+            mu_check(TS_MRANGE_ARGS[i].type == REDISMODULE_ARG_TYPE_PURE_TOKEN);
+            mu_check(TS_MRANGE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            break;
+        }
+    }
+    mu_check(found_latest);
+    
+    // Check FILTER_BY_VALUE is optional
+    int found_filter_by_value = 0;
+    for (int i = 0; TS_MRANGE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_MRANGE_ARGS[i].name, "FILTER_BY_VALUE") == 0) {
+            found_filter_by_value = 1;
+            mu_check(TS_MRANGE_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            mu_check(TS_MRANGE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            
+            // Should have min and max arguments
+            const RedisModuleCommandArg *subargs = TS_MRANGE_ARGS[i].subargs;
+            mu_check(subargs != NULL);
+            
+            int found_min = 0, found_max = 0;
+            for (int j = 0; subargs[j].name != NULL; j++) {
+                if (strcmp(subargs[j].name, "min") == 0) {
+                    found_min = 1;
+                    mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_DOUBLE);
+                }
+                if (strcmp(subargs[j].name, "max") == 0) {
+                    found_max = 1;
+                    mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_DOUBLE);
+                }
+            }
+            mu_check(found_min && found_max);
+            break;
+        }
+    }
+    mu_check(found_filter_by_value);
+    
+    // Check GROUPBY is optional
+    int found_groupby = 0;
+    for (int i = 0; TS_MRANGE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_MRANGE_ARGS[i].name, "GROUPBY") == 0) {
+            found_groupby = 1;
+            mu_check(TS_MRANGE_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            mu_check(TS_MRANGE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            break;
+        }
+    }
+    mu_check(found_groupby);
+}
+
+// Test that aggregation options are properly defined in MRANGE
+MU_TEST(test_mrange_aggregation_options) {
+    // Find aggregation argument in TS.MRANGE
+    int found_aggregation = 0;
+    for (int i = 0; TS_MRANGE_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_MRANGE_ARGS[i].name, "aggregation") == 0) {
+            found_aggregation = 1;
+            mu_check(TS_MRANGE_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            mu_check(TS_MRANGE_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            
+            const RedisModuleCommandArg *subargs = TS_MRANGE_ARGS[i].subargs;
+            mu_check(subargs != NULL);
+            
+            // Check for AGGREGATION subcommand
+            int found_agg_block = 0;
+            for (int j = 0; subargs[j].name != NULL; j++) {
+                if (strcmp(subargs[j].name, "AGGREGATION") == 0) {
+                    found_agg_block = 1;
+                    mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_BLOCK);
+                    
+                    // Check for aggregator oneof
+                    const RedisModuleCommandArg *agg_subargs = subargs[j].subargs;
+                    mu_check(agg_subargs != NULL);
+                    
+                    int found_aggregator = 0;
+                    for (int k = 0; agg_subargs[k].name != NULL; k++) {
+                        if (strcmp(agg_subargs[k].name, "aggregator") == 0) {
+                            found_aggregator = 1;
+                            mu_check(agg_subargs[k].type == REDISMODULE_ARG_TYPE_ONEOF);
+                            
+                            // Check some aggregation types exist
+                            const RedisModuleCommandArg *agg_options = agg_subargs[k].subargs;
+                            mu_check(agg_options != NULL);
+                            
+                            int found_avg = 0, found_sum = 0;
+                            for (int l = 0; agg_options[l].name != NULL; l++) {
+                                if (strcmp(agg_options[l].name, "avg") == 0) found_avg = 1;
+                                if (strcmp(agg_options[l].name, "sum") == 0) found_sum = 1;
+                            }
+                            mu_check(found_avg && found_sum);
+                            break;
+                        }
+                    }
+                    mu_check(found_aggregator);
+                    break;
+                }
+            }
+            mu_check(found_agg_block);
+            break;
+        }
+    }
+    mu_check(found_aggregation);
+}
+
 MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_add_command_info_structure);
     MU_RUN_TEST(test_ts_alter_command_info_structure);
     MU_RUN_TEST(test_ts_create_command_info_structure);
     MU_RUN_TEST(test_ts_createrule_command_info_structure);
+    MU_RUN_TEST(test_ts_mrange_command_info_structure);
+    MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
     MU_RUN_TEST(test_command_arguments);
+    MU_RUN_TEST(test_mrange_command_arguments);
+    MU_RUN_TEST(test_mrange_optional_arguments);
+    MU_RUN_TEST(test_mrange_aggregation_options);
     MU_RUN_TEST(test_duplicate_policy_options);
     MU_RUN_TEST(test_createrule_aggregation_options);
     MU_RUN_TEST(test_register_function_exists);
