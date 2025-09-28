@@ -1181,6 +1181,51 @@ static const RedisModuleCommandInfo TS_MADD_INFO = {
 };
 
 // ===============================
+// TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label...] FILTER filterExpr...
+// ===============================
+static const RedisModuleCommandArg TS_MGET_ARGS[] = {
+    { .name = "latest",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LATEST" },
+    { .name = "labels_block",
+      .type = REDISMODULE_ARG_TYPE_ONEOF,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs = (RedisModuleCommandArg[]){
+          { .name = "withlabels",
+            .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+            .token = "WITHLABELS" },
+          { .name = "selected_labels_block",
+            .type = REDISMODULE_ARG_TYPE_BLOCK,
+            .subargs = (RedisModuleCommandArg[]){
+                { .name = "selected_labels_token",
+                  .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                  .token = "SELECTED_LABELS" },
+                { .name = "label",
+                  .type = REDISMODULE_ARG_TYPE_STRING,
+                  .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                { 0 } } },
+          { 0 } } },
+    { .name = "filter_token",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .token = "FILTER" },
+    { .name = "filterExpr",
+      .type = REDISMODULE_ARG_TYPE_STRING,
+      .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_MGET_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get the sample with the highest timestamp from each time series matching a specific filter",
+    .complexity = "O(n) where n is the number of time-series that match the filters",
+    .since = "1.0.0",
+    .arity = -3,
+    .key_specs = NULL, // No key specs - this command doesn't access specific keys, uses filters
+    .args = (RedisModuleCommandArg *)TS_MGET_ARGS,
+};
+
+// ===============================
 // TS.MRANGE fromTimestamp toTimestamp [options...]
 // ===============================
 static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
@@ -1698,6 +1743,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     // Register TS.MADD command info
     RedisModuleCommand *cmd_madd = RedisModule_GetCommand(ctx, "TS.MADD");
     if (!cmd_madd || RedisModule_SetCommandInfo(cmd_madd, &TS_MADD_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.MGET command info
+    RedisModuleCommand *cmd_mget = RedisModule_GetCommand(ctx, "TS.MGET");
+    if (!cmd_mget || RedisModule_SetCommandInfo(cmd_mget, &TS_MGET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.MRANGE command info

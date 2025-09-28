@@ -200,6 +200,15 @@ MU_TEST(test_command_arguments) {
     mu_check(TS_MADD_ARGS[0].type == REDISMODULE_ARG_TYPE_BLOCK); // ktv block
     mu_check(TS_MADD_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple ktv blocks allowed
     
+    // Test TS.MGET has required arguments
+    mu_check(TS_MGET_ARGS[0].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // LATEST (optional)
+    mu_check(TS_MGET_ARGS[0].flags & REDISMODULE_CMD_ARG_OPTIONAL); // LATEST is optional
+    mu_check(TS_MGET_ARGS[1].type == REDISMODULE_ARG_TYPE_ONEOF); // labels block (optional)
+    mu_check(TS_MGET_ARGS[1].flags & REDISMODULE_CMD_ARG_OPTIONAL); // labels block is optional
+    mu_check(TS_MGET_ARGS[2].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // FILTER token
+    mu_check(TS_MGET_ARGS[3].type == REDISMODULE_ARG_TYPE_STRING); // filterExpr
+    mu_check(TS_MGET_ARGS[3].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple filter expressions allowed
+    
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
     for (int i = 0; TS_ADD_ARGS[i].name != NULL; i++) {
@@ -478,6 +487,21 @@ MU_TEST(test_ts_madd_command_info_structure) {
     mu_check(strstr(TS_MADD_INFO.complexity, "compaction rules") != NULL);
 }
 
+// Test that TS.MGET command info is properly structured
+MU_TEST(test_ts_mget_command_info_structure) {
+    // Test that TS_MGET_INFO has correct basic properties
+    mu_check(TS_MGET_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MGET_INFO.arity == -3); // At least 3 arguments: TS.MGET FILTER filterExpr
+    mu_check(TS_MGET_INFO.since != NULL);
+    mu_check(strcmp(TS_MGET_INFO.since, "1.0.0") == 0);
+    mu_check(TS_MGET_INFO.summary != NULL);
+    mu_check(strstr(TS_MGET_INFO.summary, "Get the sample with the highest timestamp") != NULL);
+    mu_check(strstr(TS_MGET_INFO.summary, "matching a specific filter") != NULL);
+    mu_check(TS_MGET_INFO.complexity != NULL);
+    mu_check(strstr(TS_MGET_INFO.complexity, "O(n)") != NULL);
+    mu_check(strstr(TS_MGET_INFO.complexity, "time-series that match") != NULL);
+}
+
 // Test that TS.MREVRANGE command info is properly structured
 MU_TEST(test_ts_mrevrange_command_info_structure) {
     // Test that TS_MREVRANGE_INFO has correct basic properties
@@ -650,6 +674,7 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_queryindex_command_info_structure);
     MU_RUN_TEST(test_ts_info_command_info_structure);
     MU_RUN_TEST(test_ts_madd_command_info_structure);
+    MU_RUN_TEST(test_ts_mget_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);

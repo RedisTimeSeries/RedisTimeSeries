@@ -85,6 +85,16 @@ class testCommandDocsAndHelp():
             assert res
             assert_docs(env, 'TS.MADD', summary='Append new samples to one or more time series', complexity='O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction', arity='-4', since='1.0.0', group='module')
 
+    def test_command_info_ts_mget(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.MGET')
+            assert res
+            assert_docs(env, 'TS.MGET', summary='Get the sample with the highest timestamp from each time series matching a specific filter', complexity='O(n) where n is the number of time-series that match the filters', arity='-3', since='1.0.0', group='module')
+
     def test_command_info_ts_revrange(self):
         env = self.env
         con = env.getConnection()
