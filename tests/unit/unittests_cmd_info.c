@@ -66,6 +66,32 @@ MU_TEST(test_ts_createrule_command_info_structure) {
     mu_check(strstr(TS_CREATERULE_INFO.complexity, "O(1)") != NULL);
 }
 
+// Test that TS.INCRBY command info is properly structured  
+MU_TEST(test_ts_incrby_command_info_structure) {
+    // Test that TS_INCRBY_INFO has correct basic properties
+    mu_check(TS_INCRBY_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_INCRBY_INFO.arity == -3); // At least 3 arguments: TS.INCRBY key addend
+    mu_check(TS_INCRBY_INFO.since != NULL);
+    mu_check(strcmp(TS_INCRBY_INFO.since, "1.0.0") == 0);
+    mu_check(TS_INCRBY_INFO.summary != NULL);
+    mu_check(strstr(TS_INCRBY_INFO.summary, "Increase the value") != NULL);
+    mu_check(TS_INCRBY_INFO.complexity != NULL);
+    mu_check(strstr(TS_INCRBY_INFO.complexity, "O(M)") != NULL);
+}
+
+// Test that TS.DECRBY command info is properly structured  
+MU_TEST(test_ts_decrby_command_info_structure) {
+    // Test that TS_DECRBY_INFO has correct basic properties
+    mu_check(TS_DECRBY_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_DECRBY_INFO.arity == -3); // At least 3 arguments: TS.DECRBY key subtrahend
+    mu_check(TS_DECRBY_INFO.since != NULL);
+    mu_check(strcmp(TS_DECRBY_INFO.since, "1.0.0") == 0);
+    mu_check(TS_DECRBY_INFO.summary != NULL);
+    mu_check(strstr(TS_DECRBY_INFO.summary, "Decrease the value") != NULL);
+    mu_check(TS_DECRBY_INFO.complexity != NULL);
+    mu_check(strstr(TS_DECRBY_INFO.complexity, "O(M)") != NULL);
+}
+
 // Test that key specifications are correct
 MU_TEST(test_command_key_specs) {
     // TS.ADD should have RW and INSERT flags
@@ -96,6 +122,16 @@ MU_TEST(test_command_key_specs) {
     mu_check(!(TS_CREATERULE_KEYSPECS[1].flags & REDISMODULE_CMD_KEY_INSERT));
     mu_check(TS_CREATERULE_KEYSPECS[1].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_CREATERULE_KEYSPECS[1].bs.index.pos == 2);
+    
+    // TS.INCRBY should have RW flag (can modify existing or create new)
+    mu_check(TS_INCRBY_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_INCRBY_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_INCRBY_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.DECRBY should have RW flag (can modify existing or create new)
+    mu_check(TS_DECRBY_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_DECRBY_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_DECRBY_KEYSPECS[0].bs.index.pos == 1);
 }
 
 // Test that arguments are properly defined
@@ -110,6 +146,14 @@ MU_TEST(test_command_arguments) {
     
     // Test TS.CREATE has key argument
     mu_check(TS_CREATE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    
+    // Test TS.INCRBY has required arguments
+    mu_check(TS_INCRBY_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_INCRBY_ARGS[1].type == REDISMODULE_ARG_TYPE_DOUBLE); // addend
+    
+    // Test TS.DECRBY has required arguments
+    mu_check(TS_DECRBY_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_DECRBY_ARGS[1].type == REDISMODULE_ARG_TYPE_DOUBLE); // subtrahend
     
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
@@ -132,6 +176,28 @@ MU_TEST(test_command_arguments) {
         }
     }
     mu_check(found_create_retention);
+    
+    // Test that TS.INCRBY also has optional TIMESTAMP
+    int found_incrby_timestamp = 0;
+    for (int i = 0; TS_INCRBY_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_INCRBY_ARGS[i].name, "timestamp_block") == 0) {
+            mu_check(TS_INCRBY_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            found_incrby_timestamp = 1;
+            break;
+        }
+    }
+    mu_check(found_incrby_timestamp);
+    
+    // Test that TS.DECRBY also has optional TIMESTAMP
+    int found_decrby_timestamp = 0;
+    for (int i = 0; TS_DECRBY_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_DECRBY_ARGS[i].name, "timestamp_block") == 0) {
+            mu_check(TS_DECRBY_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            found_decrby_timestamp = 1;
+            break;
+        }
+    }
+    mu_check(found_decrby_timestamp);
 }
 
 // Test that duplicate policy options are correctly defined
@@ -460,6 +526,8 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_alter_command_info_structure);
     MU_RUN_TEST(test_ts_create_command_info_structure);
     MU_RUN_TEST(test_ts_createrule_command_info_structure);
+    MU_RUN_TEST(test_ts_incrby_command_info_structure);
+    MU_RUN_TEST(test_ts_decrby_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
