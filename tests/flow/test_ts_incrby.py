@@ -112,12 +112,21 @@ def test_incrby_with_ignore_policy():
                          'IGNORE', '100', '1.0')  # ignore if time diff <= 100ms and value diff <= 1.0
         
         # Add another increment that should be ignored (same timestamp, small value diff)
+        # The increment of 0.5 is smaller than the ignore threshold of 1.0, so it should be ignored
         r.execute_command('TS.INCRBY', key, '0.5', 'TIMESTAMP', '1000')
         
-        # Verify only one sample exists
+        # Verify only one sample exists and value remains 5.0 (not incremented)
         result = r.execute_command('TS.RANGE', key, 0, 2000)
         assert len(result) == 1
-        assert result[0] == [1000, b'5.5']  # 5.0 + 0.5
+        assert result[0] == [1000, b'5.0']  # Original value, increment was ignored
+        
+        # Now add an increment larger than the ignore threshold
+        r.execute_command('TS.INCRBY', key, '1.5', 'TIMESTAMP', '1000')
+        
+        # This should not be ignored and should increment the value
+        result = r.execute_command('TS.RANGE', key, 0, 2000)
+        assert len(result) == 1
+        assert result[0] == [1000, b'6.5']  # 5.0 + 1.5
 
 
 def test_incrby_duplicate_policies():
