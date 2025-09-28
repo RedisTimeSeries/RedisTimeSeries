@@ -132,6 +132,16 @@ MU_TEST(test_command_key_specs) {
     mu_check(TS_DECRBY_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
     mu_check(TS_DECRBY_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_DECRBY_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.RANGE should have RO flag (read-only operation)
+    mu_check(TS_RANGE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_RANGE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_RANGE_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.REVRANGE should have RO flag (read-only operation)
+    mu_check(TS_REVRANGE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_REVRANGE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_REVRANGE_KEYSPECS[0].bs.index.pos == 1);
 }
 
 // Test that arguments are properly defined
@@ -154,6 +164,16 @@ MU_TEST(test_command_arguments) {
     // Test TS.DECRBY has required arguments
     mu_check(TS_DECRBY_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
     mu_check(TS_DECRBY_ARGS[1].type == REDISMODULE_ARG_TYPE_DOUBLE); // subtrahend
+    
+    // Test TS.RANGE has required arguments
+    mu_check(TS_RANGE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_RANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
+    mu_check(TS_RANGE_ARGS[2].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
+    
+    // Test TS.REVRANGE has required arguments
+    mu_check(TS_REVRANGE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_REVRANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
+    mu_check(TS_REVRANGE_ARGS[2].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
     
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
@@ -361,6 +381,34 @@ MU_TEST(test_ts_mrange_command_info_structure) {
     mu_check(strstr(TS_MRANGE_INFO.complexity, "O(n/m+k)") != NULL);
 }
 
+// Test that TS.RANGE command info is properly structured
+MU_TEST(test_ts_range_command_info_structure) {
+    // Test that TS_RANGE_INFO has correct basic properties
+    mu_check(TS_RANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_RANGE_INFO.arity == -4); // At least 4 arguments: TS.RANGE key fromTimestamp toTimestamp
+    mu_check(TS_RANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_RANGE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_RANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_RANGE_INFO.summary, "Query a range") != NULL);
+    mu_check(strstr(TS_RANGE_INFO.summary, "forward direction") != NULL);
+    mu_check(TS_RANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_RANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.REVRANGE command info is properly structured
+MU_TEST(test_ts_revrange_command_info_structure) {
+    // Test that TS_REVRANGE_INFO has correct basic properties
+    mu_check(TS_REVRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_REVRANGE_INFO.arity == -4); // At least 4 arguments: TS.REVRANGE key fromTimestamp toTimestamp
+    mu_check(TS_REVRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_REVRANGE_INFO.since, "1.4.0") == 0);
+    mu_check(TS_REVRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.summary, "Query a range") != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.summary, "reverse direction") != NULL);
+    mu_check(TS_REVRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
 // Test that TS.MREVRANGE command info is properly structured
 MU_TEST(test_ts_mrevrange_command_info_structure) {
     // Test that TS_MREVRANGE_INFO has correct basic properties
@@ -528,6 +576,8 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_createrule_command_info_structure);
     MU_RUN_TEST(test_ts_incrby_command_info_structure);
     MU_RUN_TEST(test_ts_decrby_command_info_structure);
+    MU_RUN_TEST(test_ts_range_command_info_structure);
+    MU_RUN_TEST(test_ts_revrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
