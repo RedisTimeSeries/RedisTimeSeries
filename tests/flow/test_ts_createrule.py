@@ -14,8 +14,7 @@ key_name = 'tester{abc}'
 agg_key_name = '{}_agg_max_10'.format(key_name)
 
 def test_compaction_rules(self):
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name, 'CHUNK_SIZE', '360')
         assert r.execute_command('TS.CREATE', agg_key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -39,8 +38,7 @@ def test_compaction_rules(self):
 
 
 def test_create_compaction_rule_with_wrong_aggregation():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', agg_key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -51,16 +49,14 @@ def test_create_compaction_rule_with_wrong_aggregation():
 
 
 def test_create_compaction_rule_without_dest_series():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_twice():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
@@ -69,8 +65,7 @@ def test_create_compaction_rule_twice():
 
 
 def test_create_compaction_rule_override_dest():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', 'tester2{abc}')
         assert r.execute_command('TS.CREATE', agg_key_name)
@@ -80,8 +75,7 @@ def test_create_compaction_rule_override_dest():
 
 
 def test_create_compaction_rule_from_target():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', 'tester2{abc}')
         assert r.execute_command('TS.CREATE', agg_key_name)
@@ -91,16 +85,14 @@ def test_create_compaction_rule_from_target():
 
 
 def test_create_compaction_rule_own():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.CREATERULE', key_name, key_name, 'AGGREGATION', 'MAX', 10)
 
 # test for mem leak
 def test_create_compaction_zero_bucket_size():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1{abc}', 'LABELS', 'key', 'val')
         assert r.execute_command('TS.CREATE', 't2{abc}', 'LABELS', 'key', 'val')
         with pytest.raises(redis.ResponseError) as excinfo:
@@ -108,8 +100,7 @@ def test_create_compaction_zero_bucket_size():
 
 
 def test_create_compaction_rule_and_del_dest_series():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'AVG', 10)
@@ -121,8 +112,7 @@ def test_create_compaction_rule_and_del_dest_series():
 
 
 def test_std_var_func():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         raw_key = 'raw{abc}'
         std_key = 'std_key{abc}'
         var_key = 'var_key{abc}'
@@ -148,8 +138,7 @@ def test_std_var_func():
 
 
 def test_delete_key():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name, 'CHUNK_SIZE', '360')
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 10)
@@ -167,8 +156,7 @@ def test_delete_key():
 
 
 def test_downsampling_current():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         key = 'src{a}'
         agg_key = 'dest{a}'
         type_list = ['', 'uncompressed']
@@ -219,8 +207,7 @@ def test_downsampling_current():
 
 
 def test_downsampling_extensive():
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         key = 'tester{abc}'
         fromTS = 10
         toTS = 10000
@@ -265,8 +252,7 @@ def test_downsampling_rules(self):
     1000sec (series should be empty since there are not enough samples)
     Insert some data and check that the length, the values and the info of the downsample series are as expected.
     """
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         key = 'tester{abc}'
         assert r.execute_command('TS.CREATE', key)
         rules = ['avg', 'sum', 'count', 'max', 'min']
@@ -307,8 +293,7 @@ def test_downsampling_rules(self):
 
 
 def test_downsampling_alignment(self):
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1{1}')
         assert r.execute_command('TS.CREATE', 't2{1}')
         assert r.execute_command('TS.CREATERULE', 't1{1}', 't2{1}', 'AGGREGATION', 'sum', 10, 5)
@@ -378,8 +363,7 @@ def test_backfill_downsampling(self):
 
 def test_rule_timebucket_64bit(self):
     Env().skipOnCluster()
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         BELOW_32BIT_LIMIT = 2147483647
         ABOVE_32BIT_LIMIT = 2147483648
         r.execute_command("ts.create", 'test_key{test}', 'RETENTION', ABOVE_32BIT_LIMIT)
@@ -395,8 +379,7 @@ def test_create_rule_non_empty_src_series(self):
     t1 = "t1{1}"
     t2 = "t2{1}"
     t3 = "t3{1}"
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command("ts.create", t1)
         r.execute_command("ts.create", t2)
         r.execute_command("ts.create", t3)

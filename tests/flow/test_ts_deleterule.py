@@ -7,8 +7,7 @@ from includes import *
 
 def test_delete_rule(self):
     key_name = 'tester{abc}'
-    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
-        r.execute_command('FLUSHALL')
+    with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', '{}_agg_max_10'.format(key_name))
         assert r.execute_command('TS.CREATE', '{}_agg_min_20'.format(key_name))
