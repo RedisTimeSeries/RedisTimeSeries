@@ -1098,12 +1098,11 @@ static const RedisModuleCommandInfo TS_RANGE_INFO = {
 // ===============================
 // TS.QUERYINDEX filterExpr...
 // ===============================
-static const RedisModuleCommandArg TS_QUERYINDEX_ARGS[] = {
-    { .name = "filterExpr",
-      .type = REDISMODULE_ARG_TYPE_STRING,
-      .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-    { 0 }
-};
+static const RedisModuleCommandArg TS_QUERYINDEX_ARGS[] = { { .name = "filterExpr",
+                                                              .type = REDISMODULE_ARG_TYPE_STRING,
+                                                              .flags =
+                                                                  REDISMODULE_CMD_ARG_MULTIPLE },
+                                                            { 0 } };
 
 static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
@@ -1162,18 +1161,21 @@ static const RedisModuleCommandArg TS_MADD_ARGS[] = {
     { .name = "ktv",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_MULTIPLE,
-      .subargs = (RedisModuleCommandArg[]){
-          { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
-          { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING }, // unix timestamp (ms) or '*'
-          { .name = "value", .type = REDISMODULE_ARG_TYPE_DOUBLE },
-          { 0 } } },
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+              { .name = "timestamp",
+                .type = REDISMODULE_ARG_TYPE_STRING }, // unix timestamp (ms) or '*'
+              { .name = "value", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+              { 0 } } },
     { 0 }
 };
 
 static const RedisModuleCommandInfo TS_MADD_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Append new samples to one or more time series",
-    .complexity = "O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction",
+    .complexity = "O(N*M) when N is the amount of series updated and M is the amount of compaction "
+                  "rules or O(N) with no compaction",
     .since = "1.0.0",
     .arity = -4,
     .key_specs = (RedisModuleCommandKeySpec *)TS_MADD_KEYSPECS,
@@ -1191,24 +1193,22 @@ static const RedisModuleCommandArg TS_MGET_ARGS[] = {
     { .name = "labels_block",
       .type = REDISMODULE_ARG_TYPE_ONEOF,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
-      .subargs = (RedisModuleCommandArg[]){
-          { .name = "withlabels",
-            .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-            .token = "WITHLABELS" },
-          { .name = "selected_labels_block",
-            .type = REDISMODULE_ARG_TYPE_BLOCK,
-            .subargs = (RedisModuleCommandArg[]){
-                { .name = "selected_labels_token",
-                  .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-                  .token = "SELECTED_LABELS" },
-                { .name = "label",
-                  .type = REDISMODULE_ARG_TYPE_STRING,
-                  .flags = REDISMODULE_CMD_ARG_MULTIPLE },
-                { 0 } } },
-          { 0 } } },
-    { .name = "filter_token",
-      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
-      .token = "FILTER" },
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "withlabels",
+                .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                .token = "WITHLABELS" },
+              { .name = "selected_labels_block",
+                .type = REDISMODULE_ARG_TYPE_BLOCK,
+                .subargs = (RedisModuleCommandArg[]){ { .name = "selected_labels_token",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "SELECTED_LABELS" },
+                                                      { .name = "label",
+                                                        .type = REDISMODULE_ARG_TYPE_STRING,
+                                                        .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                                      { 0 } } },
+              { 0 } } },
+    { .name = "filter_token", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "FILTER" },
     { .name = "filterExpr",
       .type = REDISMODULE_ARG_TYPE_STRING,
       .flags = REDISMODULE_CMD_ARG_MULTIPLE },
@@ -1217,7 +1217,8 @@ static const RedisModuleCommandArg TS_MGET_ARGS[] = {
 
 static const RedisModuleCommandInfo TS_MGET_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
-    .summary = "Get the sample with the highest timestamp from each time series matching a specific filter",
+    .summary = "Get the sample with the highest timestamp from each time series matching a "
+               "specific filter",
     .complexity = "O(n) where n is the number of time-series that match the filters",
     .since = "1.0.0",
     .arity = -3,
