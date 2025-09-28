@@ -175,6 +175,10 @@ MU_TEST(test_command_arguments) {
     mu_check(TS_REVRANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
     mu_check(TS_REVRANGE_ARGS[2].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
     
+    // Test TS.QUERYINDEX has required arguments
+    mu_check(TS_QUERYINDEX_ARGS[0].type == REDISMODULE_ARG_TYPE_STRING); // filterExpr
+    mu_check(TS_QUERYINDEX_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple filter expressions allowed
+    
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
     for (int i = 0; TS_ADD_ARGS[i].name != NULL; i++) {
@@ -409,6 +413,21 @@ MU_TEST(test_ts_revrange_command_info_structure) {
     mu_check(strstr(TS_REVRANGE_INFO.complexity, "O(n/m+k)") != NULL);
 }
 
+// Test that TS.QUERYINDEX command info is properly structured
+MU_TEST(test_ts_queryindex_command_info_structure) {
+    // Test that TS_QUERYINDEX_INFO has correct basic properties
+    mu_check(TS_QUERYINDEX_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_QUERYINDEX_INFO.arity == -2); // At least 2 arguments: TS.QUERYINDEX filterExpr
+    mu_check(TS_QUERYINDEX_INFO.since != NULL);
+    mu_check(strcmp(TS_QUERYINDEX_INFO.since, "1.0.0") == 0);
+    mu_check(TS_QUERYINDEX_INFO.summary != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.summary, "Get all time series keys") != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.summary, "matching a filter list") != NULL);
+    mu_check(TS_QUERYINDEX_INFO.complexity != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "O(n)") != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "time-series that match") != NULL);
+}
+
 // Test that TS.MREVRANGE command info is properly structured
 MU_TEST(test_ts_mrevrange_command_info_structure) {
     // Test that TS_MREVRANGE_INFO has correct basic properties
@@ -578,6 +597,7 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_decrby_command_info_structure);
     MU_RUN_TEST(test_ts_range_command_info_structure);
     MU_RUN_TEST(test_ts_revrange_command_info_structure);
+    MU_RUN_TEST(test_ts_queryindex_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);

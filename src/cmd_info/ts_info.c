@@ -1096,6 +1096,26 @@ static const RedisModuleCommandInfo TS_RANGE_INFO = {
 };
 
 // ===============================
+// TS.QUERYINDEX filterExpr...
+// ===============================
+static const RedisModuleCommandArg TS_QUERYINDEX_ARGS[] = {
+    { .name = "filterExpr",
+      .type = REDISMODULE_ARG_TYPE_STRING,
+      .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get all time series keys matching a filter list",
+    .complexity = "O(n) where n is the number of time-series that match the filters",
+    .since = "1.0.0",
+    .arity = -2,
+    .key_specs = NULL, // No key specs - this command doesn't access specific keys
+    .args = (RedisModuleCommandArg *)TS_QUERYINDEX_ARGS,
+};
+
+// ===============================
 // TS.MRANGE fromTimestamp toTimestamp [options...]
 // ===============================
 static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
@@ -1597,6 +1617,12 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_revrange = RedisModule_GetCommand(ctx, "TS.REVRANGE");
     if (!cmd_revrange ||
         RedisModule_SetCommandInfo(cmd_revrange, &TS_REVRANGE_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.QUERYINDEX command info
+    RedisModuleCommand *cmd_queryindex = RedisModule_GetCommand(ctx, "TS.QUERYINDEX");
+    if (!cmd_queryindex ||
+        RedisModule_SetCommandInfo(cmd_queryindex, &TS_QUERYINDEX_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.MRANGE command info
