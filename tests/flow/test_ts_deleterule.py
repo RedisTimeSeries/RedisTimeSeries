@@ -20,9 +20,9 @@ def test_delete_rule(self):
         assert r.execute_command('TS.CREATERULE', key_name, '{}_agg_last_40'.format(key_name), 'AGGREGATION', 'LAST', 40)
 
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DELETERULE', key_name, 'non_existent')
+            assert r.execute_command('TS.DELETERULE', key_name, 'non_existent{abc}')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.DELETERULE', 'non_existent', key_name)
+            assert r.execute_command('TS.DELETERULE', 'non_existent{abc}', key_name)
 
         assert len(_get_ts_info(r, key_name).rules) == 4
         assert r.execute_command('TS.DELETERULE', key_name, '{}_agg_avg_30'.format(key_name))
