@@ -118,7 +118,8 @@ def test_incrby_with_ignore_policy():
         # Verify only one sample exists and value remains 5.0 (not incremented)
         result = r.execute_command('TS.RANGE', key, 0, 2000)
         assert len(result) == 1
-        assert result[0] == [1000, b'5.0']  # Original value, increment was ignored
+        assert result[0][0] == 1000  # Check timestamp
+        assert float(result[0][1]) == 5.0  # Original value, increment was ignored
         
         # Now add an increment larger than the ignore threshold
         r.execute_command('TS.INCRBY', key, '1.5', 'TIMESTAMP', '1000')
@@ -126,7 +127,8 @@ def test_incrby_with_ignore_policy():
         # This should not be ignored and should increment the value
         result = r.execute_command('TS.RANGE', key, 0, 2000)
         assert len(result) == 1
-        assert result[0] == [1000, b'6.5']  # 5.0 + 1.5
+        assert result[0][0] == 1000  # Check timestamp
+        assert float(result[0][1]) == 6.5  # 5.0 + 1.5
 
 
 def test_incrby_duplicate_policies():
@@ -269,8 +271,9 @@ def test_incrby_automatic_timestamp():
 def test_incrby_with_compaction_rules():
     """Test TS.INCRBY with compaction rules"""
     with Env().getClusterConnectionIfNeeded() as r:
-        source_key = 'test_incrby_source'
-        dest_key = 'test_incrby_dest'
+        # Use hash tags to ensure keys map to the same cluster slot
+        source_key = 'test_incrby_source{test}'
+        dest_key = 'test_incrby_dest{test}'
         r.delete(source_key, dest_key)
         
         # Create source series and destination with compaction rule
@@ -295,11 +298,20 @@ def test_incrby_error_cases():
     """Test TS.INCRBY error handling"""
     with Env().getClusterConnectionIfNeeded() as r:
         # Test with wrong number of arguments
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.INCRBY')
-        
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.INCRBY', 'key')
+        # In cluster mode, we need to use a specific node since commands without keys can't be routed
+        if hasattr(r, 'nodes_manager'):  # Redis cluster
+            # Execute on a specific node using target_nodes parameter
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY', target_nodes=r.get_default_node())
+            
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY', 'key', target_nodes=r.get_default_node())
+        else:  # Single node Redis
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY')
+            
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY', 'key')
         
         # Test with invalid addend value
         with pytest.raises(redis.ResponseError):
