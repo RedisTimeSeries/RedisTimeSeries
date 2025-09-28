@@ -4,7 +4,7 @@ from includes import *
 
 
 def test_simple_dump_restore(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'test_key', 'UNCOMPRESSED')
         r.execute_command('ts.add', 'test_key', 1, 1)
         dump = r.execute_command('dump', 'test_key')
@@ -16,7 +16,8 @@ def test_rdb():
     samples_count = 1500
     data = None
     key_name = 'tester{abc}'
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
         assert r.execute_command('TS.CREATE', key_name, 'RETENTION', '0', 'CHUNK_SIZE', '360', 'LABELS', 'name',
                                  'brown', 'color', 'pink')
         assert r.execute_command('TS.CREATE', '{}_agg_avg_10'.format(key_name))
@@ -58,7 +59,8 @@ def test_rdb_aggregation_context():
     start_ts = 3
     samples_count = 4  # 1 full bucket and another one with 1 value
     key_name = 'tester{abc}'
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATE', '{}_agg_avg_3'.format(key_name))
         assert r.execute_command('TS.CREATE', '{}_agg_min_3'.format(key_name))
@@ -109,7 +111,8 @@ def test_rdb_aggregation_context():
 
 
 def test_dump_trimmed_series(self):
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
         samples = 120
         start_ts = 1589461305983
         r.execute_command('ts.create', 'test_key', 'RETENTION', 3000, 'CHUNK_SIZE', 160, 'UNCOMPRESSED')
@@ -125,7 +128,7 @@ def test_dump_trimmed_series(self):
 
 
 def test_empty_series():
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester')
         agg_list = ['avg', 'twa', 'sum', 'min', 'max', 'range', 'first', 'last',
                     'std.p', 'std.s', 'var.p', 'var.s']
@@ -134,7 +137,7 @@ def test_empty_series():
         assert r.execute_command('DUMP', 'tester')
 
 def test_533_dump_rules():
-    with Env().getClusterConnectionIfNeeded() as r:
+    with Env(freshEnv=True).getClusterConnectionIfNeeded() as r:
         key1 = 'ts1{a}'
         key2 = 'ts2{a}'
         r.execute_command('TS.CREATE', key1)
