@@ -75,6 +75,16 @@ class testCommandDocsAndHelp():
             assert res
             assert_docs(env, 'TS.INFO', summary='Returns information and statistics for a time series', complexity='O(1)', arity='-2', since='1.0.0', group='module')
 
+    def test_command_info_ts_madd(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.MADD')
+            assert res
+            assert_docs(env, 'TS.MADD', summary='Append new samples to one or more time series', complexity='O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction', arity='-4', since='1.0.0', group='module')
+
     def test_command_info_ts_revrange(self):
         env = self.env
         con = env.getConnection()

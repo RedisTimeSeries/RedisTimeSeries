@@ -1147,6 +1147,40 @@ static const RedisModuleCommandInfo TS_INFO_INFO = {
 };
 
 // ===============================
+// TS.MADD {key timestamp value}...
+// ===============================
+static const RedisModuleCommandKeySpec TS_MADD_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RW | REDISMODULE_CMD_KEY_INSERT,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = -1, .keystep = 3, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_MADD_ARGS[] = {
+    { .name = "ktv",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_MULTIPLE,
+      .subargs = (RedisModuleCommandArg[]){
+          { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+          { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING }, // unix timestamp (ms) or '*'
+          { .name = "value", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+          { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_MADD_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Append new samples to one or more time series",
+    .complexity = "O(N*M) when N is the amount of series updated and M is the amount of compaction rules or O(N) with no compaction",
+    .since = "1.0.0",
+    .arity = -4,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_MADD_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_MADD_ARGS,
+};
+
+// ===============================
 // TS.MRANGE fromTimestamp toTimestamp [options...]
 // ===============================
 static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
@@ -1659,6 +1693,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     // Register TS.INFO command info
     RedisModuleCommand *cmd_info = RedisModule_GetCommand(ctx, "TS.INFO");
     if (!cmd_info || RedisModule_SetCommandInfo(cmd_info, &TS_INFO_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.MADD command info
+    RedisModuleCommand *cmd_madd = RedisModule_GetCommand(ctx, "TS.MADD");
+    if (!cmd_madd || RedisModule_SetCommandInfo(cmd_madd, &TS_MADD_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.MRANGE command info

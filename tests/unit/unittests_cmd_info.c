@@ -147,6 +147,13 @@ MU_TEST(test_command_key_specs) {
     mu_check(TS_INFO_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
     mu_check(TS_INFO_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_INFO_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.MADD should have RW and INSERT flags (can create and modify time series)
+    mu_check(TS_MADD_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_MADD_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT);
+    mu_check(TS_MADD_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_MADD_KEYSPECS[0].bs.index.pos == 1);
+    mu_check(TS_MADD_KEYSPECS[0].fk.range.keystep == 3); // keys are every 3 arguments
 }
 
 // Test that arguments are properly defined
@@ -188,6 +195,10 @@ MU_TEST(test_command_arguments) {
     mu_check(TS_INFO_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
     mu_check(TS_INFO_ARGS[1].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // DEBUG (optional)
     mu_check(TS_INFO_ARGS[1].flags & REDISMODULE_CMD_ARG_OPTIONAL); // DEBUG is optional
+    
+    // Test TS.MADD has required arguments
+    mu_check(TS_MADD_ARGS[0].type == REDISMODULE_ARG_TYPE_BLOCK); // ktv block
+    mu_check(TS_MADD_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple ktv blocks allowed
     
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
@@ -452,6 +463,21 @@ MU_TEST(test_ts_info_command_info_structure) {
     mu_check(strstr(TS_INFO_INFO.complexity, "O(1)") != NULL);
 }
 
+// Test that TS.MADD command info is properly structured
+MU_TEST(test_ts_madd_command_info_structure) {
+    // Test that TS_MADD_INFO has correct basic properties
+    mu_check(TS_MADD_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MADD_INFO.arity == -4); // At least 4 arguments: TS.MADD key timestamp value
+    mu_check(TS_MADD_INFO.since != NULL);
+    mu_check(strcmp(TS_MADD_INFO.since, "1.0.0") == 0);
+    mu_check(TS_MADD_INFO.summary != NULL);
+    mu_check(strstr(TS_MADD_INFO.summary, "Append new samples") != NULL);
+    mu_check(strstr(TS_MADD_INFO.summary, "one or more time series") != NULL);
+    mu_check(TS_MADD_INFO.complexity != NULL);
+    mu_check(strstr(TS_MADD_INFO.complexity, "O(N*M)") != NULL);
+    mu_check(strstr(TS_MADD_INFO.complexity, "compaction rules") != NULL);
+}
+
 // Test that TS.MREVRANGE command info is properly structured
 MU_TEST(test_ts_mrevrange_command_info_structure) {
     // Test that TS_MREVRANGE_INFO has correct basic properties
@@ -623,6 +649,7 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_revrange_command_info_structure);
     MU_RUN_TEST(test_ts_queryindex_command_info_structure);
     MU_RUN_TEST(test_ts_info_command_info_structure);
+    MU_RUN_TEST(test_ts_madd_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
