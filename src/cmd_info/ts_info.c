@@ -1116,6 +1116,37 @@ static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
 };
 
 // ===============================
+// TS.INFO key [DEBUG]
+// ===============================
+static const RedisModuleCommandKeySpec TS_INFO_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_INFO_ARGS[] = {
+    { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "DEBUG",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "DEBUG" },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_INFO_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Returns information and statistics for a time series",
+    .complexity = "O(1)",
+    .since = "1.0.0",
+    .arity = -2,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_INFO_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_INFO_ARGS,
+};
+
+// ===============================
 // TS.MRANGE fromTimestamp toTimestamp [options...]
 // ===============================
 static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
@@ -1623,6 +1654,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_queryindex = RedisModule_GetCommand(ctx, "TS.QUERYINDEX");
     if (!cmd_queryindex ||
         RedisModule_SetCommandInfo(cmd_queryindex, &TS_QUERYINDEX_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.INFO command info
+    RedisModuleCommand *cmd_info = RedisModule_GetCommand(ctx, "TS.INFO");
+    if (!cmd_info || RedisModule_SetCommandInfo(cmd_info, &TS_INFO_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.MRANGE command info

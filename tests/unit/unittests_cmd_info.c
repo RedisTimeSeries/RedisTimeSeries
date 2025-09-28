@@ -142,6 +142,11 @@ MU_TEST(test_command_key_specs) {
     mu_check(TS_REVRANGE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
     mu_check(TS_REVRANGE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_REVRANGE_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.INFO should have RO flag (read-only operation)
+    mu_check(TS_INFO_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_INFO_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_INFO_KEYSPECS[0].bs.index.pos == 1);
 }
 
 // Test that arguments are properly defined
@@ -178,6 +183,11 @@ MU_TEST(test_command_arguments) {
     // Test TS.QUERYINDEX has required arguments
     mu_check(TS_QUERYINDEX_ARGS[0].type == REDISMODULE_ARG_TYPE_STRING); // filterExpr
     mu_check(TS_QUERYINDEX_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple filter expressions allowed
+    
+    // Test TS.INFO has required arguments
+    mu_check(TS_INFO_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_INFO_ARGS[1].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // DEBUG (optional)
+    mu_check(TS_INFO_ARGS[1].flags & REDISMODULE_CMD_ARG_OPTIONAL); // DEBUG is optional
     
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
@@ -428,6 +438,20 @@ MU_TEST(test_ts_queryindex_command_info_structure) {
     mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "time-series that match") != NULL);
 }
 
+// Test that TS.INFO command info is properly structured
+MU_TEST(test_ts_info_command_info_structure) {
+    // Test that TS_INFO_INFO has correct basic properties
+    mu_check(TS_INFO_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_INFO_INFO.arity == -2); // At least 2 arguments: TS.INFO key
+    mu_check(TS_INFO_INFO.since != NULL);
+    mu_check(strcmp(TS_INFO_INFO.since, "1.0.0") == 0);
+    mu_check(TS_INFO_INFO.summary != NULL);
+    mu_check(strstr(TS_INFO_INFO.summary, "Returns information and statistics") != NULL);
+    mu_check(strstr(TS_INFO_INFO.summary, "time series") != NULL);
+    mu_check(TS_INFO_INFO.complexity != NULL);
+    mu_check(strstr(TS_INFO_INFO.complexity, "O(1)") != NULL);
+}
+
 // Test that TS.MREVRANGE command info is properly structured
 MU_TEST(test_ts_mrevrange_command_info_structure) {
     // Test that TS_MREVRANGE_INFO has correct basic properties
@@ -598,6 +622,7 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_range_command_info_structure);
     MU_RUN_TEST(test_ts_revrange_command_info_structure);
     MU_RUN_TEST(test_ts_queryindex_command_info_structure);
+    MU_RUN_TEST(test_ts_info_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
