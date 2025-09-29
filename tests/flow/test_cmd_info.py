@@ -125,5 +125,55 @@ class testCommandDocsAndHelp():
             assert res
             assert_docs(env, 'TS.MREVRANGE', summary='Query a range across multiple time series by filters in reverse direction', complexity='O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested ranges', arity='-4', since='1.4.0', group='module')
 
+    def test_command_info_ts_incrby(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.INCRBY')
+            assert res
+            assert_docs(env, 'TS.INCRBY', summary='Increment the value of a sample at a timestamp or last value in a time series', complexity='O(M) where M is the number of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
+
+    def test_command_info_ts_decrby(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.DECRBY')
+            assert res
+            assert_docs(env, 'TS.DECRBY', summary='Decrement the value of a sample at a timestamp or last value in a time series', complexity='O(M) where M is the number of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
+
+    def test_command_info_ts_del(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.DEL')
+            assert res
+            assert_docs(env, 'TS.DEL', summary='Delete all samples between two timestamps for a given time series', complexity='O(N) where N is the number of data points that will be removed', arity='-4', since='1.6.0', group='module')
+
+    def test_command_info_ts_deleterule(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.DELETERULE')
+            assert res
+            assert_docs(env, 'TS.DELETERULE', summary='Delete a compaction rule', complexity='O(1)', arity='3', since='1.0.0', group='module')
+
+    def test_command_info_ts_get(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.GET')
+            assert res
+            assert_docs(env, 'TS.GET', summary='Get the sample with the highest timestamp from a given time series', complexity='O(1)', arity='-2', since='1.0.0', group='module')
+
     # NOTE: Skipping COMMAND DOCS test for now due to client parsing differences across redis-py versions
 
