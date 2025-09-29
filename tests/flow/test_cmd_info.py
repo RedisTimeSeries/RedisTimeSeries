@@ -133,7 +133,7 @@ class testCommandDocsAndHelp():
         with env.getClusterConnectionIfNeeded() as r:
             res = r.execute_command('COMMAND', 'INFO', 'TS.INCRBY')
             assert res
-            assert_docs(env, 'TS.INCRBY', summary='Increment the value of a sample at a timestamp or last value in a time series', complexity='O(M) where M is the number of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
+            assert_docs(env, 'TS.INCRBY', summary='Increase the value of the latest sample', complexity='O(M) when M is the amount of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
 
     def test_command_info_ts_decrby(self):
         env = self.env
@@ -143,7 +143,7 @@ class testCommandDocsAndHelp():
         with env.getClusterConnectionIfNeeded() as r:
             res = r.execute_command('COMMAND', 'INFO', 'TS.DECRBY')
             assert res
-            assert_docs(env, 'TS.DECRBY', summary='Decrement the value of a sample at a timestamp or last value in a time series', complexity='O(M) where M is the number of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
+            assert_docs(env, 'TS.DECRBY', summary='Decrease the value of the latest sample', complexity='O(M) when M is the amount of compaction rules or O(1) with no compaction', arity='-3', since='1.0.0', group='module')
 
     def test_command_info_ts_del(self):
         env = self.env
