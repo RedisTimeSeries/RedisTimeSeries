@@ -22,7 +22,9 @@ on:
 
 jobs:
   prepare-values:
-    runs-on: ubuntu:jammy
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
     steps:
       - name: Checkout
         uses: actions/checkout@v4
