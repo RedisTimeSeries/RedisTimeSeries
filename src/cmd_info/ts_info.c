@@ -246,7 +246,7 @@ static const RedisModuleCommandArg TS_INCRBY_ARGS[] = {
                 .subargs =
                     (RedisModuleCommandArg[]){
                         { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
-                        { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
+                        { .name = "value", .type = REDISMODULE_ARG_TYPE_STRING },
                         { 0 } } },
               { 0 } } },
     { 0 }
@@ -366,7 +366,7 @@ static const RedisModuleCommandArg TS_DECRBY_ARGS[] = {
                 .subargs =
                     (RedisModuleCommandArg[]){
                         { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
-                        { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
+                        { .name = "value", .type = REDISMODULE_ARG_TYPE_STRING },
                         { 0 } } },
               { 0 } } },
     { 0 }
