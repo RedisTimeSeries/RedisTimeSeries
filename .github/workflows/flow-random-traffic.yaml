@@ -52,8 +52,12 @@ jobs:
       - name: Install python dependencies
         shell: bash
         run: |
-            ./.install/common_installations.sh
-            pip install redis-command-generator
+            python3 pip install --upgrade pip
+            python3 pip install -q --upgrade setuptools
+            python3 pip install -q -r tests/flow/requirements.txt
+            # These packages are needed to build the package
+            python3 pip install -q -r .install/build_package_requirements.txt
+            python3 pip install redis-command-generator
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
