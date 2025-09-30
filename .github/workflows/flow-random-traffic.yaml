@@ -78,7 +78,7 @@ jobs:
       - name: Run Random Traffic
         shell: bash
         run: |
-            redis-server --loadmodule ./target/release/libtimeseries.so --port 6379 --logfile random_traffic.log --loglevel debug &
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile random_traffic.log --loglevel debug &
             ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
             tail -n 100 random_traffic.txt
             pkill -f redis-server      
