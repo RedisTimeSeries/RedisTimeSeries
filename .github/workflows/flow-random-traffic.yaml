@@ -9,6 +9,16 @@ on:
       timeout-minutes: 
         description: 'Timeout in minutes'
         default: '10'
+  workflow_call:
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'
+        type: string
+        default: 'unstable'
+      timeout-minutes: 
+        description: 'Timeout in minutes'
+        type: string
+        default: '10'
 
 jobs:
   prepare-values:
