@@ -27,8 +27,12 @@ jobs:
       image: ubuntu:jammy
     steps:
       - name: install git
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
         run: |
-          apt-get update && apt-get install -y git
+          ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+          apt-get update && apt-get install -y tzdata git && dpkg-reconfigure -f noninteractive tzdata
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -47,9 +51,14 @@ jobs:
             ./install_script.sh
       - name: Install python dependencies
         shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
         run: |
+            ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
             apt-get update
-            apt-get install -y --no-install-recommends software-properties-common gnupg curl
+            apt-get install -y --no-install-recommends tzdata software-properties-common gnupg curl
+            dpkg-reconfigure -f noninteractive tzdata
             add-apt-repository -y ppa:deadsnakes/ppa
             apt-get update
             apt-get install -y --no-install-recommends python3.11 python3.11-venv python3.11-distutils python3.11-dev
