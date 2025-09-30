@@ -381,17 +381,17 @@ MU_TEST(test_labels_argument_structure) {
             const RedisModuleCommandArg *subargs = TS_ADD_ARGS[i].subargs;
             mu_check(subargs != NULL);
             
-            // Should have LABELS token and label_value_pairs
+            // Should have LABELS token and label-value
             int found_token = 0, found_pairs = 0;
             for (int j = 0; subargs[j].name != NULL; j++) {
                 if (strcmp(subargs[j].name, "LABELS") == 0) {
                     found_token = 1;
                     mu_check(subargs[j].type == REDISMODULE_ARG_TYPE_PURE_TOKEN);
                 }
-                if (strcmp(subargs[j].name, "label_value_pairs") == 0) {
+                if (strcmp(subargs[j].name, "label-value") == 0) {
                     found_pairs = 1;
                     mu_check(subargs[j].flags & REDISMODULE_CMD_ARG_MULTIPLE);
-                    mu_check(subargs[j].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+                    // Note: label-value block is not optional, only the outer LABELS block is optional
                 }
             }
             mu_check(found_token && found_pairs);
