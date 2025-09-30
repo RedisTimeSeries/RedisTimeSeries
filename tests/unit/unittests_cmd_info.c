@@ -66,6 +66,32 @@ MU_TEST(test_ts_createrule_command_info_structure) {
     mu_check(strstr(TS_CREATERULE_INFO.complexity, "O(1)") != NULL);
 }
 
+// Test that TS.INCRBY command info is properly structured  
+MU_TEST(test_ts_incrby_command_info_structure) {
+    // Test that TS_INCRBY_INFO has correct basic properties
+    mu_check(TS_INCRBY_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_INCRBY_INFO.arity == -3); // At least 3 arguments: TS.INCRBY key addend
+    mu_check(TS_INCRBY_INFO.since != NULL);
+    mu_check(strcmp(TS_INCRBY_INFO.since, "1.0.0") == 0);
+    mu_check(TS_INCRBY_INFO.summary != NULL);
+    mu_check(strstr(TS_INCRBY_INFO.summary, "Increase the value") != NULL);
+    mu_check(TS_INCRBY_INFO.complexity != NULL);
+    mu_check(strstr(TS_INCRBY_INFO.complexity, "O(M)") != NULL);
+}
+
+// Test that TS.DECRBY command info is properly structured  
+MU_TEST(test_ts_decrby_command_info_structure) {
+    // Test that TS_DECRBY_INFO has correct basic properties
+    mu_check(TS_DECRBY_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_DECRBY_INFO.arity == -3); // At least 3 arguments: TS.DECRBY key subtrahend
+    mu_check(TS_DECRBY_INFO.since != NULL);
+    mu_check(strcmp(TS_DECRBY_INFO.since, "1.0.0") == 0);
+    mu_check(TS_DECRBY_INFO.summary != NULL);
+    mu_check(strstr(TS_DECRBY_INFO.summary, "Decrease the value") != NULL);
+    mu_check(TS_DECRBY_INFO.complexity != NULL);
+    mu_check(strstr(TS_DECRBY_INFO.complexity, "O(M)") != NULL);
+}
+
 // Test that key specifications are correct
 MU_TEST(test_command_key_specs) {
     // TS.ADD should have RW and INSERT flags
@@ -96,6 +122,38 @@ MU_TEST(test_command_key_specs) {
     mu_check(!(TS_CREATERULE_KEYSPECS[1].flags & REDISMODULE_CMD_KEY_INSERT));
     mu_check(TS_CREATERULE_KEYSPECS[1].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
     mu_check(TS_CREATERULE_KEYSPECS[1].bs.index.pos == 2);
+    
+    // TS.INCRBY should have RW flag (can modify existing or create new)
+    mu_check(TS_INCRBY_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_INCRBY_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_INCRBY_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.DECRBY should have RW flag (can modify existing or create new)
+    mu_check(TS_DECRBY_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_DECRBY_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_DECRBY_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.RANGE should have RO flag (read-only operation)
+    mu_check(TS_RANGE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_RANGE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_RANGE_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.REVRANGE should have RO flag (read-only operation)
+    mu_check(TS_REVRANGE_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_REVRANGE_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_REVRANGE_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.INFO should have RO flag (read-only operation)
+    mu_check(TS_INFO_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RO);
+    mu_check(TS_INFO_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_INFO_KEYSPECS[0].bs.index.pos == 1);
+    
+    // TS.MADD should have RW and INSERT flags (can create and modify time series)
+    mu_check(TS_MADD_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_RW);
+    mu_check(TS_MADD_KEYSPECS[0].flags & REDISMODULE_CMD_KEY_INSERT);
+    mu_check(TS_MADD_KEYSPECS[0].begin_search_type == REDISMODULE_KSPEC_BS_INDEX);
+    mu_check(TS_MADD_KEYSPECS[0].bs.index.pos == 1);
+    mu_check(TS_MADD_KEYSPECS[0].fk.range.keystep == 3); // keys are every 3 arguments
 }
 
 // Test that arguments are properly defined
@@ -110,6 +168,46 @@ MU_TEST(test_command_arguments) {
     
     // Test TS.CREATE has key argument
     mu_check(TS_CREATE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    
+    // Test TS.INCRBY has required arguments
+    mu_check(TS_INCRBY_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_INCRBY_ARGS[1].type == REDISMODULE_ARG_TYPE_DOUBLE); // addend
+    
+    // Test TS.DECRBY has required arguments
+    mu_check(TS_DECRBY_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_DECRBY_ARGS[1].type == REDISMODULE_ARG_TYPE_DOUBLE); // subtrahend
+    
+    // Test TS.RANGE has required arguments
+    mu_check(TS_RANGE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_RANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
+    mu_check(TS_RANGE_ARGS[2].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
+    
+    // Test TS.REVRANGE has required arguments
+    mu_check(TS_REVRANGE_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_REVRANGE_ARGS[1].type == REDISMODULE_ARG_TYPE_STRING); // fromTimestamp
+    mu_check(TS_REVRANGE_ARGS[2].type == REDISMODULE_ARG_TYPE_STRING); // toTimestamp
+    
+    // Test TS.QUERYINDEX has required arguments
+    mu_check(TS_QUERYINDEX_ARGS[0].type == REDISMODULE_ARG_TYPE_STRING); // filterExpr
+    mu_check(TS_QUERYINDEX_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple filter expressions allowed
+    
+    // Test TS.INFO has required arguments
+    mu_check(TS_INFO_ARGS[0].type == REDISMODULE_ARG_TYPE_KEY); // key
+    mu_check(TS_INFO_ARGS[1].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // DEBUG (optional)
+    mu_check(TS_INFO_ARGS[1].flags & REDISMODULE_CMD_ARG_OPTIONAL); // DEBUG is optional
+    
+    // Test TS.MADD has required arguments
+    mu_check(TS_MADD_ARGS[0].type == REDISMODULE_ARG_TYPE_BLOCK); // ktv block
+    mu_check(TS_MADD_ARGS[0].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple ktv blocks allowed
+    
+    // Test TS.MGET has required arguments
+    mu_check(TS_MGET_ARGS[0].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // LATEST (optional)
+    mu_check(TS_MGET_ARGS[0].flags & REDISMODULE_CMD_ARG_OPTIONAL); // LATEST is optional
+    mu_check(TS_MGET_ARGS[1].type == REDISMODULE_ARG_TYPE_ONEOF); // labels block (optional)
+    mu_check(TS_MGET_ARGS[1].flags & REDISMODULE_CMD_ARG_OPTIONAL); // labels block is optional
+    mu_check(TS_MGET_ARGS[2].type == REDISMODULE_ARG_TYPE_PURE_TOKEN); // FILTER token
+    mu_check(TS_MGET_ARGS[3].type == REDISMODULE_ARG_TYPE_STRING); // filterExpr
+    mu_check(TS_MGET_ARGS[3].flags & REDISMODULE_CMD_ARG_MULTIPLE); // multiple filter expressions allowed
     
     // Test that optional arguments are marked as optional
     int found_optional_retention = 0;
@@ -132,6 +230,28 @@ MU_TEST(test_command_arguments) {
         }
     }
     mu_check(found_create_retention);
+    
+    // Test that TS.INCRBY also has optional TIMESTAMP
+    int found_incrby_timestamp = 0;
+    for (int i = 0; TS_INCRBY_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_INCRBY_ARGS[i].name, "timestamp_block") == 0) {
+            mu_check(TS_INCRBY_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            found_incrby_timestamp = 1;
+            break;
+        }
+    }
+    mu_check(found_incrby_timestamp);
+    
+    // Test that TS.DECRBY also has optional TIMESTAMP
+    int found_decrby_timestamp = 0;
+    for (int i = 0; TS_DECRBY_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_DECRBY_ARGS[i].name, "timestamp_block") == 0) {
+            mu_check(TS_DECRBY_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+            found_decrby_timestamp = 1;
+            break;
+        }
+    }
+    mu_check(found_decrby_timestamp);
 }
 
 // Test that duplicate policy options are correctly defined
@@ -293,6 +413,93 @@ MU_TEST(test_ts_mrange_command_info_structure) {
     mu_check(strstr(TS_MRANGE_INFO.summary, "forward direction") != NULL);
     mu_check(TS_MRANGE_INFO.complexity != NULL);
     mu_check(strstr(TS_MRANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.RANGE command info is properly structured
+MU_TEST(test_ts_range_command_info_structure) {
+    // Test that TS_RANGE_INFO has correct basic properties
+    mu_check(TS_RANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_RANGE_INFO.arity == -4); // At least 4 arguments: TS.RANGE key fromTimestamp toTimestamp
+    mu_check(TS_RANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_RANGE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_RANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_RANGE_INFO.summary, "Query a range") != NULL);
+    mu_check(strstr(TS_RANGE_INFO.summary, "forward direction") != NULL);
+    mu_check(TS_RANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_RANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.REVRANGE command info is properly structured
+MU_TEST(test_ts_revrange_command_info_structure) {
+    // Test that TS_REVRANGE_INFO has correct basic properties
+    mu_check(TS_REVRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_REVRANGE_INFO.arity == -4); // At least 4 arguments: TS.REVRANGE key fromTimestamp toTimestamp
+    mu_check(TS_REVRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_REVRANGE_INFO.since, "1.4.0") == 0);
+    mu_check(TS_REVRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.summary, "Query a range") != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.summary, "reverse direction") != NULL);
+    mu_check(TS_REVRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_REVRANGE_INFO.complexity, "O(n/m+k)") != NULL);
+}
+
+// Test that TS.QUERYINDEX command info is properly structured
+MU_TEST(test_ts_queryindex_command_info_structure) {
+    // Test that TS_QUERYINDEX_INFO has correct basic properties
+    mu_check(TS_QUERYINDEX_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_QUERYINDEX_INFO.arity == -2); // At least 2 arguments: TS.QUERYINDEX filterExpr
+    mu_check(TS_QUERYINDEX_INFO.since != NULL);
+    mu_check(strcmp(TS_QUERYINDEX_INFO.since, "1.0.0") == 0);
+    mu_check(TS_QUERYINDEX_INFO.summary != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.summary, "Get all time series keys") != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.summary, "matching a filter list") != NULL);
+    mu_check(TS_QUERYINDEX_INFO.complexity != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "O(n)") != NULL);
+    mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "time-series that match") != NULL);
+}
+
+// Test that TS.INFO command info is properly structured
+MU_TEST(test_ts_info_command_info_structure) {
+    // Test that TS_INFO_INFO has correct basic properties
+    mu_check(TS_INFO_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_INFO_INFO.arity == -2); // At least 2 arguments: TS.INFO key
+    mu_check(TS_INFO_INFO.since != NULL);
+    mu_check(strcmp(TS_INFO_INFO.since, "1.0.0") == 0);
+    mu_check(TS_INFO_INFO.summary != NULL);
+    mu_check(strstr(TS_INFO_INFO.summary, "Returns information and statistics") != NULL);
+    mu_check(strstr(TS_INFO_INFO.summary, "time series") != NULL);
+    mu_check(TS_INFO_INFO.complexity != NULL);
+    mu_check(strstr(TS_INFO_INFO.complexity, "O(1)") != NULL);
+}
+
+// Test that TS.MADD command info is properly structured
+MU_TEST(test_ts_madd_command_info_structure) {
+    // Test that TS_MADD_INFO has correct basic properties
+    mu_check(TS_MADD_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MADD_INFO.arity == -4); // At least 4 arguments: TS.MADD key timestamp value
+    mu_check(TS_MADD_INFO.since != NULL);
+    mu_check(strcmp(TS_MADD_INFO.since, "1.0.0") == 0);
+    mu_check(TS_MADD_INFO.summary != NULL);
+    mu_check(strstr(TS_MADD_INFO.summary, "Append new samples") != NULL);
+    mu_check(strstr(TS_MADD_INFO.summary, "one or more time series") != NULL);
+    mu_check(TS_MADD_INFO.complexity != NULL);
+    mu_check(strstr(TS_MADD_INFO.complexity, "O(N*M)") != NULL);
+    mu_check(strstr(TS_MADD_INFO.complexity, "compaction rules") != NULL);
+}
+
+// Test that TS.MGET command info is properly structured
+MU_TEST(test_ts_mget_command_info_structure) {
+    // Test that TS_MGET_INFO has correct basic properties
+    mu_check(TS_MGET_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_MGET_INFO.arity == -3); // At least 3 arguments: TS.MGET FILTER filterExpr
+    mu_check(TS_MGET_INFO.since != NULL);
+    mu_check(strcmp(TS_MGET_INFO.since, "1.0.0") == 0);
+    mu_check(TS_MGET_INFO.summary != NULL);
+    mu_check(strstr(TS_MGET_INFO.summary, "Get the sample with the highest timestamp") != NULL);
+    mu_check(strstr(TS_MGET_INFO.summary, "matching a specific filter") != NULL);
+    mu_check(TS_MGET_INFO.complexity != NULL);
+    mu_check(strstr(TS_MGET_INFO.complexity, "O(n)") != NULL);
+    mu_check(strstr(TS_MGET_INFO.complexity, "time-series that match") != NULL);
 }
 
 // Test that TS.MREVRANGE command info is properly structured
@@ -460,6 +667,14 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_alter_command_info_structure);
     MU_RUN_TEST(test_ts_create_command_info_structure);
     MU_RUN_TEST(test_ts_createrule_command_info_structure);
+    MU_RUN_TEST(test_ts_incrby_command_info_structure);
+    MU_RUN_TEST(test_ts_decrby_command_info_structure);
+    MU_RUN_TEST(test_ts_range_command_info_structure);
+    MU_RUN_TEST(test_ts_revrange_command_info_structure);
+    MU_RUN_TEST(test_ts_queryindex_command_info_structure);
+    MU_RUN_TEST(test_ts_info_command_info_structure);
+    MU_RUN_TEST(test_ts_madd_command_info_structure);
+    MU_RUN_TEST(test_ts_mget_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
