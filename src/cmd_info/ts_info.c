@@ -127,9 +127,9 @@ static const RedisModuleCommandArg TS_ADD_ARGS[] = {
       .subargs =
           (RedisModuleCommandArg[]){
               { .name = "LABELS", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "LABELS" },
-              { .name = "label_value_pairs",
+              { .name = "label-value",
                 .type = REDISMODULE_ARG_TYPE_BLOCK,
-                .flags = REDISMODULE_CMD_ARG_MULTIPLE | REDISMODULE_CMD_ARG_OPTIONAL,
+                .flags = REDISMODULE_CMD_ARG_MULTIPLE,
                 .subargs =
                     (RedisModuleCommandArg[]){
                         { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
