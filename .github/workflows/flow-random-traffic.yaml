@@ -26,6 +26,9 @@ jobs:
     container:
       image: ubuntu:jammy
     steps:
+      - name: install git
+        run: |
+          apt-get update && apt-get install -y git
       - name: Checkout
         uses: actions/checkout@v4
         with:
