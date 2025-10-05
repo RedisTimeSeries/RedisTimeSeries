@@ -78,15 +78,15 @@ jobs:
       - name: Run Random Traffic
         shell: bash
         run: |
-            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile random_traffic.log --loglevel debug &
-            ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
-            tail -n 100 random_traffic.txt
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis.log --loglevel debug &
+            ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic_output.txt
+            tail -n 100 random_traffic_output.txt
             pkill -f redis-server      
       - name: Upload random traffic
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: random_traffic.txt
+          name: results.zip
           path: |
-            random_traffic.txt
-            random_traffic.log
+            random_traffic_output.txt
+            redis.log
