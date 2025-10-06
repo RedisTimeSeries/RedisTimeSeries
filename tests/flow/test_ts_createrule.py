@@ -207,7 +207,10 @@ def test_downsampling_current():
 
 
 def test_downsampling_extensive():
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    if VALGRIND:
+        env.skip()
+    with env.getClusterConnectionIfNeeded() as r:
         key = 'tester{abc}'
         fromTS = 10
         toTS = 10000

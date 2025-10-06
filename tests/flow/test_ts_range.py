@@ -1082,8 +1082,11 @@ def test_sanity_pipeline():
         assert expected_result == actual_result
 
 def test_large_compressed_range():
+    env = Env()
+    if VALGRIND:
+        env.skip()
     random.seed()
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
         n_samples_dict = {}
@@ -1106,8 +1109,11 @@ def test_large_compressed_range():
                 assert len(res) == val2 - val1 + 1
 
 def test_large_compressed_revrange():
+    env = Env()
+    if VALGRIND:
+        env.skip()
     random.seed()
-    with Env().getClusterConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
         _len = 400
         n_samples_dict = {}
@@ -1178,6 +1184,8 @@ def test_filter_by():
 def test_filter_by_extensive():
     env = Env()
     #skip cause it takes too much time
+    if VALGRIND:
+        env.skip()
     env.skipOnCluster()
     env.skipOnAOF()
     env.skipOnSlave()
@@ -1221,6 +1229,8 @@ def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
 def test_max_extensive():
     env = Env()
     #skip cause it takes too much time
+    if VALGRIND:
+        env.skip()
     env.skipOnCluster()
     env.skipOnAOF()
     env.skipOnSlave()

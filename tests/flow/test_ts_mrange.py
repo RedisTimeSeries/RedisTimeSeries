@@ -271,6 +271,8 @@ def test_multilabel_filter(env):
         assert actual_result[0][0] == b'tester1'
 
 def test_large_key_value_pairs(env):
+    if VALGRIND:
+        env.skip()
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         number_series = 100
         for i in range(0,number_series):
