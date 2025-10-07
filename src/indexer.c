@@ -21,7 +21,7 @@
 
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
-extern bool isTrimming;
+extern bool isTrimming, isAsmTrimming, isAsmImporting;
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
@@ -456,14 +456,14 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 
     free(dicts);
 
-    if (unlikely(isTrimming)) {
+    if (unlikely(isTrimming || isAsmTrimming || isAsmImporting)) {
+        // During those periods modules might see keys whose slots are no longer
+        // (or not yet) owned by the current shard, so we need to filter them out of the results
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
         RedisModuleString *currentKey;
-        int slot, firstSlot, lastSlot;
-        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
         while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            slot = RedisModule_ShardingGetKeySlot(currentKey);
-            if (firstSlot > slot || lastSlot < slot) {
+            int slot = RedisModule_ShardingGetKeySlot(currentKey);
+            if (!RedisModule_ClusterCanAccessKeysInSlot(slot)) {
                 RedisModule_DictDel(res, currentKey, NULL);
                 RedisModule_DictIteratorReseek(iter, ">", currentKey);
             }

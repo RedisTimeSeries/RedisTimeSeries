@@ -35,6 +35,7 @@
 #include "cmd_info/command_info.h"
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <string.h>
 #include <strings.h>
@@ -113,7 +114,7 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
-bool isTrimming = false;
+bool isTrimming = false, isAsmTrimming = false, isAsmImporting = false;
 
 static void FreeConfigAndStaticCtx(void) {
     FreeConfig();
@@ -1565,6 +1566,64 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
     }
 }
 
+void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_ASM) {
+        RedisModule_Log(rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_IMPORT_STARTED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM import started (subevent=%" PRIu64 ") received.", subevent);
+            isAsmImporting = true;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_IMPORT_FAILED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM import failed (subevent=%" PRIu64 ") received.", subevent);
+            isAsmImporting = false;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_IMPORT_COMPLETED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM import completed (subevent=%" PRIu64 ") received.", subevent);
+            isAsmImporting = false;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_MIGRATE_STARTED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM migrate started (subevent=%" PRIu64 ") received.", subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_MIGRATE_FAILED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM migrate failed (subevent=%" PRIu64 ") received.", subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_MIGRATE_COMPLETED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM migrate completed (subevent=%" PRIu64 ") received.", subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_MIGRATE_MODULE_PROPAGATE:
+            RedisModule_Log(ctx, "notice", "Cluster ASM module propagate (subevent=%" PRIu64 ") received.", subevent);
+            break;
+        default:
+            RedisModule_Log(rts_staticCtx, "warning", "Bad subevent (%" PRIu64 ") received, ignored.", subevent);
+    }
+}
+
+void ClusterAsmTrimCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_ASM_TRIM) {
+        RedisModule_Log(rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_TRIM_STARTED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM trim started (subevent=%" PRIu64 ") received.", subevent);
+            isAsmTrimming = true;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_ASM_TRIM_COMPLETED:
+            RedisModule_Log(ctx, "notice", "Cluster ASM trim completed (subevent=%" PRIu64 ") received.", subevent);
+            isAsmTrimming = false;
+            break;
+        // Since we subscribed to keyspace event REDISMODULE_NOTIFY_GENERIC (and also to REDISMODULE_NOTIFY_TRIMMED)
+        // an active trimming will be used so no need to handle the REDISMODULE_SUBEVENT_CLUSTER_ASM_TRIM_BACKGROUND case.
+        default:
+            RedisModule_Log(rts_staticCtx, "warning", "Bad subevent (%" PRIu64 ") received, ignored.", subevent);
+    }
+}
+
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
                            uint64_t subevent,
@@ -1835,15 +1894,18 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
-        // we have server events support, lets subscribe to relevan events.
-        RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
-        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+    if (RedisModule_SubscribeToServerEvent) {
+        // we have server events support, lets subscribe to relevant events.
+        if (RedisModule_ShardingGetKeySlot) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
+            RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+        }
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsm, ClusterAsmCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsmTrim, ClusterAsmTrimCallback);
     }
-
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
 
     Initialize_RdbNotifications(ctx);
 
