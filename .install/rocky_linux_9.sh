@@ -18,6 +18,12 @@ cd ..
 rm /usr/bin/python3 && ln -s `which python3.9` /usr/bin/python3
 cmake --version
 python3 --version
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+# Detect architecture and download appropriate AWS CLI
+ARCH=$(uname -m)
+if [[ $ARCH == "aarch64" ]]; then
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+else
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+fi
 unzip awscliv2.zip
 ./aws/install
