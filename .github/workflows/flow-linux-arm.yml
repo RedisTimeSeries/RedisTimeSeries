@@ -130,6 +130,15 @@ jobs:
               echo ::group::Install dependencies
                 ./install_script.sh 
               echo ::endgroup::
+          - image: "rockylinux:9"
+            nick: "rocky9"
+            install_git: |
+              dnf install -y git
+            install_deps: |
+              cd .install
+              echo ::group::Install dependencies
+                ./install_script.sh
+              echo ::endgroup::
 
     defaults:
       run:
