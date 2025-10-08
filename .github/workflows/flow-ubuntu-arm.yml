@@ -111,6 +111,16 @@ jobs:
               apt upgrade -yqq
               apt install -yqq git wget build-essential lcov openssl libssl-dev \
                 python3 python3-pip python3-venv python3-dev unzip rsync libclang-dev clang curl cmake jq automake libtool
+          - image: "rockylinux:9"
+            nick: "rocky9"
+            install_git: |
+              dnf install -y git
+            install_deps: |
+              cd .install
+              echo ::group::Install dependencies
+                ./install_script.sh
+              echo ::endgroup::
+                
     defaults:
       run:
         shell: bash
