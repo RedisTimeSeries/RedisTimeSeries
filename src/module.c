@@ -114,7 +114,7 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
-bool isTrimming = false, isAsmTrimming = false, isAsmImporting = false;
+bool isReshardTrimming = false, isAsmTrimming = false, isAsmImporting = false;
 
 static void FreeConfigAndStaticCtx(void) {
     FreeConfig();
@@ -1550,16 +1550,16 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
         case REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED:
             RedisModule_Log(
                 ctx, "notice", "%s", "Got slot range change event, enter trimming phase.");
-            isTrimming = true;
+            isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
             RedisModule_Log(
                 ctx, "notice", "%s", "Got trimming started event, enter trimming phase.");
-            isTrimming = true;
+            isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
             RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
-            isTrimming = false;
+            isReshardTrimming = false;
             break;
         default:
             RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
@@ -1896,15 +1896,18 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_SubscribeToServerEvent) {
         // we have server events support, lets subscribe to relevant events.
-        if (RedisModule_ShardingGetKeySlot) {
+        if (RedisModule_ShardingGetKeySlot != NULL) {
             RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
             RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+        }
+        if (RedisModule_ClusterCanAccessKeysInSlot != NULL) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to ASM events");
+            RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsm, ClusterAsmCallback);
+            RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsmTrim, ClusterAsmTrimCallback);
         }
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
-        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsm, ClusterAsmCallback);
-        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterAsmTrim, ClusterAsmTrimCallback);
     }
 
     Initialize_RdbNotifications(ctx);
