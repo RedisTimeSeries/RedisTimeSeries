@@ -126,6 +126,7 @@ jobs:
     name: ${{matrix.docker_image.image}}, ${{needs.setup-environment.outputs.redis-ref}}
     runs-on: ubuntu-latest
     needs: setup-environment
+    timeout-minutes: ${{ inputs.run_valgrind && 300 || 180 }}
     strategy:
       fail-fast: false
       matrix:

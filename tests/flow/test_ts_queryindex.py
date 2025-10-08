@@ -46,6 +46,8 @@ def test_label_index():
 
 def test_large_key_value_pairs():
     env = Env()
+    if VALGRIND:
+        env.skip()
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
         number_series = 100
         for i in range(0,number_series):
