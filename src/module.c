@@ -1617,7 +1617,7 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t 
             RedisModule_Log(ctx, "notice", "Cluster ASM trim completed (subevent=%" PRIu64 ") received.", subevent);
             isAsmTrimming = false;
             break;
-        // Since we subscribed to keyspace event REDISMODULE_NOTIFY_GENERIC (and also to REDISMODULE_NOTIFY_TRIMMED)
+        // Since we subscribed to keyspace event REDISMODULE_NOTIFY_KEY_TRIMMED
         // an active trimming will be used so no need to handle the REDISMODULE_SUBEVENT_CLUSTER_ASM_TRIM_BACKGROUND case.
         default:
             RedisModule_Log(rts_staticCtx, "warning", "Bad subevent (%" PRIu64 ") received, ignored.", subevent);
