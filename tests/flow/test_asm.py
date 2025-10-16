@@ -1,7 +1,27 @@
-from includes import Env
+import time
+import random
 from dataclasses import dataclass
 import re
-import time
+
+from includes import Env
+from utils import slot_table
+
+
+def test_asm_without_data():
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":  # TODO: convert to a proper fixture (here and below)
+        env.skip()
+
+    migrate_slots_back_and_forth(env)
+
+
+def test_asm_with_data():
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    fill_some_data(env, number_of_keys=1000, samples_per_key=50)
+    migrate_slots_back_and_forth(env)
 
 
 @dataclass(frozen=True)
@@ -59,12 +79,21 @@ class ClusterNode:
         )
 
 
-def test_asm_without_data():
-    env = Env(shardsCount=2, decodeResponses=True)
-    if env.env != "oss-cluster":  # TODO: convert to a proper fixture
-        env.skip()
+def fill_some_data(env, number_of_keys: int, samples_per_key: int):
+    def generate_commands():
+        start_timestamp, jump_timestamps = 1000000000, 100
+        for i in range(number_of_keys):
+            hslot = i * (2**14 - 1) // (number_of_keys - 1)
+            ts_key = f"ts:{{{slot_table[hslot]}}}"
+            yield f"TS.CREATE {ts_key}"
+            yield "TS.MADD " + " ".join(
+                f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
+                for j in range(samples_per_key)
+            )
 
-    migrate_slots_back_and_forth(env)
+    with env.getClusterConnectionIfNeeded() as rc:
+        for command in generate_commands():
+            rc.execute_command(*command.split())
 
 
 def migrate_slots_back_and_forth(env):
