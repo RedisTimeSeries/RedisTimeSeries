@@ -2,6 +2,7 @@ import time
 import random
 from dataclasses import dataclass
 import re
+import threading
 
 from includes import Env
 from utils import slot_table
@@ -20,8 +21,45 @@ def test_asm_with_data():
     if env.env != "oss-cluster":
         env.skip()
 
-    fill_some_data(env, number_of_keys=1000, samples_per_key=50)
+    fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
     migrate_slots_back_and_forth(env)
+
+
+def test_asm_with_data_and_queries_during_migrations():
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 1000
+    samples_per_key = 150
+    fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
+
+    conn = env.getConnection(0)
+    command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
+    result = conn.execute_command(command)
+    # First validate the result
+    ((filtered_by, withlabels, samples),) = result
+    assert filtered_by == "label1=17"
+    assert withlabels == []  # No WITHLABLES
+    assert len(samples) == samples_per_key
+    assert all(sample[1] == str(number_of_keys) for sample in samples)
+
+    # Now validate the command in a loop during the back and forth migrations
+    def validate_command_in_a_loop():
+        while not done:
+            assert conn.execute_command(command) == result
+
+    done = False
+    thread = threading.Thread(target=validate_command_in_a_loop)
+    thread.start()
+
+    migrate_slots_back_and_forth(env)
+
+    done = True
+    thread.join()
+
+
+# Helper structs and functions
 
 
 @dataclass(frozen=True)
@@ -79,13 +117,13 @@ class ClusterNode:
         )
 
 
-def fill_some_data(env, number_of_keys: int, samples_per_key: int):
+def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
             hslot = i * (2**14 - 1) // (number_of_keys - 1)
             ts_key = f"ts:{{{slot_table[hslot]}}}"
-            yield f"TS.CREATE {ts_key}"
+            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in lables.items())}"
             yield "TS.MADD " + " ".join(
                 f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
                 for j in range(samples_per_key)
