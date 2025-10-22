@@ -82,7 +82,7 @@ static inline void lazyModuleInitialize(RedisModuleCtx *ctx) {
             REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
                 REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED |
                 REDISMODULE_NOTIFY_LOADED | REDISMODULE_NOTIFY_KEY_TRIMMED |
-                REDISMODULE_NOTIFY_TRIMMED,  // Only during redis enterprise sharding
+                REDISMODULE_NOTIFY_TRIMMED, // Only during redis enterprise sharding
             NotifyCallback);
         lazy_initialized = 1;
     }

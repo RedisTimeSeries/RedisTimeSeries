@@ -3,6 +3,7 @@ import random
 from dataclasses import dataclass
 import re
 import threading
+from typing import Optional, Set
 
 from includes import Env
 from utils import slot_table
@@ -80,14 +81,14 @@ class ClusterNode:
     ip: str
     port: int
     cport: int  # cluster bus port
-    hostname: str | None
-    flags: set[str]
+    hostname: Optional[str]
+    flags: Set[str]
     master: str  # Either this node's primary replica or '-'
     ping_sent: int
     pong_recv: int
     config_epoch: int
     link_state: bool  # True: connected, False: disconnected
-    slots: set[SlotRange]
+    slots: Set[SlotRange]
 
     @staticmethod
     def from_str(s: str):
@@ -136,18 +137,17 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
 
 def migrate_slots_back_and_forth(env):
     def cluster_node_of(conn) -> ClusterNode:
-        (result,) = (
-            cluster_node
-            for line in conn.execute_command("cluster", "nodes").splitlines()
-            if "myself" in (cluster_node := ClusterNode.from_str(line)).flags
-        )
-        return result
+        for line in conn.execute_command("cluster", "nodes").splitlines():
+            cluster_node = ClusterNode.from_str(line)
+            if "myself" in cluster_node.flags:
+                return cluster_node
+        raise ValueError("No node with 'myself' flag found")
 
     def middle_slot_range(slot_range: SlotRange) -> SlotRange:
         third = (slot_range.end - slot_range.start) // 3
         return SlotRange(slot_range.start + third, slot_range.end - third)
 
-    def cantorized_slot_set(slot_range: SlotRange) -> set[SlotRange]:  # https://en.wikipedia.org/wiki/Cantor_set ;)
+    def cantorized_slot_set(slot_range: SlotRange) -> Set[SlotRange]:  # https://en.wikipedia.org/wiki/Cantor_set ;)
         middle = middle_slot_range(slot_range)
         return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
 

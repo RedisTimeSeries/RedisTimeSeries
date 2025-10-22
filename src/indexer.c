@@ -413,16 +413,17 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
     return true;
 }
 
-static inline bool OwnKeyDuringSharding(RedisModuleString *key) {  // RE version; during non-ASM reshards
+static inline bool OwnKeyDuringSharding(
+    RedisModuleString *key) { // RE version; during non-ASM reshards
     int slot = RedisModule_ShardingGetKeySlot(key);
-    if (slot < 0)  // sharding config not set
+    if (slot < 0) // sharding config not set
         return false;
     int firstSlot, lastSlot;
     RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
     return firstSlot <= slot && slot <= lastSlot;
 }
 
-static inline bool OwnKeyDuringASM(RedisModuleString *key) {  // ASM version
+static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
     unsigned int slot = RedisModule_ClusterKeySlot(key);
     return RedisModule_ClusterCanAccessKeysInSlot(slot);
 }
@@ -476,7 +477,8 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
         RedisModuleString *currentKey;
         while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            bool ownCurrentKey = (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
+            bool ownCurrentKey =
+                (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
             if (!ownCurrentKey) {
                 RedisModule_DictDel(res, currentKey, NULL);
                 RedisModule_DictIteratorReseek(iter, ">", currentKey);
