@@ -1,4 +1,6 @@
 bin/
-/VARIANT
-/BINDIR
-
+redis/
+test_env/
+.git/
+*.log
+logs/
