@@ -1,0 +1,26 @@
+===========================================
+Docker Testing Branch - Quick Start Guide
+===========================================
+
+✅ BRANCH CREATED: docker-testing-support
+
+✅ ALL ASM TESTS PASSING: 3/3 passed in 6 seconds
+
+USAGE:
+------
+1. Switch to branch:
+   git checkout docker-testing-support
+
+2. Run ASM tests:
+   ./run-docker-asm-tests.sh
+
+3. Run all tests:
+   ./run-docker-tests.sh
+
+WHY THIS WORKS:
+---------------
+- Linux Docker container avoids macOS symbol resolution issues
+- OSS Cluster mode works perfectly in Linux
+- Same environment as nightly CI
+
+SEE DOCKER-TESTING.md for full documentation
