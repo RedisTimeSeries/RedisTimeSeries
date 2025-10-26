@@ -21,7 +21,7 @@
 
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
-extern bool isTrimming;
+extern bool isReshardTrimming, isAsmTrimming, isAsmImporting;
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
@@ -413,6 +413,21 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
     return true;
 }
 
+static inline bool OwnKeyDuringSharding(
+    RedisModuleString *key) { // RE version; during non-ASM reshards
+    int slot = RedisModule_ShardingGetKeySlot(key);
+    if (slot < 0) // sharding config not set
+        return false;
+    int firstSlot, lastSlot;
+    RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
+    return firstSlot <= slot && slot <= lastSlot;
+}
+
+static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
+    unsigned int slot = RedisModule_ClusterKeySlot(key);
+    return RedisModule_ClusterCanAccessKeysInSlot(slot);
+}
+
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
@@ -456,14 +471,15 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 
     free(dicts);
 
-    if (unlikely(isTrimming)) {
+    if (unlikely(isReshardTrimming || isAsmTrimming || isAsmImporting)) {
+        // During those periods modules might see keys whose slots are no longer
+        // (or not yet) owned by the current shard, so we need to filter them out of the results
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
         RedisModuleString *currentKey;
-        int slot, firstSlot, lastSlot;
-        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
         while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            slot = RedisModule_ShardingGetKeySlot(currentKey);
-            if (firstSlot > slot || lastSlot < slot) {
+            bool ownCurrentKey =
+                (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
+            if (!ownCurrentKey) {
                 RedisModule_DictDel(res, currentKey, NULL);
                 RedisModule_DictIteratorReseek(iter, ">", currentKey);
             }
