@@ -254,6 +254,7 @@ run_tests() {
 				--oss-redis-path=$REDIS_SERVER
 				--module $MODULE
 				--module-args '$MODARGS'
+				--no-progress
 				$RLTEST_ARGS
 				$RLTEST_TEST_ARGS
 				$RLTEST_PARALLEL_ARG

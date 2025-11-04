@@ -1,0 +1,67 @@
+name: Flow Random Traffic
+
+on:
+  workflow_dispatch:
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'
+        default: 'unstable'
+      timeout-minutes: 
+        description: 'Timeout in minutes'
+        default: '10'
+  workflow_call:
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'
+        type: string
+        default: 'unstable'
+      timeout-minutes: 
+        description: 'Timeout in minutes'
+        type: string
+        default: '10'
+
+jobs:
+  prepare-values:
+    runs-on: ubuntu:jammy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Checkout Redis
+        uses: actions/checkout@v4
+        with:
+          repository: redis/redis
+          ref: ${{ inputs.redis-ref }}
+          path: redis
+          submodules: 'recursive'
+      - name: Setup
+        working-directory: .install
+        shell: bash
+        run: |
+            ./install_script.sh
+      - name: Install python11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install python dependencies
+        shell: bash
+        run: |
+            ./.install/common_installations.sh
+            pip install redis-command-generator
+      - name: build
+        uses: ./.github/actions/build-module-and-redis
+        with:
+          use-venv: '1'
+      - name: Run Random Traffic
+        shell: bash
+        run: |
+            redis-server --loadmodule ./target/release/libtimeseries.so --port 6379 &
+            python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
+            tail -n 100 random_traffic.txt
+            pkill -f redis-server      
+      - name: Upload random traffic
+        uses: actions/upload-artifact@v4
+        with:
+          name: random_traffic.txt
+          path: random_traffic.txt

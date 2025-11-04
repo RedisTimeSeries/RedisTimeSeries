@@ -67,21 +67,21 @@ def test_create_compaction_rule_twice():
 def test_create_compaction_rule_override_dest():
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
-        assert r.execute_command('TS.CREATE', 'tester2')
+        assert r.execute_command('TS.CREATE', 'tester2{abc}')
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 'tester2', agg_key_name, 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', 'tester2{abc}', agg_key_name, 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_from_target():
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', key_name)
-        assert r.execute_command('TS.CREATE', 'tester2')
+        assert r.execute_command('TS.CREATE', 'tester2{abc}')
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'MAX', 10)
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', agg_key_name, 'tester2', 'AGGREGATION', 'MAX', 10)
+            assert r.execute_command('TS.CREATERULE', agg_key_name, 'tester2{abc}', 'AGGREGATION', 'MAX', 10)
 
 
 def test_create_compaction_rule_own():
@@ -93,10 +93,10 @@ def test_create_compaction_rule_own():
 # test for mem leak
 def test_create_compaction_zero_bucket_size():
     with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 't1', 'LABELS', 'key', 'val')
-        assert r.execute_command('TS.CREATE', 't2', 'LABELS', 'key', 'val')
+        assert r.execute_command('TS.CREATE', 't1{abc}', 'LABELS', 'key', 'val')
+        assert r.execute_command('TS.CREATE', 't2{abc}', 'LABELS', 'key', 'val')
         with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.CREATERULE', 't1', 't2', 'AGGREGATION', 'sum', 0)
+            assert r.execute_command('TS.CREATERULE', 't1{abc}', 't2{abc}', 'AGGREGATION', 'sum', 0)
 
 
 def test_create_compaction_rule_and_del_dest_series():

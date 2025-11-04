@@ -32,8 +32,10 @@
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
+#include "cmd_info/command_info.h"
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <string.h>
 #include <strings.h>
@@ -112,7 +114,15 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
-bool isTrimming = false;
+bool isReshardTrimming = false, isAsmTrimming = false, isAsmImporting = false;
+
+static void FreeConfigAndStaticCtx(void) {
+    FreeConfig();
+    if (rts_staticCtx != NULL) {
+        RedisModule_FreeThreadSafeContext(rts_staticCtx);
+        rts_staticCtx = NULL;
+    }
+}
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
@@ -1540,19 +1550,116 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
         case REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED:
             RedisModule_Log(
                 ctx, "notice", "%s", "Got slot range change event, enter trimming phase.");
-            isTrimming = true;
+            isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
             RedisModule_Log(
                 ctx, "notice", "%s", "Got trimming started event, enter trimming phase.");
-            isTrimming = true;
+            isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
             RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
-            isTrimming = false;
+            isReshardTrimming = false;
             break;
         default:
             RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
+    }
+}
+
+void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION) {
+        RedisModule_Log(
+            rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_STARTED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM import started (subevent=%" PRIu64 ") received.",
+                            subevent);
+            isAsmImporting = true;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_FAILED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM import failed (subevent=%" PRIu64 ") received.",
+                            subevent);
+            isAsmImporting = false;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_COMPLETED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM import completed (subevent=%" PRIu64 ") received.",
+                            subevent);
+            isAsmImporting = false;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_STARTED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM migrate started (subevent=%" PRIu64 ") received.",
+                            subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_FAILED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM migrate failed (subevent=%" PRIu64 ") received.",
+                            subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_COMPLETED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM migrate completed (subevent=%" PRIu64 ") received.",
+                            subevent);
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_MODULE_PROPAGATE:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM module propagate (subevent=%" PRIu64 ") received.",
+                            subevent);
+            break;
+        default:
+            RedisModule_Log(rts_staticCtx,
+                            "warning",
+                            "Bad subevent (%" PRIu64 ") received, ignored.",
+                            subevent);
+    }
+}
+
+void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
+                            RedisModuleEvent eid,
+                            uint64_t subevent,
+                            void *data) {
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION_TRIM) {
+        RedisModule_Log(
+            rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_TRIM_STARTED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM trim started (subevent=%" PRIu64 ") received.",
+                            subevent);
+            isAsmTrimming = true;
+            break;
+        case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_TRIM_COMPLETED:
+            RedisModule_Log(ctx,
+                            "notice",
+                            "Cluster ASM trim completed (subevent=%" PRIu64 ") received.",
+                            subevent);
+            isAsmTrimming = false;
+            break;
+        // Since we subscribed to keyspace event REDISMODULE_NOTIFY_KEY_TRIMMED
+        // an active trimming will be used so no need to handle the
+        // REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_TRIM_BACKGROUND case.
+        default:
+            RedisModule_Log(rts_staticCtx,
+                            "warning",
+                            "Bad subevent (%" PRIu64 ") received, ignored.",
+                            subevent);
     }
 }
 
@@ -1614,10 +1721,7 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
 
 int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     if (rts_staticCtx) {
-        FreeConfig();
-
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
     }
 
     return REDISMODULE_OK;
@@ -1709,9 +1813,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     initGlobalCompactionFunctions();
 
     if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1729,9 +1831,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_LATEST_ENCVER, &tm);
     if (SeriesType == NULL) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1744,9 +1844,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     };
     if (RedisModule_SetDataTypeExtensions != NULL) {
         if (RedisModule_SetDataTypeExtensions(ctx, SeriesType, &etm) != REDISMODULE_OK) {
-            FreeConfig();
-            RedisModule_FreeThreadSafeContext(rts_staticCtx);
-            rts_staticCtx = NULL;
+            FreeConfigAndStaticCtx();
 
             return REDISMODULE_ERR;
         }
@@ -1756,9 +1854,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to add ACL category");
 
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1766,9 +1862,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     IndexInit();
     if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to register defrag function");
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1785,9 +1879,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1800,9 +1892,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1811,9 +1901,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1822,9 +1910,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
@@ -1833,24 +1919,37 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
-        FreeConfig();
-        RedisModule_FreeThreadSafeContext(rts_staticCtx);
-        rts_staticCtx = NULL;
+        FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
 
     SetCommandAcls(ctx, "ts.mget", "read");
 
-    if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
-        // we have server events support, lets subscribe to relevan events.
-        RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
-        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+    if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "warning", "Failed to register timeseries command infos");
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
     }
 
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
-    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
+    if (RedisModule_SubscribeToServerEvent) {
+        // we have server events support, lets subscribe to relevant events.
+        if (RedisModule_ShardingGetKeySlot != NULL) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
+            RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
+        }
+        if (RedisModule_ClusterCanAccessKeysInSlot != NULL) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to ASM events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterSlotMigration, ClusterAsmCallback);
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
+        }
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
+    }
 
     Initialize_RdbNotifications(ctx);
 

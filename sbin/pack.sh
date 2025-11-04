@@ -270,6 +270,12 @@ pack_deps() {
 NUMVER="$(NUMERIC=1 $SBIN/getver)"
 SEMVER="$($SBIN/getver)"
 
+# Override SEMVER with BETA_VERSION if provided (for nightly builds)
+if [[ -n $BETA_VERSION ]]; then
+	SEMVER="$BETA_VERSION"
+	echo "# Using beta version: $BETA_VERSION"
+fi
+
 if [[ -n $VARIANT ]]; then
 	_VARIANT="-${VARIANT}"
 fi
