@@ -135,8 +135,8 @@ jobs:
       - name: Checkout Redis
         uses: actions/checkout@v4
         with:
-          repository: 'redis/redis'
-          ref: ${{ needs.setup-environment.outputs.redis-ref }}
+          repository: 'gabsow/redis'
+          ref: 'unstable'
           path: 'redis'
           submodules: recursive
       - name: Setup specific
