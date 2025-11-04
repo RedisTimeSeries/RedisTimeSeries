@@ -184,6 +184,12 @@ CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
 include $(MK)/defs
 
+# macOS Redis modules must use -bundle, not -dynamiclib
+ifeq ($(OS),macos)
+SO_LD_FLAGS := $(filter-out -dynamiclib,$(SO_LD_FLAGS))
+SO_LD_FLAGS += -bundle -flat_namespace -undefined dynamic_lookup
+endif
+
 #----------------------------------------------------------------------------------------------
 
 MISSING_DEPS:=
