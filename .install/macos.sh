@@ -9,7 +9,9 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 
 LLVM_VERSION="18"
 
-brew update
+# Commenting out brew update as it can hang in GitHub Actions CI
+# The runners already have recent Homebrew installations
+# brew update
 brew install coreutils
 brew install make
 brew install jq
