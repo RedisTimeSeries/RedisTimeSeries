@@ -23,7 +23,7 @@ runs:
   using: composite
   steps:
     - name: Run tests
-      shell: bash
+      shell: bash -l -eo pipefail {0}
       run: |
         if command -v scl_source &> /dev/null
         then
