@@ -151,6 +151,7 @@ jobs:
           use-venv: '1'
           extra-packages-to-install: 'gevent'
       - name: Build Redis
+        working-directory: redis
         shell: bash
         run: |
           make install -j `nproc`
