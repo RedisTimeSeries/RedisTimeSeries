@@ -129,7 +129,8 @@ endef
 LD_LIBS += $(call flatten,$(LD_LIBS.deps))
 
 LD_LIBS.ext += ssl crypto
-LD_FLAGS.macos += -L$(openssl_prefix)/lib
+LD_FLAGS.macos += -L$(openssl_prefix)/lib 
+CC_FLAGS.macos += -Wno-nullability-completeness -Wno-nullability-extension # TODO: remove this once it compile on macos
 
 define _SOURCES
 	chunk.c
