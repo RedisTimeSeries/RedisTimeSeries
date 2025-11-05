@@ -31,6 +31,15 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
 /// ```
 #define defer DEFERER(__LINE__, __COUNTER__)
 
+#define ERRDEFERER_(err, L, C, ...)                                                                \
+    typeof(err) *p_##L##C = &err;                                                                  \
+    defer {                                                                                        \
+        if (unlikely(*p_##L##C))                                                                   \
+            __VA_ARGS__;                                                                           \
+    }
+
+#define ERRDEFERER(err, L, C, ...) ERRDEFERER_(err, L, C, __VA_ARGS__)
+
 /// errdefer is used to execute code at the end of the current scope only if an error occurred.
 /// usage: `errdefer(err, compound-statement)`
 /// example:
@@ -39,11 +48,8 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
 /// void *p = malloc(10);
 /// errdefer(err, { free(p); })
 /// ```
-#define errdefer(err, ...)                                                                         \
-    defer {                                                                                        \
-        if (unlikely(err))                                                                         \
-            __VA_ARGS__;                                                                           \
-    }
+#define errdefer(err, ...) ERRDEFERER(err, __LINE__, __COUNTER__, __VA_ARGS__)
+
 
 #define LoadDouble_IOError(rdb, is_err, ret)                                                       \
     __extension__({                                                                                \
