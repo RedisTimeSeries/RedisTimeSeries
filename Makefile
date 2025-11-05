@@ -8,6 +8,7 @@ ROOT=.
 MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
+-include $(ROOT)/mk/overrides.mk
 
 #----------------------------------------------------------------------------------------------
 
