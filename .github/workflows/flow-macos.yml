@@ -150,10 +150,21 @@ jobs:
         with: 
           use-venv: '1'
           extra-packages-to-install: 'gevent'
-      - name: build
-        uses: ./.github/actions/build-module-and-redis
-        with:
-          use-venv: '1'
+      - name: Build Redis
+        shell: bash
+        run: |
+          make install -j `nproc`
+          echo "REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/redis/src" >> $GITHUB_PATH
+          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
+      - name: Build Deps
+        shell: bash
+        run: |
+          make deps -j `nproc`
+      - name: Build Module
+        shell: bash
+        run: |
+          make build -j `nproc`
       - name: Run tests
         uses: ./.github/actions/run-tests
         with: 
