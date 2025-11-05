@@ -114,6 +114,8 @@ jobs:
       BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
       PIP_BREAK_SYSTEM_PACKAGES: 1
+      CFLAGS: "-Wno-nullability-completeness -Wno-nullability-extension"
+      CXXFLAGS: "-Wno-nullability-completeness -Wno-nullability-extension"
     runs-on: ${{matrix.os}}
     needs: setup-environment
     strategy:
