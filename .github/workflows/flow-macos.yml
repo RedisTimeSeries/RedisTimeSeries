@@ -150,14 +150,6 @@ jobs:
         with: 
           use-venv: '1'
           extra-packages-to-install: 'gevent'
-      - name: check for cmake 3.5
-        shell: bash
-        run: |
-          cmake --version
-          if [ $(cmake --version | grep -o '3\.5' | wc -l) -eq 0 ]; then
-            echo "CMake 3.5 is not installed"
-            exit 1
-          fi
       - name: Build Redis
         working-directory: redis
         shell: bash
