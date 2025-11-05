@@ -9,7 +9,6 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 
 LLVM_VERSION="18"
 
-brew update
 brew install coreutils
 brew install make
 brew install jq
