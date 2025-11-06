@@ -1,4 +1,6 @@
 #!/bin/bash
+# Update system packages first to avoid glibc version mismatches
+yum -y update
 yum -y install epel-release
 yum -y install gcc make cmake3 wget openssl-devel bzip2-devel libffi-devel zlib-devel wget scl-utils which gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-libatomic-devel jq
 yum groupinstall "Development Tools" -y
@@ -15,9 +17,21 @@ cd Python-3.9.6
 make -j `nproc`
 make altinstall
 cd ..
-rm /usr/bin/python3 && ln -s `which python3.9` /usr/bin/python3
+# Create python3 symlink - use full path since which might not find it yet
+rm -f /usr/bin/python3
+ln -s /usr/local/bin/python3.9 /usr/bin/python3
+# Also create pip3 symlink if it doesn't exist
+if [ ! -f /usr/bin/pip3 ]; then
+    ln -s /usr/local/bin/pip3.9 /usr/bin/pip3
+fi
+# Ensure /usr/local/bin is in PATH for subsequent steps
+export PATH="/usr/local/bin:$PATH"
+# Verify installations
 cmake --version
 python3 --version
+pip3 --version
+# Also verify python3 is accessible via the symlink
+/usr/bin/python3 --version
 # Detect architecture and download appropriate AWS CLI
 ARCH=$(uname -m)
 if [[ $ARCH == "aarch64" ]]; then
