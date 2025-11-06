@@ -1,37 +1,31 @@
 #!/bin/bash
-# Update system packages first to avoid glibc version mismatches
-yum -y update
 yum -y install epel-release
-yum -y install gcc make cmake3 wget openssl-devel bzip2-devel libffi-devel zlib-devel wget scl-utils which gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-libatomic-devel jq
-yum groupinstall "Development Tools" -y
-cp /opt/rh/gcc-toolset-13/enable /etc/profile.d/gcc-toolset-13.sh
+yum -y update --nobest
 
-make --version
-gcc --version
-git --version
+yum -y install python3.11 python3.11-pip python3.11-devel
 
-wget https://www.python.org/ftp/python/3.9.6/Python-3.9.6.tgz
-tar -xvf Python-3.9.6.tgz
-cd Python-3.9.6
-./configure
-make -j `nproc`
-make altinstall
-cd ..
-# Create python3 symlink - use full path since which might not find it yet
-rm -f /usr/bin/python3
-ln -s /usr/local/bin/python3.9 /usr/bin/python3
-# Also create pip3 symlink if it doesn't exist
-if [ ! -f /usr/bin/pip3 ]; then
-    ln -s /usr/local/bin/pip3.9 /usr/bin/pip3
+yum -y install gcc gcc-c++ || echo "Warning: gcc installation failed"
+if ! command -v gcc &> /dev/null; then
+    yum -y install --nobest gcc gcc-c++ || true
 fi
-# Ensure /usr/local/bin is in PATH for subsequent steps
-export PATH="/usr/local/bin:$PATH"
-# Verify installations
-cmake --version
+
+yum -y install --nobest --skip-broken make cmake3 wget openssl-devel bzip2-devel libffi-devel zlib-devel scl-utils which jq unzip
+yum -y install --nobest --skip-broken gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-libatomic-devel || true
+yum groupinstall "Development Tools" -y --nobest --skip-broken || true
+
+if [ -f /opt/rh/gcc-toolset-13/enable ]; then
+    cp /opt/rh/gcc-toolset-13/enable /etc/profile.d/gcc-toolset-13.sh
+    source /opt/rh/gcc-toolset-13/enable || true
+fi
+
+alternatives --set python3 /usr/bin/python3.11 || ln -sf /usr/bin/python3.11 /usr/bin/python3
+ln -sf /usr/bin/pip3.11 /usr/bin/pip3 || true
+
+make --version || echo "make not available"
+cmake --version || echo "cmake not available"
+gcc --version || echo "gcc not available"
 python3 --version
 pip3 --version
-# Also verify python3 is accessible via the symlink
-/usr/bin/python3 --version
 # Detect architecture and download appropriate AWS CLI
 ARCH=$(uname -m)
 if [[ $ARCH == "aarch64" ]]; then
