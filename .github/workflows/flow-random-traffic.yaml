@@ -79,8 +79,32 @@ jobs:
         shell: bash
         run: |
           redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis.log --loglevel debug &
+          REDIS_PID=$!
+          echo "Redis server started with PID: $REDIS_PID"
+          
+          # Wait for Redis to be ready
+          sleep 2
+          
+          # Run random traffic
           ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic_output.txt
           tail -n 100 random_traffic_output.txt
+          
+          # Verify Redis is still running and responsive
+          echo "Verifying Redis server health after random traffic..."
+          if ! kill -0 $REDIS_PID 2>/dev/null; then
+            echo "ERROR: Redis server process is not running!"
+            exit 1
+          fi
+          
+          # Check if Redis responds to PING
+          if ! ./venv/bin/python -c "import redis; r = redis.Redis(host='localhost', port=6379); r.ping()"; then
+            echo "ERROR: Redis server is not responding to PING!"
+            exit 1
+          fi
+          
+          echo "SUCCESS: Redis server is healthy after random traffic"
+          
+          # Clean up
           pkill -f redis-server      
       - name: Upload random traffic
         uses: actions/upload-artifact@v4
