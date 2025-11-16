@@ -1,5 +1,4 @@
 RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
 statistics
-# redis-command-generator - not available on PyPI, install separately if needed
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 #gevent~=22.10.1
