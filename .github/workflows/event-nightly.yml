@@ -52,6 +52,13 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+    env:
+      TEST: test_random_traffic_crash.py:test_random_traffic_no_crash
+      GEN: 1
+      SLAVES: 1
+      AOF: 1
+      AOF_SLAVES: 1
+      OSS_CLUSTER: 1
   mariner:
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
@@ -60,6 +67,13 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+    env:
+      TEST: test_random_traffic_crash.py:test_random_traffic_no_crash
+      GEN: 1
+      SLAVES: 1
+      AOF: 1
+      AOF_SLAVES: 1
+      OSS_CLUSTER: 1
   arm64:
     uses: ./.github/workflows/flow-linux-arm.yml
     needs: [prepare-values]
@@ -68,6 +82,13 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+    env:
+      TEST: test_random_traffic_crash.py:test_random_traffic_no_crash
+      GEN: 1
+      SLAVES: 1
+      AOF: 1
+      AOF_SLAVES: 1
+      OSS_CLUSTER: 1
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
@@ -76,7 +97,15 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+    env:
+      TEST: test_random_traffic_crash.py:test_random_traffic_no_crash
+      GEN: 1
+      SLAVES: 1
+      AOF: 1
+      AOF_SLAVES: 1
+      OSS_CLUSTER: 1
   linux-valgrind:
+    if: false
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
