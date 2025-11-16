@@ -22,8 +22,17 @@ on:
 
 jobs:
   prepare-values:
-    runs-on: ubuntu:jammy
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
     steps:
+      - name: install git
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
+        run: |
+          ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+          apt-get update && apt-get install -y tzdata git && dpkg-reconfigure -f noninteractive tzdata
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -40,15 +49,28 @@ jobs:
         shell: bash
         run: |
             ./install_script.sh
-      - name: Install python11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - name: Install python dependencies
         shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
         run: |
-            ./.install/common_installations.sh
-            pip install redis-command-generator
+          ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+          apt-get update
+          apt-get install -y --no-install-recommends tzdata software-properties-common gnupg curl
+          dpkg-reconfigure -f noninteractive tzdata
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends python3.11 python3.11-venv python3.11-distutils python3.11-dev
+          curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+          python3.11 /tmp/get-pip.py
+          python3.11 -m venv venv
+          . venv/bin/activate
+          python -m pip install -U pip setuptools
+          python -m pip install -q -r tests/flow/requirements.txt
+          # These packages are needed to build the package
+          python -m pip install -q -r .install/build_package_requirements.txt
+          python -m pip install redis-command-generator
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
@@ -56,12 +78,15 @@ jobs:
       - name: Run Random Traffic
         shell: bash
         run: |
-            redis-server --loadmodule ./target/release/libtimeseries.so --port 6379 &
-            python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
-            tail -n 100 random_traffic.txt
-            pkill -f redis-server      
+          redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis.log --loglevel debug &
+          ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic_output.txt
+          tail -n 100 random_traffic_output.txt
+          pkill -f redis-server      
       - name: Upload random traffic
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: random_traffic.txt
-          path: random_traffic.txt
+          name: results.zip
+          path: |
+            random_traffic_output.txt
+            redis.log
