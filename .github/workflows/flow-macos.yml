@@ -114,6 +114,12 @@ jobs:
       BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
       PIP_BREAK_SYSTEM_PACKAGES: 1
+      TEST: test_random_traffic_crash.py:test_random_traffic_no_crash
+      GEN: 1
+      SLAVES: 1
+      AOF: 1
+      AOF_SLAVES: 1
+      OSS_CLUSTER: 1
     runs-on: ${{matrix.os}}
     needs: setup-environment
     strategy:
