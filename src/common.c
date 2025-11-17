@@ -7,7 +7,8 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
             0 || // unlink also notifies with del with freeseries called before
         strcasecmp(event, "set") == 0 ||
         strcasecmp(event, "expired") == 0 || strcasecmp(event, "evict") == 0 ||
-        strcasecmp(event, "evicted") == 0 || strcasecmp(event, "trimmed") == 0 // only on enterprise
+        strcasecmp(event, "evicted") == 0 || strcasecmp(event, "key_trimmed") == 0 ||
+        strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
         RemoveIndexedMetric(key);
         return REDISMODULE_OK;
