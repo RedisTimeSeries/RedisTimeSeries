@@ -194,6 +194,7 @@ jobs:
         with:
           call-setup: ${{matrix.docker_image.call-setup}}
           use-venv: ${{matrix.docker_image.use-venv}}
+          extra-packages-to-install: 'redis-command-generator'
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
