@@ -37,6 +37,24 @@ def test_random_traffic_no_crash():
     """
     env = Env(decodeResponses=True)
     
+    # Check if redis_command_generator module is available
+    # Try to find the module first
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', 'import redis_command_generator'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            raise AssertionError("redis_command_generator module not available - required dependency missing")
+    except subprocess.TimeoutExpired:
+        raise AssertionError("redis_command_generator module check timed out")
+    except Exception as e:
+        if isinstance(e, AssertionError):
+            raise
+        raise AssertionError(f"redis_command_generator module not available - required dependency missing: {str(e)}")
+    
     # Get connection to determine Redis host/port
     with env.getClusterConnectionIfNeeded() as r:
         # Get Redis connection info from the connection
@@ -59,10 +77,9 @@ def test_random_traffic_no_crash():
                 host = getattr(r, 'host', 'localhost')
                 port = getattr(r, 'port', 6379)
         except:
-            # If we can't determine the port, skip the test
+            # If we can't determine the port, fail the test
             # (redis_command_generator needs the exact port)
-            env.skip("Cannot determine Redis connection details for redis_command_generator")
-            return
+            raise AssertionError("Cannot determine Redis connection details for redis_command_generator")
         
         # Configurable number of commands (default 1000 for regular tests)
         max_commands = int(os.getenv('RANDOM_TRAFFIC_MAX_COMMANDS', '1000'))
@@ -87,15 +104,16 @@ def test_random_traffic_no_crash():
                 print(f"Warning: redis_command_generator exited with code {result.returncode}")
                 if result.stderr:
                     print(f"stderr: {result.stderr}")
-                # Don't fail the test if generator has issues, but still verify Redis health
+                    # Check if the error is due to missing module
+                    if 'ModuleNotFoundError' in result.stderr or 'No module named' in result.stderr:
+                        raise AssertionError("redis_command_generator not available (ModuleNotFoundError) - required dependency missing")
+                # Don't fail the test if generator has other issues, but still verify Redis health
                     
         except subprocess.TimeoutExpired:
             print("Warning: redis_command_generator timed out after 1 hour")
             # Still verify Redis health even if generator timed out
         except FileNotFoundError:
-            print("Warning: redis_command_generator not found")
-            env.skip("redis_command_generator not available")
-            return
+            raise AssertionError("redis_command_generator not available - required dependency missing")
         except Exception as e:
             print(f"Warning: Error running redis_command_generator: {e}")
             # Still verify Redis health
