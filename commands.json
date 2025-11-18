@@ -717,7 +717,10 @@
             }
         ],
         "since": "1.0.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.REVRANGE": {
         "summary": "Query a range in reverse direction",
@@ -912,7 +915,10 @@
             }
         ],
         "since": "1.4.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.MRANGE": {
         "summary": "Query a range across multiple time series by filters in forward direction",
@@ -1155,7 +1161,10 @@
             }
         ],
         "since": "1.0.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.MREVRANGE": {
         "summary": "Query a range across multiple time-series by filters in reverse direction",
@@ -1399,7 +1408,10 @@
                 ]
             }
         ],
-            "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.GET": {
         "summary": "Get the sample with the highest timestamp from a given time series",
@@ -1417,7 +1429,10 @@
             }
         ],
         "since": "1.0.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.MGET": {
         "summary": "Get the sample with the highest timestamp from each time series matching a specific filter",
@@ -1508,7 +1523,10 @@
             }
         ],
         "since": "1.0.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     },
     "TS.QUERYINDEX": {
         "summary": "Get all time series keys matching a filter list",
@@ -1547,6 +1565,9 @@
             }
         ],
         "since": "1.0.0",
-        "group": "timeseries"
+        "group": "timeseries",
+        "command_flags": [
+            "readonly"
+        ]
     }
 }
