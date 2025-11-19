@@ -82,7 +82,6 @@ jobs:
           name: build-artifacts
           path: |
             bin/
-            venv/
             redis/
           retention-days: 1
 
@@ -117,7 +116,7 @@ jobs:
           curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
           python3.11 /tmp/get-pip.py
           python3.11 -m venv venv
-          . venv/bin/activate
+          source venv/bin/activate
           python -m pip install -U pip setuptools redis redis-command-generator
       - name: Run Random Traffic - ${{ matrix.env_type }}
         shell: bash
