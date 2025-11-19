@@ -100,6 +100,10 @@ jobs:
         with:
           name: build-artifacts
           path: .
+      - name: Fix Redis executable permissions
+        shell: bash
+        run: |
+          chmod +x redis/src/redis-server redis/src/redis-cli
       - name: Install dependencies
         shell: bash
         env:
