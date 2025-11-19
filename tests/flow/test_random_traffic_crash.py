@@ -48,14 +48,27 @@ def test_random_traffic_no_crash():
         if result.returncode != 0:
             # Try to install redis-command-generator
             print("redis_command_generator not found, attempting to install...")
-            install_result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', 'redis-command-generator'],
+            # First upgrade pip to ensure we have the latest version
+            subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=30
+            )
+            # Install redis-command-generator
+            install_result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'redis-command-generator'],
+                capture_output=True,
+                text=True,
+                timeout=120
             )
             if install_result.returncode != 0:
-                raise AssertionError("redis_command_generator module not available - required dependency missing. Installation failed.")
+                error_msg = "redis_command_generator module not available - required dependency missing. Installation failed."
+                if install_result.stdout:
+                    error_msg += f"\nInstallation stdout: {install_result.stdout}"
+                if install_result.stderr:
+                    error_msg += f"\nInstallation stderr: {install_result.stderr}"
+                raise AssertionError(error_msg)
             # Verify installation succeeded
             verify_result = subprocess.run(
                 [sys.executable, '-c', 'import redis_command_generator'],
@@ -64,7 +77,10 @@ def test_random_traffic_no_crash():
                 timeout=10
             )
             if verify_result.returncode != 0:
-                raise AssertionError("redis_command_generator installation succeeded but module still not importable")
+                error_msg = "redis_command_generator installation succeeded but module still not importable"
+                if verify_result.stderr:
+                    error_msg += f"\nImport error: {verify_result.stderr}"
+                raise AssertionError(error_msg)
     except subprocess.TimeoutExpired:
         raise AssertionError("redis_command_generator module check/installation timed out")
     except Exception as e:
