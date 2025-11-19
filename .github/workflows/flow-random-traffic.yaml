@@ -178,6 +178,47 @@ jobs:
           
           echo "Redis server(s) started for ${{ matrix.env_type }}"
           
+          # Check if Redis process is running
+          sleep 2
+          if [ "${{ matrix.env_type }}" == "cluster" ]; then
+            for port in 7000 7001 7002; do
+              if ! pgrep -f "redis-server.*$port" > /dev/null; then
+                echo "ERROR: Redis server for port $port is not running!"
+                if [ -f redis-$port.log ]; then
+                  echo "Redis log for port $port:"
+                  cat redis-$port.log
+                fi
+                exit 1
+              fi
+            done
+          elif [ "${{ matrix.env_type }}" == "slaves" ] || [ "${{ matrix.env_type }}" == "aof-slaves" ]; then
+            if ! kill -0 $MASTER_PID 2>/dev/null; then
+              echo "ERROR: Redis master process is not running!"
+              if [ -f redis-master.log ]; then
+                echo "Redis master log:"
+                cat redis-master.log
+              fi
+              exit 1
+            fi
+            if ! kill -0 $REPLICA_PID 2>/dev/null; then
+              echo "ERROR: Redis replica process is not running!"
+              if [ -f redis-replica.log ]; then
+                echo "Redis replica log:"
+                cat redis-replica.log
+              fi
+              exit 1
+            fi
+          else
+            if ! kill -0 $REDIS_PID 2>/dev/null; then
+              echo "ERROR: Redis server process is not running!"
+              if [ -f redis.log ]; then
+                echo "Redis log:"
+                cat redis.log
+              fi
+              exit 1
+            fi
+          fi
+          
           # Wait for Redis to be ready
           echo "Waiting for Redis to be ready..."
           if [ "${{ matrix.env_type }}" == "cluster" ]; then
