@@ -122,7 +122,7 @@ jobs:
         shell: bash
         run: |
           . venv/bin/activate
-          export PATH="$GITHUB_WORKSPACE/redis/src:$PATH"
+          export PATH="$(pwd)/redis/src:$PATH"
           
           # Setup Redis based on environment type
           if [ "${{ matrix.env_type }}" == "standalone" ]; then
