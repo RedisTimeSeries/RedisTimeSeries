@@ -64,12 +64,6 @@ jobs:
       - name: Install dependencies
         run: |
           bash .install/mariner2.sh
-      - name: Install redis-command-generator
-        run: |
-          if [[ -f venv/bin/activate ]]; then
-            . venv/bin/activate
-          fi
-          pip install redis-command-generator || true
       - name: Get Redis
         uses: actions/checkout@v4
         with:

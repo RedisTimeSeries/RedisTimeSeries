@@ -197,11 +197,6 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           use-venv: '1'
-      - name: Install redis-command-generator
-        shell: bash
-        run: |
-          . venv/bin/activate
-          pip install redis-command-generator || true
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
