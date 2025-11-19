@@ -194,6 +194,13 @@ jobs:
         with:
           call-setup: ${{matrix.docker_image.call-setup}}
           use-venv: ${{matrix.docker_image.use-venv}}
+      - name: Install redis-command-generator
+        shell: bash
+        run: |
+          if [[ "${{matrix.docker_image.use-venv}}" == "1" ]]; then
+            . venv/bin/activate
+          fi
+          pip install redis-command-generator || true
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:

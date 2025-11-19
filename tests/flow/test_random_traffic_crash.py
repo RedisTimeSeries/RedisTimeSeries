@@ -37,8 +37,7 @@ def test_random_traffic_no_crash():
     """
     env = Env(decodeResponses=True)
     
-    # Check if redis_command_generator module is available
-    # Try to find the module first
+    # Check if redis_command_generator module is available, install if needed
     try:
         result = subprocess.run(
             [sys.executable, '-c', 'import redis_command_generator'],
@@ -47,9 +46,27 @@ def test_random_traffic_no_crash():
             timeout=10
         )
         if result.returncode != 0:
-            raise AssertionError("redis_command_generator module not available - required dependency missing")
+            # Try to install redis-command-generator
+            print("redis_command_generator not found, attempting to install...")
+            install_result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', 'redis-command-generator'],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if install_result.returncode != 0:
+                raise AssertionError("redis_command_generator module not available - required dependency missing. Installation failed.")
+            # Verify installation succeeded
+            verify_result = subprocess.run(
+                [sys.executable, '-c', 'import redis_command_generator'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if verify_result.returncode != 0:
+                raise AssertionError("redis_command_generator installation succeeded but module still not importable")
     except subprocess.TimeoutExpired:
-        raise AssertionError("redis_command_generator module check timed out")
+        raise AssertionError("redis_command_generator module check/installation timed out")
     except Exception as e:
         if isinstance(e, AssertionError):
             raise
