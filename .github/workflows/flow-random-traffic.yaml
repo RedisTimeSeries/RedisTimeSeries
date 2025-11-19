@@ -75,42 +75,160 @@ jobs:
         uses: ./.github/actions/build-module-and-redis
         with:
           use-venv: '1'
-      - name: Run Random Traffic
-        shell: bash
-        run: |
-          redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis.log --loglevel debug &
-          REDIS_PID=$!
-          echo "Redis server started with PID: $REDIS_PID"
-          
-          # Wait for Redis to be ready
-          sleep 2
-          
-          # Run random traffic
-          ./venv/bin/python -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic_output.txt
-          tail -n 100 random_traffic_output.txt
-          
-          # Verify Redis is still running and responsive
-          echo "Verifying Redis server health after random traffic..."
-          if ! kill -0 $REDIS_PID 2>/dev/null; then
-            echo "ERROR: Redis server process is not running!"
-            exit 1
-          fi
-          
-          # Check if Redis responds to PING
-          if ! ./venv/bin/python -c "import redis; r = redis.Redis(host='localhost', port=6379); r.ping()"; then
-            echo "ERROR: Redis server is not responding to PING!"
-            exit 1
-          fi
-          
-          echo "SUCCESS: Redis server is healthy after random traffic"
-          
-          # Clean up
-          pkill -f redis-server      
-      - name: Upload random traffic
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results.zip
+          name: build-artifacts
           path: |
-            random_traffic_output.txt
-            redis.log
+            bin/
+            venv/
+            redis/
+          retention-days: 1
+
+  run-random-traffic:
+    needs: prepare-values
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
+    strategy:
+      fail-fast: false
+      matrix:
+        env_type: [standalone, slaves, aof, aof-slaves, cluster]
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+      - name: Install dependencies
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
+        run: |
+          ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+          apt-get update
+          apt-get install -y --no-install-recommends tzdata software-properties-common gnupg curl python3 redis-tools
+          dpkg-reconfigure -f noninteractive tzdata
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends python3.11 python3.11-venv python3.11-distutils python3.11-dev
+          curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+          python3.11 /tmp/get-pip.py
+          python3.11 -m venv venv
+          . venv/bin/activate
+          python -m pip install -U pip setuptools redis redis-command-generator
+      - name: Run Random Traffic - ${{ matrix.env_type }}
+        shell: bash
+        run: |
+          . venv/bin/activate
+          
+          # Setup Redis based on environment type
+          if [ "${{ matrix.env_type }}" == "standalone" ]; then
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis.log --loglevel debug &
+            REDIS_PID=$!
+            HOSTS="localhost:6379"
+            
+          elif [ "${{ matrix.env_type }}" == "slaves" ]; then
+            # Start master
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --logfile redis-master.log --loglevel debug &
+            MASTER_PID=$!
+            sleep 2
+            
+            # Start replica
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6380 --logfile redis-replica.log --loglevel debug --replicaof localhost 6379 &
+            REPLICA_PID=$!
+            HOSTS="localhost:6379"
+            REDIS_PID=$MASTER_PID
+            
+          elif [ "${{ matrix.env_type }}" == "aof" ]; then
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --appendonly yes --logfile redis.log --loglevel debug &
+            REDIS_PID=$!
+            HOSTS="localhost:6379"
+            
+          elif [ "${{ matrix.env_type }}" == "aof-slaves" ]; then
+            # Start master with AOF
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6379 --appendonly yes --logfile redis-master.log --loglevel debug &
+            MASTER_PID=$!
+            sleep 2
+            
+            # Start replica
+            redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port 6380 --logfile redis-replica.log --loglevel debug --replicaof localhost 6379 &
+            REPLICA_PID=$!
+            HOSTS="localhost:6379"
+            REDIS_PID=$MASTER_PID
+            
+          elif [ "${{ matrix.env_type }}" == "cluster" ]; then
+            # Start 3 cluster nodes
+            for port in 7000 7001 7002; do
+              redis-server --loadmodule ./bin/linux-x64-release/redistimeseries.so --port $port --cluster-enabled yes --cluster-config-file nodes-$port.conf --cluster-node-timeout 5000 --logfile redis-$port.log --loglevel debug &
+            done
+            sleep 3
+            
+            # Create cluster
+            echo "yes" | redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 0
+            HOSTS="localhost:7000,localhost:7001,localhost:7002"
+            REDIS_PID=$(pgrep -f "redis-server.*7000")
+          fi
+          
+          echo "Redis server(s) started for ${{ matrix.env_type }}"
+          sleep 2
+          
+          # Run random traffic
+          python -m redis_command_generator.TimeSeriesGen --hosts $HOSTS --verbose --max_cmd_cnt 1000000 > random_traffic_${{ matrix.env_type }}.txt 2>&1
+          tail -n 100 random_traffic_${{ matrix.env_type }}.txt
+          
+          # Verify Redis is still running and responsive
+          echo "Verifying Redis server health after random traffic..."
+          if [ "${{ matrix.env_type }}" == "cluster" ]; then
+            # Check all cluster nodes
+            for port in 7000 7001 7002; do
+              if ! python -c "import redis; r = redis.Redis(host='localhost', port=$port); r.ping()"; then
+                echo "ERROR: Redis cluster node on port $port is not responding to PING!"
+                exit 1
+              fi
+            done
+          elif [ "${{ matrix.env_type }}" == "slaves" ] || [ "${{ matrix.env_type }}" == "aof-slaves" ]; then
+            # Check master and replica
+            if ! kill -0 $MASTER_PID 2>/dev/null; then
+              echo "ERROR: Redis master process is not running!"
+              exit 1
+            fi
+            if ! kill -0 $REPLICA_PID 2>/dev/null; then
+              echo "ERROR: Redis replica process is not running!"
+              exit 1
+            fi
+            if ! python -c "import redis; r = redis.Redis(host='localhost', port=6379); r.ping()"; then
+              echo "ERROR: Redis master is not responding to PING!"
+              exit 1
+            fi
+            if ! python -c "import redis; r = redis.Redis(host='localhost', port=6380); r.ping()"; then
+              echo "ERROR: Redis replica is not responding to PING!"
+              exit 1
+            fi
+          else
+            if ! kill -0 $REDIS_PID 2>/dev/null; then
+              echo "ERROR: Redis server process is not running!"
+              exit 1
+            fi
+            if ! python -c "import redis; r = redis.Redis(host='localhost', port=6379); r.ping()"; then
+              echo "ERROR: Redis server is not responding to PING!"
+              exit 1
+            fi
+          fi
+          
+          echo "SUCCESS: Redis server(s) healthy after random traffic in ${{ matrix.env_type }} mode"
+          
+          # Clean up
+          pkill -f redis-server
+          
+      - name: Upload random traffic - ${{ matrix.env_type }}
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.env_type }}
+          path: |
+            random_traffic_${{ matrix.env_type }}.txt
+            redis*.log
+            nodes-*.conf
