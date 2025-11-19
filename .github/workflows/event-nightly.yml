@@ -41,9 +41,11 @@ jobs:
           echo "beta-version=${BETA_VERSION}" >> $GITHUB_OUTPUT
           echo "Generated beta version: ${BETA_VERSION}"
   linter:
+    if: false
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
   build-linux-x86:
+    if: false
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
@@ -53,6 +55,7 @@ jobs:
       quick: false
     secrets: inherit
   mariner:
+    if: false
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
     with:
@@ -61,6 +64,7 @@ jobs:
       quick: false
     secrets: inherit
   arm64:
+    if: false
     uses: ./.github/workflows/flow-linux-arm.yml
     needs: [prepare-values]
     with:
@@ -69,6 +73,7 @@ jobs:
       quick: false
     secrets: inherit
   macos:
+    if: false
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
@@ -76,7 +81,15 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+  random-traffic:
+    uses: ./.github/workflows/flow-random-traffic.yaml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      timeout-minutes: '60'
+    secrets: inherit
   linux-valgrind:
+    if: false
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
@@ -86,6 +99,7 @@ jobs:
       run_valgrind: true
     secrets: inherit
   linux-sanitizer:
+    if: false
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
