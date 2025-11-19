@@ -177,11 +177,31 @@ jobs:
           fi
           
           echo "Redis server(s) started for ${{ matrix.env_type }}"
-          sleep 2
+          
+          # Wait for Redis to be ready
+          echo "Waiting for Redis to be ready..."
+          for i in {1..30}; do
+            if redis-cli -p 6379 ping > /dev/null 2>&1; then
+              echo "Redis is ready!"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: Redis failed to start after 30 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
           
           # Run random traffic
+          echo "Starting random traffic generation..."
           python -m redis_command_generator.TimeSeriesGen --hosts $HOSTS --verbose --max_cmd_cnt 1000000 > random_traffic_${{ matrix.env_type }}.txt 2>&1
+          RANDOM_TRAFFIC_EXIT_CODE=$?
           tail -n 100 random_traffic_${{ matrix.env_type }}.txt
+          
+          if [ $RANDOM_TRAFFIC_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Random traffic generation failed with exit code $RANDOM_TRAFFIC_EXIT_CODE"
+            exit 1
+          fi
           
           # Verify Redis is still running and responsive
           echo "Verifying Redis server health after random traffic..."
@@ -225,7 +245,7 @@ jobs:
           echo "SUCCESS: Redis server(s) healthy after random traffic in ${{ matrix.env_type }} mode"
           
           # Clean up
-          pkill -f redis-server
+          pkill -f redis-server || true
           
       - name: Upload random traffic - ${{ matrix.env_type }}
         uses: actions/upload-artifact@v4
