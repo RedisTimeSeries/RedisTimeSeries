@@ -152,7 +152,7 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           use-venv: '1'
-          extra-packages-to-install: 'gevent redis-command-generator'
+          extra-packages-to-install: 'gevent'
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:

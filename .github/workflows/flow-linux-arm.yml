@@ -197,7 +197,6 @@ jobs:
         uses: ./.github/actions/install-python-deps
         with: 
           use-venv: '1'
-          extra-packages-to-install: 'redis-command-generator'
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
