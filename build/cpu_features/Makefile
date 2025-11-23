@@ -43,6 +43,8 @@ CMAKE_DEFS += \
 
 include $(MK)/defs
 
+CMAKE_FLAGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
 MK_CUSTOM_CLEAN=1
 
 #----------------------------------------------------------------------------------------------
