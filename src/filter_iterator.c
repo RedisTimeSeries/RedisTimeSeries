@@ -757,24 +757,24 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                          self->endTimestamp);
             aggregation->addBucketParams(
                 aggregationContext, (!self->reverse) ? ta : tb, (!self->reverse) ? tb : ta);
-        }
 
-        if (aggregation->type == TS_AGG_TWA && !((!is_reversed) && init_ts == 0)) {
-            RangeArgs args = {
-                .aggregationArgs = { 0 },
-                .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator*)self),
-                .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator*)self),
-                .startTimestamp = is_reversed ? init_ts + 1 : 0,
-                .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
-                .latest = false,
-            };
-            AbstractSampleIterator *sample_iterator =
-                SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
-            if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                aggregation->addPrevBucketLastSample(
-                    aggregationContext, sample.value, sample.timestamp);
+            if (is_reversed || init_ts > 0) {
+                RangeArgs args = {
+                    .aggregationArgs = { 0 },
+                    .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator*)self),
+                    .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator*)self),
+                    .startTimestamp = is_reversed ? init_ts + 1 : 0,
+                    .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
+                    .latest = false,
+                };
+                AbstractSampleIterator *sample_iterator =
+                    SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
+                if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+                    aggregation->addPrevBucketLastSample(
+                        aggregationContext, sample.value, sample.timestamp);
+                }
+                sample_iterator->Close(sample_iterator);
             }
-            sample_iterator->Close(sample_iterator);
         }
     }
 
