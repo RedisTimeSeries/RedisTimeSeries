@@ -276,7 +276,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->series = series;
-    iter->initilized = false;
+    iter->initialized = false;
     iter->empty = empty;
     iter->bucketTS = bucketTS;
     iter->aux_chunk = NewEnrichedChunk();
@@ -739,11 +739,11 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     }
     self->hasUnFinalizedContext = true;
 
-    if (!self->initilized) {
+    if (!self->initialized) {
         timestamp_t init_ts = enrichedChunk->samples.timestamps[si];
         self->aggregationLastTimestamp =
             CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
-        self->initilized = true;
+        self->initialized = true;
         if (aggregation->type == TS_AGG_TWA) {
             timestamp_t ta = twa_calc_ta(self->reverse,
                                          BucketStartNormalize(self->aggregationLastTimestamp),
