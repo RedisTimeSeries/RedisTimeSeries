@@ -15,11 +15,7 @@
 #include <math.h> /* ceil */
 
 static inline bool check_sample_value(double value, FilterByValueArgs *byValueArgs) {
-    if (value >= byValueArgs->min && value <= byValueArgs->max) {
-        return true;
-    } else {
-        return false;
-    }
+    return byValueArgs->min <= value && value <= byValueArgs->max;
 }
 
 typedef struct dfs_stack_val
