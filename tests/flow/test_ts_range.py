@@ -443,6 +443,16 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 20, 'AGGREGATION', 'twa', 10)
         assert actual_result[0] == expected_result
 
+        # ... with TS filter
+        assert r.execute_command('TS.ADD', 'ts8', 4, 4)
+        assert r.execute_command('TS.ADD', 'ts8', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts8', 29, 29)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 20, 'FILTER_BY_TS', 3, 13, 28, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+        actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 20, 'FILTER_BY_TS', 3, 13, 28, 'AGGREGATION', 'twa', 10)
+        assert actual_result[0] == expected_result
+
         #case 9:
         assert r.execute_command('TS.CREATE', 'ts9')
         assert r.execute_command('TS.ADD', 'ts9', 13, 13)
