@@ -158,32 +158,39 @@ def migrate_slots_back_and_forth(env):
     middle_of_original_first = middle_slot_range(original_first_slot_range)
     middle_of_original_second = middle_slot_range(original_second_slot_range)
 
-    import_slots(first_conn, middle_of_original_second)
+    import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
 
-    import_slots(second_conn, middle_of_original_second)
+    import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
 
-    import_slots(second_conn, middle_of_original_first)
+    import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
 
-    import_slots(first_conn, middle_of_original_first)
+    import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
 
 
-def import_slots(conn, slot_range: SlotRange):
-    task_id = conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
-    start_time = time.time()
-    timeout = 5 if not VALGRIND else 60
-    while time.time() - start_time < timeout:
-        (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
-        migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
-        if migration_status["state"] == "completed":
-            break
-        time.sleep(0.1)
-    else:
-        raise TimeoutError
+def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
+
+    def wait_for_completion(conn):
+        start_time = time.time()
+        timeout = 5 if not VALGRIND else 60
+        while time.time() - start_time < timeout:
+            (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
+            migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
+            if migration_status["state"] == "completed":
+                break
+            time.sleep(0.1)
+        else:
+            raise TimeoutError(f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}")
+
+    wait_for_completion(target_conn)
+    # The oss cluster's status data is not CP, but we should rather rely on eventual consistencty, so let's wait for the source as well
+    wait_for_completion(source_conn)
+
