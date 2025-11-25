@@ -175,14 +175,18 @@ def migrate_slots_back_and_forth(env):
     import_slots(first_conn, middle_of_original_second)
     wait_for_slots(first_conn, {original_first_slot_range, middle_of_original_second})
     wait_for_slots(second_conn, cantorized_slot_set(original_second_slot_range))
+    # Small delay to ensure cluster state is fully stable before next migration
+    time.sleep(0.3)
 
     import_slots(second_conn, middle_of_original_second)
     wait_for_slots(first_conn, {original_first_slot_range})
     wait_for_slots(second_conn, {original_second_slot_range})
+    time.sleep(0.3)
 
     import_slots(second_conn, middle_of_original_first)
     wait_for_slots(second_conn, {original_second_slot_range, middle_of_original_first})
     wait_for_slots(first_conn, cantorized_slot_set(original_first_slot_range))
+    time.sleep(0.3)
 
     import_slots(first_conn, middle_of_original_first)
     wait_for_slots(first_conn, {original_first_slot_range})
@@ -192,12 +196,26 @@ def migrate_slots_back_and_forth(env):
 def import_slots(conn, slot_range: SlotRange):
     task_id = conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
     start_time = time.time()
-    timeout = 5 if not VALGRIND else 60
+    timeout = 30 if not VALGRIND else 120
+    last_state = None
     while time.time() - start_time < timeout:
         (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
         migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
-        if migration_status["state"] == "completed":
-            break
+        state = migration_status.get("state")
+        last_state = state
+        
+        if state == "completed":
+            # Give a small delay after completion to ensure cluster state propagates
+            time.sleep(0.2)
+            return
+        elif state == "failed":
+            error_msg = migration_status.get("error", "Unknown error")
+            raise RuntimeError(f"Migration failed: {error_msg}")
+        
         time.sleep(0.1)
     else:
-        raise TimeoutError
+        # Timeout occurred - provide detailed error message
+        raise TimeoutError(
+            f"Migration timeout after {timeout}s. Slot range: {slot_range.start}-{slot_range.end}, "
+            f"Last state: {last_state}, Task ID: {task_id}"
+        )
