@@ -151,6 +151,20 @@ def migrate_slots_back_and_forth(env):
         middle = middle_slot_range(slot_range)
         return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
 
+    def wait_for_slots(conn, expected_slots: Set[SlotRange], timeout: float = None):
+        """Wait for the cluster node's slots to match the expected set."""
+        if timeout is None:
+            timeout = 60.0 if VALGRIND else 5.0
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            actual_slots = cluster_node_of(conn).slots
+            if actual_slots == expected_slots:
+                return
+            time.sleep(0.1)
+        # Final check - if it still doesn't match, the assertion will fail with a clear error
+        actual_slots = cluster_node_of(conn).slots
+        assert actual_slots == expected_slots, f"Expected slots {expected_slots}, but got {actual_slots}"
+
     first_conn, second_conn = env.getConnection(0), env.getConnection(1)
     # Store some original values to be used throughout the test
     (original_first_slot_range,) = cluster_node_of(first_conn).slots
@@ -159,20 +173,20 @@ def migrate_slots_back_and_forth(env):
     middle_of_original_second = middle_slot_range(original_second_slot_range)
 
     import_slots(first_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
-    assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
+    wait_for_slots(first_conn, {original_first_slot_range, middle_of_original_second})
+    wait_for_slots(second_conn, cantorized_slot_set(original_second_slot_range))
 
     import_slots(second_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    wait_for_slots(first_conn, {original_first_slot_range})
+    wait_for_slots(second_conn, {original_second_slot_range})
 
     import_slots(second_conn, middle_of_original_first)
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
-    assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
+    wait_for_slots(second_conn, {original_second_slot_range, middle_of_original_first})
+    wait_for_slots(first_conn, cantorized_slot_set(original_first_slot_range))
 
     import_slots(first_conn, middle_of_original_first)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    wait_for_slots(first_conn, {original_first_slot_range})
+    wait_for_slots(second_conn, {original_second_slot_range})
 
 
 def import_slots(conn, slot_range: SlotRange):
