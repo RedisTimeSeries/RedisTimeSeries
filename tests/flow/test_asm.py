@@ -3,10 +3,14 @@ import random
 from dataclasses import dataclass
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Set
 
 from includes import Env, VALGRIND
 from utils import slot_table
+
+
+MIGRATION_CYCLES = 10
 
 
 def test_asm_without_data():
@@ -14,7 +18,8 @@ def test_asm_without_data():
     if env.env != "oss-cluster":  # TODO: convert to a proper fixture (here and below)
         env.skip()
 
-    migrate_slots_back_and_forth(env)
+    for _ in range(MIGRATION_CYCLES):
+        migrate_slots_back_and_forth(env)
 
 
 def test_asm_with_data():
@@ -23,7 +28,8 @@ def test_asm_with_data():
         env.skip()
 
     fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
-    migrate_slots_back_and_forth(env)
+    for _ in range(MIGRATION_CYCLES):
+        migrate_slots_back_and_forth(env)
 
 
 def test_asm_with_data_and_queries_during_migrations():
@@ -37,9 +43,9 @@ def test_asm_with_data_and_queries_during_migrations():
 
     conn = env.getConnection(0)
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
-    result = conn.execute_command(command)
-    # First validate the result
-    ((filtered_by, withlabels, samples),) = result
+    expected_result = conn.execute_command(command)
+    # First validate the expected_result
+    ((filtered_by, withlabels, samples),) = expected_result
     assert filtered_by == "label1=17"
     assert withlabels == []  # No WITHLABLES
     assert len(samples) == samples_per_key
@@ -47,17 +53,21 @@ def test_asm_with_data_and_queries_during_migrations():
 
     # Now validate the command in a loop during the back and forth migrations
     def validate_command_in_a_loop():
-        while not done:
-            assert conn.execute_command(command) == result
+        while not done.is_set():
+            actual_result = conn.execute_command(command)
+            assert (
+                actual_result == expected_result
+            ), f"'{command}' returned {actual_result} and not the expected {expected_result}"
 
-    done = False
-    thread = threading.Thread(target=validate_command_in_a_loop)
-    thread.start()
+    done = threading.Event()
+    with ThreadPoolExecutor() as executor:
+        future = executor.submit(validate_command_in_a_loop)
 
-    migrate_slots_back_and_forth(env)
+        for _ in range(MIGRATION_CYCLES):
+            migrate_slots_back_and_forth(env)
+        done.set()
 
-    done = True
-    thread.join()
+        future.result()  # This will raise an exception in case the validation function failed
 
 
 # Helper structs and functions
@@ -136,6 +146,10 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
 
 
 def migrate_slots_back_and_forth(env):
+    """
+    Migrates slots between the two shards. When done all slots are back to their original places.
+    """
+
     def cluster_node_of(conn) -> ClusterNode:
         for line in conn.execute_command("cluster", "nodes").splitlines():
             cluster_node = ClusterNode.from_str(line)
@@ -188,9 +202,11 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
                 break
             time.sleep(0.1)
         else:
-            raise TimeoutError(f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}")
+            raise TimeoutError(
+                f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
+            )
 
     wait_for_completion(target_conn)
-    # The oss cluster's status data is not CP, but we should rather rely on eventual consistencty, so let's wait for the source as well
+    # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
+    # so let's wait for the source as well:
     wait_for_completion(source_conn)
-
