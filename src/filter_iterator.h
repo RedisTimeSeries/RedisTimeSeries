@@ -50,7 +50,7 @@ typedef struct AggregationIterator
     timestamp_t aggregationLastTimestamp;
     bool hasUnFinalizedContext;
     bool reverse;
-    bool initilized;
+    bool initialized;
     bool empty; // should report empty buckets
     BucketTimestamp bucketTS;
     EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket

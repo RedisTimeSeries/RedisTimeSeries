@@ -9,7 +9,6 @@
 #include "rdb.h"
 
 #include "consts.h"
-#include "endianconv.h"
 #include "load_io_error_macros.h"
 #include "module.h"
 

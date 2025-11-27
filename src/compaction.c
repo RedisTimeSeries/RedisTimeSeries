@@ -317,11 +317,11 @@ void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
     }
     const double delta_time = t2 - t1;
     const double delta_val = v2 - v1;
-    const bool *is_first_bucket = &context->is_first_bucket;
+    const bool is_first_bucket = context->is_first_bucket;
     const timestamp_t ta = context->bucketStartTS;
 
     if ((*iter) == 0) { // First sample in bucket
-        if (!(*is_first_bucket)) {
+        if (!is_first_bucket) {
             context->first_ts = ta;
             double vab = v1 + ((double)((ta - t1) * delta_val)) / delta_time;
             if (!context->reverse) {
