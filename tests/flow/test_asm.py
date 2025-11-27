@@ -202,7 +202,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
         start_time = time.time()
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
-        repl_diskless_sync_delay = float(conn.config_get()['repl-diskless-sync-delay'])
+        repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
         timeout = repl_diskless_sync_delay + (5 if not VALGRIND else 60)
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
