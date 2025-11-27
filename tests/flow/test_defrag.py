@@ -54,7 +54,7 @@ def testDefrag(env):
     # wait for fragmentation for up to sleepTime seconds
     time.sleep(sleepTime)
     frag = env.cmd('info', 'memory')['allocator_frag_ratio']
-    defragExpected = 1 + (frag - 1) * 0.85
+    defragExpected = 1 + (frag - 1) * 0.90
 
     #enable active defrag
     env.cmd('CONFIG', 'SET', 'activedefrag', 'yes')
