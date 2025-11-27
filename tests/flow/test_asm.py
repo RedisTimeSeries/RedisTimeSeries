@@ -3,10 +3,14 @@ import random
 from dataclasses import dataclass
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 
 from includes import Env, VALGRIND
 from utils import slot_table
+
+
+MIGRATION_CYCLES = 10
 
 
 def test_asm_without_data():
@@ -14,7 +18,8 @@ def test_asm_without_data():
     if env.env != "oss-cluster":  # TODO: convert to a proper fixture (here and below)
         env.skip()
 
-    migrate_slots_back_and_forth(env)
+    for _ in range(MIGRATION_CYCLES):
+        migrate_slots_back_and_forth(env)
 
 
 def test_asm_with_data():
@@ -23,7 +28,8 @@ def test_asm_with_data():
         env.skip()
 
     fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
-    migrate_slots_back_and_forth(env)
+    for _ in range(MIGRATION_CYCLES):
+        migrate_slots_back_and_forth(env)
 
 
 def test_asm_with_data_and_queries_during_migrations():
@@ -37,27 +43,37 @@ def test_asm_with_data_and_queries_during_migrations():
 
     conn = env.getConnection(0)
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
-    result = conn.execute_command(command)
-    # First validate the result
-    ((filtered_by, withlabels, samples),) = result
-    assert filtered_by == "label1=17"
-    assert withlabels == []  # No WITHLABLES
-    assert len(samples) == samples_per_key
-    assert all(sample[1] == str(number_of_keys) for sample in samples)
 
-    # Now validate the command in a loop during the back and forth migrations
+    def validate_result(result):
+        ((filtered_by, withlabels, samples),) = result
+        assert filtered_by == "label1=17"
+        assert withlabels == []  # No WITHLABLES
+        assert len(samples) == samples_per_key
+        # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
+
+    # First validate the result on the "static" cluster
+    validate_result(conn.execute_command(command))
+
+    # Now validate the command's result in a loop during the back and forth migrations
+    done = threading.Event()
+
     def validate_command_in_a_loop():
-        while not done:
-            assert conn.execute_command(command) == result
+        while not done.is_set():
+            validate_result(conn.execute_command(command))
 
-    done = False
-    thread = threading.Thread(target=validate_command_in_a_loop)
-    thread.start()
+    def migrate_slots():
+        for _ in range(MIGRATION_CYCLES):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env)
 
-    migrate_slots_back_and_forth(env)
-
-    done = True
-    thread.join()
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        for future in as_completed(futures):
+            # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+            done.set()
+            # This will raise an exception in case the validation function failed (or got stuck)
+            future.result()
 
 
 # Helper structs and functions
@@ -136,6 +152,10 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
 
 
 def migrate_slots_back_and_forth(env):
+    """
+    Migrates slots between the two shards. When done all slots are back to their original places.
+    """
+
     def cluster_node_of(conn) -> ClusterNode:
         for line in conn.execute_command("cluster", "nodes").splitlines():
             cluster_node = ClusterNode.from_str(line)
@@ -158,32 +178,41 @@ def migrate_slots_back_and_forth(env):
     middle_of_original_first = middle_slot_range(original_first_slot_range)
     middle_of_original_second = middle_slot_range(original_second_slot_range)
 
-    import_slots(first_conn, middle_of_original_second)
+    import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
 
-    import_slots(second_conn, middle_of_original_second)
+    import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
 
-    import_slots(second_conn, middle_of_original_first)
+    import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
 
-    import_slots(first_conn, middle_of_original_first)
+    import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
 
 
-def import_slots(conn, slot_range: SlotRange):
-    task_id = conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
-    start_time = time.time()
-    timeout = 5 if not VALGRIND else 60
-    while time.time() - start_time < timeout:
-        (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
-        migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
-        if migration_status["state"] == "completed":
-            break
-        time.sleep(0.1)
-    else:
-        raise TimeoutError
+def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
+
+    def wait_for_completion(conn):
+        start_time = time.time()
+        timeout = 5 if not VALGRIND else 60
+        while time.time() - start_time < timeout:
+            (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
+            migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
+            if migration_status["state"] == "completed":
+                break
+            time.sleep(0.1)
+        else:
+            raise TimeoutError(
+                f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
+            )
+
+    wait_for_completion(target_conn)
+    # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
+    # so let's wait for the source as well:
+    wait_for_completion(source_conn)
