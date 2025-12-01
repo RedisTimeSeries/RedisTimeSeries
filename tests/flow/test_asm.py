@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 
-from includes import Env, VALGRIND
+from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
 
 
@@ -37,7 +37,7 @@ def test_asm_with_data_and_queries_during_migrations():
     if env.env != "oss-cluster":
         env.skip()
 
-    number_of_keys = 1000 if not VALGRIND else 100
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
     samples_per_key = 150
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
@@ -203,7 +203,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not VALGRIND else 60)
+        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
             migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
