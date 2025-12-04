@@ -16,6 +16,9 @@
 >
 > See https://github.com/redis/redis
 
+> [!NOTE]
+> 32 bit systems are not supported.
+
 ## Overview
 
 RedisTimeSeries can hold multiple time series. Each time series is accessible via a single Redis key (similar to any other Redis data structure).
