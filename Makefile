@@ -9,6 +9,13 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
+# RedisTimeSeries only supports 64-bit architectures
+ifneq ($(ARCH),x64)
+ifneq ($(ARCH),arm64v8)
+$(error RedisTimeSeries only supports 64-bit architectures (x64, arm64v8). Current architecture: $(ARCH))
+endif
+endif
+
 #----------------------------------------------------------------------------------------------
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
