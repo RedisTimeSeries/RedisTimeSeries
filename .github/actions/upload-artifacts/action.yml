@@ -5,6 +5,14 @@ inputs:
   image: # The Docker image to use for the build
     description: 'The Docker image to use for the build'
     required: true
+  redis-ref:
+    description: 'Redis ref being tested'
+    required: false
+    default: 'unstable'
+  test-type:
+    description: 'Type of test (e.g., valgrind, sanitizer, or empty for normal)'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -15,7 +23,11 @@ runs:
       id: artifact-names
       shell: bash
       run: | # Invalid characters include: Double quote ", Colon :, Less than <, Greater than >, Vertical bar |, Asterisk *, Question mark ?
-        echo "name=$(echo "${{ inputs.image }} x86-64, Redis unstable" | \
+        TEST_SUFFIX="${{ inputs.test-type }}"
+        if [ -n "$TEST_SUFFIX" ]; then
+          TEST_SUFFIX=" ${TEST_SUFFIX}"
+        fi
+        echo "name=$(echo "${{ inputs.image }} x86-64, Redis ${{ inputs.redis-ref }}${TEST_SUFFIX}" | \
           sed -e 's/[":\/\\<>\|*?]/_/g' -e 's/__*/_/g' -e 's/^_//' -e 's/_$//')" >> $GITHUB_OUTPUT
     - name: Upload test artifacts
       if: inputs.image != 'amazonlinux:2' && inputs.image != 'ubuntu:bionic'
