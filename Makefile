@@ -415,7 +415,7 @@ flow_tests: #$(TARGET)
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
-	TEST=$(TEST) \
+	TEST=test_asm:test_asm_with_data_and_queries_during_migrations \
 	$(ROOT)/tests/flow/tests.sh
 
 else # RLEC
