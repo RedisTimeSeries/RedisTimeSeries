@@ -1,7 +1,10 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "query_language.h"
 #include "tsdb.h"
+
+#include <stdint.h>
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
 #define REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -26,7 +29,18 @@ typedef struct QueryPredicates_Arg
     RedisModuleString **limitLabels;
     bool latest;
     bool resp3;
+
+    // Optional extra data for specialized multi-shard execution paths.
+    // Kept inside this shared object so shards can run pushed-down logic.
+    uint64_t flags;
+    RangeArgs rangeArgs;
+    TS_AGG_TYPES_T rangeAggType; // TS_AGG_NONE when no aggregation
+    ReducerArgs reducerArgs;     // used for GROUPBY/REDUCE pushdown
+    RedisModuleString *groupByLabel;
 } QueryPredicates_Arg;
+
+// QueryPredicates_Arg.flags values
+#define QP_FLAG_MRANGE_GROUPBY_REDUCE_PUSHDOWN (1ULL << 0)
 
 typedef struct StringRecord
 {

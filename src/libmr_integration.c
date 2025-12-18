@@ -9,10 +9,13 @@
 #include "indexer.h"
 #include "module.h"
 #include "query_language.h"
+#include "resultset.h"
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
+
+#include <string.h>
 
 #define SeriesRecordName "SeriesRecord"
 
@@ -53,6 +56,9 @@ static void QueryPredicates_ObjectFree(void *arg) {
         RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
     }
     free(predicate_list->limitLabels);
+    if (predicate_list->groupByLabel) {
+        RedisModule_FreeString(NULL, predicate_list->groupByLabel);
+    }
     free(predicate_list);
 }
 
@@ -126,6 +132,39 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->endTimestamp, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->latest, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->resp3, error);
+    MR_SerializationCtxWriteLongLong(sctx, (long long)predicate_list->flags, error);
+
+    if (predicate_list->flags & QP_FLAG_MRANGE_GROUPBY_REDUCE_PUSHDOWN) {
+        SerializationCtxWriteRedisString(sctx, predicate_list->groupByLabel, error);
+        MR_SerializationCtxWriteLongLong(sctx, (long long)predicate_list->reducerArgs.agg_type, error);
+        MR_SerializationCtxWriteLongLong(sctx, (long long)predicate_list->rangeAggType, error);
+
+        // RangeArgs (everything needed for shard-side range query & reducer)
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.startTimestamp, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.endTimestamp, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.latest, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.count, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.alignment, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.timestampAlignment, error);
+
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.filterByValueArgs.hasValue, error);
+        if (predicate_list->rangeArgs.filterByValueArgs.hasValue) {
+            MR_SerializationCtxWriteDouble(sctx, predicate_list->rangeArgs.filterByValueArgs.min, error);
+            MR_SerializationCtxWriteDouble(sctx, predicate_list->rangeArgs.filterByValueArgs.max, error);
+        }
+
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.filterByTSArgs.hasValue, error);
+        if (predicate_list->rangeArgs.filterByTSArgs.hasValue) {
+            MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.filterByTSArgs.count, error);
+            for (size_t i = 0; i < predicate_list->rangeArgs.filterByTSArgs.count; i++) {
+                MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.filterByTSArgs.values[i], error);
+            }
+        }
+
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.aggregationArgs.timeDelta, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.aggregationArgs.empty, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->rangeArgs.aggregationArgs.bucketTS, error);
+    }
 
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         SerializationCtxWriteRedisString(sctx, predicate_list->limitLabels[i], error);
@@ -185,12 +224,16 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
         }
         free(predicates->limitLabels);
     }
+    if (predicates->groupByLabel) {
+        RedisModule_FreeString(NULL, predicates->groupByLabel);
+    }
     free(predicates);
 }
 
 static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
                                                  MRError **error,
-                                                 bool expect_resp) {
+                                                 bool expect_resp,
+                                                 bool expect_flags) {
     QueryPredicates_Arg *predicates = calloc(1, sizeof *predicates);
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
@@ -207,6 +250,83 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     // *error must be NULL here, as ReadLongLong checks that we do not exceed the buffer.
     if (unlikely(expect_resp && (bool)predicates->resp3 != predicates->resp3)) {
         goto err;
+    }
+
+    predicates->flags = expect_flags ? (uint64_t)MR_SerializationCtxReadLongLong(sctx, error) : 0;
+    if (unlikely(expect_flags && *error)) {
+        goto err;
+    }
+
+    if ((predicates->flags & QP_FLAG_MRANGE_GROUPBY_REDUCE_PUSHDOWN) != 0) {
+        predicates->groupByLabel = SerializationCtxReadeRedisString(sctx, error);
+        if (unlikely(*error)) {
+            goto err;
+        }
+
+        predicates->reducerArgs.agg_type = (TS_AGG_TYPES_T)MR_SerializationCtxReadLongLong(sctx, error);
+        if (unlikely(*error)) {
+            goto err;
+        }
+        predicates->reducerArgs.aggregationClass = GetAggClass(predicates->reducerArgs.agg_type);
+        if (predicates->reducerArgs.aggregationClass == NULL) {
+            goto err;
+        }
+
+        predicates->rangeAggType = (TS_AGG_TYPES_T)MR_SerializationCtxReadLongLong(sctx, error);
+        if (unlikely(*error)) {
+            goto err;
+        }
+
+        // RangeArgs
+        memset(&predicates->rangeArgs, 0, sizeof(predicates->rangeArgs));
+        predicates->rangeArgs.startTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.endTimestamp = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.latest = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.count = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.alignment = (RangeAlignment)MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.timestampAlignment = MR_SerializationCtxReadLongLong(sctx, error);
+        if (unlikely(*error)) {
+            goto err;
+        }
+
+        predicates->rangeArgs.filterByValueArgs.hasValue = MR_SerializationCtxReadLongLong(sctx, error);
+        if (predicates->rangeArgs.filterByValueArgs.hasValue) {
+            predicates->rangeArgs.filterByValueArgs.min = MR_SerializationCtxReadDouble(sctx, error);
+            predicates->rangeArgs.filterByValueArgs.max = MR_SerializationCtxReadDouble(sctx, error);
+        }
+
+        predicates->rangeArgs.filterByTSArgs.hasValue = MR_SerializationCtxReadLongLong(sctx, error);
+        if (predicates->rangeArgs.filterByTSArgs.hasValue) {
+            predicates->rangeArgs.filterByTSArgs.count = (size_t)MR_SerializationCtxReadLongLong(sctx, error);
+            if (predicates->rangeArgs.filterByTSArgs.count > MAX_TS_VALUES_FILTER) {
+                goto err;
+            }
+            for (size_t i = 0; i < predicates->rangeArgs.filterByTSArgs.count; i++) {
+                predicates->rangeArgs.filterByTSArgs.values[i] =
+                    (timestamp_t)MR_SerializationCtxReadLongLong(sctx, error);
+            }
+        }
+
+        predicates->rangeArgs.aggregationArgs.timeDelta = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.aggregationArgs.empty = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->rangeArgs.aggregationArgs.bucketTS = (BucketTimestamp)MR_SerializationCtxReadLongLong(sctx, error);
+        if (unlikely(*error)) {
+            goto err;
+        }
+
+        if (predicates->rangeAggType == TS_AGG_NONE) {
+            predicates->rangeArgs.aggregationArgs.aggregationClass = NULL;
+        } else {
+            predicates->rangeArgs.aggregationArgs.aggregationClass = GetAggClass(predicates->rangeAggType);
+            if (predicates->rangeArgs.aggregationArgs.aggregationClass == NULL) {
+                goto err;
+            }
+        }
+
+        // Keep the legacy fields consistent for any code paths still using them.
+        predicates->startTimestamp = predicates->rangeArgs.startTimestamp;
+        predicates->endTimestamp = predicates->rangeArgs.endTimestamp;
+        predicates->latest = predicates->rangeArgs.latest;
     }
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof *predicates->limitLabels);
@@ -258,8 +378,10 @@ err:
 }
 
 static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRError **error) {
-    return QueryPredicates_ArgDeserialize_impl(sctx, error, true)
-               ?: QueryPredicates_ArgDeserialize_impl(sctx, error, false);
+    return QueryPredicates_ArgDeserialize_impl(sctx, error, true, true) ?:
+           QueryPredicates_ArgDeserialize_impl(sctx, error, true, false) ?:
+           QueryPredicates_ArgDeserialize_impl(sctx, error, false, true) ?:
+           QueryPredicates_ArgDeserialize_impl(sctx, error, false, false);
 }
 
 static Record *StringRecord_Create(char *val, size_t len);
@@ -403,6 +525,19 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     Record *series_list = ListRecord_Create(0);
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
+    const bool should_pushdown_groupby_reduce =
+        ((predicates->flags & QP_FLAG_MRANGE_GROUPBY_REDUCE_PUSHDOWN) != 0) &&
+        predicates->groupByLabel != NULL && predicates->reducerArgs.agg_type == TS_AGG_COUNT;
+
+    // Push-down optimization for TS.MRANGE ... GROUPBY <label> REDUCE COUNT:
+    // compute the reduced series on each shard and only return the reduced series.
+    RedisModuleDict *groups = NULL;
+    const char *groupByLabelCStr = NULL;
+    if (should_pushdown_groupby_reduce) {
+        groupByLabelCStr = RedisModule_StringPtrLen(predicates->groupByLabel, NULL);
+        groups = RedisModule_CreateDict(NULL);
+    }
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName =
@@ -421,16 +556,108 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
             continue;
         }
 
-        ListRecord_Add(
-            series_list,
-            SeriesRecord_New(
-                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
+        if (should_pushdown_groupby_reduce) {
+            char *labelValue = SeriesGetCStringLabelValue(series, groupByLabelCStr);
+            if (labelValue) {
+                const size_t labelValueLen = strlen(labelValue);
+                int nokey = 0;
+                Series **groupSeries =
+                    (Series **)RedisModule_DictGetC(groups, labelValue, labelValueLen, &nokey);
+                if (nokey) {
+                    groupSeries = array_new(Series *, 1);
+                }
+                groupSeries = array_append(groupSeries, series);
+                RedisModule_DictSetC(groups, labelValue, labelValueLen, groupSeries);
+                free(labelValue);
+            }
+        } else {
+            ListRecord_Add(
+                series_list,
+                SeriesRecord_New(
+                    series, predicates->startTimestamp, predicates->endTimestamp, predicates));
+        }
 
         RedisModule_CloseKey(key);
     }
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
+
+    if (should_pushdown_groupby_reduce) {
+        RedisModuleDictIter *giter = RedisModule_DictIteratorStartC(groups, "^", NULL, 0);
+        char *groupValue = NULL;
+        size_t groupValueLen = 0;
+        Series **groupSeries = NULL;
+
+        // Avoid accidental "LATEST" handling for the reduced temp series.
+        QueryPredicates_Arg clonePred = *predicates;
+        clonePred.latest = false;
+
+        // Use the same chunk size used by the existing group-by reducer path.
+        CreateCtx cCtx = {
+            .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
+        };
+        cCtx.options |= SERIES_OPT_UNCOMPRESSED;
+
+        ReducerArgs reducerArgs = {
+            .agg_type = predicates->reducerArgs.agg_type,
+            .aggregationClass = GetAggClass(predicates->reducerArgs.agg_type),
+        };
+
+        while ((groupValue = RedisModule_DictNextC(giter, &groupValueLen, (void **)&groupSeries)) !=
+               NULL) {
+            if (!groupSeries || array_len(groupSeries) == 0) {
+                continue;
+            }
+
+            // Create reduced series name: "<groupByLabel>=<groupValue>"
+            RedisModuleString *reducedName = RedisModule_CreateStringPrintf(
+                NULL, "%s=%.*s", groupByLabelCStr, (int)groupValueLen, groupValue);
+            Series *reduced = NewSeries(reducedName, &cCtx);
+
+            // Run the reducer (COUNT) on the shard.
+            MultiSerieReduce(reduced,
+                             groupSeries,
+                             array_len(groupSeries),
+                             &reducerArgs,
+                             &predicates->rangeArgs);
+
+            // Prepare labels:
+            // <label>=<groupbyvalue>, __reducer__=count, __source__=<comma-separated keys>
+            Label *labels = calloc(3, sizeof(Label));
+            labels[0].key = RedisModule_CreateStringFromString(NULL, predicates->groupByLabel);
+            labels[0].value = RedisModule_CreateString(NULL, groupValue, groupValueLen);
+            labels[1].key = RedisModule_CreateString(NULL, "__reducer__", strlen("__reducer__"));
+            labels[1].value = RedisModule_CreateString(
+                NULL,
+                AggTypeEnumToStringLowerCase(predicates->reducerArgs.agg_type),
+                strlen(AggTypeEnumToStringLowerCase(predicates->reducerArgs.agg_type)));
+            labels[2].key = RedisModule_CreateString(NULL, "__source__", strlen("__source__"));
+            labels[2].value = RedisModule_CreateString(NULL, "", 0);
+
+            for (uint32_t i = 0; i < array_len(groupSeries); i++) {
+                size_t keyLen = 0;
+                const char *keyname = RedisModule_StringPtrLen(groupSeries[i]->keyName, &keyLen);
+                RedisModule_StringAppendBuffer(NULL, labels[2].value, keyname, keyLen);
+                if (i < array_len(groupSeries) - 1) {
+                    RedisModule_StringAppendBuffer(NULL, labels[2].value, ",", 1);
+                }
+            }
+
+            FreeLabels(reduced->labels, reduced->labelsCount);
+            reduced->labels = labels;
+            reduced->labelsCount = 3;
+
+            ListRecord_Add(series_list, SeriesRecord_New(reduced, 0, UINT64_MAX, &clonePred));
+            FreeSeries(reduced);
+
+            array_free(groupSeries);
+        }
+
+        RedisModule_DictIteratorStop(giter);
+        RedisModule_FreeDict(NULL, groups);
+    }
+
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_list;

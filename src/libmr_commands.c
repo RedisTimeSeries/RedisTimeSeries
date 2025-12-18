@@ -12,6 +12,8 @@
 
 #include "rmutil/alloc.h"
 
+#include <string.h>
+
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
@@ -240,7 +242,144 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
+    const bool groupby_reduce_count_pushdown =
+        data->args.groupByLabel && data->args.gropuByReducerArgs.agg_type == TS_AGG_COUNT;
+
     TS_ResultSet *resultset = NULL;
+
+    if (groupby_reduce_count_pushdown) {
+        // Shards already returned reduced "COUNT" series per group.
+        // We only need to merge per-group partial results by summing counts per timestamp.
+        RedisModuleDict *groups = RedisModule_CreateDict(NULL);
+        Series **tempSeries = array_new(Series *, len);
+
+        for (int i = 0; i < len; i++) {
+            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+            if (raw_listRecord->recordType != GetListRecordType()) {
+                RedisModule_Log(rctx,
+                                "warning",
+                                "Unexpected record type: %s",
+                                raw_listRecord->recordType->type.type);
+                continue;
+            }
+
+            size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+            for (size_t j = 0; j < list_len; j++) {
+                Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+                if (raw_record->recordType != GetSeriesRecordType()) {
+                    continue;
+                }
+                Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
+                tempSeries = array_append(tempSeries, s);
+
+                size_t klen = 0;
+                const char *k = RedisModule_StringPtrLen(s->keyName, &klen);
+                int nokey = 0;
+                Series **partials = (Series **)RedisModule_DictGetC(groups, (void *)k, klen, &nokey);
+                if (nokey) {
+                    partials = array_new(Series *, 1);
+                }
+                partials = array_append(partials, s);
+                RedisModule_DictSetC(groups, (void *)k, klen, partials);
+            }
+        }
+
+        // Prepare the reply args: don't re-apply aggregation/filters, but keep COUNT limit.
+        RangeArgs minimizedArgs = data->args.rangeArgs;
+        minimizedArgs.startTimestamp = 0;
+        minimizedArgs.endTimestamp = UINT64_MAX;
+        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByTSArgs.hasValue = false;
+        minimizedArgs.filterByValueArgs.hasValue = false;
+        minimizedArgs.latest = false;
+
+        RedisModule_ReplyWithMapOrArray(rctx, RedisModule_DictSize(groups), false);
+
+        // Merge reducer output across shards by summing per-timestamp counts.
+        ReducerArgs sumReducer = { .agg_type = TS_AGG_SUM, .aggregationClass = GetAggClass(TS_AGG_SUM) };
+        RangeArgs rawArgs = { 0 };
+        rawArgs.startTimestamp = 0;
+        rawArgs.endTimestamp = UINT64_MAX;
+        rawArgs.count = -1;
+        rawArgs.latest = false;
+        rawArgs.alignment = DefaultAlignment;
+        rawArgs.aggregationArgs.aggregationClass = NULL;
+        rawArgs.filterByTSArgs.hasValue = false;
+        rawArgs.filterByValueArgs.hasValue = false;
+
+        RedisModuleDictIter *giter = RedisModule_DictIteratorStartC(groups, "^", NULL, 0);
+        char *groupKey = NULL;
+        size_t groupKeyLen = 0;
+        Series **partials = NULL;
+
+        // Use the same chunk size used by the existing group-by reducer path.
+        CreateCtx cCtx = {
+            .labels = NULL, .labelsCount = 0, .chunkSizeBytes = Chunk_SIZE_BYTES_SECS, .options = 0
+        };
+        cCtx.options |= SERIES_OPT_UNCOMPRESSED;
+
+        while ((groupKey = RedisModule_DictNextC(giter, &groupKeyLen, (void **)&partials)) != NULL) {
+            if (!partials || array_len(partials) == 0) {
+                continue;
+            }
+
+            Series *first = partials[0];
+            Series *merged = NewSeries(RedisModule_CreateStringFromString(NULL, first->keyName), &cCtx);
+
+            // Labels: <label>=<value>, __reducer__=count, __source__=<comma-separated keys>.
+            Label *labels = calloc(3, sizeof(Label));
+            labels[0].key = RedisModule_CreateStringFromString(NULL, first->labels[0].key);
+            labels[0].value = RedisModule_CreateStringFromString(NULL, first->labels[0].value);
+            labels[1].key = RedisModule_CreateString(NULL, "__reducer__", strlen("__reducer__"));
+            labels[1].value = RedisModule_CreateString(NULL, "count", strlen("count"));
+            labels[2].key = RedisModule_CreateString(NULL, "__source__", strlen("__source__"));
+            labels[2].value = RedisModule_CreateString(NULL, "", 0);
+
+            bool first_src = true;
+            for (uint32_t i = 0; i < array_len(partials); i++) {
+                Series *p = partials[i];
+                // "__source__" is always the last label in reduced series.
+                RedisModuleString *srcVal = p->labels[p->labelsCount - 1].value;
+                size_t srcLen = 0;
+                const char *src = RedisModule_StringPtrLen(srcVal, &srcLen);
+                if (srcLen == 0) {
+                    continue;
+                }
+                if (!first_src) {
+                    RedisModule_StringAppendBuffer(NULL, labels[2].value, ",", 1);
+                }
+                RedisModule_StringAppendBuffer(NULL, labels[2].value, src, srcLen);
+                first_src = false;
+            }
+
+            merged->labels = labels;
+            merged->labelsCount = 3;
+
+            // Merge values: SUM(partial counts) for each timestamp.
+            MultiSerieReduce(merged, partials, array_len(partials), &sumReducer, &rawArgs);
+
+            ReplySeriesArrayPos(rctx,
+                                merged,
+                                data->args.withLabels,
+                                data->args.limitLabels,
+                                data->args.numLimitLabels,
+                                &minimizedArgs,
+                                data->args.reverse,
+                                true);
+
+            FreeSeries(merged);
+            array_free(partials);
+        }
+
+        RedisModule_DictIteratorStop(giter);
+        RedisModule_FreeDict(NULL, groups);
+
+        array_foreach(tempSeries, x, FreeSeries(x));
+        array_free(tempSeries);
+
+        goto __done;
+    }
 
     if (data->args.groupByLabel) {
         resultset = ResultSet_Create();
@@ -356,6 +495,14 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+
+    // No push-down for mget.
+    queryArg->flags = 0;
+    queryArg->groupByLabel = NULL;
+    memset(&queryArg->rangeArgs, 0, sizeof(queryArg->rangeArgs));
+    queryArg->rangeAggType = TS_AGG_NONE;
+    memset(&queryArg->reducerArgs, 0, sizeof(queryArg->reducerArgs));
+
     MRError *err = NULL;
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
 
@@ -403,6 +550,28 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+    queryArg->resp3 = _ReplyMap(ctx);
+
+    // Default: no push-down.
+    queryArg->flags = 0;
+    queryArg->groupByLabel = NULL;
+    memset(&queryArg->rangeArgs, 0, sizeof(queryArg->rangeArgs));
+    queryArg->rangeAggType = TS_AGG_NONE;
+    memset(&queryArg->reducerArgs, 0, sizeof(queryArg->reducerArgs));
+
+    // Optimization: for GROUPBY <label> REDUCE COUNT in cluster mode, push the reduction to shards.
+    if (args.groupByLabel && args.gropuByReducerArgs.agg_type == TS_AGG_COUNT) {
+        queryArg->flags |= QP_FLAG_MRANGE_GROUPBY_REDUCE_PUSHDOWN;
+        queryArg->groupByLabel =
+            RedisModule_CreateString(ctx, args.groupByLabel, strlen(args.groupByLabel));
+        queryArg->rangeArgs = args.rangeArgs;
+        queryArg->rangeAggType =
+            args.rangeArgs.aggregationArgs.aggregationClass
+                ? args.rangeArgs.aggregationArgs.aggregationClass->type
+                : TS_AGG_NONE;
+        queryArg->reducerArgs.agg_type = args.gropuByReducerArgs.agg_type;
+        queryArg->reducerArgs.aggregationClass = args.gropuByReducerArgs.aggregationClass;
+    }
 
     MRError *err = NULL;
 
@@ -444,6 +613,14 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+
+    // No push-down for queryindex.
+    queryArg->latest = false;
+    queryArg->flags = 0;
+    queryArg->groupByLabel = NULL;
+    memset(&queryArg->rangeArgs, 0, sizeof(queryArg->rangeArgs));
+    queryArg->rangeAggType = TS_AGG_NONE;
+    memset(&queryArg->reducerArgs, 0, sizeof(queryArg->reducerArgs));
 
     ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
 
