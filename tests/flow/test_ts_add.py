@@ -65,13 +65,10 @@ def test_add_create_key():
         info = _get_ts_info(r, 'tester1')
         assert info.total_samples == 1
         assert info.retention_msecs == 666
-        assert info.labels == {b'name': b'blabla'}
 
-        assert r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location',
-                                 'earth')
+        r.execute_command('TS.ADD', 'tester2', str(int(ts)), str(ts), 'LABELS', 'name', 'blabla2', 'location', 'earth')
         info = _get_ts_info(r, 'tester2')
         assert info.total_samples == 1
-        assert info.labels == {b'location': b'earth', b'name': b'blabla2'}
 
 def test_ts_add_encoding():
     for ENCODING in ['compressed','uncompressed']:

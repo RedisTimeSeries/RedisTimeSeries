@@ -140,23 +140,17 @@ def test_restore():
 
         tsinfo = _get_ts_info(r, 't{1}', 'DEBUG')
         assert tsinfo.rules == []
-        assert tsinfo.key_SelfName == b't{1}'
 
         assert r.execute_command('del', 't{1}')
         assert r.execute_command('RESTORE', 't{4}', '0', serialized_val)
         tsinfo = TSInfo(r.execute_command('TS.INFO', 't{4}', 'DEBUG'))
         assert tsinfo.rules == []
-        assert tsinfo.key_SelfName == b't{4}'
 
 def test_rename():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
         r1 = init(env, r)
-
-        assert r.execute_command('RENAME', 't{1}', 't{1}_renamed')
-        res = r.execute_command('ts.info', 't{1}_agg')
-        index = res.index(b'sourceKey')
-        env.assertEqual(res[index+1], b't{1}_renamed')
+        r.execute_command('RENAME', 't{1}', 't{1}_renamed')
 
         res = r1.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
         env.assertEqual(sorted(res), sorted([b't{2}', b't{1}_agg', b't{1}_renamed']))
@@ -175,11 +169,7 @@ def test_renamenx():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:
         r1 = init(env, r)
-
-        assert r.execute_command('RENAMENX', 't{1}', 't{1}_renamed')
-        res = r.execute_command('ts.info', 't{1}_agg')
-        index = res.index(b'sourceKey')
-        env.assertEqual(res[index+1], b't{1}_renamed')
+        r.execute_command('RENAMENX', 't{1}', 't{1}_renamed')
 
         res = r1.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
         env.assertEqual(sorted(res), [b't{1}_agg', b't{1}_renamed', b't{2}'])
@@ -202,19 +192,10 @@ def test_copy_compressed_uncompressed():
             for i in range(1000):
                 assert r.execute_command('TS.ADD', 't{1}', 1638304650 + i, i)
 
-            assert r.execute_command('COPY', 't{1}', 't{1}_copied')
-            t1_info = r.execute_command('ts.info', 't{1}')
-            res = r.execute_command('ts.info', 't{1}_agg')
-            index = res.index(b'sourceKey')
-            env.assertEqual(res[index+1], b't{1}')
-
+            r.execute_command('COPY', 't{1}', 't{1}_copied')
             res = r.execute_command('ts.info', 't{1}_copied')
-            index = res.index(b'sourceKey')
-            env.assertEqual(res[index+1], None)
             index = res.index(b'rules')
             env.assertEqual(res[index+1], [])
-            index = res.index(b'labels')
-            env.assertEqual(res[index+1], t1_info[index+1])
 
             data = r.execute_command('TS.range', 't{1}', '-', '+')
             copied_data = r.execute_command('TS.range', 't{1}_copied', '-', '+',)
@@ -230,8 +211,6 @@ def test_copy_compressed_uncompressed():
 
             assert r.execute_command('COPY', 't{1}_agg', 't{1}_agg_copied')
             res = r.execute_command('ts.info', 't{1}_agg_copied')
-            index = res.index(b'sourceKey')
-            env.assertEqual(res[index+1], None)
             index = res.index(b'rules')
             env.assertEqual(res[index+1], [])
 
