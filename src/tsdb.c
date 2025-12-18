@@ -1100,7 +1100,7 @@ void SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                        Series *series,
                                        Label *labels,
                                        size_t labelsCount) {
-        const size_t compactedRuleLabelCount = labelsCount + 2;
+    const size_t compactedRuleLabelCount = labelsCount + 2;
 
     for (int i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
