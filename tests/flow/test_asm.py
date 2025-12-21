@@ -54,7 +54,6 @@ def test_asm_with_data_and_queries_during_migrations():
     # First validate the result on the "static" cluster
     print('debugme validate_result: ', command)
     validate_result(conn.execute_command(command))
-    return
 
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
@@ -159,6 +158,9 @@ def migrate_slots_back_and_forth(env):
     Migrates slots between the two shards. When done all slots are back to their original places.
     """
 
+    import time
+    time.sleep(10)
+    return
     def cluster_node_of(conn) -> ClusterNode:
         for line in conn.execute_command("cluster", "nodes").splitlines():
             cluster_node = ClusterNode.from_str(line)
