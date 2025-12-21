@@ -158,6 +158,8 @@ static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCt
                                                            MRError **error) {
     size_t len;
     const char *temp = MR_SerializationCtxReadBuffer(sctx, &len, error);
+    if (*error)
+        return NULL;
     return RedisModule_CreateString(NULL, temp, len - 1);
 }
 
@@ -758,6 +760,8 @@ static void StringRecord_Serialize(WriteSerializationCtx *sctx, void *base, MREr
 static void *StringRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     size_t size;
     const char *temp = MR_SerializationCtxReadBuffer(sctx, &size, error);
+    if (*error)
+        return NULL;
     char *temp1 = malloc(size);
     memcpy(temp1, temp, size);
     return StringRecord_Create(temp1, size);
