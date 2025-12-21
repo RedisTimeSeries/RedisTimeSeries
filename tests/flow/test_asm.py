@@ -60,8 +60,6 @@ def test_asm_with_data_and_queries_during_migrations():
 
     def validate_command_in_a_loop():
         while not done.is_set():
-            time.sleep(0.1)
-            continue
             print('debugme validate_result: ', command)
             validate_result(conn.execute_command(command))
 
@@ -79,8 +77,6 @@ def test_asm_with_data_and_queries_during_migrations():
             # This will raise an exception in case the validation function failed (or got stuck)
             future.result()
 
-    print('debugme validate_result: ', command)
-    validate_result(conn.execute_command(command))
 
 # Helper structs and functions
 
