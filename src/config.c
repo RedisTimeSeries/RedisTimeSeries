@@ -703,8 +703,9 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         }
     }
     // Default, can be overridden either by legacy module arguments (deprecated) or by modern ones.
-    // Note: Modern module configs are loaded later via RedisModule_LoadConfigs(), but supporting the
-    // modern name here as a module argument helps users migrate from the legacy NUM_THREADS arg.
+    // Note: Modern module configs are loaded later via RedisModule_LoadConfigs(), but supporting
+    // the modern name here as a module argument helps users migrate from the legacy NUM_THREADS
+    // arg.
     TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     bool modernNumThreadsFound = false;
 
@@ -742,9 +743,10 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         }
 
         if (modernNumThreadsFound) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Both ts-num-threads and NUM_THREADS were provided. Using ts-num-threads.");
+            RedisModule_Log(
+                ctx,
+                "warning",
+                "Both ts-num-threads and NUM_THREADS were provided. Using ts-num-threads.");
         } else {
             TSGlobalConfig.numThreads = parsed;
         }
