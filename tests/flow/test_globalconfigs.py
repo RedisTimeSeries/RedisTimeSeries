@@ -392,12 +392,16 @@ def test_ts_num_threads_can_be_set_via_module_arguments_using_modern_name():
     to ease migration from the deprecated NUM_THREADS module argument.
     '''
     env = Env(noLog=False)
-    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+    # This test is about module load-time arguments on a single Redis instance.
+    # Skip cluster variants (OSS cluster / RLEC) and Redis versions without module config API.
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster() or is_rlec():
         env.skip()
-    skip_on_rlec()
 
     env = Env(moduleArgs="ts-num-threads 5", noLog=False)
     with env.getConnection() as conn:
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+        # This is an immutable module config (tested elsewhere too); keep it explicit here.
+        with pytest.raises(redis.exceptions.ResponseError):
+            conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
 
     assert not is_line_in_server_log(env, "ts-num-threads is deprecated")
