@@ -1,9 +1,14 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #include "indexer.h"
+#include "module.h"
+#include "common.h"
 
 #include "consts.h"
 #include "utils/overflow.h"
@@ -16,7 +21,7 @@
 
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
-extern bool isTrimming;
+extern bool isReshardTrimming, isAsmTrimming, isAsmImporting;
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
@@ -30,6 +35,34 @@ typedef enum
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
     tsLabelIndex = RedisModule_CreateDict(NULL);
+}
+
+static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
+                           void *data,
+                           __unused unsigned char *key,
+                           __unused size_t keylen,
+                           void **newptr) {
+    static RedisModuleString *seekTo = NULL;
+    *newptr = (void *)defragDict(ctx, (RedisModuleDict *)data, NULL, &seekTo);
+    return (seekTo == NULL) ? DefragStatus_Finished : DefragStatus_Paused;
+}
+
+int DefragIndex(RedisModuleDefragCtx *ctx) {
+    static RedisModuleString *seekTo = NULL;
+    static RedisModuleDict **index = &labelsIndex;
+
+    // can only defrag one index at a time
+    *index = defragDict(ctx, *index, DefragIndexLeaf, &seekTo);
+    if (seekTo != NULL) { // defrag paused
+        return DefragStatus_Paused;
+    }
+
+    index = (index == &labelsIndex) ? &tsLabelIndex : &labelsIndex;
+    if (index == &labelsIndex) { // defragged both indexes, done
+        return DefragStatus_Finished;
+    }
+
+    return DefragIndex(ctx);
 }
 
 void FreeLabels(void *value, size_t labelsCount) {
@@ -380,9 +413,25 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
     return true;
 }
 
+static inline bool OwnKeyDuringSharding(
+    RedisModuleString *key) { // RE version; during non-ASM reshards
+    int slot = RedisModule_ShardingGetKeySlot(key);
+    if (slot < 0) // sharding config not set
+        return false;
+    int firstSlot, lastSlot;
+    RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
+    return firstSlot <= slot && slot <= lastSlot;
+}
+
+static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
+    unsigned int slot = RedisModule_ClusterKeySlot(key);
+    return RedisModule_ClusterCanAccessKeysInSlot(slot);
+}
+
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count) {
+                            size_t predicate_count,
+                            bool *hasPermissionError) {
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
     RedisModuleDict *res = RedisModule_CreateDict(ctx);
@@ -403,9 +452,15 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         }
 
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
-        char *currentKey;
-        size_t currentKeyLen;
+        char *currentKey = NULL;
+        size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+            if (hasPermissionError) {
+                if (!CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen)) {
+                    *hasPermissionError = true;
+                    continue;
+                }
+            }
             if (_isKeySatisfyAllPredicates(
                     ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
                 RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
@@ -416,14 +471,15 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 
     free(dicts);
 
-    if (unlikely(isTrimming)) {
+    if (unlikely(isReshardTrimming || isAsmTrimming || isAsmImporting)) {
+        // During those periods modules might see keys whose slots are no longer
+        // (or not yet) owned by the current shard, so we need to filter them out of the results
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
         RedisModuleString *currentKey;
-        int slot, firstSlot, lastSlot;
-        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
         while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            slot = RedisModule_ShardingGetKeySlot(currentKey);
-            if (firstSlot > slot || lastSlot < slot) {
+            bool ownCurrentKey =
+                (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
+            if (!ownCurrentKey) {
                 RedisModule_DictDel(res, currentKey, NULL);
                 RedisModule_DictIteratorReseek(iter, ">", currentKey);
             }

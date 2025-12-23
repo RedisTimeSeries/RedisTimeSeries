@@ -8,6 +8,19 @@ from includes import *
 import random 
 import struct
 
+def test_add_different_slot_range():
+    env = Env(decodeResponses=True)
+    if not env.isCluster():
+        env.skip()
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('config','set', 'ts-compaction-policy', 'sum:1M:1h') == 'OK', 'Failed to set compaction policy'
+        assert r.execute_command('ts.add', 'b', '1', '1') == 1, 'Failed to add data'
+        assert r.execute_command('type', 'b') == 'TSDB-TYPE', 'type is not TSDB-TYPE, result: ' + str(r.execute_command('type', 'a'))
+        assert r.execute_command('type', 'b_SUM_60000') != 'TSDB-TYPE', 'type is TSDB-TYPE, result: ' + str(r.execute_command('type', 'a_SUM_60000'))
+        assert r.execute_command('ts.add', '{b}', '1', '1') == 1, 'Failed to add data'
+        assert r.execute_command('type', '{b}') == 'TSDB-TYPE', 'type is not TSDB-TYPE, result: ' + str(r.execute_command('type', '{b}'))
+        assert r.execute_command('type', '{b}_SUM_60000') == 'TSDB-TYPE', 'type is not TSDB-TYPE, result: ' + str(r.execute_command('type', '{b}_SUM_60000'))
+        assert 'b_SUM_60000' not in r.execute_command('KEYS', '*'), 'Keys are not as expected: ' + str(r.execute_command('KEYS', '*'))
 
 def test_issue_504():
     with Env().getClusterConnectionIfNeeded() as r:
@@ -279,4 +292,17 @@ def test_ts_upsert_bug():
         res2 = r.execute_command("ts.range", t1, first_chunk_last_ts, first_chunk_last_ts + 100)
         info2 = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
         assert res2 == [res[0], [first_chunk_last_ts + 100, first_chunk_last_val]]
-  
+
+def test_ts_add_fail(env):
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '1a')
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '1.')
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '1.0.0')
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '.1')
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '1,0')
+    with pytest.raises(redis.ResponseError):
+        env.cmd('TS.ADD', 'k', 1, '0x1')

@@ -115,7 +115,7 @@ def test_madd_some_failed_replicas():
     env.cmd('CONFIG', 'SET', 'appendfsync', 'always')
 
     with env.getClusterConnectionIfNeeded() as r:
-        is_less_than_ver7 = is_redis_version_smaller_than(r, "7.0.0")
+        is_less_than_ver7 = is_redis_version_lower_than(r, "7.0.0")
 
         r.execute_command("ts.create", "test_key1", 'RETENTION', 100, 'ENCODING', 'UNCOMPRESSED', 'CHUNK_SIZE', 128, "DUPLICATE_POLICY", "block", 'LABELS', 'name', 'Or', 'color', 'pink')
         r.execute_command("set", "test_key3", "danni")

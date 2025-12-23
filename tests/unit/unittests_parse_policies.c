@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #include "compaction.h"
 #include "compressed_chunk.h"
@@ -17,9 +20,12 @@
 MU_TEST(test_valid_policy) {
     SimpleCompactionRule *parsedRules;
     uint64_t rulesCount;
-    int result = ParseCompactionPolicy(
-        "max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d", &parsedRules, &rulesCount);
-    mu_check(result == TRUE);
+    const char policy[] = "max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d";
+    bool result =
+        ParseCompactionPolicy(policy, sizeof(policy) - 1,
+                              &parsedRules,
+                              &rulesCount);
+    mu_check(result == true);
     mu_check(rulesCount == 5);
 
     mu_check(parsedRules[0].aggType == StringAggTypeToEnum("max"));
@@ -46,35 +52,68 @@ MU_TEST(test_valid_policy) {
 
 MU_TEST(test_invalid_policy) {
     SimpleCompactionRule *parsedRules;
+    const char *policy;
     uint64_t rulesCount;
-    int result;
-    result = ParseCompactionPolicy("max:1M;mins:10s;avg:2h;avg:1d", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    bool result;
+    policy = "max:1M;mins:10s;avg:2h;avg:1d";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
 
-    result = ParseCompactionPolicy("max:1M:1h:abc;", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "max:1M:1h:abc;";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
 
-    result = ParseCompactionPolicy("max:12hd;", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "max:12hd;";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
 
-    result = ParseCompactionPolicy("------", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "------";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
-    result = ParseCompactionPolicy("max", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "max";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
-    result = ParseCompactionPolicy("max:", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "max:";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
-    result = ParseCompactionPolicy("max:abcdfeffas", &parsedRules, &rulesCount);
-    mu_check(result == FALSE);
+    policy = "max:abcdfeffas";
+    result = ParseCompactionPolicy(policy, strlen(policy), &parsedRules, &rulesCount);
+    mu_check(result == false);
     mu_check(rulesCount == 0);
-    if(parsedRules) {
+    if (parsedRules) {
         free(parsedRules);
     }
+}
+
+static inline void PolicyStringCompare(const char *s, const char *expectedOverride) {
+    SimpleCompactionRule *parsedRules = NULL;
+    uint64_t rulesCount = 0;
+    const bool result = ParseCompactionPolicy(s, strlen(s), &parsedRules, &rulesCount);
+    mu_check(result == true);
+    char *actual = CompactionRulesToString(parsedRules, rulesCount);
+    if (expectedOverride) {
+        mu_assert_string_eq(expectedOverride, actual);
+    } else {
+        mu_assert_string_eq(s, actual);
+    }
+    free(actual);
+    free(parsedRules);
+}
+
+MU_TEST(test_PolicyToString) {
+    PolicyStringCompare("max:1m:1h:1m;min:10s:10d:0m;last:5M:10m;avg:2h:10d:1d;avg:3d:100d",
+                        "max:1m:1h:1m;min:10s:10d;last:5M:10m;avg:2h:10d:1d;avg:3d:100d");
+    PolicyStringCompare("max:1m:1h:1m", NULL);
+    PolicyStringCompare("min:10s:10d:0m", "min:10s:10d");
+    PolicyStringCompare("last:5M:10m", NULL);
+    PolicyStringCompare("avg:2h:10d:1d", NULL);
+    PolicyStringCompare("avg:3d:100d", NULL);
 }
 
 MU_TEST(test_StringLenAggTypeToEnum) {
@@ -93,4 +132,5 @@ MU_TEST_SUITE(parse_policies_test_suite) {
     MU_RUN_TEST(test_valid_policy);
     MU_RUN_TEST(test_invalid_policy);
     MU_RUN_TEST(test_StringLenAggTypeToEnum);
+    MU_RUN_TEST(test_PolicyToString);
 }

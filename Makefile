@@ -9,7 +9,14 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
-#----------------------------------------------------------------------------------------------  
+# RedisTimeSeries only supports 64-bit architectures
+ifneq ($(ARCH),x64)
+ifneq ($(ARCH),arm64v8)
+$(error RedisTimeSeries only supports 64-bit architectures (x64, arm64v8). Current architecture: $(ARCH))
+endif
+endif
+
+#----------------------------------------------------------------------------------------------
 
 export LIBMR_BINDIR=$(ROOT)/bin/$(FULL_VARIANT)/LibMR
 include $(ROOT)/build/LibMR/Makefile.defs
@@ -32,7 +39,7 @@ include $(ROOT)/build/rmutil/Makefile.defs
 export CPU_FEATURES_BINDIR=$(ROOT)/bin/$(FULL_VARIANT.release)/cpu_features
 include $(ROOT)/build/cpu_features/Makefile.defs
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 define HELPTEXT
 make build
@@ -85,7 +92,7 @@ make sanbox        # create container with CLang Sanitizer
 
 endef
 
-#----------------------------------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------
 
 MK_CUSTOM_CLEAN=1
 
@@ -107,10 +114,11 @@ endef
 define CC_DEFS +=
 	REDIS_MODULE_TARGET
 	REDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\"
+	DREDISMODULE_MAIN
 	REDISMODULE_SDK_RLEC
 endef
 
-CC_PEDANTIC=1
+# CC_PEDANTIC=1
 
 ifeq ($(VG),1)
 CC_DEFS += _VALGRIND
@@ -132,6 +140,7 @@ LD_FLAGS.macos += -L$(openssl_prefix)/lib
 
 define _SOURCES
 	chunk.c
+	common.c
 	compaction.c
 	compressed_chunk.c
 	config.c
@@ -159,6 +168,7 @@ define _SOURCES
 	multiseries_sample_iterator.c
 	multiseries_agg_dup_sample_iterator.c
 	utils/blocked_client.c
+	cmd_info/ts_info.c
 endef
 
 ifeq ($(ARCH),x64)
@@ -174,7 +184,7 @@ _SOURCES += $(_SOURCES_AVX512) $(_SOURCES_AVX2)
 endif
 
 SOURCES=$(addprefix $(SRCDIR)/,$(call flatten,$(_SOURCES)))
-HEADERS=$(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES))
+HEADERS=$(wildcard $(patsubst $(SRCDIR)/%.c,$(SRCDIR)/%.h,$(SOURCES)))
 OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
@@ -227,11 +237,20 @@ endif
 
 #----------------------------------------------------------------------------------------------
 
-.PHONY: pack clean all bindirs
+.PHONY: gen-compile-commands pack clean all bindirs
 
-all: bindirs $(TARGET)
+all: gen-compile-commands bindirs $(TARGET)
 
 include $(MK)/rules
+
+ifeq ($(OS),macos)
+CC_FLAGS += -fblocks
+endif
+
+ifneq ($(SAN),)
+CC_FLAGS += -fblocks
+LD_LIBS += -lBlocksRuntime
+endif
 
 #----------------------------------------------------------------------------------------------
 
@@ -295,12 +314,16 @@ endif # DEPS
 
 clean:
 	@echo Cleaning ...
+	$(SHOW)rm -rf compile_commands.json
 ifeq ($(ALL),1)
+	@echo Cleaning ALL...
 	-$(SHOW)rm -rf $(BINROOT) $(LIBEVENT_BINDIR) $(DRAGONBOX_BINDIR) $(FAST_DOUBLE_PARSER_C_BINDIR) $(CPU_FEATURES_BINDIR)
 	$(SHOW)$(MAKE) -C $(ROOT)/build/libevent clean AUTOGEN=1
+	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 else
 	-$(SHOW)rm -rf $(BINDIR)
 ifeq ($(DEPS),1)
+	@echo Cleaning DEPS...
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/rmutil clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/hiredis clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR clean
@@ -308,7 +331,6 @@ ifeq ($(DEPS),1)
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/libevent DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/dragonbox DEBUG='' clean
 	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/fast_double_parser_c DEBUG='' clean
-	-$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/tests/unit DEBUG='' clean
 endif
 endif
 
@@ -408,7 +430,7 @@ endif # RLEC
 BENCHMARK_ARGS = redisbench-admin run-local
 
 ifneq ($(REMOTE),)
-	BENCHMARK_ARGS = redisbench-admin run-remote 
+	BENCHMARK_ARGS = redisbench-admin run-remote
 endif
 
 BENCHMARK_ARGS += \
@@ -506,12 +528,22 @@ sanbox:
 
 pack: $(TARGET)
 	@echo Creating packages...
-	$(SHOW)MODULE=$(realpath $(TARGET)) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh
+	$(SHOW) BINDIR=$(BINDIR) $(ROOT)/sbin/pack.sh $(realpath $(TARGET))
 
 upload-release:
 	@RELEASE=1 $(ROOT)/sbin/upload-artifacts
 
 upload-artifacts:
 	@SNAPSHOT=1 $(ROOT)/sbin/upload-artifacts
+
+ifeq ($(MAKELEVEL),0)
+gen-compile-commands:
+	@echo "Generating compile_commands.json..."
+	@$(MAKE) --always-make --dry-run \
+	| grep -wE 'gcc|g\+\+|c\+\+' \
+	| grep -w '\-c' \
+	| jq -nR '[inputs|{directory:"$(CURDIR)", command:., file: match(" [^ ]+$$").string[1:]}]' \
+	> compile_commands.json
+endif
 
 .PHONY: pack upload-release upload-artifacts

@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #ifndef INDEXER_H
 #define INDEXER_H
@@ -9,6 +12,7 @@
 #include "RedisModulesSDK/redismodule.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct
 {
@@ -56,6 +60,7 @@ void QueryPredicate_Free(QueryPredicate *predicate, size_t count);
 void QueryPredicateList_Free(QueryPredicateList *list);
 
 void IndexInit();
+int DefragIndex(RedisModuleDefragCtx *ctx);
 void FreeLabels(void *value, size_t labelsCount);
 void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count);
 void RemoveIndexedMetric(RedisModuleString *ts_key);
@@ -65,7 +70,8 @@ void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
 int IsKeyIndexed(RedisModuleString *ts_key);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
-                            size_t predicate_count);
+                            size_t predicate_count,
+                            bool *hasPermissionError);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif

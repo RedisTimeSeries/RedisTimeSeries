@@ -163,3 +163,29 @@ def test_dump_restore_dst_rule_old_version():
         assert len(_get_ts_info(r, key1).rules) == 0
         assert _get_ts_info(r, key2).sourceKey == None
         assert len(_get_ts_info(r, key2).rules) == 0
+
+def test_info_doesnt_delete_acl_restricted():
+    Env().skipOnCluster()
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'a')
+        r.execute_command('TS.CREATE', 'b')
+
+        r.execute_command('TS.CREATERULE', 'a', 'b', 'AGGREGATION', 'avg', 60000)
+        assert _get_ts_info(r, 'b').sourceKey.decode() == 'a'
+        assert len(_get_ts_info(r, 'a').rules) == 1
+        assert _get_ts_info(r, 'a').rules[0][0].decode() == 'b'
+
+        r.execute_command('ACL SETUSER usr on >p ~a* +@all')
+        r.execute_command('AUTH usr p')
+        assert len(_get_ts_info(r, 'a').rules) == 1
+        assert _get_ts_info(r, 'a').rules[0][0].decode() == 'b'
+        try:
+            _get_ts_info(r, 'b')
+            assert False
+        except redis.exceptions.NoPermissionError:
+            pass
+        
+        r.execute_command('AUTH default ""')
+        assert len(_get_ts_info(r, 'a').rules) == 1
+        assert _get_ts_info(r, 'a').rules[0][0].decode() == 'b'
+        assert _get_ts_info(r, 'b').sourceKey.decode() == 'a'

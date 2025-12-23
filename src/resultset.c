@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 
 #include "resultset.h"
@@ -11,6 +14,7 @@
 #include "series_iterator.h"
 #include "string.h"
 #include "tsdb.h"
+#include "module.h"
 
 #include "RedisModulesSDK/redismodule.h"
 #include "utils/arr.h"
@@ -22,12 +26,12 @@ struct TS_ResultSet
     char *labelkey;
 };
 
-struct TS_GroupList
+typedef struct TS_GroupList
 {
     char *labelValue;
     size_t count;
     Series **list;
-};
+} TS_GroupList;
 
 TS_GroupList *GroupList_Create();
 
@@ -138,20 +142,18 @@ TS_ResultSet *ResultSet_Create() {
     return r;
 }
 
-int GroupList_SetLabelValue(TS_GroupList *r, const char *label) {
+void GroupList_SetLabelValue(TS_GroupList *r, const char *label) {
     r->labelValue = strdup(label);
-    return true;
 }
 
-int ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
+void ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
     r->labelkey = strdup(label);
-    return true;
 }
 
-int ResultSet_ApplyReducer(RedisModuleCtx *ctx,
-                           TS_ResultSet *r,
-                           const RangeArgs *args,
-                           const ReducerArgs *gropuByReducerArgs) {
+void ResultSet_ApplyReducer(RedisModuleCtx *ctx,
+                            TS_ResultSet *r,
+                            const RangeArgs *args,
+                            const ReducerArgs *gropuByReducerArgs) {
     // ^ seek the smallest element of the radix tree.
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     TS_GroupList *groupList;
@@ -159,8 +161,6 @@ int ResultSet_ApplyReducer(RedisModuleCtx *ctx,
         GroupList_ApplyReducer(ctx, groupList, r->labelkey, args, gropuByReducerArgs);
     }
     RedisModule_DictIteratorStop(iter);
-
-    return TSDB_OK;
 }
 void GroupList_ApplyReducer(RedisModuleCtx *ctx,
                             TS_GroupList *group,
@@ -215,8 +215,8 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     free(serie_name);
 }
 
-int ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
-    int result = false;
+bool ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
+    bool result = false;
 
     char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey);
     if (labelValue != NULL) {

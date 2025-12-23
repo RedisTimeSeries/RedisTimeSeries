@@ -16,6 +16,10 @@ def shardsConnections(env):
 
 def verifyClusterInitialized(env):
     for conn in shardsConnections(env):
+        try:
+            conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
+        except Exception:
+            pass # in case we run on older version of redis
         allConnected = False
         while not allConnected:
             res = conn.execute_command('timeseries.INFOCLUSTER')
@@ -120,6 +124,6 @@ def testLibmr_client_disconnect():
         # wait for processes to join
         [th.join() for th in threads]
 
-        # make sure we did not crashed
+        # make sure we did not crash
         r.ping()
         r.close()

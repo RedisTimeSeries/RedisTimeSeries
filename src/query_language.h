@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 
 #include "compaction.h"
@@ -117,13 +120,15 @@ int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
                    int argc,
                    const char *arg_prefix,
-                   long long *chunkSizeBytes);
+                   long long *chunkSizeBytes,
+                   bool *found);
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          const char *arg_prefix,
-                         DuplicatePolicy *policy);
+                         DuplicatePolicy *policy,
+                         bool *found);
 
 int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int *options);
 
@@ -167,7 +172,8 @@ void MRangeArgs_Free(MRangeArgs *args);
 
 int parseMGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, MGetArgs *out);
 void MGetArgs_Free(MGetArgs *args);
-bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes);
+bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err);
+bool ValidateChunkSizeSimple(long long chunkSizeBytes);
 int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

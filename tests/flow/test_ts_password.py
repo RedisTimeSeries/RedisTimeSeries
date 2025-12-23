@@ -6,7 +6,7 @@ from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, \
 # import pytest
 
 def test_password():
-    env = Env(moduleArgs='ENCODING UNCOMPRESSED; OSS_GLOBAL_PASSWORD password', freshEnv=True)
+    env = Env(moduleArgs='ENCODING UNCOMPRESSED; global-password password', freshEnv=True)
     if not env.is_cluster():
         env.skip()
     skip_on_rlec()
@@ -20,8 +20,9 @@ def test_password():
         res = r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
         assert res != []
 
+@skip(onVersionHigherThan='7.4.0')
 def test_invalid_password():
-    env = Env(moduleArgs='ENCODING UNCOMPRESSED; OSS_GLOBAL_PASSWORD wrong_password', freshEnv=True)
+    env = Env(moduleArgs='ENCODING UNCOMPRESSED; global-password wrong_password', freshEnv=True)
     if not env.is_cluster():
         env.skip()
     skip_on_rlec()
@@ -35,6 +36,7 @@ def test_invalid_password():
         with pytest.raises(redis.ResponseError) as excinfo:
             r1.execute_command('TS.mrange', '-', '+', 'WITHLABELS', 'FILTER', 'name=bob')
 
+@skip(onVersionHigherThan='7.4.0')
 def test_no_password():
     env = Env(moduleArgs='ENCODING UNCOMPRESSED', freshEnv=True)
     if not env.is_cluster():

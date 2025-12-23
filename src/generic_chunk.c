@@ -12,6 +12,7 @@ static const ChunkFuncs regChunk = {
     .FreeChunk = Uncompressed_FreeChunk,
     .SplitChunk = Uncompressed_SplitChunk,
     .CloneChunk = Uncompressed_CloneChunk,
+    .DefragChunk = Uncompressed_DefragChunk,
 
     .AddSample = Uncompressed_AddSample,
     .UpsertSample = Uncompressed_UpsertSample,
@@ -36,6 +37,7 @@ static const ChunkFuncs comprChunk = {
     .FreeChunk = Compressed_FreeChunk,
     .CloneChunk = Compressed_CloneChunk,
     .SplitChunk = Compressed_SplitChunk,
+    .DefragChunk = Compressed_DefragChunk,
 
     .AddSample = Compressed_AddSample,
     .UpsertSample = Compressed_UpsertSample,
@@ -99,27 +101,6 @@ const ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkType) {
             return &comprChunk;
     }
     return NULL;
-}
-
-const char *DuplicatePolicyToString(DuplicatePolicy policy) {
-    switch (policy) {
-        case DP_NONE:
-            return "none";
-        case DP_BLOCK:
-            return "block";
-        case DP_LAST:
-            return "last";
-        case DP_FIRST:
-            return "first";
-        case DP_MAX:
-            return "max";
-        case DP_MIN:
-            return "min";
-        case DP_SUM:
-            return "sum";
-        default:
-            return "invalid";
-    }
 }
 
 int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
