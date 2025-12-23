@@ -308,6 +308,10 @@ static void Uncompressed_GenericSerialize(Chunk_t *chunk,
         size_t string_buffer_size;                                                                 \
         uncompchunk->samples =                                                                     \
             (Sample *)loadStringBuffer(ctx, &string_buffer_size, ##__VA_ARGS__);                   \
+        if (uncompchunk->num_samples * SAMPLE_SIZE > uncompchunk->size)                            \
+            goto err; /* num_samples can't exceed capacity */                                      \
+        if (uncompchunk->size != string_buffer_size)                                               \
+            goto err; /* Size must match buffer */                                                 \
         *chunk = (Chunk_t *)uncompchunk;                                                           \
         return TSDB_OK;                                                                            \
                                                                                                    \
