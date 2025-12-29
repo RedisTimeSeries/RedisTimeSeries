@@ -178,7 +178,7 @@ jobs:
           git checkout ${REF}
           git submodule update
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
       - name: git checkout redis/redis
         if: matrix.docker_image.image == 'amazonlinux:2023' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
@@ -191,7 +191,7 @@ jobs:
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
           git submodule update
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Setup
         working-directory: .install
         shell: bash
