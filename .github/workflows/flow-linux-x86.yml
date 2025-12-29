@@ -186,6 +186,8 @@ jobs:
           git fetch origin ${REF}
           git checkout ${REF}
           git submodule update
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: git checkout redis/redis
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
