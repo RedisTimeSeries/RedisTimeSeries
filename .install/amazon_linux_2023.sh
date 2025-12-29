@@ -1,22 +1,66 @@
 #!/bin/bash
-amazon-linux-extras install epel -y
-yum -y install epel-release yum-utils
-yum-config-manager --add-repo http://vault.centos.org/centos/7/sclo/x86_64/rh/
-yum -y install gcc make autogen automake libtool cmake3 git python-pip openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq
-yum -y install devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-make --nogpgcheck
-. scl_source enable devtoolset-11 || true
+# amazon-linux-extras install epel -y
+# yum -y install epel-release yum-utils
+# yum-config-manager --add-repo http://vault.centos.org/centos/7/sclo/x86_64/rh/
+# yum -y install gcc make autogen automake libtool cmake3 git python-pip openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq
+# yum -y install devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-make --nogpgcheck
+# . scl_source enable devtoolset-11 || true
+# make --version
+# git --version
+# wget https://www.python.org/ftp/python/3.7.16/Python-3.7.16.tgz
+# tar -xvf Python-3.7.16.tgz
+# cd Python-3.7.16
+# ./configure
+# make -j `nproc`
+# make altinstall
+# cd ..
+# rm /usr/bin/python3 && ln -s `which python3.7` /usr/bin/python3
+# ln -s `which cmake3` /usr/bin/cmake
+# python3 --version
+
+set -euo pipefail
+
+# AL2023: no amazon-linux-extras, no epel-release, no CentOS SCL/devtoolset.
+dnf -y update
+
+# Install roughly the same tooling using AL2023 package names
+dnf -y install \
+  gcc gcc-c++ make \
+  autogen automake libtool \
+  cmake git \
+  python3-pip \
+  openssl-devel bzip2-devel libffi-devel zlib-devel \
+  wget which tar unzip jq \
+  findutils
+
 make --version
 git --version
+
+# Build Python 3.7.16 (kept as-is, even though it's ancient)
 wget https://www.python.org/ftp/python/3.7.16/Python-3.7.16.tgz
 tar -xvf Python-3.7.16.tgz
 cd Python-3.7.16
+
 ./configure
-make -j `nproc`
+make -j "$(nproc)"
 make altinstall
+
 cd ..
-rm /usr/bin/python3 && ln -s `which python3.7` /usr/bin/python3
-ln -s `which cmake3` /usr/bin/cmake
+
+# Keep behavior: point /usr/bin/python3 at python3.7 if it exists
+# (Will require root in many environments)
+if [ -x "$(command -v python3.7)" ]; then
+  rm -f /usr/bin/python3
+  ln -s "$(command -v python3.7)" /usr/bin/python3
+fi
+
+# AL2023 uses cmake (not cmake3); keep the /usr/bin/cmake symlink behavior
+if [ -x "$(command -v cmake)" ]; then
+  ln -sf "$(command -v cmake)" /usr/bin/cmake
+fi
+
 python3 --version
+
 # 
 # MODE=$1 # whether to install using sudo or not
 # set -e
