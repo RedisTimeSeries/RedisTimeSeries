@@ -26,7 +26,7 @@ dnf -y update
 # Install roughly the same tooling using AL2023 package names
 dnf -y install \
   gcc gcc-c++ make \
-  automake libtool \
+  autogen automake libtool \
   cmake git \
   python3-pip \
   openssl-devel bzip2-devel libffi-devel zlib-devel \
