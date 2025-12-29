@@ -157,8 +157,16 @@ jobs:
           ref: ${{needs.setup-environment.outputs.redis-ref}}
           path: redis
           submodules: 'recursive'
-      - name: git checkout
+      - name: Create GitHub App installation token
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic'
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_REDIS_ORG_APP_ID }}
+          private-key: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
+          owner: redis
+      - name: git checkout
+        if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
           # Perform checkout
           REPO_URL="https://github.com/${{ github.repository }}.git"
@@ -178,6 +186,8 @@ jobs:
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
           git submodule update
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Setup
         working-directory: .install
         shell: bash

@@ -156,6 +156,13 @@ jobs:
       - name: Install git
         run: |
           ${{ matrix.docker.install_git }}
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_REDIS_ORG_APP_ID }}
+          private-key: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
+          owner: redis
       - name: git checkout
         run: |
           # Perform checkout
@@ -176,6 +183,8 @@ jobs:
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
           git submodule update
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Setup Python for testing
         if: matrix.docker.image == 'ubuntu:jammy'
         uses: actions/setup-python@v5
