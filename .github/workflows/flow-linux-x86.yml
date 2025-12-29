@@ -177,6 +177,13 @@ jobs:
       - name: git checkout local repo
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          echo "::add-mask::$GH_TOKEN"
+      
+          export GIT_ASKPASS=/bin/echo
+          export GIT_USERNAME=x-access-token
+          export GIT_PASSWORD="$GH_TOKEN"
           # Perform checkout
           REPO_URL="https://github.com/${{ github.repository }}.git"
           # Clone the repository to the current directory
@@ -191,6 +198,13 @@ jobs:
       - name: git checkout redis/redis
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          echo "::add-mask::$GH_TOKEN"
+      
+          export GIT_ASKPASS=/bin/echo
+          export GIT_USERNAME=x-access-token
+          export GIT_PASSWORD="$GH_TOKEN"
           git clone --recurse-submodules $REPO_URL redis
           cd redis
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
