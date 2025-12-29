@@ -165,7 +165,7 @@ jobs:
           app-id: ${{ vars.GH_REDIS_ORG_APP_ID }}
           private-key: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
           owner: redis
-      - name: git checkout
+      - name: git checkout local repo
         if: matrix.docker_image.image == 'amazonlinux:2023' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
           # Perform checkout
@@ -177,7 +177,9 @@ jobs:
           git fetch origin ${REF}
           git checkout ${REF}
           git submodule update
-
+      - name: git checkout redis/redis
+        if: matrix.docker_image.image == 'amazonlinux:2023' || matrix.docker_image.image == 'ubuntu:bionic' 
+        run: |
           # Perform checkout
           REPO_URL="https://github.com/redis/redis.git"
           # Clone the repository to the current directory
