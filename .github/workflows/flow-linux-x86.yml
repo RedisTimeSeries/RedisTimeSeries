@@ -58,6 +58,23 @@ on:
         required: false
         default: ''
 jobs:
+  create-github-app-token:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      GH_REDIS_ORG_APP_TOKEN: ${{ steps.token.outputs.token }}
+    steps:
+      - name: Create GitHub App installation token
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_REDIS_ORG_APP_ID }}
+          private-key: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
+          owner: redis
+
+      - name: Mask token
+        run: echo "::add-mask::${{ steps.token.outputs.token }}"
   setup-environment:
     runs-on: ubuntu-latest
     outputs:
@@ -105,7 +122,7 @@ jobs:
                 MATRIX="${MATRIX}{\"image\": \"debian:bullseye\", \"use-venv\": \"1\", \"call-setup\": \"1\", \"pre_req_install_cmd\": \"apt-get update && apt-get install -y git\"},"
                 ;;
               amazonlinux2)
-                MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git openssl\"},"
+                MATRIX="${MATRIX}{\"image\": \"amazonlinux:2\", \"use-venv\": \"0\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"yum update -y && yum install -y git\"},"
                 ;;
               mariner2)
                 MATRIX="${MATRIX}{\"image\": \"mcr.microsoft.com/cbl-mariner/base/core:2.0\", \"use-venv\": \"1\", \"call-setup\": \"0\", \"pre_req_install_cmd\": \"tdnf install --noplugins --skipsignature -y ca-certificates git\"},"
@@ -125,7 +142,7 @@ jobs:
   build-linux-matrix:
     name: ${{matrix.docker_image.image}}, ${{needs.setup-environment.outputs.redis-ref}}
     runs-on: ubuntu-latest
-    needs: setup-environment
+    needs: [setup-environment, create-github-app-token]
     strategy:
       fail-fast: false
       matrix:
@@ -157,55 +174,6 @@ jobs:
           ref: ${{needs.setup-environment.outputs.redis-ref}}
           path: redis
           submodules: 'recursive'
-      - name: Create GitHub App token (bash)
-        if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
-        id: app-token
-        shell: bash
-        env:
-          APP_ID: ${{ vars.GH_REDIS_ORG_APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
-          INSTALLATION_ID: 101726374
-        run: |
-          set -euo pipefail
-      
-          # Write private key to file
-          KEY_FILE="$(mktemp)"
-          printf '%s' "$APP_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-      
-          # Time claims
-          NOW=$(date +%s)
-          IAT=$((NOW - 60))
-          EXP=$((NOW + 9*60))   # <10 min per GitHub rules
-      
-          b64url() {
-            openssl base64 -A | tr '+/' '-_' | tr -d '='
-          }
-      
-          # JWT header + payload
-          HEADER='{"alg":"RS256","typ":"JWT"}'
-          PAYLOAD=$(printf '{"iat":%d,"exp":%d,"iss":%s}' "$IAT" "$EXP" "$APP_ID")
-      
-          UNSIGNED="$(printf '%s' "$HEADER" | b64url).$(printf '%s' "$PAYLOAD" | b64url)"
-          SIGNATURE="$(printf '%s' "$UNSIGNED" | openssl dgst -sha256 -sign "$KEY_FILE" | b64url)"
-          JWT="$UNSIGNED.$SIGNATURE"
-      
-          # Exchange JWT for installation token
-          TOKEN_JSON="$(
-            curl -fsSL -X POST \
-              -H "Authorization: Bearer $JWT" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens"
-          )"
-      
-          TOKEN="$(printf '%s' "$TOKEN_JSON" | python3 - <<'PY'
-          import json,sys
-          print(json.load(sys.stdin)["token"])
-          PY
-          )"
-          
-          echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
       - name: git checkout local repo
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
@@ -218,15 +186,6 @@ jobs:
           git fetch origin ${REF}
           git checkout ${REF}
           git submodule update
-
-          # Perform checkout
-          REPO_URL="https://github.com/redis/redis.git"
-          # Clone the repository to the current directory
-          git clone --recurse-submodules $REPO_URL redis
-          cd redis
-          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
-          git checkout ${{needs.setup-environment.outputs.redis-ref}}
-          git submodule update
       - name: git checkout redis/redis
         if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic' 
         run: |
@@ -235,6 +194,8 @@ jobs:
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
           git submodule update
+        env:
+          GH_TOKEN: ${{ needs.create-github-app-token.outputs.GH_REDIS_ORG_APP_TOKEN }}
       - name: Setup
         working-directory: .install
         shell: bash
