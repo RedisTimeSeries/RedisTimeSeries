@@ -180,10 +180,15 @@ jobs:
           set -euo pipefail
           export GIT_TERMINAL_PROMPT=0
           echo "::add-mask::$GH_TOKEN"
-      
-          export GIT_ASKPASS=/bin/echo
-          export GIT_USERNAME=x-access-token
-          export GIT_PASSWORD="$GH_TOKEN"
+
+          cat > ~/.netrc <<EOF
+          machine github.com
+            login x-access-token
+            password $GH_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           # Perform checkout
           REPO_URL="https://github.com/${{ github.repository }}.git"
           # Clone the repository to the current directory
@@ -201,10 +206,15 @@ jobs:
           set -euo pipefail
           export GIT_TERMINAL_PROMPT=0
           echo "::add-mask::$GH_TOKEN"
-      
-          export GIT_ASKPASS=/bin/echo
-          export GIT_USERNAME=x-access-token
-          export GIT_PASSWORD="$GH_TOKEN"
+
+          cat > ~/.netrc <<EOF
+          machine github.com
+            login x-access-token
+            password $GH_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git clone --recurse-submodules $REPO_URL redis
           cd redis
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
