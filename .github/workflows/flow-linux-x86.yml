@@ -145,39 +145,16 @@ jobs:
       - name: Install git
         run: ${{ matrix.docker_image.pre_req_install_cmd }}
       - name: Checkout
-        if: matrix.docker_image.image != 'amazonlinux:2' && matrix.docker_image.image != 'ubuntu:bionic'
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
       - name: Checkout Redis
-        if: matrix.docker_image.image != 'amazonlinux:2' && matrix.docker_image.image != 'ubuntu:bionic'
         uses: actions/checkout@v4
         with:
           repository: redis/redis
           ref: ${{needs.setup-environment.outputs.redis-ref}}
           path: redis
           submodules: 'recursive'
-      - name: git checkout
-        if: matrix.docker_image.image == 'amazonlinux:2' || matrix.docker_image.image == 'ubuntu:bionic'
-        run: |
-          # Perform checkout
-          REPO_URL="https://github.com/${{ github.repository }}.git"
-          # Clone the repository to the current directory
-          git config --global --add safe.directory /__w/${{ github.repository }}
-          git clone --recurse-submodules --depth=1 $REPO_URL .
-          REF=${{github.sha}}
-          git fetch origin ${REF}
-          git checkout ${REF}
-          git submodule update
-
-          # Perform checkout
-          REPO_URL="https://github.com/redis/redis.git"
-          # Clone the repository to the current directory
-          git clone --recurse-submodules $REPO_URL redis
-          cd redis
-          git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
-          git checkout ${{needs.setup-environment.outputs.redis-ref}}
-          git submodule update
       - name: Setup
         working-directory: .install
         shell: bash
