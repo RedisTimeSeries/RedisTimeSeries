@@ -214,6 +214,7 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
+          REPO_URL="https://github.com/redis/redis.git"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git clone --recurse-submodules $REPO_URL redis
           cd redis
