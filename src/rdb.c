@@ -27,7 +27,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     }
 
     bool err = false;
-    Series *series = NULL;
+    __blocked Series *series = NULL;
 
     RedisModuleString *keyName = LoadString_IOError(io, err, NULL);
     errdefer(err, if (!series) RedisModule_FreeString(NULL, keyName));

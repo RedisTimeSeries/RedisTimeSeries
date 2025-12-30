@@ -5,6 +5,11 @@
 /// `defer` and `errdefer` are macros that are used to execute a block of code at the end of the current
 /// scope. They behave similarly to the `defer` and `errdefer` keywords in languages like Go, Swift, and Zig.
 ///
+#ifdef __clang__
+#define __blocked __block
+#else
+#define __blocked  // empty on GCC
+#endif
 #if defined(__GNUC__) && !defined(__clang__)
 #define DEFER_(F, V)                                                                               \
     auto inline __attribute__((__always_inline__)) void F(int *);                                  \

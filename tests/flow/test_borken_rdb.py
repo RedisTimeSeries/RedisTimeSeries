@@ -335,24 +335,6 @@ def test_broken_rdb_invalid_encoding_version(env):
 
 
 def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):
-    """
-    Tamper with module payload (keeping CRC valid) so the first uncompressed chunk has
-    num_samples > size/SAMPLE_SIZE. This must be rejected during RESTORE (no crash).
-    """
     env.skipOnCluster()
-
-    env.cmd('DEL', 'test_key')
-    env.cmd('TS.CREATE', 'test_key', 'UNCOMPRESSED', 'CHUNK_SIZE', '128')
-    env.cmd('TS.ADD', 'test_key', 1, 1.0)
-
-    valid_dump = env.cmd('DUMP', 'test_key')
-    assert _verify_dump_payload(valid_dump)
-
-    # Set num_samples to 63 while keeping the same 1-byte encoding.
-    corrupted_dump = _patch_first_uncompressed_chunk_num_samples(valid_dump, 63)
-    assert _verify_dump_payload(corrupted_dump)
-
-    env.cmd('DEL', 'test_key')
-
-    # Should fail due to module rejecting malformed chunk metadata (not checksum).
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    rdb_payload = b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\x04zxcv\x02\x00\x02P\x00\x02\x01\x02\x01\x04\x00\x00\x00\x00\x00\x00\xf0?\x02\x01\x02\x00\x02\x00\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02\x00\x02\x80AAAA\x02\x01\x05B\xbbXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00\xff\x0c\x00\xf4\x02\x01#\x17\x97f\xae'
+    env.expect('RESTORE', 'test_key', 0, rdb_payload, replace=True).error().contains("Bad data format")
