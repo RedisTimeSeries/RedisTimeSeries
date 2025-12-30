@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 
 #ifndef COMPRESSED_CHUNK_H
@@ -18,6 +21,11 @@ Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
 Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk);
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
+int Compressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                           void *data,
+                           unsigned char *key,
+                           size_t keylen,
+                           void **newptr);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
@@ -36,7 +44,7 @@ void Compressed_ResetChunkIterator(ChunkIter_t *iterator, const Chunk_t *chunk);
 void Compressed_FreeChunkIterator(ChunkIter_t *iter);
 
 // Miscellaneous
-size_t Compressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
+size_t Compressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct);
 uint64_t Compressed_ChunkNumOfSample(Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk);

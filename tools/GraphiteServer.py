@@ -38,7 +38,7 @@ def process_connection(socket, _):
             except redis.ResponseError as ex:
                 # small hack, for performance reasons its better to first try to add an metric
                 # instead of checking per metric if it exists or not
-                if 'the key does not exists' in ex.message:
+                if 'the key does not exist' in ex.message:
                     redis_client.execute_command("ts.create",
                                                  path,
                                                  MAX_RETENTION,

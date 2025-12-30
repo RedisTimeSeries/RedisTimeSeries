@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #ifndef CONSTS_H
 #define CONSTS_H
@@ -21,9 +24,6 @@
 #define likely(x) (x)
 #define unlikely(x) (x)
 #endif
-
-#define TRUE 1
-#define FALSE 0
 
 #ifndef really_inline
 #define really_inline __attribute__((always_inline)) inline
@@ -81,6 +81,30 @@ typedef enum DuplicatePolicy
     DP_MAX = 5,
     DP_SUM = 6,
 } DuplicatePolicy;
+
+static inline __attribute__((always_inline)) const char *DuplicatePolicyToString(
+    const DuplicatePolicy policy) {
+    switch (policy) {
+        case DP_NONE:
+            return "none";
+        case DP_BLOCK:
+            return "block";
+        case DP_LAST:
+            return "last";
+        case DP_FIRST:
+            return "first";
+        case DP_MIN:
+            return "min";
+        case DP_MAX:
+            return "max";
+        case DP_SUM:
+            return "sum";
+        case DP_INVALID:
+            return "invalid";
+        default:
+            return "unknown";
+    }
+}
 
 /* Series struct options */
 #define SERIES_OPT_UNCOMPRESSED 0x1

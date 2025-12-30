@@ -66,3 +66,19 @@ def test_incrby_with_update_latest():
         result = r.execute_command('TS.RANGE', 'tester', 0, 20)
         assert len(result) == 20
         assert result[19] == [20, b'95']
+
+
+def test_incrby_error_cases():
+    """Minimal test for TS.INCRBY error handling (cluster-compatible)"""
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Test with wrong number of arguments - cluster-compatible approach
+        if hasattr(r, 'nodes_manager'):  # Redis cluster
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY', target_nodes=r.get_default_node())
+        else:  # Single node Redis
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('TS.INCRBY')
+        
+        # Test with invalid addend value
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.INCRBY', 'test_key', 'not_a_number')

@@ -23,11 +23,14 @@ def test_resp3(env):
         res = r.execute_command('ts.get', t1)
         assert res == [1000, 5.0]
         res = r.execute_command('ts.info', t1, 'DEBUG')
+        res.pop(b'memoryUsage')
+        default_duplicate_policy = env.cmd("config", "get", "ts-duplicate-policy")[b"ts-duplicate-policy"]
         assert res == {
             b'totalSamples': 1000,
-            b'memoryUsage': 514, b'firstTimestamp': 1, b'lastTimestamp': 1000,
+            b'firstTimestamp': 1, b'lastTimestamp': 1000,
             b'retentionTime': 0, b'chunkCount': 2, b'chunkSize': 128,
-            b'chunkType': b'compressed', b'duplicatePolicy': None,
+            b'chunkType': b'compressed',
+            b'duplicatePolicy': default_duplicate_policy,
             b'labels': {b'name': b'mush'},
             b'sourceKey': None,
             b'rules': {b't2{1}': [10, b'COUNT', 0]},
@@ -60,7 +63,7 @@ def test_resp3(env):
                     b't2{1}': [{b'name': b'mush'}, [990, 10.0]]}
 
         res = r1.execute_command('ts.queryindex', 'name=mush')
-        assert res == {b't1{1}', b't2{1}'}
+        assert set(res) == set([b't1{1}', b't2{1}'])
 
 def test_resp3_mrange(env):
     if not is_resp3_possible(env):

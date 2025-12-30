@@ -1,9 +1,13 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #define REDISMODULE_MAIN
+#define REDISMODULE_SDK_RLEC 1
 
 #include "minunit.h"
 
@@ -12,6 +16,7 @@
 #include "unittests_parse_duplicate_policy.c"
 #include "unittests_parse_policies.c"
 #include "unittests_uncompressed_chunk.c"
+#include "unittests_cmd_info.c"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +29,7 @@ int main(int argc, char *argv[]) {
     MU_RUN_SUITE(uncompressed_chunk_test_suite);
     MU_RUN_SUITE(compressed_chunk_test_suite);
     MU_RUN_SUITE(parse_duplicate_policy_test_suite);
+    MU_RUN_SUITE(command_info_test_suite);
     MU_REPORT();
     return minunit_fail;
 }

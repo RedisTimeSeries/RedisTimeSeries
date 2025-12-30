@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 
 #ifndef GENERIC__CHUNK_H
@@ -48,6 +51,7 @@ typedef struct ChunkFuncs
     void (*FreeChunk)(Chunk_t *chunk);
     Chunk_t *(*CloneChunk)(const Chunk_t *chunk);
     Chunk_t *(*SplitChunk)(Chunk_t *chunk);
+    RedisModuleDefragDictValueCallback DefragChunk;
 
     size_t (*DelRange)(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs);
     ChunkResult (*AddSample)(Chunk_t *chunk, Sample *sample);
@@ -59,7 +63,7 @@ typedef struct ChunkFuncs
                          EnrichedChunk *enrichedChunk,
                          bool reverse);
 
-    size_t (*GetChunkSize)(Chunk_t *chunk, bool includeStruct);
+    size_t (*GetChunkSize)(const Chunk_t *chunk, bool includeStruct);
     uint64_t (*GetNumOfSample)(Chunk_t *chunk);
     uint64_t (*GetLastTimestamp)(Chunk_t *chunk);
     double (*GetLastValue)(Chunk_t *chunk);

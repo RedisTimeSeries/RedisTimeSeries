@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #ifndef CHUNK_H
 #define CHUNK_H
@@ -29,7 +32,12 @@ void Uncompressed_FreeChunk(Chunk_t *chunk);
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk);
 Chunk_t *Uncompressed_CloneChunk(const Chunk_t *src);
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk, bool includeStruct);
+int Uncompressed_DefragChunk(RedisModuleDefragCtx *ctx,
+                             void *data,
+                             unsigned char *key,
+                             size_t keylen,
+                             void **newptr);
+size_t Uncompressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct);
 
 /**
  * TODO: describe me

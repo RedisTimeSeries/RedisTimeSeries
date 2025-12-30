@@ -1,7 +1,10 @@
 /*
- *copyright redis ltd. 2017 - present
- *licensed under your choice of the redis source available license 2.0 (rsalv2) or
- *the server side public license v1 (ssplv1).
+ * Copyright (c) 2006-Present, Redis Ltd.
+ * All rights reserved.
+ *
+ * Licensed under your choice of (a) the Redis Source Available License 2.0
+ * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
+ * GNU Affero General Public License v3 (AGPLv3).
  */
 #ifndef TSDB_H
 #define TSDB_H
@@ -14,6 +17,32 @@
 #include "query_language.h"
 
 #include "RedisModulesSDK/redismodule.h"
+
+typedef enum GetSeriesResult
+{
+    // The operation was successful.
+    GetSeriesResult_Success = 0,
+    // A generic error occurred.
+    GetSeriesResult_GenericError = 1,
+    // The user does not have the required permissions to perform the
+    // requested operation.
+    GetSeriesResult_PermissionError = 2,
+} GetSeriesResult;
+
+typedef enum GetSeriesResultFlags
+{
+    // No flags are set.
+    GetSeriesFlags_None = 0,
+    // Delete references to deleted series.
+    GetSeriesFlags_DeleteReferences = 1 << 0,
+    // Perform the operation silently.
+    GetSeriesFlags_SilentOperation = 1 << 1,
+    // Check for ACLs.
+    GetSeriesFlags_CheckForAcls = 1 << 2,
+    // All the flags set.
+    GetSeriesFlags_All = GetSeriesFlags_DeleteReferences | GetSeriesFlags_SilentOperation |
+                         GetSeriesFlags_CheckForAcls,
+} GetSeriesFlags;
 
 typedef struct CompactionRule
 {
@@ -51,14 +80,16 @@ typedef struct Series
 } Series;
 
 // process C's modulo result to translate from a negative modulo to a positive
-#define modulo(x, N) ((x % N + N) % N)
+static inline int64_t modulo(int64_t x, int64_t N) {
+    return ((x % N) + N) % N;
+}
 
 // Calculate the begining of aggregation bucket
 static inline timestamp_t CalcBucketStart(timestamp_t ts,
                                           timestamp_t bucketDuration,
                                           timestamp_t timestampAlignment) {
     const int64_t timestamp_diff = ts - timestampAlignment;
-    return ts - modulo(timestamp_diff, (int64_t)bucketDuration);
+    return ts - modulo(timestamp_diff, bucketDuration);
 }
 
 // If bucketTS is negative converts it to 0
@@ -66,8 +97,9 @@ static inline timestamp_t BucketStartNormalize(timestamp_t bucketTS) {
     return max(0, (int64_t)bucketTS);
 }
 
-Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
+Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx);
 void FreeSeries(void *value);
+int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value);
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value);
 void RenameSeriesFrom(RedisModuleCtx *ctx, RedisModuleString *key);
 void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname);
@@ -75,16 +107,17 @@ void RenameSeriesTo(RedisModuleCtx *ctx, RedisModuleString *key);
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 
 CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
-void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx, Series *series);
+void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx,
+                                    Series *series,
+                                    const GetSeriesFlags flags);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
-int GetSeries(RedisModuleCtx *ctx,
-              RedisModuleString *keyName,
-              RedisModuleKey **key,
-              Series **series,
-              int mode,
-              bool shouldDeleteRefs,
-              bool isSilent);
+GetSeriesResult GetSeries(RedisModuleCtx *ctx,
+                          RedisModuleString *keyName,
+                          RedisModuleKey **key,
+                          Series **series,
+                          int mode,
+                          const GetSeriesFlags flags);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,
@@ -117,9 +150,9 @@ int SeriesUpsertSample(Series *series,
                        double value,
                        DuplicatePolicy dp_override);
 
-int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
+bool SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 void SeriesSetSrcRule(RedisModuleCtx *ctx, Series *series, RedisModuleString *srcKeyName);
-int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
+bool SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
 
 CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               Series *series,

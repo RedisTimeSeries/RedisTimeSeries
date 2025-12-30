@@ -864,9 +864,41 @@
                     },
                     {
                         "name": "buckettimestamp",
-                        "type": "pure-token",
+                        "type": "oneof",
                         "token": "BUCKETTIMESTAMP",
                         "optional": true,
+                        "arguments": [
+                            {
+                                "name": "-",
+                                "type": "pure-token",
+                                "token": "-"
+                            },
+                            {
+                                "name": "start",
+                                "type": "pure-token",
+                                "token": "start"
+                            },
+                            {
+                                "name": "+",
+                                "type": "pure-token",
+                                "token": "+"
+                            },
+                            {
+                                "name": "end",
+                                "type": "pure-token",
+                                "token": "end"
+                            },
+                            {
+                                "name": "~",
+                                "type": "pure-token",
+                                "token": "~"
+                            },
+                            {
+                                "name": "mid",
+                                "type": "pure-token",
+                                "token": "mid"
+                            }
+                        ],
                         "since": "1.8.0"
                     },
                     {
@@ -1139,9 +1171,10 @@
                 "type": "string"
             },
             {
-                "name": "LATEST",
-                "type": "string",
+                "name": "latest",
+                "type": "pure-token",
                 "optional": true,
+                "token": "LATEST",
                 "since": "1.8.0"
             },
             {

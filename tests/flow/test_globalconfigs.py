@@ -1,6 +1,6 @@
 # import pytest
 # from utils import Env
-from test_helper_classes import TSInfo
+from test_helper_classes import TSInfo, _get_ts_info
 from includes import *
 
 class testModuleLoadTimeArguments(object):
@@ -122,14 +122,14 @@ def test_timestamp_alignment():
         res.sort()
         assert res == [b't1', b't1_MAX_1000_500']
 
-        info = r.execute_command('TS.INFO', 't1_MAX_1000_500')
-        assert info == [b'totalSamples', 2, b'memoryUsage', 4201, b'firstTimestamp', 0, b'lastTimestamp', 2500, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'uncompressed', b'duplicatePolicy', None, b'labels', [[b'aggregation', b'MAX'], [b'time_bucket', b'1000']], b'sourceKey', b't1', b'rules', [],  b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
+        info = _get_ts_info(r, 't1_MAX_1000_500')
+        assert info == TSInfo([b'totalSamples', 2, b'firstTimestamp', 0, b'lastTimestamp', 2500, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'uncompressed', b'duplicatePolicy', None, b'labels', [[b'aggregation', b'MAX'], [b'time_bucket', b'1000']], b'sourceKey', b't1', b'rules', [],  b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0'])
 
-        info = r.execute_command('TS.INFO', 't1', 'DEBUG')
-        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0', b'keySelfName', b't1', b'Chunks', [[b'startTimestamp', 1, b'endTimestamp', 5000, b'samples', 3, b'size', 4096, b'bytesPerSample', b'1365.3333740234375']]]
+        info = _get_ts_info(r, 't1', 'DEBUG')
+        assert info == TSInfo([b'totalSamples', 3, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0', b'keySelfName', b't1', b'Chunks', [[b'startTimestamp', 1, b'endTimestamp', 5000, b'samples', 3, b'size', 4096, b'bytesPerSample', b'1365.3333740234375']]])
 
-        info = r.execute_command('TS.INFO', 't1')
-        assert info == [b'totalSamples', 3, b'memoryUsage', 4248, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
+        info = _get_ts_info(r, 't1')
+        assert info == TSInfo([b'totalSamples', 3, b'firstTimestamp', 1, b'lastTimestamp', 5000, b'retentionTime', 0, b'chunkCount', 1, b'chunkSize', 4096, b'chunkType', b'compressed', b'duplicatePolicy', None, b'labels', [], b'sourceKey', None, b'rules', [[b't1_MAX_1000_500', 1000, b'MAX', 500]], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0'])
 
 class testGlobalConfigTests():
 
@@ -196,7 +196,6 @@ class testGlobalConfigTests():
 
 
 def test_negative_configuration():
-    Env().skip()
     Env().skipOnCluster()
     skip_on_rlec()
     with pytest.raises(Exception) as excinfo:
@@ -240,3 +239,149 @@ def test_negative_configuration():
 
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_TYPE compressed; OSS_GLOBAL_PASSWORD')
+
+    with pytest.raises(Exception) as excinfo:
+        env = Env(moduleArgs='CHUNK_TYPE compressed; global-password')
+
+@skip(onVersionLowerThan='6.2', onVersionHigherThan='7.0', on_cluster=True)
+def test_module_config_api_is_unused_on_old_versions(env):
+    env = Env(noLog=False)
+    '''
+    Tests that the module configuration API is not attempted to be used
+    on Redis versions older than 7.0 and no deprecation warnings are
+    emitted.
+    '''
+    skip_on_rlec()
+
+    with env.getConnection() as conn:
+        # It should return an empty array as the option is not supported.
+        # The command should not raise an exception and no deprecation
+        # warnings should be emitted.
+        env.expectEqual(len(conn.execute_command('CONFIG', 'GET', 'ts-global-user')), 0)
+
+    assert is_line_in_server_log(env, f"{arg[0]} is deprecated")
+    assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+
+def test_module_config_api_is_used_on_recent_redis_versions():
+    '''
+    Tests that the module configuration API is used on Redis versions
+    starting 7.0 and the deprecation warnings are emitted.
+    '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    with env.getConnection() as conn:
+        # String or floating-point value options:
+        conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-compaction-policy', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-global-user')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'last')
+        conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'LAST')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-encoding')
+        conn.execute_command('CONFIG', 'SET', 'ts-encoding', 'compressed')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-val-diff')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-val-diff', '10')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-val-diff', '10.0')
+
+        # Integer value options:
+        conn.execute_command('CONFIG', 'GET', 'ts-num-threads')
+
+        # Can't set an immutable config value.
+        with pytest.raises(redis.exceptions.ResponseError):
+            conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '2')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-retention-policy')
+        conn.execute_command('CONFIG', 'SET', 'ts-retention-policy', '1')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-chunk-size-bytes')
+        conn.execute_command('CONFIG', 'SET', 'ts-chunk-size-bytes', '2048')
+
+        conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-time-diff')
+        conn.execute_command('CONFIG', 'SET', 'ts-ignore-max-time-diff', '5')
+
+        assert not is_line_in_server_log(env, 'is deprecated, please use')
+
+def test_module_config_from_module_arguments_raises_deprecation_messages():
+    '''
+    Tests that using the deprecated module configuration options
+    (module arguments) while the module configuration API is used at the
+    same time, leads to the deprecation messages.
+    '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    args = [
+        ['CHUNK_TYPE', 'compressed'],
+        ['ENCODING', 'compressed'],
+        ['COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d'],
+        ['DUPLICATE_POLICY', 'MAX'],
+        ['IGNORE_MAX_TIME_DIFF', '10'],
+        ['IGNORE_MAX_VAL_DIFF', '10'],
+        ['RETENTION_POLICY', '30'],
+        ['CHUNK_SIZE_BYTES', '2048'],
+        ['OSS_GLOBAL_PASSWORD', 'test'],
+    ]
+
+    for arg in args:
+        env = Env(moduleArgs=f"{arg[0]} {arg[1]}", noLog=False)
+        assert is_line_in_server_log(env, f"{arg[0]} is deprecated")
+        assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+
+def test_module_config_takes_precedence_over_module_arguments():
+    '''
+    Tests that using the deprecated module configuration options
+    (module arguments) while also using the the module configuration API
+    leads to the latter taking precedence.
+    '''
+    env = Env(noLog=False)
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+        env.skip()
+    skip_on_rlec()
+
+    # All these options are expected to return a valid value, so just
+    # check that no exception is raised, no crashes observed and so on.
+    args = [
+        'CHUNK_TYPE', 'compressed',
+        'ENCODING', 'compressed',
+        'COMPACTION_POLICY', 'max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d',
+        'DUPLICATE_POLICY', 'MAX',
+        'IGNORE_MAX_TIME_DIFF', '10',
+        'IGNORE_MAX_VAL_DIFF', '10',
+        'RETENTION_POLICY', '30',
+        'CHUNK_SIZE_BYTES', '2048',
+        'OSS_GLOBAL_PASSWORD', 'test',
+    ]
+
+    configFileContent = """
+    ts-ignore-max-time-diff 20
+    ts-chunk-size-bytes 4096
+    ts-retention-policy 40
+    ts-duplicate-policy last
+    ts-compaction-policy max:1m:1d
+    ts-encoding uncompressed
+    """
+
+    env = Env(moduleArgs=args, redisConfigFileContent=configFileContent, noLog=False)
+    assert is_line_in_server_log(env, " is deprecated")
+    assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+
+    with env.getConnection() as conn:
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-ignore-max-time-diff')[1], b'20')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-chunk-size-bytes')[1], b'4096')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-retention-policy')[1], b'40')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
