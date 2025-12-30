@@ -2,7 +2,7 @@ name: Event CI
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 on:
   pull_request:

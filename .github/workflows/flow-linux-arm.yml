@@ -38,6 +38,23 @@ on:
 
 
 jobs:
+  create-github-app-token:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      GH_REDIS_ORG_APP_TOKEN: ${{ steps.token.outputs.token }}
+    steps:
+      - name: Create GitHub App installation token
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_REDIS_ORG_APP_ID }}
+          private-key: ${{ secrets.GH_REDIS_ORG_APP_PRIVATE_KEY }}
+          owner: redis
+
+      - name: Mask token
+        run: echo "::add-mask::${{ steps.token.outputs.token }}"
   setup-environment:
     runs-on: ubuntu-latest
     outputs:
@@ -57,7 +74,7 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
   ubuntu-arm64:
     runs-on: ubuntu24-arm64-4-16 # ubuntu24-arm64-2-8
-    needs: setup-environment
+    needs: [setup-environment, create-github-app-token]
     strategy:
       fail-fast: false
       matrix:
@@ -156,8 +173,20 @@ jobs:
       - name: Install git
         run: |
           ${{ matrix.docker.install_git }}
-      - name: git checkout
+      - name: git checkout local repo
         run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          echo "::add-mask::$GH_TOKEN"
+
+          cat > ~/.netrc <<EOF
+          machine github.com
+            login x-access-token
+            password $GH_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           # Perform checkout
           REPO_URL="https://github.com/${{ github.repository }}.git"
           # Clone the repository to the current directory
@@ -167,15 +196,31 @@ jobs:
           git fetch origin ${REF}
           git checkout ${REF}
           git submodule update
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-          # Perform checkout
+      - name: git checkout redis/redis
+        run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          echo "::add-mask::$GH_TOKEN"
+
+          cat > ~/.netrc <<EOF
+          machine github.com
+            login x-access-token
+            password $GH_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
           REPO_URL="https://github.com/redis/redis.git"
-          # Clone the repository to the current directory
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git clone --recurse-submodules $REPO_URL redis
           cd redis
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
           git submodule update
+        env:
+          GH_TOKEN: ${{ needs.create-github-app-token.outputs.GH_REDIS_ORG_APP_TOKEN }}
       - name: Setup Python for testing
         if: matrix.docker.image == 'ubuntu:jammy'
         uses: actions/setup-python@v5

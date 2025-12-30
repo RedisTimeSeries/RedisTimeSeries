@@ -25,6 +25,7 @@ capabilities:
     - intershard_tls_pass
     - flash
     - ipv6
+    - asm
 exclude_commands:
     - timeseries.REFRESHCLUSTER
     - timeseries.INFOCLUSTER
