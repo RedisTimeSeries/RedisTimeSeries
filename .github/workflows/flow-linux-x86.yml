@@ -238,36 +238,29 @@ jobs:
         with:
           build_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
           use-venv: ${{matrix.docker_image.use-venv}}
-      # - name: Run tests
-      #   uses: ./.github/actions/run-tests
-      #   with:
-      #     use-venv: ${{matrix.docker_image.use-venv}}
-      #     quick: ${{inputs.quick && '1' || '0'}}
-      #     run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
-      #     run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
-      # - name: Upload test artifacts
-      #   if: failure()
-      #   uses: ./.github/actions/upload-artifacts
-      #   with:
-      #     image: ${{ matrix.docker_image.image }}
+      - name: Run tests
+        uses: ./.github/actions/run-tests
+        with:
+          use-venv: ${{matrix.docker_image.use-venv}}
+          quick: ${{inputs.quick && '1' || '0'}}
+          run_valgrind: ${{inputs.run_valgrind && '1' || '0'}}
+          run_sanitizer: ${{inputs.run_sanitizer && 'addr' || ''}}
+      - name: Upload test artifacts
+        if: failure()
+        uses: ./.github/actions/upload-artifacts
+        with:
+          image: ${{ matrix.docker_image.image }}
       - name: Pack module
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
         uses: ./.github/actions/pack-module
         with:
           use-venv: ${{matrix.docker_image.use-venv}}
           beta-version: ${{ inputs.beta-version }}
-      - name: Sanitize artifact name
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
-        id: sanitize
-        run: |
-          IMAGE_NAME="${{ matrix.docker_image.image }}"
-          SANITIZED=$(echo "$IMAGE_NAME" | tr ':/' '--' | tr -d ' ')
-          echo "name=$SANITIZED" >> $GITHUB_OUTPUT
       - name: Upload packed artifacts
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
         uses: actions/upload-artifact@v4
         with:
-          name: packed-artifacts-${{ steps.sanitize.outputs.name }}
+          name: packed-artifacts-${{ matrix.docker_image.image }}
           path: bin/artifacts
           retention-days: 1
           if-no-files-found: ignore
@@ -282,17 +275,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Sanitize artifact name
-        id: sanitize
-        run: |
-          IMAGE_NAME="${{ matrix.docker_image.image }}"
-          SANITIZED=$(echo "$IMAGE_NAME" | tr ':/' '--' | tr -d ' ')
-          echo "name=$SANITIZED" >> $GITHUB_OUTPUT
       - name: Download packed artifacts
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: packed-artifacts-${{ steps.sanitize.outputs.name }}
+          name: packed-artifacts-${{ matrix.docker_image.image }}
           path: bin/artifacts
       - name: Check if artifacts exist
         id: check-artifacts
