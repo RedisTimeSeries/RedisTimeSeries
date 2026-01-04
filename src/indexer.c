@@ -17,7 +17,10 @@
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
+#include <pthread.h>
 #include <rmutil/alloc.h>
+
+#include "utils/strmap.h"
 
 RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
@@ -32,9 +35,85 @@ typedef enum
     Indexer_Remove = 0x2,
 } INDEXER_OPERATION_T;
 
+/* Module-owned (worker-friendly) in-memory index.
+ *
+ * labelsIndexMem: index_key(string) -> StrMap*(set of ts_key strings)
+ * tsLabelIndexMem: ts_key(string) -> StrMap*(set of index_key strings)
+ *
+ * Protected by an RW lock so many readers (queries) can run concurrently. */
+static pthread_rwlock_t labelsIndexMemLock = PTHREAD_RWLOCK_INITIALIZER;
+static StrMap labelsIndexMem;   /* values: StrMap* */
+static StrMap tsLabelIndexMem;  /* values: StrMap* */
+
+static void FreeStrMapPtr(void *v) {
+    StrMap *m = (StrMap *)v;
+    if (!m) return;
+    StrMap_Free(m, NULL);
+    free(m);
+}
+
+static StrMap *GetOrCreateSet(StrMap *top, const char *key) {
+    void *v = NULL;
+    if (StrMap_Get(top, key, &v)) {
+        return (StrMap *)v;
+    }
+    StrMap *set = malloc(sizeof(*set));
+    if (!set) return NULL;
+    StrMap_Init(set);
+    if (StrMap_Set(top, key, set, FreeStrMapPtr) != 0) {
+        StrMap_Free(set, NULL);
+        free(set);
+        return NULL;
+    }
+    return set;
+}
+
+static void MemIndex_Add(const char *ts_key_cstr, const char *index_key_cstr) {
+    pthread_rwlock_wrlock(&labelsIndexMemLock);
+    StrMap *ts_set = GetOrCreateSet(&labelsIndexMem, index_key_cstr);
+    if (ts_set) {
+        (void)StrMap_Set(ts_set, ts_key_cstr, NULL, NULL);
+    }
+    StrMap *lbl_set = GetOrCreateSet(&tsLabelIndexMem, ts_key_cstr);
+    if (lbl_set) {
+        (void)StrMap_Set(lbl_set, index_key_cstr, NULL, NULL);
+    }
+    pthread_rwlock_unlock(&labelsIndexMemLock);
+}
+
+static void MemIndex_Remove(const char *ts_key_cstr) {
+    pthread_rwlock_wrlock(&labelsIndexMemLock);
+    void *v = NULL;
+    if (!StrMap_Get(&tsLabelIndexMem, ts_key_cstr, &v) || !v) {
+        pthread_rwlock_unlock(&labelsIndexMemLock);
+        return;
+    }
+    StrMap *lbl_set = (StrMap *)v;
+
+    StrMapIter it = {0};
+    void *dummy = NULL;
+    const char *idx_key = NULL;
+    while ((idx_key = StrMapIter_Next(lbl_set, &it, &dummy)) != NULL) {
+        void *sv = NULL;
+        if (StrMap_Get(&labelsIndexMem, idx_key, &sv) && sv) {
+            StrMap *ts_set = (StrMap *)sv;
+            (void)StrMap_Del(ts_set, ts_key_cstr, NULL);
+            if (StrMap_Len(ts_set) == 0) {
+                (void)StrMap_Del(&labelsIndexMem, idx_key, FreeStrMapPtr);
+            }
+        }
+    }
+
+    (void)StrMap_Del(&tsLabelIndexMem, ts_key_cstr, FreeStrMapPtr);
+    pthread_rwlock_unlock(&labelsIndexMemLock);
+}
+
 void IndexInit() {
     labelsIndex = RedisModule_CreateDict(NULL);
     tsLabelIndex = RedisModule_CreateDict(NULL);
+
+    StrMap_Init(&labelsIndexMem);
+    StrMap_Init(&tsLabelIndexMem);
 }
 
 static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
@@ -146,6 +225,8 @@ int parsePredicate(RedisModuleCtx *ctx,
         return TSDB_ERROR;
     }
     retQuery->key = RedisModule_CreateString(NULL, token, strlen(token));
+    retQuery->keyCStr = strdup(token);
+    retQuery->valuesCStr = NULL;
 
     // Extract value
     token = strtok_r(NULL, separator, &iter_ptr);
@@ -153,6 +234,8 @@ int parsePredicate(RedisModuleCtx *ctx,
         if (parseValueList(token, &retQuery->valueListCount, &retQuery->valuesList) == TSDB_ERROR) {
             RedisModule_FreeString(NULL, retQuery->key);
             retQuery->key = NULL;
+            free(retQuery->keyCStr);
+            retQuery->keyCStr = NULL;
             free(labelstr);
             return TSDB_ERROR;
         }
@@ -163,6 +246,16 @@ int parsePredicate(RedisModuleCtx *ctx,
     } else {
         retQuery->valuesList = NULL;
         retQuery->valueListCount = 0;
+    }
+
+    if (retQuery->valueListCount > 0 && retQuery->valuesList) {
+        retQuery->valuesCStr = calloc(retQuery->valueListCount, sizeof(char *));
+        for (size_t i = 0; i < retQuery->valueListCount; i++) {
+            if (!retQuery->valuesList[i]) continue;
+            size_t slen = 0;
+            const char *s = RedisModule_StringPtrLen(retQuery->valuesList[i], &slen);
+            retQuery->valuesCStr[i] = strndup(s, slen);
+        }
     }
     free(labelstr);
     return TSDB_OK;
@@ -217,6 +310,8 @@ void labelIndexUnderKey(INDEXER_OPERATION_T op,
 
 void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count) {
     const char *key_string, *value_string;
+    size_t ts_len = 0;
+    const char *ts_key_cstr = RedisModule_StringPtrLen(ts_key, &ts_len);
     for (int i = 0; i < labels_count; i++) {
         size_t _s;
         key_string = RedisModule_StringPtrLen(labels[i].key, &_s);
@@ -227,6 +322,16 @@ void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count) 
 
         labelIndexUnderKey(Indexer_Add, indexed_key_value, ts_key, labelsIndex, tsLabelIndex);
         labelIndexUnderKey(Indexer_Add, indexed_key, ts_key, labelsIndex, tsLabelIndex);
+
+        /* Mirror to module-owned index for worker threads. */
+        {
+            char buf1[512];
+            char buf2[512];
+            snprintf(buf1, sizeof(buf1), KV_PREFIX, key_string, value_string);
+            snprintf(buf2, sizeof(buf2), K_PREFIX, key_string);
+            MemIndex_Add(ts_key_cstr, buf1);
+            MemIndex_Add(ts_key_cstr, buf2);
+        }
 
         RedisModule_FreeString(NULL, indexed_key_value);
         RedisModule_FreeString(NULL, indexed_key);
@@ -261,6 +366,9 @@ void RemoveIndexedMetric_generic(RedisModuleString *ts_key,
 // Removes the ts from the label index and from the inverse index, if exist.
 void RemoveIndexedMetric(RedisModuleString *ts_key) {
     RemoveIndexedMetric_generic(ts_key, labelsIndex, tsLabelIndex, true);
+    size_t ts_len = 0;
+    const char *ts_key_cstr = RedisModule_StringPtrLen(ts_key, &ts_len);
+    MemIndex_Remove(ts_key_cstr);
 }
 
 // Removes all indexed metrics
@@ -279,6 +387,12 @@ void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
 
 void RemoveAllIndexedMetrics() {
     RemoveAllIndexedMetrics_generic(labelsIndex, &tsLabelIndex);
+    pthread_rwlock_wrlock(&labelsIndexMemLock);
+    StrMap_Free(&labelsIndexMem, FreeStrMapPtr);
+    StrMap_Free(&tsLabelIndexMem, FreeStrMapPtr);
+    StrMap_Init(&labelsIndexMem);
+    StrMap_Init(&tsLabelIndexMem);
+    pthread_rwlock_unlock(&labelsIndexMemLock);
 }
 
 int IsKeyIndexed(RedisModuleString *ts_key) {
@@ -491,6 +605,172 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
+void FreeQueryIndexKeys(char **keys, size_t count) {
+    if (!keys) {
+        return;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        free(keys[i]);
+    }
+    free(keys);
+}
+
+static StrMap *MemIndex_GetSetForKey(const char *index_key) {
+    void *v = NULL;
+    if (StrMap_Get(&labelsIndexMem, index_key, &v)) {
+        return (StrMap *)v;
+    }
+    return NULL;
+}
+
+static int MemIndex_PredicateHasKey(const QueryPredicate *p, const char *ts_key) {
+    char buf[512];
+    if (p->type == CONTAINS || p->type == NCONTAINS) {
+        snprintf(buf, sizeof(buf), K_PREFIX, p->keyCStr ? p->keyCStr : "");
+        StrMap *set = MemIndex_GetSetForKey(buf);
+        if (!set) return 0;
+        return StrMap_Get(set, ts_key, NULL);
+    }
+
+    /* EQ / NEQ / LIST_*: check any of the values */
+    for (size_t i = 0; i < p->valueListCount; ++i) {
+        const char *v = (p->valuesCStr && p->valuesCStr[i]) ? p->valuesCStr[i] : "";
+        snprintf(buf, sizeof(buf), KV_PREFIX, p->keyCStr ? p->keyCStr : "", v);
+        StrMap *set = MemIndex_GetSetForKey(buf);
+        if (!set) {
+            continue;
+        }
+        if (StrMap_Get(set, ts_key, NULL)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static uint64_t MemIndex_PredicateTotalSize(const QueryPredicate *p) {
+    char buf[512];
+    uint64_t total = 0;
+    if (!p || !p->keyCStr) return 0;
+    if (p->type == CONTAINS || p->type == NCONTAINS) {
+        snprintf(buf, sizeof(buf), K_PREFIX, p->keyCStr);
+        StrMap *set = MemIndex_GetSetForKey(buf);
+        return set ? (uint64_t)StrMap_Len(set) : 0;
+    }
+    for (size_t i = 0; i < p->valueListCount; ++i) {
+        const char *v = (p->valuesCStr && p->valuesCStr[i]) ? p->valuesCStr[i] : "";
+        snprintf(buf, sizeof(buf), KV_PREFIX, p->keyCStr, v);
+        StrMap *set = MemIndex_GetSetForKey(buf);
+        total += set ? (uint64_t)StrMap_Len(set) : 0;
+    }
+    return total;
+}
+
+static void MemIndex_ProcessSetCandidates(StrMap *set,
+                                         const QueryPredicate *preds,
+                                         size_t predicate_count,
+                                         size_t seed,
+                                         StrMap *seen,
+                                         char ***out,
+                                         size_t *out_count,
+                                         size_t *cap) {
+    if (!set) {
+        return;
+    }
+    StrMapIter it = {0};
+    void *dummy = NULL;
+    const char *ts = NULL;
+    while ((ts = StrMapIter_Next(set, &it, &dummy)) != NULL) {
+        if (StrMap_Get(seen, ts, NULL)) {
+            continue;
+        }
+        (void)StrMap_Set(seen, ts, NULL, NULL);
+
+        int ok = 1;
+        for (size_t j = 0; j < predicate_count; ++j) {
+            if (j == seed) {
+                continue;
+            }
+            int found = MemIndex_PredicateHasKey(&preds[j], ts);
+            int inclusion = IS_INCLUSION(preds[j].type);
+            if ((inclusion && !found) || (!inclusion && found)) {
+                ok = 0;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        if (*out_count == *cap) {
+            *cap *= 2;
+            char **tmp = realloc(*out, (*cap) * sizeof(char *));
+            if (!tmp) {
+                return;
+            }
+            *out = tmp;
+        }
+        (*out)[*out_count] = strdup(ts);
+        (*out_count)++;
+    }
+}
+
+char **QueryIndexKeys(const QueryPredicate *index_predicate,
+                      size_t predicate_count,
+                      size_t *out_count,
+                      bool *hasPermissionError) {
+    (void)hasPermissionError; /* worker path does not do ACL checks */
+    *out_count = 0;
+    if (!index_predicate || predicate_count == 0) {
+        return NULL;
+    }
+
+    pthread_rwlock_rdlock(&labelsIndexMemLock);
+
+    /* Pick smallest inclusion predicate as seed. */
+    size_t seed = 0;
+    uint64_t seed_sz = UINT64_MAX;
+    for (size_t i = 0; i < predicate_count; ++i) {
+        if (!IS_INCLUSION(index_predicate[i].type)) {
+            continue;
+        }
+        uint64_t sz = MemIndex_PredicateTotalSize(&index_predicate[i]);
+        if (sz < seed_sz) {
+            seed_sz = sz;
+            seed = i;
+        }
+    }
+
+    /* Collect candidates from seed predicate sets. */
+    StrMap seen;
+    StrMap_Init(&seen);
+    size_t cap = 256;
+    char **out = malloc(cap * sizeof(char *));
+    if (!out) {
+        pthread_rwlock_unlock(&labelsIndexMemLock);
+        return NULL;
+    }
+
+    char buf[512];
+    const QueryPredicate *p0 = &index_predicate[seed];
+
+    if (p0->type == CONTAINS || p0->type == NCONTAINS) {
+        snprintf(buf, sizeof(buf), K_PREFIX, p0->keyCStr ? p0->keyCStr : "");
+        StrMap *set = MemIndex_GetSetForKey(buf);
+        MemIndex_ProcessSetCandidates(set, index_predicate, predicate_count, seed, &seen, &out, out_count, &cap);
+    } else {
+        for (size_t i = 0; i < p0->valueListCount; ++i) {
+            const char *v = (p0->valuesCStr && p0->valuesCStr[i]) ? p0->valuesCStr[i] : "";
+            snprintf(buf, sizeof(buf), KV_PREFIX, p0->keyCStr ? p0->keyCStr : "", v);
+            StrMap *set = MemIndex_GetSetForKey(buf);
+            MemIndex_ProcessSetCandidates(set, index_predicate, predicate_count, seed, &seen, &out, out_count, &cap);
+        }
+    }
+
+    StrMap_Free(&seen, NULL);
+    pthread_rwlock_unlock(&labelsIndexMemLock);
+
+    return out;
+}
+
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
     for (size_t predicate_index = 0; predicate_index < count; predicate_index++) {
         QueryPredicate *predicate = &predicate_list[predicate_index];
@@ -501,8 +781,18 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
                 }
             }
         }
-        free(predicate->key);
+        if (predicate->key) {
+            RedisModule_FreeString(NULL, predicate->key);
+        }
         free(predicate->valuesList);
+
+        free(predicate->keyCStr);
+        if (predicate->valuesCStr) {
+            for (size_t i = 0; i < predicate->valueListCount; i++) {
+                free(predicate->valuesCStr[i]);
+            }
+        }
+        free(predicate->valuesCStr);
     }
 }
 

@@ -42,6 +42,10 @@ typedef struct QueryPredicate
     RedisModuleString *key;
     RedisModuleString **valuesList;
     size_t valueListCount;
+    /* Cached C-strings for worker-thread access without RedisModule APIs.
+     * Owned by the predicate and freed in QueryPredicate_Free. */
+    char *keyCStr;
+    char **valuesCStr;
 } QueryPredicate;
 
 typedef struct QueryPredicateList
@@ -72,6 +76,14 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
                             bool *hasPermissionError);
+
+/* Worker-friendly API: return a malloc'ed array of malloc'ed key strings.
+ * Caller must free each string and the array (use FreeQueryIndexKeys). */
+char **QueryIndexKeys(const QueryPredicate *index_predicate,
+                      size_t predicate_count,
+                      size_t *out_count,
+                      bool *hasPermissionError);
+void FreeQueryIndexKeys(char **keys, size_t count);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif

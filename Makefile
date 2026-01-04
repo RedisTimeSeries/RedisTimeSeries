@@ -153,6 +153,7 @@ define _SOURCES
 	libmr_integration.c
 	libmr_commands.c
 	module.c
+	mrprof_command.c
 	parse_policies.c
 	query_language.c
 	reply.c
@@ -168,6 +169,7 @@ define _SOURCES
 	multiseries_sample_iterator.c
 	multiseries_agg_dup_sample_iterator.c
 	utils/blocked_client.c
+	utils/strmap.c
 	cmd_info/ts_info.c
 endef
 
