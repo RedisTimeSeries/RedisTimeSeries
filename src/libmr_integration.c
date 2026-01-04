@@ -25,6 +25,55 @@ static MRRecordType *LongRecordType = NULL;
 static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *mapRecordType = NULL;
 
+typedef struct RTSKeyName {
+    char *ptr;
+    size_t len;
+} RTSKeyName;
+
+/* Copy all keys from a RedisModuleDict (string keys) into a plain C array.
+ * Must be called while holding RedisModule_ThreadSafeContextLock(rts_staticCtx). */
+static RTSKeyName *RTS_CopyKeysFromDict(RedisModuleDict *d, size_t *out_len) {
+    *out_len = 0;
+    if (!d) {
+        return NULL;
+    }
+
+    size_t cap = 128;
+    RTSKeyName *keys = malloc(cap * sizeof(*keys));
+    if (!keys) {
+        return NULL;
+    }
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(d, "^", NULL, 0);
+    char *k = NULL;
+    size_t klen = 0;
+    while ((k = RedisModule_DictNextC(iter, &klen, NULL)) != NULL) {
+        if (*out_len == cap) {
+            cap *= 2;
+            RTSKeyName *tmp = realloc(keys, cap * sizeof(*keys));
+            if (!tmp) {
+                break;
+            }
+            keys = tmp;
+        }
+        keys[*out_len].ptr = strndup(k, klen);
+        keys[*out_len].len = klen;
+        (*out_len)++;
+    }
+    RedisModule_DictIteratorStop(iter);
+    return keys;
+}
+
+static void RTS_FreeCopiedKeys(RTSKeyName *keys, size_t n) {
+    if (!keys) {
+        return;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        free(keys[i].ptr);
+    }
+    free(keys);
+}
+
 static Record *GetNullRecord() {
     return &NullRecord;
 }
@@ -174,6 +223,13 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
                 }
                 free(predicate->valuesList);
             }
+            if (predicate->valuesCStr) {
+                for (int j = 0; j < predicate->valueListCount && predicate->valuesCStr[j]; j++) {
+                    free(predicate->valuesCStr[j]);
+                }
+                free(predicate->valuesCStr);
+            }
+            free(predicate->keyCStr);
             RedisModule_FreeString(NULL, predicate->key);
         }
         free(predicates->predicates->list);
@@ -232,6 +288,11 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         if (unlikely(expect_resp && *error)) {
             goto err;
         }
+        {
+            size_t klen = 0;
+            const char *k = RedisModule_StringPtrLen(predicate->key, &klen);
+            predicate->keyCStr = strndup(k, klen);
+        }
 
         // decode values
         predicate->valueListCount = MR_SerializationCtxReadLongLong(sctx, error);
@@ -240,10 +301,16 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         }
 
         predicate->valuesList = calloc(predicate->valueListCount, sizeof *predicate->valuesList);
+        predicate->valuesCStr = calloc(predicate->valueListCount, sizeof *predicate->valuesCStr);
         for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
             predicate->valuesList[value_index] = SerializationCtxReadeRedisString(sctx, error);
             if (unlikely(expect_resp && *error)) {
                 goto err;
+            }
+            {
+                size_t vlen = 0;
+                const char *v = RedisModule_StringPtrLen(predicate->valuesList[value_index], &vlen);
+                predicate->valuesCStr[value_index] = strndup(v, vlen);
             }
         }
     }
@@ -389,49 +456,47 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
-    Series *series;
     Record *series_list = ListRecord_Create(0);
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
+    /* QueryIndexKeys uses module-owned RW-locked in-memory index and does not require the Redis
+     * module global lock. */
+    size_t nkeys = 0;
+    char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
 
-        RedisModule_FreeString(rts_staticCtx, keyName);
+    /* Phase 2: process each series under its own lock hold to reduce contention. */
+    /* Batching trades longer hold for fewer lock acquisitions, which matters a lot for wide scans. */
+#ifndef RTS_GIL_BATCH_SIZE
+#define RTS_GIL_BATCH_SIZE 64
+#endif
+    for (size_t i = 0; i < nkeys;) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-        if (status != GetSeriesResult_Success) {
-            RedisModule_Log(rts_staticCtx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
-            continue;
+        size_t end = i + RTS_GIL_BATCH_SIZE;
+        if (end > nkeys) end = nkeys;
+        for (; i < end; ++i) {
+            if (!keys[i] || keys[i][0] == '\0') {
+                continue;
+            }
+            RedisModuleKey *key = NULL;
+            Series *series = NULL;
+            RedisModuleString *keyName = RedisModule_CreateString(rts_staticCtx, keys[i], strlen(keys[i]));
+            const GetSeriesResult status =
+                GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
+            RedisModule_FreeString(rts_staticCtx, keyName);
+            if (status == GetSeriesResult_Success) {
+                ListRecord_Add(series_list,
+                               SeriesRecord_New(series,
+                                                predicates->startTimestamp,
+                                                predicates->endTimestamp,
+                                                predicates));
+                RedisModule_CloseKey(key);
+            }
         }
 
-        ListRecord_Add(
-            series_list,
-            SeriesRecord_New(
-                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
-
-        RedisModule_CloseKey(key);
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     }
-
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    FreeQueryIndexKeys(keys, nkeys);
 
     return series_list;
 }
@@ -449,17 +514,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
-    Series *series;
     Record *series_listOrMap;
     if (predicates->resp3) {
         series_listOrMap = MapRecord_Create(0);
@@ -469,73 +523,82 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
-        RedisModule_FreeString(rts_staticCtx, keyName);
+    size_t nkeys = 0;
+    char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
 
-        if (status != GetSeriesResult_Success) {
-            RedisModule_Log(rts_staticCtx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
-            continue;
-        }
+    for (size_t i = 0; i < nkeys;) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-        if (predicates->resp3) {
-            MapRecord_Add(series_listOrMap,
-                          StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-            Record *list_record = ListRecord_Create(2);
-            if (predicates->withLabels) {
-                ListRecord_Add(list_record, ListSeriesLabels_resp3(series));
-            } else if (predicates->limitLabelsSize > 0) {
-                ListRecord_Add(list_record,
-                               ListSeriesLabelsWithLimit_rep3(series,
-                                                              limitLabelsStr,
-                                                              predicates->limitLabels,
-                                                              predicates->limitLabelsSize));
-            } else {
-                ListRecord_Add(list_record, MapRecord_Create(0));
+        size_t end = i + RTS_GIL_BATCH_SIZE;
+        if (end > nkeys) end = nkeys;
+        for (; i < end; ++i) {
+            if (!keys[i] || keys[i][0] == '\0') {
+                continue;
             }
 
-            ListRecord_Add(
-                list_record,
-                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+            RedisModuleKey *key = NULL;
+            Series *series = NULL;
+            RedisModuleString *keyName = RedisModule_CreateString(rts_staticCtx, keys[i], strlen(keys[i]));
+            const GetSeriesResult status =
+                GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
+            RedisModule_FreeString(rts_staticCtx, keyName);
 
-            RedisModule_CloseKey(key);
-            ListRecord_Add(series_listOrMap, list_record);
-        } else {
-            Record *key_record = ListRecord_Create(3);
-            ListRecord_Add(key_record,
-                           StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-            if (predicates->withLabels) {
-                ListRecord_Add(key_record, ListSeriesLabels(series));
-            } else if (predicates->limitLabelsSize > 0) {
+            if (status != GetSeriesResult_Success) {
+                continue;
+            }
+
+            if (predicates->resp3) {
+                MapRecord_Add(series_listOrMap,
+                              StringRecord_Create(strndup(keys[i], strlen(keys[i])), strlen(keys[i])));
+                Record *list_record = ListRecord_Create(2);
+                if (predicates->withLabels) {
+                    ListRecord_Add(list_record, ListSeriesLabels_resp3(series));
+                } else if (predicates->limitLabelsSize > 0) {
+                    ListRecord_Add(list_record,
+                                   ListSeriesLabelsWithLimit_rep3(series,
+                                                                  limitLabelsStr,
+                                                                  predicates->limitLabels,
+                                                                  predicates->limitLabelsSize));
+                } else {
+                    ListRecord_Add(list_record, MapRecord_Create(0));
+                }
+
+                ListRecord_Add(
+                    list_record,
+                    ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+
+                RedisModule_CloseKey(key);
+                ListRecord_Add(series_listOrMap, list_record);
+            } else {
+                Record *key_record = ListRecord_Create(3);
                 ListRecord_Add(key_record,
-                               ListSeriesLabelsWithLimit(series,
-                                                         limitLabelsStr,
-                                                         predicates->limitLabels,
-                                                         predicates->limitLabelsSize));
-            } else {
-                ListRecord_Add(key_record, ListRecord_Create(0));
+                               StringRecord_Create(strndup(keys[i], strlen(keys[i])), strlen(keys[i])));
+                if (predicates->withLabels) {
+                    ListRecord_Add(key_record, ListSeriesLabels(series));
+                } else if (predicates->limitLabelsSize > 0) {
+                    ListRecord_Add(key_record,
+                                   ListSeriesLabelsWithLimit(series,
+                                                             limitLabelsStr,
+                                                             predicates->limitLabels,
+                                                             predicates->limitLabelsSize));
+                } else {
+                    ListRecord_Add(key_record, ListRecord_Create(0));
+                }
+
+                ListRecord_Add(
+                    key_record,
+                    ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+
+                RedisModule_CloseKey(key);
+                ListRecord_Add(series_listOrMap, key_record);
             }
-
-            ListRecord_Add(
-                key_record,
-                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
-
-            RedisModule_CloseKey(key);
-            ListRecord_Add(series_listOrMap, key_record);
         }
+
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
+
+    FreeQueryIndexKeys(keys, nkeys);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_listOrMap;
 }
@@ -548,25 +611,18 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
     Record *series_list = ListRecord_Create(0);
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        ListRecord_Add(series_list,
-                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+    size_t nkeys = 0;
+    char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
+
+    for (size_t i = 0; i < nkeys; ++i) {
+        if (!keys[i] || keys[i][0] == '\0') {
+            continue;
+        }
+        ListRecord_Add(series_list, StringRecord_Create(strndup(keys[i], strlen(keys[i])), strlen(keys[i])));
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    FreeQueryIndexKeys(keys, nkeys);
 
     return series_list;
 }

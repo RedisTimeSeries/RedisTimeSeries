@@ -168,6 +168,7 @@ define _SOURCES
 	multiseries_sample_iterator.c
 	multiseries_agg_dup_sample_iterator.c
 	utils/blocked_client.c
+	utils/strmap.c
 	cmd_info/ts_info.c
 endef
 
