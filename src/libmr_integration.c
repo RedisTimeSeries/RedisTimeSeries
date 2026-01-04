@@ -2,7 +2,6 @@
 #include "libmr_integration.h"
 
 #include "LibMR/src/mr.h"
-#include "LibMR/src/mr_prof.h"
 #include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
 #include "consts.h"
@@ -462,22 +461,16 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     /* QueryIndexKeys uses module-owned RW-locked in-memory index and does not require the Redis
      * module global lock. */
-    uint64_t _t_qi = MRProf_Begin(MRPROF_STAGE_RTS_QUERYINDEX);
     size_t nkeys = 0;
     char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
-    MRProf_End(MRPROF_STAGE_RTS_QUERYINDEX, _t_qi);
 
     /* Phase 2: process each series under its own lock hold to reduce contention. */
-    uint64_t _t_getseries_total = MRProf_Begin(MRPROF_STAGE_RTS_GETSERIES_LOOP);
     /* Batching trades longer hold for fewer lock acquisitions, which matters a lot for wide scans. */
 #ifndef RTS_GIL_BATCH_SIZE
 #define RTS_GIL_BATCH_SIZE 64
 #endif
     for (size_t i = 0; i < nkeys;) {
-        uint64_t _t_lock_wait = MRProf_Begin(MRPROF_STAGE_RTS_CTX_LOCK_WAIT);
         RedisModule_ThreadSafeContextLock(rts_staticCtx);
-        MRProf_End(MRPROF_STAGE_RTS_CTX_LOCK_WAIT, _t_lock_wait);
-        uint64_t _t_lock_hold = MRProf_Begin(MRPROF_STAGE_RTS_CTX_LOCK_HOLD);
 
         size_t end = i + RTS_GIL_BATCH_SIZE;
         if (end > nkeys) end = nkeys;
@@ -501,10 +494,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
             }
         }
 
-        MRProf_End(MRPROF_STAGE_RTS_CTX_LOCK_HOLD, _t_lock_hold);
         RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     }
-    MRProf_End(MRPROF_STAGE_RTS_GETSERIES_LOOP, _t_getseries_total);
     FreeQueryIndexKeys(keys, nkeys);
 
     return series_list;
@@ -532,17 +523,11 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    uint64_t _t_qi = MRProf_Begin(MRPROF_STAGE_RTS_QUERYINDEX);
     size_t nkeys = 0;
     char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
-    MRProf_End(MRPROF_STAGE_RTS_QUERYINDEX, _t_qi);
 
-    uint64_t _t_getseries_total = MRProf_Begin(MRPROF_STAGE_RTS_GETSERIES_LOOP);
     for (size_t i = 0; i < nkeys;) {
-        uint64_t _t_lock_wait = MRProf_Begin(MRPROF_STAGE_RTS_CTX_LOCK_WAIT);
         RedisModule_ThreadSafeContextLock(rts_staticCtx);
-        MRProf_End(MRPROF_STAGE_RTS_CTX_LOCK_WAIT, _t_lock_wait);
-        uint64_t _t_lock_hold = MRProf_Begin(MRPROF_STAGE_RTS_CTX_LOCK_HOLD);
 
         size_t end = i + RTS_GIL_BATCH_SIZE;
         if (end > nkeys) end = nkeys;
@@ -609,10 +594,8 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             }
         }
 
-        MRProf_End(MRPROF_STAGE_RTS_CTX_LOCK_HOLD, _t_lock_hold);
         RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     }
-    MRProf_End(MRPROF_STAGE_RTS_GETSERIES_LOOP, _t_getseries_total);
 
     FreeQueryIndexKeys(keys, nkeys);
     free(limitLabelsStr);
@@ -630,10 +613,8 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     Record *series_list = ListRecord_Create(0);
 
-    uint64_t _t_qi = MRProf_Begin(MRPROF_STAGE_RTS_QUERYINDEX);
     size_t nkeys = 0;
     char **keys = QueryIndexKeys(predicates->predicates->list, predicates->predicates->count, &nkeys, NULL);
-    MRProf_End(MRPROF_STAGE_RTS_QUERYINDEX, _t_qi);
 
     for (size_t i = 0; i < nkeys; ++i) {
         if (!keys[i] || keys[i][0] == '\0') {

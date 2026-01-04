@@ -153,7 +153,6 @@ define _SOURCES
 	libmr_integration.c
 	libmr_commands.c
 	module.c
-	mrprof_command.c
 	parse_policies.c
 	query_language.c
 	reply.c

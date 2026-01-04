@@ -23,7 +23,6 @@
 #include "resultset.h"
 #include "short_read.h"
 #include "tsdb.h"
-#include "mrprof_command.h"
 #include "version.h"
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
@@ -1926,13 +1925,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.mget", "read");
-
-    if (RedisModule_CreateCommand(ctx, "ts.mrprof", TSDB_mrprof, "readonly", 0, 0, -1) ==
-        REDISMODULE_ERR) {
-        FreeConfigAndStaticCtx();
-        return REDISMODULE_ERR;
-    }
-    SetCommandAcls(ctx, "ts.mrprof", "read");
 
     if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to register timeseries command infos");

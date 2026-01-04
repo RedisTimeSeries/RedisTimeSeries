@@ -39,7 +39,6 @@ _SOURCES=\
 	cluster.c \
 	crc16.c \
 	event_loop.c \
-	mr_prof.c \
 	mr.c \
 	record.c \
 	utils/adlist.c \
