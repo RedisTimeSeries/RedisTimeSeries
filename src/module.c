@@ -142,7 +142,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     const bool reply_map = _ReplyMap(ctx);
 
     const bool is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
-    RedisModule_ReplyWithMapOrArray(ctx, (is_debug + 13) * 2, true);
+    RedisModule_ReplyWithMapOrArray(ctx, (is_debug + 12) * 2, true);
 
     long long skippedSamples;
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
