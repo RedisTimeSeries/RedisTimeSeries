@@ -658,6 +658,11 @@ static inline bool filter_close_samples(DuplicatePolicy dp_policy,
                                         const Series *series,
                                         api_timestamp_t timestamp,
                                         double value) {
+
+    if (isnan(value) || isnan(series->lastValue)) {
+        return false;
+    }
+
     return dp_policy == DP_LAST && series->totalSamples != 0 &&
            timestamp >= series->lastTimestamp &&
            timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
@@ -715,12 +720,31 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline double parse_double(const RedisModuleString *valueStr) {
+static inline bool is_nan_string(const char *str, size_t len) {
+    if (len == 3 && strcasecmp(str, "nan") == 0) {
+        return true;
+    }
+    if (len == 4 && strcasecmp(str, "-nan") == 0) {
+        return true;
+    }
+    return false;
+}
+
+static inline bool parse_double(const RedisModuleString *valueStr, double *outValue) {
     size_t len;
     char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-    double value;
-    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, &value);
-    return endptr && endptr - valueCStr == len ? value : NAN;
+
+    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, outValue);
+    if (endptr && (size_t)(endptr - valueCStr) == len) {
+        return true;
+    }
+
+    if (is_nan_string(valueCStr, len)) {
+        *outValue = NAN;
+        return true;
+    }
+
+    return false;
 }
 
 static inline int add(RedisModuleCtx *ctx,
@@ -731,8 +755,8 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
 
-    const double value = parse_double(valueStr);
-    if (isnan(value)) {
+    double value;
+    if (!parse_double(valueStr, &value)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
         return REDISMODULE_ERR;
     }
