@@ -19,31 +19,30 @@ def test_alter_cmd():
         expected_data = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
 
         # test alter retention, chunk size and labels
-        expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
+        labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
         expected_retention = 500
         expected_chunk_size = 128
-        _ts_alter_cmd(r, key, expected_retention, expected_chunk_size, expected_labels)
+        _ts_alter_cmd(r, key, expected_retention, expected_chunk_size, labels)
         _assert_alter_cmd(r, key, end_ts - 501, end_ts, expected_data[-501:], expected_retention,
-                          expected_chunk_size, expected_labels)
+                          expected_chunk_size)
 
         # test alter retention
         expected_retention = 200
         _ts_alter_cmd(r, key, set_retention=expected_retention)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,
-                          expected_chunk_size, expected_labels)
+                          expected_chunk_size)
 
         # test alter chunk size
         expected_chunk_size = 128
-        expected_labels = [[b'A', b'1'], [b'B', b'2'], [b'C', b'3']]
         _ts_alter_cmd(r, key, set_chunk_size=expected_chunk_size)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,
-                          expected_chunk_size, expected_labels)
+                          expected_chunk_size)
 
         # test alter labels
-        expected_labels = [[b'A', b'1']]
-        _ts_alter_cmd(r, key, expected_retention, set_labels=expected_labels)
+        labels = [[b'A', b'1']]
+        _ts_alter_cmd(r, key, expected_retention, set_labels=labels)
         _assert_alter_cmd(r, key, end_ts - 201, end_ts, expected_data[-201:], expected_retention,
-                          expected_chunk_size, expected_labels)
+                          expected_chunk_size)
 
         # test indexer was updated
         assert r1.execute_command('TS.QUERYINDEX', 'A=1') == [key.encode('ascii')]

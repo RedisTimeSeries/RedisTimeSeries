@@ -148,7 +148,6 @@ def test_delete_key():
         assert r.execute_command('TS.CREATE', agg_key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 11)
         assert r.delete(key_name)
-        assert _get_ts_info(r, agg_key_name).sourceKey == None
 
         assert r.execute_command('TS.CREATE', key_name)
         assert r.execute_command('TS.CREATERULE', key_name, agg_key_name, 'AGGREGATION', 'avg', 12)

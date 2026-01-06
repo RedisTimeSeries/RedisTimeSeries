@@ -413,11 +413,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(rts_staticCtx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
+            RedisModule_Log(
+                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
@@ -478,11 +475,8 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(rts_staticCtx,
-                            "warning",
-                            "couldn't open key or key is not a Timeseries. key=%.*s",
-                            (int)currentKeyLen,
-                            currentKey);
+            RedisModule_Log(
+                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
