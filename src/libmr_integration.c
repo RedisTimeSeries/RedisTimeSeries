@@ -389,7 +389,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -428,7 +430,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return series_list;
 }
@@ -446,7 +450,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -529,7 +535,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return series_listOrMap;
 }
@@ -542,7 +550,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -560,7 +570,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return series_list;
 }
