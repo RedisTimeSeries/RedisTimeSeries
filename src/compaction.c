@@ -96,6 +96,12 @@ void SingleValueReset(void *contextPtr) {
     context->value = 0;
 }
 
+void *LastValueCreateContext(__unused bool reverse) {
+    SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
+    context->value = NAN;
+    return context;
+}
+
 void LastValueReset(void *contextPtr) {
     // Don't do anything cause with EMPTY flag we would like to use the last value
     return;
@@ -831,7 +837,7 @@ static AggregationClass aggFirst = {
 
 static AggregationClass aggLast = {
     .type = TS_AGG_LAST,
-    .createContext = SingleValueCreateContext,
+    .createContext = LastValueCreateContext,
     .appendValue = LastAppendValue,
     .appendValueVec = NULL, /* determined on run time */
     .freeContext = rm_free,
