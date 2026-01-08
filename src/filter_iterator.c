@@ -1057,6 +1057,7 @@ _finalize:
         if (!self->empty) {
             aggregation->resetContext(aggregationContext);
             self->validSamplesInBucket = 0;
+            self->aux_chunk->samples.num_samples = 0;
             return self->aux_chunk;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
