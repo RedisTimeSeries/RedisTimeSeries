@@ -1722,3 +1722,30 @@ def test_ts_range_NaN_values():
             assert len(result) == 1
             assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
 
+def test_ts_range_countNaN():
+    """
+    Validate COUNTNAN aggregation function
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'ts_countNaN_test{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.ADD', key, 10, 10)
+        r.execute_command('TS.ADD', key, 20, 'nan')
+        r.execute_command('TS.ADD', key, 30, 20)
+        r.execute_command('TS.ADD', key, 40, 'nan')
+        r.execute_command('TS.ADD', key, 50, 30)
+        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 100)
+        assert len(result) == 1
+        assert float(result[0][1]) == 2.0
+        result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countnan', 10, 'EMPTY')
+        assert len(result) == 5
+        assert float(result[0][1]) == 0.0
+        assert float(result[1][1]) == 1.0
+        assert float(result[2][1]) == 0.0
+        assert float(result[3][1]) == 1.0
+        assert float(result[4][1]) == 0.0
+
+        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 50)
+        assert len(result) == 1
+        assert float(result[0][1]) == 2.0
+

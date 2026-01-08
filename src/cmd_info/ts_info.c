@@ -30,6 +30,7 @@ static const RedisModuleCommandArg AGGREGATOR_OPTIONS[] = {
     { .name = "var.p", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "var.p" },
     { .name = "var.s", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "var.s" },
     { .name = "twa", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "twa" },
+    { .name = "countnan", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "countnan" },
     { 0 }
 };
 

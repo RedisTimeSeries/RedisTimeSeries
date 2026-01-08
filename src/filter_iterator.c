@@ -684,10 +684,6 @@ static int fillEmptyBuckets(Samples *samples,
 
 #define TWA_EMPTY_RANGE(iter) (((iter)->empty) && ((iter)->aggregation->type == TS_AGG_TWA))
 
-static inline bool shouldAppendValue(const AggregationClass *agg, double value) {
-    return agg->allowNAN || !isnan(value);
-}
-
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     AggregationIterator *self = (AggregationIterator *)iter;
     AggregationClass *aggregation = self->aggregation;
@@ -866,7 +862,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     aggregation->appendValueVec(
                         aggregationContext, enrichedChunk->samples.values, si, ei);
                     for (int64_t idx = si; idx <= ei; idx++) {
-                        if (shouldAppendValue(aggregation, enrichedChunk->samples.values[idx])) {
+                        if (aggregation->isValueValid(enrichedChunk->samples.values[idx])) {
                             self->validSamplesInBucket++;
                         }
                     }
@@ -923,7 +919,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         BucketStartNormalize(self->aggregationLastTimestamp);
 
                     // append sample and inc si cause we aggregate in place
-                    if (shouldAppendValue(aggregation, sample.value)) {
+                    if (aggregation->isValueValid(sample.value)) {
                         appendValue(aggregationContext, sample.value, sample.timestamp);
                         self->validSamplesInBucket++;
                     }
@@ -945,7 +941,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                 if ((!is_reversed && sample.timestamp >= contextScope) ||
                     (is_reversed && sample.timestamp < self->aggregationLastTimestamp)) {
                     if (aggregation->type == TS_AGG_TWA &&
-                        shouldAppendValue(aggregation, sample.value)) {
+                        aggregation->isValueValid(sample.value)) {
                         aggregation->addNextBucketFirstSample(
                             aggregationContext, sample.value, sample.timestamp);
                     }
@@ -996,7 +992,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     self->aggregationLastTimestamp =
                         BucketStartNormalize(self->aggregationLastTimestamp);
                     if (aggregation->type == TS_AGG_TWA &&
-                        shouldAppendValue(aggregation, last_sample.value)) {
+                        aggregation->isValueValid(last_sample.value)) {
                         aggregation->addPrevBucketLastSample(
                             aggregationContext, last_sample.value, last_sample.timestamp);
                     }
@@ -1014,7 +1010,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
                 }
 
-                if (shouldAppendValue(aggregation, sample.value)) {
+                if (aggregation->isValueValid(sample.value)) {
                     appendValue(aggregationContext, sample.value, sample.timestamp);
                     self->validSamplesInBucket++;
                 }
@@ -1048,7 +1044,7 @@ _finalize:
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, is_reversed, true);
             if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK &&
-                shouldAppendValue(aggregation, sample.value)) {
+                aggregation->isValueValid(sample.value)) {
                 aggregation->addNextBucketFirstSample(
                     aggregationContext, sample.value, sample.timestamp);
             }

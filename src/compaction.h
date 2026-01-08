@@ -44,7 +44,7 @@ typedef struct AggregationClass
     int (*finalize)(void *context, double *value);
     void (*finalizeEmpty)(void *contextPtr, double *value); // assigns empty value to value
     void *(*cloneContext)(void *contextPtr);                // return cloned context
-    bool allowNAN; // allow NAN values to be aggregated, default is false
+    bool (*isValueValid)(double value); // check if value is valid for this aggregation
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
