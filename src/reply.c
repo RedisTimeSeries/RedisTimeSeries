@@ -103,9 +103,35 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
             // reply sources
             RedisModule_ReplyWithMap(ctx, 1);
             RedisModule_ReplyWithCString(ctx, "sources");
-            RedisModule_ReplyWithArray(ctx, array_len((RedisModuleString **)s->srcKey));
-            for (uint32_t i = 0; i < array_len((RedisModuleString **)s->srcKey); i++) {
-                RedisModule_ReplyWithString(ctx, ((RedisModuleString **)s->srcKey)[i]);
+            if (s->srcKey != NULL) {
+                RedisModule_ReplyWithArray(ctx, array_len((RedisModuleString **)s->srcKey));
+                for (uint32_t i = 0; i < array_len((RedisModuleString **)s->srcKey); i++) {
+                    RedisModule_ReplyWithString(ctx, ((RedisModuleString **)s->srcKey)[i]);
+                }
+            } else {
+                // Cluster/groupby push-down paths may not populate srcKey (which is normally a
+                // compaction-series field). Fall back to parsing the "__source__" label string.
+                RedisModuleString *srcVal = s->labelsCount > 0 ? s->labels[s->labelsCount - 1].value : NULL;
+                size_t srcLen = 0;
+                const char *src = srcVal ? RedisModule_StringPtrLen(srcVal, &srcLen) : NULL;
+                if (src == NULL || srcLen == 0) {
+                    RedisModule_ReplyWithArray(ctx, 0);
+                } else {
+                    long long n = 1;
+                    for (size_t i = 0; i < srcLen; i++) {
+                        if (src[i] == ',') {
+                            n++;
+                        }
+                    }
+                    RedisModule_ReplyWithArray(ctx, n);
+                    size_t start = 0;
+                    for (size_t i = 0; i <= srcLen; i++) {
+                        if (i == srcLen || src[i] == ',') {
+                            RedisModule_ReplyWithStringBuffer(ctx, src + start, i - start);
+                            start = i + 1;
+                        }
+                    }
+                }
             }
         } else {
             // reply aggregators
