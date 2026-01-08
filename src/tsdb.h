@@ -15,6 +15,7 @@
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "query_language.h"
+#include "endianconv.h"
 
 #include "RedisModulesSDK/redismodule.h"
 
@@ -195,7 +196,11 @@ typedef enum
 } DictOp;
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
 
-void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
+// we use a redis' prefix tree to store a timeseries, so to scan
+// the keys (timestamps) in order they have to be encoded as big endians
+static inline uint64_t raxKeyFromTimestamp(timestamp_t timestamp) {
+    return htonu64(timestamp);
+}
 
 CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
 

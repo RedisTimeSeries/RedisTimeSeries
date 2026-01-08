@@ -37,14 +37,14 @@ AbstractIterator *SeriesIterator_New(Series *series,
     iter->reverse_chunk = rev_chunk;
     iter->latest = latest;
 
-    timestamp_t rax_key;
+    uint64_t rax_key;
 
     if (!rev) {
         iter->DictGetNext = RedisModule_DictNextC;
-        seriesEncodeTimestamp(&rax_key, iter->minTimestamp);
+        rax_key = raxKeyFromTimestamp(iter->minTimestamp);
     } else {
         iter->DictGetNext = RedisModule_DictPrevC;
-        seriesEncodeTimestamp(&rax_key, iter->maxTimestamp);
+        rax_key = raxKeyFromTimestamp(iter->maxTimestamp);
     }
 
     // get first chunk within query range

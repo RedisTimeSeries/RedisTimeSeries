@@ -951,6 +951,22 @@ def test_agg_twa():
         actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 20, 'AGGREGATION', 'twa', 100)
         assert actual_result[0] == expected_result
 
+        # ... with TS filter
+        assert r.execute_command('TS.ADD', 'ts21', 4, 4)
+        assert r.execute_command('TS.ADD', 'ts21', 14, 14)
+        assert r.execute_command('TS.ADD', 'ts21', 29, 29)
+
+        actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 20, 'FILTER_BY_TS', 20, 'AGGREGATION', 'twa', 100)
+        assert actual_result[0] == expected_result
+        expected_result = [0, str(100).encode('ascii')]
+        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 20, 'FILTER_BY_TS', 20, 'AGGREGATION', 'twa', 100)
+        assert actual_result[0] == expected_result
+
+        # Keep it tidy: remove the added data since the rest of the test-cases do not need it
+        assert r.execute_command('TS.DEL', 'ts21', 4, 4)
+        assert r.execute_command('TS.DEL', 'ts21', 14, 14)
+        assert r.execute_command('TS.DEL', 'ts21', 29, 29)
+
         # Test case #29:
         expected_result = [0, str(100).encode('ascii')]
         actual_result = r.execute_command('TS.RANGE', 'ts21', 20, 30, 'AGGREGATION', 'twa', 100)

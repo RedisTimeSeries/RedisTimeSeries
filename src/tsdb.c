@@ -146,7 +146,7 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
 }
 
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
-    timestamp_t rax_key = htonu64(ts);
+    timestamp_t rax_key = raxKeyFromTimestamp(ts);
     switch (op) {
         case DICT_OP_SET:
             return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
@@ -230,13 +230,6 @@ void SeriesTrim(Series *series, timestamp_t startTs, timestamp_t endTs) {
     }
 
     RedisModule_DictIteratorStop(iter);
-}
-
-// Encode timestamps as bigendian to allow correct lexical sorting
-void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
-    uint64_t e;
-    e = htonu64(timestamp);
-    memcpy(buf, &e, sizeof(e));
 }
 
 void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
@@ -680,8 +673,7 @@ int SeriesUpsertSample(Series *series,
     if (timestamp < chunkFirstTS && RedisModule_DictSize(series->chunks) > 1) {
         // Upsert in an older chunk
         latestChunk = false;
-        timestamp_t rax_key;
-        seriesEncodeTimestamp(&rax_key, timestamp);
+        uint64_t rax_key = raxKeyFromTimestamp(timestamp);
         RedisModuleDictIter *dictIter =
             RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
         chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
@@ -798,11 +790,10 @@ static bool delete_sample_before(RedisModuleCtx *ctx,
         return false;
     }
 
-    timestamp_t rax_key;
-    Chunk_t *chunk;
-    seriesEncodeTimestamp(&rax_key, ts);
+    timestamp_t rax_key = raxKeyFromTimestamp(ts);
     RedisModuleDictIter *dictIter =
         RedisModule_DictIteratorStartC(series->chunks, "<", &rax_key, sizeof(rax_key));
+    Chunk_t *chunk;
     void *chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
     if (chunkKey == NULL || series->funcs->GetNumOfSample(chunk) == 0) {
         rv = false;
@@ -1021,8 +1012,7 @@ size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts) 
                     series->chunks, currentChunk, chunkFirstTS, chunkFirstTSAfterOp);
                 // reseek iterator since we modified the dict,
                 // go to first element that is bigger than current key
-                timestamp_t rax_key;
-                seriesEncodeTimestamp(&rax_key, chunkFirstTSAfterOp);
+                uint64_t rax_key = raxKeyFromTimestamp(chunkFirstTSAfterOp);
                 RedisModule_DictIteratorReseekC(iter, ">", &rax_key, sizeof(rax_key));
             }
             continue;

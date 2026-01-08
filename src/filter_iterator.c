@@ -15,11 +15,7 @@
 #include <math.h> /* ceil */
 
 static inline bool check_sample_value(double value, FilterByValueArgs *byValueArgs) {
-    if (value >= byValueArgs->min && value <= byValueArgs->max) {
-        return true;
-    } else {
-        return false;
-    }
+    return byValueArgs->min <= value && value <= byValueArgs->max;
 }
 
 typedef struct dfs_stack_val
@@ -184,6 +180,21 @@ SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
     return newIter;
 }
 
+static inline bool IsFilterTSIterator(const AbstractIterator *iter) {
+    return iter->GetNext == SeriesFilterTSIterator_GetNextChunk;
+}
+
+static inline const FilterByTSArgs *GetFilterByTSArgs(const AbstractIterator *iter) {
+    while (iter) {
+        if (IsFilterTSIterator(iter))
+            return &((const SeriesFilterTSIterator *)iter)->ByTsArgs;
+        iter = iter->input;
+    }
+
+    static const FilterByTSArgs NoFilter = { 0 };
+    return &NoFilter;
+}
+
 void SeriesFilterIterator_Close(struct AbstractIterator *iterator) {
     iterator->input->Close(iterator->input);
     free(iterator);
@@ -224,6 +235,21 @@ SeriesFilterValIterator *SeriesFilterValIterator_New(AbstractIterator *input,
     return newIter;
 }
 
+static inline bool IsFilterValIterator(const AbstractIterator *iter) {
+    return iter->GetNext == SeriesFilterValIterator_GetNextChunk;
+}
+
+static inline const FilterByValueArgs *GetFilterByValueArgs(const AbstractIterator *iter) {
+    while (iter) {
+        if (IsFilterValIterator(iter))
+            return &((const SeriesFilterValIterator *)iter)->byValueArgs;
+        iter = iter->input;
+    }
+
+    static const FilterByValueArgs NoFilter = { 0 };
+    return &NoFilter;
+}
+
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass *aggregation,
                                              int64_t aggregationTimeDelta,
@@ -246,7 +272,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
     iter->series = series;
-    iter->initilized = false;
+    iter->initialized = false;
     iter->empty = empty;
     iter->bucketTS = bucketTS;
     iter->aux_chunk = NewEnrichedChunk();
@@ -341,8 +367,8 @@ static size_t twa_get_samples_from_right(timestamp_t cur_ts,
     if (cur_ts < UINT64_MAX) {
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = { 0 },
-            .filterByTSArgs = { 0 },
+            .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator *)self),
+            .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator *)self),
             .startTimestamp = cur_ts,
             .endTimestamp = UINT64_MAX,
             .latest = false,
@@ -369,8 +395,8 @@ static size_t twa_get_samples_from_left(timestamp_t cur_ts,
     if (cur_ts > 0) {
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = { 0 },
-            .filterByTSArgs = { 0 },
+            .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator *)self),
+            .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator *)self),
             .startTimestamp = 0,
             .endTimestamp = cur_ts - 1,
             .latest = false,
@@ -709,11 +735,11 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     }
     self->hasUnFinalizedContext = true;
 
-    if (!self->initilized) {
+    if (!self->initialized) {
         timestamp_t init_ts = enrichedChunk->samples.timestamps[si];
         self->aggregationLastTimestamp =
             CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
-        self->initilized = true;
+        self->initialized = true;
         if (aggregation->type == TS_AGG_TWA) {
             timestamp_t ta = twa_calc_ta(self->reverse,
                                          BucketStartNormalize(self->aggregationLastTimestamp),
@@ -727,24 +753,24 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                          self->endTimestamp);
             aggregation->addBucketParams(
                 aggregationContext, (!self->reverse) ? ta : tb, (!self->reverse) ? tb : ta);
-        }
 
-        if (aggregation->type == TS_AGG_TWA && !((!is_reversed) && init_ts == 0)) {
-            RangeArgs args = {
-                .aggregationArgs = { 0 },
-                .filterByValueArgs = { 0 },
-                .filterByTSArgs = { 0 },
-                .startTimestamp = is_reversed ? init_ts + 1 : 0,
-                .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
-                .latest = false,
-            };
-            AbstractSampleIterator *sample_iterator =
-                SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
-            if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                aggregation->addPrevBucketLastSample(
-                    aggregationContext, sample.value, sample.timestamp);
+            if (is_reversed || init_ts > 0) {
+                RangeArgs args = {
+                    .aggregationArgs = { 0 },
+                    .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator *)self),
+                    .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator *)self),
+                    .startTimestamp = is_reversed ? init_ts + 1 : 0,
+                    .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
+                    .latest = false,
+                };
+                AbstractSampleIterator *sample_iterator =
+                    SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
+                if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+                    aggregation->addPrevBucketLastSample(
+                        aggregationContext, sample.value, sample.timestamp);
+                }
+                sample_iterator->Close(sample_iterator);
             }
-            sample_iterator->Close(sample_iterator);
         }
     }
 
@@ -919,8 +945,8 @@ _finalize:
         if (!(is_reversed && last_sample.timestamp == 0)) {
             RangeArgs args = {
                 .aggregationArgs = { 0 },
-                .filterByValueArgs = { 0 },
-                .filterByTSArgs = { 0 },
+                .filterByValueArgs = *GetFilterByValueArgs((const AbstractIterator *)self),
+                .filterByTSArgs = *GetFilterByTSArgs((const AbstractIterator *)self),
                 .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
                 .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
                 .latest = false,
