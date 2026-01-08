@@ -586,13 +586,22 @@ static void TS_MR_RemoteTask_Mget(Record *r,
                                  void (*onDone)(void *PD, Record *r),
                                  void (*onError)(void *PD, MRError *r),
                                  void *pd) {
-    (void)onError;
     QueryPredicates_Arg *predicates = args;
+    if (!predicates) {
+        // LibMR may invoke remote tasks with NULL args after a failed deserialization
+        // (see TODOs in LibMR around handling serialization failures).
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
+    }
     const bool resp3 = predicates ? predicates->resp3 : false;
     // Ensure we run exactly once.
-    if (predicates) {
-        predicates->shouldReturnNull = false;
-    }
+    predicates->shouldReturnNull = false;
     Record *res = ShardMgetMapper(NULL, predicates);
     TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
     if (!res) {
@@ -606,11 +615,18 @@ static void TS_MR_RemoteTask_Mrange(Record *r,
                                    void (*onDone)(void *PD, Record *r),
                                    void (*onError)(void *PD, MRError *r),
                                    void *pd) {
-    (void)onError;
     QueryPredicates_Arg *predicates = args;
-    if (predicates) {
-        predicates->shouldReturnNull = false;
+    if (!predicates) {
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
     }
+    predicates->shouldReturnNull = false;
     Record *res = ShardSeriesMapper(NULL, predicates);
     TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
     if (!res) {
@@ -624,11 +640,18 @@ static void TS_MR_RemoteTask_QueryIndex(Record *r,
                                        void (*onDone)(void *PD, Record *r),
                                        void (*onError)(void *PD, MRError *r),
                                        void *pd) {
-    (void)onError;
     QueryPredicates_Arg *predicates = args;
-    if (predicates) {
-        predicates->shouldReturnNull = false;
+    if (!predicates) {
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
     }
+    predicates->shouldReturnNull = false;
     Record *res = ShardQueryindexMapper(NULL, predicates);
     TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
     if (!res) {
