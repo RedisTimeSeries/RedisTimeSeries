@@ -25,8 +25,8 @@ static inline bool check_and_reply_on_remote_errors(MRError **errs,
         RedisModule_Log(rctx, "warning", "got libmr error:");
         bool timeout_reached = false;
         for (size_t i = 0; i < nErrs; ++i) {
-            const char *msg = MR_ErrorGetMessage(errs[i]);
-            RedisModule_Log(rctx, "warning", "%s", msg);
+            const char *msg = (errs && errs[i]) ? MR_ErrorGetMessage(errs[i]) : NULL;
+            RedisModule_Log(rctx, "warning", "%s", msg ? msg : "unknown error");
             if (msg && strstr(msg, "timeout")) {
                 timeout_reached = true;
             }
@@ -37,11 +37,12 @@ static inline bool check_and_reply_on_remote_errors(MRError **errs,
                                       "A multi-shard command failed because at least one shard "
                                       "did not reply within the given timeframe.");
         } else {
+            const char *first_msg = (errs && errs[0]) ? MR_ErrorGetMessage(errs[0]) : NULL;
             char buf[512] = { 0 };
             snprintf(buf,
                      sizeof(buf),
                      "Multi-shard command failed. %s",
-                     MR_ErrorGetMessage(errs[0]));
+                     first_msg ? first_msg : "unknown error");
             RedisModule_ReplyWithError(rctx, buf);
         }
         return true;
