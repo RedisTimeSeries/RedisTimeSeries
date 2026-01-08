@@ -74,6 +74,7 @@ typedef struct LongRecord
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
+Record *GetNullRecord();
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
