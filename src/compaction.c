@@ -530,6 +530,10 @@ bool nanValueValid(double value) {
     return isnan(value);
 }
 
+bool allValueValid(double value) {
+    return true;
+}
+
 // time weighted avg
 static AggregationClass aggWAvg = {
     .type = TS_AGG_TWA,
@@ -911,6 +915,25 @@ static AggregationClass aggCountNaN = {
     .isValueValid = nanValueValid,
 };
 
+static AggregationClass aggCountAll = {
+    .type = TS_AGG_COUNT_ALL,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+    .isValueValid = allValueValid,
+};
+
 void initGlobalCompactionFunctions() {
     const X86Features *features = getArchitectureOptimization();
     aggMax.appendValueVec = MaxAppendValuesVec;
@@ -982,6 +1005,8 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
     } else if (len == 8) {
         if (strncmp(agg_type_lower, "countnan", len) == 0) {
             result = TS_AGG_COUNT_NAN;
+        } else if (strncmp(agg_type_lower, "countall", len) == 0) {
+            result = TS_AGG_COUNT_ALL;
         }
     }
 
@@ -1018,6 +1043,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "RANGE";
         case TS_AGG_COUNT_NAN:
             return "COUNTNAN";
+        case TS_AGG_COUNT_ALL:
+            return "COUNTALL";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1056,6 +1083,8 @@ const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
             return "range";
         case TS_AGG_COUNT_NAN:
             return "countnan";
+        case TS_AGG_COUNT_ALL:
+            return "countall";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1094,6 +1123,8 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggRange;
         case TS_AGG_COUNT_NAN:
             return &aggCountNaN;
+        case TS_AGG_COUNT_ALL:
+            return &aggCountAll;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:

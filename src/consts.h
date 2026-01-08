@@ -68,7 +68,8 @@ typedef enum
     TS_AGG_VAR_S,
     TS_AGG_TWA,
     TS_AGG_COUNT_NAN,
-    TS_AGG_TYPES_MAX // 14
+    TS_AGG_COUNT_ALL,
+    TS_AGG_TYPES_MAX // 15
 } TS_AGG_TYPES_T;
 
 typedef enum DuplicatePolicy
