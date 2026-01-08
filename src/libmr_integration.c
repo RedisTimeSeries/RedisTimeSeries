@@ -25,7 +25,7 @@ static MRRecordType *LongRecordType = NULL;
 static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *mapRecordType = NULL;
 
-static Record *GetNullRecord() {
+Record *GetNullRecord() {
     return &NullRecord;
 }
 
@@ -48,10 +48,14 @@ static void QueryPredicates_ObjectFree(void *arg) {
         return;
     }
 
+    // This object can be freed from LibMR threads (remote tasks / executions).
+    // Any RedisModuleString refcount ops must be protected by the Redis GIL.
+    RedisModule_ThreadSafeContextLock(rts_staticCtx);
     QueryPredicateList_Free(predicate_list->predicates);
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
     }
+    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     free(predicate_list->limitLabels);
     free(predicate_list);
 }
@@ -162,6 +166,7 @@ static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCt
 }
 
 static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
+    RedisModule_ThreadSafeContextLock(rts_staticCtx);
     if (predicates->predicates->list) {
         for (int i = 0; i < predicates->predicates->count; i++) {
             QueryPredicate *predicate = &predicates->predicates->list[i];
@@ -185,6 +190,7 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
         }
         free(predicates->limitLabels);
     }
+    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     free(predicates);
 }
 
@@ -565,6 +571,72 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     return series_list;
 }
 
+// Remote tasks (one reply per shard) used by coordinator-side fanout.
+static void TS_MR_RemoteTask_SharedFreeInputs(Record *r, QueryPredicates_Arg *args) {
+    if (r) {
+        MR_RecordFree(r);
+    }
+    if (args) {
+        QueryPredicates_ObjectFree(args);
+    }
+}
+
+static void TS_MR_RemoteTask_Mget(Record *r,
+                                 void *args,
+                                 void (*onDone)(void *PD, Record *r),
+                                 void (*onError)(void *PD, MRError *r),
+                                 void *pd) {
+    (void)onError;
+    QueryPredicates_Arg *predicates = args;
+    const bool resp3 = predicates ? predicates->resp3 : false;
+    // Ensure we run exactly once.
+    if (predicates) {
+        predicates->shouldReturnNull = false;
+    }
+    Record *res = ShardMgetMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = resp3 ? MapRecord_Create(0) : ListRecord_Create(0);
+    }
+    onDone(pd, res);
+}
+
+static void TS_MR_RemoteTask_Mrange(Record *r,
+                                   void *args,
+                                   void (*onDone)(void *PD, Record *r),
+                                   void (*onError)(void *PD, MRError *r),
+                                   void *pd) {
+    (void)onError;
+    QueryPredicates_Arg *predicates = args;
+    if (predicates) {
+        predicates->shouldReturnNull = false;
+    }
+    Record *res = ShardSeriesMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = ListRecord_Create(0);
+    }
+    onDone(pd, res);
+}
+
+static void TS_MR_RemoteTask_QueryIndex(Record *r,
+                                       void *args,
+                                       void (*onDone)(void *PD, Record *r),
+                                       void (*onError)(void *PD, MRError *r),
+                                       void *pd) {
+    (void)onError;
+    QueryPredicates_Arg *predicates = args;
+    if (predicates) {
+        predicates->shouldReturnNull = false;
+    }
+    Record *res = ShardQueryindexMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = ListRecord_Create(0);
+    }
+    onDone(pd, res);
+}
+
 static MRObjectType *MR_CreateType(char *type,
                                    ObjectFree free,
                                    ObjectDuplicate dup,
@@ -730,6 +802,13 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardQueryindexMapper", ShardQueryindexMapper, QueryPredicatesType);
+
+    // Remote tasks used by coordinator to reduce inter-shard messaging:
+    // - One request per shard
+    // - One reply per shard with an aggregated record (List/Map)
+    MR_RegisterRemoteTask("TSDB_MGET_REMOTE_TASK", TS_MR_RemoteTask_Mget, QueryPredicatesType);
+    MR_RegisterRemoteTask("TSDB_MRANGE_REMOTE_TASK", TS_MR_RemoteTask_Mrange, QueryPredicatesType);
+    MR_RegisterRemoteTask("TSDB_QUERYINDEX_REMOTE_TASK", TS_MR_RemoteTask_QueryIndex, QueryPredicatesType);
 
     return REDISMODULE_OK;
 }

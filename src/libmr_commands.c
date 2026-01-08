@@ -12,34 +12,40 @@
 
 #include "rmutil/alloc.h"
 
-static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
-    size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
-    if (unlikely(len > 0)) {
+#include <stdio.h>
+#include <string.h>
+
+// Keep behavior similar to LibMR's default max idle (see deps/LibMR/src/mr.c).
+#define RTS_LIBMR_REMOTE_TASK_TIMEOUT_MS 5000
+
+static inline bool check_and_reply_on_remote_errors(MRError **errs,
+                                                    size_t nErrs,
+                                                    RedisModuleCtx *rctx) {
+    if (unlikely(nErrs > 0)) {
         RedisModule_Log(rctx, "warning", "got libmr error:");
-        bool max_idle_reached = false;
-        for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
-            if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
-                max_idle_reached = true;
+        bool timeout_reached = false;
+        for (size_t i = 0; i < nErrs; ++i) {
+            const char *msg = MR_ErrorGetMessage(errs[i]);
+            RedisModule_Log(rctx, "warning", "%s", msg);
+            if (msg && strstr(msg, "timeout")) {
+                timeout_reached = true;
             }
         }
 
-        if (max_idle_reached) {
+        if (timeout_reached) {
             RedisModule_ReplyWithError(rctx,
-                                       "A multi-shard command failed because at least one shard "
-                                       "did not reply within the given timeframe.");
+                                      "A multi-shard command failed because at least one shard "
+                                      "did not reply within the given timeframe.");
         } else {
             char buf[512] = { 0 };
             snprintf(buf,
                      sizeof(buf),
                      "Multi-shard command failed. %s",
-                     MR_ExecutionCtxGetError(eCtx, 0));
-
+                     MR_ErrorGetMessage(errs[0]));
             RedisModule_ReplyWithError(rctx, buf);
         }
         return true;
     }
-
     return false;
 }
 
@@ -52,203 +58,180 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
     RedisModule_FreeThreadSafeContext(_rctx);
 }
 
-static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
+typedef struct {
+    RedisModuleBlockedClient *bc;
+    bool resp3;
+} MRRunOnShardsBlockedCtx;
+
+static void mget_done_onshards(void *privateData,
+                              Record **results,
+                              size_t nResults,
+                              MRError **errs,
+                              size_t nErrs) {
+    MRRunOnShardsBlockedCtx *pd = privateData;
+    RedisModuleBlockedClient *bc = pd->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+    if (unlikely(check_and_reply_on_remote_errors(errs, nErrs, rctx))) {
         goto __done;
     }
 
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
+    for (size_t i = 0; i < nResults; i++) {
+        Record *raw = results[i];
+        if (!raw) {
             continue;
         }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+        if (pd->resp3) {
+            if (raw->recordType != GetMapRecordType()) {
+                RedisModule_Log(rctx,
+                                "warning",
+                                "Unexpected record type: %s",
+                                raw->recordType->type.type);
+                continue;
+            }
+            total_len += MapRecord_GetLen((MapRecord *)raw);
+        } else {
+            if (raw->recordType != GetListRecordType()) {
+                RedisModule_Log(rctx,
+                                "warning",
+                                "Unexpected record type: %s",
+                                raw->recordType->type.type);
+                continue;
+            }
+            total_len += ListRecord_GetLen((ListRecord *)raw);
+        }
     }
-    RedisModule_ReplyWithSet(rctx, total_len);
 
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+    if (pd->resp3) {
+        RedisModule_ReplyWithMap(rctx, total_len / 2);
+        for (size_t i = 0; i < nResults; i++) {
+            Record *raw = results[i];
+            if (!raw || raw->recordType != GetMapRecordType()) {
+                continue;
+            }
+            size_t map_len = MapRecord_GetLen((MapRecord *)raw);
+            for (size_t j = 0; j < map_len; j++) {
+                Record *r = MapRecord_GetRecord((MapRecord *)raw, j);
+                r->recordType->sendReply(rctx, r);
+            }
+        }
+    } else {
+        RedisModule_ReplyWithArray(rctx, total_len);
+        for (size_t i = 0; i < nResults; i++) {
+            Record *raw = results[i];
+            if (!raw || raw->recordType != GetListRecordType()) {
+                continue;
+            }
+            size_t list_len = ListRecord_GetLen((ListRecord *)raw);
+            for (size_t j = 0; j < list_len; j++) {
+                Record *r = ListRecord_GetRecord((ListRecord *)raw, j);
+                r->recordType->sendReply(rctx, r);
+            }
+        }
+    }
+
+__done:
+    for (size_t i = 0; i < nResults; ++i) {
+        if (results[i]) {
+            MR_RecordFree(results[i]);
+        }
+    }
+    for (size_t i = 0; i < nErrs; ++i) {
+        if (errs[i]) {
+            MR_ErrorFree(errs[i]);
+        }
+    }
+    free(pd);
+    RTS_UnblockClient(bc, rctx);
+}
+
+static void queryindex_done_onshards(void *privateData,
+                                   Record **results,
+                                   size_t nResults,
+                                   MRError **errs,
+                                   size_t nErrs) {
+    MRRunOnShardsBlockedCtx *pd = privateData;
+    RedisModuleBlockedClient *bc = pd->bc;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_remote_errors(errs, nErrs, rctx))) {
+        goto __done;
+    }
+
+    size_t total_len = 0;
+    for (size_t i = 0; i < nResults; i++) {
+        Record *raw = results[i];
+        if (!raw) {
+            continue;
+        }
+        if (raw->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
                             "warning",
                             "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
+                            raw->recordType->type.type);
             continue;
         }
+        total_len += ListRecord_GetLen((ListRecord *)raw);
+    }
 
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+    if (pd->resp3) {
+        RedisModule_ReplyWithSet(rctx, total_len);
+    } else {
+        RedisModule_ReplyWithArray(rctx, total_len);
+    }
+
+    for (size_t i = 0; i < nResults; i++) {
+        Record *raw = results[i];
+        if (!raw || raw->recordType != GetListRecordType()) {
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw);
         for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            Record *r = ListRecord_GetRecord((ListRecord *)raw, j);
             r->recordType->sendReply(rctx, r);
         }
     }
 
 __done:
+    for (size_t i = 0; i < nResults; ++i) {
+        if (results[i]) {
+            MR_RecordFree(results[i]);
+        }
+    }
+    for (size_t i = 0; i < nErrs; ++i) {
+        if (errs[i]) {
+            MR_ErrorFree(errs[i]);
+        }
+    }
+    free(pd);
     RTS_UnblockClient(bc, rctx);
 }
 
-static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_mapRecord->recordType != GetMapRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_mapRecord->recordType->type.type);
-            continue;
-        }
-        total_len += MapRecord_GetLen((MapRecord *)raw_mapRecord);
-    }
-
-    RedisModule_ReplyWithMap(rctx, total_len / 2);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_mapRecord->recordType != GetMapRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_mapRecord->recordType->type.type);
-            continue;
-        }
-
-        size_t map_len = MapRecord_GetLen((MapRecord *)raw_mapRecord);
-        for (size_t j = 0; j < map_len; j++) {
-            Record *r = MapRecord_GetRecord((MapRecord *)raw_mapRecord, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    RTS_UnblockClient(bc, rctx);
-}
-
-static void mget_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-    }
-    RedisModule_ReplyWithArray(rctx, total_len);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    RTS_UnblockClient(bc, rctx);
-}
-
-static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-    }
-    RedisModule_ReplyWithSet(rctx, total_len);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    RTS_UnblockClient(bc, rctx);
-}
-
-static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
+static void mrange_done_onshards(void *privateData,
+                                Record **results,
+                                size_t nResults,
+                                MRError **errs,
+                                size_t nErrs) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+    if (unlikely(check_and_reply_on_remote_errors(errs, nErrs, rctx))) {
         goto __done;
     }
 
-    long long len = MR_ExecutionCtxGetResultsLen(eCtx);
-
     TS_ResultSet *resultset = NULL;
-
     if (data->args.groupByLabel) {
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
         size_t total_len = 0;
-        for (int i = 0; i < len; i++) {
-            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        for (size_t i = 0; i < nResults; i++) {
+            Record *raw_listRecord = results[i];
+            if (!raw_listRecord) {
+                continue;
+            }
             if (raw_listRecord->recordType != GetListRecordType()) {
                 RedisModule_Log(rctx,
                                 "warning",
@@ -261,21 +244,17 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
     }
 
-    Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
+    Series **tempSeries = array_new(Record *, nResults);
+    for (size_t i = 0; i < nResults; i++) {
+        Record *raw_listRecord = results[i];
+        if (!raw_listRecord || raw_listRecord->recordType != GetListRecordType()) {
             continue;
         }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            if (raw_record->recordType != GetSeriesRecordType()) {
+            if (!raw_record || raw_record->recordType != GetSeriesRecordType()) {
                 continue;
             }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
@@ -322,10 +301,21 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
         ResultSet_Free(resultset);
     }
+
     array_foreach(tempSeries, x, FreeSeries(x));
     array_free(tempSeries);
 
 __done:
+    for (size_t i = 0; i < nResults; ++i) {
+        if (results[i]) {
+            MR_RecordFree(results[i]);
+        }
+    }
+    for (size_t i = 0; i < nErrs; ++i) {
+        if (errs[i]) {
+            MR_ErrorFree(errs[i]);
+        }
+    }
     MRangeArgs_Free(&data->args);
     free(data);
     RTS_UnblockClient(bc, rctx);
@@ -356,25 +346,19 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
-    MRError *err = NULL;
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
-    Execution *exec = MR_CreateExecution(builder, &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
-        MR_FreeExecutionBuilder(builder);
-        return REDISMODULE_OK;
-    }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
+    MRRunOnShardsBlockedCtx *pd = malloc(sizeof(*pd));
+    pd->bc = bc;
+    pd->resp3 = queryArg->resp3;
 
-    MR_Run(exec);
-
-    MR_FreeExecution(exec);
-    MR_FreeExecutionBuilder(builder);
+    // Note: ownership of `queryArg` is transferred to remote tasks (local+remote).
+    MR_RunOnAllShards("TSDB_MGET_REMOTE_TASK",
+                      queryArg,
+                      GetNullRecord(),
+                      mget_done_onshards,
+                      pd,
+                      RTS_LIBMR_REMOTE_TASK_TIMEOUT_MS);
     return REDISMODULE_OK;
 }
 
@@ -403,35 +387,22 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
-
-    MRError *err = NULL;
-
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
-    Execution *exec = MR_CreateExecution(builder, &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
-        MR_FreeExecutionBuilder(builder);
-        return REDISMODULE_OK;
-    }
-
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
-    MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
-    MR_Run(exec);
-    MR_FreeExecution(exec);
-    MR_FreeExecutionBuilder(builder);
+    // Note: ownership of `queryArg` is transferred to remote tasks (local+remote).
+    MR_RunOnAllShards("TSDB_MRANGE_REMOTE_TASK",
+                      queryArg,
+                      GetNullRecord(),
+                      mrange_done_onshards,
+                      data,
+                      RTS_LIBMR_REMOTE_TASK_TIMEOUT_MS);
     return REDISMODULE_OK;
 }
 
 int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    MRError *err = NULL;
-
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
@@ -445,23 +416,17 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
 
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
-    Execution *exec = MR_CreateExecution(builder, &err);
-    if (err) {
-        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
-        MR_FreeExecutionBuilder(builder);
-        return REDISMODULE_OK;
-    }
-
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
+    MRRunOnShardsBlockedCtx *pd = malloc(sizeof(*pd));
+    pd->bc = bc;
+    pd->resp3 = queryArg->resp3;
 
-    MR_Run(exec);
-
-    MR_FreeExecution(exec);
-    MR_FreeExecutionBuilder(builder);
+    // Note: ownership of `queryArg` is transferred to remote tasks (local+remote).
+    MR_RunOnAllShards("TSDB_QUERYINDEX_REMOTE_TASK",
+                      queryArg,
+                      GetNullRecord(),
+                      queryindex_done_onshards,
+                      pd,
+                      RTS_LIBMR_REMOTE_TASK_TIMEOUT_MS);
     return REDISMODULE_OK;
 }
