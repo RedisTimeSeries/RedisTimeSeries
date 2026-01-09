@@ -205,6 +205,8 @@ jobs:
         uses: ./.github/actions/upload-artifacts
         with:
           image: ${{ matrix.docker_image.image }}
+          redis-ref: ${{ needs.setup-environment.outputs.redis-ref }}
+          test-type: ${{ inputs.run_valgrind && 'valgrind' || (inputs.run_sanitizer && 'sanitizer' || '') }}
       - name: Pack module
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
         uses: ./.github/actions/pack-module

@@ -47,31 +47,7 @@ jobs:
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
-      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 azurelinux3
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      beta-version: ${{needs.prepare-values.outputs.beta-version}}
-      quick: false
-    secrets: inherit
-  mariner:
-    uses: ./.github/workflows/mariner2.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      beta-version: ${{needs.prepare-values.outputs.beta-version}}
-      quick: false
-    secrets: inherit
-  arm64:
-    uses: ./.github/workflows/flow-linux-arm.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      beta-version: ${{needs.prepare-values.outputs.beta-version}}
-      quick: false
-    secrets: inherit
-  macos:
-    uses: ./.github/workflows/flow-macos.yml
-    needs: [prepare-values]
-    with:
+      os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false

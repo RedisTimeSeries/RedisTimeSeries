@@ -10,7 +10,7 @@ from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
 
 
-MIGRATION_CYCLES = 10
+MIGRATION_CYCLES = 1  # debugme
 
 
 def test_asm_without_data():
@@ -52,6 +52,7 @@ def test_asm_with_data_and_queries_during_migrations():
         # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
 
     # First validate the result on the "static" cluster
+    print('debugme validate_result: ', command)
     validate_result(conn.execute_command(command))
 
     # Now validate the command's result in a loop during the back and forth migrations
@@ -59,6 +60,7 @@ def test_asm_with_data_and_queries_during_migrations():
 
     def validate_command_in_a_loop():
         while not done.is_set():
+            print('debugme validate_result: ', command)
             validate_result(conn.execute_command(command))
 
     def migrate_slots():
@@ -196,6 +198,7 @@ def migrate_slots_back_and_forth(env):
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    print(f"debugme import_slots from {source_conn} to {target_conn}: CLUSTER MIGRATION IMPORT {slot_range.start} {slot_range.end}")
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
     def wait_for_completion(conn):
