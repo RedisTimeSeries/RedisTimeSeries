@@ -417,8 +417,8 @@ run_tests() {
 			echo "== recent logs =="
 			ls -la $HERE/logs 2>/dev/null || true
 			find $HERE/logs -name "*.log" -maxdepth 2 -type f 2>/dev/null | tail -n 5 | while read f; do
-				echo \"--- tail $f\"
-				tail -n 80 \"$f\" || true
+				echo "--- tail $f"
+				tail -n 80 "$f" || true
 			done
 		fi
 	else

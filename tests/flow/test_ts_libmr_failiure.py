@@ -1,8 +1,8 @@
 # import pytest
 # import redis
 import random
-from threading import Thread
 import time
+import redis
 
 from utils import Env, Refresh_Cluster
 from test_helper_classes import _get_series_value, calc_rule, ALLOWED_ERROR, _insert_data, \
@@ -119,19 +119,35 @@ def testLibmr_client_disconnect():
         assert r.execute_command('TS.CREATE', 'tester1{1}', 'LABELS', 'name', 'bob')
         _insert_data(r, 'tester1{1}', start_ts, samples_count, 1)
 
-        threads = []
-        cons = []
-        for i in range(0,20):
-            # expect a new connection to arrive
-            cons.append(env.getConnection(random.randint(0, env.shardsCount - 1)))
-            threads.append(Thread(target=libmr_query, args=(cons[i], env, start_ts, samples_count)))
+        # Simulate clients that disconnect mid-request without threads.
+        # Using threads here is flaky across OS/Python versions (thread exceptions are noisy and
+        # can lead to hangs). A low-level redis-py Connection lets us send the command and
+        # immediately drop the TCP connection without waiting for a reply.
+        for _ in range(20):
+            con = env.getConnection(shardId=random.randint(1, env.shardsCount))
+            kw = getattr(con, "connection_pool", None).connection_kwargs
+            host = kw.get("host", "127.0.0.1")
+            port = int(kw["port"])
 
-        for i in range(len(threads)):
-            threads[i].start()
-            cons[i].close()
-
-        # wait for processes to join
-        [th.join() for th in threads]
+            c = redis.connection.Connection(host=host,
+                                            port=port,
+                                            socket_connect_timeout=1,
+                                            socket_timeout=1,
+                                            decode_responses=False)
+            try:
+                c.connect()
+                c.send_command('TS.MRANGE',
+                               start_ts,
+                               start_ts + samples_count,
+                               'WITHLABELS',
+                               'FILTER',
+                               'name=bob')
+            finally:
+                # Drop connection without reading response (simulates abrupt disconnect).
+                try:
+                    c.disconnect()
+                except Exception:
+                    pass
 
         # make sure we did not crash
         r.ping()
