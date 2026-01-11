@@ -166,6 +166,18 @@ traps 'stop' SIGINT
 
 #----------------------------------------------------------------------------------------------
 
+#
+# CI defaults: avoid "silent forever" hangs (especially during OSS cluster env startup/teardown).
+#
+if [[ -n $CI || -n $GITHUB_ACTIONS ]]; then
+	# Default RLTest per-test timeout (seconds) unless overridden.
+	TEST_TIMEOUT_SEC=${TEST_TIMEOUT_SEC:-180}
+	# Default hard timeout for the whole RLTest invocation (seconds) unless overridden.
+	RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-3600}
+	# Avoid port collisions between repeated RLTest invocations in the same job.
+	RANDPORTS=${RANDPORTS:-1}
+fi
+
 setup_rltest() {
 	if [[ $RLTEST == view ]]; then
 		if [[ ! -d $ROOT/../RLTest ]]; then
@@ -361,13 +373,34 @@ run_tests() {
 
 	local E=0
 	if [[ $NOP != 1 ]]; then
+		# Heartbeat so CI logs keep moving even if RLTest blocks during env startup.
+		if [[ ( -n $CI || -n $GITHUB_ACTIONS ) && ${RUN_TIMEOUT_SEC:-0} != 0 ]]; then
+			(
+				i=0
+				while true; do
+					sleep 60
+					i=$((i + 60))
+					echo "[heartbeat] RLTest still running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC})"
+				done
+			) &
+			HB_PID=$!
+		fi
+
 		{ $OP run_with_timeout "${RUN_TIMEOUT_SEC:-0}" python3 -m RLTest @$rltest_config; E=$?; } || true
+
+		if [[ -n ${HB_PID:-} ]]; then
+			kill "$HB_PID" >/dev/null 2>&1 || true
+			wait "$HB_PID" 2>/dev/null || true
+			unset HB_PID
+		fi
 
 		# On timeout, dump basic diagnostics to help CI/root-cause.
 		if [[ $E == 124 ]]; then
 			echo "RLTest run timed out (RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-0}). Collecting diagnostics..."
 			echo "== ps (redis-server/RLTest) =="
 			ps aux | egrep 'redis-server|RLTest' | egrep -v egrep || true
+			echo "== open ports (redis) =="
+			(netstat -an 2>/dev/null | egrep 'LISTEN|listen' | egrep ':(6379|6381|6383|16379|16381|16383)\\b' || true)
 			echo "== recent logs =="
 			ls -la $HERE/logs 2>/dev/null || true
 			find $HERE/logs -name "*.log" -maxdepth 2 -type f 2>/dev/null | tail -n 5 | while read f; do
