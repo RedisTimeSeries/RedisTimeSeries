@@ -436,8 +436,27 @@ run_tests() {
 					i=$((i + 60))
 					latest_log="$(ls -t "$HERE"/logs/*.log 2>/dev/null | head -n 1)"
 					redis_cnt="$(ps aux | egrep 'redis-server' | egrep -v egrep | wc -l | tr -d ' ')"
+					log_age="na"
+					log_size="na"
+					if [[ -n $latest_log && -f $latest_log ]]; then
+						# Prefer portable 'stat' variants.
+						if stat -c %Y "$latest_log" >/dev/null 2>&1; then
+							mt=$(stat -c %Y "$latest_log")
+						else
+							mt=$(stat -f %m "$latest_log" 2>/dev/null || echo "")
+						fi
+						if [[ -n ${mt:-} ]]; then
+							now=$(date +%s)
+							log_age=$((now - mt))
+						fi
+						if stat -c %s "$latest_log" >/dev/null 2>&1; then
+							log_size=$(stat -c %s "$latest_log")
+						else
+							log_size=$(stat -f %z "$latest_log" 2>/dev/null || echo "na")
+						fi
+					fi
 					if [[ -n $latest_log ]]; then
-						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=$(basename "$latest_log")"
+						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=$(basename "$latest_log") age_s=${log_age} size=${log_size}"
 					else
 						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=(none yet)"
 					fi
@@ -558,6 +577,18 @@ if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
 	else
 		parallel="$PARALLEL"
 	fi
+
+	# OSS cluster tests are much heavier (multiple redis-servers per test). On some
+	# CI images (notably ubuntu/jammy) high parallelism can cause resource
+	# starvation and make a single test appear "stuck" for a long time. Cap the
+	# default parallelism in CI unless explicitly overridden by PARALLEL>1.
+	if [[ ( -n $CI || -n $GITHUB_ACTIONS ) && ${OSS_CLUSTER:-0} == 1 && $PARALLEL == 1 ]]; then
+		oss_cluster_parallel_cap="${OSS_CLUSTER_PARALLELISM:-4}"
+		if [[ $parallel -gt $oss_cluster_parallel_cap ]]; then
+			parallel="$oss_cluster_parallel_cap"
+		fi
+	fi
+
 	RLTEST_PARALLEL_ARG="--parallelism $parallel"
 fi
 
