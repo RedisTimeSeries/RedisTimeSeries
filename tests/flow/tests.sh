@@ -24,12 +24,18 @@ cd $HERE
 # RLTest and redis-py versions are consistent and compatible.
 #
 PYTHON=${PYTHON:-python3}
-if [[ -z ${VIRTUAL_ENV:-} ]]; then
-	if [[ -x "$ROOT/venv/bin/python" ]]; then
-		PYTHON="$ROOT/venv/bin/python"
-	elif [[ -x "$ROOT/test_env/bin/python" ]]; then
-		PYTHON="$ROOT/test_env/bin/python"
-	fi
+repo_venv_python=""
+if [[ -x "$ROOT/venv/bin/python" ]]; then
+	repo_venv_python="$ROOT/venv/bin/python"
+elif [[ -x "$ROOT/test_env/bin/python" ]]; then
+	repo_venv_python="$ROOT/test_env/bin/python"
+fi
+
+# If user didn't explicitly set PYTHON, prefer a repo-local venv interpreter.
+# Even if a virtualenv is active, it might be unrelated and missing required deps
+# (e.g. redis-py < 5, which breaks RLTest's protocol= kwarg).
+if [[ -n $repo_venv_python && ( -z ${VIRTUAL_ENV:-} || "$VIRTUAL_ENV" != "$ROOT/venv" && "$VIRTUAL_ENV" != "$ROOT/test_env" ) ]]; then
+	PYTHON="$repo_venv_python"
 fi
 export PYTHON
 
