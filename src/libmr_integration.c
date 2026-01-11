@@ -48,14 +48,15 @@ static void QueryPredicates_ObjectFree(void *arg) {
         return;
     }
 
-    // This object can be freed from LibMR threads (remote tasks / executions).
-    // Any RedisModuleString refcount ops must be protected by the Redis GIL.
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    // This object can be freed from LibMR threads (remote tasks / executions) and
+    // also from main-thread remote task execution. Any RedisModuleString refcount
+    // ops must be protected by the Redis GIL / thread-safe context lock.
+    RTS_StaticCtxLock();
     QueryPredicateList_Free(predicate_list->predicates);
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
-        RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
+        RedisModule_FreeString(rts_staticCtx, predicate_list->limitLabels[i]);
     }
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
     free(predicate_list->limitLabels);
     free(predicate_list);
 }
@@ -395,7 +396,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -434,7 +435,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_list;
 }
@@ -452,7 +453,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -535,7 +536,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_listOrMap;
 }
@@ -548,7 +549,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -566,7 +567,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_list;
 }
