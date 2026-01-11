@@ -39,6 +39,9 @@ help() {
 		OSS_CLUSTER=0|1       General tests on Redis OSS Cluster
 		SHARDS=n              Number of shards (default: 3)
 
+		TEST_TIMEOUT_SEC=n    RLTest per-test timeout in seconds (default: 0 = no timeout)
+		RUN_TIMEOUT_SEC=n     Hard timeout for the whole RLTest run (seconds, default: 0 = no timeout)
+
 		QUICK=1               Perform only one test variant
 
 		TEST=name             Run specific test (e.g. test.py:test_name)
@@ -89,6 +92,43 @@ help() {
 		HELP=1                Show help
 
 	END
+}
+
+#----------------------------------------------------------------------------------------------
+
+run_with_timeout() {
+	local timeout_sec="$1"
+	shift
+
+	if [[ -z $timeout_sec || $timeout_sec == 0 ]]; then
+		"$@"
+		return $?
+	fi
+
+	# Prefer coreutils 'timeout' when available (Linux CI).
+	if is_command timeout; then
+		timeout --signal=KILL "${timeout_sec}s" "$@"
+		return $?
+	fi
+	# macOS users may have coreutils as 'gtimeout'.
+	if is_command gtimeout; then
+		gtimeout --signal=KILL "${timeout_sec}s" "$@"
+		return $?
+	fi
+
+	# Portable fallback: Python subprocess timeout.
+	python3 - "$timeout_sec" "$@" <<'PY'
+import os, subprocess, sys
+timeout = int(sys.argv[1])
+cmd = sys.argv[2:]
+try:
+  p = subprocess.run(cmd, timeout=timeout)
+  sys.exit(p.returncode)
+except subprocess.TimeoutExpired:
+  # Best effort: exit with a distinctive code.
+  sys.stderr.write(f"RLTest run timed out after {timeout} seconds: {' '.join(cmd)}\n")
+  sys.exit(124)
+PY
 }
 
 #----------------------------------------------------------------------------------------------
@@ -321,7 +361,20 @@ run_tests() {
 
 	local E=0
 	if [[ $NOP != 1 ]]; then
-		{ $OP python3 -m RLTest @$rltest_config; (( E |= $? )); } || true
+		{ $OP run_with_timeout "${RUN_TIMEOUT_SEC:-0}" python3 -m RLTest @$rltest_config; E=$?; } || true
+
+		# On timeout, dump basic diagnostics to help CI/root-cause.
+		if [[ $E == 124 ]]; then
+			echo "RLTest run timed out (RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-0}). Collecting diagnostics..."
+			echo "== ps (redis-server/RLTest) =="
+			ps aux | egrep 'redis-server|RLTest' | egrep -v egrep || true
+			echo "== recent logs =="
+			ls -la $HERE/logs 2>/dev/null || true
+			find $HERE/logs -name "*.log" -maxdepth 2 -type f 2>/dev/null | tail -n 5 | while read f; do
+				echo \"--- tail $f\"
+				tail -n 80 \"$f\" || true
+			done
+		fi
 	else
 		$OP python3 -m RLTest @$rltest_config
 	fi
@@ -461,6 +514,11 @@ fi
 
 [[ $UNIX == 1 ]] && RLTEST_ARGS+=" --unix"
 [[ $RANDPORTS == 1 ]] && RLTEST_ARGS+=" --randomize-ports"
+
+# RLTest per-test timeout (seconds)
+if [[ -n $TEST_TIMEOUT_SEC && $TEST_TIMEOUT_SEC != 0 ]]; then
+	RLTEST_ARGS+=" --test-timeout $TEST_TIMEOUT_SEC"
+fi
 
 #----------------------------------------------------------------------------------------------
 

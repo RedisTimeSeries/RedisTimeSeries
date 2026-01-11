@@ -71,6 +71,8 @@ make flow_tests    # run tests
   AOF_SLAVES=1     # run AND and replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
   SHARDS=num       # run OSS cluster with `num` shards (default: 3)
+  TEST_TIMEOUT_SEC=num  # RLTest per-test timeout in seconds (0=off)
+  RUN_TIMEOUT_SEC=num   # hard timeout for the whole RLTest invocation (0=off)
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
   VALGRIND|VG=1    # run specified tests with Valgrind
@@ -414,6 +416,7 @@ flow_tests: #$(TARGET)
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	TEST_TIMEOUT_SEC=$(TEST_TIMEOUT_SEC) RUN_TIMEOUT_SEC=$(RUN_TIMEOUT_SEC) SHARDS=$(SHARDS) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh
@@ -426,6 +429,17 @@ flow_tests: #$(TARGET)
 endif # RLEC
 
 #----------------------------------------------------------------------------------------------
+
+.PHONY: ci_oss_cluster_tests ci_nightly_tests
+
+# CI helper targets:
+# - CI should run these on all platforms/variants (x64, arm64v8, Mariner/AzureLinux, SAN, VG, etc.)
+# - Timeouts are configurable via TEST_TIMEOUT_SEC / RUN_TIMEOUT_SEC (see tests/flow/tests.sh).
+ci_oss_cluster_tests:
+	$(SHOW)$(MAKE) flow_tests PLATFORM_MODE=1 GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1
+
+ci_nightly_tests:
+	$(SHOW)$(MAKE) flow_tests PLATFORM_MODE=1
 
 BENCHMARK_ARGS = redisbench-admin run-local
 
