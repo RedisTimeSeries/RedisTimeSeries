@@ -380,7 +380,13 @@ run_tests() {
 				while true; do
 					sleep 60
 					i=$((i + 60))
-					echo "[heartbeat] RLTest still running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC})"
+					latest_log="$(ls -t "$HERE"/logs/*.log 2>/dev/null | head -n 1)"
+					redis_cnt="$(ps aux | egrep 'redis-server' | egrep -v egrep | wc -l | tr -d ' ')"
+					if [[ -n $latest_log ]]; then
+						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=$(basename "$latest_log")"
+					else
+						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=(none yet)"
+					fi
 				done
 			) &
 			HB_PID=$!
