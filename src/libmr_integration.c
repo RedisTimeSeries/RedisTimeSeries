@@ -167,7 +167,7 @@ static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCt
 }
 
 static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
     if (predicates->predicates->list) {
         for (int i = 0; i < predicates->predicates->count; i++) {
             QueryPredicate *predicate = &predicates->predicates->list[i];
@@ -176,22 +176,22 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
 
             if (predicate->valuesList) {
                 for (int j = 0; j < predicate->valueListCount && predicate->valuesList[j]; j++) {
-                    RedisModule_FreeString(NULL, predicate->valuesList[j]);
+                    RedisModule_FreeString(rts_staticCtx, predicate->valuesList[j]);
                 }
                 free(predicate->valuesList);
             }
-            RedisModule_FreeString(NULL, predicate->key);
+            RedisModule_FreeString(rts_staticCtx, predicate->key);
         }
         free(predicates->predicates->list);
     }
     free(predicates->predicates);
     if (predicates->limitLabels) {
         for (int i = 0; i < predicates->limitLabelsSize && predicates->limitLabels[i]; ++i) {
-            RedisModule_FreeString(NULL, predicates->limitLabels[i]);
+            RedisModule_FreeString(rts_staticCtx, predicates->limitLabels[i]);
         }
         free(predicates->limitLabels);
     }
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
     free(predicates);
 }
 
@@ -575,7 +575,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 // Remote tasks (one reply per shard) used by coordinator-side fanout.
 static void TS_MR_RemoteTask_SharedFreeInputs(Record *r, QueryPredicates_Arg *args) {
     if (r) {
+        RTS_StaticCtxLock();
         MR_RecordFree(r);
+        RTS_StaticCtxUnlock();
     }
     if (args) {
         QueryPredicates_ObjectFree(args);

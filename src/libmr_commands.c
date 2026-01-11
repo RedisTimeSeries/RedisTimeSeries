@@ -5,6 +5,7 @@
 #include "LibMR/src/utils/arr.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "module.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
@@ -130,11 +131,16 @@ static void mget_done_onshards(void *privateData,
     }
 
 __done:
+    /* These callbacks can run on LibMR threads. Some Record types (e.g.
+     * SeriesRecord) free RedisModuleString values and must be protected by the
+     * Redis thread-safe context lock. */
+    RTS_StaticCtxLock();
     for (size_t i = 0; i < nResults; ++i) {
         if (results[i]) {
             MR_RecordFree(results[i]);
         }
     }
+    RTS_StaticCtxUnlock();
     for (size_t i = 0; i < nErrs; ++i) {
         if (errs[i]) {
             MR_ErrorFree(errs[i]);
@@ -190,11 +196,13 @@ static void queryindex_done_onshards(void *privateData,
     }
 
 __done:
+    RTS_StaticCtxLock();
     for (size_t i = 0; i < nResults; ++i) {
         if (results[i]) {
             MR_RecordFree(results[i]);
         }
     }
+    RTS_StaticCtxUnlock();
     for (size_t i = 0; i < nErrs; ++i) {
         if (errs[i]) {
             MR_ErrorFree(errs[i]);
@@ -302,11 +310,13 @@ static void mrange_done_onshards(void *privateData,
     array_free(tempSeries);
 
 __done:
+    RTS_StaticCtxLock();
     for (size_t i = 0; i < nResults; ++i) {
         if (results[i]) {
             MR_RecordFree(results[i]);
         }
     }
+    RTS_StaticCtxUnlock();
     for (size_t i = 0; i < nErrs; ++i) {
         if (errs[i]) {
             MR_ErrorFree(errs[i]);
