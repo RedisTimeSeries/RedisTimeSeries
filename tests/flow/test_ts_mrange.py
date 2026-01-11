@@ -505,82 +505,84 @@ def test_mrange_nan_handling():
     import math
     env = Env(decodeResponses=True)
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
-        # Create two series with same labels
-        r.execute_command('TS.CREATE', 'ts1{a}', 'LABELS', 'sensor', 'temp')
-        r.execute_command('TS.CREATE', 'ts2{a}', 'LABELS', 'sensor', 'temp')
+        for encoding in ['compressed', 'uncompressed']:
+            env.flush()
+            # Create two series with same labels
+            r.execute_command('TS.CREATE', 'ts1{a}', 'ENCODING', encoding, 'LABELS', 'sensor', 'temp')
+            r.execute_command('TS.CREATE', 'ts2{a}', 'ENCODING', encoding, 'LABELS', 'sensor', 'temp')
 
-        # ts1: bucket 0-99 mixed, bucket 100-199 NaN-only, bucket 200-299 valid
-        for ts, val in [(10, 10), (20, 'nan'), (30, 20), (40, 'nan'), (50, 30)]:
-            r.execute_command('TS.ADD', 'ts1{a}', ts, val)
-        for ts in [110, 120, 130]:
-            r.execute_command('TS.ADD', 'ts1{a}', ts, 'nan')
-        for ts, val in [(210, 40), (220, 50)]:
-            r.execute_command('TS.ADD', 'ts1{a}', ts, val)
+            # ts1: bucket 0-99 mixed, bucket 100-199 NaN-only, bucket 200-299 valid
+            for ts, val in [(10, 10), (20, 'nan'), (30, 20), (40, 'nan'), (50, 30)]:
+                r.execute_command('TS.ADD', 'ts1{a}', ts, val)
+            for ts in [110, 120, 130]:
+                r.execute_command('TS.ADD', 'ts1{a}', ts, 'nan')
+            for ts, val in [(210, 40), (220, 50)]:
+                r.execute_command('TS.ADD', 'ts1{a}', ts, val)
 
-        # ts2: bucket 0-99 valid, bucket 100-199 mixed, bucket 200-299 NaN-only
-        for ts, val in [(10, 100), (50, 200)]:
-            r.execute_command('TS.ADD', 'ts2{a}', ts, val)
-        for ts, val in [(110, 'nan'), (150, 300), (180, 'nan')]:
-            r.execute_command('TS.ADD', 'ts2{a}', ts, val)
-        for ts in [210, 250]:
-            r.execute_command('TS.ADD', 'ts2{a}', ts, 'nan')
+            # ts2: bucket 0-99 valid, bucket 100-199 mixed, bucket 200-299 NaN-only
+            for ts, val in [(10, 100), (50, 200)]:
+                r.execute_command('TS.ADD', 'ts2{a}', ts, val)
+            for ts, val in [(110, 'nan'), (150, 300), (180, 'nan')]:
+                r.execute_command('TS.ADD', 'ts2{a}', ts, val)
+            for ts in [210, 250]:
+                r.execute_command('TS.ADD', 'ts2{a}', ts, 'nan')
 
-        # Test 1: sum ignores NaN, count counts only valid samples
-        res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100, 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert series[2] == [[0, '60'], [200, '90']]  # bucket 100 skipped (NaN-only)
-            elif series[0] == 'ts2{a}':
-                assert series[2] == [[0, '300'], [100, '300']]  # bucket 200 skipped (NaN-only)
+            # Test 1: sum ignores NaN, count counts only valid samples
+            res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100, 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert series[2] == [[0, '60'], [200, '90']]  # bucket 100 skipped (NaN-only)
+                elif series[0] == 'ts2{a}':
+                    assert series[2] == [[0, '300'], [100, '300']]  # bucket 200 skipped (NaN-only)
 
-        # Test 2: with EMPTY flag, NaN-only buckets appear
-        res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY', 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert len(series[2]) == 3
-                assert series[2][1][0] == 100 and float(series[2][1][1]) == 0  # empty sum = 0
-            elif series[0] == 'ts2{a}':
-                assert len(series[2]) == 3
-                assert series[2][2][0] == 200 and float(series[2][2][1]) == 0
+            # Test 2: with EMPTY flag, NaN-only buckets appear
+            res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY', 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert len(series[2]) == 3
+                    assert series[2][1][0] == 100 and float(series[2][1][1]) == 0  # empty sum = 0
+                elif series[0] == 'ts2{a}':
+                    assert len(series[2]) == 3
+                    assert series[2][2][0] == 200 and float(series[2][2][1]) == 0
 
-        # Test 3: avg returns NaN for NaN-only buckets with EMPTY
-        res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'avg', 100, 'EMPTY', 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert math.isnan(float(series[2][1][1]))  # bucket 100 is NaN
-            elif series[0] == 'ts2{a}':
-                assert math.isnan(float(series[2][2][1]))  # bucket 200 is NaN
+            # Test 3: avg returns NaN for NaN-only buckets with EMPTY
+            res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'avg', 100, 'EMPTY', 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert math.isnan(float(series[2][1][1]))  # bucket 100 is NaN
+                elif series[0] == 'ts2{a}':
+                    assert math.isnan(float(series[2][2][1]))  # bucket 200 is NaN
 
-        # Test 4: GROUPBY with REDUCE - NaN values should be skipped in reduction
-        res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100,
-                                 'FILTER', 'sensor=temp', 'GROUPBY', 'sensor', 'REDUCE', 'sum')
-        assert len(res) == 1
-        assert res[0][0] == 'sensor=temp'
-        # bucket 0: 60+300=360, bucket 100: 300 (ts1 has no valid), bucket 200: 90 (ts2 has no valid)
-        sums = {int(s[0]): float(s[1]) for s in res[0][2]}
-        assert sums[0] == 360
-        assert sums.get(100) == 300
-        assert sums.get(200) == 90
+            # Test 4: GROUPBY with REDUCE - NaN values should be skipped in reduction
+            res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'sum', 100,
+                                    'FILTER', 'sensor=temp', 'GROUPBY', 'sensor', 'REDUCE', 'sum')
+            assert len(res) == 1
+            assert res[0][0] == 'sensor=temp'
+            # bucket 0: 60+300=360, bucket 100: 300 (ts1 has no valid), bucket 200: 90 (ts2 has no valid)
+            sums = {int(s[0]): float(s[1]) for s in res[0][2]}
+            assert sums[0] == 360
+            assert sums.get(100) == 300
+            assert sums.get(200) == 90
 
-        # Test 5: count aggregation
-        res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'count', 100, 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert series[2] == [[0, '3'], [200, '2']]  # 3 valid in bucket 0, 2 in bucket 200
-            elif series[0] == 'ts2{a}':
-                assert series[2] == [[0, '2'], [100, '1']]  # 2 valid in bucket 0, 1 in bucket 100
+            # Test 5: count aggregation
+            res = r1.execute_command('TS.MRANGE', 0, 299, 'AGGREGATION', 'count', 100, 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert series[2] == [[0, '3'], [200, '2']]  # 3 valid in bucket 0, 2 in bucket 200
+                elif series[0] == 'ts2{a}':
+                    assert series[2] == [[0, '2'], [100, '1']]  # 2 valid in bucket 0, 1 in bucket 100
 
-        # Test 6: min/max with mixed buckets
-        res = r1.execute_command('TS.MRANGE', 0, 99, 'AGGREGATION', 'min', 100, 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert float(series[2][0][1]) == 10  # min of valid values
-            elif series[0] == 'ts2{a}':
-                assert float(series[2][0][1]) == 100
+            # Test 6: min/max with mixed buckets
+            res = r1.execute_command('TS.MRANGE', 0, 99, 'AGGREGATION', 'min', 100, 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert float(series[2][0][1]) == 10  # min of valid values
+                elif series[0] == 'ts2{a}':
+                    assert float(series[2][0][1]) == 100
 
-        res = r1.execute_command('TS.MRANGE', 0, 99, 'AGGREGATION', 'max', 100, 'FILTER', 'sensor=temp')
-        for series in res:
-            if series[0] == 'ts1{a}':
-                assert float(series[2][0][1]) == 30
-            elif series[0] == 'ts2{a}':
-                assert float(series[2][0][1]) == 200
+            res = r1.execute_command('TS.MRANGE', 0, 99, 'AGGREGATION', 'max', 100, 'FILTER', 'sensor=temp')
+            for series in res:
+                if series[0] == 'ts1{a}':
+                    assert float(series[2][0][1]) == 30
+                elif series[0] == 'ts2{a}':
+                    assert float(series[2][0][1]) == 200 

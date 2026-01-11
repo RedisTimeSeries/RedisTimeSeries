@@ -309,36 +309,38 @@ def test_ts_add_fail(env):
 
 def test_ts_add_nan():
     with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command('ts.create', 'nan_key')
-        r.execute_command('ts.add', 'nan_key', 1, 'nan')
-        r.execute_command('ts.add', 'nan_key', 2, 'NaN')
-        r.execute_command('ts.add', 'nan_key', 3, 'NAN')
-        r.execute_command('ts.add', 'nan_key', 4, '-nan')
-        r.execute_command('ts.add', 'nan_key', 5, '-NaN')
-        r.execute_command('ts.add', 'nan_key', 6, '-NAN')
-        res = r.execute_command('ts.range', 'nan_key', '-', '+')
-        assert res == [[1, b'NaN'], [2, b'NaN'], [3, b'NaN'], [4, b'NaN'], [5, b'NaN'], [6, b'NaN']]
+        for encoding in ['compressed', 'uncompressed']:
+            Env().flush()
+            r.execute_command('ts.create', 'nan_key', 'ENCODING', encoding)
+            r.execute_command('ts.add', 'nan_key', 1, 'nan')
+            r.execute_command('ts.add', 'nan_key', 2, 'NaN')
+            r.execute_command('ts.add', 'nan_key', 3, 'NAN')
+            r.execute_command('ts.add', 'nan_key', 4, '-nan')
+            r.execute_command('ts.add', 'nan_key', 5, '-NaN')
+            r.execute_command('ts.add', 'nan_key', 6, '-NAN')
+            res = r.execute_command('ts.range', 'nan_key', '-', '+')
+            assert res == [[1, b'NaN'], [2, b'NaN'], [3, b'NaN'], [4, b'NaN'], [5, b'NaN'], [6, b'NaN']]
         
-        r.execute_command('flushall')
-        r.execute_command('ts.create', 'nan_key')
-        r.execute_command('ts.madd', 'nan_key', 1, 'nan', 'nan_key', 2, 'NaN', 'nan_key', 3, 'NAN', 'nan_key', 4, '-nan', 'nan_key', 5, '-NaN', 'nan_key', 6, '-NAN')
-        res = r.execute_command('ts.range', 'nan_key', '-', '+')
-        assert res == [[1, b'NaN'], [2, b'NaN'], [3, b'NaN'], [4, b'NaN'], [5, b'NaN'], [6, b'NaN']]
+            r.execute_command('flushall')
+            r.execute_command('ts.create', 'nan_key', 'ENCODING', encoding)
+            r.execute_command('ts.madd', 'nan_key', 1, 'nan', 'nan_key', 2, 'NaN', 'nan_key', 3, 'NAN', 'nan_key', 4, '-nan', 'nan_key', 5, '-NaN', 'nan_key', 6, '-NAN')
+            res = r.execute_command('ts.range', 'nan_key', '-', '+')
+            assert res == [[1, b'NaN'], [2, b'NaN'], [3, b'NaN'], [4, b'NaN'], [5, b'NaN'], [6, b'NaN']]
 
-        r.execute_command('flushall')
-        r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'MIN')
-        r.execute_command('ts.add', 'nan_key', 1, 'nan')
-        with pytest.raises(redis.ResponseError):
+            r.execute_command('flushall')
+            r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'MIN', 'ENCODING', encoding)
+            r.execute_command('ts.add', 'nan_key', 1, 'nan')
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('ts.add', 'nan_key', 1, '6')
+            
+            r.execute_command('flushall')
+            r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'MAX', 'ENCODING', encoding)
             r.execute_command('ts.add', 'nan_key', 1, '6')
-        
-        r.execute_command('flushall')
-        r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'MAX')
-        r.execute_command('ts.add', 'nan_key', 1, '6')
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('ts.add', 'nan_key', 1, 'nan')
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('ts.add', 'nan_key', 1, 'nan')
 
-        r.execute_command('flushall')
-        r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'SUM')
-        r.execute_command('ts.add', 'nan_key', 1, '6')
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('ts.add', 'nan_key', 1, 'nan')
+            r.execute_command('flushall')
+            r.execute_command('ts.create', 'nan_key', 'DUPLICATE_POLICY', 'SUM', 'ENCODING', encoding)
+            r.execute_command('ts.add', 'nan_key', 1, '6')
+            with pytest.raises(redis.ResponseError):
+                r.execute_command('ts.add', 'nan_key', 1, 'nan')

@@ -1585,189 +1585,195 @@ def test_ts_range_NaN_values():
     Aggregation functions should ignore NaN values.
     """
     with Env().getClusterConnectionIfNeeded() as r:
-        key = 'ts_nan_test{a}'
-        
-        # Create a series with mixed NaN and valid values
-        # Bucket 0-99: values 10, NaN, 20, NaN, 30 (valid: 10, 20, 30)
-        # Bucket 100-199: only NaN values (should be treated as empty)
-        # Bucket 200-299: values 40, 50 (valid: 40, 50)
-        r.execute_command('TS.CREATE', key)
-        
-        # Bucket 0-99: mixed NaN and valid values
-        r.execute_command('TS.ADD', key, 10, 10)
-        r.execute_command('TS.ADD', key, 20, 'nan')
-        r.execute_command('TS.ADD', key, 30, 20)
-        r.execute_command('TS.ADD', key, 40, 'nan')
-        r.execute_command('TS.ADD', key, 50, 30)
-        
-        # Bucket 100-199: only NaN values
-        r.execute_command('TS.ADD', key, 110, 'nan')
-        r.execute_command('TS.ADD', key, 120, 'nan')
-        r.execute_command('TS.ADD', key, 130, 'nan')
-        
-        # Bucket 200-299: valid values only
-        r.execute_command('TS.ADD', key, 210, 40)
-        r.execute_command('TS.ADD', key, 220, 50)
-        
-        # Test 1: Aggregations should ignore NaN values
-        # sum of valid values in bucket 0-99: 10 + 20 + 30 = 60
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'sum', 100)
-        assert len(result) == 1
-        assert result[0][0] == 0
-        assert float(result[0][1]) == 60.0
-        
-        # count should only count valid (non-NaN) samples
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 3.0  # 3 valid samples
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'min', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 10.0
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'max', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 30.0
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'avg', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 20.0
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'first', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 10.0
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'last', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 30.0
-        
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'range', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 20.0
-        
-        # Test 2: Bucket with only NaN should be skipped (no EMPTY flag)
-        # Query all three buckets - bucket 100-199 should be missing
-        result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
-        assert len(result) == 2  # Only 2 buckets (0 and 200), bucket 100 is skipped
-        assert result[0][0] == 0    # First bucket
-        assert result[1][0] == 200  # Third bucket (second is skipped)
-        assert float(result[0][1]) == 60.0   # sum of bucket 0
-        assert float(result[1][1]) == 90.0   # sum of bucket 200: 40 + 50
-        
-        # Test 3: Bucket with only NaN should return NaN with EMPTY flag
-        result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY')
-        assert len(result) == 3  # All 3 buckets
-        assert result[0][0] == 0
-        assert result[1][0] == 100
-        assert result[2][0] == 200
-        assert float(result[0][1]) == 60.0
-        assert float(result[1][1]) == 0 # empty bucket
-        assert float(result[2][1]) == 90.0
-        
-        # Test 4: REVRANGE should also handle NaN correctly
-        result = r.execute_command('TS.REVRANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
-        assert len(result) == 2  # Only 2 buckets, reversed
-        assert result[0][0] == 200
-        assert result[1][0] == 0
-        
-        # Test 5: count aggregation - empty bucket should return 0 with EMPTY flag
-        result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'count', 100, 'EMPTY')
-        assert len(result) == 3
-        assert float(result[0][1]) == 3.0   # 3 valid samples in bucket 0
-        assert float(result[1][1]) == 0.0   # 0 valid samples in bucket 100
-        assert float(result[2][1]) == 2.0   # 2 valid samples in bucket 200
-        
-        # Test 6: Test aggregations with EMPTY flag on NaN-only bucket (100-199)
-        # Expected values: NaN for most, 0 for sum/count, 0 for last (last valid before bucket),
-        # interpolated for twa (has samples before and after)
-        expected_empty_bucket_values = {
-            'sum': 0.0,
-            'count': 0.0,
-            'min': float('nan'),
-            'max': float('nan'),
-            'avg': float('nan'),
-            'first': float('nan'),
-            'last': 30.0,  # last valid value before bucket (from ts=50)
-            'range': float('nan'),
-            'std.p': float('nan'),
-            'std.s': float('nan'),
-            'var.p': float('nan'),
-            'var.s': float('nan'),
-            'twa': 'interpolated',  # special case: has surrounding samples, should not be NaN
-        }
-        
-        for agg_func, expected in expected_empty_bucket_values.items():
-            result = r.execute_command('TS.RANGE', key, 0, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
-            assert len(result) == 2, f"{agg_func}: expected 2 results"
-            actual = float(result[1][1])
-            if expected == 'interpolated':
-                assert not math.isnan(actual), f"{agg_func}: expected interpolated value, got NaN"
-            elif math.isnan(expected):
-                assert math.isnan(actual), f"{agg_func}: expected NaN, got {actual}"
-            else:
-                assert actual == expected, f"{agg_func}: expected {expected}, got {actual}"
-        
-        # Test 7: Query only the NaN-only bucket without EMPTY - should return empty
-        result = r.execute_command('TS.RANGE', key, 100, 199, 'AGGREGATION', 'sum', 100)
-        assert len(result) == 0  # No results - bucket is effectively empty
-        
-        # Test 8: 'last' and 'twa' return NaN when NO sample exists before the bucket
-        key_no_before = 'ts_nan_no_before{a}'
-        r.execute_command('TS.CREATE', key_no_before)
-        r.execute_command('TS.ADD', key_no_before, 100, 'nan')  # NaN in bucket 100-199
-        r.execute_command('TS.ADD', key_no_before, 200, 50)     # Valid sample after
-        
-        for agg_func in ['last', 'twa']:
-            result = r.execute_command('TS.RANGE', key_no_before, 100, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
+        for encoding in ['compressed', 'uncompressed']:
+            Env().flush()
+            key = 'ts_nan_test{a}{encoding}'
+            
+            # Create a series with mixed NaN and valid values
+            # Bucket 0-99: values 10, NaN, 20, NaN, 30 (valid: 10, 20, 30)
+            # Bucket 100-199: only NaN values (should be treated as empty)
+            # Bucket 200-299: values 40, 50 (valid: 40, 50)
+            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+            
+            # Bucket 0-99: mixed NaN and valid values
+            r.execute_command('TS.ADD', key, 10, 10)
+            r.execute_command('TS.ADD', key, 20, 'nan')
+            r.execute_command('TS.ADD', key, 30, 20)
+            r.execute_command('TS.ADD', key, 40, 'nan')
+            r.execute_command('TS.ADD', key, 50, 30)
+            
+            # Bucket 100-199: only NaN values
+            r.execute_command('TS.ADD', key, 110, 'nan')
+            r.execute_command('TS.ADD', key, 120, 'nan')
+            r.execute_command('TS.ADD', key, 130, 'nan')
+            
+            # Bucket 200-299: valid values only
+            r.execute_command('TS.ADD', key, 210, 40)
+            r.execute_command('TS.ADD', key, 220, 50)
+            
+            # Test 1: Aggregations should ignore NaN values
+            # sum of valid values in bucket 0-99: 10 + 20 + 30 = 60
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'sum', 100)
             assert len(result) == 1
-            assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
+            assert result[0][0] == 0
+            assert float(result[0][1]) == 60.0
+            
+            # count should only count valid (non-NaN) samples
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 3.0  # 3 valid samples
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'min', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 10.0
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'max', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 30.0
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'avg', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 20.0
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'first', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 10.0
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'last', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 30.0
+            
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'range', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 20.0
+            
+            # Test 2: Bucket with only NaN should be skipped (no EMPTY flag)
+            # Query all three buckets - bucket 100-199 should be missing
+            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
+            assert len(result) == 2  # Only 2 buckets (0 and 200), bucket 100 is skipped
+            assert result[0][0] == 0    # First bucket
+            assert result[1][0] == 200  # Third bucket (second is skipped)
+            assert float(result[0][1]) == 60.0   # sum of bucket 0
+            assert float(result[1][1]) == 90.0   # sum of bucket 200: 40 + 50
+            
+            # Test 3: Bucket with only NaN should return NaN with EMPTY flag
+            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY')
+            assert len(result) == 3  # All 3 buckets
+            assert result[0][0] == 0
+            assert result[1][0] == 100
+            assert result[2][0] == 200
+            assert float(result[0][1]) == 60.0
+            assert float(result[1][1]) == 0 # empty bucket
+            assert float(result[2][1]) == 90.0
+            
+            # Test 4: REVRANGE should also handle NaN correctly
+            result = r.execute_command('TS.REVRANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
+            assert len(result) == 2  # Only 2 buckets, reversed
+            assert result[0][0] == 200
+            assert result[1][0] == 0
+            
+            # Test 5: count aggregation - empty bucket should return 0 with EMPTY flag
+            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'count', 100, 'EMPTY')
+            assert len(result) == 3
+            assert float(result[0][1]) == 3.0   # 3 valid samples in bucket 0
+            assert float(result[1][1]) == 0.0   # 0 valid samples in bucket 100
+            assert float(result[2][1]) == 2.0   # 2 valid samples in bucket 200
+            
+            # Test 6: Test aggregations with EMPTY flag on NaN-only bucket (100-199)
+            # Expected values: NaN for most, 0 for sum/count, 0 for last (last valid before bucket),
+            # interpolated for twa (has samples before and after)
+            expected_empty_bucket_values = {
+                'sum': 0.0,
+                'count': 0.0,
+                'min': float('nan'),
+                'max': float('nan'),
+                'avg': float('nan'),
+                'first': float('nan'),
+                'last': 30.0,  # last valid value before bucket (from ts=50)
+                'range': float('nan'),
+                'std.p': float('nan'),
+                'std.s': float('nan'),
+                'var.p': float('nan'),
+                'var.s': float('nan'),
+                'twa': 'interpolated',  # special case: has surrounding samples, should not be NaN
+            }
+            
+            for agg_func, expected in expected_empty_bucket_values.items():
+                result = r.execute_command('TS.RANGE', key, 0, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
+                assert len(result) == 2, f"{agg_func}: expected 2 results"
+                actual = float(result[1][1])
+                if expected == 'interpolated':
+                    assert not math.isnan(actual), f"{agg_func}: expected interpolated value, got NaN"
+                elif math.isnan(expected):
+                    assert math.isnan(actual), f"{agg_func}: expected NaN, got {actual}"
+                else:
+                    assert actual == expected, f"{agg_func}: expected {expected}, got {actual}"
+            
+            # Test 7: Query only the NaN-only bucket without EMPTY - should return empty
+            result = r.execute_command('TS.RANGE', key, 100, 199, 'AGGREGATION', 'sum', 100)
+            assert len(result) == 0  # No results - bucket is effectively empty
+            
+            # Test 8: 'last' and 'twa' return NaN when NO sample exists before the bucket
+            key_no_before = 'ts_nan_no_before{a}'
+            r.execute_command('TS.CREATE', key_no_before, 'ENCODING', encoding)
+            r.execute_command('TS.ADD', key_no_before, 100, 'nan')  # NaN in bucket 100-199
+            r.execute_command('TS.ADD', key_no_before, 200, 50)     # Valid sample after
+            
+            for agg_func in ['last', 'twa']:
+                result = r.execute_command('TS.RANGE', key_no_before, 100, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
+                assert len(result) == 1
+                assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
 
 def test_ts_range_countNaN():
     """
     Validate COUNTNAN aggregation function
     """
     with Env().getClusterConnectionIfNeeded() as r:
-        key = 'ts_countNaN_test{a}'
-        r.execute_command('TS.CREATE', key)
-        r.execute_command('TS.ADD', key, 10, 10)
-        r.execute_command('TS.ADD', key, 20, 'nan')
-        r.execute_command('TS.ADD', key, 30, 20)
-        r.execute_command('TS.ADD', key, 40, 'nan')
-        r.execute_command('TS.ADD', key, 50, 30)
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 2.0
-        result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countnan', 10, 'EMPTY')
-        assert len(result) == 5
-        assert float(result[0][1]) == 0.0
-        assert float(result[1][1]) == 1.0
-        assert float(result[2][1]) == 0.0
-        assert float(result[3][1]) == 1.0
-        assert float(result[4][1]) == 0.0
+        for encoding in ['compressed', 'uncompressed']:
+            Env().flush()
+            key = 'ts_countNaN_test{a}'
+            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+            r.execute_command('TS.ADD', key, 10, 10)
+            r.execute_command('TS.ADD', key, 20, 'nan')
+            r.execute_command('TS.ADD', key, 30, 20)
+            r.execute_command('TS.ADD', key, 40, 'nan')
+            r.execute_command('TS.ADD', key, 50, 30)
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 2.0
+            result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countnan', 10, 'EMPTY')
+            assert len(result) == 5
+            assert float(result[0][1]) == 0.0
+            assert float(result[1][1]) == 1.0
+            assert float(result[2][1]) == 0.0
+            assert float(result[3][1]) == 1.0
+            assert float(result[4][1]) == 0.0
 
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 50)
-        assert len(result) == 1
-        assert float(result[0][1]) == 2.0
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 50)
+            assert len(result) == 1
+            assert float(result[0][1]) == 2.0
 
 def test_ts_range_countAll():
     """
     Validate COUNTALL aggregation function
     """
     with Env().getClusterConnectionIfNeeded() as r:
-        key = 'ts_countAll_test{a}'
-        r.execute_command('TS.CREATE', key)
-        r.execute_command('TS.ADD', key, 10, 10)
-        r.execute_command('TS.ADD', key, 20, 'nan')
-        r.execute_command('TS.ADD', key, 30, 20)
-        r.execute_command('TS.ADD', key, 40, 'nan')
-        r.execute_command('TS.ADD', key, 50, 30)
-        result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countall', 100)
-        assert len(result) == 1
-        assert float(result[0][1]) == 5.0
-        result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countall', 10, 'EMPTY')
-        assert len(result) == 5
-        assert float(result[0][1]) == 1.0
-        assert float(result[1][1]) == 1.0
-        assert float(result[2][1]) == 1.0
-        assert float(result[3][1]) == 1.0
-        assert float(result[4][1]) == 1.0
+        for encoding in ['compressed', 'uncompressed']:
+            Env().flush()
+            key = 'ts_countAll_test{a}'
+            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+            r.execute_command('TS.ADD', key, 10, 10)
+            r.execute_command('TS.ADD', key, 20, 'nan')
+            r.execute_command('TS.ADD', key, 30, 20)
+            r.execute_command('TS.ADD', key, 40, 'nan')
+            r.execute_command('TS.ADD', key, 50, 30)
+            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countall', 100)
+            assert len(result) == 1
+            assert float(result[0][1]) == 5.0
+            result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countall', 10, 'EMPTY')
+            assert len(result) == 5
+            assert float(result[0][1]) == 1.0
+            assert float(result[1][1]) == 1.0
+            assert float(result[2][1]) == 1.0
+            assert float(result[3][1]) == 1.0
+            assert float(result[4][1]) == 1.0
