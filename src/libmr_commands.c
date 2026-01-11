@@ -12,11 +12,29 @@
 
 #include "rmutil/alloc.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
 // Keep behavior similar to LibMR's default max idle (see deps/LibMR/src/mr.c).
 #define RTS_LIBMR_REMOTE_TASK_TIMEOUT_MS 5000
+
+static inline bool rts_str_contains_timeout_ci(const char *s) {
+    if (!s) {
+        return false;
+    }
+    static const char needle[] = "timeout";
+    for (const char *p = s; *p; ++p) {
+        size_t i = 0;
+        while (needle[i] && p[i] && tolower((unsigned char)p[i]) == (unsigned char)needle[i]) {
+            ++i;
+        }
+        if (needle[i] == '\0') {
+            return true;
+        }
+    }
+    return false;
+}
 
 static inline bool check_and_reply_on_remote_errors(MRError **errs,
                                                     size_t nErrs,
@@ -27,7 +45,7 @@ static inline bool check_and_reply_on_remote_errors(MRError **errs,
         for (size_t i = 0; i < nErrs; ++i) {
             const char *msg = (errs && errs[i]) ? MR_ErrorGetMessage(errs[i]) : NULL;
             RedisModule_Log(rctx, "warning", "%s", msg ? msg : "unknown error");
-            if (msg && strstr(msg, "timeout")) {
+            if (rts_str_contains_timeout_ci(msg)) {
                 timeout_reached = true;
             }
         }
