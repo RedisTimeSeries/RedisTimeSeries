@@ -582,10 +582,10 @@ static void TS_MR_RemoteTask_SharedFreeInputs(Record *r, QueryPredicates_Arg *ar
 }
 
 static void TS_MR_RemoteTask_Mget(Record *r,
-                                 void *args,
-                                 void (*onDone)(void *PD, Record *r),
-                                 void (*onError)(void *PD, MRError *r),
-                                 void *pd) {
+                                  void *args,
+                                  void (*onDone)(void *PD, Record *r),
+                                  void (*onError)(void *PD, MRError *r),
+                                  void *pd) {
     QueryPredicates_Arg *predicates = args;
     if (!predicates) {
         // LibMR may invoke remote tasks with NULL args after a failed deserialization
@@ -611,10 +611,10 @@ static void TS_MR_RemoteTask_Mget(Record *r,
 }
 
 static void TS_MR_RemoteTask_Mrange(Record *r,
-                                   void *args,
-                                   void (*onDone)(void *PD, Record *r),
-                                   void (*onError)(void *PD, MRError *r),
-                                   void *pd) {
+                                    void *args,
+                                    void (*onDone)(void *PD, Record *r),
+                                    void (*onError)(void *PD, MRError *r),
+                                    void *pd) {
     QueryPredicates_Arg *predicates = args;
     if (!predicates) {
         TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
@@ -636,10 +636,10 @@ static void TS_MR_RemoteTask_Mrange(Record *r,
 }
 
 static void TS_MR_RemoteTask_QueryIndex(Record *r,
-                                       void *args,
-                                       void (*onDone)(void *PD, Record *r),
-                                       void (*onError)(void *PD, MRError *r),
-                                       void *pd) {
+                                        void *args,
+                                        void (*onDone)(void *PD, Record *r),
+                                        void (*onError)(void *PD, MRError *r),
+                                        void *pd) {
     QueryPredicates_Arg *predicates = args;
     if (!predicates) {
         TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
@@ -831,7 +831,8 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     // - One reply per shard with an aggregated record (List/Map)
     MR_RegisterRemoteTask("TSDB_MGET_REMOTE_TASK", TS_MR_RemoteTask_Mget, QueryPredicatesType);
     MR_RegisterRemoteTask("TSDB_MRANGE_REMOTE_TASK", TS_MR_RemoteTask_Mrange, QueryPredicatesType);
-    MR_RegisterRemoteTask("TSDB_QUERYINDEX_REMOTE_TASK", TS_MR_RemoteTask_QueryIndex, QueryPredicatesType);
+    MR_RegisterRemoteTask(
+        "TSDB_QUERYINDEX_REMOTE_TASK", TS_MR_RemoteTask_QueryIndex, QueryPredicatesType);
 
     return REDISMODULE_OK;
 }

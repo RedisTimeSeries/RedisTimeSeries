@@ -34,8 +34,8 @@ static inline bool check_and_reply_on_remote_errors(MRError **errs,
 
         if (timeout_reached) {
             RedisModule_ReplyWithError(rctx,
-                                      "A multi-shard command failed because at least one shard "
-                                      "did not reply within the given timeframe.");
+                                       "A multi-shard command failed because at least one shard "
+                                       "did not reply within the given timeframe.");
         } else {
             const char *first_msg = (errs && errs[0]) ? MR_ErrorGetMessage(errs[0]) : NULL;
             char buf[512] = { 0 };
@@ -59,16 +59,17 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
     RedisModule_FreeThreadSafeContext(_rctx);
 }
 
-typedef struct {
+typedef struct
+{
     RedisModuleBlockedClient *bc;
     bool resp3;
 } MRRunOnShardsBlockedCtx;
 
 static void mget_done_onshards(void *privateData,
-                              Record **results,
-                              size_t nResults,
-                              MRError **errs,
-                              size_t nErrs) {
+                               Record **results,
+                               size_t nResults,
+                               MRError **errs,
+                               size_t nErrs) {
     MRRunOnShardsBlockedCtx *pd = privateData;
     RedisModuleBlockedClient *bc = pd->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
@@ -85,19 +86,15 @@ static void mget_done_onshards(void *privateData,
         }
         if (pd->resp3) {
             if (raw->recordType != GetMapRecordType()) {
-                RedisModule_Log(rctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw->recordType->type.type);
+                RedisModule_Log(
+                    rctx, "warning", "Unexpected record type: %s", raw->recordType->type.type);
                 continue;
             }
             total_len += MapRecord_GetLen((MapRecord *)raw);
         } else {
             if (raw->recordType != GetListRecordType()) {
-                RedisModule_Log(rctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw->recordType->type.type);
+                RedisModule_Log(
+                    rctx, "warning", "Unexpected record type: %s", raw->recordType->type.type);
                 continue;
             }
             total_len += ListRecord_GetLen((ListRecord *)raw);
@@ -148,10 +145,10 @@ __done:
 }
 
 static void queryindex_done_onshards(void *privateData,
-                                   Record **results,
-                                   size_t nResults,
-                                   MRError **errs,
-                                   size_t nErrs) {
+                                     Record **results,
+                                     size_t nResults,
+                                     MRError **errs,
+                                     size_t nErrs) {
     MRRunOnShardsBlockedCtx *pd = privateData;
     RedisModuleBlockedClient *bc = pd->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
@@ -167,10 +164,8 @@ static void queryindex_done_onshards(void *privateData,
             continue;
         }
         if (raw->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw->recordType->type.type);
+            RedisModule_Log(
+                rctx, "warning", "Unexpected record type: %s", raw->recordType->type.type);
             continue;
         }
         total_len += ListRecord_GetLen((ListRecord *)raw);
@@ -210,10 +205,10 @@ __done:
 }
 
 static void mrange_done_onshards(void *privateData,
-                                Record **results,
-                                size_t nResults,
-                                MRError **errs,
-                                size_t nErrs) {
+                                 Record **results,
+                                 size_t nResults,
+                                 MRError **errs,
+                                 size_t nErrs) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
