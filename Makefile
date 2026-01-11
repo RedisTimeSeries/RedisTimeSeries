@@ -396,6 +396,13 @@ unit_tests: $(UNITTESTS_RUNNER)
 
 #----------------------------------------------------------------------------------------------
 
+# In CI we must run OSS cluster flow tests on all variants. Some CI entrypoints
+# historically set QUICK=1; ignore that in CI so we don't accidentally skip the
+# OSS cluster suite.
+ifneq ($(CI),)
+override QUICK := 0
+endif
+
 ifeq ($(QUICK),1)
 export GEN=1
 export SLAVES=0
