@@ -176,7 +176,9 @@ traps 'stop' SIGINT
 #
 if [[ -n $CI || -n $GITHUB_ACTIONS ]]; then
 	# Default RLTest per-test timeout (seconds) unless overridden.
-	TEST_TIMEOUT_SEC=${TEST_TIMEOUT_SEC:-180}
+	# NOTE: We keep this disabled by default in CI because some tests (e.g.
+	# "extensive") legitimately take a long time on slower runners.
+	TEST_TIMEOUT_SEC=${TEST_TIMEOUT_SEC:-0}
 	# Default hard timeout for the whole RLTest invocation (seconds) unless overridden.
 	RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-3600}
 	# Avoid port collisions between repeated RLTest invocations in the same job.

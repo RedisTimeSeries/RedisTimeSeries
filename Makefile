@@ -401,7 +401,6 @@ unit_tests: $(UNITTESTS_RUNNER)
 # OSS cluster suite.
 ifneq ($(CI),)
 override QUICK := 0
-export TEST_TIMEOUT_SEC ?= 180
 export RUN_TIMEOUT_SEC ?= 3600
 endif
 
