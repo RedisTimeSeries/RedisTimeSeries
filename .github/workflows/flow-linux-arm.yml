@@ -56,6 +56,7 @@ jobs:
           github-ref: ${{ github.ref }}
           redis-ref: ${{ inputs.redis-ref }}
   ubuntu-arm64:
+    name: ${{ matrix.docker.nick }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ubuntu24-arm64-4-16 # ubuntu24-arm64-2-8
     needs: setup-environment
     strategy:
