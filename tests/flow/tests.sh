@@ -17,6 +17,23 @@ SAN_GETREDIS_VER=7
 cd $HERE
 
 #----------------------------------------------------------------------------------------------
+# Python selection:
+# - CI typically activates `venv/` before running tests.
+# - Local dev sometimes uses `test_env/` but may forget to activate it.
+# If no virtualenv is active, prefer a repo-local venv python when present so
+# RLTest and redis-py versions are consistent and compatible.
+#
+PYTHON=${PYTHON:-python3}
+if [[ -z ${VIRTUAL_ENV:-} ]]; then
+	if [[ -x "$ROOT/venv/bin/python" ]]; then
+		PYTHON="$ROOT/venv/bin/python"
+	elif [[ -x "$ROOT/test_env/bin/python" ]]; then
+		PYTHON="$ROOT/test_env/bin/python"
+	fi
+fi
+export PYTHON
+
+#----------------------------------------------------------------------------------------------
 
 help() {
 	cat <<-'END'
@@ -423,7 +440,7 @@ run_tests() {
 			HB_PID=$!
 		fi
 
-		{ $OP run_with_timeout "${RUN_TIMEOUT_SEC:-0}" python3 -m RLTest @$rltest_config; E=$?; } || true
+		{ $OP run_with_timeout "${RUN_TIMEOUT_SEC:-0}" "$PYTHON" -m RLTest @$rltest_config; E=$?; } || true
 
 		if [[ -n ${HB_PID:-} ]]; then
 			kill "$HB_PID" >/dev/null 2>&1 || true
@@ -446,7 +463,7 @@ run_tests() {
 			done
 		fi
 	else
-		$OP python3 -m RLTest @$rltest_config
+		$OP "$PYTHON" -m RLTest @$rltest_config
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config
