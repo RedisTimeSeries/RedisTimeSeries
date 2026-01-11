@@ -123,16 +123,40 @@ run_with_timeout() {
 
 	# Portable fallback: Python subprocess timeout.
 	python3 - "$timeout_sec" "$@" <<'PY'
-import os, subprocess, sys
+import os, signal, subprocess, sys
 timeout = int(sys.argv[1])
 cmd = sys.argv[2:]
+def _kill_pg(pid: int, sig) -> None:
+  try:
+    os.killpg(pid, sig)
+  except ProcessLookupError:
+    pass
+
 try:
-  p = subprocess.run(cmd, timeout=timeout)
-  sys.exit(p.returncode)
-except subprocess.TimeoutExpired:
-  # Best effort: exit with a distinctive code.
-  sys.stderr.write(f"RLTest run timed out after {timeout} seconds: {' '.join(cmd)}\n")
-  sys.exit(124)
+  # start_new_session=True creates a new process group (pgid == pid) on POSIX.
+  p = subprocess.Popen(cmd, start_new_session=True)
+  try:
+    rc = p.wait(timeout=timeout)
+    sys.exit(rc)
+  except subprocess.TimeoutExpired:
+    sys.stderr.write(f"RLTest run timed out after {timeout} seconds: {' '.join(cmd)}\n")
+    _kill_pg(p.pid, signal.SIGTERM)
+    try:
+      p.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+      _kill_pg(p.pid, signal.SIGKILL)
+      try:
+        p.wait(timeout=5)
+      except subprocess.TimeoutExpired:
+        pass
+    sys.exit(124)
+finally:
+  # Ensure the child isn't left around if we exit early for any reason.
+  try:
+    if p.poll() is None:
+      _kill_pg(p.pid, signal.SIGKILL)
+  except Exception:
+    pass
 PY
 }
 
