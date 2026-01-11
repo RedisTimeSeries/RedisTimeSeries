@@ -658,7 +658,6 @@ static inline bool filter_close_samples(DuplicatePolicy dp_policy,
                                         const Series *series,
                                         api_timestamp_t timestamp,
                                         double value) {
-
     if (isnan(value) || isnan(series->lastValue)) {
         return false;
     }
@@ -698,7 +697,8 @@ static int internalAdd(RedisModuleCtx *ctx,
         if (SeriesUpsertSample(series, timestamp, value, dp_policy) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx,
                                   "TSDB: Error at upsert, update is not supported when "
-                                  "DUPLICATE_POLICY is set to BLOCK mode");
+                                  "DUPLICATE_POLICY is set to BLOCK mode, or either current or new "
+                                  "value is NaN and DUPLICATE_POLICY is MAX/MIN/SUM");
             return REDISMODULE_ERR;
         }
     } else {

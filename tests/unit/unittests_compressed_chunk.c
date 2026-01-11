@@ -13,6 +13,7 @@
 #include "parse_policies.h"
 #include "tsdb.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "rmutil/alloc.h"
@@ -199,10 +200,72 @@ MU_TEST(test_Compressed_SplitChunk_force_realloc) {
     Compressed_FreeChunk(chunk);
 }
 
+MU_TEST(test_nan_mixed_compression) {
+    const size_t chunk_size = 4096;
+    const int total_samples = 1000;
+    const int nan_frequency = 100; // 1 in 100 samples is NaN (1%)
+
+    // Different NaN bit patterns
+    union
+    {
+        double d;
+        uint64_t u;
+    } nan1, nan2, nan3;
+
+    nan1.u = CANONICAL_NAN_BITS;
+    nan2.u = 0x7ff8000000000001ULL; // Different payload
+    nan3.u = 0x7ffFFFFFFFFFFFFFULL; // Max payload
+
+    // Chunk 1: Sparse NaN with canonical pattern
+    CompressedChunk *chunk_canonical = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk_canonical != NULL, "create chunk_canonical");
+
+    for (int i = 0; i < total_samples; i++) {
+        double val = (i % nan_frequency == 0) ? nan1.d : (double)(i * 1.5);
+        Sample s = { .timestamp = i + 1, .value = val };
+        Compressed_AddSample(chunk_canonical, &s);
+    }
+    uint64_t bits_canonical = chunk_canonical->idx;
+
+    // Chunk 2: Sparse NaN with varying patterns
+    CompressedChunk *chunk_varying = Compressed_NewChunk(chunk_size);
+    mu_assert(chunk_varying != NULL, "create chunk_varying");
+
+    int nan_count = 0;
+    for (int i = 0; i < total_samples; i++) {
+        double val;
+        if (i % nan_frequency == 0) {
+            switch (nan_count++ % 3) {
+                case 0:
+                    val = nan1.d;
+                    break;
+                case 1:
+                    val = nan2.d;
+                    break;
+                default:
+                    val = nan3.d;
+                    break;
+            }
+        } else {
+            val = (double)(i * 1.5);
+        }
+        Sample s = { .timestamp = i + 1, .value = val };
+        Compressed_AddSample(chunk_varying, &s);
+    }
+    uint64_t bits_varying = chunk_varying->idx;
+
+    mu_assert(bits_varying == bits_canonical,
+              "Sparse NaN data with varying patterns should compress same as canonical");
+
+    Compressed_FreeChunk(chunk_canonical);
+    Compressed_FreeChunk(chunk_varying);
+}
+
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
     MU_RUN_TEST(test_Compressed_SplitChunk_empty);
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);
     MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
+    MU_RUN_TEST(test_nan_mixed_compression);
 }

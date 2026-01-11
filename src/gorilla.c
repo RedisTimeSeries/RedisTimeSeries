@@ -95,6 +95,7 @@
 #include "gorilla.h"
 
 #include <assert.h>
+#include <math.h>
 
 #define BIN_NUM_VALUES 64
 #define BINW BIN_NUM_VALUES
@@ -413,6 +414,13 @@ ChunkResult Compressed_Append(CompressedChunk *chunk, timestamp_t timestamp, dou
 #ifdef DEBUG
     assert(chunk);
 #endif
+
+    // Canonicalize NaN to a single bit pattern for better compression.
+    if (isnan(value)) {
+        union64bits canonical_nan;
+        canonical_nan.u = CANONICAL_NAN_BITS;
+        value = canonical_nan.d;
+    }
 
     if (chunk->count == 0) {
         chunk->baseValue.d = chunk->prevValue.d = value;
