@@ -16,7 +16,7 @@ def test_lazy_del_src():
         assert _get_ts_info(r, 'src{test}').rules[0][0].decode() == 'dst{test}'
         r.execute_command('DEL', 'src{test}')
 
-        assert _get_ts_info(r, 'dst{test}').sourceKey == None
+        assert _get_ts_info(r, 'dst{test}').sourceKey is None
         assert len(_get_ts_info(r, 'dst{test}').rules) == 0
 
 def test_lazy_del_dst():
@@ -30,7 +30,7 @@ def test_lazy_del_dst():
         assert _get_ts_info(r, 'src{test}').rules[0][0].decode() == 'dst{test}'
         r.execute_command('DEL', 'dst{test}')
 
-        assert _get_ts_info(r, 'src{test}').sourceKey == None
+        assert _get_ts_info(r, 'src{test}').sourceKey is None
         assert len(_get_ts_info(r, 'src{test}').rules) == 0
 
 #def test_533_dump_rules() implementing test_dump_restore_src_rule
@@ -62,41 +62,41 @@ def test_dump_restore_dst_rule():
         r.execute_command('DEL', key2)
         r.execute_command('restore', key2, 0, data)
 
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) == n_dst_keys - 1
-        assert _get_ts_info(r, key2).sourceKey == None
+        assert _get_ts_info(r, key2).sourceKey is None
         assert len(_get_ts_info(r, key2).rules) == 0
     
         data = r.execute_command('DUMP', key3)
         r.execute_command('DEL', key3)
         r.execute_command('restore', key3, 0, data)
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) == n_dst_keys - 2
-        assert _get_ts_info(r, key3).sourceKey == None
+        assert _get_ts_info(r, key3).sourceKey is None
         assert len(_get_ts_info(r, key3).rules) == 0
 
         data = r.execute_command('DUMP', key4)
         r.execute_command('DEL', key4)
         r.execute_command('restore', key4, 0, data)
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 3
-        assert _get_ts_info(r, key4).sourceKey == None
+        assert _get_ts_info(r, key4).sourceKey is None
         assert len(_get_ts_info(r, key4).rules) == 0
 
         data = r.execute_command('DUMP', key5)
         r.execute_command('DEL', key5)
         r.execute_command('restore', key5, 0, data)
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 4
-        assert _get_ts_info(r, key5).sourceKey == None
+        assert _get_ts_info(r, key5).sourceKey is None
         assert len(_get_ts_info(r, key5).rules) == 0
 
         data = r.execute_command('DUMP', key6)
         r.execute_command('DEL', key6)
         r.execute_command('restore', key6, 0, data)
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) ==  n_dst_keys - 5
-        assert _get_ts_info(r, key6).sourceKey == None
+        assert _get_ts_info(r, key6).sourceKey is None
         assert len(_get_ts_info(r, key6).rules) == 0
 
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
@@ -107,9 +107,9 @@ def test_dump_restore_dst_rule():
         r.execute_command('DEL', key1)
         r.execute_command('restore', key1, 0, data)
 
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) == 0
-        assert _get_ts_info(r, key2).sourceKey == None
+        assert _get_ts_info(r, key2).sourceKey is None
         assert len(_get_ts_info(r, key2).rules) == 0
 
 # test for version problems in dump restore
@@ -133,7 +133,7 @@ def test_dump_restore_dst_rule_force_save_refs():
         r.execute_command('DEL', key2)
         r.execute_command('restore', key2, 0, data)
 
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) != 0
         assert _get_ts_info(r, key2).sourceKey != None
         assert len(_get_ts_info(r, key2).rules) == 0
@@ -150,7 +150,7 @@ def test_dump_restore_dst_rule_old_version():
 
         assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) == 0
-        assert _get_ts_info(r, key2).sourceKey == None
+        assert _get_ts_info(r, key2).sourceKey is None
         assert len(_get_ts_info(r, key2).rules) == 0
 
         r.execute_command('DEL', key1)
@@ -159,9 +159,9 @@ def test_dump_restore_dst_rule_old_version():
         data = b'\a\x81M \xc1\xf96\x0f\x10\x04\x05\x06ts1{a}\x02\x00\x02P\x00\x02\x02\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x00\x02\x00\x02\x01\x05\x06ts2{a}\x02\x80\x00\x00\xea`\x02\x04\x02\x81\xff\xff\xff\xff\xff\xff\xff\xff\x04\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x01\x02P\x00\x02\x00\x02\x00\x02\x00\x02\x00\x02\x00\x02\x00\x02\x00\x02 \x02 \x05\xc36P\x00\x01\x00\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0\xff\x00\xe0{\x00\x01\x00\x00\x00\t\x00j\x85\xe4Z\xb6\xb9\xc38'
         r.execute_command('restore', key1, 0, data)
 
-        assert _get_ts_info(r, key1).sourceKey == None
+        assert _get_ts_info(r, key1).sourceKey is None
         assert len(_get_ts_info(r, key1).rules) == 0
-        assert _get_ts_info(r, key2).sourceKey == None
+        assert _get_ts_info(r, key2).sourceKey is None
         assert len(_get_ts_info(r, key2).rules) == 0
 
 def test_info_doesnt_delete_acl_restricted():
