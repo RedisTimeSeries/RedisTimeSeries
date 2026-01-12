@@ -14,6 +14,8 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 
+#include <stdlib.h>
+
 #define SeriesRecordName "SeriesRecord"
 
 static Record NullRecord;
@@ -39,6 +41,54 @@ MRRecordType *GetListRecordType() {
 
 MRRecordType *GetSeriesRecordType() {
     return SeriesRecordType;
+}
+
+typedef struct RTS_KeyName
+{
+    char *key;
+    size_t len;
+} RTS_KeyName;
+
+static void RTS_FreeKeyNames(RTS_KeyName *keys, size_t n) {
+    if (!keys) {
+        return;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        free(keys[i].key);
+    }
+    free(keys);
+}
+
+/* Collect matching key names under RTS_StaticCtxLock(), then release the lock.
+ * This significantly reduces the time we hold the global thread-safe context lock,
+ * which helps avoid head-of-line blocking and LibMR 5s remote-task timeouts when
+ * multiple coordinators are active concurrently. */
+static RTS_KeyName *RTS_QueryIndexKeys(const QueryPredicates_Arg *predicates, size_t *out_len) {
+    *out_len = 0;
+    RTS_KeyName *keys = NULL;
+    size_t cap = 0;
+
+    RTS_StaticCtxLock();
+    RedisModuleDict *result =
+        QueryIndex(rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        if (*out_len == cap) {
+            cap = cap ? cap * 2 : 64;
+            keys = realloc(keys, cap * sizeof(*keys));
+        }
+        keys[*out_len].key = strndup(currentKey, currentKeyLen);
+        keys[*out_len].len = currentKeyLen;
+        ++(*out_len);
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(rts_staticCtx, result);
+    RTS_StaticCtxUnlock();
+
+    return keys;
 }
 
 static void QueryPredicates_ObjectFree(void *arg) {
@@ -396,47 +446,39 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RTS_StaticCtxLock();
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
+    size_t nkeys = 0;
+    RTS_KeyName *keys = RTS_QueryIndexKeys(predicates, &nkeys);
 
     Series *series;
-    Record *series_list = ListRecord_Create(0);
+    Record *series_list = ListRecord_Create(nkeys);
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+    for (size_t i = 0; i < nkeys; ++i) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        Record *series_rec = NULL;
+
+        RTS_StaticCtxLock();
+        RedisModuleString *keyName = RedisModule_CreateString(rts_staticCtx, keys[i].key, keys[i].len);
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
-
         RedisModule_FreeString(rts_staticCtx, keyName);
 
-        if (status != GetSeriesResult_Success) {
+        if (status == GetSeriesResult_Success) {
+            series_rec =
+                SeriesRecord_New(series, predicates->startTimestamp, predicates->endTimestamp, predicates);
+            RedisModule_CloseKey(key);
+        } else {
             RedisModule_Log(
                 rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
-            continue;
         }
+        RTS_StaticCtxUnlock();
 
-        ListRecord_Add(
-            series_list,
-            SeriesRecord_New(
-                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
-
-        RedisModule_CloseKey(key);
+        if (series_rec) {
+            ListRecord_Add(series_list, series_rec);
+        }
     }
 
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
-    RTS_StaticCtxUnlock();
-
+    RTS_FreeKeyNames(keys, nkeys);
     return series_list;
 }
 
@@ -453,16 +495,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RTS_StaticCtxLock();
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
     Series *series;
     Record *series_listOrMap;
     if (predicates->resp3) {
@@ -473,10 +505,16 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+    size_t nkeys = 0;
+    RTS_KeyName *keys = RTS_QueryIndexKeys(predicates, &nkeys);
+
+    for (size_t i = 0; i < nkeys; ++i) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        const char *currentKey = keys[i].key;
+        const size_t currentKeyLen = keys[i].len;
+
+        RTS_StaticCtxLock();
+        RedisModuleString *keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
         RedisModule_FreeString(rts_staticCtx, keyName);
@@ -484,6 +522,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         if (status != GetSeriesResult_Success) {
             RedisModule_Log(
                 rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
+            RTS_StaticCtxUnlock();
             continue;
         }
 
@@ -532,11 +571,10 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
             RedisModule_CloseKey(key);
             ListRecord_Add(series_listOrMap, key_record);
         }
+        RTS_StaticCtxUnlock();
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RTS_StaticCtxUnlock();
+    RTS_FreeKeyNames(keys, nkeys);
 
     return series_listOrMap;
 }
@@ -549,26 +587,16 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RTS_StaticCtxLock();
+    size_t nkeys = 0;
+    RTS_KeyName *keys = RTS_QueryIndexKeys(predicates, &nkeys);
 
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
-    Record *series_list = ListRecord_Create(0);
-
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+    Record *series_list = ListRecord_Create(nkeys);
+    for (size_t i = 0; i < nkeys; ++i) {
         ListRecord_Add(series_list,
-                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+                       StringRecord_Create(strndup(keys[i].key, keys[i].len), keys[i].len));
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
-    RTS_StaticCtxUnlock();
 
+    RTS_FreeKeyNames(keys, nkeys);
     return series_list;
 }
 
