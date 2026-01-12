@@ -42,3 +42,95 @@ def test_mrevrange():
         last_results = last_results[0:3]
         assert r1.execute_command('TS.mrevrange', 0, '+', 'AGGREGATION', 'sum', 50, 'COUNT', 3, 'FILTER', 'name=bob')[0][
                    2] == last_results
+
+
+def test_mrevrange_pipelined_load_does_not_hang():
+    """
+    Regression test: multi-shard TS.MREVRANGE under multi-connection + pipeline load must not hang.
+
+    This test targets failures where internal multi-shard aggregation/cleanup can deadlock/stall,
+    causing clients to time out and (in some environments) shards to be watchdog-killed.
+    """
+    env = Env()
+    if env.shardsCount < 2:
+        env.skip()
+    if not env.is_cluster():
+        env.skip()
+
+    # Make the test resilient to transient local FS / BGSAVE issues (which can surface as MISCONF
+    # and block writes). We don't want a persistence issue to mask a multi-shard hang regression.
+    for c in shardsConnections(env):
+        try:
+            c.execute_command('CONFIG', 'SET', 'save', '')
+            c.execute_command('CONFIG', 'SET', 'stop-writes-on-bgsave-error', 'no')
+        except Exception:
+            # If CONFIG is disabled by the Redis build/environment, best-effort only.
+            pass
+
+    # Keep dataset small to avoid adding real load, while still forcing multi-shard fanout.
+    start_ts = 1
+    samples_count = 20
+    series_per_shard = 4
+
+    with env.getClusterConnectionIfNeeded() as r:
+        for i in range(env.shardsCount * series_per_shard):
+            # Different hash-tags => different slots => more likely to spread across shards.
+            key = f"mrevrange_load{{{i}}}"
+            r.execute_command('TS.CREATE', key, 'LABELS', 'user_id', '754', 'metric', 'x')
+            _insert_data(r, key, start_ts, samples_count, 1)
+
+    # Use a direct socket connection with short timeouts so a hang turns into a fast test failure.
+    base = env.getConnection(1)
+    kw = dict(base.connection_pool.connection_kwargs)
+    host = kw.get('host', '127.0.0.1')
+    port = kw['port']
+    password = kw.get('password', None)
+
+    cmd = [
+        'TS.MREVRANGE',
+        str(start_ts),
+        str(start_ts + samples_count),
+        'FILTER',
+        'user_id=754',
+        'metric=x',
+    ]
+
+    # Simulate memtier-like load: multiple connections, pipelined commands.
+    n_conns = 4
+    pipeline_len = 25
+
+    conns = []
+    try:
+        for _ in range(n_conns):
+            c = redis.connection.Connection(
+                host=host,
+                port=port,
+                password=password,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+            c.connect()
+            conns.append(c)
+
+        with TimeLimit(30):
+            # Send a pipeline burst on all connections first...
+            for c in conns:
+                for _ in range(pipeline_len):
+                    c.send_command(*cmd)
+
+            # ...then drain all replies.
+            for c in conns:
+                for _ in range(pipeline_len):
+                    resp = c.read_response()
+                    # For OSS cluster, a successful TS.MREVRANGE reply is an array.
+                    assert isinstance(resp, list)
+    finally:
+        for c in conns:
+            try:
+                c.disconnect()
+            except Exception:
+                pass
+
+    # Sanity: cluster still responds after the load burst.
+    with env.getClusterConnectionIfNeeded() as r:
+        r.ping()
