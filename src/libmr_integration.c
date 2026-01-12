@@ -134,6 +134,9 @@ static void *LongRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **erro
 static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 static Record *RedisStringRecord_Create(RedisModuleString *str);
 
+// Forward declaration (implemented later in this file).
+static Record *MR_RecordCreate(MRRecordType *type, size_t size);
+
 static ShardEnvelopeRecord *ShardEnvelopeRecord_Create(uint64_t epoch,
                                                        SlotRangeRecord *ranges,
                                                        size_t rangesCount,
@@ -270,11 +273,13 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
 
 fallback_all:
     // Conservative fallback: treat as all slots owned.
-    SlotRangeRecord *all = malloc(sizeof(*all));
-    all[0].start = 0;
-    all[0].end = (uint16_t)((1 << 14) - 1);
-    *outRanges = all;
-    *outCount = 1;
+    {
+        SlotRangeRecord *all = malloc(sizeof(*all));
+        all[0].start = 0;
+        all[0].end = (uint16_t)((1 << 14) - 1);
+        *outRanges = all;
+        *outCount = 1;
+    }
 }
 
 static bool SlotInRanges(unsigned int slot, const SlotRangeRecord *ranges, size_t count) {
