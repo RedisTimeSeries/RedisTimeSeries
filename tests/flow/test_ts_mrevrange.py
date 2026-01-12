@@ -79,12 +79,14 @@ def test_mrevrange_pipelined_load_does_not_hang():
             r.execute_command('TS.CREATE', key, 'LABELS', 'user_id', '754', 'metric', 'x')
             _insert_data(r, key, start_ts, samples_count, 1)
 
-    # Use a direct socket connection with short timeouts so a hang turns into a fast test failure.
-    base = env.getConnection(1)
+    # Use direct socket connections with short timeouts so a hang turns into a fast test failure.
+    # Be robust to environments that use unix sockets.
+    base = env.getConnection(shardId=1)
     kw = dict(base.connection_pool.connection_kwargs)
-    host = kw.get('host', '127.0.0.1')
-    port = kw['port']
     password = kw.get('password', None)
+    unix_path = kw.get('path') or kw.get('unix_socket_path')
+    host = kw.get('host', '127.0.0.1')
+    port = kw.get('port')
 
     cmd = [
         'TS.MREVRANGE',
@@ -102,28 +104,39 @@ def test_mrevrange_pipelined_load_does_not_hang():
     conns = []
     try:
         for _ in range(n_conns):
-            c = redis.connection.Connection(
-                host=host,
-                port=port,
-                password=password,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-            )
+            if unix_path:
+                c = redis.connection.Connection(
+                    unix_socket_path=unix_path,
+                    password=password,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                )
+            else:
+                c = redis.connection.Connection(
+                    host=host,
+                    port=port,
+                    password=password,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                )
             c.connect()
             conns.append(c)
 
-        with TimeLimit(30):
-            # Send a pipeline burst on all connections first...
-            for c in conns:
-                for _ in range(pipeline_len):
-                    c.send_command(*cmd)
+        deadline = time.time() + 30
 
-            # ...then drain all replies.
-            for c in conns:
-                for _ in range(pipeline_len):
-                    resp = c.read_response()
-                    # For OSS cluster, a successful TS.MREVRANGE reply is an array.
-                    assert isinstance(resp, list)
+        # Send a pipeline burst on all connections first...
+        for c in conns:
+            for _ in range(pipeline_len):
+                c.send_command(*cmd)
+
+        # ...then drain all replies.
+        for c in conns:
+            for _ in range(pipeline_len):
+                if time.time() > deadline:
+                    raise RuntimeError("Timed out draining pipelined TS.MREVRANGE replies")
+                resp = c.read_response()
+                # For OSS cluster, a successful TS.MREVRANGE reply is an array.
+                assert isinstance(resp, list)
     finally:
         for c in conns:
             try:
