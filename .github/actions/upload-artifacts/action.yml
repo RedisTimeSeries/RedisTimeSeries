@@ -23,4 +23,5 @@ runs:
       with:
         name: Test logs ${{ steps.artifact-names.outputs.name }}
         path: tests/**/logs/*.log*
+        overwrite: true
         if-no-files-found: ignore

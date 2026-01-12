@@ -135,6 +135,11 @@ static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *c
 extern RedisModuleType *SeriesType;
 extern RedisModuleCtx *rts_staticCtx;
 
+/* Guarded access to rts_staticCtx from non-main threads and from main-thread
+ * remote task execution. */
+void RTS_StaticCtxLock(void);
+void RTS_StaticCtxUnlock(void);
+
 // Create a new TS key, if key is NULL the function will open the key, the user must call to
 // RedisModule_CloseKey The function assumes the key doesn't exists
 int CreateTsKey(RedisModuleCtx *ctx,

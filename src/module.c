@@ -37,6 +37,7 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <pthread.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
@@ -115,6 +116,45 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
 bool isReshardTrimming = false, isAsmTrimming = false, isAsmImporting = false;
+
+/* rts_staticCtx is a detached thread-safe context. When used from background
+ * threads we must use RedisModule_ThreadSafeContextLock/Unlock.
+ *
+ * LibMR remote tasks can execute on the Redis main thread. On some Redis
+ * versions, calling RedisModule_ThreadSafeContextLock() from the main thread
+ * may crash. We still must prevent concurrent usage from background threads, so
+ * we guard all "thread-safe context" operations with an additional mutex. */
+static pthread_t rts_mainThreadId;
+static pthread_mutex_t rts_staticCtxMutex = PTHREAD_MUTEX_INITIALIZER;
+/* Re-entrancy guard: some code paths can indirectly free nested objects (e.g.
+ * MR_RecordFree() may trigger frees that also need the static ctx lock). If we
+ * take the mutex again from the same thread, we'll deadlock. */
+static __thread int rts_staticCtxLockDepth = 0;
+
+void RTS_StaticCtxLock(void) {
+    if (rts_staticCtxLockDepth++ > 0) {
+        return;
+    }
+    pthread_mutex_lock(&rts_staticCtxMutex);
+    if (!pthread_equal(pthread_self(), rts_mainThreadId)) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
+}
+
+void RTS_StaticCtxUnlock(void) {
+    if (rts_staticCtxLockDepth <= 0) {
+        /* Unbalanced lock/unlock; avoid underflow and crashing. */
+        rts_staticCtxLockDepth = 0;
+        return;
+    }
+    if (--rts_staticCtxLockDepth > 0) {
+        return;
+    }
+    if (!pthread_equal(pthread_self(), rts_mainThreadId)) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
+    pthread_mutex_unlock(&rts_staticCtxMutex);
+}
 
 static void FreeConfigAndStaticCtx(void) {
     FreeConfig();
@@ -1736,6 +1776,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
+
+    rts_mainThreadId = pthread_self();
 
     if (RedisModule_RegisterDefragFunc == NULL)
         RedisModule_RegisterDefragFunc = Stub_RegisterDefragFunc;
