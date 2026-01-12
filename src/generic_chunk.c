@@ -143,9 +143,11 @@ long long MR_SerializationCtxReadLongLongWrapper(ReaderSerializationCtx *sctx) {
 }
 
 char *MR_ownedBufferFrom(ReaderSerializationCtx *sctx, size_t *len) {
-    MRError *err;
+    MRError *err = NULL;
     size_t size = 0;
     const char *temp = MR_SerializationCtxReadBuffer(sctx, &size, &err);
+    if (err)
+        return NULL;
     char *ret = malloc(size);
     memcpy(ret, temp, size);
     if (len != NULL) {
