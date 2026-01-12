@@ -31,7 +31,10 @@ def test_resp3(env):
             b'retentionTime': 0, b'chunkCount': 2, b'chunkSize': 128,
             b'chunkType': b'compressed',
             b'duplicatePolicy': default_duplicate_policy,
+            b'labels': {b'name': b'mush'},
+            b'sourceKey': None,
             b'rules': {b't2{1}': [10, b'COUNT', 0]},
+            b'keySelfName': b't1{1}',
             b'Chunks':
                 [
                     {

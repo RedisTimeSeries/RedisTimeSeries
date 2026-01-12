@@ -45,6 +45,8 @@ def test_rdb():
 
         assert _get_ts_info(r, key_name).rules == []
 
+        assert _get_ts_info(r, '{}_agg_avg_10'.format(key_name)).sourceKey == None
+
 
 def test_rdb_aggregation_context():
     """
@@ -139,11 +141,14 @@ def test_533_dump_rules():
         r.execute_command('TS.CREATE', key2)
         r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'avg', 60000)
 
+        assert _get_ts_info(r, key2).sourceKey.decode() == key1
         assert len(_get_ts_info(r, key1).rules) == 1
 
         data = r.execute_command('DUMP', key1)
         r.execute_command('DEL', key1)
         r.execute_command('restore', key1, 0, data)
 
+        assert _get_ts_info(r, key1).sourceKey == None
         assert len(_get_ts_info(r, key1).rules) == 0
+        assert _get_ts_info(r, key2).sourceKey == None
         assert len(_get_ts_info(r, key2).rules) == 0
