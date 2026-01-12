@@ -141,8 +141,12 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     const bool reply_map = _ReplyMap(ctx);
 
-    const bool is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
-    RedisModule_ReplyWithMapOrArray(ctx, (is_debug + 12) * 2, true);
+    const int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
+    if (is_debug) {
+        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true); // 16 fields x 2 (key + value)
+    } else {
+        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true); // 14 fields x 2 (key + value)
+    }
 
     long long skippedSamples;
     long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
@@ -168,6 +172,16 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_ReplyWithSimpleString(ctx, DuplicatePolicyToString(series->duplicatePolicy));
     } else {
         RedisModule_ReplyWithNull(ctx);
+    }
+
+    RedisModule_ReplyWithSimpleString(ctx, "labels");
+    ReplyWithSeriesLabels(ctx, series);
+
+    RedisModule_ReplyWithSimpleString(ctx, "sourceKey");
+    if (series->srcKey == NULL) {
+        RedisModule_ReplyWithNull(ctx);
+    } else {
+        RedisModule_ReplyWithString(ctx, series->srcKey);
     }
 
     RedisModule_ReplyWithSimpleString(ctx, "rules");
@@ -200,6 +214,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, ">", "", 0);
         Chunk_t *chunk = NULL;
         int chunkCount = 0;
+        RedisModule_ReplyWithSimpleString(ctx, "keySelfName");
+        RedisModule_ReplyWithString(ctx, series->keyName);
         RedisModule_ReplyWithSimpleString(ctx, "Chunks");
         RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
         while (RedisModule_DictNextC(iter, NULL, (void *)&chunk)) {

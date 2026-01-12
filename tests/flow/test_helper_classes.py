@@ -29,7 +29,8 @@ def _get_series_value(ts_key_result):
 def _assert_alter_cmd(r, key, start_ts, end_ts,
                       expected_data=None,
                       expected_retention=None,
-                      expected_chunk_size=None):
+                      expected_chunk_size=None,
+                      expected_labels=None):
     """
     Test modifications didn't change the data
     :param r: Redis instance
@@ -47,6 +48,8 @@ def _assert_alter_cmd(r, key, start_ts, end_ts,
         assert expected_data == actual_data
     if expected_retention:
         assert expected_retention == actual_result.retention_msecs
+    if expected_labels:
+        assert list_to_dict(expected_labels) == actual_result.labels
     if expected_chunk_size:
         assert expected_chunk_size == actual_result.chunk_size_bytes
 
@@ -158,6 +161,8 @@ def _get_ts_info(redis, key, *args):
 
 class TSInfo(object):
     rules = []
+    labels = []
+    sourceKey = None
     chunk_count = None
     memory_usage = None
     total_samples = None
@@ -169,11 +174,14 @@ class TSInfo(object):
     chunk_size_bytes = None
     chunk_type = None
     chunks = None
+    key_SelfName = None
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
         if b'rules' in response: self.rules = response[b'rules']
+        if b'sourceKey' in response: self.sourceKey = response[b'sourceKey']
         if b'chunkCount' in response: self.chunk_count = response[b'chunkCount']
+        if b'labels' in response: self.labels = list_to_dict(response[b'labels'])
         if b'memoryUsage' in response: self.memory_usage = response[b'memoryUsage']
         if b'totalSamples' in response: self.total_samples = response[b'totalSamples']
         if b'retentionTime' in response: self.retention_msecs = response[b'retentionTime']
@@ -184,11 +192,13 @@ class TSInfo(object):
         if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
         if b'chunkType' in response: self.chunk_type = response[b'chunkType']
         if b'Chunks' in response: self.chunks = response[b'Chunks']
+        if b'keySelfName' in response: self.key_SelfName = response[b'keySelfName']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
             return NotImplemented
         return self.rules == other.rules and \
+               self.sourceKey == other.sourceKey and \
                self.chunk_count == other.chunk_count and \
                self.total_samples == other.total_samples and \
                self.retention_msecs == other.retention_msecs and \
@@ -197,12 +207,13 @@ class TSInfo(object):
                self.ignore_max_time_diff == other.ignore_max_time_diff and \
                self.ignore_max_val_diff == other.ignore_max_val_diff and \
                self.chunk_size_bytes == other.chunk_size_bytes and \
-               self.chunks == other.chunks
+               self.chunks == other.chunks and \
+               self.key_SelfName == other.key_SelfName
 
     def __str__(self):
-        return f"Info rules:{self.rules} chunk_count:{self.chunk_count} " \
+        return f"Info rules:{self.rules} sourceKey:{self.sourceKey} chunk_count:{self.chunk_count} " \
             + f"memory_usage:{self.memory_usage} total_samples:{self.total_samples} " \
                 + f"retention_msecs:{self.retention_msecs} last_time_stamp:{self.last_time_stamp} " \
                     + f"first_time_stamp:{self.first_time_stamp} ignore_max_time_diff:{self.ignore_max_time_diff} " \
                         + f"ignore_max_val_diff:{self.ignore_max_val_diff} chunk_size_bytes:{self.chunk_size_bytes} " \
-                            + f"chunk_type:{self.chunk_type} chunks:{self.chunks}"
+                            + f"chunk_type:{self.chunk_type} chunks:{self.chunks} key_SelfName:{self.key_SelfName}"
