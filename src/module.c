@@ -37,6 +37,7 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
@@ -115,6 +116,14 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
 RedisModuleType *SeriesType;
 RedisModuleCtx *rts_staticCtx; // global redis ctx
 bool isReshardTrimming = false, isAsmTrimming = false, isAsmImporting = false;
+
+// Monotonically increasing identifier for the module's view of cluster slot ownership / ASM state.
+// Bumped on any sharding/ASM event that can change slot coverage decisions.
+_Atomic uint64_t RTS_clusterViewEpoch = 1;
+
+static inline void RTS_BumpClusterViewEpoch(void) {
+    atomic_fetch_add_explicit(&RTS_clusterViewEpoch, 1, memory_order_relaxed);
+}
 
 static void FreeConfigAndStaticCtx(void) {
     FreeConfig();
@@ -1532,15 +1541,18 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
             RedisModule_Log(
                 ctx, "notice", "%s", "Got slot range change event, enter trimming phase.");
             isReshardTrimming = true;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
             RedisModule_Log(
                 ctx, "notice", "%s", "Got trimming started event, enter trimming phase.");
             isReshardTrimming = true;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
             RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
             isReshardTrimming = false;
+            RTS_BumpClusterViewEpoch();
             break;
         default:
             RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
@@ -1561,6 +1573,7 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
                             "Cluster ASM import started (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = true;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_FAILED:
             RedisModule_Log(ctx,
@@ -1568,6 +1581,7 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
                             "Cluster ASM import failed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_COMPLETED:
             RedisModule_Log(ctx,
@@ -1575,30 +1589,35 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
                             "Cluster ASM import completed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_STARTED:
             RedisModule_Log(ctx,
                             "notice",
                             "Cluster ASM migrate started (subevent=%" PRIu64 ") received.",
                             subevent);
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_FAILED:
             RedisModule_Log(ctx,
                             "notice",
                             "Cluster ASM migrate failed (subevent=%" PRIu64 ") received.",
                             subevent);
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_COMPLETED:
             RedisModule_Log(ctx,
                             "notice",
                             "Cluster ASM migrate completed (subevent=%" PRIu64 ") received.",
                             subevent);
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_MODULE_PROPAGATE:
             RedisModule_Log(ctx,
                             "notice",
                             "Cluster ASM module propagate (subevent=%" PRIu64 ") received.",
                             subevent);
+            RTS_BumpClusterViewEpoch();
             break;
         default:
             RedisModule_Log(rts_staticCtx,
@@ -1625,6 +1644,7 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
                             "Cluster ASM trim started (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmTrimming = true;
+            RTS_BumpClusterViewEpoch();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_TRIM_COMPLETED:
             RedisModule_Log(ctx,
@@ -1632,6 +1652,7 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
                             "Cluster ASM trim completed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmTrimming = false;
+            RTS_BumpClusterViewEpoch();
             break;
         // Since we subscribed to keyspace event REDISMODULE_NOTIFY_KEY_TRIMMED
         // an active trimming will be used so no need to handle the

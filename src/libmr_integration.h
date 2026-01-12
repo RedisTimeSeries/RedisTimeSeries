@@ -1,6 +1,7 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "module.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -71,9 +72,33 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
+typedef struct SlotRangeRecord
+{
+    uint16_t start;
+    uint16_t end;
+} SlotRangeRecord;
+
+// Wrapper record used for shard->coordinator internal communication. It carries a stable view id
+// and the shard's slot ranges, alongside the actual mapper payload.
+typedef struct ShardEnvelopeRecord
+{
+    Record base;
+    uint64_t clusterViewEpoch;
+    size_t slotRangesCount;
+    SlotRangeRecord *slotRanges;
+    Record *payload;
+} ShardEnvelopeRecord;
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
+MRRecordType *GetShardEnvelopeRecordType();
+
+uint64_t ShardEnvelopeRecord_GetEpoch(const ShardEnvelopeRecord *r);
+size_t ShardEnvelopeRecord_GetSlotRangesCount(const ShardEnvelopeRecord *r);
+const SlotRangeRecord *ShardEnvelopeRecord_GetSlotRanges(const ShardEnvelopeRecord *r);
+Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r);
+
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
