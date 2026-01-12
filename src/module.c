@@ -139,13 +139,13 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    bool reply_map = _ReplyMap(ctx);
+    const bool reply_map = _ReplyMap(ctx);
 
-    int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
+    const int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true);
+        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true); // 16 fields x 2 (key + value)
     } else {
-        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true);
+        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true); // 14 fields x 2 (key + value)
     }
 
     long long skippedSamples;
