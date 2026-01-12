@@ -259,8 +259,9 @@ def test_module_config_api_is_unused_on_old_versions(env):
         # warnings should be emitted.
         env.expectEqual(len(conn.execute_command('CONFIG', 'GET', 'ts-global-user')), 0)
 
-    assert is_line_in_server_log(env, f"{arg[0]} is deprecated")
-    assert is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
+    # No deprecation warnings should be emitted on older versions.
+    assert not is_line_in_server_log(env, ' is deprecated')
+    assert not is_line_in_server_log(env, 'Deprecated load-time configuration options were used')
 
 def test_module_config_api_is_used_on_recent_redis_versions():
     '''
@@ -347,7 +348,11 @@ def test_module_config_takes_precedence_over_module_arguments():
     leads to the latter taking precedence.
     '''
     env = Env(noLog=False)
-    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+    # This test is intended for a single Redis instance (non-cluster).
+    # In CI we also run RLTest with `--env oss-cluster` (Redis Cluster mode),
+    # where RLTest's cluster detection can be inconsistent and this test may
+    # hang waiting for conditions that never happen.
+    if is_redis_version_lower_than(env, '7.0') or env.isCluster() or os.getenv('OSS_CLUSTER') == '1':
         env.skip()
     skip_on_rlec()
 
