@@ -226,6 +226,12 @@ if [[ -n $CI || -n $GITHUB_ACTIONS ]]; then
 	# NOTE: We keep this disabled by default in CI because some tests (e.g.
 	# "extensive") legitimately take a long time on slower runners.
 	TEST_TIMEOUT_SEC=${TEST_TIMEOUT_SEC:-0}
+	# OSS cluster runs are more prone to "hang between tests / env teardown" issues.
+	# For QUICK=1 CI jobs, a moderate per-test timeout is a good safety net and
+	# should not impact legitimate long-running suites.
+	if [[ ${OSS_CLUSTER:-0} == 1 && ${QUICK:-0} == 1 && ${TEST_TIMEOUT_SEC:-0} == 0 ]]; then
+		TEST_TIMEOUT_SEC=600
+	fi
 	# Default hard timeout for the whole RLTest invocation (seconds) unless overridden.
 	RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-3600}
 	# Avoid port collisions between repeated RLTest invocations in the same job.
@@ -583,7 +589,8 @@ if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
 	# starvation and make a single test appear "stuck" for a long time. Cap the
 	# default parallelism in CI unless explicitly overridden by PARALLEL>1.
 	if [[ ( -n $CI || -n $GITHUB_ACTIONS ) && ${OSS_CLUSTER:-0} == 1 && $PARALLEL == 1 ]]; then
-		oss_cluster_parallel_cap="${OSS_CLUSTER_PARALLELISM:-4}"
+		# Default to a conservative cap for stability; can be increased via OSS_CLUSTER_PARALLELISM.
+		oss_cluster_parallel_cap="${OSS_CLUSTER_PARALLELISM:-2}"
 		if [[ $parallel -gt $oss_cluster_parallel_cap ]]; then
 			parallel="$oss_cluster_parallel_cap"
 		fi
