@@ -126,8 +126,15 @@ bool isReshardTrimming = false, isAsmTrimming = false, isAsmImporting = false;
  * we guard all "thread-safe context" operations with an additional mutex. */
 static pthread_t rts_mainThreadId;
 static pthread_mutex_t rts_staticCtxMutex = PTHREAD_MUTEX_INITIALIZER;
+/* Re-entrancy guard: some code paths can indirectly free nested objects (e.g.
+ * MR_RecordFree() may trigger frees that also need the static ctx lock). If we
+ * take the mutex again from the same thread, we'll deadlock. */
+static __thread int rts_staticCtxLockDepth = 0;
 
 void RTS_StaticCtxLock(void) {
+    if (rts_staticCtxLockDepth++ > 0) {
+        return;
+    }
     pthread_mutex_lock(&rts_staticCtxMutex);
     if (!pthread_equal(pthread_self(), rts_mainThreadId)) {
         RedisModule_ThreadSafeContextLock(rts_staticCtx);
@@ -135,6 +142,14 @@ void RTS_StaticCtxLock(void) {
 }
 
 void RTS_StaticCtxUnlock(void) {
+    if (rts_staticCtxLockDepth <= 0) {
+        /* Unbalanced lock/unlock; avoid underflow and crashing. */
+        rts_staticCtxLockDepth = 0;
+        return;
+    }
+    if (--rts_staticCtxLockDepth > 0) {
+        return;
+    }
     if (!pthread_equal(pthread_self(), rts_mainThreadId)) {
         RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     }
