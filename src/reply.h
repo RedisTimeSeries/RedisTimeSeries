@@ -16,8 +16,8 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool devide_by_two);
-void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool devide_by_two);
+void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two);
+void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two);
 void RedisModule_ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len);
 void RedisModule_ReplyWithSetOrArray(RedisModuleCtx *ctx, long len);
 

@@ -31,17 +31,17 @@ int RedisModule_ReplyWithDoubleOrString(RedisModuleCtx *ctx, double d) {
     }
 }
 
-void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool devide_by_two) {
+void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two) {
     if (_ReplyMap(ctx)) {
-        RedisModule_ReplySetMapLength(ctx, devide_by_two ? len / 2 : len);
+        RedisModule_ReplySetMapLength(ctx, divide_by_two ? len / 2 : len);
     } else {
         RedisModule_ReplySetArrayLength(ctx, len);
     }
 }
 
-void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool devide_by_two) {
+void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two) {
     if (_ReplyMap(ctx)) {
-        RedisModule_ReplyWithMap(ctx, devide_by_two ? len / 2 : len);
+        RedisModule_ReplyWithMap(ctx, divide_by_two ? len / 2 : len);
     } else {
         RedisModule_ReplyWithArray(ctx, len);
     }

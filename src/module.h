@@ -145,6 +145,8 @@ int CreateTsKey(RedisModuleCtx *ctx,
 
 bool CheckVersionForBlockedClientMeasureTime();
 
+int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
+
 extern int persistence_in_progress;
 
 #endif // MODULE_H

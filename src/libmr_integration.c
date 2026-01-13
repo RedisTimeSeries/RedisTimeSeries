@@ -155,7 +155,7 @@ static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
     MR_SerializationCtxWriteBuffer(sctx, value, value_len + 1, error);
 }
 
-static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCtx *sctx,
+static RedisModuleString *SerializationCtxReadRedisString(ReaderSerializationCtx *sctx,
                                                            MRError **error) {
     size_t len;
     const char *temp = MR_SerializationCtxReadBuffer(sctx, &len, error);
@@ -212,7 +212,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof *predicates->limitLabels);
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
-        predicates->limitLabels[i] = SerializationCtxReadeRedisString(sctx, error);
+        predicates->limitLabels[i] = SerializationCtxReadRedisString(sctx, error);
         if (unlikely(expect_resp && *error)) {
             goto err;
         }
@@ -229,7 +229,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         }
 
         // decode key
-        predicate->key = SerializationCtxReadeRedisString(sctx, error);
+        predicate->key = SerializationCtxReadRedisString(sctx, error);
         if (unlikely(expect_resp && *error)) {
             goto err;
         }
@@ -242,11 +242,14 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
 
         predicate->valuesList = calloc(predicate->valueListCount, sizeof *predicate->valuesList);
         for (int value_index = 0; value_index < predicate->valueListCount; value_index++) {
-            predicate->valuesList[value_index] = SerializationCtxReadeRedisString(sctx, error);
+            predicate->valuesList[value_index] = SerializationCtxReadRedisString(sctx, error);
             if (unlikely(expect_resp && *error)) {
                 goto err;
             }
         }
+    }
+    if (unlikely(expect_resp && *error)) {
+        goto err;
     }
 
     return predicates;
@@ -618,7 +621,47 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
     return ret;
 }
 
-int register_rg(RedisModuleCtx *ctx, long long numThreads) {
+void TS_INTERNAL_SLOT_RANGES(struct RedisModuleCtx *ctx, const char *sender_id, void*) {
+    RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
+    RedisModule_ReplyWithArray(ctx, sra->num_ranges);
+    for (int i = 0; i < sra->num_ranges; i++) {
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges->start);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges->end);
+    }
+}
+
+void TS_INTERNAL_MRANGE(struct RedisModuleCtx *ctx, const char *sender_id, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    RedisModuleDict *qi = QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+
+    MRangeArgs mrangeArgs;
+    mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
+    mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
+    mrangeArgs.rangeArgs.latest = queryArg->latest;
+    mrangeArgs.rangeArgs.count = -1LL;
+    mrangeArgs.rangeArgs.aggregationArgs.empty = false;
+    mrangeArgs.rangeArgs.aggregationArgs.timeDelta = 0;
+    mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
+    mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = NULL;
+    mrangeArgs.rangeArgs.filterByValueArgs.hasValue = false;
+    mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
+    mrangeArgs.rangeArgs.alignment = DefaultAlignment;
+    mrangeArgs.rangeArgs.timestampAlignment = 0;
+    mrangeArgs.withLabels = queryArg->withLabels;
+    mrangeArgs.numLimitLabels = queryArg->limitLabelsSize;
+    for (int i = 0; i < mrangeArgs.numLimitLabels; i++)
+        mrangeArgs.limitLabels[i] = queryArg->limitLabels[i];
+    mrangeArgs.queryPredicates = queryArg->predicates;
+    mrangeArgs.groupByLabel = NULL;
+    mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
+    mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
+    mrangeArgs.reverse = false;
+        
+    replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+}
+
+int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
         return REDISMODULE_ERR;
@@ -731,6 +774,8 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", TS_INTERNAL_SLOT_RANGES, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", TS_INTERNAL_MRANGE, QueryPredicatesType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
@@ -1008,12 +1053,12 @@ void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     SeriesRecord *series = (SeriesRecord *)MR_RecordCreate(SeriesRecordType, sizeof(*series));
     series->chunkType = MR_SerializationCtxReadLongLong(sctx, error);
     series->funcs = GetChunkClass(series->chunkType);
-    series->keyName = SerializationCtxReadeRedisString(sctx, error);
+    series->keyName = SerializationCtxReadRedisString(sctx, error);
     series->labelsCount = MR_SerializationCtxReadLongLong(sctx, error);
     series->labels = calloc(series->labelsCount, sizeof(Label));
     for (int i = 0; i < series->labelsCount; i++) {
-        series->labels[i].key = SerializationCtxReadeRedisString(sctx, error);
-        series->labels[i].value = SerializationCtxReadeRedisString(sctx, error);
+        series->labels[i].key = SerializationCtxReadRedisString(sctx, error);
+        series->labels[i].value = SerializationCtxReadRedisString(sctx, error);
     }
 
     series->chunkCount = MR_SerializationCtxReadLongLong(sctx, error);

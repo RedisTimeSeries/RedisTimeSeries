@@ -18,8 +18,8 @@ typedef struct MData
     bool is_mget;
 } MData;
 
-int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries);
-int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse);
+int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries);
+int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse);
 
 #endif // REDIS_TIMESERIES_CLEAN_MR_COMMANDS_H
