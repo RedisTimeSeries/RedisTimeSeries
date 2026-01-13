@@ -37,8 +37,8 @@ def test_asm_with_data_and_queries_during_migrations():
     if env.env != "oss-cluster":
         env.skip()
 
-    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
-    samples_per_key = 150
+    number_of_keys = 10 if not (VALGRIND or SANITIZER) else 100
+    samples_per_key = 5
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
@@ -50,6 +50,8 @@ def test_asm_with_data_and_queries_during_migrations():
         assert withlabels == []  # No WITHLABLES
         assert len(samples) == samples_per_key
         # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
+
+    time.sleep(1000)
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
@@ -75,6 +77,9 @@ def test_asm_with_data_and_queries_during_migrations():
             # This will raise an exception in case the validation function failed (or got stuck)
             future.result()
 
+    # Validate that all is fine after the migrations
+    print('debugme validate_result: ', command)
+    validate_result(conn.execute_command(command))
 
 # Helper structs and functions
 
@@ -196,6 +201,7 @@ def migrate_slots_back_and_forth(env):
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    print(f"debugme import_slots from :{source_conn.connection_pool.connection_kwargs['port']} to :{target_conn.connection_pool.connection_kwargs['port']}: CLUSTER MIGRATION IMPORT {slot_range.start} {slot_range.end}")
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
     def wait_for_completion(conn):

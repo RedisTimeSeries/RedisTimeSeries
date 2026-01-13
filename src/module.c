@@ -298,7 +298,7 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                        "lua, or when blocking is not allowed");
             return REDISMODULE_OK;
         }
-        TSDB_queryindex_RG(ctx, queries);
+        TSDB_queryindex_MR(ctx, queries);
         QueryPredicateList_Free(queries);
     } else {
         _TSDB_queryindex_impl(ctx, queries);
@@ -369,14 +369,14 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
             continue;
         }
 
-        ResultSet_AddSerie(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
+        ResultSet_AddSeries(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
         RedisModule_CloseKey(key);
     }
     RedisModule_DictIteratorStop(iter);
 
     // todo: this is duplicated in resultset.c
     // Apply the reducer
-    ResultSet_ApplyReducer(ctx, resultset, &args->rangeArgs, &args->gropuByReducerArgs);
+    ResultSet_ApplyReducer(ctx, resultset, &args->rangeArgs, &args->groupByReducerArgs);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
     RangeArgs minimizedArgs = args->rangeArgs;
@@ -401,9 +401,7 @@ exit:
 }
 
 // Previous multirange reply logic ( unchanged )
-static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
-                                    RedisModuleDict *result,
-                                    const MRangeArgs *args) {
+int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     RedisModuleString *currentKey;
     long long replylen = 0;
@@ -482,7 +480,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
     MRangeArgs args;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
-        return REDISMODULE_OK;
+        return REDISMODULE_ERR;
     }
     args.reverse = rev;
 
@@ -510,6 +508,15 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     return result;
 }
 
+int TSDB_debugme(RedisModuleCtx *ctx, Execution *e) {
+    RedisModule_AutoMemory(ctx);
+
+    RedisModuleDict *resultSeries = QueryIndex(ctx, NULL, 0, NULL);
+
+    int result = REDISMODULE_OK;
+    return result;
+}
+
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
@@ -525,7 +532,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                        "lua, or when blocking is not allowed");
             return REDISMODULE_OK;
         }
-        return TSDB_mrange_RG(ctx, argv, argc, false);
+        return TSDB_mrange_MR(ctx, argv, argc, false);
     }
 
     return TSDB_generic_mrange(ctx, argv, argc, false);
@@ -546,7 +553,7 @@ int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                        "lua, or when blocking is not allowed");
             return REDISMODULE_OK;
         }
-        return TSDB_mrange_RG(ctx, argv, argc, true);
+        return TSDB_mrange_MR(ctx, argv, argc, true);
     }
     return TSDB_generic_mrange(ctx, argv, argc, true);
 }
@@ -1252,7 +1259,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                                        "lua, or when blocking is not allowed");
             return REDISMODULE_OK;
         }
-        return TSDB_mget_RG(ctx, argv, argc);
+        return TSDB_mget_MR(ctx, argv, argc);
     }
 
     RedisModule_AutoMemory(ctx);
@@ -1793,7 +1800,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     initGlobalCompactionFunctions();
 
-    if (register_rg(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
+    if (register_mr(ctx, TSGlobalConfig.numThreads) != REDISMODULE_OK) {
         FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;

@@ -79,7 +79,7 @@ def test_mget_cmd():
         actual_result = r1.execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'a=1')
         assert sorted(expected_result_withlabels) == decode_if_needed(sorted(actual_result))
 
-        # expect to recieve only some labels
+        # expect to receive only some labels
         expected_labels = [["metric", "cpu"], ["new_label", None]]
         expected_result_withlabels = [
             [keys[0], expected_labels, [time_stamp, str(values[0])]],
