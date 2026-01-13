@@ -467,3 +467,41 @@ def test_compaction_rules_with_nan():
                 r.execute_command('DEL', key)
                 r.execute_command('DEL', agg_key)
 
+
+def test_compaction_rules_nan_only_bucket():
+    """
+    Verify compaction rules correctly handle buckets containing ONLY NaN values.
+    """
+    import math
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        key = 'src_nan_only{abc}'
+        agg_list = ['max', 'min', 'sum', 'avg', 'range', 'std.p', 'std.s', 'var.p', 'var.s', 'first', 'last']
+        
+        for agg in agg_list:
+            agg_key = f'{key}_agg_{agg}_10'
+            
+            r.execute_command('TS.CREATE', key)
+            r.execute_command('TS.CREATE', agg_key)
+            r.execute_command('TS.CREATERULE', key, agg_key, 'AGGREGATION', agg, 10)
+            
+            # Add ONLY NaN values to bucket 0-9
+            r.execute_command('TS.ADD', key, 1, 'nan')
+            r.execute_command('TS.ADD', key, 5, 'nan')
+            r.execute_command('TS.ADD', key, 9, 'nan')
+            
+            # Close bucket 0-9 by adding a valid sample to bucket 10-19
+            r.execute_command('TS.ADD', key, 15, 100)
+            
+            # Get the compaction result for bucket 0-9
+            actual_result = r.execute_command('TS.RANGE', agg_key, 0, 9)
+            
+            # For a bucket with ONLY NaN values, the result should match TS.RANGE behavior
+            # with aggregation on NaN-only data.
+            expected_result = r.execute_command('TS.RANGE', key, 0, 9, 'AGGREGATION', agg, 10)
+            
+            env.assertEqual(expected_result, actual_result,
+                           message=f"NaN-only bucket mismatch for {agg}: expected {expected_result}, got {actual_result}")
+            
+            r.execute_command('DEL', key)
+            r.execute_command('DEL', agg_key)

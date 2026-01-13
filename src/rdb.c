@@ -88,6 +88,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         destKey = NULL;
 
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
+
+        rule->validSamplesInBucket =
+            Load_IOError_OrDefault(io, err, NULL, encver >= TS_NAN_SUPPORT_VER, 0);
+
         rule->nextRule = series->rules;
         series->rules = rule;
 
@@ -184,6 +188,7 @@ void series_rdb_save(RedisModuleIO *io, void *value) {
             RedisModule_SaveUnsigned(io, rule->timestampAlignment);
             RedisModule_SaveUnsigned(io, rule->aggType);
             RedisModule_SaveUnsigned(io, rule->startCurrentTimeBucket);
+            RedisModule_SaveUnsigned(io, rule->validSamplesInBucket);
             rule->aggClass->writeContext(rule->aggContext, io);
             rule = rule->nextRule;
         }

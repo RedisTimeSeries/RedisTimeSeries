@@ -55,6 +55,7 @@ typedef struct CompactionRule
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket; // Beware that the first bucket is alway starting in 0 no
                                         // matter the alignment
+    uint64_t validSamplesInBucket;      // Count of valid samples in current bucket
 } CompactionRule;
 
 typedef struct Series

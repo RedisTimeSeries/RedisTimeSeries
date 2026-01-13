@@ -627,17 +627,20 @@ static void handleCompaction(RedisModuleCtx *ctx,
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
-        double aggVal;
-        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
-            RedisModule_NotifyKeyspaceEvent(
-                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        if (rule->validSamplesInBucket > 0) {
+            double aggVal;
+            if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+                internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+                RedisModule_NotifyKeyspaceEvent(
+                    ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+            }
         }
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
         }
         rule->aggClass->resetContext(rule->aggContext);
+        rule->validSamplesInBucket = 0;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
@@ -653,6 +656,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
     }
     if (rule->aggClass->isValueValid(value)) {
         rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+        rule->validSamplesInBucket++;
     }
 }
 
