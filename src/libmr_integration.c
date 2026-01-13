@@ -255,8 +255,8 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
         }
 
         ranges = realloc(ranges, sizeof(*ranges) * (rangesCount + 1));
-        ranges[rangesCount++] = (SlotRangeRecord){ .start = (uint16_t)start_ll,
-                                                   .end = (uint16_t)end_ll };
+        ranges[rangesCount++] =
+            (SlotRangeRecord){ .start = (uint16_t)start_ll, .end = (uint16_t)end_ll };
     }
 
     RedisModule_FreeCallReply(slots_reply);

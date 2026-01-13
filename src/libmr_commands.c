@@ -42,9 +42,9 @@ static bool validate_and_accumulate_envelope(RedisModuleCtx *rctx,
         acc->epoch = epoch;
         acc->epoch_set = true;
     } else if (acc->epoch != epoch) {
-        RedisModule_ReplyWithError(
-            rctx,
-            "Multi-shard command failed due to cluster topology change during execution. Please retry.");
+        RedisModule_ReplyWithError(rctx,
+                                   "Multi-shard command failed due to cluster topology change "
+                                   "during execution. Please retry.");
         return false;
     }
 
@@ -83,9 +83,9 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, const SlotRang
         const int end = (int)tmp[i].end;
         if (start != expected) {
             free(tmp);
-            RedisModule_ReplyWithError(
-                rctx,
-                "Multi-shard command failed due to cluster topology change during execution. Please retry.");
+            RedisModule_ReplyWithError(rctx,
+                                       "Multi-shard command failed due to cluster topology change "
+                                       "during execution. Please retry.");
             return false;
         }
         if (end < start) {
@@ -99,9 +99,9 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, const SlotRang
     }
     free(tmp);
     if (expected != (1 << 14)) {
-        RedisModule_ReplyWithError(
-            rctx,
-            "Multi-shard command failed due to cluster topology change during execution. Please retry.");
+        RedisModule_ReplyWithError(rctx,
+                                   "Multi-shard command failed due to cluster topology change "
+                                   "during execution. Please retry.");
         return false;
     }
 
@@ -190,10 +190,8 @@ static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_env->recordType->type.type);
+            RedisModule_Log(
+                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
             continue;
         }
 
@@ -317,10 +315,8 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_env->recordType->type.type);
+            RedisModule_Log(
+                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
             continue;
         }
 
@@ -455,10 +451,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_env->recordType->type.type);
+            RedisModule_Log(
+                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
             continue;
         }
         Record *raw_listRecord = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
