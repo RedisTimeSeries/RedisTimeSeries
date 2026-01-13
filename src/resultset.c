@@ -216,21 +216,19 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
 
 bool ResultSet_AddSeries(TS_ResultSet *r, Series *series, const char *name) {
     size_t labelLen;
-    const char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey, &labelLen);
-    if (labelValue != NULL) {
-        int nokey;
-        TS_GroupList *labelGroup =
-            RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
-        if (nokey) {
-            labelGroup = GroupList_Create();
-            GroupList_SetLabelValue(labelGroup, labelValue);
-            RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
-        }
-        GroupList_AddSeries(labelGroup, series, name);
-        return true;
-    }
+    const char *labelValue = SeriesGetCStringLabelValue(series, r->labelkey, &labelLen);
+    if (labelValue == NULL)
+        return false;
 
-    return false;
+    int nokey;
+    TS_GroupList *labelGroup = RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
+    if (nokey) {
+        labelGroup = GroupList_Create();
+        GroupList_SetLabelValue(labelGroup, labelValue);
+        RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
+    }
+    GroupList_AddSeries(labelGroup, series, name);
+    return true;
 }
 
 void replyResultSet(RedisModuleCtx *ctx,
