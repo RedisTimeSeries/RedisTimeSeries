@@ -133,69 +133,6 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
     RedisModule_FreeThreadSafeContext(_rctx);
 }
 
-static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_envelope(rctx, &acc, env)) {
-            SlotRangeAccum_Free(&acc);
-            goto __done;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload(env);
-        if (payload->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected payload record type: %s",
-                            payload->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)payload);
-    }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
-        SlotRangeAccum_Free(&acc);
-        goto __done;
-    }
-    RedisModule_ReplyWithSet(rctx, total_len);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-
-        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
-        if (payload->recordType != GetListRecordType()) {
-            continue;
-        }
-        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)payload, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    SlotRangeAccum_Free(&acc);
-    RTS_UnblockClient(bc, rctx);
-}
-
 static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
