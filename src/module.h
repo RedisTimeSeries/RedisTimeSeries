@@ -10,7 +10,6 @@
 #define MODULE_H
 
 #include <stdbool.h>
-#include <stdint.h>
 
 #include "tsdb.h"
 
