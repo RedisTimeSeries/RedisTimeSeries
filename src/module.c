@@ -1202,6 +1202,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     double result = series->lastValue;
+    if (isnan(result)) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: cannot increment/decrement NaN value");
+    }
     RMUtil_StringToLower(argv[0]);
     bool isIncr = RMUtil_StringEqualsC(argv[0], "ts.incrby");
     if (isIncr) {
