@@ -59,7 +59,16 @@ def test_asm_with_data_and_queries_during_migrations():
 
     def validate_command_in_a_loop():
         while not done.is_set():
-            validate_result(conn.execute_command(command))
+            try:
+                validate_result(conn.execute_command(command))
+            except Exception as e:
+                # Safe failure mode: topology changed mid-execution, so the command asks for retry.
+                msg = str(e)
+                assert (
+                    "cluster topology change during execution" in msg
+                    or "missing slot ownership metadata" in msg
+                    or "Please retry" in msg
+                ), msg
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
