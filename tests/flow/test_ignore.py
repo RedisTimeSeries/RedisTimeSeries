@@ -256,7 +256,6 @@ def test_ignore_NaN():
         
         # Sanity check
         result = r.execute_command('TS.range', 'key1', 0, '+')
-        print(result)
         assert result == [
             [8, b'NaN'], [1001, b'1'], [1007, b'8'], [1009, b'15.0001']
         ]

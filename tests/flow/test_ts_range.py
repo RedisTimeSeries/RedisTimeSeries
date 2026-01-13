@@ -1724,6 +1724,68 @@ def test_ts_range_NaN_values():
                 assert len(result) == 1
                 assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
 
+
+def test_twa_nan_interpolation():
+    """
+    Test that TWA aggregation correctly skips NaN samples when fetching samples
+    before/after the query range for interpolation.    
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Test case 1: NaN sample immediately before query range should be skipped
+        # The valid sample before NaN should be used for interpolation instead
+        key1 = 'twa_nan_before{tag}'
+        r.execute_command('TS.CREATE', key1)
+        r.execute_command('TS.ADD', key1, 5, 5)    # Valid sample - should be used for interpolation
+        r.execute_command('TS.ADD', key1, 8, 'nan') # NaN right before range - should be skipped
+        r.execute_command('TS.ADD', key1, 12, 12)  # Sample in query range
+        r.execute_command('TS.ADD', key1, 18, 18)  # Sample in query range
+        r.execute_command('TS.ADD', key1, 25, 25)  # Sample after query range
+        
+        # Query range 10-20, bucket size 10
+        # TWA should interpolate from sample at ts=5 (value=5), not from NaN at ts=8
+        result = r.execute_command('TS.RANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
+        assert len(result) == 1
+        # The result should be a valid number (not NaN)
+        value = float(result[0][1])
+        assert not math.isnan(value), f"TWA should not use NaN for interpolation, got {value}"
+        
+        # Test case 2: Multiple NaN samples before query range - all should be skipped
+        key2 = 'twa_nan_multi_before{tag}'
+        r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.ADD', key2, 3, 3)    # Valid sample - should be used
+        r.execute_command('TS.ADD', key2, 5, 'nan')
+        r.execute_command('TS.ADD', key2, 7, 'nan')
+        r.execute_command('TS.ADD', key2, 9, 'nan') # Multiple NaNs before range
+        r.execute_command('TS.ADD', key2, 12, 12)  # In query range
+        r.execute_command('TS.ADD', key2, 18, 18)  # In query range
+        r.execute_command('TS.ADD', key2, 25, 25)  # After range
+        
+        result = r.execute_command('TS.RANGE', key2, 10, 20, 'AGGREGATION', 'twa', 10)
+        assert len(result) == 1
+        value = float(result[0][1])
+        assert not math.isnan(value), f"TWA should skip multiple NaN samples, got {value}"
+        
+        # Test case 3: NaN samples after query range should also be skipped
+        key3 = 'twa_nan_after{tag}'
+        r.execute_command('TS.CREATE', key3)
+        r.execute_command('TS.ADD', key3, 5, 5)
+        r.execute_command('TS.ADD', key3, 12, 12)
+        r.execute_command('TS.ADD', key3, 18, 18)
+        r.execute_command('TS.ADD', key3, 22, 'nan')  # NaN right after range
+        r.execute_command('TS.ADD', key3, 25, 25)     # Valid sample after NaN
+        
+        result = r.execute_command('TS.RANGE', key3, 10, 20, 'AGGREGATION', 'twa', 10)
+        assert len(result) == 1
+        value = float(result[0][1])
+        assert not math.isnan(value), f"TWA should skip NaN after range, got {value}"
+        
+        # Test case 4: REVRANGE should also handle NaN interpolation correctly
+        result = r.execute_command('TS.REVRANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
+        assert len(result) == 1
+        value = float(result[0][1])
+        assert not math.isnan(value), f"REVRANGE TWA should not use NaN for interpolation, got {value}"
+
+
 def test_ts_range_countNaN():
     """
     Validate COUNTNAN aggregation function

@@ -839,9 +839,13 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
-            if (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                aggregation->addPrevBucketLastSample(
-                    aggregationContext, sample.value, sample.timestamp);
+            // Skip non valid samples - they shouldn't be used for interpolation
+            while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+                if (aggregation->isValueValid(sample.value)) {
+                    aggregation->addPrevBucketLastSample(
+                        aggregationContext, sample.value, sample.timestamp);
+                    break;
+                }
             }
             sample_iterator->Close(sample_iterator);
         }

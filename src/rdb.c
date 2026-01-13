@@ -90,7 +90,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
         rule->validSamplesInBucket =
-            Load_IOError_OrDefault(io, err, NULL, encver >= TS_NAN_SUPPORT_VER, 0);
+            Load_IOError_OrDefault(io, err, NULL, encver >= TS_NAN_SUPPORT_VER, 1);
 
         rule->nextRule = series->rules;
         series->rules = rule;
