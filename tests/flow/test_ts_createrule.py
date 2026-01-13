@@ -393,3 +393,77 @@ def test_create_rule_non_empty_src_series(self):
         r.execute_command("ts.createrule", t1, t3, "AGGREGATION", "avg", 10, 5)
         res = r.execute_command("ts.range", t3, "-", "+", "LATEST")
         assert res == []
+
+def test_compaction_rules_with_nan():
+    """
+    Verify compaction rules correctly handle NaN values.
+    NaN values should be ignored by most aggregations, countnan/countall should count them.
+    Tests all aggregation types with both compressed and uncompressed chunks.
+    """
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        key = 'src_nan{abc}'
+        type_list = ['', 'uncompressed']
+        for chunk_type in type_list:
+            agg_list = ['sum', 'min', 'max', 'count', 'first', 'last', 'avg', 'range',
+                        'std.p', 'std.s', 'var.p', 'var.s']
+            for agg in agg_list:
+                agg_key = f'{key}_agg_{agg}_10'
+
+                r.execute_command('TS.CREATE', key, chunk_type)
+                r.execute_command('TS.CREATE', agg_key, chunk_type)
+                r.execute_command('TS.CREATERULE', key, agg_key, 'AGGREGATION', agg, 10)
+
+                # Add data with NaN values mixed in: bucket 0-9 has values 10, NaN, 20
+                r.execute_command('TS.ADD', key, 1, 10)
+                r.execute_command('TS.ADD', key, 2, 'nan')
+                r.execute_command('TS.ADD', key, 3, 20)
+
+                # Close bucket 0-9 by adding sample to bucket 10-19
+                r.execute_command('TS.ADD', key, 12, 'NaN')
+
+                # Verify: compaction rule result should match TS.RANGE aggregation (both ignore NaN)
+                expected_result = r.execute_command('TS.RANGE', key, 0, 9, 'AGGREGATION', agg, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, 9)
+                env.assertEqual(expected_result, actual_result,
+                               message=f"Mismatch for {agg} with {chunk_type or 'compressed'}: expected {expected_result}, got {actual_result}")
+
+                # Add more data to bucket 10-19
+                r.execute_command('TS.ADD', key, 15, 100)
+                r.execute_command('TS.ADD', key, 19, 120)
+
+                # Close bucket 10-19 by adding sample to bucket 20-29
+                r.execute_command('TS.ADD', key, 25, 200)
+
+                # Verify: compaction rule result should match TS.RANGE aggregation (both ignore NaN)
+                expected_result = r.execute_command('TS.RANGE', key, 0, 19, 'AGGREGATION', agg, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, 19)
+                env.assertEqual(expected_result, actual_result,
+                               message=f"Mismatch for {agg} with {chunk_type or 'compressed'}: expected {expected_result}, got {actual_result}")
+                r.execute_command('DEL', key)
+                r.execute_command('DEL', agg_key)
+
+            # Test countnan and countall separately (they have special NaN handling)
+            for agg in ['countnan', 'countall']:
+                agg_key = f'{key}_agg_{agg}_10'
+
+                r.execute_command('TS.CREATE', key, chunk_type)
+                r.execute_command('TS.CREATE', agg_key, chunk_type)
+                r.execute_command('TS.CREATERULE', key, agg_key, 'AGGREGATION', agg, 10)
+
+                # Add data with NaN values mixed in: bucket 0-9 has values 10, NaN, 20
+                r.execute_command('TS.ADD', key, 1, 10)
+                r.execute_command('TS.ADD', key, 2, 'nan')
+                r.execute_command('TS.ADD', key, 3, 20)
+
+                # Close bucket 0-9 by adding sample to bucket 10-19
+                r.execute_command('TS.ADD', key, 15, 100)
+
+                expected_result = r.execute_command('TS.RANGE', key, 0, 9, 'AGGREGATION', agg, 10)
+                actual_result = r.execute_command('TS.RANGE', agg_key, 0, 9)
+                env.assertEqual(expected_result, actual_result,
+                               message=f"Mismatch for {agg} with {chunk_type or 'compressed'}: expected {expected_result}, got {actual_result}")
+
+                r.execute_command('DEL', key)
+                r.execute_command('DEL', agg_key)
+

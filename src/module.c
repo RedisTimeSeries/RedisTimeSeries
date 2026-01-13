@@ -623,7 +623,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
 
-        if (rule->aggClass->type == TS_AGG_TWA) {
+        if (rule->aggClass->type == TS_AGG_TWA && rule->aggClass->isValueValid(value)) {
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
@@ -644,14 +644,16 @@ static void handleCompaction(RedisModuleCtx *ctx,
                                             currentTimestamp + rule->bucketDuration);
         }
 
-        if (rule->aggClass->type == TS_AGG_TWA) {
+        if (rule->aggClass->type == TS_AGG_TWA && rule->aggClass->isValueValid(last_sample.value)) {
             rule->aggClass->addPrevBucketLastSample(
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }
         rule->startCurrentTimeBucket = currentTimestampNormalized;
         RedisModule_CloseKey(key);
     }
-    rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    if (rule->aggClass->isValueValid(value)) {
+        rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    }
 }
 
 static inline bool filter_close_samples(DuplicatePolicy dp_policy,
