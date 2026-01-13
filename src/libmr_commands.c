@@ -151,13 +151,13 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
 static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
     }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    SlotRangeAccum acc = { 0 };
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -216,13 +216,13 @@ __done:
 static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
     }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    SlotRangeAccum acc = { 0 };
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -278,13 +278,13 @@ __done:
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
     }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    SlotRangeAccum acc = { 0 };
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -343,13 +343,13 @@ __done:
 static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
     }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    SlotRangeAccum acc = { 0 };
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -403,13 +403,13 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
     }
 
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
-    SlotRangeAccum acc = { 0 };
 
     TS_ResultSet *resultset = NULL;
 
