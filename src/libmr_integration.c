@@ -10,6 +10,7 @@
 #include "module.h"
 #include "query_language.h"
 #include "tsdb.h"
+#include <math.h>
 
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
@@ -354,7 +355,11 @@ Record *ListWithSample(uint64_t timestamp, double value, bool resp3) {
         return r;
     } else {
         char buf[MAX_VAL_LEN];
-        snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+        if (isnan(value)) {
+            strcpy(buf, "NaN");
+        } else {
+            snprintf(buf, MAX_VAL_LEN, "%.15g", value);
+        }
         ListRecord_Add(r, StringRecord_Create(strdup(buf), strlen(buf)));
     }
     return r;
