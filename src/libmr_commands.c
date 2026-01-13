@@ -16,8 +16,6 @@ typedef struct SlotRangeAccum
 {
     SlotRangeRecord *ranges;
     size_t count;
-    uint64_t epoch;
-    bool epoch_set;
 } SlotRangeAccum;
 
 static int cmp_slotrange_by_start(const void *a, const void *b) {
@@ -30,24 +28,11 @@ static void SlotRangeAccum_Free(SlotRangeAccum *acc) {
     free(acc->ranges);
     acc->ranges = NULL;
     acc->count = 0;
-    acc->epoch = 0;
-    acc->epoch_set = false;
 }
 
 static bool validate_and_accumulate_envelope(RedisModuleCtx *rctx,
                                              SlotRangeAccum *acc,
                                              const ShardEnvelopeRecord *env) {
-    const uint64_t epoch = ShardEnvelopeRecord_GetEpoch(env);
-    if (!acc->epoch_set) {
-        acc->epoch = epoch;
-        acc->epoch_set = true;
-    } else if (acc->epoch != epoch) {
-        RedisModule_ReplyWithError(rctx,
-                                   "Multi-shard command failed due to cluster topology change "
-                                   "during execution. Please retry.");
-        return false;
-    }
-
     const size_t n = ShardEnvelopeRecord_GetSlotRangesCount(env);
     const SlotRangeRecord *ranges = ShardEnvelopeRecord_GetSlotRanges(env);
     if (n == 0 || ranges == NULL) {
@@ -64,7 +49,7 @@ static bool validate_and_accumulate_envelope(RedisModuleCtx *rctx,
 }
 
 static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, const SlotRangeAccum *acc) {
-    if (!acc->epoch_set || acc->count == 0) {
+    if (acc->count == 0) {
         RedisModule_ReplyWithError(
             rctx,
             "Multi-shard command failed due to missing slot ownership metadata. Please retry.");

@@ -198,78 +198,29 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
     *outRanges = NULL;
     *outCount = 0;
 
-    RedisModuleCallReply *myid_reply = RedisModule_Call(rts_staticCtx, "CLUSTER", "c", "MYID");
-    if (!myid_reply || RedisModule_CallReplyType(myid_reply) != REDISMODULE_REPLY_STRING) {
-        goto fallback_all;
-    }
-    size_t myid_len = 0;
-    const char *myid = RedisModule_CallReplyStringPtr(myid_reply, &myid_len);
-
-    RedisModuleCallReply *slots_reply = RedisModule_Call(rts_staticCtx, "CLUSTER", "c", "SLOTS");
-    if (!slots_reply || RedisModule_CallReplyType(slots_reply) != REDISMODULE_REPLY_ARRAY) {
-        RedisModule_FreeCallReply(myid_reply);
-        goto fallback_all;
-    }
-
-    const size_t outer_len = RedisModule_CallReplyLength(slots_reply);
-    SlotRangeRecord *ranges = NULL;
-    size_t rangesCount = 0;
-
-    for (size_t i = 0; i < outer_len; i++) {
-        RedisModuleCallReply *slot_entry = RedisModule_CallReplyArrayElement(slots_reply, i);
-        if (!slot_entry || RedisModule_CallReplyType(slot_entry) != REDISMODULE_REPLY_ARRAY) {
-            continue;
+    if (RedisModule_ClusterGetLocalSlotRanges != NULL &&
+        RedisModule_ClusterFreeSlotRanges != NULL) {
+        RedisModuleSlotRangeArray *slots = RedisModule_ClusterGetLocalSlotRanges(rts_staticCtx);
+        if (slots && slots->num_ranges > 0) {
+            const size_t n = (size_t)slots->num_ranges;
+            SlotRangeRecord *ranges = malloc(sizeof(*ranges) * n);
+            for (size_t i = 0; i < n; i++) {
+                ranges[i].start = slots->ranges[i].start;
+                ranges[i].end = slots->ranges[i].end;
+            }
+            RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
+            *outRanges = ranges;
+            *outCount = n;
+            return;
         }
-        if (RedisModule_CallReplyLength(slot_entry) < 3) {
-            continue;
+        if (slots) {
+            RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
         }
-
-        RedisModuleCallReply *start_r = RedisModule_CallReplyArrayElement(slot_entry, 0);
-        RedisModuleCallReply *end_r = RedisModule_CallReplyArrayElement(slot_entry, 1);
-        RedisModuleCallReply *master = RedisModule_CallReplyArrayElement(slot_entry, 2);
-        if (!start_r || !end_r || !master) {
-            continue;
-        }
-        if (RedisModule_CallReplyType(start_r) != REDISMODULE_REPLY_INTEGER ||
-            RedisModule_CallReplyType(end_r) != REDISMODULE_REPLY_INTEGER ||
-            RedisModule_CallReplyType(master) != REDISMODULE_REPLY_ARRAY) {
-            continue;
-        }
-        if (RedisModule_CallReplyLength(master) < 3) {
-            continue;
-        }
-        RedisModuleCallReply *master_id_r = RedisModule_CallReplyArrayElement(master, 2);
-        if (!master_id_r || RedisModule_CallReplyType(master_id_r) != REDISMODULE_REPLY_STRING) {
-            continue;
-        }
-        size_t master_id_len = 0;
-        const char *master_id = RedisModule_CallReplyStringPtr(master_id_r, &master_id_len);
-        if (master_id_len != myid_len || memcmp(master_id, myid, myid_len) != 0) {
-            continue;
-        }
-
-        const long long start_ll = RedisModule_CallReplyInteger(start_r);
-        const long long end_ll = RedisModule_CallReplyInteger(end_r);
-        if (start_ll < 0 || end_ll < start_ll || end_ll >= (1 << 14)) {
-            continue;
-        }
-
-        ranges = realloc(ranges, sizeof(*ranges) * (rangesCount + 1));
-        ranges[rangesCount++] =
-            (SlotRangeRecord){ .start = (uint16_t)start_ll, .end = (uint16_t)end_ll };
-    }
-
-    RedisModule_FreeCallReply(slots_reply);
-    RedisModule_FreeCallReply(myid_reply);
-
-    if (rangesCount == 0) {
-        free(ranges);
         goto fallback_all;
     }
 
-    *outRanges = ranges;
-    *outCount = rangesCount;
-    return;
+    // Fallback for older Redis versions: treat as all slots owned.
+    // (Prefer RedisModule_ClusterGetLocalSlotRanges for authoritative local ownership.)
 
 fallback_all:
     // Conservative fallback: treat as all slots owned.
