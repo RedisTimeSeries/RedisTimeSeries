@@ -523,6 +523,16 @@
                         "type": "pure-token",
                         "token": "TWA",
                         "since": "1.8.0"
+                    },
+                    {
+                        "name": "countnan",
+                        "type": "pure-token",
+                        "token": "COUNTNAN"
+                    },
+                    {
+                        "name": "countall",
+                        "type": "pure-token",
+                        "token": "COUNTALL"
                     }
                 ]
             },
@@ -692,6 +702,16 @@
                                 "type": "pure-token",
                                 "token": "TWA",
                                 "since": "1.8.0"
+                            },
+                            {
+                                "name": "countnan",
+                                "type": "pure-token",
+                                "token": "COUNTNAN"
+                            },
+                            {
+                                "name": "countall",
+                                "type": "pure-token",
+                                "token": "COUNTALL"
                             }
                         ]
                     },
@@ -855,6 +875,16 @@
                                 "type": "pure-token",
                                 "token": "TWA",
                                 "since": "1.8.0"
+                            },
+                            {
+                                "name": "countnan",
+                                "type": "pure-token",
+                                "token": "COUNTNAN"
+                            },
+                            {
+                                "name": "countall",
+                                "type": "pure-token",
+                                "token": "COUNTALL"
                             }
                         ]
                     },
@@ -1074,6 +1104,16 @@
                                 "type": "pure-token",
                                 "token": "TWA",
                                 "since": "1.8.0"
+                            },
+                            {
+                                "name": "countnan",
+                                "type": "pure-token",
+                                "token": "COUNTNAN"
+                            },
+                            {
+                                "name": "countall",
+                                "type": "pure-token",
+                                "token": "COUNTALL"
                             }
                         ]
                     },
@@ -1319,6 +1359,16 @@
                                 "type": "pure-token",
                                 "token": "TWA",
                                 "since": "1.8.0"
+                            },
+                            {
+                                "name": "countnan",
+                                "type": "pure-token",
+                                "token": "COUNTNAN"
+                            },
+                            {
+                                "name": "countall",
+                                "type": "pure-token",
+                                "token": "COUNTALL"
                             }
                         ]
                     },
