@@ -7,7 +7,6 @@
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
-#include "module.h"
 #include "query_language.h"
 #include "tsdb.h"
 
@@ -28,10 +27,6 @@ static MRRecordType *ShardEnvelopeRecordType = NULL;
 
 MRRecordType *GetShardEnvelopeRecordType() {
     return ShardEnvelopeRecordType;
-}
-
-uint64_t ShardEnvelopeRecord_GetEpoch(const ShardEnvelopeRecord *r) {
-    return r->clusterViewEpoch;
 }
 
 size_t ShardEnvelopeRecord_GetSlotRangesCount(const ShardEnvelopeRecord *r) {
@@ -137,13 +132,11 @@ static Record *RedisStringRecord_Create(RedisModuleString *str);
 // Forward declaration (implemented later in this file).
 static Record *MR_RecordCreate(MRRecordType *type, size_t size);
 
-static ShardEnvelopeRecord *ShardEnvelopeRecord_Create(uint64_t epoch,
-                                                       SlotRangeRecord *ranges,
+static ShardEnvelopeRecord *ShardEnvelopeRecord_Create(SlotRangeRecord *ranges,
                                                        size_t rangesCount,
                                                        Record *payload) {
     ShardEnvelopeRecord *ret =
         (ShardEnvelopeRecord *)MR_RecordCreate(ShardEnvelopeRecordType, sizeof(*ret));
-    ret->clusterViewEpoch = epoch;
     ret->slotRangesCount = rangesCount;
     ret->slotRanges = ranges;
     ret->payload = payload;
@@ -161,7 +154,6 @@ static void ShardEnvelopeRecord_Free(void *base) {
 
 static void ShardEnvelopeRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
     ShardEnvelopeRecord *r = (ShardEnvelopeRecord *)arg;
-    MR_SerializationCtxWriteLongLong(sctx, (long long)r->clusterViewEpoch, error);
     MR_SerializationCtxWriteLongLong(sctx, (long long)r->slotRangesCount, error);
     for (size_t i = 0; i < r->slotRangesCount; i++) {
         MR_SerializationCtxWriteLongLong(sctx, (long long)r->slotRanges[i].start, error);
@@ -171,7 +163,6 @@ static void ShardEnvelopeRecord_Serialize(WriteSerializationCtx *sctx, void *arg
 }
 
 static void *ShardEnvelopeRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
-    const uint64_t epoch = (uint64_t)MR_SerializationCtxReadLongLong(sctx, error);
     const size_t count = (size_t)MR_SerializationCtxReadLongLong(sctx, error);
     SlotRangeRecord *ranges = NULL;
     if (count > 0) {
@@ -182,7 +173,7 @@ static void *ShardEnvelopeRecord_Deserialize(ReaderSerializationCtx *sctx, MRErr
         }
     }
     Record *payload = MR_RecordDeSerialize(sctx);
-    return ShardEnvelopeRecord_Create(epoch, ranges, count, payload);
+    return ShardEnvelopeRecord_Create(ranges, count, payload);
 }
 
 static void ShardEnvelopeRecord_SendReply(RedisModuleCtx *rctx, void *record) {
@@ -520,7 +511,6 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    const uint64_t epoch = atomic_load_explicit(&RTS_clusterViewEpoch, memory_order_relaxed);
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
     CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
@@ -569,7 +559,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return &ShardEnvelopeRecord_Create(epoch, slotRanges, slotRangesCount, series_list)->base;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 
 Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
@@ -587,7 +577,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    const uint64_t epoch = atomic_load_explicit(&RTS_clusterViewEpoch, memory_order_relaxed);
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
     CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
@@ -680,7 +669,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return &ShardEnvelopeRecord_Create(epoch, slotRanges, slotRangesCount, series_listOrMap)->base;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_listOrMap)->base;
 }
 
 Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
@@ -693,7 +682,6 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
-    const uint64_t epoch = atomic_load_explicit(&RTS_clusterViewEpoch, memory_order_relaxed);
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
     CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
@@ -723,7 +711,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return &ShardEnvelopeRecord_Create(epoch, slotRanges, slotRangesCount, series_list)->base;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 
 static MRObjectType *MR_CreateType(char *type,

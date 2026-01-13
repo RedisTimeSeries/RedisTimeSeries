@@ -11,15 +11,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdatomic.h>
 
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
-
-// Monotonic identifier for the module's view of cluster slot ownership / ASM state.
-// Updated in `src/module.c` on sharding/ASM events.
-extern _Atomic uint64_t RTS_clusterViewEpoch;
 
 /// @brief Check if the key is allowed by the ACLs for the current user.
 /// @param ctx The redis module context.

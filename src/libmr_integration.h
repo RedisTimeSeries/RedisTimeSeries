@@ -83,7 +83,6 @@ typedef struct SlotRangeRecord
 typedef struct ShardEnvelopeRecord
 {
     Record base;
-    uint64_t clusterViewEpoch;
     size_t slotRangesCount;
     SlotRangeRecord *slotRanges;
     Record *payload;
@@ -94,7 +93,6 @@ MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetShardEnvelopeRecordType();
 
-uint64_t ShardEnvelopeRecord_GetEpoch(const ShardEnvelopeRecord *r);
 size_t ShardEnvelopeRecord_GetSlotRangesCount(const ShardEnvelopeRecord *r);
 const SlotRangeRecord *ShardEnvelopeRecord_GetSlotRanges(const ShardEnvelopeRecord *r);
 Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r);
