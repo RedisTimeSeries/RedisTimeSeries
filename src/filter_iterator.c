@@ -255,7 +255,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->handled_twa_empty_prefix = false;
     iter->handled_twa_empty_suffix = false;
     iter->prev_ts = DC;
-    iter->validSamplesInBucket = 0;
+    iter->validSamplesInBucket = false;
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
     return iter;
@@ -289,27 +289,27 @@ static void twa_calc_empty_bucket_val(timestamp_t ta,
                                       size_t n_samples_before,
                                       size_t n_samples_after,
                                       double *value) {
-    bool is_nan_bucket = true;
+    bool is_empty_bucket = true;
     bool has_before_and_after = false;
 
     if (n_samples_before > 1) {
         timestamp_t delta = sample_before->timestamp - sample_befBefore->timestamp;
         if (sample_before->timestamp + delta > ta) {
-            is_nan_bucket = false;
+            is_empty_bucket = false;
         }
     }
     if (n_samples_after > 1) {
         timestamp_t delta = sample_afAfter->timestamp - sample_after->timestamp;
         if (tb + delta > sample_after->timestamp) {
-            is_nan_bucket = false;
+            is_empty_bucket = false;
         }
     }
     if (n_samples_after != 0 && n_samples_before != 0) {
-        is_nan_bucket = false;
+        is_empty_bucket = false;
         has_before_and_after = true;
     }
 
-    if (is_nan_bucket) {
+    if (is_empty_bucket) {
         *value = NAN;
     } else if (has_before_and_after) {
         double delta_val = (sample_after->value - sample_before->value);
@@ -363,12 +363,12 @@ static void twa_compute_empty_bucket_value(const AggregationIterator *self,
 
 // Returns true if bucket should be output, false if it should be skipped.
 static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIterator *self) {
-    bool shouldBucketIgnored = self->validSamplesInBucket == 0;
+    bool shouldBucketIgnored = !self->validSamplesInBucket;
     if (shouldBucketIgnored) {
         // Bucket has only NaN samples - treat as empty bucket
         if (!self->empty) {
             self->aggregation->resetContext(self->aggregationContext);
-            self->validSamplesInBucket = 0;
+            self->validSamplesInBucket = false;
             return false;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
@@ -384,7 +384,7 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
     samples->timestamps[index] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     self->aggregation->resetContext(self->aggregationContext);
-    self->validSamplesInBucket = 0;
+    self->validSamplesInBucket = false;
     return true;
 }
 
@@ -867,7 +867,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         aggregationContext, enrichedChunk->samples.values, si, ei);
                     for (int64_t idx = si; idx <= ei; idx++) {
                         if (aggregation->isValueValid(enrichedChunk->samples.values[idx])) {
-                            self->validSamplesInBucket++;
+                            self->validSamplesInBucket = true;
                         }
                     }
                     si = ei + 1;
@@ -925,7 +925,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     // append sample and inc si cause we aggregate in place
                     if (aggregation->isValueValid(sample.value)) {
                         appendValue(aggregationContext, sample.value, sample.timestamp);
-                        self->validSamplesInBucket++;
+                        self->validSamplesInBucket = true;
                     }
                     si++;
                 }
@@ -1016,7 +1016,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
 
                 if (aggregation->isValueValid(sample.value)) {
                     appendValue(aggregationContext, sample.value, sample.timestamp);
-                    self->validSamplesInBucket++;
+                    self->validSamplesInBucket = true;
                 }
                 si++;
             }
@@ -1063,7 +1063,7 @@ _finalize:
     if (shouldBucketIgnored) {
         if (!self->empty) {
             aggregation->resetContext(aggregationContext);
-            self->validSamplesInBucket = 0;
+            self->validSamplesInBucket = false;
             self->aux_chunk->samples.num_samples = 0;
             return self->aux_chunk;
         }
@@ -1076,7 +1076,7 @@ _finalize:
     } else {
         aggregation->finalize(aggregationContext, &value);
     }
-    self->validSamplesInBucket = 0;
+    self->validSamplesInBucket = false;
 
     self->aux_chunk->samples.timestamps[0] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);

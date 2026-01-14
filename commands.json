@@ -527,12 +527,14 @@
                     {
                         "name": "countnan",
                         "type": "pure-token",
-                        "token": "COUNTNAN"
+                        "token": "COUNTNAN",
+                        "since": "8.6.0"
                     },
                     {
                         "name": "countall",
                         "type": "pure-token",
-                        "token": "COUNTALL"
+                        "token": "COUNTALL",
+                        "since": "8.6.0"
                     }
                 ]
             },
@@ -706,12 +708,14 @@
                             {
                                 "name": "countnan",
                                 "type": "pure-token",
-                                "token": "COUNTNAN"
+                                "token": "COUNTNAN",
+                                "since": "8.6.0"
                             },
                             {
                                 "name": "countall",
                                 "type": "pure-token",
-                                "token": "COUNTALL"
+                                "token": "COUNTALL",
+                                "since": "8.6.0"
                             }
                         ]
                     },
@@ -879,12 +883,14 @@
                             {
                                 "name": "countnan",
                                 "type": "pure-token",
-                                "token": "COUNTNAN"
+                                "token": "COUNTNAN",
+                                "since": "8.6.0"
                             },
                             {
                                 "name": "countall",
                                 "type": "pure-token",
-                                "token": "COUNTALL"
+                                "token": "COUNTALL",
+                                "since": "8.6.0"
                             }
                         ]
                     },
@@ -1108,12 +1114,14 @@
                             {
                                 "name": "countnan",
                                 "type": "pure-token",
-                                "token": "COUNTNAN"
+                                "token": "COUNTNAN",
+                                "since": "8.6.0"
                             },
                             {
                                 "name": "countall",
                                 "type": "pure-token",
-                                "token": "COUNTALL"
+                                "token": "COUNTALL",
+                                "since": "8.6.0"
                             }
                         ]
                     },
@@ -1363,12 +1371,14 @@
                             {
                                 "name": "countnan",
                                 "type": "pure-token",
-                                "token": "COUNTNAN"
+                                "token": "COUNTNAN",
+                                "since": "8.6.0"
                             },
                             {
                                 "name": "countall",
                                 "type": "pure-token",
-                                "token": "COUNTALL"
+                                "token": "COUNTALL",
+                                "since": "8.6.0"
                             }
                         ]
                     },
@@ -1449,7 +1459,7 @@
                 ]
             }
         ],
-            "group": "timeseries"
+        "group": "timeseries"
     },
     "TS.GET": {
         "summary": "Get the sample with the highest timestamp from a given time series",

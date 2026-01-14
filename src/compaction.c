@@ -97,7 +97,7 @@ void SingleValueReset(void *contextPtr) {
 }
 
 void *LastValueCreateContext(__unused bool reverse) {
-    SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
+    SingleValueContext *context = malloc(sizeof *context);
     context->value = NAN;
     return context;
 }
@@ -965,52 +965,53 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    int result = TS_AGG_INVALID;
     char agg_type_lower[len];
     for (int i = 0; i < len; i++) {
         agg_type_lower[i] = tolower(agg_type[i]);
     }
-    if (len == 3) {
-        if (strncmp(agg_type_lower, "min", len) == 0 && len == 3) {
-            result = TS_AGG_MIN;
-        } else if (strncmp(agg_type_lower, "max", len) == 0) {
-            result = TS_AGG_MAX;
-        } else if (strncmp(agg_type_lower, "sum", len) == 0) {
-            result = TS_AGG_SUM;
-        } else if (strncmp(agg_type_lower, "avg", len) == 0) {
-            result = TS_AGG_AVG;
-        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
-            result = TS_AGG_TWA;
-        }
-    } else if (len == 4) {
-        if (strncmp(agg_type_lower, "last", len) == 0) {
-            result = TS_AGG_LAST;
-        }
-    } else if (len == 5) {
-        if (strncmp(agg_type_lower, "count", len) == 0) {
-            result = TS_AGG_COUNT;
-        } else if (strncmp(agg_type_lower, "range", len) == 0) {
-            result = TS_AGG_RANGE;
-        } else if (strncmp(agg_type_lower, "first", len) == 0) {
-            result = TS_AGG_FIRST;
-        } else if (strncmp(agg_type_lower, "std.p", len) == 0) {
-            result = TS_AGG_STD_P;
-        } else if (strncmp(agg_type_lower, "std.s", len) == 0) {
-            result = TS_AGG_STD_S;
-        } else if (strncmp(agg_type_lower, "var.p", len) == 0) {
-            result = TS_AGG_VAR_P;
-        } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
-            result = TS_AGG_VAR_S;
-        }
-    } else if (len == 8) {
-        if (strncmp(agg_type_lower, "countnan", len) == 0) {
-            result = TS_AGG_COUNT_NAN;
-        } else if (strncmp(agg_type_lower, "countall", len) == 0) {
-            result = TS_AGG_COUNT_ALL;
-        }
+
+    switch (len) {
+        case 3:
+            if (strncmp(agg_type_lower, "min", len) == 0)
+                return TS_AGG_MIN;
+            if (strncmp(agg_type_lower, "max", len) == 0)
+                return TS_AGG_MAX;
+            if (strncmp(agg_type_lower, "sum", len) == 0)
+                return TS_AGG_SUM;
+            if (strncmp(agg_type_lower, "avg", len) == 0)
+                return TS_AGG_AVG;
+            if (strncmp(agg_type_lower, "twa", len) == 0)
+                return TS_AGG_TWA;
+            break;
+        case 4:
+            if (strncmp(agg_type_lower, "last", len) == 0)
+                return TS_AGG_LAST;
+            break;
+        case 5:
+            if (strncmp(agg_type_lower, "count", len) == 0)
+                return TS_AGG_COUNT;
+            if (strncmp(agg_type_lower, "range", len) == 0)
+                return TS_AGG_RANGE;
+            if (strncmp(agg_type_lower, "first", len) == 0)
+                return TS_AGG_FIRST;
+            if (strncmp(agg_type_lower, "std.p", len) == 0)
+                return TS_AGG_STD_P;
+            if (strncmp(agg_type_lower, "std.s", len) == 0)
+                return TS_AGG_STD_S;
+            if (strncmp(agg_type_lower, "var.p", len) == 0)
+                return TS_AGG_VAR_P;
+            if (strncmp(agg_type_lower, "var.s", len) == 0)
+                return TS_AGG_VAR_S;
+            break;
+        case 8:
+            if (strncmp(agg_type_lower, "countnan", len) == 0)
+                return TS_AGG_COUNT_NAN;
+            if (strncmp(agg_type_lower, "countall", len) == 0)
+                return TS_AGG_COUNT_ALL;
+            break;
     }
 
-    return result;
+    return TS_AGG_INVALID;
 }
 
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {

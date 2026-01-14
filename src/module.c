@@ -627,7 +627,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
-        if (rule->validSamplesInBucket > 0) {
+        if (rule->validSamplesInBucket) {
             double aggVal;
             if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
                 internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
@@ -640,7 +640,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
         }
         rule->aggClass->resetContext(rule->aggContext);
-        rule->validSamplesInBucket = 0;
+        rule->validSamplesInBucket = false;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
@@ -656,7 +656,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
     }
     if (rule->aggClass->isValueValid(value)) {
         rule->aggClass->appendValue(rule->aggContext, value, timestamp);
-        rule->validSamplesInBucket++;
+        rule->validSamplesInBucket = true;
     }
 }
 
@@ -727,10 +727,10 @@ static int internalAdd(RedisModuleCtx *ctx,
 }
 
 static inline bool is_nan_string(const char *str, size_t len) {
-    if (len == 3 && strcasecmp(str, "nan") == 0) {
+    if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
         return true;
     }
-    if (len == 4 && strcasecmp(str, "-nan") == 0) {
+    if (len == 4 && (strncasecmp(str, "-nan", 4) == 0 || strncasecmp(str, "+nan", 4) == 0)) {
         return true;
     }
     return false;
