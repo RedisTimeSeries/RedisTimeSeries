@@ -627,7 +627,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
-        if (rule->validSamplesInBucket) {
+        bool hadValidSamples = rule->validSamplesInBucket;
+        if (hadValidSamples) {
             double aggVal;
             if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
                 internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
@@ -647,7 +648,8 @@ static void handleCompaction(RedisModuleCtx *ctx,
                                             currentTimestamp + rule->bucketDuration);
         }
 
-        if (rule->aggClass->type == TS_AGG_TWA && rule->aggClass->isValueValid(last_sample.value)) {
+        if (rule->aggClass->type == TS_AGG_TWA && hadValidSamples &&
+            rule->aggClass->isValueValid(last_sample.value)) {
             rule->aggClass->addPrevBucketLastSample(
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }

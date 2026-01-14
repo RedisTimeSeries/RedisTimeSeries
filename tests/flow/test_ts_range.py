@@ -1786,6 +1786,101 @@ def test_twa_nan_interpolation():
         assert not math.isnan(value), f"REVRANGE TWA should not use NaN for interpolation, got {value}"
 
 
+def test_twa_nan_only_bucket():
+    """
+    Test that TWA correctly handles buckets containing only NaN samples.
+    When a bucket has only NaN samples, TWA should not use uninitialized values
+    for interpolation in subsequent buckets.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Test case 1: TS.RANGE with NaN-only bucket in the middle
+        key1 = 'twa_nan_only_bucket_range{tag}'
+        r.execute_command('TS.CREATE', key1)
+        r.execute_command('TS.ADD', key1, 5, 10)     # Bucket 0-10: valid sample
+        r.execute_command('TS.ADD', key1, 15, 'nan') # Bucket 10-20: only NaN
+        r.execute_command('TS.ADD', key1, 25, 30)    # Bucket 20-30: valid sample
+        r.execute_command('TS.ADD', key1, 35, 40)    # Bucket 30-40: valid sample
+        
+        # Query across all buckets with EMPTY to include NaN-only bucket
+        result = r.execute_command('TS.RANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
+        assert len(result) == 4
+        
+        # Bucket 0 (0-10): has sample at 5 with value 10 - should be valid
+        bucket0_value = float(result[0][1])
+        assert not math.isnan(bucket0_value), "Bucket 0 should have valid TWA value"
+        
+        # Bucket 1 (10-20): only NaN sample - TWA with EMPTY interpolates from surrounding samples
+        # (sample at ts=5 value=10 before, sample at ts=25 value=30 after)
+        bucket1_value = float(result[1][1])
+        assert not math.isnan(bucket1_value), "TWA+EMPTY interpolates NaN-only bucket from neighbors"
+        # Key test: the interpolated value should be reasonable (between 10 and 30)
+        assert bucket1_value > 0, f"TWA should not use timestamp=0, got {bucket1_value}"
+        
+        # Bucket 2 (20-30): has sample at 25 with value 30 - should be valid
+        # This is the key test: interpolation should work correctly, NOT from bogus (0,0) values
+        bucket2_value = float(result[2][1])
+        assert not math.isnan(bucket2_value), "Bucket after NaN-only bucket should have valid TWA"
+        assert bucket2_value > 0, f"TWA should not use timestamp=0 for interpolation, got {bucket2_value}"
+        
+        # Bucket 3 (30-40): should interpolate correctly from bucket 2
+        bucket3_value = float(result[3][1])
+        assert not math.isnan(bucket3_value), "Bucket 3 should have valid TWA value"
+        
+        # Test case 2: REVRANGE with NaN-only bucket
+        result_rev = r.execute_command('TS.REVRANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
+        assert len(result_rev) == 4
+        # Results should be same as RANGE but reversed
+        bucket2_rev = float(result_rev[1][1])  # Bucket 20-30 is second from end
+        assert not math.isnan(bucket2_rev), "REVRANGE: bucket after NaN-only should have valid TWA"
+        assert bucket2_rev > 0, f"REVRANGE: TWA should not use timestamp=0, got {bucket2_rev}"
+        
+        # Test case 3: First bucket is NaN-only (edge case - tests initial state)
+        # No sample before first bucket, so TWA cannot interpolate backward
+        key2 = 'twa_nan_first_bucket{tag}'
+        r.execute_command('TS.CREATE', key2)
+        r.execute_command('TS.ADD', key2, 5, 'nan')  # Bucket 0-10: only NaN
+        r.execute_command('TS.ADD', key2, 15, 20)    # Bucket 10-20: valid sample
+        r.execute_command('TS.ADD', key2, 25, 30)    # Bucket 20-30: valid sample
+        
+        result = r.execute_command('TS.RANGE', key2, 0, 30, 'AGGREGATION', 'twa', 10, 'EMPTY')
+        assert len(result) == 3
+        
+        # First bucket is NaN-only with no sample before - may be NaN or interpolated forward
+        # The key test is that subsequent buckets are NOT corrupted
+        
+        # Second bucket should NOT be corrupted by first bucket's uninitialized values
+        bucket1_value = float(result[1][1])
+        assert not math.isnan(bucket1_value), "Second bucket should have valid TWA"
+        # The value should be reasonable (not affected by bogus timestamp=0)
+        assert bucket1_value > 0, f"TWA should not interpolate from timestamp=0, got {bucket1_value}"
+        
+        # Test case 4: Compaction rule with NaN-only bucket
+        src_key = 'twa_compaction_src{tag}'
+        dst_key = 'twa_compaction_dst{tag}'
+        r.execute_command('TS.CREATE', src_key)
+        r.execute_command('TS.CREATE', dst_key)
+        r.execute_command('TS.CREATERULE', src_key, dst_key, 'AGGREGATION', 'twa', 10)
+        
+        # Add samples: bucket 0-10 valid, bucket 10-20 NaN only, bucket 20-30 valid
+        r.execute_command('TS.ADD', src_key, 5, 100)   # Bucket 0-10
+        r.execute_command('TS.ADD', src_key, 15, 'nan') # Bucket 10-20: only NaN
+        r.execute_command('TS.ADD', src_key, 25, 200)   # Bucket 20-30
+        r.execute_command('TS.ADD', src_key, 35, 300)   # Trigger compaction for bucket 20-30
+        
+        # Check destination series
+        result = r.execute_command('TS.RANGE', dst_key, 0, '+')
+        
+        # Should have bucket 0 (finalized when bucket 1 started) and bucket 2 
+        # (finalized when bucket 3 started). Bucket 1 had only NaN so no output.
+        assert len(result) >= 1, "Compaction should produce at least one bucket"
+        
+        for ts, val in result:
+            value = float(val)
+            assert not math.isnan(value), f"Compacted TWA at {ts} should not be NaN"
+            # Key check: value should be reasonable, not corrupted by (0,0) interpolation
+            assert value > 0, f"Compacted TWA at {ts} should be > 0, got {value}"
+
+
 def test_ts_range_countNaN():
     """
     Validate COUNTNAN aggregation function

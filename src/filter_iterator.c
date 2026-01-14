@@ -951,6 +951,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
 
                     Sample last_sample;
+                    bool hadValidSamples = self->validSamplesInBucket;
                     if (aggregation->type == TS_AGG_TWA) {
                         aggregation->getLastSample(aggregationContext, &last_sample);
                     }
@@ -995,7 +996,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
                     self->aggregationLastTimestamp =
                         BucketStartNormalize(self->aggregationLastTimestamp);
-                    if (aggregation->type == TS_AGG_TWA &&
+                    if (aggregation->type == TS_AGG_TWA && hadValidSamples &&
                         aggregation->isValueValid(last_sample.value)) {
                         aggregation->addPrevBucketLastSample(
                             aggregationContext, last_sample.value, last_sample.timestamp);
