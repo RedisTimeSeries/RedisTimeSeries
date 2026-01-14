@@ -623,41 +623,53 @@ static void handleCompaction(RedisModuleCtx *ctx,
             return;
         }
 
-        if (rule->aggClass->type == TS_AGG_TWA) {
+        if (rule->aggClass->type == TS_AGG_TWA && rule->aggClass->isValueValid(value)) {
             rule->aggClass->addNextBucketFirstSample(rule->aggContext, value, timestamp);
         }
 
-        double aggVal;
-        if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
-            internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
-            RedisModule_NotifyKeyspaceEvent(
-                ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+        bool hadValidSamples = rule->validSamplesInBucket;
+        if (hadValidSamples) {
+            double aggVal;
+            if (rule->aggClass->finalize(rule->aggContext, &aggVal) == TSDB_OK) {
+                internalAdd(ctx, destSeries, rule->startCurrentTimeBucket, aggVal, DP_LAST, false);
+                RedisModule_NotifyKeyspaceEvent(
+                    ctx, REDISMODULE_NOTIFY_MODULE, "ts.add:dest", rule->destKey);
+            }
         }
         Sample last_sample;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->getLastSample(rule->aggContext, &last_sample);
         }
         rule->aggClass->resetContext(rule->aggContext);
+        rule->validSamplesInBucket = false;
         if (rule->aggClass->type == TS_AGG_TWA) {
             rule->aggClass->addBucketParams(rule->aggContext,
                                             currentTimestampNormalized,
                                             currentTimestamp + rule->bucketDuration);
         }
 
-        if (rule->aggClass->type == TS_AGG_TWA) {
+        if (rule->aggClass->type == TS_AGG_TWA && hadValidSamples &&
+            rule->aggClass->isValueValid(last_sample.value)) {
             rule->aggClass->addPrevBucketLastSample(
                 rule->aggContext, last_sample.value, last_sample.timestamp);
         }
         rule->startCurrentTimeBucket = currentTimestampNormalized;
         RedisModule_CloseKey(key);
     }
-    rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+    if (rule->aggClass->isValueValid(value)) {
+        rule->aggClass->appendValue(rule->aggContext, value, timestamp);
+        rule->validSamplesInBucket = true;
+    }
 }
 
 static inline bool filter_close_samples(DuplicatePolicy dp_policy,
                                         const Series *series,
                                         api_timestamp_t timestamp,
                                         double value) {
+    if (isnan(value) || isnan(series->lastValue)) {
+        return false;
+    }
+
     return dp_policy == DP_LAST && series->totalSamples != 0 &&
            timestamp >= series->lastTimestamp &&
            timestamp - series->lastTimestamp <= series->ignoreMaxTimeDiff &&
@@ -693,7 +705,8 @@ static int internalAdd(RedisModuleCtx *ctx,
         if (SeriesUpsertSample(series, timestamp, value, dp_policy) != REDISMODULE_OK) {
             RTS_ReplyGeneralError(ctx,
                                   "TSDB: Error at upsert, update is not supported when "
-                                  "DUPLICATE_POLICY is set to BLOCK mode");
+                                  "DUPLICATE_POLICY is set to BLOCK mode, or either current or new "
+                                  "value is NaN and DUPLICATE_POLICY is MAX/MIN/SUM");
             return REDISMODULE_ERR;
         }
     } else {
@@ -715,12 +728,31 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline double parse_double(const RedisModuleString *valueStr) {
+static inline bool is_nan_string(const char *str, size_t len) {
+    if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
+        return true;
+    }
+    if (len == 4 && (strncasecmp(str, "-nan", 4) == 0 || strncasecmp(str, "+nan", 4) == 0)) {
+        return true;
+    }
+    return false;
+}
+
+static inline bool parse_double(const RedisModuleString *valueStr, double *outValue) {
     size_t len;
     char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-    double value;
-    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, &value);
-    return endptr && endptr - valueCStr == len ? value : NAN;
+
+    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, outValue);
+    if (endptr && (size_t)(endptr - valueCStr) == len) {
+        return true;
+    }
+
+    if (is_nan_string(valueCStr, len)) {
+        *outValue = NAN;
+        return true;
+    }
+
+    return false;
 }
 
 static inline int add(RedisModuleCtx *ctx,
@@ -731,8 +763,8 @@ static inline int add(RedisModuleCtx *ctx,
                       int argc) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ | REDISMODULE_WRITE);
 
-    const double value = parse_double(valueStr);
-    if (isnan(value)) {
+    double value;
+    if (!parse_double(valueStr, &value)) {
         RTS_ReplyGeneralError(ctx, "TSDB: invalid value");
         return REDISMODULE_ERR;
     }
@@ -1176,6 +1208,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     double result = series->lastValue;
+    if (isnan(result)) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: cannot increment/decrement NaN value");
+    }
     RMUtil_StringToLower(argv[0]);
     bool isIncr = RMUtil_StringEqualsC(argv[0], "ts.incrby");
     if (isIncr) {

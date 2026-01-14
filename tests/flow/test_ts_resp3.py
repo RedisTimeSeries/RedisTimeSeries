@@ -171,3 +171,23 @@ def test_resp3_mrange(env):
         actual_result = r1.execute_command(
             'TS.mrange', '-', '+', 'SELECTED_LABELS', 'fame', 'FILTER', 'name=(rush,bush)')
         env.assertEqual(actual_result, exp)
+
+def test_nan_serialization_consistency():
+    from utils import is_resp3_possible
+    import math
+    env = Env()
+    if is_resp3_possible(env):
+        env = Env(protocol=3)
+        with env.getClusterConnectionIfNeeded() as r:
+            for encoding in ['compressed', 'uncompressed']:
+                env.flush()
+                key = f'nan_consistency_resp3_{encoding}'
+                r.execute_command('ts.create', key, 'ENCODING', encoding)
+                r.execute_command('ts.add', key, 1, 'nan')
+                
+                result = r.execute_command('ts.get', key)
+                assert math.isnan(result[1]), f"RESP3 TS.GET expected NaN float but got {result[1]}"
+                
+                # Verify via TS.RANGE - should return float NaN
+                result = r.execute_command('ts.range', key, '-', '+')
+                assert math.isnan(result[0][1]), f"RESP3 TS.RANGE expected NaN float but got {result[0][1]}"

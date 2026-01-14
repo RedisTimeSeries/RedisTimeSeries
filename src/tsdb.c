@@ -1196,6 +1196,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
+    rule->validSamplesInBucket = false;
 
     return rule;
 }
