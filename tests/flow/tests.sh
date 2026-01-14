@@ -17,6 +17,29 @@ SAN_GETREDIS_VER=7
 cd $HERE
 
 #----------------------------------------------------------------------------------------------
+# Python selection:
+# - CI typically activates `venv/` before running tests.
+# - Local dev sometimes uses `test_env/` but may forget to activate it.
+# If no virtualenv is active, prefer a repo-local venv python when present so
+# RLTest and redis-py versions are consistent and compatible.
+#
+PYTHON=${PYTHON:-python3}
+repo_venv_python=""
+if [[ -x "$ROOT/venv/bin/python" ]]; then
+	repo_venv_python="$ROOT/venv/bin/python"
+elif [[ -x "$ROOT/test_env/bin/python" ]]; then
+	repo_venv_python="$ROOT/test_env/bin/python"
+fi
+
+# If user didn't explicitly set PYTHON, prefer a repo-local venv interpreter.
+# Even if a virtualenv is active, it might be unrelated and missing required deps
+# (e.g. redis-py < 5, which breaks RLTest's protocol= kwarg).
+if [[ -n $repo_venv_python && ( -z ${VIRTUAL_ENV:-} || "$VIRTUAL_ENV" != "$ROOT/venv" && "$VIRTUAL_ENV" != "$ROOT/test_env" ) ]]; then
+	PYTHON="$repo_venv_python"
+fi
+export PYTHON
+
+#----------------------------------------------------------------------------------------------
 
 help() {
 	cat <<-'END'
@@ -38,6 +61,9 @@ help() {
 		AOF_SLAVES=0|1        AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1       General tests on Redis OSS Cluster
 		SHARDS=n              Number of shards (default: 3)
+
+		TEST_TIMEOUT_SEC=n    RLTest per-test timeout in seconds (default: 0 = no timeout)
+		RUN_TIMEOUT_SEC=n     Hard timeout for the whole RLTest run (seconds, default: 0 = no timeout)
 
 		QUICK=1               Perform only one test variant
 
@@ -93,6 +119,72 @@ help() {
 
 #----------------------------------------------------------------------------------------------
 
+run_with_timeout() {
+	local timeout_sec="$1"
+	shift
+
+	if [[ -z $timeout_sec || $timeout_sec == 0 ]]; then
+		"$@"
+		return $?
+	fi
+
+	is_gnu_timeout() {
+		timeout --version 2>/dev/null | head -n 1 | grep -q "GNU coreutils"
+	}
+
+	# Prefer GNU coreutils 'timeout' when available (Linux CI).
+	if is_command timeout && is_gnu_timeout; then
+		# Use TERM first (more graceful), then KILL. GNU timeout returns 124 on timeout.
+		timeout --signal=TERM --kill-after=5s "$timeout_sec" "$@"
+		return $?
+	fi
+	# macOS users may have coreutils as 'gtimeout'.
+	if is_command gtimeout; then
+		gtimeout --signal=TERM --kill-after=5s "$timeout_sec" "$@"
+		return $?
+	fi
+
+	# Portable fallback: Python subprocess timeout.
+	python3 - "$timeout_sec" "$@" <<'PY'
+import os, signal, subprocess, sys
+timeout = int(sys.argv[1])
+cmd = sys.argv[2:]
+def _kill_pg(pid: int, sig) -> None:
+  try:
+    os.killpg(pid, sig)
+  except ProcessLookupError:
+    pass
+
+try:
+  # start_new_session=True creates a new process group (pgid == pid) on POSIX.
+  p = subprocess.Popen(cmd, start_new_session=True)
+  try:
+    rc = p.wait(timeout=timeout)
+    sys.exit(rc)
+  except subprocess.TimeoutExpired:
+    sys.stderr.write(f"RLTest run timed out after {timeout} seconds: {' '.join(cmd)}\n")
+    _kill_pg(p.pid, signal.SIGTERM)
+    try:
+      p.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+      _kill_pg(p.pid, signal.SIGKILL)
+      try:
+        p.wait(timeout=5)
+      except subprocess.TimeoutExpired:
+        pass
+    sys.exit(124)
+finally:
+  # Ensure the child isn't left around if we exit early for any reason.
+  try:
+    if p.poll() is None:
+      _kill_pg(p.pid, signal.SIGKILL)
+  except Exception:
+    pass
+PY
+}
+
+#----------------------------------------------------------------------------------------------
+
 traps() {
 	local func="$1"
 	shift
@@ -125,6 +217,20 @@ stop() {
 traps 'stop' SIGINT
 
 #----------------------------------------------------------------------------------------------
+
+#
+# CI defaults: avoid "silent forever" hangs (especially during OSS cluster env startup/teardown).
+#
+if [[ -n $CI || -n $GITHUB_ACTIONS ]]; then
+	# Default RLTest per-test timeout (seconds) unless overridden.
+	# NOTE: We keep this disabled by default in CI because some tests (e.g.
+	# "extensive") legitimately take a long time on slower runners.
+	TEST_TIMEOUT_SEC=${TEST_TIMEOUT_SEC:-0}
+	# Default hard timeout for the whole RLTest invocation (seconds) unless overridden.
+	RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-3600}
+	# Avoid port collisions between repeated RLTest invocations in the same job.
+	RANDPORTS=${RANDPORTS:-1}
+fi
 
 setup_rltest() {
 	if [[ $RLTEST == view ]]; then
@@ -321,9 +427,68 @@ run_tests() {
 
 	local E=0
 	if [[ $NOP != 1 ]]; then
-		{ $OP python3 -m RLTest @$rltest_config; (( E |= $? )); } || true
+		# Heartbeat so CI logs keep moving even if RLTest blocks during env startup.
+		if [[ ( -n $CI || -n $GITHUB_ACTIONS ) && ${RUN_TIMEOUT_SEC:-0} != 0 ]]; then
+			(
+				i=0
+				while true; do
+					sleep 60
+					i=$((i + 60))
+					latest_log="$(ls -t "$HERE"/logs/*.log 2>/dev/null | head -n 1)"
+					redis_cnt="$(ps aux | egrep 'redis-server' | egrep -v egrep | wc -l | tr -d ' ')"
+					log_age="na"
+					log_size="na"
+					if [[ -n $latest_log && -f $latest_log ]]; then
+						# Prefer portable 'stat' variants.
+						if stat -c %Y "$latest_log" >/dev/null 2>&1; then
+							mt=$(stat -c %Y "$latest_log")
+						else
+							mt=$(stat -f %m "$latest_log" 2>/dev/null || echo "")
+						fi
+						if [[ -n ${mt:-} ]]; then
+							now=$(date +%s)
+							log_age=$((now - mt))
+						fi
+						if stat -c %s "$latest_log" >/dev/null 2>&1; then
+							log_size=$(stat -c %s "$latest_log")
+						else
+							log_size=$(stat -f %z "$latest_log" 2>/dev/null || echo "na")
+						fi
+					fi
+					if [[ -n $latest_log ]]; then
+						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=$(basename "$latest_log") age_s=${log_age} size=${log_size}"
+					else
+						echo "[heartbeat] RLTest running (${i}s elapsed, RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}) redis-server=${redis_cnt} latest_log=(none yet)"
+					fi
+				done
+			) &
+			HB_PID=$!
+		fi
+
+		{ $OP run_with_timeout "${RUN_TIMEOUT_SEC:-0}" "$PYTHON" -m RLTest @$rltest_config; E=$?; } || true
+
+		if [[ -n ${HB_PID:-} ]]; then
+			kill "$HB_PID" >/dev/null 2>&1 || true
+			wait "$HB_PID" 2>/dev/null || true
+			unset HB_PID
+		fi
+
+		# On timeout, dump basic diagnostics to help CI/root-cause.
+		if [[ $E == 124 ]]; then
+			echo "RLTest run timed out (RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC:-0}). Collecting diagnostics..."
+			echo "== ps (redis-server/RLTest) =="
+			ps aux | egrep 'redis-server|RLTest' | egrep -v egrep || true
+			echo "== open ports (redis) =="
+			(netstat -an 2>/dev/null | egrep 'LISTEN|listen' | egrep ':(6379|6381|6383|16379|16381|16383)\\b' || true)
+			echo "== recent logs =="
+			ls -la $HERE/logs 2>/dev/null || true
+			find $HERE/logs -name "*.log" -maxdepth 2 -type f 2>/dev/null | tail -n 5 | while read f; do
+				echo "--- tail $f"
+				tail -n 80 "$f" || true
+			done
+		fi
 	else
-		$OP python3 -m RLTest @$rltest_config
+		$OP "$PYTHON" -m RLTest @$rltest_config
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config
@@ -412,6 +577,18 @@ if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
 	else
 		parallel="$PARALLEL"
 	fi
+
+	# OSS cluster tests are much heavier (multiple redis-servers per test). On some
+	# CI images (notably ubuntu/jammy) high parallelism can cause resource
+	# starvation and make a single test appear "stuck" for a long time. Cap the
+	# default parallelism in CI unless explicitly overridden by PARALLEL>1.
+	if [[ ( -n $CI || -n $GITHUB_ACTIONS ) && ${OSS_CLUSTER:-0} == 1 && $PARALLEL == 1 ]]; then
+		oss_cluster_parallel_cap="${OSS_CLUSTER_PARALLELISM:-4}"
+		if [[ $parallel -gt $oss_cluster_parallel_cap ]]; then
+			parallel="$oss_cluster_parallel_cap"
+		fi
+	fi
+
 	RLTEST_PARALLEL_ARG="--parallelism $parallel"
 fi
 
@@ -461,6 +638,11 @@ fi
 
 [[ $UNIX == 1 ]] && RLTEST_ARGS+=" --unix"
 [[ $RANDPORTS == 1 ]] && RLTEST_ARGS+=" --randomize-ports"
+
+# RLTest per-test timeout (seconds)
+if [[ -n $TEST_TIMEOUT_SEC && $TEST_TIMEOUT_SEC != 0 ]]; then
+	RLTEST_ARGS+=" --test-timeout $TEST_TIMEOUT_SEC"
+fi
 
 #----------------------------------------------------------------------------------------------
 

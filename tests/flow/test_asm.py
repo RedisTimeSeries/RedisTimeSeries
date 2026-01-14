@@ -1,5 +1,6 @@
 import time
 import random
+import os
 from dataclasses import dataclass
 import re
 import threading
@@ -10,7 +11,7 @@ from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
 
 
-MIGRATION_CYCLES = 10
+MIGRATION_CYCLES = int(os.getenv("ASM_MIGRATION_CYCLES", "10"))
 
 
 def test_asm_without_data():
@@ -203,7 +204,10 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+        # On slower CI runners, the "init-rdbchannel" phase can take longer than the
+        # minimal +5s budget even when the system is healthy.
+        extra = 60 if (VALGRIND or SANITIZER) else (30 if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) else 5)
+        timeout = repl_diskless_sync_delay + extra
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
             migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}

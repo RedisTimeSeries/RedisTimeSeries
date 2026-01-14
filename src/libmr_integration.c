@@ -25,7 +25,7 @@ static MRRecordType *LongRecordType = NULL;
 static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *mapRecordType = NULL;
 
-static Record *GetNullRecord() {
+Record *GetNullRecord() {
     return &NullRecord;
 }
 
@@ -48,10 +48,15 @@ static void QueryPredicates_ObjectFree(void *arg) {
         return;
     }
 
+    // This object can be freed from LibMR threads (remote tasks / executions) and
+    // also from main-thread remote task execution. Any RedisModuleString refcount
+    // ops must be protected by the Redis GIL / thread-safe context lock.
+    RTS_StaticCtxLock();
     QueryPredicateList_Free(predicate_list->predicates);
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
-        RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
+        RedisModule_FreeString(rts_staticCtx, predicate_list->limitLabels[i]);
     }
+    RTS_StaticCtxUnlock();
     free(predicate_list->limitLabels);
     free(predicate_list);
 }
@@ -162,6 +167,7 @@ static RedisModuleString *SerializationCtxReadeRedisString(ReaderSerializationCt
 }
 
 static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
+    RTS_StaticCtxLock();
     if (predicates->predicates->list) {
         for (int i = 0; i < predicates->predicates->count; i++) {
             QueryPredicate *predicate = &predicates->predicates->list[i];
@@ -170,21 +176,22 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
 
             if (predicate->valuesList) {
                 for (int j = 0; j < predicate->valueListCount && predicate->valuesList[j]; j++) {
-                    RedisModule_FreeString(NULL, predicate->valuesList[j]);
+                    RedisModule_FreeString(rts_staticCtx, predicate->valuesList[j]);
                 }
                 free(predicate->valuesList);
             }
-            RedisModule_FreeString(NULL, predicate->key);
+            RedisModule_FreeString(rts_staticCtx, predicate->key);
         }
         free(predicates->predicates->list);
     }
     free(predicates->predicates);
     if (predicates->limitLabels) {
         for (int i = 0; i < predicates->limitLabelsSize && predicates->limitLabels[i]; ++i) {
-            RedisModule_FreeString(NULL, predicates->limitLabels[i]);
+            RedisModule_FreeString(rts_staticCtx, predicates->limitLabels[i]);
         }
         free(predicates->limitLabels);
     }
+    RTS_StaticCtxUnlock();
     free(predicates);
 }
 
@@ -389,7 +396,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -428,7 +435,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_list;
 }
@@ -446,7 +453,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -529,7 +536,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_listOrMap;
 }
@@ -542,7 +549,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    RTS_StaticCtxLock();
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -560,9 +567,100 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    RTS_StaticCtxUnlock();
 
     return series_list;
+}
+
+// Remote tasks (one reply per shard) used by coordinator-side fanout.
+static void TS_MR_RemoteTask_SharedFreeInputs(Record *r, QueryPredicates_Arg *args) {
+    if (r) {
+        RTS_StaticCtxLock();
+        MR_RecordFree(r);
+        RTS_StaticCtxUnlock();
+    }
+    if (args) {
+        QueryPredicates_ObjectFree(args);
+    }
+}
+
+static void TS_MR_RemoteTask_Mget(Record *r,
+                                  void *args,
+                                  void (*onDone)(void *PD, Record *r),
+                                  void (*onError)(void *PD, MRError *r),
+                                  void *pd) {
+    QueryPredicates_Arg *predicates = args;
+    if (!predicates) {
+        // LibMR may invoke remote tasks with NULL args after a failed deserialization
+        // (see TODOs in LibMR around handling serialization failures).
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
+    }
+    const bool resp3 = predicates ? predicates->resp3 : false;
+    // Ensure we run exactly once.
+    predicates->shouldReturnNull = false;
+    Record *res = ShardMgetMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = resp3 ? MapRecord_Create(0) : ListRecord_Create(0);
+    }
+    onDone(pd, res);
+}
+
+static void TS_MR_RemoteTask_Mrange(Record *r,
+                                    void *args,
+                                    void (*onDone)(void *PD, Record *r),
+                                    void (*onError)(void *PD, MRError *r),
+                                    void *pd) {
+    QueryPredicates_Arg *predicates = args;
+    if (!predicates) {
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
+    }
+    predicates->shouldReturnNull = false;
+    Record *res = ShardSeriesMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = ListRecord_Create(0);
+    }
+    onDone(pd, res);
+}
+
+static void TS_MR_RemoteTask_QueryIndex(Record *r,
+                                        void *args,
+                                        void (*onDone)(void *PD, Record *r),
+                                        void (*onError)(void *PD, MRError *r),
+                                        void *pd) {
+    QueryPredicates_Arg *predicates = args;
+    if (!predicates) {
+        TS_MR_RemoteTask_SharedFreeInputs(r, NULL);
+        static const char err_msg[] = "Remote task args deserialization failed";
+        if (onError) {
+            onError(pd, MR_ErrorCreate(err_msg, sizeof(err_msg) - 1));
+        } else {
+            onDone(pd, ListRecord_Create(0));
+        }
+        return;
+    }
+    predicates->shouldReturnNull = false;
+    Record *res = ShardQueryindexMapper(NULL, predicates);
+    TS_MR_RemoteTask_SharedFreeInputs(r, predicates);
+    if (!res) {
+        res = ListRecord_Create(0);
+    }
+    onDone(pd, res);
 }
 
 static MRObjectType *MR_CreateType(char *type,
@@ -730,6 +828,14 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardQueryindexMapper", ShardQueryindexMapper, QueryPredicatesType);
+
+    // Remote tasks used by coordinator to reduce inter-shard messaging:
+    // - One request per shard
+    // - One reply per shard with an aggregated record (List/Map)
+    MR_RegisterRemoteTask("TSDB_MGET_REMOTE_TASK", TS_MR_RemoteTask_Mget, QueryPredicatesType);
+    MR_RegisterRemoteTask("TSDB_MRANGE_REMOTE_TASK", TS_MR_RemoteTask_Mrange, QueryPredicatesType);
+    MR_RegisterRemoteTask(
+        "TSDB_QUERYINDEX_REMOTE_TASK", TS_MR_RemoteTask_QueryIndex, QueryPredicatesType);
 
     return REDISMODULE_OK;
 }
