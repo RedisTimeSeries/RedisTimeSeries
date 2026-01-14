@@ -18,6 +18,8 @@ typedef struct SlotRangeAccum
     size_t count;
 } SlotRangeAccum;
 
+#define RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS "Query requires unavailable slots"
+
 static int cmp_slotrange_by_start(const void *a, const void *b) {
     const SlotRangeRecord *ra = a;
     const SlotRangeRecord *rb = b;
@@ -30,15 +32,13 @@ static void SlotRangeAccum_Free(SlotRangeAccum *acc) {
     acc->count = 0;
 }
 
-static bool validate_and_accumulate_envelope(RedisModuleCtx *rctx,
-                                             SlotRangeAccum *acc,
-                                             const ShardEnvelopeRecord *env) {
-    const size_t n = ShardEnvelopeRecord_GetSlotRangesCount(env);
-    const SlotRangeRecord *ranges = ShardEnvelopeRecord_GetSlotRanges(env);
+static bool validate_and_accumulate_shard_slots(RedisModuleCtx *rctx,
+                                                SlotRangeAccum *acc,
+                                                const ShardEnvelopeRecord *shardResult) {
+    size_t n = 0;
+    const SlotRangeRecord *ranges = ShardEnvelopeRecord_SlotRanges(shardResult, &n);
     if (n == 0 || ranges == NULL) {
-        RedisModule_ReplyWithError(
-            rctx,
-            "Multi-shard command failed due to missing slot ownership metadata. Please retry.");
+        RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
 
@@ -48,45 +48,32 @@ static bool validate_and_accumulate_envelope(RedisModuleCtx *rctx,
     return true;
 }
 
-static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, const SlotRangeAccum *acc) {
+static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum *acc) {
     if (acc->count == 0) {
-        RedisModule_ReplyWithError(
-            rctx,
-            "Multi-shard command failed due to missing slot ownership metadata. Please retry.");
+        RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
 
     // Validate that shard-reported ownership covers all cluster slots exactly once.
     // Overlap or gaps mean shards replied under inconsistent views.
-    SlotRangeRecord *tmp = malloc(sizeof(*tmp) * acc->count);
-    memcpy(tmp, acc->ranges, sizeof(*tmp) * acc->count);
-    qsort(tmp, acc->count, sizeof(*tmp), cmp_slotrange_by_start);
+    qsort(acc->ranges, acc->count, sizeof(*acc->ranges), cmp_slotrange_by_start);
 
     int expected = 0;
     for (size_t i = 0; i < acc->count; i++) {
-        const int start = (int)tmp[i].start;
-        const int end = (int)tmp[i].end;
+        const int start = (int)acc->ranges[i].start;
+        const int end = (int)acc->ranges[i].end;
         if (start != expected) {
-            free(tmp);
-            RedisModule_ReplyWithError(rctx,
-                                       "Multi-shard command failed due to cluster topology change "
-                                       "during execution. Please retry.");
+            RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
             return false;
         }
         if (end < start) {
-            free(tmp);
-            RedisModule_ReplyWithError(
-                rctx,
-                "Multi-shard command failed due to invalid slot ownership metadata. Please retry.");
+            RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
             return false;
         }
         expected = end + 1;
     }
-    free(tmp);
     if (expected != (1 << 14)) {
-        RedisModule_ReplyWithError(rctx,
-                                   "Multi-shard command failed due to cluster topology change "
-                                   "during execution. Please retry.");
+        RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
 
@@ -152,7 +139,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_envelope(rctx, &acc, env)) {
+        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -214,7 +201,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_envelope(rctx, &acc, env)) {
+        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -277,7 +264,7 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_envelope(rctx, &acc, env)) {
+        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -331,7 +318,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     TS_ResultSet *resultset = NULL;
 
-    // First pass: validate metadata (epoch + slot coverage) and compute total length if needed.
+    // First pass: validate slot ownership metadata and compute total length if needed
+    // (non-groupby).
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -341,7 +329,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_envelope(rctx, &acc, env)) {
+        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }

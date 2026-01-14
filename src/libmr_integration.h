@@ -72,14 +72,11 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
-typedef struct SlotRangeRecord
-{
-    uint16_t start;
-    uint16_t end;
-} SlotRangeRecord;
+// Reuse Redis Module API slot range struct.
+typedef RedisModuleSlotRange SlotRangeRecord;
 
-// Wrapper record used for shard->coordinator internal communication. It carries a stable view id
-// and the shard's slot ranges, alongside the actual mapper payload.
+// Wrapper record used for shard->coordinator internal communication. It carries the shard's
+// owned slot ranges (captured under the thread-safe lock), alongside the actual mapper payload.
 typedef struct ShardEnvelopeRecord
 {
     Record base;
@@ -93,8 +90,8 @@ MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetShardEnvelopeRecordType();
 
-size_t ShardEnvelopeRecord_GetSlotRangesCount(const ShardEnvelopeRecord *r);
-const SlotRangeRecord *ShardEnvelopeRecord_GetSlotRanges(const ShardEnvelopeRecord *r);
+// Similar to RedisModule_StringPtrLen(): returns pointer and writes length to out param.
+const SlotRangeRecord *ShardEnvelopeRecord_SlotRanges(const ShardEnvelopeRecord *r, size_t *count);
 Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r);
 
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);

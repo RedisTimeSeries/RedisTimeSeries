@@ -29,11 +29,10 @@ MRRecordType *GetShardEnvelopeRecordType() {
     return ShardEnvelopeRecordType;
 }
 
-size_t ShardEnvelopeRecord_GetSlotRangesCount(const ShardEnvelopeRecord *r) {
-    return r->slotRangesCount;
-}
-
-const SlotRangeRecord *ShardEnvelopeRecord_GetSlotRanges(const ShardEnvelopeRecord *r) {
+const SlotRangeRecord *ShardEnvelopeRecord_SlotRanges(const ShardEnvelopeRecord *r, size_t *count) {
+    if (count) {
+        *count = r->slotRangesCount;
+    }
     return r->slotRanges;
 }
 

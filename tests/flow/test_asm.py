@@ -67,6 +67,7 @@ def test_asm_with_data_and_queries_during_migrations():
                 assert (
                     "cluster topology change during execution" in msg
                     or "missing slot ownership metadata" in msg
+                    or "Query requires unavailable slots" in msg
                     or "Please retry" in msg
                 ), msg
 
@@ -115,6 +116,7 @@ def test_asm_multishard_queryindex_is_consistent_or_retryable():
                 assert (
                     "cluster topology change during execution" in msg
                     or "missing slot ownership metadata" in msg
+                    or "Query requires unavailable slots" in msg
                     or "Please retry" in msg
                 ), msg
 
