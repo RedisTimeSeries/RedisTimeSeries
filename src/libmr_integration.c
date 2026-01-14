@@ -529,12 +529,22 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const unsigned int slot = RedisModule_ClusterKeySlot(keyName);
+        RedisModuleString *keyName = NULL;
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+        }
         if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
-            RedisModule_FreeString(rts_staticCtx, keyName);
+            if (keyName) {
+                RedisModule_FreeString(rts_staticCtx, keyName);
+            }
             continue;
+        }
+        if (!keyName) {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
         }
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
@@ -601,12 +611,22 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const unsigned int slot = RedisModule_ClusterKeySlot(keyName);
+        RedisModuleString *keyName = NULL;
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+        }
         if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
-            RedisModule_FreeString(rts_staticCtx, keyName);
+            if (keyName) {
+                RedisModule_FreeString(rts_staticCtx, keyName);
+            }
             continue;
+        }
+        if (!keyName) {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
         }
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
@@ -697,10 +717,15 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     Record *series_list = ListRecord_Create(0);
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        const unsigned int slot = RedisModule_ClusterKeySlot(keyName);
-        RedisModule_FreeString(rts_staticCtx, keyName);
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            RedisModuleString *keyName =
+                RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+            RedisModule_FreeString(rts_staticCtx, keyName);
+        }
         if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
             continue;
         }
