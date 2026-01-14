@@ -629,6 +629,7 @@ void TS_INTERNAL_SLOT_RANGES(struct RedisModuleCtx *ctx, const char *sender_id, 
         RedisModule_ReplyWithLongLong(ctx, sra->ranges->start);
         RedisModule_ReplyWithLongLong(ctx, sra->ranges->end);
     }
+    RedisModule_ClusterFreeSlotRanges(ctx, sra);
 }
 
 void TS_INTERNAL_MRANGE(struct RedisModuleCtx *ctx, const char *sender_id, void *args) {
