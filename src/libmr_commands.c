@@ -20,6 +20,13 @@ typedef struct SlotRangeAccum
 
 #define RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS "Query requires unavailable slots"
 
+static inline bool should_validate_slot_ranges(RedisModuleCtx *rctx) {
+    // Redis core note: RM_ClusterGetLocalSlotRanges() can be incorrect when cluster-enabled=no.
+    // Only validate slot coverage when Redis runs in OSS Cluster mode (cluster-enabled=yes).
+    const int flags = RedisModule_GetContextFlags(rctx);
+    return (flags & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
+}
+
 static int cmp_slotrange_by_start(const void *a, const void *b) {
     const SlotRangeRecord *ra = a;
     const SlotRangeRecord *rb = b;
@@ -35,21 +42,40 @@ static void SlotRangeAccum_Free(SlotRangeAccum *acc) {
 static bool validate_and_accumulate_shard_slots(RedisModuleCtx *rctx,
                                                 SlotRangeAccum *acc,
                                                 const ShardEnvelopeRecord *shardResult) {
+    if (!should_validate_slot_ranges(rctx)) {
+        return true;
+    }
     size_t n = 0;
     const SlotRangeRecord *ranges = ShardEnvelopeRecord_SlotRanges(shardResult, &n);
+    RedisModule_Log(
+        rctx, "notice", "slotranges: got shard slots metadata ptr=%p count=%zu", (void *)ranges, n);
     if (n == 0 || ranges == NULL) {
+        RedisModule_Log(rctx, "warning", "slotranges: missing shard slots metadata");
         RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
 
     acc->ranges = realloc(acc->ranges, sizeof(*acc->ranges) * (acc->count + n));
     memcpy(acc->ranges + acc->count, ranges, sizeof(*ranges) * n);
+    for (size_t i = 0; i < n; i++) {
+        RedisModule_Log(rctx,
+                        "notice",
+                        "slotranges: shard range[%zu]=[%u,%u]",
+                        i,
+                        (unsigned)ranges[i].start,
+                        (unsigned)ranges[i].end);
+    }
     acc->count += n;
+    RedisModule_Log(rctx, "notice", "slotranges: accumulated ranges count=%zu", acc->count);
     return true;
 }
 
 static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum *acc) {
+    if (!should_validate_slot_ranges(rctx)) {
+        return true;
+    }
     if (acc->count == 0) {
+        RedisModule_Log(rctx, "warning", "slotranges: validate coverage failed: count==0");
         RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
@@ -57,22 +83,48 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum
     // Validate that shard-reported ownership covers all cluster slots exactly once.
     // Overlap or gaps mean shards replied under inconsistent views.
     qsort(acc->ranges, acc->count, sizeof(*acc->ranges), cmp_slotrange_by_start);
+    for (size_t i = 0; i < acc->count; i++) {
+        RedisModule_Log(rctx,
+                        "notice",
+                        "slotranges: sorted[%zu]=[%u,%u]",
+                        i,
+                        (unsigned)acc->ranges[i].start,
+                        (unsigned)acc->ranges[i].end);
+    }
 
     int expected = 0;
     for (size_t i = 0; i < acc->count; i++) {
         const int start = (int)acc->ranges[i].start;
         const int end = (int)acc->ranges[i].end;
         if (start != expected) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "slotranges: GAP/OVERLAP at i=%zu start=%d expected=%d end=%d",
+                            i,
+                            start,
+                            expected,
+                            end);
             RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
             return false;
         }
         if (end < start) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "slotranges: invalid range at i=%zu start=%d end=%d",
+                            i,
+                            start,
+                            end);
             RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
             return false;
         }
         expected = end + 1;
     }
     if (expected != (1 << 14)) {
+        RedisModule_Log(rctx,
+                        "warning",
+                        "slotranges: coverage incomplete: expected_end=%d wanted=%d",
+                        expected,
+                        (1 << 14));
         RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
     }
