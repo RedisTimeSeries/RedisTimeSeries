@@ -189,32 +189,45 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
     *outRanges = NULL;
     *outCount = 0;
 
-    // Redis Enterprise / RLEC: prefer sharding range API when available.
-    // In Enterprise, the OSS Cluster slot-range APIs may be unavailable or may not reflect
-    // shard ownership the way multi-shard fanout expects.
+    RedisModule_Log(rts_staticCtx,
+                    "notice",
+                    "slotranges: enter CaptureOwnedSlotRanges_locked "
+                    "ClusterGetLocalSlotRanges=%p ClusterFreeSlotRanges=%p ShardingGetSlotRange=%p",
+                    (void *)RedisModule_ClusterGetLocalSlotRanges,
+                    (void *)RedisModule_ClusterFreeSlotRanges,
+                    (void *)RedisModule_ShardingGetSlotRange);
+
     if (RedisModule_ShardingGetSlotRange != NULL) {
         int firstSlot = -1;
         int lastSlot = -1;
         RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
-        if (firstSlot >= 0 && lastSlot >= firstSlot) {
-            SlotRangeRecord *ranges = malloc(sizeof(*ranges));
-            ranges[0].start = (uint16_t)firstSlot;
-            ranges[0].end = (uint16_t)lastSlot;
-            *outRanges = ranges;
-            *outCount = 1;
-            return;
-        }
+        RedisModule_Log(rts_staticCtx,
+                        "notice",
+                        "slotranges: ShardingGetSlotRange first=%d last=%d",
+                        firstSlot,
+                        lastSlot);
     }
 
     if (RedisModule_ClusterGetLocalSlotRanges != NULL &&
         RedisModule_ClusterFreeSlotRanges != NULL) {
         RedisModuleSlotRangeArray *slots = RedisModule_ClusterGetLocalSlotRanges(rts_staticCtx);
+        RedisModule_Log(rts_staticCtx,
+                        "notice",
+                        "slotranges: ClusterGetLocalSlotRanges slots=%p num_ranges=%d",
+                        (void *)slots,
+                        slots ? slots->num_ranges : -1);
         if (slots && slots->num_ranges > 0) {
             const size_t n = (size_t)slots->num_ranges;
             SlotRangeRecord *ranges = malloc(sizeof(*ranges) * n);
             for (size_t i = 0; i < n; i++) {
                 ranges[i].start = slots->ranges[i].start;
                 ranges[i].end = slots->ranges[i].end;
+                RedisModule_Log(rts_staticCtx,
+                                "notice",
+                                "slotranges: local[%zu]=[%u,%u]",
+                                i,
+                                (unsigned)ranges[i].start,
+                                (unsigned)ranges[i].end);
             }
             RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
             *outRanges = ranges;
@@ -224,11 +237,15 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
         if (slots) {
             RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
         }
-        goto fallback_all;
     }
 
-fallback_all:
-    // Conservative fallback: treat as all slots owned.
+    // TEMP debug behavior: keep previous behavior for now, but log loudly.
+    RedisModule_Log(
+        rts_staticCtx,
+        "warning",
+        "slotranges: falling back to ALL slots (this will likely cause 'Query requires unavailable "
+        "slots' on multi-shard commands)");
+
     {
         SlotRangeRecord *all = malloc(sizeof(*all));
         all[0].start = 0;
