@@ -5,7 +5,6 @@
 #include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
 #include "consts.h"
-#include "config.h"
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "query_language.h"
@@ -198,9 +197,7 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
                     (void *)RedisModule_ClusterFreeSlotRanges,
                     (void *)RedisModule_ShardingGetSlotRange);
 
-    // Enterprise: ClusterGetLocalSlotRanges currently reports [0..16383] on each shard (overlap),
-    // so prefer ShardingGetSlotRange for per-shard ownership.
-    if (RTS_IsEnterprise() && RedisModule_ShardingGetSlotRange != NULL) {
+    if (RedisModule_ShardingGetSlotRange != NULL) {
         int firstSlot = -1;
         int lastSlot = -1;
         RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
@@ -209,14 +206,6 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
                         "slotranges: ShardingGetSlotRange first=%d last=%d",
                         firstSlot,
                         lastSlot);
-        if (firstSlot >= 0 && lastSlot >= firstSlot) {
-            SlotRangeRecord *ranges = malloc(sizeof(*ranges));
-            ranges[0].start = (uint16_t)firstSlot;
-            ranges[0].end = (uint16_t)lastSlot;
-            *outRanges = ranges;
-            *outCount = 1;
-            return;
-        }
     }
 
     if (RedisModule_ClusterGetLocalSlotRanges != NULL &&
