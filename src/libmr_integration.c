@@ -7,7 +7,6 @@
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
-#include "module.h"
 #include "query_language.h"
 #include "tsdb.h"
 
@@ -24,6 +23,22 @@ static MRRecordType *SeriesRecordType = NULL;
 static MRRecordType *LongRecordType = NULL;
 static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *mapRecordType = NULL;
+static MRRecordType *ShardEnvelopeRecordType = NULL;
+
+MRRecordType *GetShardEnvelopeRecordType() {
+    return ShardEnvelopeRecordType;
+}
+
+const SlotRangeRecord *ShardEnvelopeRecord_SlotRanges(const ShardEnvelopeRecord *r, size_t *count) {
+    if (count) {
+        *count = r->slotRangesCount;
+    }
+    return r->slotRanges;
+}
+
+Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r) {
+    return r->payload;
+}
 
 static Record *GetNullRecord() {
     return &NullRecord;
@@ -112,6 +127,110 @@ static void LongRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError
 static void *LongRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 static Record *RedisStringRecord_Create(RedisModuleString *str);
+
+// Forward declaration (implemented later in this file).
+static Record *MR_RecordCreate(MRRecordType *type, size_t size);
+
+static ShardEnvelopeRecord *ShardEnvelopeRecord_Create(SlotRangeRecord *ranges,
+                                                       size_t rangesCount,
+                                                       Record *payload) {
+    ShardEnvelopeRecord *ret =
+        (ShardEnvelopeRecord *)MR_RecordCreate(ShardEnvelopeRecordType, sizeof(*ret));
+    ret->slotRangesCount = rangesCount;
+    ret->slotRanges = ranges;
+    ret->payload = payload;
+    return ret;
+}
+
+static void ShardEnvelopeRecord_Free(void *base) {
+    ShardEnvelopeRecord *r = (ShardEnvelopeRecord *)base;
+    if (r->payload) {
+        MR_RecordFree(r->payload);
+    }
+    free(r->slotRanges);
+    free(r);
+}
+
+static void ShardEnvelopeRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
+    ShardEnvelopeRecord *r = (ShardEnvelopeRecord *)arg;
+    MR_SerializationCtxWriteLongLong(sctx, (long long)r->slotRangesCount, error);
+    for (size_t i = 0; i < r->slotRangesCount; i++) {
+        MR_SerializationCtxWriteLongLong(sctx, (long long)r->slotRanges[i].start, error);
+        MR_SerializationCtxWriteLongLong(sctx, (long long)r->slotRanges[i].end, error);
+    }
+    MR_RecordSerialize(r->payload, sctx);
+}
+
+static void *ShardEnvelopeRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
+    const size_t count = (size_t)MR_SerializationCtxReadLongLong(sctx, error);
+    SlotRangeRecord *ranges = NULL;
+    if (count > 0) {
+        ranges = malloc(sizeof(*ranges) * count);
+        for (size_t i = 0; i < count; i++) {
+            ranges[i].start = (uint16_t)MR_SerializationCtxReadLongLong(sctx, error);
+            ranges[i].end = (uint16_t)MR_SerializationCtxReadLongLong(sctx, error);
+        }
+    }
+    Record *payload = MR_RecordDeSerialize(sctx);
+    return ShardEnvelopeRecord_Create(ranges, count, payload);
+}
+
+static void ShardEnvelopeRecord_SendReply(RedisModuleCtx *rctx, void *record) {
+    ShardEnvelopeRecord *r = (ShardEnvelopeRecord *)record;
+    if (r->payload) {
+        r->payload->recordType->sendReply(rctx, r->payload);
+    } else {
+        RedisModule_ReplyWithNull(rctx);
+    }
+}
+
+static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *outCount) {
+    *outRanges = NULL;
+    *outCount = 0;
+
+    if (RedisModule_ClusterGetLocalSlotRanges != NULL &&
+        RedisModule_ClusterFreeSlotRanges != NULL) {
+        RedisModuleSlotRangeArray *slots = RedisModule_ClusterGetLocalSlotRanges(rts_staticCtx);
+        if (slots && slots->num_ranges > 0) {
+            const size_t n = (size_t)slots->num_ranges;
+            SlotRangeRecord *ranges = malloc(sizeof(*ranges) * n);
+            for (size_t i = 0; i < n; i++) {
+                ranges[i].start = slots->ranges[i].start;
+                ranges[i].end = slots->ranges[i].end;
+            }
+            RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
+            *outRanges = ranges;
+            *outCount = n;
+            return;
+        }
+        if (slots) {
+            RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
+        }
+        goto fallback_all;
+    }
+
+    // Fallback for older Redis versions: treat as all slots owned.
+    // (Prefer RedisModule_ClusterGetLocalSlotRanges for authoritative local ownership.)
+
+fallback_all:
+    // Conservative fallback: treat as all slots owned.
+    {
+        SlotRangeRecord *all = malloc(sizeof(*all));
+        all[0].start = 0;
+        all[0].end = (uint16_t)((1 << 14) - 1);
+        *outRanges = all;
+        *outCount = 1;
+    }
+}
+
+static bool SlotInRanges(unsigned int slot, const SlotRangeRecord *ranges, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (ranges[i].start <= slot && slot <= ranges[i].end) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
                                              const RedisModuleString *arg,
@@ -391,6 +510,10 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
+    SlotRangeRecord *slotRanges = NULL;
+    size_t slotRangesCount = 0;
+    CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
+
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
@@ -405,8 +528,23 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        RedisModuleString *keyName = NULL;
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+        }
+        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
+            if (keyName) {
+                RedisModule_FreeString(rts_staticCtx, keyName);
+            }
+            continue;
+        }
+        if (!keyName) {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        }
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
 
@@ -433,7 +571,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return series_list;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 
 Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
@@ -450,6 +588,10 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     }
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
+
+    SlotRangeRecord *slotRanges = NULL;
+    size_t slotRangesCount = 0;
+    CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
@@ -471,8 +613,23 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        RedisModuleString *keyName =
-            RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        RedisModuleString *keyName = NULL;
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+        }
+        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
+            if (keyName) {
+                RedisModule_FreeString(rts_staticCtx, keyName);
+            }
+            continue;
+        }
+        if (!keyName) {
+            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+        }
         const GetSeriesResult status =
             GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
         RedisModule_FreeString(rts_staticCtx, keyName);
@@ -537,7 +694,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return series_listOrMap;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_listOrMap)->base;
 }
 
 Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
@@ -550,6 +707,10 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
+    SlotRangeRecord *slotRanges = NULL;
+    size_t slotRangesCount = 0;
+    CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
+
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
@@ -561,6 +722,18 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     Record *series_list = ListRecord_Create(0);
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        unsigned int slot = 0;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            RedisModuleString *keyName =
+                RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+            RedisModule_FreeString(rts_staticCtx, keyName);
+        }
+        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
+            continue;
+        }
         ListRecord_Add(series_list,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
     }
@@ -568,7 +741,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
-    return series_list;
+    return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 
 static MRObjectType *MR_CreateType(char *type,
@@ -728,6 +901,18 @@ int register_rg(RedisModuleCtx *ctx, long long numThreads) {
                                            NULL);
 
     if (MR_RegisterRecord(DoubleRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    ShardEnvelopeRecordType = MR_RecordTypeCreate("ShardEnvelopeRecord",
+                                                  ShardEnvelopeRecord_Free,
+                                                  NULL,
+                                                  ShardEnvelopeRecord_Serialize,
+                                                  ShardEnvelopeRecord_Deserialize,
+                                                  NULL,
+                                                  ShardEnvelopeRecord_SendReply,
+                                                  NULL);
+    if (MR_RegisterRecord(ShardEnvelopeRecordType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
