@@ -189,6 +189,23 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
     *outRanges = NULL;
     *outCount = 0;
 
+    // Redis Enterprise / RLEC: prefer sharding range API when available.
+    // In Enterprise, the OSS Cluster slot-range APIs may be unavailable or may not reflect
+    // shard ownership the way multi-shard fanout expects.
+    if (RedisModule_ShardingGetSlotRange != NULL) {
+        int firstSlot = -1;
+        int lastSlot = -1;
+        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
+        if (firstSlot >= 0 && lastSlot >= firstSlot) {
+            SlotRangeRecord *ranges = malloc(sizeof(*ranges));
+            ranges[0].start = (uint16_t)firstSlot;
+            ranges[0].end = (uint16_t)lastSlot;
+            *outRanges = ranges;
+            *outCount = 1;
+            return;
+        }
+    }
+
     if (RedisModule_ClusterGetLocalSlotRanges != NULL &&
         RedisModule_ClusterFreeSlotRanges != NULL) {
         RedisModuleSlotRangeArray *slots = RedisModule_ClusterGetLocalSlotRanges(rts_staticCtx);
@@ -207,23 +224,7 @@ static void CaptureOwnedSlotRanges_locked(SlotRangeRecord **outRanges, size_t *o
         if (slots) {
             RedisModule_ClusterFreeSlotRanges(rts_staticCtx, slots);
         }
-        goto fallback_sharding;
-    }
-
-fallback_sharding:
-    // Redis Enterprise / RLEC: use sharding range API if available (returns the local shard range).
-    if (RedisModule_ShardingGetSlotRange != NULL) {
-        int firstSlot = -1;
-        int lastSlot = -1;
-        RedisModule_ShardingGetSlotRange(&firstSlot, &lastSlot);
-        if (firstSlot >= 0 && lastSlot >= firstSlot) {
-            SlotRangeRecord *ranges = malloc(sizeof(*ranges));
-            ranges[0].start = (uint16_t)firstSlot;
-            ranges[0].end = (uint16_t)lastSlot;
-            *outRanges = ranges;
-            *outCount = 1;
-            return;
-        }
+        goto fallback_all;
     }
 
 fallback_all:
