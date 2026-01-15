@@ -88,7 +88,7 @@ typedef struct MRangeArgs
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
-    ReducerArgs gropuByReducerArgs;
+    ReducerArgs groupByReducerArgs;
     bool reverse;
 } MRangeArgs;
 

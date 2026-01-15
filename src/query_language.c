@@ -945,7 +945,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }
-        if (parseMultiSeriesReduceArgs(ctx, argv[reduce_location + 1], &args.gropuByReducerArgs) !=
+        if (parseMultiSeriesReduceArgs(ctx, argv[reduce_location + 1], &args.groupByReducerArgs) !=
             TSDB_OK) {
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;

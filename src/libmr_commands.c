@@ -282,7 +282,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             tempSeries = array_append(tempSeries, s);
 
             if (data->args.groupByLabel) {
-                ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
+                ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             } else {
                 ReplySeriesArrayPos(rctx,
                                     s,
@@ -300,7 +300,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         // Apply the reducer
         RangeArgs args = data->args.rangeArgs;
         args.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(rctx, resultset, &args, &data->args.gropuByReducerArgs);
+        ResultSet_ApplyReducer(rctx, resultset, &args, &data->args.groupByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = data->args.rangeArgs;
@@ -331,7 +331,7 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     MGetArgs args;
     if (parseMGetCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
@@ -378,7 +378,7 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse) {
+int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse) {
     MRangeArgs args;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_OK;
@@ -406,10 +406,9 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 
     MRError *err = NULL;
 
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -429,7 +428,7 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     return REDISMODULE_OK;
 }
 
-int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
+int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     MRError *err = NULL;
 
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));

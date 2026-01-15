@@ -88,7 +88,7 @@ void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record);
 Series *SeriesRecord_IntoSeries(SeriesRecord *record);
 
-int register_rg(RedisModuleCtx *ctx, long long numThreads);
+int register_mr(RedisModuleCtx *ctx, long long numThreads);
 bool IsMRCluster();
 
 #endif // REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
