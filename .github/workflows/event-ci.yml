@@ -28,19 +28,26 @@ jobs:
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]
     with:
-      os: jammy rocky9 bullseye amazonlinux2 azurelinux3
+      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 azurelinux3
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
+      quick: false
     secrets: inherit
   mariner:
     uses: ./.github/workflows/mariner2.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
+      quick: false
     secrets: inherit
   arm64:
     uses: ./.github/workflows/flow-linux-arm.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+    secrets: inherit
+  macos:
+    uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
@@ -52,7 +59,7 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
+      quick: false
       run_valgrind: true
     secrets: inherit
   linux-sanitizer:
@@ -61,6 +68,6 @@ jobs:
     with:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
+      quick: false
       run_sanitizer: true
     secrets: inherit
