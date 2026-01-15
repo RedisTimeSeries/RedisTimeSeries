@@ -82,3 +82,19 @@ def test_incrby_error_cases():
         # Test with invalid addend value
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.INCRBY', 'test_key', 'not_a_number')
+
+def test_ts_incrby_NaN():
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('ts.create', 'tester')
+        r.execute_command('ts.add', 'tester', 1, 'nan')
+
+        # Add a number to a NaN value, error expected
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.incrby', 'tester', '1')
+            r.execute_command('TS.decrby', 'tester', '1')
+        
+        r.execute_command('ts.add', 'tester', 2,  1)
+        # Add a NaN value to a number, error expected
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.incrby', 'tester', 'nan')
+            r.execute_command('TS.decrby', 'tester', 'nan')

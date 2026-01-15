@@ -96,6 +96,12 @@ void SingleValueReset(void *contextPtr) {
     context->value = 0;
 }
 
+void *LastValueCreateContext(__unused bool reverse) {
+    SingleValueContext *context = malloc(sizeof *context);
+    context->value = NAN;
+    return context;
+}
+
 void LastValueReset(void *contextPtr) {
     // Don't do anything cause with EMPTY flag we would like to use the last value
     return;
@@ -516,6 +522,18 @@ void rm_free(void *ptr) {
     free(ptr);
 }
 
+bool nonNaNValueValid(double value) {
+    return !isnan(value);
+}
+
+bool nanValueValid(double value) {
+    return isnan(value);
+}
+
+bool allValueValid(double value) {
+    return true;
+}
+
 // time weighted avg
 static AggregationClass aggWAvg = {
     .type = TS_AGG_TWA,
@@ -532,6 +550,7 @@ static AggregationClass aggWAvg = {
     .getLastSample = TwaGetLastSample,
     .resetContext = TwaReset,
     .cloneContext = TwaCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggAvg = {
@@ -550,6 +569,7 @@ static AggregationClass aggAvg = {
     .getLastSample = NULL,
     .resetContext = AvgReset,
     .cloneContext = AvgCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggStdP = {
@@ -568,6 +588,7 @@ static AggregationClass aggStdP = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggStdS = {
@@ -586,6 +607,7 @@ static AggregationClass aggStdS = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggVarP = {
@@ -604,6 +626,7 @@ static AggregationClass aggVarP = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggVarS = {
@@ -622,6 +645,7 @@ static AggregationClass aggVarS = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 void *MaxMinCreateContext(__unused bool reverse) {
@@ -755,6 +779,7 @@ static AggregationClass aggMax = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggMin = {
@@ -773,6 +798,7 @@ static AggregationClass aggMin = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggSum = {
@@ -791,6 +817,7 @@ static AggregationClass aggSum = {
     .getLastSample = NULL,
     .resetContext = SingleValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggCount = {
@@ -809,6 +836,7 @@ static AggregationClass aggCount = {
     .getLastSample = NULL,
     .resetContext = SingleValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggFirst = {
@@ -827,11 +855,12 @@ static AggregationClass aggFirst = {
     .getLastSample = NULL,
     .resetContext = FirstValueReset,
     .cloneContext = FirstValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggLast = {
     .type = TS_AGG_LAST,
-    .createContext = SingleValueCreateContext,
+    .createContext = LastValueCreateContext,
     .appendValue = LastAppendValue,
     .appendValueVec = NULL, /* determined on run time */
     .freeContext = rm_free,
@@ -845,6 +874,7 @@ static AggregationClass aggLast = {
     .getLastSample = NULL,
     .resetContext = LastValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggRange = {
@@ -863,6 +893,45 @@ static AggregationClass aggRange = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
+};
+
+static AggregationClass aggCountNaN = {
+    .type = TS_AGG_COUNT_NAN,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+    .isValueValid = nanValueValid,
+};
+
+static AggregationClass aggCountAll = {
+    .type = TS_AGG_COUNT_ALL,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+    .isValueValid = allValueValid,
 };
 
 void initGlobalCompactionFunctions() {
@@ -896,45 +965,53 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    int result = TS_AGG_INVALID;
     char agg_type_lower[len];
     for (int i = 0; i < len; i++) {
         agg_type_lower[i] = tolower(agg_type[i]);
     }
-    if (len == 3) {
-        if (strncmp(agg_type_lower, "min", len) == 0 && len == 3) {
-            result = TS_AGG_MIN;
-        } else if (strncmp(agg_type_lower, "max", len) == 0) {
-            result = TS_AGG_MAX;
-        } else if (strncmp(agg_type_lower, "sum", len) == 0) {
-            result = TS_AGG_SUM;
-        } else if (strncmp(agg_type_lower, "avg", len) == 0) {
-            result = TS_AGG_AVG;
-        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
-            result = TS_AGG_TWA;
-        }
-    } else if (len == 4) {
-        if (strncmp(agg_type_lower, "last", len) == 0) {
-            result = TS_AGG_LAST;
-        }
-    } else if (len == 5) {
-        if (strncmp(agg_type_lower, "count", len) == 0) {
-            result = TS_AGG_COUNT;
-        } else if (strncmp(agg_type_lower, "range", len) == 0) {
-            result = TS_AGG_RANGE;
-        } else if (strncmp(agg_type_lower, "first", len) == 0) {
-            result = TS_AGG_FIRST;
-        } else if (strncmp(agg_type_lower, "std.p", len) == 0) {
-            result = TS_AGG_STD_P;
-        } else if (strncmp(agg_type_lower, "std.s", len) == 0) {
-            result = TS_AGG_STD_S;
-        } else if (strncmp(agg_type_lower, "var.p", len) == 0) {
-            result = TS_AGG_VAR_P;
-        } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
-            result = TS_AGG_VAR_S;
-        }
+
+    switch (len) {
+        case 3:
+            if (strncmp(agg_type_lower, "min", len) == 0)
+                return TS_AGG_MIN;
+            if (strncmp(agg_type_lower, "max", len) == 0)
+                return TS_AGG_MAX;
+            if (strncmp(agg_type_lower, "sum", len) == 0)
+                return TS_AGG_SUM;
+            if (strncmp(agg_type_lower, "avg", len) == 0)
+                return TS_AGG_AVG;
+            if (strncmp(agg_type_lower, "twa", len) == 0)
+                return TS_AGG_TWA;
+            break;
+        case 4:
+            if (strncmp(agg_type_lower, "last", len) == 0)
+                return TS_AGG_LAST;
+            break;
+        case 5:
+            if (strncmp(agg_type_lower, "count", len) == 0)
+                return TS_AGG_COUNT;
+            if (strncmp(agg_type_lower, "range", len) == 0)
+                return TS_AGG_RANGE;
+            if (strncmp(agg_type_lower, "first", len) == 0)
+                return TS_AGG_FIRST;
+            if (strncmp(agg_type_lower, "std.p", len) == 0)
+                return TS_AGG_STD_P;
+            if (strncmp(agg_type_lower, "std.s", len) == 0)
+                return TS_AGG_STD_S;
+            if (strncmp(agg_type_lower, "var.p", len) == 0)
+                return TS_AGG_VAR_P;
+            if (strncmp(agg_type_lower, "var.s", len) == 0)
+                return TS_AGG_VAR_S;
+            break;
+        case 8:
+            if (strncmp(agg_type_lower, "countnan", len) == 0)
+                return TS_AGG_COUNT_NAN;
+            if (strncmp(agg_type_lower, "countall", len) == 0)
+                return TS_AGG_COUNT_ALL;
+            break;
     }
-    return result;
+
+    return TS_AGG_INVALID;
 }
 
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
@@ -965,6 +1042,10 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
+        case TS_AGG_COUNT_NAN:
+            return "COUNTNAN";
+        case TS_AGG_COUNT_ALL:
+            return "COUNTALL";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1001,6 +1082,10 @@ const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
             return "last";
         case TS_AGG_RANGE:
             return "range";
+        case TS_AGG_COUNT_NAN:
+            return "countnan";
+        case TS_AGG_COUNT_ALL:
+            return "countall";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1037,6 +1122,10 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_COUNT_NAN:
+            return &aggCountNaN;
+        case TS_AGG_COUNT_ALL:
+            return &aggCountAll;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:

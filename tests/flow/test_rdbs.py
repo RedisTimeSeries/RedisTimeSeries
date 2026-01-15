@@ -93,3 +93,31 @@ def testRDBCompatibility():
             assert normalized_info[b"duplicatePolicy"] is None
             normalized_info[b"duplicatePolicy"] = TSINFO_RESULTS[key][b"duplicatePolicy"]
             assert normalized_info == TSINFO_RESULTS[key]
+
+def testRDBCompatibilityWithNaN():
+    env = Env()
+    result = None
+    ts = int(time.time())
+    with env.getConnection() as r:
+        key = "rdb_nan_test"
+        r.execute_command("ts.create", key)
+        for _ in range(1, 1000):
+            import random
+            if ts % 10 == 0:
+                val = 'nan'
+            else:
+                val = random.uniform(10.0, 100.0)
+            r.execute_command("ts.add", key, ts, val)
+            ts += 1
+            result = r.execute_command("ts.range", key, "-", "+")
+            info = r.execute_command("ts.info", key)
+        
+        new_key = "rdb_nan_test_new"
+        dump = r.execute_command("dump", key)
+        r.execute_command("restore", new_key, 0, dump)
+        result_after = r.execute_command("ts.range", new_key, "-", "+")
+        assert result == result_after
+
+        env.dumpAndReload()
+        result_after = r.execute_command("ts.range", key, "-", "+")
+        assert result == result_after

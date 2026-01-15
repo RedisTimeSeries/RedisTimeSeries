@@ -232,3 +232,40 @@ def test_ignore_alter():
         expected = [[1000, b'1'], [1004, b'3'], [1006, b'10'], [1007, b'15.0001'], [1010, b'19']]
         actual = r.execute_command('TS.range', 'key1', 0, '+')
         assert actual == expected
+
+
+def test_ignore_NaN():
+    """
+    Verify IGNORE config never regards NaN values as duplicates.
+    NaN values should always be added regardless of IGNORE settings.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'key1', 'IGNORE', '5', '5', 'DUPLICATE_POLICY', 'LAST')
+        
+        # Add NaN as first value - should be added
+        r.execute_command('TS.ADD', 'key1', '8', 'nan')
+        
+        # Add value within ignore window - should be added (not ignored due to NaN)
+        r.execute_command('TS.ADD', 'key1', '1001', '1')
+        
+        # Add values - some within ignore window, some outside
+        r.execute_command('TS.ADD', 'key1', '1006', '3')
+        r.execute_command('TS.ADD', 'key1', '1007', '8')
+        r.execute_command('TS.ADD', 'key1', '1008', '10')
+        r.execute_command('TS.ADD', 'key1', '1009', '15.0001')
+        
+        # Sanity check
+        result = r.execute_command('TS.range', 'key1', 0, '+')
+        assert result == [
+            [8, b'NaN'], [1001, b'1'], [1007, b'8'], [1009, b'15.0001']
+        ]
+        
+        # Test adding NaN after regular values - should never be ignored
+        r.execute_command('TS.ADD', 'key1', '1010', 'nan')
+        result = r.execute_command('TS.range', 'key1', 1009, '+')
+        assert result == [[1009, b'15.0001'], [1010, b'NaN']]
+        
+        # Test that values after NaN are not ignored due to NaN comparison
+        r.execute_command('TS.ADD', 'key1', '1011', '15.0001')  # Same value as 1009, within time window of 1010
+        result = r.execute_command('TS.range', 'key1', 1010, '+')
+        assert result == [[1010, b'NaN'], [1011, b'15.0001']]

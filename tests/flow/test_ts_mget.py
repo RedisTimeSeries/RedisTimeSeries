@@ -149,3 +149,17 @@ def test_latest_flag_mget():
         assert res == [[0, '4']] or res == [[0, b'4']]
         res = r.execute_command('TS.range', key1, 0, 20)
         assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+def test_mget_NaN():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'key1', 'LABELS', 'test', 'test')
+        r.execute_command('TS.ADD', 'key1', 1, 'NaN')
+        r.execute_command('TS.ADD', 'key1', 2, '1')
+        r.execute_command('TS.ADD', 'key1', 3, 'NaN')
+        r.execute_command('TS.CREATE', 'key2', 'LABELS', 'test', 'test')
+        r.execute_command('TS.ADD', 'key2', 1, '1')
+        r.execute_command('TS.ADD', 'key2', 2, 'NaN')
+        r.execute_command('TS.ADD', 'key2', 3, '3')
+        res = r1.execute_command('TS.mget','FILTER', 'test=test')
+        assert res ==[[b'key1', [], [3, b'NaN']], [b'key2', [], [3, b'3']]] or res ==[[b'key2', [], [3, b'3']], [b'key1', [], [3, b'NaN']]], print(res)
