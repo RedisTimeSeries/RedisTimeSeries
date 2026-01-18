@@ -20,6 +20,13 @@ typedef struct SlotRangeAccum
 
 #define RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS "Query requires unavailable slots"
 
+static inline bool should_validate_slot_ranges(RedisModuleCtx *rctx) {
+    // Redis core note: RM_ClusterGetLocalSlotRanges() can be incorrect when cluster-enabled=no.
+    // Only validate slot coverage when Redis runs in OSS Cluster mode (cluster-enabled=yes).
+    const int flags = RedisModule_GetContextFlags(rctx);
+    return (flags & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
+}
+
 static int cmp_slotrange_by_start(const void *a, const void *b) {
     const SlotRangeRecord *ra = a;
     const SlotRangeRecord *rb = b;
@@ -35,6 +42,9 @@ static void SlotRangeAccum_Free(SlotRangeAccum *acc) {
 static bool validate_and_accumulate_shard_slots(RedisModuleCtx *rctx,
                                                 SlotRangeAccum *acc,
                                                 const ShardEnvelopeRecord *shardResult) {
+    if (!should_validate_slot_ranges(rctx)) {
+        return true;
+    }
     size_t n = 0;
     const SlotRangeRecord *ranges = ShardEnvelopeRecord_SlotRanges(shardResult, &n);
     if (n == 0 || ranges == NULL) {
@@ -49,6 +59,9 @@ static bool validate_and_accumulate_shard_slots(RedisModuleCtx *rctx,
 }
 
 static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum *acc) {
+    if (!should_validate_slot_ranges(rctx)) {
+        return true;
+    }
     if (acc->count == 0) {
         RedisModule_ReplyWithError(rctx, RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS);
         return false;
