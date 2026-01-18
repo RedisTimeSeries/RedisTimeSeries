@@ -30,7 +30,9 @@ sanitizer_check() {
 	local logdir="$ROOT/tests/$DIR/logs"
 
 	for file in "$logdir"/*.asan.log*; do
-		if grep -q -e "runtime error" -e "Sanitizer" -v "failed to allocate" "$file"; then
+		# Filter out a known noisy line ("grep: failed to allocate ...") and then
+		# search for actual sanitizer issues.
+		if grep -v -e "failed to allocate" "$file" | grep -q -e "runtime error" -e "Sanitizer"; then
 			echo
 			echo "### Sanitizer error in $file:"
 			cat "$file"
