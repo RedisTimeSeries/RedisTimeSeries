@@ -29,8 +29,21 @@ VALGRIND = os.getenv('VALGRIND', '0') == '1'
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
 
-Defaults.terminate_retries = 3
-Defaults.terminate_retries_secs = 1
+_terminate_retries = 3
+_terminate_retries_secs = 1
+
+# Valgrind slows shutdown significantly; give Redis more time to exit cleanly
+# to avoid RLTest force-killing processes (which then shows up as leaks).
+if VALGRIND:
+    _terminate_retries = 20
+    _terminate_retries_secs = 2
+elif SANITIZER:
+    # Sanitized builds are slower too, but not as much as valgrind.
+    _terminate_retries = 10
+    _terminate_retries_secs = 1
+
+Defaults.terminate_retries = _terminate_retries
+Defaults.terminate_retries_secs = _terminate_retries_secs
 
 
 class ShardConnectionTimeoutException(Exception):
@@ -93,7 +106,10 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    env = rltestEnv(*args,
+                    terminateRetries=_terminate_retries,
+                    terminateRetrySecs=_terminate_retries_secs,
+                    **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
