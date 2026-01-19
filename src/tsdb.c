@@ -1436,19 +1436,23 @@ AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **seri
     return res;
 }
 
-typedef struct MultiSeriesAggDupSampleIteratorAdapter {
+typedef struct
+{
     AbstractSampleIterator base;
     AbstractMultiSeriesAggDupSampleIterator *inner;
 } MultiSeriesAggDupSampleIteratorAdapter;
 
-static ChunkResult MultiSeriesAggDupSampleIteratorAdapter_GetNext(struct AbstractSampleIterator *iter,
-                                                                  Sample *sample) {
-    MultiSeriesAggDupSampleIteratorAdapter *adapter = (MultiSeriesAggDupSampleIteratorAdapter *)iter;
+static ChunkResult MultiSeriesAggDupSampleIteratorAdapter_GetNext(
+    struct AbstractSampleIterator *iter,
+    Sample *sample) {
+    MultiSeriesAggDupSampleIteratorAdapter *adapter =
+        (MultiSeriesAggDupSampleIteratorAdapter *)iter;
     return adapter->inner->GetNext(adapter->inner, sample);
 }
 
 static void MultiSeriesAggDupSampleIteratorAdapter_Close(struct AbstractSampleIterator *iter) {
-    MultiSeriesAggDupSampleIteratorAdapter *adapter = (MultiSeriesAggDupSampleIteratorAdapter *)iter;
+    MultiSeriesAggDupSampleIteratorAdapter *adapter =
+        (MultiSeriesAggDupSampleIteratorAdapter *)iter;
     if (adapter->inner) {
         adapter->inner->Close(adapter->inner);
     }
@@ -1468,7 +1472,8 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
     adapter->base.GetNext = MultiSeriesAggDupSampleIteratorAdapter_GetNext;
     adapter->base.Close = MultiSeriesAggDupSampleIteratorAdapter_Close;
     adapter->base.input = NULL;
-    adapter->inner = (AbstractMultiSeriesAggDupSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+    adapter->inner = (AbstractMultiSeriesAggDupSampleIterator *)MultiSeriesAggDupSampleIterator_New(
+        chain, reducerArgs);
     return (AbstractSampleIterator *)adapter;
 }
 
