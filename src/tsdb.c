@@ -1436,6 +1436,25 @@ AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **seri
     return res;
 }
 
+typedef struct MultiSeriesAggDupSampleIteratorAdapter {
+    AbstractSampleIterator base;
+    AbstractMultiSeriesAggDupSampleIterator *inner;
+} MultiSeriesAggDupSampleIteratorAdapter;
+
+static ChunkResult MultiSeriesAggDupSampleIteratorAdapter_GetNext(struct AbstractSampleIterator *iter,
+                                                                  Sample *sample) {
+    MultiSeriesAggDupSampleIteratorAdapter *adapter = (MultiSeriesAggDupSampleIteratorAdapter *)iter;
+    return adapter->inner->GetNext(adapter->inner, sample);
+}
+
+static void MultiSeriesAggDupSampleIteratorAdapter_Close(struct AbstractSampleIterator *iter) {
+    MultiSeriesAggDupSampleIteratorAdapter *adapter = (MultiSeriesAggDupSampleIteratorAdapter *)iter;
+    if (adapter->inner) {
+        adapter->inner->Close(adapter->inner);
+    }
+    free(adapter);
+}
+
 // returns sample iterator over multiple series
 AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               size_t n_series,
@@ -1445,7 +1464,12 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               const ReducerArgs *reducerArgs) {
     AbstractMultiSeriesSampleIterator *chain =
         MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
-    return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+    MultiSeriesAggDupSampleIteratorAdapter *adapter = malloc(sizeof(*adapter));
+    adapter->base.GetNext = MultiSeriesAggDupSampleIteratorAdapter_GetNext;
+    adapter->base.Close = MultiSeriesAggDupSampleIteratorAdapter_Close;
+    adapter->base.input = NULL;
+    adapter->inner = (AbstractMultiSeriesAggDupSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
+    return (AbstractSampleIterator *)adapter;
 }
 
 void calculate_latest_sample(Sample **sample, const Series *series) {
