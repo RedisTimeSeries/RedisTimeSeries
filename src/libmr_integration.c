@@ -14,6 +14,8 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 
+#include "LibMR/deps/hiredis/hiredis.h"
+
 #define SeriesRecordName "SeriesRecord"
 
 static Record NullRecord;
@@ -616,7 +618,7 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
     return ret;
 }
 
-void TS_INTERNAL_SLOT_RANGES(struct RedisModuleCtx *ctx, const char *sender_id, void*) {
+static void TS_INTERNAL_SLOT_RANGES(struct RedisModuleCtx *ctx, const char *sender_id, void*) {
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
     RedisModule_ReplyWithArray(ctx, sra->num_ranges);
     for (int i = 0; i < sra->num_ranges; i++) {
@@ -627,7 +629,7 @@ void TS_INTERNAL_SLOT_RANGES(struct RedisModuleCtx *ctx, const char *sender_id, 
     RedisModule_ClusterFreeSlotRanges(ctx, sra);
 }
 
-void TS_INTERNAL_MRANGE(struct RedisModuleCtx *ctx, const char *sender_id, void *args) {
+static void TS_INTERNAL_MRANGE(struct RedisModuleCtx *ctx, const char *sender_id, void *args) {
     QueryPredicates_Arg *queryArg = args;
     RedisModuleDict *qi = QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
 
@@ -655,6 +657,22 @@ void TS_INTERNAL_MRANGE(struct RedisModuleCtx *ctx, const char *sender_id, void 
     mrangeArgs.reverse = false;
         
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+}
+
+static void *SlotRangesReplyParser(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    size_t size = sizeof(RedisModuleSlotRangeArray) + reply->elements * sizeof(RedisModuleSlotRange);
+    RedisModuleSlotRangeArray *result = malloc(size);
+    result->num_ranges = reply->elements;
+    for (size_t i = 0; i < result->num_ranges; i++) {
+        const redisReply *range = reply->element[i];
+        RedisModule_Assert(range->type == REDIS_REPLY_ARRAY && range->elements == 2);
+        RedisModule_Assert(range->element[0]->type == REDIS_REPLY_INTEGER && range->element[1]->type == REDIS_REPLY_INTEGER);
+        result->ranges[i].start = range->element[0]->integer;
+        result->ranges[i].end = range->element[1]->integer;
+    }
+
+    return result;
 }
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
@@ -770,8 +788,8 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
-    MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", TS_INTERNAL_SLOT_RANGES, QueryPredicatesType);
-    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", TS_INTERNAL_MRANGE, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", TS_INTERNAL_SLOT_RANGES, QueryPredicatesType, SlotRangesReplyParser);
+    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", TS_INTERNAL_MRANGE, QueryPredicatesType, NULL);  // debugme
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
