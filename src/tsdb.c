@@ -297,10 +297,7 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
 
     if (unlikely(IsKeyIndexed(_keyname))) {
         // when loading from rdb file the key shouldn't exist.
-        size_t len;
-        const char *str = RedisModule_StringPtrLen(_keyname, &len);
-        RedisModule_Log(
-            ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
+        RedisModule_Log(ctx, "warning", "Trying to load rdb a key which is already in index");
         RemoveIndexedMetric(_keyname); // for safety
     }
 
@@ -545,16 +542,14 @@ size_t SeriesRulesSize(const Series *series) {
     return rulesSize;
 }
 
-char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey) {
-    char *result = NULL;
+const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey, size_t *len) {
     for (int i = 0; i < series->labelsCount; i++) {
         const char *currLabel = RedisModule_StringPtrLen(series->labels[i].key, NULL);
         if (strcmp(currLabel, labelKey) == 0) {
-            result = strdup(RedisModule_StringPtrLen(series->labels[i].value, NULL));
-            break;
+            return RedisModule_StringPtrLen(series->labels[i].value, len);
         }
     }
-    return result;
+    return NULL;
 }
 
 size_t SeriesMemUsage(const void *value) {
@@ -741,7 +736,7 @@ int SeriesUpsertSample(Series *series,
     return rv;
 }
 
-int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+void SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     // backfilling or update
     Sample sample = {
         .timestamp = timestamp,
@@ -761,7 +756,6 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     series->lastTimestamp = timestamp;
     series->lastValue = value;
     series->totalSamples++;
-    return TSDB_OK;
 }
 
 static int ContinuousDeletion(RedisModuleCtx *ctx,
@@ -1101,32 +1095,28 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
     return rule;
 }
 
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
-                                      RedisModuleString *keyName,
-                                      Series *series,
-                                      Label *labels,
-                                      size_t labelsCount) {
-    size_t len;
-    int i;
-    Series *compactedSeries;
-    RedisModuleKey *compactedKey;
-    size_t compactedRuleLabelCount = labelsCount + 2;
+void SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
+                                       RedisModuleString *keyName,
+                                       Series *series,
+                                       Label *labels,
+                                       size_t labelsCount) {
+    const size_t compactedRuleLabelCount = labelsCount + 2;
 
-    for (i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
+    for (int i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
         RedisModuleString *destKey;
         if (rule->timestampAlignment != 0) {
             destKey = RedisModule_CreateStringPrintf(ctx,
                                                      "%s_%s_%" PRIu64 "_%" PRIu64,
-                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     RedisModule_StringPtrLen(keyName, NULL),
                                                      aggString,
                                                      rule->bucketDuration,
                                                      rule->timestampAlignment);
         } else {
             destKey = RedisModule_CreateStringPrintf(ctx,
                                                      "%s_%s_%" PRIu64,
-                                                     RedisModule_StringPtrLen(keyName, &len),
+                                                     RedisModule_StringPtrLen(keyName, NULL),
                                                      aggString,
                                                      rule->bucketDuration);
         }
@@ -1135,26 +1125,22 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
         bool isCluster = RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER;
         if (isCluster &&
             RedisModule_ClusterKeySlot(destKey) != RedisModule_ClusterKeySlot(keyName)) {
-            RM_LOG_WARNING(ctx,
-                           "Cannot create compacted key, key '%s' and '%s' are in different slots",
-                           RedisModule_StringPtrLen(destKey, NULL),
-                           RedisModule_StringPtrLen(keyName, NULL));
+            RM_LOG_WARNING(ctx, "Cannot create compacted key, keys are in different slots");
             RedisModule_FreeString(ctx, destKey);
             continue;
         }
 
-        compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
+        RedisModuleKey *compactedKey =
+            RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
-            RM_LOG_WARNING(ctx,
-                           "Cannot create compacted key, key '%s' already exists",
-                           RedisModule_StringPtrLen(destKey, NULL));
+            RM_LOG_WARNING(ctx, "Cannot create compacted key, key already exists");
             RedisModule_FreeString(ctx, destKey);
             RedisModule_CloseKey(compactedKey);
             continue;
         }
 
-        Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof(Label));
+        Label *compactedLabels = calloc(compactedRuleLabelCount, sizeof *compactedLabels);
         // todo: deep copy labels function
         for (int l = 0; l < labelsCount; l++) {
             compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
@@ -1180,6 +1166,7 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
             .labels = compactedLabels,
             .options = rules_options,
         };
+        Series *compactedSeries;
         CreateTsKey(ctx, destKey, &cCtx, &compactedSeries, &compactedKey);
         SeriesSetSrcRule(ctx, compactedSeries, series->keyName);
         SeriesAddRule(ctx,
@@ -1190,7 +1177,6 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                       rule->timestampAlignment);
         RedisModule_CloseKey(compactedKey);
     }
-    return TSDB_OK;
 }
 
 CompactionRule *NewRule(RedisModuleString *destKey,
@@ -1201,7 +1187,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
         return NULL;
     }
 
-    CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
+    CompactionRule *rule = malloc(sizeof *rule);
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);

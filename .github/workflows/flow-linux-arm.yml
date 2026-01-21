@@ -195,7 +195,7 @@ jobs:
           REF=${{github.sha}}
           git fetch origin ${REF}
           git checkout ${REF}
-          git submodule update
+          git submodule update --init --recursive
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -218,7 +218,7 @@ jobs:
           cd redis
           git fetch origin ${{needs.setup-environment.outputs.redis-ref}}
           git checkout ${{needs.setup-environment.outputs.redis-ref}}
-          git submodule update
+          git submodule update --init --recursive
         env:
           GH_TOKEN: ${{ needs.create-github-app-token.outputs.GH_REDIS_ORG_APP_TOKEN }}
       - name: Setup Python for testing

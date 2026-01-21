@@ -102,17 +102,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
             const timestamp_t ts = LoadUnsigned_IOError(io, err, NULL);
             const double val = LoadDouble_IOError(io, err, NULL);
-            const int result = SeriesAddSample(series, ts, val);
-            if (result != TSDB_OK) {
-                RedisModule_LogIOError(
-                    io, "warning", "couldn't load sample: %" PRIu64 " %lf", ts, val);
-            }
+            SeriesAddSample(series, ts, val);
         }
     } else {
-        Chunk_t *chunk = NULL;
         // Free the default allocated chunk given LoadFromRDB will allocate a proper sized chunk
         timestamp_t rax_key = 0;
-        chunk = (Chunk_t *)RedisModule_DictGetC(series->chunks, &rax_key, sizeof(rax_key), NULL);
+        Chunk_t *chunk = RedisModule_DictGetC(series->chunks, &rax_key, sizeof(rax_key), NULL);
         if (chunk != NULL) {
             series->funcs->FreeChunk(chunk);
         }

@@ -74,7 +74,7 @@ void FreeTempSeries(Series *s) {
 }
 
 TS_GroupList *GroupList_Create() {
-    TS_GroupList *g = (TS_GroupList *)malloc(sizeof(TS_GroupList));
+    TS_GroupList *g = malloc(sizeof *g);
     g->count = 0;
     g->labelValue = NULL;
     g->list = NULL;
@@ -91,15 +91,14 @@ void GroupList_Free(TS_GroupList *groupList) {
     free(groupList);
 }
 
-int GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
+static void GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
     if (g->list == NULL) {
-        g->list = (Series **)malloc(sizeof(Series *));
+        g->list = malloc(sizeof *g->list);
     } else {
-        g->list = (Series **)realloc(g->list, sizeof(Series *) * (g->count + 1));
+        g->list = realloc(g->list, sizeof *g->list * (g->count + 1));
     }
     g->list[g->count] = serie;
     g->count++;
-    return REDISMODULE_OK;
 }
 
 void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
@@ -216,24 +215,22 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
 }
 
 bool ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
-    bool result = false;
-
-    char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey);
+    size_t labelLen;
+    const char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey, &labelLen);
     if (labelValue != NULL) {
-        const size_t labelLen = strlen(labelValue);
         int nokey;
         TS_GroupList *labelGroup =
-            (TS_GroupList *)RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
+            RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
         if (nokey) {
             labelGroup = GroupList_Create();
             GroupList_SetLabelValue(labelGroup, labelValue);
             RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
         }
-        free(labelValue);
-        result = GroupList_AddSerie(labelGroup, serie, name);
+        GroupList_AddSerie(labelGroup, serie, name);
+        return true;
     }
 
-    return result;
+    return false;
 }
 
 void replyResultSet(RedisModuleCtx *ctx,
