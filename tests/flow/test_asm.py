@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 
-from includes import Env, VALGRIND
+from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
 
 
