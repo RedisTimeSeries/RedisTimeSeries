@@ -144,7 +144,7 @@ AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 
-int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
+void SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
 int SeriesUpsertSample(Series *series,
                        api_timestamp_t timestamp,
                        double value,
@@ -160,16 +160,15 @@ CompactionRule *SeriesAddRule(RedisModuleCtx *ctx,
                               int aggType,
                               uint64_t bucketDuration,
                               timestamp_t timestampAlignment);
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
-                                      RedisModuleString *keyName,
-                                      Series *series,
-                                      Label *labels,
-                                      size_t labelsCount);
+void SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
+                                       RedisModuleString *keyName,
+                                       Series *series,
+                                       Label *labels,
+                                       size_t labelsCount);
 size_t SeriesGetNumSamples(const Series *series);
 
-char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey);
+const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKey, size_t *len);
 size_t SeriesDelRange(Series *series, timestamp_t start_ts, timestamp_t end_ts);
-const char *SeriesChunkTypeToString(const Series *series);
 
 int SeriesCalcRange(Series *series,
                     timestamp_t start_ts,

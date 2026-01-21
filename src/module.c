@@ -139,13 +139,13 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    bool reply_map = _ReplyMap(ctx);
+    const bool reply_map = _ReplyMap(ctx);
 
-    int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
+    const int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true);
+        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true); // 16 fields x 2 (key + value)
     } else {
-        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true);
+        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true); // 14 fields x 2 (key + value)
     }
 
     long long skippedSamples;
@@ -336,17 +336,13 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "couldn't open key or key is not a Timeseries. key=%s",
-                                currentKey);
+                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
 
                 continue;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
                                 "warning",
-                                "The user lacks the required permissions for the key=%s, stopping.",
-                                currentKey);
+                                "The user lacks the required permissions for the key, stopping.");
                 exitStatus = REDISMODULE_ERR;
 
                 goto exit;
@@ -410,7 +406,6 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                                     const MRangeArgs *args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     RedisModuleString *currentKey;
-    size_t currentKeyLen;
     long long replylen = 0;
     Series *series;
     int exitStatus = REDISMODULE_OK;
@@ -428,18 +423,14 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
 
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "couldn't open key or key is not a Timeseries. key=%s",
-                                RedisModule_StringPtrLen(currentKey, NULL));
+                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
                 RedisModule_FreeString(ctx, currentKey);
 
                 break;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
                                 "warning",
-                                "The user lacks the required permissions for the key=%s, stopping.",
-                                RedisModule_StringPtrLen(currentKey, NULL));
+                                "The user lacks the required permissions for the key, stopping.");
                 RedisModule_FreeString(ctx, currentKey);
                 exitStatus = REDISMODULE_ERR;
 
@@ -706,10 +697,7 @@ static int internalAdd(RedisModuleCtx *ctx,
             return REDISMODULE_ERR;
         }
     } else {
-        if (SeriesAddSample(series, timestamp, value) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Error at add");
-            return REDISMODULE_ERR;
-        }
+        SeriesAddSample(series, timestamp, value);
         // handle compaction rules
         if (series->rules) {
             const GetSeriesFlags flags =
@@ -1314,19 +1302,12 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 RedisModule_CloseKey(key);
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "couldn't open key or key is not a Timeseries. key=%.*s",
-                                (int)currentKeyLen,
-                                currentKey);
+                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
                 break;
             case GetSeriesResult_PermissionError:
-                RedisModule_Log(
-                    ctx,
-                    "warning",
-                    "The user lacks the required permissions for the key=%.*s, stopping.",
-                    (int)currentKeyLen,
-                    currentKey);
+                RedisModule_Log(ctx,
+                                "warning",
+                                "The user lacks the required permissions for the key, stopping.");
 
                 RTS_ReplyKeyPermissionsError(ctx);
 
