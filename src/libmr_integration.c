@@ -675,6 +675,77 @@ static void *SlotRangesReplyParser(const redisReply *reply) {
     return result;
 }
 
+static Series *ParseSeries(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    RedisModule_Assert(reply->elements == 3);  // name, labels, samples
+
+    const redisReply *nameElement = reply->element[0];
+    RedisModule_Assert(nameElement->type == REDIS_REPLY_STRING);
+    RedisModuleString *name = RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
+
+    CreateCtx cCtx = { 0 };
+    cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
+    cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
+    cCtx.duplicatePolicy = DP_NONE;
+    cCtx.labelsCount = 0;
+    cCtx.labels = NULL;
+
+    const redisReply *labelsElement = reply->element[1];
+    RedisModule_Assert(labelsElement->type == REDIS_REPLY_ARRAY);
+    if (labelsElement->elements > 0) {
+        static RedisModuleString *LABELS = NULL;  // Use as the LABELS keyword for the parsing
+        if (LABELS == NULL)
+            LABELS = RedisModule_CreateString(rts_staticCtx, "LABELS", 6);
+        // We already have a parser for the labels from argv/argc, so let's use it
+        size_t argc = 1 + 2 * labelsElement->elements;
+        RedisModuleString *argv[argc];
+        argv[0] = LABELS;
+        for (size_t i = 0; i < labelsElement->elements; i++) {
+            const redisReply *labelElement = labelsElement->element[i];
+            RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
+            RedisModule_Assert(labelElement->elements == 2);
+            RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING && labelElement->element[1]->type == REDIS_REPLY_STRING);
+            RedisModuleString *name = RedisModule_CreateString(rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
+            RedisModuleString *value = RedisModule_CreateString(rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
+            argv[1 + 2 * i] = name;
+            argv[2 + 2 * i] = value;
+        }
+        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels);
+        RedisModule_Assert(r == REDISMODULE_OK);
+        for (size_t i = 1 /* Don't free the LABELS "keyword" */; i < argc; i++)
+            RedisModule_FreeString(rts_staticCtx, argv[i]);
+    }
+
+    Series *result = NewSeries(name, &cCtx);
+
+    const redisReply *samplesElement = reply->element[2];
+    RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
+    for (size_t i = 0; i < samplesElement->elements; i++) {
+        const redisReply *sampleElement = samplesElement->element[i];
+        RedisModule_Assert(sampleElement->type == REDIS_REPLY_ARRAY);
+        RedisModule_Assert(sampleElement->elements == 2);
+        RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
+        // Unfortunately we cannot assume that the second element's type is a (simple) string
+        // because it could start with a '+' or a '-' which confuses the type detection.
+        api_timestamp_t timestamp = sampleElement->element[0]->integer;
+        double value = parse_double_cstr(sampleElement->element[1]->str, sampleElement->element[1]->len);
+        SeriesAddSample(result, timestamp, value);
+    }
+
+    return result;
+}
+
+static void *MrangeReplyParser(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    ARR(Series*) result = array_new(Series*, reply->elements);
+    for (size_t i = 0; i < reply->elements; i++) {
+        Series *series = ParseSeries(reply->element[i]);
+        array_append(result, series);
+    }
+
+    return result;
+}
+
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
@@ -789,7 +860,7 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
 
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", TS_INTERNAL_SLOT_RANGES, QueryPredicatesType, SlotRangesReplyParser);
-    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", TS_INTERNAL_MRANGE, QueryPredicatesType, NULL);  // debugme
+    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", TS_INTERNAL_MRANGE, QueryPredicatesType, MrangeReplyParser);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 

@@ -25,7 +25,6 @@
 #include "tsdb.h"
 #include "version.h"
 
-#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "LibMR/src/cluster.h"
 #include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
@@ -40,7 +39,6 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
-#include <math.h>
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"
@@ -720,14 +718,6 @@ static int internalAdd(RedisModuleCtx *ctx,
         RedisModule_ReplyWithLongLong(ctx, timestamp);
     }
     return REDISMODULE_OK;
-}
-
-static inline double parse_double(const RedisModuleString *valueStr) {
-    size_t len;
-    char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-    double value;
-    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, &value);
-    return endptr && endptr - valueCStr == len ? value : NAN;
 }
 
 static inline int add(RedisModuleCtx *ctx,
