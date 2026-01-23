@@ -506,15 +506,6 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     return result;
 }
 
-int TSDB_debugme(RedisModuleCtx *ctx, Execution *e) {
-    RedisModule_AutoMemory(ctx);
-
-    RedisModuleDict *resultSeries = QueryIndex(ctx, NULL, 0, NULL);
-
-    int result = REDISMODULE_OK;
-    return result;
-}
-
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
