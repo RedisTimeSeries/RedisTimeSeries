@@ -33,7 +33,7 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=3, decodeResponses=True)  # debugme should be 2
+    env = Env(shardsCount=2, decodeResponses=True)  # debugme should be 2
     if env.env != "oss-cluster":
         env.skip()
 
