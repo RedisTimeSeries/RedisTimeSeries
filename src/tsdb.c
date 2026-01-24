@@ -567,10 +567,10 @@ size_t SeriesGetNumSamples(const Series *series) {
 }
 
 void MultiSeriesReduce(Series *dest,
-                      Series **series,
-                      size_t n_series,
-                      const ReducerArgs *groupByReducerArgs,
-                      RangeArgs *args) {
+                       Series **series,
+                       size_t n_series,
+                       const ReducerArgs *groupByReducerArgs,
+                       RangeArgs *args) {
     Sample sample;
     AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
         series, n_series, args, false, true, groupByReducerArgs);
