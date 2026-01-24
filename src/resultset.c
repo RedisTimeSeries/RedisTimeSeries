@@ -177,7 +177,8 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     };
     cCtx.options |= SERIES_OPT_UNCOMPRESSED;
 
-    Series *reduced = NewSeries(RedisModule_CreateString(NULL, series_name, series_name_len), &cCtx);
+    Series *reduced =
+        NewSeries(RedisModule_CreateString(NULL, series_name, series_name_len), &cCtx);
     if (_ReplyMap(ctx)) {
         // abuse srckey to store the source keys
         reduced->srcKey = (RedisModuleString *)array_new(RedisModuleString *, 1);
@@ -221,7 +222,8 @@ bool ResultSet_AddSeries(TS_ResultSet *r, Series *series, const char *name) {
         return false;
 
     int nokey;
-    TS_GroupList *labelGroup = RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
+    TS_GroupList *labelGroup =
+        RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
     if (nokey) {
         labelGroup = GroupList_Create();
         GroupList_SetLabelValue(labelGroup, labelValue);
