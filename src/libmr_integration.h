@@ -88,6 +88,7 @@ MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetSlotRangesRecordType();
+MRRecordType *GetSeriesListRecordType();
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
