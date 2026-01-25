@@ -27,7 +27,7 @@ static MRRecordType *LongRecordType = NULL;
 static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *MapRecordType = NULL;
 static MRRecordType *SlotRangesRecordType = NULL;
-static MRRecordType *SeriesListRangesRecordType = NULL;
+static MRRecordType *SeriesListRecordType = NULL;
 
 static Record *GetNullRecord() {
     return &NullRecord;
@@ -43,6 +43,14 @@ MRRecordType *GetListRecordType() {
 
 MRRecordType *GetSeriesRecordType() {
     return SeriesRecordType;
+}
+
+MRRecordType *GetSlotRangesRecordType() {
+    return SlotRangesRecordType;
+}
+
+MRRecordType *GetSeriesListRecordType() {
+    return SeriesListRecordType;
 }
 
 static void QueryPredicates_ObjectFree(void *arg) {
@@ -116,10 +124,10 @@ static void LongRecord_Serialize(WriteSerializationCtx *sctx, void *arg, MRError
 static void *LongRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 
+// Internal command records
 static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges);
 static void SlotRangesRecord_Free(void *base);
-
-static Record *SeriesListRecord_Create(Series **seriesList);
+static Record *SeriesListRecord_Create(ARR(Series*) seriesList);
 static void SeriesListRecord_Free(void *base);
 
 static Record *RedisStringRecord_Create(RedisModuleString *str);
@@ -895,6 +903,19 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
         return REDISMODULE_ERR;
     }
 
+    SeriesListRecordType = MR_RecordTypeCreate("SeriesListRecord",
+                                               SeriesListRecord_Free,
+                                               NULL,
+                                               NULL,
+                                               NULL,
+                                               NULL,
+                                               NULL,
+                                               NULL);
+
+    if (MR_RegisterRecord(SeriesListRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
@@ -1311,7 +1332,7 @@ static void SlotRangesRecord_Free(void *base) {
 }
 
 static Record *SeriesListRecord_Create(ARR(Series*) seriesList) {
-    SeriesListRecord *result = (SeriesListRecord*)MR_RecordCreate(SeriesListRangesRecordType, sizeof(*result));
+    SeriesListRecord *result = (SeriesListRecord*)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
     return &result->base;
 }
