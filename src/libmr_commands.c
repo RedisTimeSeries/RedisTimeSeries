@@ -303,11 +303,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     array_foreach(nodesResults, seriesList, {
         array_foreach(seriesList, s, {
-            if (args->groupByLabel) {
+            if (args->groupByLabel)
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
-            } else {
+            else
                 ReplySeriesArrayPos(rctx, s, args->withLabels, args->limitLabels, args->numLimitLabels, &args->rangeArgs, args->reverse, false);
-            }
         });
     });
 
@@ -336,6 +335,8 @@ __done:
     array_free(nodesResults);
     MRangeArgs_Free(&data->args);
     free(data);
+    MR_ExecutionCtxSetDone(eCtx);
+
     RTS_UnblockClient(bc, rctx);
 }
 
