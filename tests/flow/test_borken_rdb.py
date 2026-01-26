@@ -5,6 +5,7 @@ This test creates various types of broken RDB files and ensures they fail to loa
 
 from RLTest import Env
 from includes import *
+import pytest
 
 def _crc_reflect64(x: int) -> int:
     x &= 0xFFFFFFFFFFFFFFFF
@@ -105,6 +106,80 @@ def _rdb_read_string_len_and_skip(buf: bytes, idx: int):
         outlen, _, idx = _rdb_load_len(buf, idx)
         return outlen, idx + clen
     raise AssertionError("Unknown RDB string encoding")
+
+def _rdb_encode_len(v: int) -> bytes:
+    # Implements Redis rdbSaveLen() encoding for non-encoded lengths/integers.
+    assert v >= 0
+    if v < (1 << 6):
+        return bytes([v & 0x3F])
+    if v < (1 << 14):
+        return bytes([((v >> 8) & 0x3F) | 0x40, v & 0xFF])
+    if v <= 0xFFFFFFFF:
+        return bytes([0x80]) + int(v).to_bytes(4, "big", signed=False)
+    return bytes([0x81]) + int(v).to_bytes(8, "big", signed=False)
+
+def _patch_labels_count(dump: bytes, new_labels_count: int) -> bytes:
+    b = bytearray(dump)
+    assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
+
+    # Parse: [1 byte object type] [moduleid (rdb len)] [module opcodes... EOF] [footer...]
+    idx = 0
+    idx += 1  # object type byte
+    _, _, idx = _rdb_load_len(dump, idx)  # moduleid
+
+    # Helpers to consume module opcodes.
+    def read_opcode():
+        nonlocal idx
+        op, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return op
+
+    def read_uint_capture_value_range():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 2  # RDB_MODULE_OPCODE_UINT
+        val_start = idx
+        _val, _, idx2 = _rdb_load_len(dump, idx)
+        val_end = idx2
+        idx = idx2
+        return val_start, val_end
+
+    def read_uint_skip():
+        _start, _end = read_uint_capture_value_range()
+
+    def read_string_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 5  # RDB_MODULE_OPCODE_STRING
+        idx = _rdb_skip_string(dump, idx)
+
+    def read_double_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 4  # RDB_MODULE_OPCODE_DOUBLE
+        idx += 8
+
+    # series_rdb_save() fields (minimal path used by DUMP/RESTORE).
+    read_string_skip()  # keyName
+    read_uint_skip()    # retentionTime
+    read_uint_skip()    # chunkSizeBytes
+    read_uint_skip()    # options
+    read_uint_skip()    # lastTimestamp
+    read_double_skip()  # lastValue
+    read_uint_skip()    # totalSamples
+    read_uint_skip()    # duplicatePolicy
+    read_uint_skip()    # hasSrcKey (expected 0 on DUMP)
+    read_uint_skip()    # ignoreMaxTimeDiff
+    read_double_skip()  # ignoreMaxValDiff
+
+    labels_count_start, labels_count_end = read_uint_capture_value_range()
+
+    # Replace the encoded integer (may change total payload length).
+    b[labels_count_start:labels_count_end] = _rdb_encode_len(new_labels_count)
+
+    _patch_dump_crc(b)
+    assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
+    return bytes(b)
 
 def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: int) -> bytes:
     # We keep the same encoding width by ensuring new_num_samples fits in 6-bit len (0..63).
@@ -338,3 +413,33 @@ def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):
     env.skipOnCluster()
     rdb_payload = b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\x04zxcv\x02\x00\x02P\x00\x02\x01\x02\x01\x04\x00\x00\x00\x00\x00\x00\xf0?\x02\x01\x02\x00\x02\x00\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02\x00\x02\x80AAAA\x02\x01\x05B\xbbXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00\xff\x0c\x00\xf4\x02\x01#\x17\x97f\xae'
     env.expect('RESTORE', 'test_key', 0, rdb_payload, replace=True).error().contains("Bad data format")
+
+
+def test_rdb_restore_rejects_large_labelscount(env):
+    """
+    Regression test for MOD-13408: crafted DUMP payload with huge labelsCount must be rejected quickly.
+    """
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'test_key', 'CHUNK_SIZE', '128', 'LABELS', 'a', '1', 'b', '2')
+    env.cmd('TS.ADD', 'test_key', 1, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    malicious_dump = _patch_labels_count(valid_dump, 0xFFFFFFFF)
+
+    env.cmd('DEL', 'test_key')
+
+    try:
+        with TimeLimit(1.0):
+            env.expect('RESTORE', 'test_key', 0, malicious_dump, replace=True).error().contains(
+                "Bad data format")
+        # Ensure server is still responsive.
+        pong = env.cmd('PING')
+        assert pong in (b'PONG', 'PONG', True)
+    except ShardConnectionTimeoutException:
+        # If this triggers, the server likely got stuck. Force restart to avoid poisoning the suite.
+        pytest.fail("RESTORE with malformed labelsCount caused server to hang")
+    finally:
+        # Defensive: on failure modes, the server may be unresponsive; restart it for test isolation.
+        env.stop()
+        env.start()
