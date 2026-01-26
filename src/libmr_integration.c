@@ -1339,6 +1339,6 @@ static Record *SeriesListRecord_Create(ARR(Series*) seriesList) {
 
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
-    array_free_ex(record->seriesList, FreeSeries(ptr));
+    array_free_ex(record->seriesList, FreeSeries(*(Series**)ptr));
     free(record);
 }
