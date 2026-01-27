@@ -1735,6 +1735,12 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
     RedisModuleType *mt,
     RedisModuleTypeExtMethods *typemethods) REDISMODULE_ATTR = NULL;
 
+__attribute__((weak)) int (*RedisModule_ClusterDisableTrim)(RedisModuleCtx *ctx)
+    REDISMODULE_ATTR = NULL;
+
+__attribute__((weak)) int (*RedisModule_ClusterEnableTrim)(RedisModuleCtx *ctx)
+    REDISMODULE_ATTR = NULL;
+
 int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     if (rts_staticCtx) {
         FreeConfigAndStaticCtx();

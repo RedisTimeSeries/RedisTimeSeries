@@ -79,7 +79,7 @@ static inline void lazyModuleInitialize(RedisModuleCtx *ctx) {
     if (!lazy_initialized) {
         RedisModule_SubscribeToKeyspaceEvents(
             ctx,
-            REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
+            REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_TYPE_CHANGED |
                 REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED |
                 REDISMODULE_NOTIFY_LOADED | REDISMODULE_NOTIFY_KEY_TRIMMED |
                 REDISMODULE_NOTIFY_TRIMMED, // Only during redis enterprise sharding
