@@ -1,0 +1,25 @@
+FROM debian:bullseye
+
+WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install git first (needed for install_script.sh)
+RUN apt-get update && apt-get install -y git
+
+# Copy and run install scripts
+COPY .install /workspace/.install
+RUN cd /workspace/.install && ./install_script.sh
+
+# Install Redis
+ARG REDIS_REF=unstable
+COPY .install/install_redis.sh /tmp/install_redis.sh
+RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} /tmp/install_redis.sh
+
+# Install uv and Python environment
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
+ENV PATH="/usr/local/bin:${PATH}"
+RUN uv venv --python=3.9 /opt/.venv
+ENV VIRTUAL_ENV=/opt/.venv
+ENV PATH="/opt/.venv/bin:${PATH}"
+COPY requierments_docker.txt /workspace/requierments.txt
+RUN uv pip install -r requierments.txt

@@ -17,6 +17,9 @@ inputs:
     type: string
     description: "Specify whether to use the environment or not"
     default: '0'
+  image:
+    description: 'The Docker image to use for the build'
+    required: true
 
 
 runs:
@@ -32,4 +35,4 @@ runs:
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        docker run -v $GITHUB_WORKSPACE:/workspace -w /workspace ${{ inputs.image }} make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
