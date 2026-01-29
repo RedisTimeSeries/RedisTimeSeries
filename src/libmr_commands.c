@@ -93,8 +93,7 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
+static void mget_done(ExecutionCtx *eCtx, RedisModuleBlockedClient *bc, bool resp3) {
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
@@ -102,34 +101,36 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     }
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
+    size_t totalLen = 0;
+    MRRecordType *expectedType = resp3 ? GetMapRecordType() : GetListRecordType();
+    // Pass 1: find out the total length (and possibly log mismatched type)
     for (int i = 0; i < len; i++) {
-        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_mapRecord->recordType != GetMapRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_mapRecord->recordType->type.type);
+        Record *rawRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (rawRecord->recordType != expectedType) {
+            RedisModule_Log(
+                rctx, "warning", "Unexpected record type: %s", rawRecord->recordType->type.type);
             continue;
         }
-        total_len += MapRecord_GetLen((MapRecord *)raw_mapRecord);
+        size_t nRecords = resp3 ? MapRecord_GetLen((MapRecord *)rawRecord)
+                                : ListRecord_GetLen((ListRecord *)rawRecord);
+        totalLen += nRecords;
     }
 
-    RedisModule_ReplyWithMap(rctx, total_len / 2);
+    if (resp3)
+        RedisModule_ReplyWithMap(rctx, totalLen / 2);
+    else
+        RedisModule_ReplyWithArray(rctx, totalLen);
 
     for (int i = 0; i < len; i++) {
-        Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_mapRecord->recordType != GetMapRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_mapRecord->recordType->type.type);
+        Record *rawRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (rawRecord->recordType != expectedType)
             continue;
-        }
 
-        size_t map_len = MapRecord_GetLen((MapRecord *)raw_mapRecord);
-        for (size_t j = 0; j < map_len; j++) {
-            Record *r = MapRecord_GetRecord((MapRecord *)raw_mapRecord, j);
+        size_t nRecords = resp3 ? MapRecord_GetLen((MapRecord *)rawRecord)
+                                : ListRecord_GetLen((ListRecord *)rawRecord);
+        for (size_t j = 0; j < nRecords; j++) {
+            Record *r = resp3 ? MapRecord_GetRecord((MapRecord *)rawRecord, j)
+                              : ListRecord_GetRecord((ListRecord *)rawRecord, j);
             r->recordType->sendReply(rctx, r);
         }
     }
@@ -138,48 +139,14 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-static void mget_done(ExecutionCtx *eCtx, void *privateData) {
+static void mget_done_resp2(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+    return mget_done(eCtx, bc, false);
+}
 
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-    }
-    RedisModule_ReplyWithArray(rctx, total_len);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    RTS_UnblockClient(bc, rctx);
+static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    return mget_done(eCtx, bc, true);
 }
 
 static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
@@ -397,7 +364,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done_resp2, bc);
 
     MR_Run(exec);
 
@@ -484,7 +451,8 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(
+        exec, queryArg->resp3 ? queryindex_resp3_done : mget_done_resp2, bc); // debugme: mget?!
 
     MR_Run(exec);
 
