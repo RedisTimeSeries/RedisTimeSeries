@@ -2,7 +2,7 @@ version: 0.1
 
 remote:
   - type: oss-standalone
-  - setup: redisearch-m5
+  - setup: modules-m5
 
 exporter:
   redistimeseries:

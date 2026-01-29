@@ -11,7 +11,7 @@ description: '
 
 remote:
  - type: oss-standalone
- - setup: redisearch-m5
+ - setup: modules-m5
 
 setups:
   - oss-standalone
