@@ -16,10 +16,10 @@
 
 #include "RedisModulesSDK/redismodule.h"
 
-void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two);
-void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two);
-void RedisModule_ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len);
-void RedisModule_ReplyWithSetOrArray(RedisModuleCtx *ctx, long len);
+void ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two);
+void ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two);
+void ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len);
+void ReplyWithSetOrArray(RedisModuleCtx *ctx, long len);
 
 static inline bool _is_resp3(RedisModuleCtx *ctx) {
     int ctxFlags = RedisModule_GetContextFlags(ctx);

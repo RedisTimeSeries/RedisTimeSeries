@@ -242,7 +242,7 @@ void replyResultSet(RedisModuleCtx *ctx,
                     bool rev) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
 
-    RedisModule_ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
+    ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
     TS_GroupList *innerGroupList;
     while (RedisModule_DictNextC(iter, NULL, (void **)&innerGroupList) != NULL) {
         GroupList_ReplyResultSet(
