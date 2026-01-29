@@ -1,4 +1,5 @@
 name: Run module tests
+
 inputs:
   run_valgrind:
     description: 'Run valgrind on the tests'
