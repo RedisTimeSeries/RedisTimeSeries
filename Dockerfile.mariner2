@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 WORKDIR /workspace
 
 # Install git first (needed for install_script.sh)
-RUN tdnf install -y git
+RUN tdnf install -y git ca-certificates
 
 # Copy and run install scripts
 COPY .install /workspace/.install

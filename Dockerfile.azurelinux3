@@ -5,24 +5,24 @@ WORKDIR /workspace
 # Install dependencies
 RUN tdnf -y update && \
     tdnf install -y \
-        git \
-        wget \
-        curl \
-        gcc \
-        g++ \
-        make \
-        cmake \
-        libffi-devel \
-        openssl-devel \
-        build-essential \
-        zlib-devel \
-        bzip2-devel \
-        readline-devel \
-        which \
-        unzip \
-        jq \
-        ca-certificates \
-        tar
+    git \
+    wget \
+    curl \
+    gcc \
+    g++ \
+    make \
+    cmake \
+    libffi-devel \
+    openssl-devel \
+    build-essential \
+    zlib-devel \
+    bzip2-devel \
+    readline-devel \
+    which \
+    unzip \
+    jq \
+    ca-certificates \
+    tar
 
 # Install Redis
 ARG REDIS_REF
