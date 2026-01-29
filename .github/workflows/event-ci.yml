@@ -32,20 +32,13 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
     secrets: inherit
-  # mariner:
-  #   uses: ./.github/workflows/mariner2.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     quick: false
-  #   secrets: inherit
-  # arm64:
-  #   uses: ./.github/workflows/flow-linux-arm.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     quick: false
-  #   secrets: inherit
+  arm64:
+    uses: ./.github/workflows/flow-linux-arm.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+    secrets: inherit
   # macos:
   #   uses: ./.github/workflows/flow-macos.yml
   #   needs: [prepare-values]
