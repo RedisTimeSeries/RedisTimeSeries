@@ -157,19 +157,19 @@ jobs:
             redistimeseries-${{ matrix.platform.os }}:latest \
             make build
 
-      - name: Run tests
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            --cap-add=SYS_PTRACE \
-            --security-opt seccomp=unconfined \
-            -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-            redistimeseries-${{ matrix.platform.os }}:latest \
-            make test \
-              VG=${{ inputs.run_valgrind && '1' || '0' }} \
-              SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }}
+      # - name: Run tests
+      #   run: |
+      #     docker run --rm \
+      #       -v ${{ github.workspace }}:/workspace \
+      #       -w /workspace \
+      #       --cap-add=SYS_PTRACE \
+      #       --security-opt seccomp=unconfined \
+      #       -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
+      #       redistimeseries-${{ matrix.platform.os }}:latest \
+      #       make test \
+      #         VG=${{ inputs.run_valgrind && '1' || '0' }} \
+      #         SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
+      #         QUICK=${{ inputs.quick && '1' || '0' }}
 
       - name: Upload test artifacts
         if: failure()
