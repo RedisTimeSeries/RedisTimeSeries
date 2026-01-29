@@ -21,7 +21,7 @@
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
-int RedisModule_ReplyWithDoubleOrString(RedisModuleCtx *ctx, double d) {
+int ReplyWithDoubleOrString(RedisModuleCtx *ctx, double d) {
     if (_is_resp3(ctx)) {
         return RedisModule_ReplyWithDouble(ctx, d);
     } else {
@@ -31,7 +31,7 @@ int RedisModule_ReplyWithDoubleOrString(RedisModuleCtx *ctx, double d) {
     }
 }
 
-void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two) {
+void ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool divide_by_two) {
     if (_ReplyMap(ctx)) {
         RedisModule_ReplySetMapLength(ctx, divide_by_two ? len / 2 : len);
     } else {
@@ -39,7 +39,7 @@ void RedisModule_ReplySetMapOrArrayLength(RedisModuleCtx *ctx, long len, bool di
     }
 }
 
-void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two) {
+void ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_by_two) {
     if (_ReplyMap(ctx)) {
         RedisModule_ReplyWithMap(ctx, divide_by_two ? len / 2 : len);
     } else {
@@ -47,7 +47,7 @@ void RedisModule_ReplyWithMapOrArray(RedisModuleCtx *ctx, long len, bool divide_
     }
 }
 
-void RedisModule_ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len) {
+void ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len) {
     if (_ReplySet(ctx)) {
         RedisModule_ReplySetSetLength(ctx, len);
     } else {
@@ -55,7 +55,7 @@ void RedisModule_ReplySetSetOrArrayLength(RedisModuleCtx *ctx, long len) {
     }
 }
 
-void RedisModule_ReplyWithSetOrArray(RedisModuleCtx *ctx, long len) {
+void ReplyWithSetOrArray(RedisModuleCtx *ctx, long len) {
     if (_ReplySet(ctx)) {
         RedisModule_ReplyWithSet(ctx, len);
     } else {
@@ -89,7 +89,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     } else if (limitLabelsSize > 0) {
         ReplyWithSeriesLabelsWithLimit(ctx, s, limitLabels, limitLabelsSize);
     } else {
-        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+        ReplyWithMapOrArray(ctx, 0, false);
     }
 
     if (_ReplyMap(ctx)) {
@@ -167,7 +167,7 @@ void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                                      const Series *series,
                                      const char **limitLabels,
                                      ushort limitLabelsSize) {
-    RedisModule_ReplyWithMapOrArray(ctx, limitLabelsSize, false);
+    ReplyWithMapOrArray(ctx, limitLabelsSize, false);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;
         for (int j = 0; j < series->labelsCount; ++j) {
@@ -193,7 +193,7 @@ void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
 }
 
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
-    RedisModule_ReplyWithMapOrArray(ctx, series->labelsCount, false);
+    ReplyWithMapOrArray(ctx, series->labelsCount, false);
     for (int i = 0; i < series->labelsCount; i++) {
         if (!_ReplyMap(ctx)) {
             RedisModule_ReplyWithArray(ctx, 2);
@@ -206,7 +206,7 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
 void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
-    RedisModule_ReplyWithDoubleOrString(ctx, value);
+    ReplyWithDoubleOrString(ctx, value);
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {

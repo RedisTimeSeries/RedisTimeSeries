@@ -271,7 +271,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     } else {
         size_t totalLen = 0;
         array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
-        RedisModule_ReplyWithMapOrArray(rctx, totalLen, false);
+        RedisModule_ReplyWithArray(rctx, totalLen);
     }
 
     array_foreach(nodesResults, seriesList, {
@@ -351,11 +351,12 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+
     MRError *err = NULL;
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
 
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -367,7 +368,6 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done_resp2, bc);
 
     MR_Run(exec);
-
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;

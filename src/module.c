@@ -141,9 +141,9 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     const int is_debug = RMUtil_ArgExists("DEBUG", argv, argc, 1);
     if (is_debug) {
-        RedisModule_ReplyWithMapOrArray(ctx, 16 * 2, true); // 16 fields x 2 (key + value)
+        ReplyWithMapOrArray(ctx, 16 * 2, true); // 16 fields x 2 (key + value)
     } else {
-        RedisModule_ReplyWithMapOrArray(ctx, 14 * 2, true); // 14 fields x 2 (key + value)
+        ReplyWithMapOrArray(ctx, 14 * 2, true); // 14 fields x 2 (key + value)
     }
 
     long long skippedSamples;
@@ -183,7 +183,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModule_ReplyWithSimpleString(ctx, "rules");
-    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_LEN, false);
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_LEN, false);
     CompactionRule *rule = series->rules;
     int ruleCount = 0;
     while (rule != NULL) {
@@ -201,7 +201,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         rule = rule->nextRule;
         ruleCount++;
     }
-    RedisModule_ReplySetMapOrArrayLength(ctx, ruleCount, false);
+    ReplySetMapOrArrayLength(ctx, ruleCount, false);
 
     RedisModule_ReplyWithSimpleString(ctx, "ignoreMaxTimeDiff");
     RedisModule_ReplyWithLongLong(ctx, series->ignoreMaxTimeDiff);
@@ -251,7 +251,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, NULL);
 
-    RedisModule_ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -262,7 +262,7 @@ void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         replylen++;
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetSetOrArrayLength(ctx, replylen);
+    ReplySetSetOrArrayLength(ctx, replylen);
 }
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -436,7 +436,7 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
 
     RedisModule_DictIteratorStop(iter);
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status =
@@ -467,7 +467,7 @@ exit:
     RedisModule_DictIteratorStop(iter);
 
     if (exitStatus == REDISMODULE_OK) {
-        RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
 
     return exitStatus;
@@ -1304,7 +1304,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
     }
 
-    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     RedisModule_DictIteratorStop(iter);
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
@@ -1334,7 +1334,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else if (args.numLimitLabels > 0) {
             ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, args.numLimitLabels);
         } else {
-            RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+            ReplyWithMapOrArray(ctx, 0, false);
         }
         // LATEST is ignored for a series that is not a compaction.
         bool should_finalize_last_bucket = should_finalize_last_bucket_get(args.latest, series);
@@ -1356,7 +1356,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 exit:
     if (exitStatus == REDISMODULE_OK) {
-        RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, result);
