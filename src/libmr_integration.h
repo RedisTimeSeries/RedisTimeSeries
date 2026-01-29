@@ -81,7 +81,7 @@ typedef struct SlotRangesRecord
 typedef struct SeriesListRecord
 {
     Record base;
-    ARR(Series*) seriesList;
+    ARR(Series *) seriesList;
 } SeriesListRecord;
 
 MRRecordType *GetMapRecordType();
