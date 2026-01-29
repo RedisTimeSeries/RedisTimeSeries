@@ -1,4 +1,3 @@
-
 #include "libmr_integration.h"
 
 #include "LibMR/src/mr.h"
@@ -10,6 +9,7 @@
 #include "query_language.h"
 #include "tsdb.h"
 #include <math.h>
+#include "reply.h"
 
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
@@ -673,8 +673,6 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
-    RedisModuleDict *qi =
-        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
 
     MRangeArgs mrangeArgs;
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
@@ -699,6 +697,8 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
+    RedisModuleDict *qi =
+        QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
 }
 
@@ -780,6 +780,70 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
 
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
                                                     .replyParser = SeriesListReplyParser };
+
+static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+
+    MGetArgs mgetArgs;
+    mgetArgs.withLabels = queryArg->withLabels;
+    mgetArgs.numLimitLabels = queryArg->limitLabelsSize;
+    for (int i = 0; i < mgetArgs.numLimitLabels; i++)
+        mgetArgs.limitLabels[i] = queryArg->limitLabels[i];
+    QueryPredicateList *queryPredicates;
+    mgetArgs.queryPredicates = queryArg->predicates;
+    mgetArgs.latest = queryArg->latest;
+
+    RedisModuleDict *qi = QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+
+    char *currentKey;
+    size_t currentKeyLen;
+    Series *series;
+    long long replylen = 0;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const GetSeriesResult status = GetSeries(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen), &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        if (status != GetSeriesResult_Success)
+            continue;
+
+        RedisModule_ReplyWithArray(ctx, 3);  // name, labels, sample
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        if (mgetArgs.withLabels) {
+            ReplyWithSeriesLabels(ctx, series);
+        } else if (mgetArgs.numLimitLabels > 0) {
+            const char *limitLabelsStr[mgetArgs.numLimitLabels];
+            for (int i = 0; i < mgetArgs.numLimitLabels; i++)
+                limitLabelsStr[i] = RedisModule_StringPtrLen(mgetArgs.limitLabels[i], NULL);
+            ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, mgetArgs.numLimitLabels);
+        } else {
+            RedisModule_ReplyWithArray(ctx, 0);
+        }
+        // LATEST is ignored for a series that is not a compaction.
+        bool should_finalize_last_bucket = should_finalize_last_bucket_get(mgetArgs.latest, series);
+        if (should_finalize_last_bucket) {
+            Sample sample;
+            Sample *sample_ptr = &sample;
+            calculate_latest_sample(&sample_ptr, series);
+            if (sample_ptr) {
+                ReplyWithSample(ctx, sample.timestamp, sample.value);
+            } else {
+                ReplyWithSeriesLastDatapoint(ctx, series);
+            }
+        } else {
+            ReplyWithSeriesLastDatapoint(ctx, series);
+        }
+        replylen++;
+        RedisModule_CloseKey(key);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+}
+
+static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET, .replyParser = SeriesListReplyParser };
+
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
@@ -911,6 +975,7 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterInternalCommand(
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
