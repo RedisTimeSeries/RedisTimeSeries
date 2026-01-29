@@ -92,7 +92,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.PERFORMANCE_EC2_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PERFORMANCE_EC2_SECRET_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.PERFORMANCE_EC2_REGION }}
-          EC2_PRIVATE_PEM: ${{ secrets.PERFORMANCE_EC2_PRIVATE_PEM }}
           # Inputs
           PROFILE: ${{ inputs.profile_env }}
           BENCHMARK_GLOB: ${{ inputs.benchmark_glob }}
@@ -117,6 +116,7 @@ jobs:
 
       - name: Generate Pull Request Performance info
         if: github.event.number
+        continue-on-error: true
         env:
           PERFORMANCE_GH_TOKEN: ${{ secrets.PERFORMANCE_GH_TOKEN }}
           PERFORMANCE_WH_TOKEN: ${{ secrets.PERFORMANCE_WH_TOKEN }}
