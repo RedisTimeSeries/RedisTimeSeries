@@ -20,7 +20,7 @@ git checkout ${REDIS_REF}
 git submodule update --init --recursive
 make SANITIZER=${SANITIZER:-} -j$(nproc)
 make install
-cd /
+cd ..
 
 echo "Redis installed successfully"
 redis-server --version
