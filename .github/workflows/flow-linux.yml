@@ -186,8 +186,9 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e BETA_VERSION=${{ inputs.beta-version }} \
             redistimeseries-${{ matrix.platform.os }}:latest \
-            make pack BRANCH=${{ env.BRANCH }} VERSION=${{ env.VERSION }} ${{ inputs.beta-version && format('VARIANT={0}', inputs.beta-version) || '' }}
+            make pack BRANCH=${{ env.BRANCH }} VERSION=${{ env.VERSION }}
 
       - name: Upload artifacts to S3
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
