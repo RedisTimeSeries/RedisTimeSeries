@@ -161,6 +161,9 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             redistimeseries-${{ matrix.platform.os }}:latest \
             make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
