@@ -1,7 +1,9 @@
-name: Flow Linux x86
+name: Flow Linux
+
 permissions:
   id-token: write
   contents: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,8 +11,13 @@ on:
         description: 'Redis ref to checkout'
         type: string
         required: true
+      arch:
+        description: 'Architecture (x64 or arm64)'
+        type: string
+        required: true
+        default: 'x64'
       os:
-        description: 'OS to build on (space-separated, e.g. "focal jammy rocky8")'
+        description: 'OS to build on (space-separated, e.g. "focal jammy rocky9")'
         type: string
         required: false
         default: ''
@@ -37,8 +44,12 @@ on:
         description: 'Redis ref to checkout'
         type: string
         required: true
+      arch:
+        description: 'Architecture (x64 or arm64)'
+        type: string
+        required: true
       os:
-        description: 'OS to build on (space-separated, e.g. "focal jammy rocky8")'
+        description: 'OS to build on (space-separated, e.g. "focal jammy rocky9")'
         type: string
         required: false
         default: ''
@@ -66,6 +77,7 @@ jobs:
     outputs:
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      runner: ${{ steps.set-runner.outputs.runner }}
       TAGGED: ${{ steps.set-env.outputs.TAGGED }}
       TAG: ${{ steps.set-env.outputs.TAG }}
       BRANCH: ${{ steps.set-env.outputs.BRANCH }}
@@ -79,12 +91,24 @@ jobs:
         with:
           github-ref: ${{ github.ref }}
           redis-ref: ${{ inputs.redis-ref }}
+      - name: Set runner
+        id: set-runner
+        run: |
+          if [ "${{ inputs.arch }}" == "arm64" ]; then
+            echo "runner=ubuntu24-arm64-4-16" >> $GITHUB_OUTPUT
+          else
+            echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
+          fi
       - name: Set matrix
         id: set-matrix
         run: |
           OS="${{ inputs.os }}"
           if [ -z "${OS}" ]; then
-            OS="bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 mariner2 azurelinux3"
+            if [ "${{ inputs.arch }}" == "arm64" ]; then
+              OS="bionic focal jammy rocky9 azurelinux3"
+            else
+              OS="bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 mariner2 azurelinux3"
+            fi
           fi
           # Convert space-separated list to JSON array
           MATRIX="["
@@ -93,11 +117,11 @@ jobs:
           done
           MATRIX="${MATRIX%,}]"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
-          echo "Generated matrix: ${MATRIX}"
+          echo "Generated matrix for ${{ inputs.arch }}: ${MATRIX}"
 
-  build-linux-matrix:
-    name: ${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
-    runs-on: ubuntu-latest
+  build-linux:
+    name: ${{ inputs.arch }}-${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
+    runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
     strategy:
       fail-fast: false
@@ -147,7 +171,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-artifacts-${{ matrix.platform.os }}
+          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}
           path: |
             tests/**/logs/
             tests/**/*.log
