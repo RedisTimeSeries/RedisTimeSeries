@@ -18,7 +18,8 @@ RUN apt-get update && apt-get install -y \
     automake \
     libtool \
     cmake \
-    curl
+    curl \
+    libblocksruntime-dev
 
 # Install Redis
 ARG REDIS_REF=unstable
