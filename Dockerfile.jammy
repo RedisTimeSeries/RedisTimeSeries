@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     gdb \
+    clang \
     valgrind \
     git \
     jq \
