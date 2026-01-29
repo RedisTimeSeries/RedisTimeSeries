@@ -13,10 +13,11 @@ RUN cd /workspace/.install && ./install_script.sh
 ENV PATH="/opt/rh/devtoolset-11/root/usr/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/devtoolset-11/root/usr/lib64:${LD_LIBRARY_PATH}"
 
-# Install Redis
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
+ARG SANITIZER=
 COPY .install/install_redis.sh /tmp/install_redis.sh
-RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} /tmp/install_redis.sh
+RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /tmp/install_redis.sh
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh

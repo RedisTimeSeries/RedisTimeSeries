@@ -9,10 +9,11 @@ RUN apt update -qq \
     unzip rsync build-essential gcc-10 g++-10 cargo libclang-dev clang curl cmake jq automake libtool \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
-# Install Redis
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
+ARG SANITIZER=
 COPY .install/install_redis.sh /tmp/install_redis.sh
-RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} /tmp/install_redis.sh
+RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /tmp/install_redis.sh
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh

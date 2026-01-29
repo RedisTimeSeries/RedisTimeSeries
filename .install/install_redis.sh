@@ -8,12 +8,17 @@ fi
 
 echo "Installing Redis from ref: ${REDIS_REF}"
 
+# SANITIZER can be passed to build Redis with sanitizer support (e.g., SANITIZER=address)
+if [ -n "${SANITIZER}" ]; then
+    echo "Building Redis with SANITIZER=${SANITIZER}"
+fi
+
 git clone https://github.com/redis/redis.git 
 cd redis
 git fetch origin ${REDIS_REF}
 git checkout ${REDIS_REF}
 git submodule update --init --recursive
-make -j$(nproc)
+make SANITIZER=${SANITIZER:-} -j$(nproc)
 make install
 cd /
 
