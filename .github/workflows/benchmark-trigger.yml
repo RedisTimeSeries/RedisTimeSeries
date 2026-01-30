@@ -1,4 +1,4 @@
-name: Check if needs trigger CircleCI benchmark
+name: Check if needs trigger CI benchmark
 
 on:
   pull_request:
