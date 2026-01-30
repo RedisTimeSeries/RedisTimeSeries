@@ -746,6 +746,18 @@ static Series *ParseSeries(const redisReply *reply) {
 
     const redisReply *samplesElement = reply->element[2];
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
+    api_timestamp_t timestamp;
+    double value;
+    if (samplesElement->elements == 2) {
+        // This could be the compact way for a single sample, in which case we simply extract it
+        if (samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
+            timestamp = samplesElement->element[0]->integer;
+            value = parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len);
+            SeriesAddSample(result, timestamp, value);
+            return result;
+        }
+    }
+
     for (size_t i = 0; i < samplesElement->elements; i++) {
         const redisReply *sampleElement = samplesElement->element[i];
         RedisModule_Assert(sampleElement->type == REDIS_REPLY_ARRAY);
@@ -753,9 +765,8 @@ static Series *ParseSeries(const redisReply *reply) {
         RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
         // Unfortunately we cannot assume that the second element's type is a (simple) string
         // because it could start with a '+' or a '-' which confuses the type detection.
-        api_timestamp_t timestamp = sampleElement->element[0]->integer;
-        double value =
-            parse_double_cstr(sampleElement->element[1]->str, sampleElement->element[1]->len);
+        timestamp = sampleElement->element[0]->integer;
+        value = parse_double_cstr(sampleElement->element[1]->str, sampleElement->element[1]->len);
         SeriesAddSample(result, timestamp, value);
     }
 
@@ -784,7 +795,6 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     mgetArgs.numLimitLabels = queryArg->limitLabelsSize;
     for (int i = 0; i < mgetArgs.numLimitLabels; i++)
         mgetArgs.limitLabels[i] = queryArg->limitLabels[i];
-    QueryPredicateList *queryPredicates;
     mgetArgs.queryPredicates = queryArg->predicates;
     mgetArgs.latest = queryArg->latest;
 
@@ -792,11 +802,11 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    long long replylen = 0;
 
     char *currentKey;
     size_t currentKeyLen;
     Series *series;
-    long long replylen = 0;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         const GetSeriesResult status = GetSeries(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen), &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
@@ -832,6 +842,8 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
         replylen++;
         RedisModule_CloseKey(key);
     }
+
+    RedisModule_ReplySetArrayLength(ctx, replylen);
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
