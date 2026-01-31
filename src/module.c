@@ -297,12 +297,11 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return REDISMODULE_OK;
         }
         TSDB_queryindex_MR(ctx, queries);
-        QueryPredicateList_Free(queries);
     } else {
         _TSDB_queryindex_impl(ctx, queries);
-        QueryPredicateList_Free(queries);
     }
 
+    QueryPredicateList_Free(queries);
     return REDISMODULE_OK;
 }
 
