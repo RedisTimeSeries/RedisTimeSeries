@@ -2,8 +2,7 @@ version: 0.1
 
 remote:
   - type: oss-standalone
-  - setup: redistimeseries-m5
-  - spot_instance: oss-redistimeseries-m5-spot-instances
+  - setup: modules-m5
 
 exporter:
   redistimeseries:
