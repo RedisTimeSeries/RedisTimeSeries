@@ -863,6 +863,32 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
 static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
                                                   .replyParser = SeriesListReplyParser };
 
+static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+
+    RedisModuleDict *qi =
+        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+
+    const char *keyName;
+    size_t keyNameLen;
+    long long replylen = 0;
+
+    ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
+        RedisModule_ReplyWithStringBuffer(ctx, keyName, keyNameLen);
+        replylen++;
+    }
+    ReplySetSetOrArrayLength(ctx, replylen);
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+}
+
+static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
+                                                        .replyParser =
+                                                            QueryIndexRangesReplyParser };
+
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
@@ -994,6 +1020,7 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 

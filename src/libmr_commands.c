@@ -271,7 +271,6 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-
 int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     MGetArgs args;
     if (parseMGetCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
