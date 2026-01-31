@@ -1,8 +1,9 @@
 
 #include "libmr_commands.h"
 
-#include "LibMR/src/mr.h"
 #include "LibMR/src/utils/arr.h"
+#include "LibMR/src/mr.h"
+#include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
 #include "query_language.h"
@@ -93,62 +94,6 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-static void mget_done(ExecutionCtx *eCtx, RedisModuleBlockedClient *bc, bool resp3) {
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t totalLen = 0;
-    MRRecordType *expectedType = resp3 ? GetMapRecordType() : GetListRecordType();
-    // Pass 1: find out the total length (and possibly log mismatched type)
-    for (int i = 0; i < len; i++) {
-        Record *rawRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (rawRecord->recordType != expectedType) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", rawRecord->recordType->type.type);
-            continue;
-        }
-        size_t nRecords = resp3 ? MapRecord_GetLen((MapRecord *)rawRecord)
-                                : ListRecord_GetLen((ListRecord *)rawRecord);
-        totalLen += nRecords;
-    }
-
-    if (resp3)
-        RedisModule_ReplyWithMap(rctx, totalLen / 2);
-    else
-        RedisModule_ReplyWithArray(rctx, totalLen);
-
-    for (int i = 0; i < len; i++) {
-        Record *rawRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (rawRecord->recordType != expectedType)
-            continue;
-
-        size_t nRecords = resp3 ? MapRecord_GetLen((MapRecord *)rawRecord)
-                                : ListRecord_GetLen((ListRecord *)rawRecord);
-        for (size_t j = 0; j < nRecords; j++) {
-            Record *r = resp3 ? MapRecord_GetRecord((MapRecord *)rawRecord, j)
-                              : ListRecord_GetRecord((ListRecord *)rawRecord, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    RTS_UnblockClient(bc, rctx);
-}
-
-static void mget_done_resp2(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    return mget_done(eCtx, bc, false);
-}
-
-static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    return mget_done(eCtx, bc, true);
-}
-
 static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
@@ -199,6 +144,8 @@ static int compare_slot_ranges(const void *a, const void *b) {
     return (int)ra->start - (int)rb->start;
 }
 
+#define SLOT_RANGES_ERROR "Query requires unavailable slots"
+
 static bool valid_slot_ranges(ARR(RedisModuleSlotRange *) slotRanges) {
     size_t len = array_len(slotRanges);
     if (len == 0)
@@ -213,31 +160,20 @@ static bool valid_slot_ranges(ARR(RedisModuleSlotRange *) slotRanges) {
     return slot == (1 << 14);
 }
 
-#define SLOT_RANGES_ERROR "Query requires unavailable slots"
+static bool collect_slot_ranges_and_series_lists(ExecutionCtx *eCtx,
+                                                 RedisModuleCtx *ctx,
+                                                 ARR(RedisModuleSlotRange *) slotRanges,
+                                                 ARR(ARR(Series *)) nodesResults) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx)))
+        return false;
 
-static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
-    MRangeData *data = privateData;
-    RedisModuleBlockedClient *bc = data->bc;
-    MRangeArgs *args = &data->args;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    ARR(RedisModuleSlotRange *) slotRanges = NULL;
-    ARR(ARR(Series *)) nodesResults = NULL;
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    // Collect results
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     if (len % 2 != 0 || len == 0) {
-        // There should be 2 results from each node: slot ranges and internal mrange
-        RedisModule_Log(rctx, "warning", "Unexpected results from nodes");
-        RedisModule_ReplyWithError(rctx, SLOT_RANGES_ERROR);
-        goto __done;
+        // There should be 2 results from each node: slot ranges and node results
+        RedisModule_Log(ctx, "warning", "Unexpected results from nodes");
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        return false;
     }
-    slotRanges = array_new(RedisModuleSlotRange *,
-                           len / 2); // Minimal capacity (in case each node has one range)
-    nodesResults = array_new(ARR(Series *), len / 2);
     for (size_t i = 0; i < len; i++) {
         Record *r = MR_ExecutionCtxGetResult(eCtx, i);
         if (r->recordType == GetSlotRangesRecordType()) {
@@ -251,18 +187,35 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             nodesResults = array_append(nodesResults, record->seriesList);
             continue;
         }
-        RedisModule_Log(rctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
-        RedisModule_ReplyWithError(rctx, SLOT_RANGES_ERROR);
-        goto __done;
+        RedisModule_Log(ctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        return false;
     }
 
     bool redisClusterEnabled =
-        (RedisModule_GetContextFlags(rctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
+        (RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
     if (redisClusterEnabled && !valid_slot_ranges(slotRanges)) {
-        RedisModule_Log(rctx, "warning", "Invalid slot ranges");
-        RedisModule_ReplyWithError(rctx, SLOT_RANGES_ERROR);
-        goto __done;
+        RedisModule_Log(ctx, "warning", "Invalid slot ranges");
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        return false;
     }
+
+    return true;
+}
+
+static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
+    MRangeData *data = privateData;
+    MRangeArgs *args = &data->args;
+    RedisModuleBlockedClient *bc = data->bc;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+    ARR(RedisModuleSlotRange *) slotRanges = NULL;
+    ARR(ARR(Series *)) nodesResults = NULL;
+
+    slotRanges = array_new(RedisModuleSlotRange *, MR_ClusterGetSize());
+    nodesResults = array_new(ARR(Series *), MR_ClusterGetSize());
+
+    if (!collect_slot_ranges_and_series_lists(eCtx, ctx, slotRanges, nodesResults))
+        goto __done;
 
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
@@ -271,7 +224,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     } else {
         size_t totalLen = 0;
         array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
-        RedisModule_ReplyWithArray(rctx, totalLen);
+        RedisModule_ReplyWithArray(ctx, totalLen);
     }
 
     array_foreach(nodesResults, seriesList, {
@@ -279,7 +232,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             if (args->groupByLabel)
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             else
-                ReplySeriesArrayPos(rctx,
+                ReplySeriesArrayPos(ctx,
                                     s,
                                     args->withLabels,
                                     args->limitLabels,
@@ -294,7 +247,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         // Apply the reducer
         RangeArgs rangeArgs = args->rangeArgs;
         rangeArgs.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(rctx, resultset, &rangeArgs, &args->groupByReducerArgs);
+        ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
         RangeArgs minimizedArgs = args->rangeArgs;
@@ -306,7 +259,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.filterByValueArgs.hasValue = false;
         minimizedArgs.latest = false;
 
-        replyResultSet(rctx,
+        replyResultSet(ctx,
                        resultset,
                        args->withLabels,
                        args->limitLabels,
@@ -323,7 +276,43 @@ __done:
     free(data);
     MR_ExecutionCtxSetDone(eCtx);
 
-    RTS_UnblockClient(bc, rctx);
+    RTS_UnblockClient(bc, ctx);
+}
+
+static void mget_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+    ARR(RedisModuleSlotRange *) slotRanges = NULL;
+    ARR(ARR(Series *)) nodesResults = NULL;
+
+    slotRanges = array_new(RedisModuleSlotRange *, MR_ClusterGetSize());
+    nodesResults = array_new(ARR(Series *), MR_ClusterGetSize());
+
+    if (!collect_slot_ranges_and_series_lists(eCtx, ctx, slotRanges, nodesResults))
+        goto __done;
+
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    size_t len = 0;
+    array_foreach(nodesResults, seriesList, {
+        array_foreach(seriesList, s, {
+            if (!_ReplyMap(ctx))
+                RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
+            RedisModule_ReplyWithString(ctx, s->keyName);
+            if (_ReplyMap(ctx))
+                RedisModule_ReplyWithArray(ctx, 2);
+            ReplyWithSeriesLabels(ctx, s);
+            ReplyWithSeriesLastDatapoint(ctx, s);
+            len++;
+        });
+    });
+    ReplySetMapOrArrayLength(ctx, len, false);
+
+__done:
+    array_free(slotRanges);
+    array_free(nodesResults);
+    MR_ExecutionCtxSetDone(eCtx);
+
+    RTS_UnblockClient(bc, ctx);
 }
 
 int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -365,7 +354,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done_resp2, bc);
+    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
@@ -412,7 +401,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MRangeData *data = malloc(sizeof(struct MRangeData));
+    MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
     data->bc = bc;
     data->args = args;
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
@@ -452,7 +441,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(
-        exec, queryArg->resp3 ? queryindex_resp3_done : mget_done_resp2, bc); // debugme: mget?!
+        exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc); // debugme: mget?!
 
     MR_Run(exec);
 
