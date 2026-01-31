@@ -695,6 +695,7 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    RedisModule_FreeDict(ctx, qi);
 }
 
 static Series *ParseSeries(const redisReply *reply) {
@@ -752,7 +753,8 @@ static Series *ParseSeries(const redisReply *reply) {
         // This could be the compact way for a single sample, in which case we simply extract it
         if (samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
             timestamp = samplesElement->element[0]->integer;
-            value = parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len);
+            value =
+                parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len);
             SeriesAddSample(result, timestamp, value);
             return result;
         }
@@ -798,7 +800,8 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     mgetArgs.queryPredicates = queryArg->predicates;
     mgetArgs.latest = queryArg->latest;
 
-    RedisModuleDict *qi = QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
+    RedisModuleDict *qi =
+        QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -809,11 +812,14 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     Series *series;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
-        const GetSeriesResult status = GetSeries(ctx, RedisModule_CreateString(ctx, currentKey, currentKeyLen), &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        const GetSeriesResult status = GetSeries(
+            ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;
 
-        RedisModule_ReplyWithArray(ctx, 3);  // name, labels, sample
+        RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         if (mgetArgs.withLabels) {
             ReplyWithSeriesLabels(ctx, series);
@@ -849,8 +855,8 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModule_FreeDict(ctx, qi);
 }
 
-static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET, .replyParser = SeriesListReplyParser };
-
+static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
+                                                  .replyParser = SeriesListReplyParser };
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
