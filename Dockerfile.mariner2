@@ -1,28 +1,13 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 
 WORKDIR /workspace
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
-    make \
-    cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
-    ca-certificates \
-    tar
+# Install git first (needed for install_script.sh)
+RUN tdnf install -y git ca-certificates
+
+# Copy and run install scripts
+COPY .install /workspace/.install
+RUN cd /workspace/.install && ./install_script.sh
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable

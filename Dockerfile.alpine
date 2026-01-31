@@ -1,28 +1,41 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM alpine:3
 
 WORKDIR /workspace
 
 # Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
+RUN apk add --no-cache \
+    bash \
     make \
+    libtool \
+    tar \
     cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
-    ca-certificates \
-    tar
+    python3 \
+    python3-dev \
+    py3-pip \
+    gcc \
+    git \
+    curl \
+    build-base \
+    autoconf \
+    automake \
+    py3-cryptography \
+    linux-headers \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    openssh \
+    py-virtualenv \
+    clang18-libclang \
+    gcompat \
+    libstdc++ \
+    libgcc \
+    g++ \
+    openblas-dev \
+    xsimd \
+    xz \
+    bsd-compat-headers \
+    clang18 \
+    jq
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
@@ -33,7 +46,7 @@ RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZ
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
 ENV PATH="/usr/local/bin:${PATH}"
-RUN uv venv --python=3.9 /opt/.venv
+RUN uv venv --python=3.11 /opt/.venv
 ENV VIRTUAL_ENV=/opt/.venv
 ENV PATH="/opt/.venv/bin:${PATH}"
 COPY requierments_docker.txt /workspace/requierments.txt
