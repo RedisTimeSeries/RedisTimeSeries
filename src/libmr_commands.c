@@ -1,4 +1,3 @@
-
 #include "libmr_commands.h"
 
 #include "LibMR/src/utils/arr.h"
@@ -369,8 +368,6 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 }
 
 int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    MRError *err = NULL;
-
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
@@ -384,10 +381,10 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
 
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
+    MRError *err = NULL;
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -399,7 +396,6 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
 
     MR_Run(exec);
-
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;

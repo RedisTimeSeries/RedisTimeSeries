@@ -72,6 +72,11 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
+// The following record structs are for internal commands.
+// They are a bit more lightweight than the above collection records because
+// their elements do not need to be "derived from" Record objects.
+// We create them in the `replyParser`s and use them in the `..._done()` callbacks.
+
 typedef struct SlotRangesRecord
 {
     Record base;
@@ -84,11 +89,18 @@ typedef struct SeriesListRecord
     ARR(Series *) seriesList;
 } SeriesListRecord;
 
+typedef struct StringListRecord
+{
+    Record base;
+    ARR(RedisModuleString *) stringList;
+} StringListRecord;
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetSlotRangesRecordType();
 MRRecordType *GetSeriesListRecordType();
+MRRecordType *GetStringListRecordType();
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
