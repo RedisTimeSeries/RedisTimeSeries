@@ -43,11 +43,12 @@ ARG SANITIZER=
 COPY .install/install_redis.sh /tmp/install_redis.sh
 RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /tmp/install_redis.sh
 
-# Install uv and Python environment
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
-ENV PATH="/usr/local/bin:${PATH}"
-RUN uv venv --python=3.11 /opt/.venv
+# Use system Python with venv (like the old flow-alpine workflow)
+# uv's managed Python has clang-specific flags that cause build issues
+RUN python3 -m venv /opt/.venv
 ENV VIRTUAL_ENV=/opt/.venv
 ENV PATH="/opt/.venv/bin:${PATH}"
+
 COPY requirements_docker.txt /workspace/requirements.txt
-RUN uv pip install -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements.txt
