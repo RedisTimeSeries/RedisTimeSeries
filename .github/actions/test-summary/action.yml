@@ -38,6 +38,15 @@ outputs:
   notification-sent:
     description: 'Whether the notification was sent successfully'
     value: ${{ steps.send-slack.outputs.sent }}
+  total-tests-passed:
+    description: 'Total number of tests passed across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_passed }}
+  total-tests-failed:
+    description: 'Total number of tests failed across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_failed }}
+  total-tests-skipped:
+    description: 'Total number of tests skipped across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_skipped }}
 
 runs:
   using: composite
@@ -46,6 +55,104 @@ runs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 1
+
+    - name: Download all test result artifacts
+      uses: actions/download-artifact@v4
+      continue-on-error: true
+      with:
+        pattern: test-results-*
+        merge-multiple: false
+
+    - name: Aggregate test metrics from artifacts
+      id: test-metrics
+      shell: bash
+      run: |
+        # Initialize counters for granular test metrics
+        TOTAL_PASSED=0
+        TOTAL_FAILED=0
+        TOTAL_SKIPPED=0
+        TOTAL_TESTS=0
+        OS_SUMMARY=""
+        FAILED_OS_SUMMARY=""
+
+        # Find all test result JSON files from downloaded artifacts
+        echo "Looking for test result artifacts..."
+
+        for result_file in test-results-*/test-results-*.json; do
+          if [ -f "$result_file" ]; then
+            echo "Processing: $result_file"
+
+            # Validate JSON file
+            if ! jq empty "$result_file" 2>/dev/null; then
+              echo "Warning: Invalid JSON in $result_file, skipping"
+              continue
+            fi
+
+            # Extract values
+            OS_NAME=$(jq -r '.os // "unknown"' "$result_file" 2>/dev/null || echo "unknown")
+            PASSED=$(jq -r '.passed // 0' "$result_file" 2>/dev/null || echo "0")
+            FAILED=$(jq -r '.failed // 0' "$result_file" 2>/dev/null || echo "0")
+            SKIPPED=$(jq -r '.skipped // 0' "$result_file" 2>/dev/null || echo "0")
+            STATUS=$(jq -r '.status // ""' "$result_file" 2>/dev/null || echo "")
+
+            # Ensure values are valid numbers
+            PASSED=${PASSED:-0}
+            FAILED=${FAILED:-0}
+            SKIPPED=${SKIPPED:-0}
+
+            # Accumulate totals
+            TOTAL_PASSED=$((TOTAL_PASSED + PASSED))
+            TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
+
+            # Build per-OS summary line
+            if [ "$STATUS" = "error" ] || [ "$STATUS" = "unknown" ]; then
+              OS_LINE="• *${OS_NAME}*: ⚠️ Status: ${STATUS}"
+            else
+              OS_LINE="• *${OS_NAME}*: ✅ ${PASSED}"
+              if [ "$FAILED" -gt 0 ]; then
+                OS_LINE="${OS_LINE} | ❌ ${FAILED}"
+              fi
+              if [ "$SKIPPED" -gt 0 ]; then
+                OS_LINE="${OS_LINE} | ⏭️ ${SKIPPED}"
+              fi
+            fi
+            OS_SUMMARY="${OS_SUMMARY}${OS_LINE}\n"
+
+            # Track failed OSs (failed > 0 OR passed = 0 OR status = error/unknown)
+            if [ "$FAILED" -gt 0 ] || [ "$PASSED" -eq 0 ] || [ "$STATUS" = "error" ] || [ "$STATUS" = "unknown" ]; then
+              FAILED_OS_SUMMARY="${FAILED_OS_SUMMARY}${OS_LINE}\n"
+            fi
+          fi
+        done
+
+        TOTAL_TESTS=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_SKIPPED))
+
+        # Set outputs
+        echo "total_passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+        echo "total_failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+        echo "total_skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
+        echo "total_tests=$TOTAL_TESTS" >> $GITHUB_OUTPUT
+
+        # Handle empty summaries
+        if [ -z "$OS_SUMMARY" ]; then
+          OS_SUMMARY="No test result artifacts found"
+        fi
+        if [ -z "$FAILED_OS_SUMMARY" ]; then
+          FAILED_OS_SUMMARY="✅ All platforms passed!"
+        fi
+
+        # Use heredoc for multi-line outputs
+        echo "os_summary<<EOF" >> $GITHUB_OUTPUT
+        echo -e "${OS_SUMMARY}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        echo "failed_os_summary<<EOF" >> $GITHUB_OUTPUT
+        echo -e "${FAILED_OS_SUMMARY}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        echo "=== Test Metrics Summary ==="
+        echo "Total Tests: $TOTAL_TESTS (Passed: $TOTAL_PASSED, Failed: $TOTAL_FAILED, Skipped: $TOTAL_SKIPPED)"
 
     - name: Collect commit information
       id: commit-info
@@ -206,17 +313,37 @@ runs:
         SHORT_SHA: ${{ steps.commit-info.outputs.short_sha }}
         COMMIT_MESSAGE: ${{ steps.commit-info.outputs.commit_message }}
         WORKFLOW_URL: ${{ steps.urls.outputs.workflow_url }}
+        # Granular test metrics from artifacts
+        TOTAL_TESTS_PASSED: ${{ steps.test-metrics.outputs.total_passed }}
+        TOTAL_TESTS_FAILED: ${{ steps.test-metrics.outputs.total_failed }}
+        TOTAL_TESTS_SKIPPED: ${{ steps.test-metrics.outputs.total_skipped }}
+        TOTAL_TESTS: ${{ steps.test-metrics.outputs.total_tests }}
+        FAILED_OS_SUMMARY: ${{ steps.test-metrics.outputs.failed_os_summary }}
       run: |
-        # Build the overall summary line
-        SUMMARY="✅ Passed: ${PASSED_JOBS}"
+        # Build the job-level summary line
+        JOB_SUMMARY="✅ Jobs Passed: ${PASSED_JOBS}"
         if [[ "${FAILED_COUNT}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ❌ Failed: ${FAILED_COUNT}"
+          JOB_SUMMARY="${JOB_SUMMARY} | ❌ Failed: ${FAILED_COUNT}"
         fi
         if [[ "${SKIPPED_COUNT}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ⏭️ Skipped: ${SKIPPED_COUNT}"
+          JOB_SUMMARY="${JOB_SUMMARY} | ⏭️ Skipped: ${SKIPPED_COUNT}"
         fi
         if [[ "${CANCELLED_COUNT}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ⚠️ Cancelled: ${CANCELLED_COUNT}"
+          JOB_SUMMARY="${JOB_SUMMARY} | ⚠️ Cancelled: ${CANCELLED_COUNT}"
+        fi
+
+        # Build the test-level summary line (granular metrics)
+        TEST_SUMMARY=""
+        if [[ "${TOTAL_TESTS}" != "0" ]] && [[ -n "${TOTAL_TESTS}" ]]; then
+          TEST_SUMMARY="✅ Tests Passed: ${TOTAL_TESTS_PASSED}"
+          if [[ "${TOTAL_TESTS_FAILED}" != "0" ]]; then
+            TEST_SUMMARY="${TEST_SUMMARY} | ❌ Failed: ${TOTAL_TESTS_FAILED}"
+          fi
+          if [[ "${TOTAL_TESTS_SKIPPED}" != "0" ]]; then
+            TEST_SUMMARY="${TEST_SUMMARY} | ⏭️ Skipped: ${TOTAL_TESTS_SKIPPED}"
+          fi
+        else
+          TEST_SUMMARY="No granular test metrics available"
         fi
 
         # Build payload using jq to properly escape all values
@@ -225,9 +352,11 @@ runs:
           --arg redis_ref "$REDIS_REF" \
           --arg short_sha "$SHORT_SHA" \
           --arg commit_msg "$COMMIT_MESSAGE" \
-          --arg summary "$SUMMARY" \
+          --arg job_summary "$JOB_SUMMARY" \
+          --arg test_summary "$TEST_SUMMARY" \
           --arg workflow_url "$WORKFLOW_URL" \
           --arg failed_jobs "$FAILED_JOBS_TEXT" \
+          --arg failed_os "$FAILED_OS_SUMMARY" \
           '{
             "text": "Event Nightly Test Results",
             "blocks": [
@@ -265,7 +394,14 @@ runs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*Overall Summary*\n\($summary)"
+                  "text": "*Job Summary*\n\($job_summary)"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Test Summary*\n\($test_summary)"
                 }
               },
               {
@@ -283,6 +419,13 @@ runs:
                 "text": {
                   "type": "mrkdwn",
                   "text": "*Failed Jobs:*\n\($failed_jobs)"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Platform Results:*\n\($failed_os)"
                 }
               },
               {

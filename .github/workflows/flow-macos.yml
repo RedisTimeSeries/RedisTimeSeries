@@ -153,13 +153,18 @@ jobs:
           use-venv: '1'
       - name: Run tests
         uses: ./.github/actions/run-tests
-        with: 
+        with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
+      - name: Capture test results
+        if: always()
+        uses: ./.github/actions/capture-test-results
+        with:
+          os-name: ${{ matrix.os }}
       - name: Upload test artifacts
         if: failure()
         uses: ./.github/actions/upload-artifacts
-        with: 
+        with:
           image: ${{ matrix.os }}
       - name: Pack module
         uses: ./.github/actions/pack-module
