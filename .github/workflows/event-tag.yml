@@ -41,7 +41,7 @@ jobs:
     needs: [prepare-values]
     with:
       arch: arm64
-      os: bionic focal jammy rocky9 azurelinux3 alpine
+      os: bionic focal jammy rocky9 azurelinux3 amazonlinux2023 alpine
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
     secrets: inherit
   macos:
