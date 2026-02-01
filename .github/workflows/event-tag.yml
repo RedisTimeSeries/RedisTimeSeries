@@ -33,7 +33,7 @@ jobs:
     needs: [prepare-values]
     with:
       arch: x64
-      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 azurelinux3 mariner2 alpine
+      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 azurelinux3 mariner2 alpine
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
     secrets: inherit
   build-linux-arm64:
