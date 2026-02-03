@@ -12,6 +12,7 @@ on:
       - master
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
+  pull_request:
   schedule:
     - cron: '20 20 * * *' # 20:20 UTC every day
   workflow_dispatch:
@@ -105,7 +106,7 @@ jobs:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
     needs: [prepare-values, linter, build-linux-x86, mariner, arm64, macos, linux-valgrind, linux-sanitizer]
-    if: always() && (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.send-slack-message == true))
+    if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
