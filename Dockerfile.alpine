@@ -37,11 +37,13 @@ RUN apk add --no-cache \
     clang18 \
     jq
 
+COPY .install /workspace/.install
+
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
 ARG SANITIZER=
-COPY .install/install_redis.sh /tmp/install_redis.sh
-RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /tmp/install_redis.sh
+
+RUN chmod +x .install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} .install/install_redis.sh
 
 # Use system Python with venv (like the old flow-alpine workflow)
 # uv's managed Python has clang-specific flags that cause build issues

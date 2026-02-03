@@ -145,7 +145,7 @@ jobs:
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
+            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'addr' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
             .
 
@@ -191,7 +191,7 @@ jobs:
             -e VERSION=${{ env.VERSION }} \
             -e BETA_VERSION=${{ inputs.beta-version }} \
             ${{ env.DOCKER_IMAGE }} \
-            make pack BRANCH=${{ env.BRANCH }} SHOW=1
+            make pack SHOW=1
 
       - name: Upload artifacts to S3
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}

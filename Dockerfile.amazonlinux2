@@ -2,27 +2,21 @@ FROM amazonlinux:2
 
 WORKDIR /workspace
 
-# Install git first (needed for install_script.sh)
-RUN yum install -y git
+RUN yum install -y git gcc-c++ libstdc++-devel make autogen automake libtool cmake3 python-pip openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-make --nogpgcheck
+RUN . scl_source enable devtoolset-11 || true
 
-# Copy and run install scripts
 COPY .install /workspace/.install
-RUN cd /workspace/.install && ./install_script.sh
-
-# Enable devtoolset-11 for all subsequent commands
-ENV PATH="/opt/rh/devtoolset-11/root/usr/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/rh/devtoolset-11/root/usr/lib64:${LD_LIBRARY_PATH}"
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
 ARG SANITIZER=
-COPY .install/install_redis.sh /tmp/install_redis.sh
-RUN chmod +x /tmp/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /tmp/install_redis.sh
+
+RUN chmod +x .install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} .install/install_redis.sh
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
 ENV PATH="/usr/local/bin:${PATH}"
-RUN uv venv --python=3.9 /opt/.venv
+RUN uv venv --python=3.11 /opt/.venv
 ENV VIRTUAL_ENV=/opt/.venv
 ENV PATH="/opt/.venv/bin:${PATH}"
 COPY requirements_docker.txt /workspace/requirements.txt
