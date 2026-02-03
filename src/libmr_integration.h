@@ -1,7 +1,6 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "generic_chunk.h"
 #include "indexer.h"
-#include "module.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -72,28 +71,9 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
-// Reuse Redis Module API slot range struct.
-typedef RedisModuleSlotRange SlotRangeRecord;
-
-// Wrapper record used for shard->coordinator internal communication. It carries the shard's
-// owned slot ranges (captured under the thread-safe lock), alongside the actual mapper payload.
-typedef struct ShardEnvelopeRecord
-{
-    Record base;
-    size_t slotRangesCount;
-    SlotRangeRecord *slotRanges;
-    Record *payload;
-} ShardEnvelopeRecord;
-
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
-MRRecordType *GetShardEnvelopeRecordType();
-
-// Similar to RedisModule_StringPtrLen(): returns pointer and writes length to out param.
-const SlotRangeRecord *ShardEnvelopeRecord_SlotRanges(const ShardEnvelopeRecord *r, size_t *count);
-Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r);
-
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
