@@ -1759,7 +1759,7 @@ static int Stub_RegisterDefragCallbacks(RedisModuleCtx *ctx,
 }
 /*
 module loading function, possible arguments:
-COMPACTION_POLICY - compaction policy from parse_policies,h
+COMPACTION_POLICY - compaction policy from parse_policies.h
 RETENTION_POLICY - long that represents the retention in milliseconds
 MAX_SAMPLE_PER_CHUNK - how many samples per chunk
 example:
