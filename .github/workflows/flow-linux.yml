@@ -154,7 +154,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
+            -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
             make build
 
