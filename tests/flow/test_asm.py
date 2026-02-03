@@ -49,7 +49,7 @@ def test_asm_with_data_and_queries_during_migrations():
         assert filtered_by == "label1=17"
         assert withlabels == []  # No WITHLABLES
         assert len(samples) == samples_per_key
-        # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
+        assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
