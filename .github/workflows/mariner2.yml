@@ -68,7 +68,16 @@ jobs:
         working-directory: redis
         run: make install
       - name: Build and test TS
-        run: make test QUICK=${{inputs.quick && '1' || '0'}}
+        run: |
+          # Capture test output to file for parsing by capture-test-results action
+          TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
+          make test QUICK=${{inputs.quick && '1' || '0'}} 2>&1 | tee "$TEST_OUTPUT_FILE" || true
+          echo "TEST_OUTPUT_FILE=$TEST_OUTPUT_FILE" >> $GITHUB_ENV
+      - name: Capture test results
+        if: always()
+        uses: ./.github/actions/capture-test-results
+        with:
+          os-name: mariner2
       - name: Pack module
         uses: ./.github/actions/pack-module
         with:

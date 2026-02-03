@@ -1,0 +1,102 @@
+name: Capture Test Results
+description: Capture test output and parse results for Slack notification
+
+inputs:
+  os-name:
+    description: 'OS name/platform identifier'
+    required: true
+  test-log-dir:
+    description: 'Directory containing test logs'
+    required: false
+    default: 'tests/flow/logs'
+
+outputs:
+  results-file:
+    description: 'Path to the results JSON file'
+    value: ${{ steps.parse.outputs.results-file }}
+  artifact-name:
+    description: 'Name of the uploaded artifact'
+    value: ${{ steps.parse.outputs.artifact-name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Capture and parse test results
+      shell: bash
+      id: parse
+      run: |
+        OS_NAME="${{ inputs.os-name }}"
+        # Sanitize OS name for artifact (remove invalid characters like :, /, etc.)
+        OS_NAME_SANITIZED=$(echo "$OS_NAME" | sed 's/[:/\\<>|*?]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//')
+        # Use job name and OS name to create unique artifact name
+        JOB_NAME="${{ github.job }}"
+        JOB_NAME_SANITIZED=$(echo "$JOB_NAME" | sed 's/[^a-zA-Z0-9_-]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//')
+        # Create unique artifact name: job-name-os-name
+        ARTIFACT_NAME="test-results-${JOB_NAME_SANITIZED}-${OS_NAME_SANITIZED}"
+        TEST_LOG_DIR="${{ inputs.test-log-dir }}"
+        RESULTS_FILE="test-results-${OS_NAME_SANITIZED}.json"
+        
+        cd "$GITHUB_WORKSPACE" || cd /tmp || cd .
+        
+        # Try to find test output - first check the captured output file
+        TEST_OUTPUT=""
+        if [ -f "$GITHUB_WORKSPACE/test_output.log" ]; then
+          TEST_OUTPUT=$(cat "$GITHUB_WORKSPACE/test_output.log" || echo "")
+        fi
+        
+        # Fallback: look for test summary in log files
+        if [ -z "$TEST_OUTPUT" ] && [ -d "$TEST_LOG_DIR" ]; then
+          # Find the most recent log file (cross-platform compatible)
+          LATEST_LOG=""
+          LATEST_LOG=$(find "$TEST_LOG_DIR" -name "*.log" -type f -exec stat -f '%m %N' {} + 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || echo "")
+          if [ -z "$LATEST_LOG" ] || [ ! -f "$LATEST_LOG" ]; then
+            LATEST_LOG=$(find "$TEST_LOG_DIR" -name "*.log" -type f -exec stat -c '%Y %n' {} + 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || echo "")
+          fi
+          if [ -n "$LATEST_LOG" ] && [ -f "$LATEST_LOG" ]; then
+            TEST_OUTPUT=$(tail -100 "$LATEST_LOG" 2>/dev/null || echo "")
+          fi
+        fi
+        
+        # Parse the output using the parse script
+        PARSE_SCRIPT="$GITHUB_WORKSPACE/.github/scripts/parse-test-results.sh"
+        RESULTS_FILE_ABS="$GITHUB_WORKSPACE/$RESULTS_FILE"
+        
+        if [ -n "$TEST_OUTPUT" ] && [ -f "$PARSE_SCRIPT" ]; then
+          echo "$TEST_OUTPUT" | bash "$PARSE_SCRIPT" "" "$RESULTS_FILE_ABS"
+        else
+          # If no output found or no parse script, create empty results
+          printf '{"os":"%s","passed":0,"failed":0,"skipped":0,"total":0,"status":"unknown"}\n' "$OS_NAME" > "$RESULTS_FILE_ABS"
+        fi
+        
+        # Add OS name to results
+        if [ -f "$RESULTS_FILE_ABS" ]; then
+          if command -v jq >/dev/null 2>&1; then
+            jq ". + {\"os\": \"$OS_NAME\"}" "$RESULTS_FILE_ABS" > "${RESULTS_FILE_ABS}.tmp" && mv "${RESULTS_FILE_ABS}.tmp" "$RESULTS_FILE_ABS"
+          else
+            OS_NAME_ESC=$(echo "$OS_NAME" | sed 's/\\/\\\\/g; s/&/\\&/g; s/"/\\"/g')
+            sed "s|^{|{ \"os\": \"${OS_NAME_ESC}\",|" "$RESULTS_FILE_ABS" > "${RESULTS_FILE_ABS}.tmp" && mv "${RESULTS_FILE_ABS}.tmp" "$RESULTS_FILE_ABS"
+          fi
+        fi
+        
+        # Ensure file exists
+        if [ ! -f "$RESULTS_FILE_ABS" ]; then
+          printf '{"os":"%s","passed":0,"failed":0,"skipped":0,"total":0,"status":"error"}\n' "$OS_NAME" > "$RESULTS_FILE_ABS"
+        fi
+        
+        # Set outputs
+        echo "results-file=$RESULTS_FILE_ABS" >> $GITHUB_OUTPUT
+        echo "artifact-name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+        echo "os-name-sanitized=$OS_NAME_SANITIZED" >> $GITHUB_OUTPUT
+        
+        echo "Results captured: $RESULTS_FILE_ABS"
+        cat "$RESULTS_FILE_ABS"
+
+    - name: Upload test results artifact
+      continue-on-error: true
+      if: always() && steps.parse.outputs.results-file != '' && steps.parse.outputs.results-file != 'null'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.parse.outputs.artifact-name }}
+        path: ${{ steps.parse.outputs.results-file }}
+        if-no-files-found: warn
+
