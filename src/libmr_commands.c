@@ -211,7 +211,105 @@ __done:
     MR_ExecutionCtxSetDone(eCtx);
 }
 
-static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {}
+static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
+    RedisModuleBlockedClient *bc = data->bc;
+    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    long long len = MR_ExecutionCtxGetResultsLen(eCtx);
+
+    TS_ResultSet *resultset = NULL;
+
+    if (data->args.groupByLabel) {
+        resultset = ResultSet_Create();
+        ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
+    } else {
+        size_t total_len = 0;
+        for (int i = 0; i < len; i++) {
+            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+            if (raw_listRecord->recordType != GetListRecordType()) {
+                RedisModule_Log(ctx,
+                                "warning",
+                                "Unexpected record type: %s",
+                                raw_listRecord->recordType->type.type);
+                continue;
+            }
+            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+        }
+        ReplyWithMapOrArray(ctx, total_len, false);
+    }
+
+    Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            if (raw_record->recordType != GetSeriesRecordType()) {
+                continue;
+            }
+            Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
+            tempSeries = array_append(tempSeries, s);
+
+            if (data->args.groupByLabel) {
+                ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
+            } else {
+                ReplySeriesArrayPos(ctx,
+                                    s,
+                                    data->args.withLabels,
+                                    data->args.limitLabels,
+                                    data->args.numLimitLabels,
+                                    &data->args.rangeArgs,
+                                    data->args.reverse,
+                                    false);
+            }
+        }
+    }
+
+    if (data->args.groupByLabel) {
+        // Apply the reducer
+        RangeArgs args = data->args.rangeArgs;
+        args.latest = false; // we already handled the latest flag in the client side
+        ResultSet_ApplyReducer(ctx, resultset, &args, &data->args.groupByReducerArgs);
+
+        // Do not apply the aggregation on the resultset, do apply max results on the final result
+        RangeArgs minimizedArgs = data->args.rangeArgs;
+        minimizedArgs.startTimestamp = 0;
+        minimizedArgs.endTimestamp = UINT64_MAX;
+        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.timeDelta = 0;
+        minimizedArgs.filterByTSArgs.hasValue = false;
+        minimizedArgs.filterByValueArgs.hasValue = false;
+        minimizedArgs.latest = false;
+
+        replyResultSet(ctx,
+                       resultset,
+                       data->args.withLabels,
+                       data->args.limitLabels,
+                       data->args.numLimitLabels,
+                       &minimizedArgs,
+                       data->args.reverse);
+
+        ResultSet_Free(resultset);
+    }
+    array_foreach(tempSeries, x, FreeSeries(x));
+    array_free(tempSeries);
+
+__done:
+    MRangeArgs_Free(&data->args);
+    free(data);
+}
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
@@ -261,6 +359,40 @@ __done:
 }
 
 static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModuleBlockedClient *bc) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx)))
+        return;
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+    }
+    RedisModule_ReplyWithArray(ctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            r->recordType->sendReply(ctx, r);
+        }
+    }
 }
 
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
@@ -305,7 +437,42 @@ __done:
 
 static void queryindex_done_gears(ExecutionCtx *eCtx,
                                   RedisModuleCtx *ctx,
-                                  RedisModuleBlockedClient *bc) {}
+                                  RedisModuleBlockedClient *bc) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx)))
+        return;
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+    }
+    RedisModule_ReplyWithSet(ctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            r->recordType->sendReply(ctx, r);
+        }
+    }
+}
 
 static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
