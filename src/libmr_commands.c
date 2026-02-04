@@ -144,11 +144,9 @@ __error:
     return NULL;
 }
 
-static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
-    MRangeData *data = privateData;
+static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
 
     ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
@@ -211,14 +209,32 @@ __done:
     MRangeArgs_Free(&data->args);
     free(data);
     MR_ExecutionCtxSetDone(eCtx);
+}
+
+static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {}
+
+static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
+    MRangeData *data = privateData;
+    RedisModuleBlockedClient *bc = data->bc;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            mrange_done_gears(eCtx, ctx, data);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            mrange_done_internal(eCtx, ctx, data);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
 
     RTS_UnblockClient(bc, ctx);
 }
 
-static void mget_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
-
+static void mget_done_internal(ExecutionCtx *eCtx,
+                               RedisModuleCtx *ctx,
+                               RedisModuleBlockedClient *bc) {
     ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
@@ -242,14 +258,32 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
 __done:
     array_free(nodesResults);
     MR_ExecutionCtxSetDone(eCtx);
+}
+
+static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModuleBlockedClient *bc) {
+}
+
+static void mget_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            mget_done_gears(eCtx, ctx, bc);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            mget_done_internal(eCtx, ctx, bc);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
 
     RTS_UnblockClient(bc, ctx);
 }
 
-static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
-
+static void queryindex_done_internal(ExecutionCtx *eCtx,
+                                     RedisModuleCtx *ctx,
+                                     RedisModuleBlockedClient *bc) {
     ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
@@ -267,6 +301,26 @@ static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
 __done:
     array_free(nodesResults);
     MR_ExecutionCtxSetDone(eCtx);
+}
+
+static void queryindex_done_gears(ExecutionCtx *eCtx,
+                                  RedisModuleCtx *ctx,
+                                  RedisModuleBlockedClient *bc) {}
+
+static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            queryindex_done_gears(eCtx, ctx, bc);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            queryindex_done_internal(eCtx, ctx, bc);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
 
     RTS_UnblockClient(bc, ctx);
 }
