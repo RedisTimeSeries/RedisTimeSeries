@@ -46,7 +46,7 @@ static inline bool parse_double_cstr(const char *str, size_t len, double *outVal
             return false;
     }
     if (likely(outValue != NULL))
-        *outValue;
+        *outValue = value;
     return true;
 }
 
