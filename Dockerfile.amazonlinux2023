@@ -24,8 +24,6 @@ RUN dnf -y update && dnf -y install --allowerasing \
     unzip \
     jq \
     clang \
-    python3 \
-    python3-devel \
     && dnf clean all
 
 COPY .install /workspace/.install
