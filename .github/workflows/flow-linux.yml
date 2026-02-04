@@ -145,7 +145,7 @@ jobs:
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'addr' || '' }} \
+            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
             .
 

@@ -5,7 +5,7 @@ WORKDIR /workspace
 RUN amazon-linux-extras install epel -y && \
     yum -y install epel-release yum-utils && \
     yum-config-manager --add-repo http://vault.centos.org/centos/7/sclo/x86_64/rh/ && \
-    yum -y install gcc make autogen automake libtool cmake3 git openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq && \
+    yum -y install gcc cmake make autogen automake libtool cmake3 git openssl-devel bzip2-devel libffi-devel zlib-devel wget centos-release-scl scl-utils which tar unzip jq && \
     yum -y install devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-make --nogpgcheck
 
 # Enable devtoolset-11 for all subsequent commands
