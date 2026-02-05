@@ -1,28 +1,13 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM ubuntu:20.04
 
 WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
-    make \
-    cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
-    ca-certificates \
-    tar
+RUN apt update -qq \
+    && apt upgrade -yqq \
+    && apt install -yqq wget make clang-format gcc lcov git openssl libssl-dev \
+    unzip rsync build-essential gcc-10 g++-10 cargo libclang-dev clang curl cmake jq automake libtool \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
 COPY .install /workspace/.install
 
