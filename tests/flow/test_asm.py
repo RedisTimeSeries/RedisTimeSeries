@@ -5,6 +5,7 @@ import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
+import redis
 
 from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
@@ -49,7 +50,7 @@ def test_asm_with_data_and_queries_during_migrations():
         assert filtered_by == "label1=17"
         assert withlabels == []  # No WITHLABLES
         assert len(samples) == samples_per_key
-        # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
+        assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
@@ -58,18 +59,17 @@ def test_asm_with_data_and_queries_during_migrations():
     done = threading.Event()
 
     def validate_command_in_a_loop():
+        # Note: should be the same as in libmr_commands.c
+        SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
             try:
-                validate_result(conn.execute_command(command))
-            except Exception as e:
-                # Safe failure mode: topology changed mid-execution, so the command asks for retry.
-                msg = str(e)
-                assert (
-                    "cluster topology change during execution" in msg
-                    or "missing slot ownership metadata" in msg
-                    or "Query requires unavailable slots" in msg
-                    or "Please retry" in msg
-                ), msg
+                result = conn.execute_command(command)
+            except redis.exceptions.ResponseError as x:
+                error_message = str(x)
+                # An occasional SLOT_RANGES_ERROR is expected
+                assert error_message == SLOT_RANGES_ERROR, error_message
+                continue
+            validate_result(result)
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
@@ -85,53 +85,8 @@ def test_asm_with_data_and_queries_during_migrations():
             # This will raise an exception in case the validation function failed (or got stuck)
             future.result()
 
-
-def test_asm_multishard_queryindex_is_consistent_or_retryable():
-    env = Env(shardsCount=2, decodeResponses=True)
-    if env.env != "oss-cluster":
-        env.skip()
-
-    number_of_keys = 500 if not (VALGRIND or SANITIZER) else 100
-    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=1, label1=17)
-
-    expected_keys = set()
-    for i in range(number_of_keys):
-        hslot = i * (2**14 - 1) // (number_of_keys - 1)
-        expected_keys.add(f"ts:{{{slot_table[hslot]}}}")
-
-    conn = env.getConnection(0)
-    command = "TS.QUERYINDEX label1=17"
-
-    done = threading.Event()
-
-    def validate_command_in_a_loop():
-        while not done.is_set():
-            try:
-                res = conn.execute_command(command)
-                assert isinstance(res, list)
-                assert set(res) == expected_keys
-            except Exception as e:
-                # Safe failure mode: topology changed mid-execution, so the command asks for retry.
-                msg = str(e)
-                assert (
-                    "cluster topology change during execution" in msg
-                    or "missing slot ownership metadata" in msg
-                    or "Query requires unavailable slots" in msg
-                    or "Please retry" in msg
-                ), msg
-
-    def migrate_slots():
-        for _ in range(MIGRATION_CYCLES):
-            if done.is_set():
-                break
-            migrate_slots_back_and_forth(env)
-
-    with ThreadPoolExecutor() as executor:
-        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        for future in as_completed(futures):
-            done.set()
-            future.result()
-
+    # Validate that all is fine after the migrations
+    validate_result(conn.execute_command(command))
 
 # Helper structs and functions
 

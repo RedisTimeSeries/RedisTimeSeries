@@ -45,6 +45,7 @@ static RedisModuleString *getConfigStringCache = NULL;
 
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
+    TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
 
     if (getConfigStringCache) {
@@ -84,6 +85,7 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         "ENCODING %s\n"
         "DUPLICATE_POLICY %s\n"
         "NUM_THREADS %lld\n"
+        "LIBMR_PROTOCOL %s\n"
         "IGNORE_MAX_VAL_DIFF %lf\n"
         "IGNORE_MAX_TIME_DIFF %lld\n",
         CompactionRulesToString(TSGlobalConfig.compactionRules,
@@ -93,6 +95,7 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         ChunkTypeToString(TSGlobalConfig.options),
         DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy),
         TSGlobalConfig.numThreads,
+        LibmrProtocolToString(TSGlobalConfig.libmrProtocol),
         TSGlobalConfig.ignoreMaxValDiff,
         TSGlobalConfig.ignoreMaxTimeDiff);
 }
@@ -153,6 +156,16 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
         if (!value) {
             return NULL;
         }
+
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
+        }
+
+        getConfigStringCache = RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        return getConfigStringCache;
+    } else if (!strcasecmp("ts-libmr-protocol", name)) {
+        const char *value = LibmrProtocolToString(TSGlobalConfig.libmrProtocol);
 
         if (getConfigStringCache) {
             RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -299,6 +312,23 @@ static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisMod
     return true;
 }
 
+static bool Config_SetLibmrProtocolFromRedisString(RedisModuleString *value,
+                                                   RedisModuleString **err) {
+    size_t len = 0;
+    const char *protocol = RedisModule_StringPtrLen(value, &len);
+
+    if (!strcasecmp(protocol, LIBMR_PROTOCOL_GEARS_STR)) {
+        TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_GEARS;
+    } else if (!strcasecmp(protocol, LIBMR_PROTOCOL_INTERNAL_STR)) {
+        TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_INTERNAL;
+    } else {
+        *err = RedisModule_CreateStringPrintf(NULL, "Invalid libmr protocol: %s", protocol);
+        return false;
+    }
+
+    return true;
+}
+
 static int setModernStringConfigValue(const char *name,
                                       RedisModuleString *value,
                                       void *data,
@@ -317,6 +347,9 @@ static int setModernStringConfigValue(const char *name,
                                                                      : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-encoding", name)) {
         return Config_SetEncodingFromRedisString(value, err) ? REDISMODULE_OK : REDISMODULE_ERR;
+    } else if (!strcasecmp("ts-libmr-protocol", name)) {
+        return Config_SetLibmrProtocolFromRedisString(value, err) ? REDISMODULE_OK
+                                                                  : REDISMODULE_ERR;
     }
 
     return REDISMODULE_ERR;
@@ -414,6 +447,26 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(
         ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
+
+    if (RedisModule_RegisterStringConfig(ctx,
+                                         "ts-libmr-protocol",
+                                         LibmrProtocolToString(TSGlobalConfig.libmrProtocol),
+                                         REDISMODULE_CONFIG_IMMUTABLE |
+                                             REDISMODULE_CONFIG_UNPREFIXED,
+                                         getModernStringConfigValue,
+                                         setModernStringConfigValue,
+                                         NULL,
+                                         NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-libmr-protocol",
+                    12,
+                    LibmrProtocolToString(TSGlobalConfig.libmrProtocol));
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-retention-policy",
@@ -713,6 +766,27 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     } else {
         TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     }
+
+    if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
+        LOG_DEPRECATED_OPTION("LIBMR_PROTOCOL", "ts-libmr-protocol", showDeprecationWarning);
+        RedisModuleString *protocol;
+        if (RMUtil_ParseArgsAfter("LIBMR_PROTOCOL", argv, argc, "s", &protocol) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after LIBMR_PROTOCOL");
+            return TSDB_ERROR;
+        }
+        size_t len;
+        const char *protocol_cstr = RedisModule_StringPtrLen(protocol, &len);
+        if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_INTERNAL_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_INTERNAL;
+        } else if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_GEARS_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_GEARS;
+        } else {
+            RedisModule_Log(ctx, "warning", "unknown LIBMR_PROTOCOL: %s", protocol_cstr);
+            return TSDB_ERROR;
+        }
+        isDeprecated = true;
+    }
+
     TSGlobalConfig.forceSaveCrossRef = false;
     if (argc > 1 && RMUtil_ArgIndex("DEUBG_FORCE_RULE_DUMP", argv, argc) >= 0) {
         RedisModuleString *forceSaveCrossRef;
