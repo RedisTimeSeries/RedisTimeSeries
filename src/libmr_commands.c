@@ -205,7 +205,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     }
 
 __done:
-    array_free(nodesResults);
+    if (nodesResults)
+        array_free(nodesResults);
     MRangeArgs_Free(&data->args);
     free(data);
     MR_ExecutionCtxSetDone(eCtx);
@@ -354,7 +355,8 @@ static void mget_done_internal(ExecutionCtx *eCtx,
     ReplySetMapOrArrayLength(ctx, len, false);
 
 __done:
-    array_free(nodesResults);
+    if (nodesResults)
+        array_free(nodesResults);
     MR_ExecutionCtxSetDone(eCtx);
 }
 
@@ -431,7 +433,8 @@ static void queryindex_done_internal(ExecutionCtx *eCtx,
     ReplySetSetOrArrayLength(ctx, len);
 
 __done:
-    array_free(nodesResults);
+    if (nodesResults)
+        array_free(nodesResults);
     MR_ExecutionCtxSetDone(eCtx);
 }
 
