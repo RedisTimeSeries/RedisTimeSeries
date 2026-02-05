@@ -1,28 +1,10 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 
 WORKDIR /workspace
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
-    make \
-    cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
-    ca-certificates \
-    tar
+RUN tdnf makecache
+RUN tdnf install -y git ca-certificates build-essential wget tar openssl-devel cmake which unzip jq \
+    gcc g++ curl libffi-devel zlib-devel bzip2-devel
 
 COPY .install /workspace/.install
 
