@@ -36,7 +36,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *series,
                         bool withlabels,
                         RedisModuleString *limitLabels[],
-                        ushort limitLabelsSize,
+                        uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
                         bool print_reduced);
@@ -47,11 +47,11 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     const Series *series,
                                     RedisModuleString **limitLabels,
-                                    ushort limitLabelsSize);
+                                    uint16_t limitLabelsSize);
 void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                                      const Series *series,
                                      const char **limitLabels,
-                                     ushort limitLabelsSize);
+                                     uint16_t limitLabelsSize);
 
 void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value);
 
