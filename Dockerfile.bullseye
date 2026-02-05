@@ -1,28 +1,28 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM debian:bullseye
 
 WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
+RUN apt-get update && apt-get install -y build-essential \
     make \
     cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
+    autoconf \
+    automake \
+    libtool \
+    lcov \
+    git \
+    wget \
+    zlib1g-dev \
+    lsb-release \
+    libssl-dev \
+    openssl \
     ca-certificates \
-    tar
+    curl \
+    unzip \
+    rsync \
+    libclang-dev \
+    clang
+
 
 COPY .install /workspace/.install
 
