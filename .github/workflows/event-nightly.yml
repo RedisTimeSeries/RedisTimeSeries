@@ -5,14 +5,14 @@ permissions:
   contents: read
 
 on:
-  push:
+  schedule:
+    - cron: '20 20 * * *' # 20:20 UTC every day
+  push: # To verify full nightly build after PR is merged
     branches:
       - main
       - master
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
-  schedule:
-    - cron: '20 20 * * *' # 20:20 UTC every day
   workflow_dispatch:
     inputs:
       redis-ref:
