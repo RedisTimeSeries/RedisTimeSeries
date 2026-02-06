@@ -25,12 +25,47 @@ OSNICK = paella.Platform().osnick
 RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'
 
 SANITIZER = os.getenv('SANITIZER', '')
-VALGRIND = os.getenv('VALGRIND', '0') == '1'
+# Valgrind can be enabled either directly (VALGRIND=1) or via the make test flag (VG=1).
+VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
+GITHUB_ACTIONS = os.getenv('GITHUB_ACTIONS', '').lower() == 'true'
 
 
-Defaults.terminate_retries = 3
-Defaults.terminate_retries_secs = 1
+def _env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    try:
+        return int(v)
+    except ValueError:
+        return default
+
+
+_terminate_retries = 3
+_terminate_retries_secs = 1
+
+# Valgrind slows shutdown significantly; give Redis more time to exit cleanly
+# to avoid RLTest force-killing processes (which then shows up as leaks).
+if VALGRIND:
+    # In CI, a very large shutdown patience can make the job exceed the global
+    # Actions timeout (it adds up across many Redis instances). Keep it smaller
+    # in CI, but allow local runs to be more patient.
+    if GITHUB_ACTIONS:
+        _terminate_retries = 12
+        _terminate_retries_secs = 1
+    else:
+        _terminate_retries = 20
+        _terminate_retries_secs = 2
+elif SANITIZER:
+    # Sanitized builds are slower too, but not as much as valgrind.
+    _terminate_retries = 10
+    _terminate_retries_secs = 1
+
+_terminate_retries = _env_int('RLTEST_TERMINATE_RETRIES', _terminate_retries)
+_terminate_retries_secs = _env_int('RLTEST_TERMINATE_RETRY_SECS', _terminate_retries_secs)
+
+Defaults.terminate_retries = _terminate_retries
+Defaults.terminate_retries_secs = _terminate_retries_secs
 
 
 class ShardConnectionTimeoutException(Exception):
@@ -93,7 +128,10 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    env = rltestEnv(*args,
+                    terminateRetries=_terminate_retries,
+                    terminateRetrySecs=_terminate_retries_secs,
+                    **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
