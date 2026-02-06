@@ -14,13 +14,14 @@ def shardsConnections(env):
     for s in range(1, env.shardsCount + 1):
         yield env.getConnection(shardId=s)
 
-def verifyClusterInitialized(env):
+def verifyClusterInitialized(env, timeout_sec=40):
     for conn in shardsConnections(env):
         try:
             conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
         except Exception:
             pass # in case we run on older version of redis
         allConnected = False
+        start_time = time.time()
         while not allConnected:
             res = conn.execute_command('timeseries.INFOCLUSTER')
             nodes = res[4]
@@ -30,6 +31,10 @@ def verifyClusterInitialized(env):
                 if status != b'connected' and status != b'uninitialized':
                     allConnected = False
             if not allConnected:
+                if time.time() - start_time > timeout_sec:
+                    raise RuntimeError(
+                        "Cluster info wait loop timed out after %s seconds" % timeout_sec
+                    )
                 time.sleep(0.1)
 
 def _waitCluster(env, timeout_sec=40):

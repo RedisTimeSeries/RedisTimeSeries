@@ -566,14 +566,14 @@ size_t SeriesGetNumSamples(const Series *series) {
     return numSamples;
 }
 
-void MultiSerieReduce(Series *dest,
-                      Series **series,
-                      size_t n_series,
-                      const ReducerArgs *gropuByReducerArgs,
-                      RangeArgs *args) {
+void MultiSeriesReduce(Series *dest,
+                       Series **series,
+                       size_t n_series,
+                       const ReducerArgs *groupByReducerArgs,
+                       RangeArgs *args) {
     Sample sample;
     AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
-        series, n_series, args, false, true, gropuByReducerArgs);
+        series, n_series, args, false, true, groupByReducerArgs);
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
         SeriesAddSample(dest, sample.timestamp, sample.value);
     }

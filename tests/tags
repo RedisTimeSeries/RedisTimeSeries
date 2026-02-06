@@ -1,0 +1,854 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_EXCMD	mixed	/number, pattern, mixed, or combineV2/
+!_TAG_OUTPUT_FILESEP	slash	/slash or backslash/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PATTERN_LENGTH_LIMIT	96	/0 for no limit/
+!_TAG_PROC_CWD	/home/gal/rl/cluster/RedisTimeSeries/tests/	//
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	5.9.0	//
+$(BINDIR)/%.o	unit/Makefile	/^$(BINDIR)\/%.o: $(SRCDIR)\/%.c$/;"	t
+$(TARGET)	unit/Makefile	/^$(TARGET): $(OBJECTS)$/;"	t
+.run	qa/qatests	/^            Test(token, test_fname, modver, snapshot, rlecver, osnick).run()$/;"	f
+.run	qa/qatests	/^        Test(token, test_fname, modver, snapshot, rlecver, osnick).run()$/;"	f
+0	flow/.vscode/settings.json	/^        "."$/;"	s	array:python.testing.pytestArgs
+0	qa/adhoc.json	/^        "{{RS_MODULE}}"$/;"	s	array:test_names_modules
+0	qa/adhoc.json	/^      {$/;"	o	array:cycle_environments_setup
+0	qa/common.json	/^	  {{RLEC_ENVS}}$/;"	o	array:properties.cycle_environments_setup
+0	qa/common.json	/^      "{{MODULE_TEST_NAME}}"$/;"	s	array:properties.test_names_modules
+0	qa/nightly.json	/^        "{{RS_MODULE}}"$/;"	s	array:test_names_modules
+0	qa/nightly.json	/^      {$/;"	o	array:cycle_environments_setup
+0	qa/release.json	/^        "{{RS_MODULE}}"$/;"	s	array:test_names_modules
+0	qa/release.json	/^      {$/;"	o	array:cycle_environments_setup
+1	qa/release.json	/^      {$/;"	o	array:cycle_environments_setup
+2	qa/release.json	/^      {$/;"	o	array:cycle_environments_setup
+3	qa/release.json	/^      {$/;"	o	array:cycle_environments_setup
+4	qa/release.json	/^      {$/;"	o	array:cycle_environments_setup
+ALLOWED_ERROR	flow/test_helper_classes.py	/^ALLOWED_ERROR = 0.001$/;"	v
+ARCH	flow/common.py	/^ARCH = paella.Platform().arch$/;"	v
+AverageTemperature	flow/create_test_rdb_file.py	/^AverageTemperature = 1$/;"	v
+AverageTemperatureUncertainty	flow/create_test_rdb_file.py	/^AverageTemperatureUncertainty = 2$/;"	v
+BASE_RDBS_URL	flow/test_short_read.py	/^BASE_RDBS_URL = 'http:\/\/redismodules.s3.amazonaws.com\/redistimeseries\/rdbs\/'$/;"	v
+BINDIR	unit/Makefile	/^BINDIR=$(BINROOT)\/unit_tests$/;"	m
+Blue	flow/utils.py	/^    def Blue(data):$/;"	m	class:Colors	signature:(data)
+Bold	flow/utils.py	/^    def Bold(data):$/;"	m	class:Colors	signature:(data)
+Bred	flow/utils.py	/^    def Bred(data):$/;"	m	class:Colors	signature:(data)
+CC_C_STD	unit/Makefile	/^CC_C_STD=gnu11$/;"	m
+CC_DEPS	unit/Makefile	/^CC_DEPS = $(patsubst $(SRCDIR)\/%.c, $(BINDIR)\/%.d, $(SOURCES))$/;"	m
+CC_INCLUDES +=	unit/Makefile	/^define CC_INCLUDES +=$/;"	m
+CI integration	benchmarks/Readme.md	/^## CI integration$/;"	s	chapter:Context
+CODE_COVERAGE	flow/common.py	/^CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'$/;"	v
+CODE_COVERAGE	flow/includes.py	/^CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'$/;"	v
+CREATE_LOCAL_RDB_TARGET_DIR	flow/test_short_read.py	/^CREATE_LOCAL_RDB_TARGET_DIR = '\/tmp\/test'$/;"	v
+City	flow/create_test_rdb_file.py	/^City = 3$/;"	v
+ClusterNode	flow/test_asm.py	/^class ClusterNode:$/;"	c	inherits:
+ClusterNode.from_str	flow/test_asm.py	/^    def from_str(s: str):$/;"	m	class:ClusterNode	signature:(s: str)
+Colors	flow/utils.py	/^class Colors(object):$/;"	c	inherits:object
+Colors.Blue	flow/utils.py	/^    def Blue(data):$/;"	m	class:Colors	signature:(data)
+Colors.Bold	flow/utils.py	/^    def Bold(data):$/;"	m	class:Colors	signature:(data)
+Colors.Bred	flow/utils.py	/^    def Bred(data):$/;"	m	class:Colors	signature:(data)
+Colors.Cyan	flow/utils.py	/^    def Cyan(data):$/;"	m	class:Colors	signature:(data)
+Colors.Gray	flow/utils.py	/^    def Gray(data):$/;"	m	class:Colors	signature:(data)
+Colors.Green	flow/utils.py	/^    def Green(data):$/;"	m	class:Colors	signature:(data)
+Colors.Lgray	flow/utils.py	/^    def Lgray(data):$/;"	m	class:Colors	signature:(data)
+Colors.Yellow	flow/utils.py	/^    def Yellow(data):$/;"	m	class:Colors	signature:(data)
+Connection	flow/test_short_read.py	/^class Connection(object):$/;"	c	inherits:object
+Connection.__init__	flow/test_short_read.py	/^    def __init__(self, sock, bufsize=4096, underlying_sock=None):$/;"	m	class:Connection	signature:(self, sock, bufsize=4096, underlying_sock=None)
+Connection.close	flow/test_short_read.py	/^    def close(self):$/;"	m	class:Connection	signature:(self)
+Connection.decoder	flow/test_short_read.py	/^    def decoder(self, value):$/;"	m	class:Connection	signature:(self, value)
+Connection.encoder	flow/test_short_read.py	/^    def encoder(self, value):$/;"	m	class:Connection	signature:(self, value)
+Connection.flush	flow/test_short_read.py	/^    def flush(self):$/;"	m	class:Connection	signature:(self)
+Connection.get_address	flow/test_short_read.py	/^    def get_address(self):$/;"	m	class:Connection	signature:(self)
+Connection.get_port	flow/test_short_read.py	/^    def get_port(self):$/;"	m	class:Connection	signature:(self)
+Connection.is_close	flow/test_short_read.py	/^    def is_close(self, timeout=2):$/;"	m	class:Connection	signature:(self, timeout=2)
+Connection.read	flow/test_short_read.py	/^    def read(self, bytes):$/;"	m	class:Connection	signature:(self, bytes)
+Connection.read	flow/test_short_read.py	/^    def read(self, size):$/;"	m	class:Connection	signature:(self, size)
+Connection.read_at_most	flow/test_short_read.py	/^    def read_at_most(self, bytes, timeout=0.01):$/;"	m	class:Connection	signature:(self, bytes, timeout=0.01)
+Connection.read_mbulk	flow/test_short_read.py	/^    def read_mbulk(self, args_count=None):$/;"	m	class:Connection	signature:(self, args_count=None)
+Connection.read_request	flow/test_short_read.py	/^    def read_request(self):$/;"	m	class:Connection	signature:(self)
+Connection.read_request_and_reply_status	flow/test_short_read.py	/^    def read_request_and_reply_status(self, status):$/;"	m	class:Connection	signature:(self, status)
+Connection.read_response	flow/test_short_read.py	/^    def read_response(self):$/;"	m	class:Connection	signature:(self)
+Connection.readline	flow/test_short_read.py	/^    def readline(self):$/;"	m	class:Connection	signature:(self)
+Connection.send	flow/test_short_read.py	/^    def send(self, data):$/;"	m	class:Connection	signature:(self, data)
+Connection.send_bulk	flow/test_short_read.py	/^    def send_bulk(self, data):$/;"	m	class:Connection	signature:(self, data)
+Connection.send_status	flow/test_short_read.py	/^    def send_status(self, data):$/;"	m	class:Connection	signature:(self, data)
+Context	benchmarks/Readme.md	/^# Context$/;"	c
+Country	flow/create_test_rdb_file.py	/^Country = 4$/;"	v
+Cyan	flow/utils.py	/^    def Cyan(data):$/;"	m	class:Colors	signature:(data)
+DISABLE_AOF_PARSER	flow/includes.py	/^DISABLE_AOF_PARSER=True  # TODO: remove when hiredis RESP3-related problem is resolved$/;"	v
+Debug	flow/test_short_read.py	/^class Debug:$/;"	c	inherits:
+Debug.__call__	flow/test_short_read.py	/^    def __call__(self, f):$/;"	m	class:Debug	signature:(self, f)
+Debug.__call__.f_with_debug	flow/test_short_read.py	/^            def f_with_debug(*args, **kwds):$/;"	f	member:Debug.__call__	file:	signature:(*args, **kwds)
+Debug.__init__	flow/test_short_read.py	/^    def __init__(self, enabled=False):$/;"	m	class:Debug	signature:(self, enabled=False)
+Debug.clear	flow/test_short_read.py	/^    def clear(self):$/;"	m	class:Debug	signature:(self)
+Debug.print_bytes_incremental	flow/test_short_read.py	/^    def print_bytes_incremental(self, env, data, total_len, name):$/;"	m	class:Debug	signature:(self, env, data, total_len, name)
+DuplicatePolicyFromCString	unit/unittests_parse_duplicate_policy.c	/^#define DuplicatePolicyFromCString(/;"	d	file:	signature:(str)
+END	flow/tests.sh	/^	cat <<-'END'$/;"	h
+END	qa/run	/^	cat <<-END$/;"	h
+EOF	flow/tests.sh	/^			cat <<-EOF > $rltest_config$/;"	h
+EOF	flow/tests.sh	/^			cat <<-EOF > $xredis_conf$/;"	h
+Env	flow/includes.py	/^def Env(*args, **kwargs):$/;"	f	signature:(*args, **kwargs)
+Generating rdb files for testing	flow/README.md	/^## Generating rdb files for testing$/;"	s
+GetCleanConnection	flow/test_short_read.py	/^    def GetCleanConnection(self):$/;"	m	class:ShardMock	signature:(self)
+GetConnection	flow/test_short_read.py	/^    def GetConnection(self, timeout=None):$/;"	m	class:ShardMock	signature:(self, timeout=None)
+Gray	flow/utils.py	/^    def Gray(data):$/;"	m	class:Colors	signature:(data)
+Green	flow/utils.py	/^    def Green(data):$/;"	m	class:Colors	signature:(data)
+HELPTEXT	unit/Makefile	/^define HELPTEXT$/;"	m
+Included benchmarks	benchmarks/Readme.md	/^## Included benchmarks$/;"	s	chapter:Context
+LOCALHOST	flow/test_short_read.py	/^LOCALHOST = '127.0.0.1'$/;"	v
+Latitude	flow/create_test_rdb_file.py	/^Latitude = 5$/;"	v
+Lgray	flow/utils.py	/^    def Lgray(data):$/;"	m	class:Colors	signature:(data)
+Longitude	flow/create_test_rdb_file.py	/^Longitude = 6$/;"	v
+MK_ALL_TARGETS	unit/Makefile	/^MK_ALL_TARGETS=build$/;"	m
+MK_CUSTOM_CLEAN	unit/Makefile	/^MK_CUSTOM_CLEAN=1$/;"	m
+MU_TEST	unit/unitests_parse_filter_by_ts.c	/^MU_TEST(test_remove_duplicates) {$/;"	f	signature:(test_remove_duplicates)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_command_arguments) {$/;"	f	signature:(test_command_arguments)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_command_key_specs) {$/;"	f	signature:(test_command_key_specs)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_createrule_aggregation_options) {$/;"	f	signature:(test_createrule_aggregation_options)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_duplicate_policy_options) {$/;"	f	signature:(test_duplicate_policy_options)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_labels_argument_structure) {$/;"	f	signature:(test_labels_argument_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_mrange_aggregation_options) {$/;"	f	signature:(test_mrange_aggregation_options)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_mrange_command_arguments) {$/;"	f	signature:(test_mrange_command_arguments)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_mrange_optional_arguments) {$/;"	f	signature:(test_mrange_optional_arguments)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_register_function_exists) {$/;"	f	signature:(test_register_function_exists)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_add_command_info_structure) {$/;"	f	signature:(test_ts_add_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_alter_command_info_structure) {$/;"	f	signature:(test_ts_alter_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_create_command_info_structure) {$/;"	f	signature:(test_ts_create_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_createrule_command_info_structure) {$/;"	f	signature:(test_ts_createrule_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_decrby_command_info_structure) {$/;"	f	signature:(test_ts_decrby_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_incrby_command_info_structure) {$/;"	f	signature:(test_ts_incrby_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_info_command_info_structure) {$/;"	f	signature:(test_ts_info_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_madd_command_info_structure) {$/;"	f	signature:(test_ts_madd_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_mget_command_info_structure) {$/;"	f	signature:(test_ts_mget_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_mrange_command_info_structure) {$/;"	f	signature:(test_ts_mrange_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_mrevrange_command_info_structure) {$/;"	f	signature:(test_ts_mrevrange_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_queryindex_command_info_structure) {$/;"	f	signature:(test_ts_queryindex_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_range_command_info_structure) {$/;"	f	signature:(test_ts_range_command_info_structure)
+MU_TEST	unit/unittests_cmd_info.c	/^MU_TEST(test_ts_revrange_command_info_structure) {$/;"	f	signature:(test_ts_revrange_command_info_structure)
+MU_TEST	unit/unittests_compressed_chunk.c	/^MU_TEST(test_Compressed_SplitChunk_empty) {$/;"	f	signature:(test_Compressed_SplitChunk_empty)
+MU_TEST	unit/unittests_compressed_chunk.c	/^MU_TEST(test_Compressed_SplitChunk_force_realloc) {$/;"	f	signature:(test_Compressed_SplitChunk_force_realloc)
+MU_TEST	unit/unittests_compressed_chunk.c	/^MU_TEST(test_Compressed_SplitChunk_odd) {$/;"	f	signature:(test_Compressed_SplitChunk_odd)
+MU_TEST	unit/unittests_compressed_chunk.c	/^MU_TEST(test_compressed_fail_appendInteger) {$/;"	f	signature:(test_compressed_fail_appendInteger)
+MU_TEST	unit/unittests_compressed_chunk.c	/^MU_TEST(test_compressed_upsert) {$/;"	f	signature:(test_compressed_upsert)
+MU_TEST	unit/unittests_parse_duplicate_policy.c	/^MU_TEST(test_duplicate_policy_parse) {$/;"	f	signature:(test_duplicate_policy_parse)
+MU_TEST	unit/unittests_parse_duplicate_policy.c	/^MU_TEST(test_duplicate_policy_to_string) {$/;"	f	signature:(test_duplicate_policy_to_string)
+MU_TEST	unit/unittests_parse_policies.c	/^MU_TEST(test_PolicyToString) {$/;"	f	signature:(test_PolicyToString)
+MU_TEST	unit/unittests_parse_policies.c	/^MU_TEST(test_StringLenAggTypeToEnum) {$/;"	f	signature:(test_StringLenAggTypeToEnum)
+MU_TEST	unit/unittests_parse_policies.c	/^MU_TEST(test_invalid_policy) {$/;"	f	signature:(test_invalid_policy)
+MU_TEST	unit/unittests_parse_policies.c	/^MU_TEST(test_valid_policy) {$/;"	f	signature:(test_valid_policy)
+MU_TEST	unit/unittests_uncompressed_chunk.c	/^MU_TEST(test_Uncompressed_NewChunk) {$/;"	f	signature:(test_Uncompressed_NewChunk)
+MU_TEST	unit/unittests_uncompressed_chunk.c	/^MU_TEST(test_Uncompressed_Uncompressed_AddSample) {$/;"	f	signature:(test_Uncompressed_Uncompressed_AddSample)
+MU_TEST	unit/unittests_uncompressed_chunk.c	/^MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {$/;"	f	signature:(test_Uncompressed_Uncompressed_UpsertSample)
+MU_TEST	unit/unittests_uncompressed_chunk.c	/^MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {$/;"	f	signature:(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy)
+MU_TEST_SUITE	unit/unittests_cmd_info.c	/^MU_TEST_SUITE(command_info_test_suite) {$/;"	f	signature:(command_info_test_suite)
+MU_TEST_SUITE	unit/unittests_compressed_chunk.c	/^MU_TEST_SUITE(compressed_chunk_test_suite) {$/;"	f	signature:(compressed_chunk_test_suite)
+MU_TEST_SUITE	unit/unittests_parse_duplicate_policy.c	/^MU_TEST_SUITE(parse_duplicate_policy_test_suite) {$/;"	f	signature:(parse_duplicate_policy_test_suite)
+MU_TEST_SUITE	unit/unittests_parse_policies.c	/^MU_TEST_SUITE(parse_policies_test_suite) {$/;"	f	signature:(parse_policies_test_suite)
+MU_TEST_SUITE	unit/unittests_uncompressed_chunk.c	/^MU_TEST_SUITE(uncompressed_chunk_test_suite) {$/;"	f	signature:(uncompressed_chunk_test_suite)
+Makefile	unit/Makefile	1;"	F	epoch:1759163069
+Notice regarding GlobalLandTemperaturesByMajorCity.csv	flow/README.md	/^## Notice regarding GlobalLandTemperaturesByMajorCity.csv$/;"	s
+OBJECTS	unit/Makefile	/^OBJECTS=$(patsubst $(SRCDIR)\/%.c,$(BINDIR)\/%.o,$(SOURCES))$/;"	m
+ONLY_STABLE	flow/common.py	/^ONLY_STABLE = os.getenv('ONLY_STABLE', '0') == '1'$/;"	v
+OS	flow/common.py	/^OS = paella.Platform().os$/;"	v
+OS	flow/test_short_read.py	/^OS = os.getenv('OS')$/;"	v
+OSNICK	flow/common.py	/^OSNICK = paella.Platform().osnick$/;"	v
+OSNICK	flow/includes.py	/^OSNICK = paella.Platform().osnick$/;"	v
+OUTPUT_RDB	flow/create_test_rdb_file.py	/^OUTPUT_RDB = 'output.rdb'$/;"	v
+PIPELINE_SIZE	flow/create_test_rdb_file.py	/^PIPELINE_SIZE = 1000$/;"	v
+PORT	flow/create_test_rdb_file.py	/^PORT = 26379$/;"	v
+PolicyStringCompare	unit/unittests_parse_policies.c	/^static inline void PolicyStringCompare(const char *s, const char *expectedOverride) {$/;"	f	typeref:typename:void	file:	signature:(const char * s,const char * expectedOverride)
+RDBS	flow/test_short_read.py	/^RDBS = []$/;"	v
+RDB_PATH	flow/create_test_rdb_file.py	/^RDB_PATH = os.path.join(WORK_DIR, OUTPUT_RDB)$/;"	v
+README.md	flow/.pytest_cache/README.md	1;"	F	epoch:1744654037
+README.md	flow/README.md	1;"	F	epoch:1744312830
+REDISMODULE_MAIN	unit/unittests.c	/^#define REDISMODULE_MAIN$/;"	d	file:
+REDISMODULE_SDK_RLEC	unit/unittests.c	/^#define REDISMODULE_SDK_RLEC /;"	d	file:
+RLEC_CLUSTER	flow/includes.py	/^RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'$/;"	v
+RLEC_PLATFORMS.keys	qa/qatests	/^            envs = RLEC_PLATFORMS.keys()$/;"	f
+ROOT	unit/Makefile	/^ROOT=..\/..$/;"	m
+Readme.md	benchmarks/Readme.md	1;"	F	epoch:1744312830
+Refresh_Cluster	flow/utils.py	/^def Refresh_Cluster(env):$/;"	f	signature:(env)
+SAMPLE_SIZE	flow/test_helper_classes.py	/^SAMPLE_SIZE = 16$/;"	v
+SANITIZER	flow/common.py	/^SANITIZER = os.getenv('SANITIZER', '')$/;"	v
+SANITIZER	flow/includes.py	/^SANITIZER = os.getenv('SANITIZER', '')$/;"	v
+SHORT_READ_BYTES_DELTA	flow/test_short_read.py	/^SHORT_READ_BYTES_DELTA = int(os.getenv('SHORT_READ_BYTES_DELTA', '1'))$/;"	v
+SOURCES	unit/Makefile	/^SOURCES=$(addprefix $(SRCDIR)\/,$(_SOURCES))$/;"	m
+SRCDIR	unit/Makefile	/^SRCDIR=$(ROOT)\/tests\/unit$/;"	m
+ShardConnectionTimeoutException	flow/includes.py	/^class ShardConnectionTimeoutException(Exception):$/;"	c	inherits:Exception
+ShardMock	flow/test_short_read.py	/^class ShardMock:$/;"	c	inherits:
+ShardMock.GetCleanConnection	flow/test_short_read.py	/^    def GetCleanConnection(self):$/;"	m	class:ShardMock	signature:(self)
+ShardMock.GetConnection	flow/test_short_read.py	/^    def GetConnection(self, timeout=None):$/;"	m	class:ShardMock	signature:(self, timeout=None)
+ShardMock.StartListening	flow/test_short_read.py	/^    def StartListening(self, port, attempts=1):$/;"	m	class:ShardMock	signature:(self, port, attempts=1)
+ShardMock.StopListening	flow/test_short_read.py	/^    def StopListening(self):$/;"	m	class:ShardMock	signature:(self)
+ShardMock.__enter__	flow/test_short_read.py	/^    def __enter__(self):$/;"	m	class:ShardMock	signature:(self)
+ShardMock.__exit__	flow/test_short_read.py	/^    def __exit__(self, type, value, traceback):$/;"	m	class:ShardMock	signature:(self, type, value, traceback)
+ShardMock.__init__	flow/test_short_read.py	/^    def __init__(self, env):$/;"	m	class:ShardMock	signature:(self, env)
+ShardMock._handle_conn	flow/test_short_read.py	/^    def _handle_conn(self, sock, client_addr):$/;"	m	class:ShardMock	signature:(self, sock, client_addr)
+SlotRange	flow/test_asm.py	/^class SlotRange:$/;"	c	inherits:
+SlotRange.from_str	flow/test_asm.py	/^    def from_str(s: str):$/;"	m	class:SlotRange	signature:(s: str)
+StartListening	flow/test_short_read.py	/^    def StartListening(self, port, attempts=1):$/;"	m	class:ShardMock	signature:(self, port, attempts=1)
+StopListening	flow/test_short_read.py	/^    def StopListening(self):$/;"	m	class:ShardMock	signature:(self)
+TARGET	unit/Makefile	/^TARGET=$(BINDIR)\/unit_tests$/;"	m
+TSInfo	flow/test_helper_classes.py	/^class TSInfo(object):$/;"	c	inherits:object
+TSInfo.__eq__	flow/test_helper_classes.py	/^    def __eq__(self, other):$/;"	m	class:TSInfo	signature:(self, other)
+TSInfo.__init__	flow/test_helper_classes.py	/^    def __init__(self, args):$/;"	m	class:TSInfo	signature:(self, args)
+TSInfo.__str__	flow/test_helper_classes.py	/^    def __str__(self):$/;"	m	class:TSInfo	signature:(self)
+TSInfo.chunk_count	flow/test_helper_classes.py	/^    chunk_count = None$/;"	v	class:TSInfo
+TSInfo.chunk_size_bytes	flow/test_helper_classes.py	/^    chunk_size_bytes = None$/;"	v	class:TSInfo
+TSInfo.chunk_type	flow/test_helper_classes.py	/^    chunk_type = None$/;"	v	class:TSInfo
+TSInfo.chunks	flow/test_helper_classes.py	/^    chunks = None$/;"	v	class:TSInfo
+TSInfo.first_time_stamp	flow/test_helper_classes.py	/^    first_time_stamp = None$/;"	v	class:TSInfo
+TSInfo.ignore_max_time_diff	flow/test_helper_classes.py	/^    ignore_max_time_diff = None$/;"	v	class:TSInfo
+TSInfo.ignore_max_val_diff	flow/test_helper_classes.py	/^    ignore_max_val_diff = None$/;"	v	class:TSInfo
+TSInfo.key_SelfName	flow/test_helper_classes.py	/^    key_SelfName = None$/;"	v	class:TSInfo
+TSInfo.labels	flow/test_helper_classes.py	/^    labels = []$/;"	v	class:TSInfo
+TSInfo.last_time_stamp	flow/test_helper_classes.py	/^    last_time_stamp = None$/;"	v	class:TSInfo
+TSInfo.memory_usage	flow/test_helper_classes.py	/^    memory_usage = None$/;"	v	class:TSInfo
+TSInfo.retention_msecs	flow/test_helper_classes.py	/^    retention_msecs = None$/;"	v	class:TSInfo
+TSInfo.rules	flow/test_helper_classes.py	/^    rules = []$/;"	v	class:TSInfo
+TSInfo.sourceKey	flow/test_helper_classes.py	/^    sourceKey = None$/;"	v	class:TSInfo
+TSInfo.total_samples	flow/test_helper_classes.py	/^    total_samples = None$/;"	v	class:TSInfo
+TimeLimit	flow/includes.py	/^class TimeLimit(object):$/;"	c	inherits:object
+TimeLimit.__enter__	flow/includes.py	/^    def __enter__(self):$/;"	m	class:TimeLimit	signature:(self)
+TimeLimit.__exit__	flow/includes.py	/^    def __exit__(self, exc_type, exc_value, traceback):$/;"	m	class:TimeLimit	signature:(self, exc_type, exc_value, traceback)
+TimeLimit.__init__	flow/includes.py	/^    def __init__(self, timeout):$/;"	m	class:TimeLimit	signature:(self, timeout)
+TimeLimit.handler	flow/includes.py	/^    def handler(self, signum, frame):$/;"	m	class:TimeLimit	signature:(self, signum, frame)
+Usage	benchmarks/Readme.md	/^## Usage$/;"	s	chapter:Context
+VALGRIND	flow/common.py	/^VALGRIND = os.getenv('VALGRIND', '0') == '1'$/;"	v
+VALGRIND	flow/includes.py	/^VALGRIND = os.getenv('VALGRIND', '0') == '1'$/;"	v
+WORK_DIR	flow/create_test_rdb_file.py	/^WORK_DIR = '\/tmp\/redis_wd'$/;"	v
+Yellow	flow/utils.py	/^    def Yellow(data):$/;"	m	class:Colors	signature:(data)
+_SOURCES	unit/Makefile	/^_SOURCES=unittests.c$/;"	m
+__call__	flow/test_short_read.py	/^    def __call__(self, f):$/;"	m	class:Debug	signature:(self, f)
+__enter__	flow/includes.py	/^    def __enter__(self):$/;"	m	class:TimeLimit	signature:(self)
+__enter__	flow/test_short_read.py	/^    def __enter__(self):$/;"	m	class:ShardMock	signature:(self)
+__eq__	flow/test_helper_classes.py	/^    def __eq__(self, other):$/;"	m	class:TSInfo	signature:(self, other)
+__exit__	flow/includes.py	/^    def __exit__(self, exc_type, exc_value, traceback):$/;"	m	class:TimeLimit	signature:(self, exc_type, exc_value, traceback)
+__exit__	flow/test_short_read.py	/^    def __exit__(self, type, value, traceback):$/;"	m	class:ShardMock	signature:(self, type, value, traceback)
+__init__	flow/includes.py	/^    def __init__(self, timeout):$/;"	m	class:TimeLimit	signature:(self, timeout)
+__init__	flow/test_cmd_info.py	/^    def __init__(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+__init__	flow/test_duplicate_policy.py	/^    def __init__(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+__init__	flow/test_globalconfigs.py	/^    def __init__(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+__init__	flow/test_globalconfigs.py	/^    def __init__(self):$/;"	m	class:testModuleLoadTimeArguments	signature:(self)
+__init__	flow/test_helper_classes.py	/^    def __init__(self, args):$/;"	m	class:TSInfo	signature:(self, args)
+__init__	flow/test_short_read.py	/^    def __init__(self, enabled=False):$/;"	m	class:Debug	signature:(self, enabled=False)
+__init__	flow/test_short_read.py	/^    def __init__(self, env):$/;"	m	class:ShardMock	signature:(self, env)
+__init__	flow/test_short_read.py	/^    def __init__(self, sock, bufsize=4096, underlying_sock=None):$/;"	m	class:Connection	signature:(self, sock, bufsize=4096, underlying_sock=None)
+__str__	flow/test_helper_classes.py	/^    def __str__(self):$/;"	m	class:TSInfo	signature:(self)
+_assert_alter_cmd	flow/test_helper_classes.py	/^def _assert_alter_cmd(r, key, start_ts, end_ts,$/;"	f	signature:(r, key, start_ts, end_ts, expected_data=None, expected_retention=None, expected_chunk_size=None, expected_labels=None)
+_calc_downsampling_series	flow/test_helper_classes.py	/^def _calc_downsampling_series(values, bucket_size, calc_func):$/;"	f	signature:(values, bucket_size, calc_func)
+_extract_docs_for_command	flow/docs_utils.py	/^def _extract_docs_for_command(res, cmd_name):$/;"	f	signature:(res, cmd_name)
+_fill_data	flow/test_helper_classes.py	/^def _fill_data(r, key):$/;"	f	signature:(r, key)
+_get_series_value	flow/test_helper_classes.py	/^def _get_series_value(ts_key_result):$/;"	f	signature:(ts_key_result)
+_get_ts_info	flow/test_helper_classes.py	/^def _get_ts_info(redis, key, *args):$/;"	f	signature:(redis, key, *args)
+_handle_conn	flow/test_short_read.py	/^    def _handle_conn(self, sock, client_addr):$/;"	m	class:ShardMock	signature:(self, sock, client_addr)
+_insert_agg_data	flow/test_helper_classes.py	/^def _insert_agg_data(redis, key, agg_type, chunk_type="", fromTS=10, toTS=50, key_create_args=No/;"	f	signature:(redis, key, agg_type, chunk_type="", fromTS=10, toTS=50, key_create_args=None)
+_insert_data	flow/test_helper_classes.py	/^def _insert_data(redis, key, start_ts, samples_count, value):$/;"	f	signature:(redis, key, start_ts, samples_count, value)
+_kv_list_to_dict	flow/docs_utils.py	/^def _kv_list_to_dict(kv_list):$/;"	f	signature:(kv_list)
+_ts_alter_cmd	flow/test_helper_classes.py	/^def _ts_alter_cmd(r, key, set_retention=None, set_chunk_size=None, set_labels=None):$/;"	f	signature:(r, key, set_retention=None, set_chunk_size=None, set_labels=None)
+_version_from_string	flow/includes.py	/^def _version_from_string(version_string):$/;"	f	signature:(version_string)
+_waitCluster	flow/test_ts_libmr_failiure.py	/^def _waitCluster(env, timeout_sec=40):$/;"	f	signature:(env, timeout_sec=40)
+adhoc.json	qa/adhoc.json	1;"	F	epoch:1744312830
+agg_key_name	flow/test_ts_createrule.py	/^agg_key_name = '{}_agg_max_10'.format(key_name)$/;"	v
+aof_parser.py	flow/aof_parser.py	1;"	F	epoch:1745246867
+assert_data	flow/test_ts_queryindex.py	/^        def assert_data(query, expected_data):$/;"	f	function:test_label_index	file:	signature:(query, expected_data)
+assert_docs	flow/docs_utils.py	/^def assert_docs(env, cmd, *, summary, complexity, arity=None, since=None, group='module',$/;"	f	signature:(env, cmd, *, summary, complexity, arity=None, since=None, group='module', args=None, key_pos=1, key_spec_index=0)
+assert_msg	flow/test_ts_keyspace.py	/^def assert_msg(env, msg, expected_type, expected_data):$/;"	f	signature:(env, msg, expected_type, expected_data)
+assert_results	flow/test_ts_mrange_groupby.py	/^        def assert_results(results, expected_results):$/;"	f	function:test_filterby	file:	signature:(results, expected_results)
+build_expected	flow/test_ts_mrange.py	/^            def build_expected(val, time_bucket):$/;"	f	function:test_range_by_labels	file:	signature:(val, time_bucket)
+build_expected_aligned_data	flow/test_ts_range.py	/^def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):$/;"	f	signature:(start_ts, end_ts, agg_size, alignment_ts)
+calc_rule	flow/test_helper_classes.py	/^def calc_rule(rule, values, bucket_size):$/;"	f	signature:(rule, values, bucket_size)
+cantorized_slot_set	flow/test_asm.py	/^    def cantorized_slot_set(slot_range: SlotRange) -> set[SlotRange]:  # https:\/\/en.wikipedia./;"	f	function:migrate_slots_back_and_forth	typeref:typename:set[SlotRange]	file:	signature:(slot_range: SlotRange)
+chunk_count	flow/test_helper_classes.py	/^    chunk_count = None$/;"	v	class:TSInfo
+chunk_size_bytes	flow/test_helper_classes.py	/^    chunk_size_bytes = None$/;"	v	class:TSInfo
+chunk_type	flow/test_helper_classes.py	/^    chunk_type = None$/;"	v	class:TSInfo
+chunks	flow/test_helper_classes.py	/^    chunks = None$/;"	v	class:TSInfo
+clean	unit/Makefile	/^clean:$/;"	t
+clear	flow/test_short_read.py	/^    def clear(self):$/;"	m	class:Debug	signature:(self)
+close	flow/test_short_read.py	/^    def close(self):$/;"	m	class:Connection	signature:(self)
+cluster_node_of	flow/test_asm.py	/^    def cluster_node_of(conn) -> ClusterNode:$/;"	f	function:migrate_slots_back_and_forth	typeref:typename:ClusterNode	file:	signature:(conn)
+common.json	qa/common.json	1;"	F	epoch:1744312830
+common.py	flow/common.py	1;"	F	epoch:1759343189
+concurrency	qa/adhoc.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.0
+concurrency	qa/nightly.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.0
+concurrency	qa/release.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.0
+concurrency	qa/release.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.1
+concurrency	qa/release.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.2
+concurrency	qa/release.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.3
+concurrency	qa/release.json	/^        "concurrency": 1,$/;"	n	object:cycle_environments_setup.4
+create-cluster	utils/create-cluster	1;"	F	epoch:1745246867
+create_config_file	flow/includes.py	/^def create_config_file(content) -> str:$/;"	f	typeref:typename:str	signature:(content)
+create_rdb	flow/test_short_read.py	/^def create_rdb(env, name):$/;"	f	signature:(env, name)
+create_test_rdb_file.py	flow/create_test_rdb_file.py	1;"	F	epoch:1744312830
+create_timeseries	flow/test_short_read.py	/^def create_timeseries(env, is_backup):$/;"	f	signature:(env, is_backup)
+cycle_environments_setup	qa/adhoc.json	/^    "cycle_environments_setup": [$/;"	a
+cycle_environments_setup	qa/common.json	/^    "cycle_environments_setup": [$/;"	a	object:properties
+cycle_environments_setup	qa/nightly.json	/^    "cycle_environments_setup": [$/;"	a
+cycle_environments_setup	qa/release.json	/^    "cycle_environments_setup": [$/;"	a
+decode_if_needed	flow/includes.py	/^def decode_if_needed(data):$/;"	f	signature:(data)
+decoder	flow/test_short_read.py	/^    def decoder(self, value):$/;"	m	class:Connection	signature:(self, value)
+decorate	flow/includes.py	/^    def decorate(f):$/;"	f	function:skip	file:	signature:(f)
+defaults.yml	benchmarks/defaults.yml	1;"	F	epoch:1745246901
+do_test_libmr	flow/test_acls.py	/^def do_test_libmr(env):$/;"	f	signature:(env)
+docs_utils.py	flow/docs_utils.py	1;"	F	epoch:1759343189
+downloadFiles	flow/test_short_read.py	/^def downloadFiles(target_dir):$/;"	f	signature:(target_dir)
+email_recipients	qa/common.json	/^    "email_recipients": "s5i1u4h5a8c8w2d7@redislabs.slack.com",$/;"	s	object:properties
+enableDefrag	flow/test_defrag.py	/^def enableDefrag(env):$/;"	f	signature:(env)
+encoder	flow/test_short_read.py	/^    def encoder(self, value):$/;"	m	class:Connection	signature:(self, value)
+ensure_replies_series_match	flow/test_ts_mrange.py	/^def ensure_replies_series_match(env,series_array_1, series_array_2):$/;"	f	signature:(env,series_array_1, series_array_2)
+f_with_debug	flow/test_short_read.py	/^            def f_with_debug(*args, **kwds):$/;"	f	member:Debug.__call__	file:	signature:(*args, **kwds)
+first_time_stamp	flow/test_helper_classes.py	/^    first_time_stamp = None$/;"	v	class:TSInfo
+flush	flow/test_short_read.py	/^    def flush(self):$/;"	m	class:Connection	signature:(self)
+format	unit/Makefile	/^format:$/;"	t
+from_str	flow/test_asm.py	/^    def from_str(s: str):$/;"	m	class:ClusterNode	signature:(s: str)
+from_str	flow/test_asm.py	/^    def from_str(s: str):$/;"	m	class:SlotRange	signature:(s: str)
+get_address	flow/test_short_read.py	/^    def get_address(self):$/;"	m	class:Connection	signature:(self)
+get_bucket	flow/test_ts_range.py	/^def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):$/;"	f	signature:(timsetamp, alignment_ts, aggregation_bucket_size)
+get_port	flow/test_short_read.py	/^    def get_port(self):$/;"	m	class:Connection	signature:(self)
+get_redis_version	flow/includes.py	/^def get_redis_version(con, is_cluster=False):$/;"	f	signature:(con, is_cluster=False)
+get_server_log_path	flow/includes.py	/^def get_server_log_path(env):$/;"	f	signature:(env)
+global_spot_instances	qa/common.json	/^    "global_spot_instances": "ondemand",$/;"	s	object:properties
+global_spot_instances	qa/release.json	/^    "global_spot_instances": "ondemand",$/;"	s
+groupby	flow/test_ts_mrange.py	/^        def groupby(data):$/;"	f	function:test_mrange_align	file:	signature:(data)
+handler	flow/includes.py	/^    def handler(self, signum, frame):$/;"	m	class:TimeLimit	signature:(self, signum, frame)
+help	flow/tests.sh	/^help() {$/;"	f
+ignore_max_time_diff	flow/test_helper_classes.py	/^    ignore_max_time_diff = None$/;"	v	class:TSInfo
+ignore_max_val_diff	flow/test_helper_classes.py	/^    ignore_max_val_diff = None$/;"	v	class:TSInfo
+import_slots	flow/test_asm.py	/^def import_slots(conn, slot_range: SlotRange):$/;"	f	signature:(conn, slot_range: SlotRange)
+includes.py	flow/includes.py	1;"	F	epoch:1745246939
+init	flow/test_generic_cmds.py	/^def init(env, r, compression="COMPRESSED"):$/;"	f	signature:(env, r, compression="COMPRESSED")
+is_close	flow/test_short_read.py	/^    def is_close(self, timeout=2):$/;"	m	class:Connection	signature:(self, timeout=2)
+is_line_in_server_log	flow/includes.py	/^def is_line_in_server_log(env, line):$/;"	f	signature:(env, line)
+is_redis_version_higher_than	flow/includes.py	/^def is_redis_version_higher_than(con, _version, is_cluster=False):$/;"	f	signature:(con, _version, is_cluster=False)
+is_redis_version_lower_than	flow/includes.py	/^def is_redis_version_lower_than(con, _version, is_cluster=False):$/;"	f	signature:(con, _version, is_cluster=False)
+is_resp3_possible	flow/utils.py	/^def is_resp3_possible(env):$/;"	f	signature:(env)
+is_rlec	flow/includes.py	/^def is_rlec():$/;"	f	signature:()
+jf.read	qa/qatests	/^                        j = json.loads(jf.read())$/;"	f
+key_SelfName	flow/test_helper_classes.py	/^    key_SelfName = None$/;"	v	class:TSInfo
+key_name	flow/test_ts_createrule.py	/^key_name = 'tester{abc}'$/;"	v
+labels	flow/test_helper_classes.py	/^    labels = []$/;"	v	class:TSInfo
+last_time_stamp	flow/test_helper_classes.py	/^    last_time_stamp = None$/;"	v	class:TSInfo
+libmr_query	flow/test_ts_libmr_failiure.py	/^def libmr_query(con, env, start_ts, samples_count):$/;"	f	signature:(con, env, start_ts, samples_count)
+lint	unit/Makefile	/^lint:$/;"	t
+linux_stop	flow/tests.sh	/^linux_stop() {$/;"	f
+list_to_dict	flow/test_helper_classes.py	/^def list_to_dict(aList):$/;"	f	signature:(aList)
+load_into_redis	flow/create_test_rdb_file.py	/^def load_into_redis(redis_conn):$/;"	f	signature:(redis_conn)
+macos_stop	flow/tests.sh	/^macos_stop() {$/;"	f
+main	flow/create_test_rdb_file.py	/^def main(version):$/;"	f	signature:(version)
+main	qa/qatests	/^    main()$/;"	f
+main	unit/unittests.c	/^int main(int argc, char *argv[]) {$/;"	f	typeref:typename:int	signature:(int argc,char * argv[])
+memory_usage	flow/test_helper_classes.py	/^    memory_usage = None$/;"	v	class:TSInfo
+middle_slot_range	flow/test_asm.py	/^    def middle_slot_range(slot_range: SlotRange) -> SlotRange:$/;"	f	function:migrate_slots_back_and_forth	typeref:typename:SlotRange	file:	signature:(slot_range: SlotRange)
+migrate_slots_back_and_forth	flow/test_asm.py	/^def migrate_slots_back_and_forth(env):$/;"	f	signature:(env)
+migrate_slots_back_and_forth.cantorized_slot_set	flow/test_asm.py	/^    def cantorized_slot_set(slot_range: SlotRange) -> set[SlotRange]:  # https:\/\/en.wikipedia./;"	f	function:migrate_slots_back_and_forth	typeref:typename:set[SlotRange]	file:	signature:(slot_range: SlotRange)
+migrate_slots_back_and_forth.cluster_node_of	flow/test_asm.py	/^    def cluster_node_of(conn) -> ClusterNode:$/;"	f	function:migrate_slots_back_and_forth	typeref:typename:ClusterNode	file:	signature:(conn)
+migrate_slots_back_and_forth.middle_slot_range	flow/test_asm.py	/^    def middle_slot_range(slot_range: SlotRange) -> SlotRange:$/;"	f	function:migrate_slots_back_and_forth	typeref:typename:SlotRange	file:	signature:(slot_range: SlotRange)
+module_download_url	qa/common.json	/^    "module_download_url": true,$/;"	b	object:properties
+module_download_urls	qa/common.json	/^    "module_download_urls": {$/;"	o	object:properties
+module_url	qa/adhoc.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/snapsh/;"	s	object:cycle_environments_setup.0
+module_url	qa/nightly.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/snapsh/;"	s	object:cycle_environments_setup.0
+module_url	qa/release.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/{{RS_M/;"	s	object:cycle_environments_setup.0
+module_url	qa/release.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/{{RS_M/;"	s	object:cycle_environments_setup.1
+module_url	qa/release.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/{{RS_M/;"	s	object:cycle_environments_setup.2
+module_url	qa/release.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/{{RS_M/;"	s	object:cycle_environments_setup.3
+module_url	qa/release.json	/^        "module_url": "http:\/\/redismodules.s3.amazonaws.com\/{{RS_MODULE_FILE_PREFIX}}\/{{RS_M/;"	s	object:cycle_environments_setup.4
+module_ver	flow/common.py	/^module_ver = None$/;"	v
+module_version_at_least	flow/common.py	/^def module_version_at_least(env, ver):$/;"	f	signature:(env, ver)
+module_version_less_than	flow/common.py	/^def module_version_less_than(env, ver):$/;"	f	signature:(env, ver)
+modules_version	qa/adhoc.json	/^    "modules_version": "master",$/;"	s
+modules_version	qa/common.json	/^    "modules_version": "{{MODULE_SEMANTIC_VERSION}}",$/;"	s	object:properties
+modules_version	qa/nightly.json	/^    "modules_version": "master",$/;"	s
+modules_version	qa/release.json	/^    "modules_version": "{{MODULE_VERSION}}",$/;"	s
+name	qa/adhoc.json	/^        "name": "bionic-amd64-aws",$/;"	s	object:cycle_environments_setup.0
+name	qa/adhoc.json	/^  "name": "redistimeseries automation-testing",$/;"	s
+name	qa/common.json	/^  "name": "{{TEST_TITLE}}",$/;"	s
+name	qa/nightly.json	/^        "name": "bionic-amd64-aws",$/;"	s	object:cycle_environments_setup.0
+name	qa/nightly.json	/^  "name": "redistimeseries automation-testing",$/;"	s
+name	qa/release.json	/^        "name": "bionic-amd64-aws",$/;"	s	object:cycle_environments_setup.1
+name	qa/release.json	/^        "name": "focal-amd64-aws",$/;"	s	object:cycle_environments_setup.4
+name	qa/release.json	/^        "name": "rhel7.7-x86_64-aws",$/;"	s	object:cycle_environments_setup.2
+name	qa/release.json	/^        "name": "rhel8-x86_64-aws",$/;"	s	object:cycle_environments_setup.3
+name	qa/release.json	/^        "name": "xenial-amd64-aws",$/;"	s	object:cycle_environments_setup.0
+name	qa/release.json	/^  "name": "redistimeseries automation-testing",$/;"	s
+next_line	flow/aof_parser.py	/^    def next_line(fp):$/;"	f	function:parse_file	file:	signature:(fp)
+nightly.json	qa/nightly.json	1;"	F	epoch:1744312830
+normalize_info	flow/test_rdbs.py	/^def normalize_info(data):$/;"	f	signature:(data)
+numver_to_version	flow/common.py	/^def numver_to_version(numver):$/;"	f	signature:(numver)
+parse_file	flow/aof_parser.py	/^def parse_file(path):$/;"	f	signature:(path)
+parse_file.next_line	flow/aof_parser.py	/^    def next_line(fp):$/;"	f	function:parse_file	file:	signature:(fp)
+parse_timestamp	flow/create_test_rdb_file.py	/^def parse_timestamp(ts):$/;"	f	signature:(ts)
+print_bytes_incremental	flow/test_short_read.py	/^    def print_bytes_incremental(self, env, data, total_len, name):$/;"	m	class:Debug	signature:(self, env, data, total_len, name)
+properties	qa/adhoc.json	/^  "properties": {$/;"	o
+properties	qa/common.json	/^  "properties": {$/;"	o
+properties	qa/nightly.json	/^  "properties": {$/;"	o
+properties	qa/release.json	/^  "properties": {$/;"	o
+pytest cache directory	flow/.pytest_cache/README.md	/^# pytest cache directory #$/;"	c
+python.testing.pytestArgs	flow/.vscode/settings.json	/^    "python.testing.pytestArgs": [$/;"	a
+python.testing.pytestEnabled	flow/.vscode/settings.json	/^    "python.testing.pytestEnabled": true$/;"	b
+python.testing.unittestEnabled	flow/.vscode/settings.json	/^    "python.testing.unittestEnabled": false,$/;"	b
+qatests	qa/qatests	1;"	F	epoch:1744312830
+read	flow/test_short_read.py	/^    def read(self, bytes):$/;"	m	class:Connection	signature:(self, bytes)
+read	flow/test_short_read.py	/^    def read(self, size):$/;"	m	class:Connection	signature:(self, size)
+read_at_most	flow/test_short_read.py	/^    def read_at_most(self, bytes, timeout=0.01):$/;"	m	class:Connection	signature:(self, bytes, timeout=0.01)
+read_from_disk	flow/create_test_rdb_file.py	/^def read_from_disk():$/;"	f	signature:()
+read_mbulk	flow/test_short_read.py	/^    def read_mbulk(self, args_count=None):$/;"	m	class:Connection	signature:(self, args_count=None)
+read_request	flow/test_short_read.py	/^    def read_request(self):$/;"	m	class:Connection	signature:(self)
+read_request_and_reply_status	flow/test_short_read.py	/^    def read_request_and_reply_status(self, status):$/;"	m	class:Connection	signature:(self, status)
+read_response	flow/test_short_read.py	/^    def read_response(self):$/;"	m	class:Connection	signature:(self)
+readline	flow/test_short_read.py	/^    def readline(self):$/;"	m	class:Connection	signature:(self)
+release.json	qa/release.json	1;"	F	epoch:1744312830
+results	qa/run	/^	results() {$/;"	f
+retention_msecs	flow/test_helper_classes.py	/^    retention_msecs = None$/;"	v	class:TSInfo
+rltestEnv	flow/includes.py	/^from RLTest import Env as rltestEnv, Defaults$/;"	x	nameref:unknown:Env
+rules	flow/test_helper_classes.py	/^    rules = []$/;"	v	class:TSInfo
+run	qa/run	1;"	F	epoch:1744312830
+run	unit/Makefile	/^run: $(TARGET)$/;"	t
+runShortRead	flow/test_short_read.py	/^def runShortRead(env, data, total_len):$/;"	f	signature:(env, data, total_len)
+run_test	qa/run	/^run_test() {$/;"	f
+run_tests	flow/tests.sh	/^run_tests() {$/;"	f
+scaling-ts_mget_100K-series-tsbs-devops.yml	benchmarks/scaling-ts_mget_100K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mget_10K-series-tsbs-devops.yml	benchmarks/scaling-ts_mget_10K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mget_1K-series-tsbs-devops.yml	benchmarks/scaling-ts_mget_1K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mget_1M-series-tsbs-devops.yml	benchmarks/scaling-ts_mget_1M-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_100-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_100-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_10K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_10K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_1K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_1K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_avg_100-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_avg_100-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_max_100-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_max_100-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_max_10K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_max_10K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_max_1K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_max_1K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrange_twa_100-series-tsbs-devops.yml	benchmarks/scaling-ts_mrange_twa_100-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrevrange_as_mget_100K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrevrange_as_mget_100K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrevrange_as_mget_10K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrevrange_as_mget_10K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrevrange_as_mget_1K-series-tsbs-devops.yml	benchmarks/scaling-ts_mrevrange_as_mget_1K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_mrevrange_as_mget_1M-series-tsbs-devops.yml	benchmarks/scaling-ts_mrevrange_as_mget_1M-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_queryindex_100K-series-tsbs-devops.yml	benchmarks/scaling-ts_queryindex_100K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_queryindex_10K-series-tsbs-devops.yml	benchmarks/scaling-ts_queryindex_10K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_queryindex_1K-series-tsbs-devops.yml	benchmarks/scaling-ts_queryindex_1K-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_queryindex_1M-series-tsbs-devops.yml	benchmarks/scaling-ts_queryindex_1M-series-tsbs-devops.yml	1;"	F	epoch:1745246901
+scaling-ts_range_90k_datapoints.yml	benchmarks/scaling-ts_range_90k_datapoints.yml	1;"	F	epoch:1744312830
+self.footer	qa/qatests	/^        return self.header() + h + self.footer()$/;"	f
+self.header	qa/qatests	/^        return self.header() + h + self.footer()$/;"	f
+send	flow/test_short_read.py	/^    def send(self, data):$/;"	m	class:Connection	signature:(self, data)
+sendShortReads	flow/test_short_read.py	/^def sendShortReads(env, rdb_file):$/;"	f	signature:(env, rdb_file)
+send_bulk	flow/test_short_read.py	/^    def send_bulk(self, data):$/;"	m	class:Connection	signature:(self, data)
+send_status	flow/test_short_read.py	/^    def send_status(self, data):$/;"	m	class:Connection	signature:(self, data)
+server_ver	flow/common.py	/^server_ver = None$/;"	v
+server_version_at_least	flow/common.py	/^def server_version_at_least(env, ver):$/;"	f	signature:(env, ver)
+server_version_less_than	flow/common.py	/^def server_version_less_than(env, ver):$/;"	f	signature:(env, ver)
+service_id	qa/adhoc.json	/^  "service_id": "single_module_test_cycle",$/;"	s
+service_id	qa/common.json	/^  "service_id": "single_module_test_cycle",$/;"	s
+service_id	qa/nightly.json	/^  "service_id": "single_module_test_cycle",$/;"	s
+service_id	qa/release.json	/^  "service_id": "single_module_test_cycle",$/;"	s
+set_hertz	flow/utils.py	/^def set_hertz(env):$/;"	f	signature:(env)
+settings.json	flow/.vscode/settings.json	1;"	F	epoch:1744654927
+setup_coverage	flow/tests.sh	/^setup_coverage() {$/;"	f
+setup_redis_server	flow/tests.sh	/^setup_redis_server() {$/;"	f
+setup_rltest	flow/tests.sh	/^setup_rltest() {$/;"	f
+setup_sanitizer	flow/tests.sh	/^setup_sanitizer() {$/;"	f
+setup_valgrind	flow/tests.sh	/^setup_valgrind() {$/;"	f
+shardsConnections	flow/includes.py	/^def shardsConnections(env: rltestEnv):$/;"	f	signature:(env: rltestEnv)
+shardsConnections	flow/test_ts_libmr_failiure.py	/^def shardsConnections(env):$/;"	f	signature:(env)
+skip	flow/includes.py	/^def skip(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, on/;"	f	signature:(always=False, on_cluster=False, on_macos=False, asan=False, onVersionLowerThan=None, onVersionHigherThan=None)
+skip.decorate	flow/includes.py	/^    def decorate(f):$/;"	f	function:skip	file:	signature:(f)
+skip.decorate.wrapper	flow/includes.py	/^        def wrapper(x, *args, **kwargs):$/;"	f	function:skip.decorate	file:	signature:(x, *args, **kwargs)
+skip_on_rlec	flow/includes.py	/^def skip_on_rlec():$/;"	f	signature:()
+sourceKey	flow/test_helper_classes.py	/^    sourceKey = None$/;"	v	class:TSInfo
+stop	flow/tests.sh	/^stop() {$/;"	f
+super	qa/qatests	/^        h = super().get_help(ctx)$/;"	f
+sut_environments	qa/common.json	/^    "sut_environments": [],$/;"	a	object:properties
+sut_version	qa/adhoc.json	/^    "sut_version": "master",$/;"	s	object:properties
+sut_version	qa/common.json	/^    "sut_version": "{{RLEC_VERSION}}",$/;"	s	object:properties
+sut_version	qa/nightly.json	/^    "sut_version": "master",$/;"	s	object:properties
+sut_version	qa/release.json	/^    "sut_version": "{{RS_VERSION}}",$/;"	s	object:properties
+teardown	qa/adhoc.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.0
+teardown	qa/nightly.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.0
+teardown	qa/release.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.0
+teardown	qa/release.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.1
+teardown	qa/release.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.2
+teardown	qa/release.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.3
+teardown	qa/release.json	/^        "teardown": true,$/;"	b	object:cycle_environments_setup.4
+test	flow/test_globalconfigs.py	/^    def test(self):$/;"	m	class:testModuleLoadTimeArguments	signature:(self)
+testCommandDocsAndHelp	flow/test_cmd_info.py	/^class testCommandDocsAndHelp():$/;"	c	inherits:
+testCommandDocsAndHelp.__init__	flow/test_cmd_info.py	/^    def __init__(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_add	flow/test_cmd_info.py	/^    def test_command_info_ts_add(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_alter	flow/test_cmd_info.py	/^    def test_command_info_ts_alter(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_create	flow/test_cmd_info.py	/^    def test_command_info_ts_create(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_createrule	flow/test_cmd_info.py	/^    def test_command_info_ts_createrule(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_decrby	flow/test_cmd_info.py	/^    def test_command_info_ts_decrby(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_del	flow/test_cmd_info.py	/^    def test_command_info_ts_del(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_deleterule	flow/test_cmd_info.py	/^    def test_command_info_ts_deleterule(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_get	flow/test_cmd_info.py	/^    def test_command_info_ts_get(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_incrby	flow/test_cmd_info.py	/^    def test_command_info_ts_incrby(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_info	flow/test_cmd_info.py	/^    def test_command_info_ts_info(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_madd	flow/test_cmd_info.py	/^    def test_command_info_ts_madd(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_mget	flow/test_cmd_info.py	/^    def test_command_info_ts_mget(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_mrange	flow/test_cmd_info.py	/^    def test_command_info_ts_mrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_mrevrange	flow/test_cmd_info.py	/^    def test_command_info_ts_mrevrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_queryindex	flow/test_cmd_info.py	/^    def test_command_info_ts_queryindex(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_range	flow/test_cmd_info.py	/^    def test_command_info_ts_range(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testCommandDocsAndHelp.test_command_info_ts_revrange	flow/test_cmd_info.py	/^    def test_command_info_ts_revrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+testDefrag	flow/test_defrag.py	/^def testDefrag(env):$/;"	f	signature:(env)
+testDuplicationPolicyTests	flow/test_duplicate_policy.py	/^class testDuplicationPolicyTests():$/;"	c	inherits:
+testDuplicationPolicyTests.__init__	flow/test_duplicate_policy.py	/^    def __init__(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+testDuplicationPolicyTests.test_policies_correctness	flow/test_duplicate_policy.py	/^    def test_policies_correctness(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+testDuplicationPolicyTests.test_precendence_key	flow/test_duplicate_policy.py	/^    def test_precendence_key(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+testDuplicationPolicyTests.test_ts_add_unknow_duplicate_policy	flow/test_duplicate_policy.py	/^    def test_ts_add_unknow_duplicate_policy(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+testGlobalConfigTests	flow/test_globalconfigs.py	/^class testGlobalConfigTests():$/;"	c	inherits:
+testGlobalConfigTests.__init__	flow/test_globalconfigs.py	/^    def __init__(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+testGlobalConfigTests.test_561_compressed	flow/test_globalconfigs.py	/^    def test_561_compressed(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+testGlobalConfigTests.test_561_uncompressed	flow/test_globalconfigs.py	/^    def test_561_uncompressed(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+testGlobalConfigTests.test_autocreate	flow/test_globalconfigs.py	/^    def test_autocreate(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+testGlobalConfigTests.test_big_compressed_chunk_reverserange	flow/test_globalconfigs.py	/^    def test_big_compressed_chunk_reverserange(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+testGlobalConfigTests.verify_561	flow/test_globalconfigs.py	/^    def verify_561(self, chunk_type):$/;"	m	class:testGlobalConfigTests	signature:(self, chunk_type)
+testLibmrFail	flow/test_ts_libmr_failiure.py	/^def testLibmrFail():$/;"	f	signature:()
+testLibmr_client_disconnect	flow/test_ts_libmr_failiure.py	/^def testLibmr_client_disconnect():$/;"	f	signature:()
+testModuleLoadTimeArguments	flow/test_globalconfigs.py	/^class testModuleLoadTimeArguments(object):$/;"	c	inherits:object
+testModuleLoadTimeArguments.__init__	flow/test_globalconfigs.py	/^    def __init__(self):$/;"	m	class:testModuleLoadTimeArguments	signature:(self)
+testModuleLoadTimeArguments.test	flow/test_globalconfigs.py	/^    def test(self):$/;"	m	class:testModuleLoadTimeArguments	signature:(self)
+testRDB	flow/test_rdbs.py	/^def testRDB():$/;"	f	signature:()
+testRDBCompatibility	flow/test_rdbs.py	/^def testRDBCompatibility():$/;"	f	signature:()
+testWithMultiExec	flow/test_ts_mrange.py	/^def testWithMultiExec(env):$/;"	f	signature:(env)
+test_533_dump_rules	flow/test_persistency.py	/^def test_533_dump_rules():$/;"	f	signature:()
+test_561_compressed	flow/test_globalconfigs.py	/^    def test_561_compressed(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+test_561_uncompressed	flow/test_globalconfigs.py	/^    def test_561_uncompressed(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+test_ShortRead	flow/test_short_read.py	/^def test_ShortRead():$/;"	f	signature:()
+test_acl_ignore_on_metadata	flow/test_acls.py	/^def test_acl_ignore_on_metadata(env):$/;"	f	signature:(env)
+test_acl_with_ts_mget_mrange	flow/test_acls.py	/^def test_acl_with_ts_mget_mrange(env):$/;"	f	signature:(env)
+test_acls.py	flow/test_acls.py	1;"	F	epoch:1759163069
+test_add_create_key	flow/test_ts_add.py	/^def test_add_create_key():$/;"	f	signature:()
+test_add_different_slot_range	flow/test_ts_add.py	/^def test_add_different_slot_range():$/;"	f	signature:()
+test_agg_avg	flow/test_ts_range.py	/^def test_agg_avg():$/;"	f	signature:()
+test_agg_count	flow/test_ts_range.py	/^def test_agg_count():$/;"	f	signature:()
+test_agg_first	flow/test_ts_range.py	/^def test_agg_first():$/;"	f	signature:()
+test_agg_last	flow/test_ts_range.py	/^def test_agg_last():$/;"	f	signature:()
+test_agg_max	flow/test_ts_range.py	/^def test_agg_max():$/;"	f	signature:()
+test_agg_min	flow/test_ts_range.py	/^def test_agg_min():$/;"	f	signature:()
+test_agg_range	flow/test_ts_range.py	/^def test_agg_range():$/;"	f	signature:()
+test_agg_std_p	flow/test_ts_range.py	/^def test_agg_std_p():$/;"	f	signature:()
+test_agg_std_s	flow/test_ts_range.py	/^def test_agg_std_s():$/;"	f	signature:()
+test_agg_sum	flow/test_ts_range.py	/^def test_agg_sum():$/;"	f	signature:()
+test_agg_twa	flow/test_ts_range.py	/^def test_agg_twa():$/;"	f	signature:()
+test_agg_twa.va_fun	flow/test_ts_range.py	/^        va_fun = lambda ta: v1 + (ta - t1)*m$/;"	f	function:test_agg_twa	file:	signature:(ta)
+test_agg_var_p	flow/test_ts_range.py	/^def test_agg_var_p():$/;"	f	signature:()
+test_agg_var_s	flow/test_ts_range.py	/^def test_agg_var_s():$/;"	f	signature:()
+test_aggreataion_alignment	flow/test_ts_range.py	/^def test_aggreataion_alignment():$/;"	f	signature:()
+test_alter_cmd	flow/test_ts_alter.py	/^def test_alter_cmd():$/;"	f	signature:()
+test_alter_key	flow/test_ts_alter.py	/^def test_alter_key():$/;"	f	signature:()
+test_asm.py	flow/test_asm.py	1;"	F	epoch:1760368096
+test_asm_without_data	flow/test_asm.py	/^def test_asm_without_data():$/;"	f	signature:()
+test_autocreate	flow/test_globalconfigs.py	/^    def test_autocreate(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+test_automatic_timestamp	flow/test_ts_add.py	/^def test_automatic_timestamp():$/;"	f	signature:()
+test_backfill_downsampling	flow/test_ts_createrule.py	/^def test_backfill_downsampling(self):$/;"	f	signature:(self)
+test_bad_del	flow/test_ts_delete.py	/^def test_bad_del(self):$/;"	f	signature:(self)
+test_big_compressed_chunk_reverserange	flow/test_globalconfigs.py	/^    def test_big_compressed_chunk_reverserange(self):$/;"	m	class:testGlobalConfigTests	signature:(self)
+test_bucket_timestamp	flow/test_ts_mrange_groupby.py	/^def test_bucket_timestamp():$/;"	f	signature:()
+test_bucket_timestamp	flow/test_ts_range.py	/^def test_bucket_timestamp():$/;"	f	signature:()
+test_check_retention_64bit	flow/test_ts_create.py	/^def test_check_retention_64bit():$/;"	f	signature:()
+test_cmd_info.py	flow/test_cmd_info.py	1;"	F	epoch:1759343189
+test_command_info_ts_add	flow/test_cmd_info.py	/^    def test_command_info_ts_add(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_alter	flow/test_cmd_info.py	/^    def test_command_info_ts_alter(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_create	flow/test_cmd_info.py	/^    def test_command_info_ts_create(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_createrule	flow/test_cmd_info.py	/^    def test_command_info_ts_createrule(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_decrby	flow/test_cmd_info.py	/^    def test_command_info_ts_decrby(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_del	flow/test_cmd_info.py	/^    def test_command_info_ts_del(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_deleterule	flow/test_cmd_info.py	/^    def test_command_info_ts_deleterule(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_get	flow/test_cmd_info.py	/^    def test_command_info_ts_get(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_incrby	flow/test_cmd_info.py	/^    def test_command_info_ts_incrby(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_info	flow/test_cmd_info.py	/^    def test_command_info_ts_info(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_madd	flow/test_cmd_info.py	/^    def test_command_info_ts_madd(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_mget	flow/test_cmd_info.py	/^    def test_command_info_ts_mget(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_mrange	flow/test_cmd_info.py	/^    def test_command_info_ts_mrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_mrevrange	flow/test_cmd_info.py	/^    def test_command_info_ts_mrevrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_queryindex	flow/test_cmd_info.py	/^    def test_command_info_ts_queryindex(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_range	flow/test_cmd_info.py	/^    def test_command_info_ts_range(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_command_info_ts_revrange	flow/test_cmd_info.py	/^    def test_command_info_ts_revrange(self):$/;"	m	class:testCommandDocsAndHelp	signature:(self)
+test_compaction_rules	flow/test_ts_createrule.py	/^def test_compaction_rules(self):$/;"	f	signature:(self)
+test_compressed	flow/test_globalconfigs.py	/^def test_compressed():$/;"	f	signature:()
+test_compressed_debug	flow/test_globalconfigs.py	/^def test_compressed_debug():$/;"	f	signature:()
+test_copy_compressed_uncompressed	flow/test_generic_cmds.py	/^def test_copy_compressed_uncompressed():$/;"	f	signature:()
+test_create_compaction_rule_and_del_dest_series	flow/test_ts_createrule.py	/^def test_create_compaction_rule_and_del_dest_series():$/;"	f	signature:()
+test_create_compaction_rule_from_target	flow/test_ts_createrule.py	/^def test_create_compaction_rule_from_target():$/;"	f	signature:()
+test_create_compaction_rule_override_dest	flow/test_ts_createrule.py	/^def test_create_compaction_rule_override_dest():$/;"	f	signature:()
+test_create_compaction_rule_own	flow/test_ts_createrule.py	/^def test_create_compaction_rule_own():$/;"	f	signature:()
+test_create_compaction_rule_twice	flow/test_ts_createrule.py	/^def test_create_compaction_rule_twice():$/;"	f	signature:()
+test_create_compaction_rule_with_wrong_aggregation	flow/test_ts_createrule.py	/^def test_create_compaction_rule_with_wrong_aggregation():$/;"	f	signature:()
+test_create_compaction_rule_without_dest_series	flow/test_ts_createrule.py	/^def test_create_compaction_rule_without_dest_series():$/;"	f	signature:()
+test_create_compaction_zero_bucket_size	flow/test_ts_createrule.py	/^def test_create_compaction_zero_bucket_size():$/;"	f	signature:()
+test_create_params	flow/test_ts_create.py	/^def test_create_params():$/;"	f	signature:()
+test_create_retention	flow/test_ts_create.py	/^def test_create_retention():$/;"	f	signature:()
+test_create_rule_non_empty_src_series	flow/test_ts_createrule.py	/^def test_create_rule_non_empty_src_series(self):$/;"	f	signature:(self)
+test_create_with_negative_chunk_size	flow/test_ts_create.py	/^def test_create_with_negative_chunk_size():$/;"	f	signature:()
+test_defrag.py	flow/test_defrag.py	1;"	F	epoch:1745246939
+test_del	flow/test_generic_cmds.py	/^def test_del(env):$/;"	f	signature:(env)
+test_del_outside_retention_period	flow/test_ts_delete.py	/^def test_del_outside_retention_period(self):$/;"	f	signature:(self)
+test_del_retention_with_rules	flow/test_ts_delete.py	/^def test_del_retention_with_rules(self):$/;"	f	signature:(self)
+test_del_with_rules	flow/test_ts_delete.py	/^def test_del_with_rules(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972_2	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972_2(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972_3	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972_3(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972_4	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972_4(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972_5	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972_5(self):$/;"	f	signature:(self)
+test_del_with_rules_bug_4972_6	flow/test_ts_delete.py	/^def test_del_with_rules_bug_4972_6(self):$/;"	f	signature:(self)
+test_del_with_rules_with_alignment	flow/test_ts_delete.py	/^def test_del_with_rules_with_alignment(self):$/;"	f	signature:(self)
+test_delete_key	flow/test_ts_createrule.py	/^def test_delete_key():$/;"	f	signature:()
+test_delete_rule	flow/test_ts_deleterule.py	/^def test_delete_rule(self):$/;"	f	signature:(self)
+test_different_chunk_size	flow/test_ts_add.py	/^def test_different_chunk_size():$/;"	f	signature:()
+test_downsampling_alignment	flow/test_ts_createrule.py	/^def test_downsampling_alignment(self):$/;"	f	signature:(self)
+test_downsampling_current	flow/test_ts_createrule.py	/^def test_downsampling_current():$/;"	f	signature:()
+test_downsampling_extensive	flow/test_ts_createrule.py	/^def test_downsampling_extensive():$/;"	f	signature:()
+test_downsampling_rules	flow/test_ts_createrule.py	/^def test_downsampling_rules(self):$/;"	f	signature:(self)
+test_dump_restore_dst_rule	flow/test_lazy_del.py	/^def test_dump_restore_dst_rule():$/;"	f	signature:()
+test_dump_restore_dst_rule_force_save_refs	flow/test_lazy_del.py	/^def test_dump_restore_dst_rule_force_save_refs():$/;"	f	signature:()
+test_dump_restore_dst_rule_old_version	flow/test_lazy_del.py	/^def test_dump_restore_dst_rule_old_version():$/;"	f	signature:()
+test_dump_trimmed_series	flow/test_persistency.py	/^def test_dump_trimmed_series(self):$/;"	f	signature:(self)
+test_duplicate_policy.py	flow/test_duplicate_policy.py	1;"	F	epoch:1745246867
+test_empty	flow/test_ts_create.py	/^def test_empty():$/;"	f	signature:()
+test_empty	flow/test_ts_mrange_groupby.py	/^def test_empty():$/;"	f	signature:()
+test_empty	flow/test_ts_range.py	/^def test_empty():$/;"	f	signature:()
+test_empty_series	flow/test_persistency.py	/^def test_empty_series():$/;"	f	signature:()
+test_encoding_compressed	flow/test_globalconfigs.py	/^def test_encoding_compressed():$/;"	f	signature:()
+test_encoding_uncompressed	flow/test_globalconfigs.py	/^def test_encoding_uncompressed():$/;"	f	signature:()
+test_errors	flow/test_negative.py	/^def test_errors():$/;"	f	signature:()
+test_errors	flow/test_ts_range.py	/^def test_errors():$/;"	f	signature:()
+test_evict	flow/test_generic_cmds.py	/^def test_evict():$/;"	f	signature:()
+test_expire	flow/test_generic_cmds.py	/^def test_expire():$/;"	f	signature:()
+test_expire	flow/test_ts_create.py	/^def test_expire():$/;"	f	signature:()
+test_extensive_ts_madd	flow/test_ts_madd.py	/^def test_extensive_ts_madd():$/;"	f	signature:()
+test_filter_by	flow/test_ts_range.py	/^def test_filter_by():$/;"	f	signature:()
+test_filter_by_extensive	flow/test_ts_range.py	/^def test_filter_by_extensive():$/;"	f	signature:()
+test_filterby	flow/test_ts_mrange_groupby.py	/^def test_filterby():$/;"	f	signature:()
+test_filterby.assert_results	flow/test_ts_mrange_groupby.py	/^        def assert_results(results, expected_results):$/;"	f	function:test_filterby	file:	signature:(results, expected_results)
+test_flush	flow/test_generic_cmds.py	/^def test_flush():$/;"	f	signature:()
+test_generic_cmds.py	flow/test_generic_cmds.py	1;"	F	epoch:1745246867
+test_globalconfigs.py	flow/test_globalconfigs.py	1;"	F	epoch:1745246939
+test_gorilla	flow/test_ts_add.py	/^def test_gorilla():$/;"	f	signature:()
+test_groupby_reduce	flow/test_ts_mrange_groupby.py	/^def test_groupby_reduce():$/;"	f	signature:()
+test_groupby_reduce_empty	flow/test_ts_mrange_groupby.py	/^def test_groupby_reduce_empty():$/;"	f	signature:()
+test_groupby_reduce_errors	flow/test_ts_mrange_groupby.py	/^def test_groupby_reduce_errors():$/;"	f	signature:()
+test_groupby_reduce_multiple_groups	flow/test_ts_mrange_groupby.py	/^def test_groupby_reduce_multiple_groups():$/;"	f	signature:()
+test_helper_classes.py	flow/test_helper_classes.py	1;"	F	epoch:1745246901
+test_ignore	flow/test_globalconfigs.py	/^def test_ignore():$/;"	f	signature:()
+test_ignore.py	flow/test_ignore.py	1;"	F	epoch:1745246901
+test_ignore_alter	flow/test_ignore.py	/^def test_ignore_alter():$/;"	f	signature:()
+test_ignore_create	flow/test_ignore.py	/^def test_ignore_create():$/;"	f	signature:()
+test_ignore_duplicate_policy	flow/test_ignore.py	/^def test_ignore_duplicate_policy():$/;"	f	signature:()
+test_ignore_invalid_module_args	flow/test_globalconfigs.py	/^def test_ignore_invalid_module_args(env):$/;"	f	signature:(env)
+test_ignore_invalid_params	flow/test_ignore.py	/^def test_ignore_invalid_params():$/;"	f	signature:()
+test_ignore_madd	flow/test_ignore.py	/^def test_ignore_madd():$/;"	f	signature:()
+test_ignore_rdb_load	flow/test_ignore.py	/^def test_ignore_rdb_load():$/;"	f	signature:()
+test_ignore_restore	flow/test_ignore.py	/^def test_ignore_restore():$/;"	f	signature:()
+test_incrby	flow/test_ts_incrby.py	/^def test_incrby():$/;"	f	signature:()
+test_incrby_error_cases	flow/test_ts_incrby.py	/^def test_incrby_error_cases():$/;"	f	signature:()
+test_incrby_with_timestamp	flow/test_ts_incrby.py	/^def test_incrby_with_timestamp():$/;"	f	signature:()
+test_incrby_with_update_latest	flow/test_ts_incrby.py	/^def test_incrby_with_update_latest():$/;"	f	signature:()
+test_info_doesnt_delete_acl_restricted	flow/test_lazy_del.py	/^def test_info_doesnt_delete_acl_restricted():$/;"	f	signature:()
+test_invalid_password	flow/test_ts_password.py	/^def test_invalid_password():$/;"	f	signature:()
+test_issue299	flow/test_ts_create.py	/^def test_issue299():$/;"	f	signature:()
+test_issue358	flow/test_ts_range.py	/^def test_issue358():$/;"	f	signature:()
+test_issue400	flow/test_ts_revrange.py	/^def test_issue400():$/;"	f	signature:()
+test_issue_504	flow/test_ts_add.py	/^def test_issue_504():$/;"	f	signature:()
+test_issue_588	flow/test_ts_add.py	/^def test_issue_588():$/;"	f	signature:()
+test_keyspace	flow/test_ts_keyspace.py	/^def test_keyspace():$/;"	f	signature:()
+test_keyspace_create_rules	flow/test_ts_keyspace.py	/^def test_keyspace_create_rules():$/;"	f	signature:()
+test_keyspace_rules_send	flow/test_ts_keyspace.py	/^def test_keyspace_rules_send():$/;"	f	signature:()
+test_label_index	flow/test_ts_queryindex.py	/^def test_label_index():$/;"	f	signature:()
+test_label_index.assert_data	flow/test_ts_queryindex.py	/^        def assert_data(query, expected_data):$/;"	f	function:test_label_index	file:	signature:(query, expected_data)
+test_large_compressed_range	flow/test_ts_range.py	/^def test_large_compressed_range():$/;"	f	signature:()
+test_large_compressed_revrange	flow/test_ts_range.py	/^def test_large_compressed_revrange():$/;"	f	signature:()
+test_large_key_value_pairs	flow/test_ts_mget.py	/^def test_large_key_value_pairs():$/;"	f	signature:()
+test_large_key_value_pairs	flow/test_ts_mrange.py	/^def test_large_key_value_pairs(env):$/;"	f	signature:(env)
+test_large_key_value_pairs	flow/test_ts_queryindex.py	/^def test_large_key_value_pairs():$/;"	f	signature:()
+test_latest_flag_get	flow/test_ts_get.py	/^def test_latest_flag_get():$/;"	f	signature:()
+test_latest_flag_mget	flow/test_ts_mget.py	/^def test_latest_flag_mget():$/;"	f	signature:()
+test_latest_flag_mrange	flow/test_ts_mrange.py	/^def test_latest_flag_mrange():$/;"	f	signature:()
+test_latest_flag_mrevrange	flow/test_ts_mrange.py	/^def test_latest_flag_mrevrange():$/;"	f	signature:()
+test_latest_flag_range	flow/test_ts_range.py	/^def test_latest_flag_range():$/;"	f	signature:()
+test_latest_flag_range_plus	flow/test_ts_range.py	/^def test_latest_flag_range_plus():$/;"	f	signature:()
+test_latest_flag_revrange	flow/test_ts_range.py	/^def test_latest_flag_revrange():$/;"	f	signature:()
+test_latest_flag_with_deleted_source	flow/test_ts_range.py	/^def test_latest_flag_with_deleted_source():$/;"	f	signature:()
+test_lazy_del.py	flow/test_lazy_del.py	1;"	F	epoch:1745246939
+test_lazy_del_dst	flow/test_lazy_del.py	/^def test_lazy_del_dst():$/;"	f	signature:()
+test_lazy_del_src	flow/test_lazy_del.py	/^def test_lazy_del_src():$/;"	f	signature:()
+test_libmr_internal_commands_is_not_allowed	flow/test_acls.py	/^def test_libmr_internal_commands_is_not_allowed(env):$/;"	f	signature:(env)
+test_libmr_with_internal_secret_support	flow/test_acls.py	/^def test_libmr_with_internal_secret_support(env):$/;"	f	signature:(env)
+test_madd	flow/test_ts_madd.py	/^def test_madd():$/;"	f	signature:()
+test_madd_some_failed_replicas	flow/test_ts_madd.py	/^def test_madd_some_failed_replicas():$/;"	f	signature:()
+test_max_extensive	flow/test_ts_range.py	/^def test_max_extensive():$/;"	f	signature:()
+test_mget_cmd	flow/test_ts_mget.py	/^def test_mget_cmd():$/;"	f	signature:()
+test_mget_with_expire_cmd	flow/test_ts_mget.py	/^def test_mget_with_expire_cmd():$/;"	f	signature:()
+test_module_config_api_is_unused_on_old_versions	flow/test_globalconfigs.py	/^def test_module_config_api_is_unused_on_old_versions(env):$/;"	f	signature:(env)
+test_module_config_api_is_used_on_recent_redis_versions	flow/test_globalconfigs.py	/^def test_module_config_api_is_used_on_recent_redis_versions():$/;"	f	signature:()
+test_module_config_from_module_arguments_raises_deprecation_messages	flow/test_globalconfigs.py	/^def test_module_config_from_module_arguments_raises_deprecation_messages():$/;"	f	signature:()
+test_module_config_takes_precedence_over_module_arguments	flow/test_globalconfigs.py	/^def test_module_config_takes_precedence_over_module_arguments():$/;"	f	signature:()
+test_mrange_align	flow/test_ts_mrange.py	/^def test_mrange_align():$/;"	f	signature:()
+test_mrange_align.groupby	flow/test_ts_mrange.py	/^        def groupby(data):$/;"	f	function:test_mrange_align	file:	signature:(data)
+test_mrange_expire_issue549	flow/test_ts_mrange.py	/^def test_mrange_expire_issue549(env):$/;"	f	signature:(env)
+test_mrange_filterby	flow/test_ts_mrange.py	/^def test_mrange_filterby(env):$/;"	f	signature:(env)
+test_mrange_partial_range	flow/test_ts_mrange.py	/^def test_mrange_partial_range():$/;"	f	signature:()
+test_mrange_with_expire_cmd	flow/test_ts_mrange.py	/^def test_mrange_with_expire_cmd(env):$/;"	f	signature:(env)
+test_mrange_withlabels	flow/test_ts_mrange.py	/^def test_mrange_withlabels(env):$/;"	f	signature:(env)
+test_mrevrange	flow/test_ts_mrevrange.py	/^def test_mrevrange():$/;"	f	signature:()
+test_multi_chunk_revrange	flow/test_ts_range.py	/^def test_multi_chunk_revrange():$/;"	f	signature:()
+test_multilabel_filter	flow/test_ts_mrange.py	/^def test_multilabel_filter(env):$/;"	f	signature:(env)
+test_names_modules	qa/adhoc.json	/^    "test_names_modules": [$/;"	a
+test_names_modules	qa/common.json	/^    "test_names_modules": [$/;"	a	object:properties
+test_names_modules	qa/nightly.json	/^    "test_names_modules": [$/;"	a
+test_names_modules	qa/release.json	/^    "test_names_modules": [$/;"	a
+test_negative.py	flow/test_negative.py	1;"	F	epoch:1745246867
+test_negative_configuration	flow/test_globalconfigs.py	/^def test_negative_configuration():$/;"	f	signature:()
+test_no_password	flow/test_ts_password.py	/^def test_no_password():$/;"	f	signature:()
+test_non_local_data	flow/test_ts_mrange.py	/^def test_non_local_data(env):$/;"	f	signature:(env)
+test_non_local_data_when_the_user_has_access	flow/test_acls.py	/^def test_non_local_data_when_the_user_has_access(env):$/;"	f	signature:(env)
+test_non_local_data_when_the_user_has_no_access	flow/test_acls.py	/^def test_non_local_data_when_the_user_has_no_access(env):$/;"	f	signature:(env)
+test_non_local_filtered_data	flow/test_ts_mrange.py	/^def test_non_local_filtered_data():$/;"	f	signature:()
+test_non_local_filtered_labels	flow/test_ts_mrange.py	/^def test_non_local_filtered_labels(env):$/;"	f	signature:(env)
+test_ooo	flow/test_ooo.py	/^def test_ooo(self):$/;"	f	signature:(self)
+test_ooo.py	flow/test_ooo.py	1;"	F	epoch:1744312830
+test_ooo_madd	flow/test_ts_madd.py	/^def test_ooo_madd():$/;"	f	signature:()
+test_ooo_split	flow/test_ooo.py	/^def test_ooo_split(self):$/;"	f	signature:(self)
+test_ooo_with_retention	flow/test_ooo.py	/^def test_ooo_with_retention(self):$/;"	f	signature:(self)
+test_partial_madd	flow/test_ts_madd.py	/^def test_partial_madd():$/;"	f	signature:()
+test_password	flow/test_ts_password.py	/^def test_password():$/;"	f	signature:()
+test_persistency.py	flow/test_persistency.py	1;"	F	epoch:1744312830
+test_policies_correctness	flow/test_duplicate_policy.py	/^    def test_policies_correctness(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+test_precendence_key	flow/test_duplicate_policy.py	/^    def test_precendence_key(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+test_rand_oom	flow/test_ooo.py	/^def test_rand_oom(self):$/;"	f	signature:(self)
+test_range_by_labels	flow/test_ts_mrange.py	/^def test_range_by_labels():$/;"	f	signature:()
+test_range_by_labels.build_expected	flow/test_ts_mrange.py	/^            def build_expected(val, time_bucket):$/;"	f	function:test_range_by_labels	file:	signature:(val, time_bucket)
+test_range_count	flow/test_ts_range.py	/^def test_range_count():$/;"	f	signature:()
+test_range_midrange	flow/test_ts_range.py	/^def test_range_midrange():$/;"	f	signature:()
+test_range_query	flow/test_ts_range.py	/^def test_range_query():$/;"	f	signature:()
+test_range_with_agg_query	flow/test_ts_range.py	/^def test_range_with_agg_query():$/;"	f	signature:()
+test_rdb	flow/test_persistency.py	/^def test_rdb():$/;"	f	signature:()
+test_rdb_aggregation_context	flow/test_persistency.py	/^def test_rdb_aggregation_context():$/;"	f	signature:()
+test_rdbs.py	flow/test_rdbs.py	1;"	F	epoch:1745481312
+test_rename	flow/test_generic_cmds.py	/^def test_rename():$/;"	f	signature:()
+test_rename.py	flow/test_rename.py	1;"	F	epoch:1745246867
+test_rename_dst	flow/test_rename.py	/^def test_rename_dst():$/;"	f	signature:()
+test_rename_indexed	flow/test_rename.py	/^def test_rename_indexed():$/;"	f	signature:()
+test_rename_none_ts	flow/test_rename.py	/^def test_rename_none_ts():$/;"	f	signature:()
+test_rename_src	flow/test_rename.py	/^def test_rename_src():$/;"	f	signature:()
+test_renamenx	flow/test_generic_cmds.py	/^def test_renamenx():$/;"	f	signature:()
+test_resp3	flow/test_ts_resp3.py	/^def test_resp3(env):$/;"	f	signature:(env)
+test_resp3_mrange	flow/test_ts_resp3.py	/^def test_resp3_mrange(env):$/;"	f	signature:(env)
+test_restore	flow/test_generic_cmds.py	/^def test_restore():$/;"	f	signature:()
+test_revrange	flow/test_ts_revrange.py	/^def test_revrange():$/;"	f	signature:()
+test_rule_timebucket_64bit	flow/test_ts_createrule.py	/^def test_rule_timebucket_64bit(self):$/;"	f	signature:(self)
+test_sanity	flow/test_ts_range.py	/^def test_sanity():$/;"	f	signature:()
+test_sanity_pipeline	flow/test_ts_range.py	/^def test_sanity_pipeline():$/;"	f	signature:()
+test_series_ordering	flow/test_ts_range.py	/^def test_series_ordering():$/;"	f	signature:()
+test_set	flow/test_generic_cmds.py	/^def test_set():$/;"	f	signature:()
+test_short_read.py	flow/test_short_read.py	1;"	F	epoch:1744312830
+test_simple_dump_restore	flow/test_persistency.py	/^def test_simple_dump_restore(self):$/;"	f	signature:(self)
+test_slowlog.py	flow/test_slowlog.py	1;"	F	epoch:1745246867
+test_std_var_func	flow/test_ts_createrule.py	/^def test_std_var_func():$/;"	f	signature:()
+test_timestamp_alignment	flow/test_globalconfigs.py	/^def test_timestamp_alignment():$/;"	f	signature:()
+test_trim	flow/test_ts_create.py	/^def test_trim():$/;"	f	signature:()
+test_ts_add.py	flow/test_ts_add.py	1;"	F	epoch:1745246939
+test_ts_add_encoding	flow/test_ts_add.py	/^def test_ts_add_encoding():$/;"	f	signature:()
+test_ts_add_fail	flow/test_ts_add.py	/^def test_ts_add_fail(env):$/;"	f	signature:(env)
+test_ts_add_negative	flow/test_ts_add.py	/^def test_ts_add_negative():$/;"	f	signature:()
+test_ts_add_unknow_duplicate_policy	flow/test_duplicate_policy.py	/^    def test_ts_add_unknow_duplicate_policy(self):$/;"	m	class:testDuplicationPolicyTests	signature:(self)
+test_ts_alter.py	flow/test_ts_alter.py	1;"	F	epoch:1745246867
+test_ts_create.py	flow/test_ts_create.py	1;"	F	epoch:1745246867
+test_ts_create_encoding	flow/test_ts_create.py	/^def test_ts_create_encoding():$/;"	f	signature:()
+test_ts_createrule.py	flow/test_ts_createrule.py	1;"	F	epoch:1759343189
+test_ts_del_compressed	flow/test_ts_delete.py	/^def test_ts_del_compressed():$/;"	f	signature:()
+test_ts_del_compressed_out_range	flow/test_ts_delete.py	/^def test_ts_del_compressed_out_range():$/;"	f	signature:()
+test_ts_del_first_sample_in_chunk	flow/test_ts_delete.py	/^def test_ts_del_first_sample_in_chunk():$/;"	f	signature:()
+test_ts_del_last_chunk	flow/test_ts_delete.py	/^def test_ts_del_last_chunk():$/;"	f	signature:()
+test_ts_del_last_sample_in_series	flow/test_ts_delete.py	/^def test_ts_del_last_sample_in_series():$/;"	f	signature:()
+test_ts_del_multi_chunk	flow/test_ts_delete.py	/^def test_ts_del_multi_chunk():$/;"	f	signature:()
+test_ts_del_uncompressed	flow/test_ts_delete.py	/^def test_ts_del_uncompressed():$/;"	f	signature:()
+test_ts_del_uncompressed_in_range	flow/test_ts_delete.py	/^def test_ts_del_uncompressed_in_range():$/;"	f	signature:()
+test_ts_del_with_plus	flow/test_ts_delete.py	/^def test_ts_del_with_plus():$/;"	f	signature:()
+test_ts_delete.py	flow/test_ts_delete.py	1;"	F	epoch:1745246939
+test_ts_delete_with_rule_when_latest_timebucket_deleted	flow/test_ts_delete.py	/^def test_ts_delete_with_rule_when_latest_timebucket_deleted(self):$/;"	f	signature:(self)
+test_ts_deleterule.py	flow/test_ts_deleterule.py	1;"	F	epoch:1759343189
+test_ts_get.py	flow/test_ts_get.py	1;"	F	epoch:1745246867
+test_ts_incrby.py	flow/test_ts_incrby.py	1;"	F	epoch:1759343189
+test_ts_keyspace.py	flow/test_ts_keyspace.py	1;"	F	epoch:1744312830
+test_ts_libmr_failiure.py	flow/test_ts_libmr_failiure.py	1;"	F	epoch:1745246939
+test_ts_madd.py	flow/test_ts_madd.py	1;"	F	epoch:1745246939
+test_ts_mget.py	flow/test_ts_mget.py	1;"	F	epoch:1745246867
+test_ts_mrange.py	flow/test_ts_mrange.py	1;"	F	epoch:1745246867
+test_ts_mrange_groupby.py	flow/test_ts_mrange_groupby.py	1;"	F	epoch:1745246867
+test_ts_mrevrange.py	flow/test_ts_mrevrange.py	1;"	F	epoch:1745246867
+test_ts_password.py	flow/test_ts_password.py	1;"	F	epoch:1745246939
+test_ts_queryindex.py	flow/test_ts_queryindex.py	1;"	F	epoch:1745246867
+test_ts_range.py	flow/test_ts_range.py	1;"	F	epoch:1745246901
+test_ts_range_count_validation	flow/test_ts_range.py	/^def test_ts_range_count_validation():$/;"	f	signature:()
+test_ts_resp3.py	flow/test_ts_resp3.py	1;"	F	epoch:1745481312
+test_ts_revrange.py	flow/test_ts_revrange.py	1;"	F	epoch:1745246867
+test_ts_slowlog	flow/test_slowlog.py	/^def test_ts_slowlog():$/;"	f	signature:()
+test_ts_upsert	flow/test_ts_add.py	/^def test_ts_upsert():$/;"	f	signature:()
+test_ts_upsert_bug	flow/test_ts_add.py	/^def test_ts_upsert_bug():$/;"	f	signature:()
+test_ts_upsert_downsampled	flow/test_ts_add.py	/^def test_ts_upsert_downsampled():$/;"	f	signature:()
+test_uncompressed	flow/test_globalconfigs.py	/^def test_uncompressed():$/;"	f	signature:()
+test_uncompressed	flow/test_ts_create.py	/^def test_uncompressed():$/;"	f	signature:()
+test_unlink	flow/test_generic_cmds.py	/^def test_unlink():$/;"	f	signature:()
+test_valid_labels	flow/test_ts_add.py	/^def test_valid_labels():$/;"	f	signature:()
+test_valid_timestamp	flow/test_ts_add.py	/^def test_valid_timestamp():$/;"	f	signature:()
+tests.sh	flow/tests.sh	1;"	F	epoch:1760263336
+timed	flow/utils.py	/^    def timed(*args, **kw):$/;"	f	function:timeit	file:	signature:(*args, **kw)
+timeit	flow/utils.py	/^def timeit(method):$/;"	f	signature:(method)
+timeit.timed	flow/utils.py	/^    def timed(*args, **kw):$/;"	f	function:timeit	file:	signature:(*args, **kw)
+tools_environment	qa/adhoc.json	/^    "tools_environment": {},$/;"	o
+tools_environment	qa/common.json	/^    "tools_environment": {},$/;"	o	object:properties
+tools_environment	qa/nightly.json	/^    "tools_environment": {},$/;"	o
+tools_environment	qa/release.json	/^    "tools_environment": {},$/;"	o
+total_samples	flow/test_helper_classes.py	/^    total_samples = None$/;"	v	class:TSInfo
+traps	flow/tests.sh	/^traps() {$/;"	f
+truncate_month	flow/test_ts_mrange_groupby.py	/^def truncate_month(date):$/;"	f	signature:(date)
+ts_mrange_tsbs_alike_cpu-max-all-1.yml	benchmarks/ts_mrange_tsbs_alike_cpu-max-all-1.yml	1;"	F	epoch:1744312830
+tsbs-devops-ingestion-scale100devices-10metrics-31days.yml	benchmarks/tsbs-devops-ingestion-scale100devices-10metrics-31days.yml	1;"	F	epoch:1745246901
+tsbs-devops-ingestion-scale100devices-10metrics-4days-keyspace.yml	benchmarks/tsbs-devops-ingestion-scale100devices-10metrics-4days-keyspace.yml	1;"	F	epoch:1745246901
+tsbs-devops-ingestion-scale100devices-10metrics-4days.yml	benchmarks/tsbs-devops-ingestion-scale100devices-10metrics-4days.yml	1;"	F	epoch:1745246901
+tsbs-scale100-cpu-max-all-1.yml	benchmarks/tsbs-scale100-cpu-max-all-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-cpu-max-all-1@4139rps.yml	benchmarks/tsbs-scale100-cpu-max-all-1@4139rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-cpu-max-all-8.yml	benchmarks/tsbs-scale100-cpu-max-all-8.yml	1;"	F	epoch:1745246901
+tsbs-scale100-cpu-max-all-8@588rps.yml	benchmarks/tsbs-scale100-cpu-max-all-8@588rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-1.yml	benchmarks/tsbs-scale100-double-groupby-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-1@324rps.yml	benchmarks/tsbs-scale100-double-groupby-1@324rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-5.yml	benchmarks/tsbs-scale100-double-groupby-5.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-5@70rps.yml	benchmarks/tsbs-scale100-double-groupby-5@70rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-all.yml	benchmarks/tsbs-scale100-double-groupby-all.yml	1;"	F	epoch:1745246901
+tsbs-scale100-double-groupby-all@35rps.yml	benchmarks/tsbs-scale100-double-groupby-all@35rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-groupby-orderby-limit.yml	benchmarks/tsbs-scale100-groupby-orderby-limit.yml	1;"	F	epoch:1745246901
+tsbs-scale100-groupby-orderby-limit@28rps.yml	benchmarks/tsbs-scale100-groupby-orderby-limit@28rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-high-cpu-1.yml	benchmarks/tsbs-scale100-high-cpu-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-high-cpu-1@1816rps.yml	benchmarks/tsbs-scale100-high-cpu-1@1816rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-high-cpu-all.yml	benchmarks/tsbs-scale100-high-cpu-all.yml	1;"	F	epoch:1745246901
+tsbs-scale100-high-cpu-all@18rps.yml	benchmarks/tsbs-scale100-high-cpu-all@18rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-lastpoint.yml	benchmarks/tsbs-scale100-lastpoint.yml	1;"	F	epoch:1745246901
+tsbs-scale100-lastpoint@488rps.yml	benchmarks/tsbs-scale100-lastpoint@488rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-1-1.yml	benchmarks/tsbs-scale100-single-groupby-1-1-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-1-12.yml	benchmarks/tsbs-scale100-single-groupby-1-1-12.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-1-12@2320rps.yml	benchmarks/tsbs-scale100-single-groupby-1-1-12@2320rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-1-1@2320rps.yml	benchmarks/tsbs-scale100-single-groupby-1-1-1@2320rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-8-1.yml	benchmarks/tsbs-scale100-single-groupby-1-8-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-1-8-1@4458rps.yml	benchmarks/tsbs-scale100-single-groupby-1-8-1@4458rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-1-1.yml	benchmarks/tsbs-scale100-single-groupby-5-1-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-1-12.yml	benchmarks/tsbs-scale100-single-groupby-5-1-12.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-1-12@648rps.yml	benchmarks/tsbs-scale100-single-groupby-5-1-12@648rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-1-1@648rps.yml	benchmarks/tsbs-scale100-single-groupby-5-1-1@648rps.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-8-1.yml	benchmarks/tsbs-scale100-single-groupby-5-8-1.yml	1;"	F	epoch:1745246901
+tsbs-scale100-single-groupby-5-8-1@1158rps.yml	benchmarks/tsbs-scale100-single-groupby-5-8-1@1158rps.yml	1;"	F	epoch:1745246901
+unitests_parse_filter_by_ts.c	unit/unitests_parse_filter_by_ts.c	1;"	F	epoch:1759163069
+unittests.c	unit/unittests.c	1;"	F	epoch:1759343189
+unittests_cmd_info.c	unit/unittests_cmd_info.c	1;"	F	epoch:1759343189
+unittests_compressed_chunk.c	unit/unittests_compressed_chunk.c	1;"	F	epoch:1759163069
+unittests_parse_duplicate_policy.c	unit/unittests_parse_duplicate_policy.c	1;"	F	epoch:1759163069
+unittests_parse_policies.c	unit/unittests_parse_policies.c	1;"	F	epoch:1759163069
+unittests_uncompressed_chunk.c	unit/unittests_uncompressed_chunk.c	1;"	F	epoch:1759163069
+unzip	flow/test_short_read.py	/^def unzip(zip_path, to_dir):$/;"	f	signature:(zip_path, to_dir)
+utils.py	flow/utils.py	1;"	F	epoch:1745246867
+va_fun	flow/test_ts_range.py	/^        va_fun = lambda ta: v1 + (ta - t1)*m$/;"	f	function:test_agg_twa	file:	signature:(ta)
+verifyClusterInitialized	flow/includes.py	/^def verifyClusterInitialized(env):$/;"	f	signature:(env)
+verifyClusterInitialized	flow/test_ts_libmr_failiure.py	/^def verifyClusterInitialized(env):$/;"	f	signature:(env)
+verify_561	flow/test_globalconfigs.py	/^    def verify_561(self, chunk_type):$/;"	m	class:testGlobalConfigTests	signature:(self, chunk_type)
+wrapper	flow/includes.py	/^        def wrapper(x, *args, **kwargs):$/;"	f	function:skip.decorate	file:	signature:(x, *args, **kwargs)
+{{MODULE_DOWNLOAD_NAME}}	qa/common.json	/^      "{{MODULE_DOWNLOAD_NAME}}": "{{MODULE_URL}}"$/;"	s	object:properties.module_download_urls
