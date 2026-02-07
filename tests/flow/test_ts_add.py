@@ -175,6 +175,7 @@ def test_ts_upsert():
         r.execute_command('ts.create', key, 'CHUNK_SIZE', 128, 'DUPLICATE_POLICY', 'LAST')
         r.execute_command('ts.create', key2, 'CHUNK_SIZE', 128)
         j = 1
+        start_time = time.monotonic()
         while True:
             info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
             if(len(info.chunks) > 1):
@@ -183,10 +184,13 @@ def test_ts_upsert():
                 r.execute_command('ts.add', key, MAX_INT64 - j, DOUBLE_MAX - j)
                 r.execute_command('ts.add', key2, MAX_INT64 - j, DOUBLE_MAX - j)
                 j += 1
+            if time.monotonic() - start_time > 10:
+                raise AssertionError("Timed out waiting for chunk split in test_ts_upsert")
 
         info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
         n_samples_2_chunk = info.total_samples
         j = 1
+        start_time = time.monotonic()
         while True:
             info = TSInfo(r.execute_command("ts.info", key, 'DEBUG'))
             if(len(info.chunks) > 2):
@@ -194,6 +198,8 @@ def test_ts_upsert():
             for i in range(1,10):
                 r.execute_command('ts.add', key, pow(j, 2), pow(j, 2))
                 j += 1
+            if time.monotonic() - start_time > 10:
+                raise AssertionError("Timed out waiting for second chunk split in test_ts_upsert")
 
         res = r.execute_command('ts.range', key, '-', pow((j-1), 2))
         expected = [[pow(d, 2), str(int(pow(d, 2))).encode('ascii')] for d in range(1, j)]
@@ -264,6 +270,7 @@ def test_ts_upsert_bug():
         exp = list('00000000000')
         exp_len = len(exp)
         c = 0
+        start_time = time.monotonic()
         while True:
             val = int('0' + ''.join(exp) + ''.join(mantisa), 2)
             v = struct.unpack('d', struct.pack('Q', val))[0]
@@ -280,6 +287,8 @@ def test_ts_upsert_bug():
             exp[exp_len - c - 1] = '1'
             mantisa[mantisa_len - exp_len + c] = '1'
             c += 1
+            if time.monotonic() - start_time > 10:
+                raise AssertionError("Timed out waiting for chunk split in test_ts_upsert_bug")
 
         info = TSInfo(r.execute_command("ts.info", t1, 'DEBUG'))
         first_chunk_last_ts = info.chunks[0][3]

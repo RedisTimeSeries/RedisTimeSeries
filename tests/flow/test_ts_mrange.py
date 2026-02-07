@@ -48,8 +48,11 @@ def test_mrange_expire_issue549(env):
         assert r.execute_command('ts.add', 'k1', 1, 10, 'LABELS', 'l', '1') == 1
         assert r.execute_command('ts.add', 'k2', 2, 20, 'LABELS', 'l', '1') == 2
         assert r.execute_command('expire', 'k1', '1') == 1
-        for i in range(0, 5000):
-            assert env.getConnection().execute_command('ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
+        conn = env.getConnection()
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            assert conn.execute_command(
+                'ts.mrange - + aggregation avg 10 withlabels filter l=1') is not None
 
 
 def test_range_by_labels():
