@@ -101,9 +101,9 @@ jobs:
         run: |
           OS="${{ inputs.os }}"
           if [ -z "${OS}" ]; then
-            OS='["macos-14", "macos-15", "macos-26"]'
+            OS='["macos-13", "macos-14", "macos-15"]'
           else
-            OS='["${OS}"]'
+            OS="[\"${OS}\"]"
           fi
           echo "${OS}"
           echo "os=${OS}" >> $GITHUB_OUTPUT
