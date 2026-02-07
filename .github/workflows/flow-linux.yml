@@ -159,6 +159,7 @@ jobs:
             make build
 
       - name: Run tests
+        timeout-minutes: ${{ inputs.run_valgrind && 240 || inputs.run_sanitizer && 180 || 120 }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \

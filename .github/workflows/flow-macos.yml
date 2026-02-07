@@ -101,7 +101,7 @@ jobs:
         run: |
           OS="${{ inputs.os }}"
           if [ -z "${OS}" ]; then
-            OS='["macos-13", "macos-14", "macos-15"]'
+            OS='["macos-14", "macos-15", "macos-26"]'
           else
             OS="[\"${OS}\"]"
           fi
@@ -153,6 +153,7 @@ jobs:
           use-venv: '1'
       - name: Run tests
         uses: ./.github/actions/run-tests
+        timeout-minutes: ${{ inputs.run_valgrind && 240 || inputs.run_sanitizer && 180 || 120 }}
         with: 
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
