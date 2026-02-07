@@ -8,6 +8,7 @@
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
+#include "shard_directory.h"
 #include "utils/blocked_client.h"
 
 #include "rmutil/alloc.h"
@@ -17,6 +18,11 @@ typedef struct SlotRangeAccum
     SlotRangeRecord *ranges;
     size_t count;
 } SlotRangeAccum;
+
+typedef struct ShardQueryCtx {
+    RedisModuleBlockedClient *bc;
+    bool validateSlotRanges;
+} ShardQueryCtx;
 
 #define RTS_ERR_QUERY_REQUIRES_UNAVAILABLE_SLOTS "Query requires unavailable slots"
 
@@ -134,7 +140,9 @@ void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
 }
 
 static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
+    ShardQueryCtx *queryCtx = privateData;
+    RedisModuleBlockedClient *bc = queryCtx->bc;
+    const bool validateSlots = queryCtx->validateSlotRanges;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
@@ -152,7 +160,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
+        if (validateSlots && !validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -167,7 +175,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         total_len += MapRecord_GetLen((MapRecord *)payload);
     }
 
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
+    if (validateSlots && !validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
         goto __done;
     }
@@ -192,11 +200,14 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
 
 __done:
     SlotRangeAccum_Free(&acc);
+    free(queryCtx);
     RTS_UnblockClient(bc, rctx);
 }
 
 static void mget_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
+    ShardQueryCtx *queryCtx = privateData;
+    RedisModuleBlockedClient *bc = queryCtx->bc;
+    const bool validateSlots = queryCtx->validateSlotRanges;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
@@ -214,7 +225,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
+        if (validateSlots && !validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -228,7 +239,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         }
         total_len += ListRecord_GetLen((ListRecord *)payload);
     }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
+    if (validateSlots && !validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
         goto __done;
     }
@@ -255,11 +266,14 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
 
 __done:
     SlotRangeAccum_Free(&acc);
+    free(queryCtx);
     RTS_UnblockClient(bc, rctx);
 }
 
 static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
+    ShardQueryCtx *queryCtx = privateData;
+    RedisModuleBlockedClient *bc = queryCtx->bc;
+    const bool validateSlots = queryCtx->validateSlotRanges;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
@@ -277,7 +291,7 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
+        if (validateSlots && !validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -287,7 +301,7 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
         }
         total_len += ListRecord_GetLen((ListRecord *)payload);
     }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
+    if (validateSlots && !validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
         goto __done;
     }
@@ -314,12 +328,14 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
 
 __done:
     SlotRangeAccum_Free(&acc);
+    free(queryCtx);
     RTS_UnblockClient(bc, rctx);
 }
 
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
+    const bool validateSlots = data->validateSlotRanges;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
@@ -342,7 +358,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
+        if (validateSlots && !validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
         }
@@ -358,7 +374,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             total_len += ListRecord_GetLen((ListRecord *)payload);
         }
     }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
+    if (validateSlots && !validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
         goto __done;
     }
@@ -449,8 +465,49 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
+    RTSShardBitset targets = { 0 };
+    bool targetsKnown = false;
+    targets = ShardDirectory_ResolveTargets(args.queryPredicates, &targetsKnown);
+    if (targetsKnown && ShardDirectory_BitsetIsEmpty(&targets)) {
+        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+        ShardDirectory_StatsIncrementPruned(0);
+        ShardDirectory_FreeBitset(&targets);
+        MGetArgs_Free(&args);
+        return REDISMODULE_OK;
+    }
+
+    bool validateSlots = true;
+    bool localIncluded = true;
+    bool pruneTargets = false;
+    char **targetNodeIds = NULL;
+    size_t targetNodeCount = 0;
+    size_t totalTargets = 0;
+
+    if (targetsKnown) {
+        localIncluded = ShardDirectory_LocalShardIncluded(&targets);
+        if (!ShardDirectory_BuildTargetNodeIds(
+                &targets, false, &targetNodeIds, &targetNodeCount)) {
+            targetsKnown = false;
+        } else {
+            totalTargets = targetNodeCount + (localIncluded ? 1 : 0);
+            const size_t shardCount = ShardDirectory_GetShardCount();
+            if (shardCount == 0 || totalTargets >= shardCount) {
+                targetsKnown = false;
+            } else {
+                validateSlots = false;
+                pruneTargets = true;
+            }
+        }
+    }
+
+    if (pruneTargets) {
+        ShardDirectory_StatsIncrementPruned(totalTargets);
+    } else {
+        ShardDirectory_StatsIncrementFullFanout();
+    }
+
     QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
-    queryArg->shouldReturnNull = false;
+    queryArg->shouldReturnNull = pruneTargets && !localIncluded;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = 0;
@@ -476,17 +533,28 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+        ShardDirectory_FreeBitset(&targets);
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
+    ShardQueryCtx *queryCtx = malloc(sizeof(*queryCtx));
+    queryCtx->bc = bc;
+    queryCtx->validateSlotRanges = validateSlots;
+    if (pruneTargets) {
+        MR_ExecutionSetTargets(exec, (const char **)targetNodeIds, targetNodeCount);
+    }
+    MR_ExecutionSetOnDoneHandler(
+        exec, queryArg->resp3 ? mget_done_resp3 : mget_done, queryCtx);
 
     MR_Run(exec);
 
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+    ShardDirectory_FreeBitset(&targets);
     return REDISMODULE_OK;
 }
 
@@ -497,8 +565,49 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     args.reverse = reverse;
 
+    RTSShardBitset targets = { 0 };
+    bool targetsKnown = false;
+    targets = ShardDirectory_ResolveTargets(args.queryPredicates, &targetsKnown);
+    if (targetsKnown && ShardDirectory_BitsetIsEmpty(&targets)) {
+        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+        ShardDirectory_StatsIncrementPruned(0);
+        ShardDirectory_FreeBitset(&targets);
+        MRangeArgs_Free(&args);
+        return REDISMODULE_OK;
+    }
+
+    bool validateSlots = true;
+    bool localIncluded = true;
+    bool pruneTargets = false;
+    char **targetNodeIds = NULL;
+    size_t targetNodeCount = 0;
+    size_t totalTargets = 0;
+
+    if (targetsKnown) {
+        localIncluded = ShardDirectory_LocalShardIncluded(&targets);
+        if (!ShardDirectory_BuildTargetNodeIds(
+                &targets, false, &targetNodeIds, &targetNodeCount)) {
+            targetsKnown = false;
+        } else {
+            totalTargets = targetNodeCount + (localIncluded ? 1 : 0);
+            const size_t shardCount = ShardDirectory_GetShardCount();
+            if (shardCount == 0 || totalTargets >= shardCount) {
+                targetsKnown = false;
+            } else {
+                validateSlots = false;
+                pruneTargets = true;
+            }
+        }
+    }
+
+    if (pruneTargets) {
+        ShardDirectory_StatsIncrementPruned(totalTargets);
+    } else {
+        ShardDirectory_StatsIncrementFullFanout();
+    }
+
     QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
-    queryArg->shouldReturnNull = false;
+    queryArg->shouldReturnNull = pruneTargets && !localIncluded;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
@@ -525,6 +634,8 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+        ShardDirectory_FreeBitset(&targets);
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
@@ -533,19 +644,65 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MRangeData *data = malloc(sizeof(struct MRangeData));
     data->bc = bc;
     data->args = args;
+    data->validateSlotRanges = validateSlots;
+    if (pruneTargets) {
+        MR_ExecutionSetTargets(exec, (const char **)targetNodeIds, targetNodeCount);
+    }
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+    ShardDirectory_FreeBitset(&targets);
     return REDISMODULE_OK;
 }
 
 int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     MRError *err = NULL;
 
+    RTSShardBitset targets = { 0 };
+    bool targetsKnown = false;
+    targets = ShardDirectory_ResolveTargets(queries, &targetsKnown);
+    if (targetsKnown && ShardDirectory_BitsetIsEmpty(&targets)) {
+        RedisModule_ReplyWithSetOrArray(ctx, 0);
+        ShardDirectory_StatsIncrementPruned(0);
+        ShardDirectory_FreeBitset(&targets);
+        return REDISMODULE_OK;
+    }
+
+    bool validateSlots = true;
+    bool localIncluded = true;
+    bool pruneTargets = false;
+    char **targetNodeIds = NULL;
+    size_t targetNodeCount = 0;
+    size_t totalTargets = 0;
+
+    if (targetsKnown) {
+        localIncluded = ShardDirectory_LocalShardIncluded(&targets);
+        if (!ShardDirectory_BuildTargetNodeIds(
+                &targets, false, &targetNodeIds, &targetNodeCount)) {
+            targetsKnown = false;
+        } else {
+            totalTargets = targetNodeCount + (localIncluded ? 1 : 0);
+            const size_t shardCount = ShardDirectory_GetShardCount();
+            if (shardCount == 0 || totalTargets >= shardCount) {
+                targetsKnown = false;
+            } else {
+                validateSlots = false;
+                pruneTargets = true;
+            }
+        }
+    }
+
+    if (pruneTargets) {
+        ShardDirectory_StatsIncrementPruned(totalTargets);
+    } else {
+        ShardDirectory_StatsIncrementFullFanout();
+    }
+
     QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
-    queryArg->shouldReturnNull = false;
+    queryArg->shouldReturnNull = pruneTargets && !localIncluded;
     queryArg->refCount = 1;
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
@@ -564,16 +721,27 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+        ShardDirectory_FreeBitset(&targets);
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
+    ShardQueryCtx *queryCtx = malloc(sizeof(*queryCtx));
+    queryCtx->bc = bc;
+    queryCtx->validateSlotRanges = validateSlots;
+    if (pruneTargets) {
+        MR_ExecutionSetTargets(exec, (const char **)targetNodeIds, targetNodeCount);
+    }
+    MR_ExecutionSetOnDoneHandler(
+        exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, queryCtx);
 
     MR_Run(exec);
 
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    ShardDirectory_FreeTargetNodeIds(targetNodeIds, targetNodeCount);
+    ShardDirectory_FreeBitset(&targets);
     return REDISMODULE_OK;
 }
