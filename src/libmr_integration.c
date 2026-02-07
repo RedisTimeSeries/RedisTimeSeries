@@ -16,6 +16,21 @@
 
 #define SeriesRecordName "SeriesRecord"
 
+/* Optional LibMR API: present only if RedisTimeSeries also updates the LibMR submodule to a
+ * compatible commit. CI builds against the submodule commit pinned in this repo, so this must not
+ * be a hard dependency. */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) int MR_IsRunningOnMainThread(void);
+#endif
+
+static inline bool RTS_MR_IsRunningOnMainThread(void) {
+#if defined(__GNUC__) || defined(__clang__)
+    return MR_IsRunningOnMainThread != NULL && MR_IsRunningOnMainThread();
+#else
+    return false;
+#endif
+}
+
 static Record NullRecord;
 static MRRecordType *nullRecordType = NULL;
 static MRRecordType *stringRecordType = NULL;
@@ -513,7 +528,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
@@ -571,7 +588,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
@@ -589,7 +608,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
     }
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
@@ -691,7 +712,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
     free(limitLabelsStr);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_listOrMap)->base;
 }
@@ -704,7 +727,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
-    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    }
 
     SlotRangeRecord *slotRanges = NULL;
     size_t slotRangesCount = 0;
@@ -738,7 +763,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(rts_staticCtx, result);
-    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    if (!RTS_MR_IsRunningOnMainThread()) {
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+    }
 
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
