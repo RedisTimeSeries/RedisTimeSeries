@@ -14,6 +14,7 @@
 #include "filter_iterator.h"
 #include "indexer.h"
 #include "module.h"
+#include "shard_directory.h"
 #include "series_iterator.h"
 #include "sample_iterator.h"
 #include "multiseries_sample_iterator.h"
@@ -260,6 +261,7 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         RemoveIndexedMetric(keyname);
     }
     IndexMetric(keyname, series->labels, series->labelsCount);
+    ShardDirectory_OnSeriesCreated(series->labels, series->labelsCount);
 
     if (last_rdb_load_version < TS_REPLICAOF_SUPPORT_VER) {
         // In versions greater than TS_REPLICAOF_SUPPORT_VER we delete the reference on the dump
@@ -302,6 +304,7 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
     }
 
     IndexMetric(_keyname, series->labels, series->labelsCount);
+    ShardDirectory_OnSeriesCreated(series->labels, series->labelsCount);
 
 cleanup:
     if (key) {
@@ -430,6 +433,7 @@ void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const voi
     RemoveIndexedMetric(tokey); // in case of replace
     if (dst->labelsCount > 0) {
         IndexMetric(tokey, dst->labels, dst->labelsCount);
+        ShardDirectory_OnSeriesCreated(dst->labels, dst->labelsCount);
     }
 
     dst->in_ram = src->in_ram;

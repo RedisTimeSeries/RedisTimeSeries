@@ -74,4 +74,11 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             bool *hasPermissionError);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
+
+typedef void (*IndexLabelPairCallback)(const char *label,
+                                       size_t label_len,
+                                       const char *value,
+                                       size_t value_len,
+                                       void *ctx);
+bool IndexIterateLabelPairs(RedisModuleString *ts_key, IndexLabelPairCallback cb, void *ctx);
 #endif

@@ -25,6 +25,7 @@ extern bool isReshardTrimming, isAsmTrimming, isAsmImporting;
 
 #define KV_PREFIX "__index_%s=%s"
 #define K_PREFIX "__key_index_%s"
+#define KV_PREFIX_RAW "__index_"
 
 typedef enum
 {
@@ -176,6 +177,60 @@ int CountPredicateType(QueryPredicateList *queries, PredicateType type) {
         }
     }
     return count;
+}
+
+static bool parse_index_label_pair(const char *key,
+                                   size_t key_len,
+                                   const char **label,
+                                   size_t *label_len,
+                                   const char **value,
+                                   size_t *value_len) {
+    const size_t prefix_len = strlen(KV_PREFIX_RAW);
+    if (key_len <= prefix_len) {
+        return false;
+    }
+    if (memcmp(key, KV_PREFIX_RAW, prefix_len) != 0) {
+        return false;
+    }
+    const char *kv = key + prefix_len;
+    const size_t kv_len = key_len - prefix_len;
+    const char *eq = memchr(kv, '=', kv_len);
+    if (!eq) {
+        return false;
+    }
+    *label = kv;
+    *label_len = (size_t)(eq - kv);
+    *value = eq + 1;
+    *value_len = (size_t)((kv + kv_len) - (eq + 1));
+    return true;
+}
+
+bool IndexIterateLabelPairs(RedisModuleString *ts_key, IndexLabelPairCallback cb, void *ctx) {
+    if (!cb) {
+        return false;
+    }
+    int nokey = 0;
+    RedisModuleDict *ts_leaf = RedisModule_DictGet(tsLabelIndex, ts_key, &nokey);
+    if (nokey || !ts_leaf) {
+        return false;
+    }
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(ts_leaf, "^", NULL, 0);
+    RedisModuleString *currentLabelKey = NULL;
+    while ((currentLabelKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        size_t key_len = 0;
+        const char *key_cstr = RedisModule_StringPtrLen(currentLabelKey, &key_len);
+        const char *label = NULL;
+        const char *value = NULL;
+        size_t label_len = 0;
+        size_t value_len = 0;
+        if (parse_index_label_pair(
+                key_cstr, key_len, &label, &label_len, &value, &value_len)) {
+            cb(label, label_len, value, value_len, ctx);
+        }
+        RedisModule_FreeString(NULL, currentLabelKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+    return true;
 }
 
 static inline void labelsIndexRemoveTsKey(RedisModuleDict *leaf,

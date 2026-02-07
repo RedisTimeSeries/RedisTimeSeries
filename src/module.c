@@ -21,6 +21,7 @@
 #include "rdb.h"
 #include "reply.h"
 #include "resultset.h"
+#include "shard_directory.h"
 #include "short_read.h"
 #include "tsdb.h"
 #include "version.h"
@@ -122,6 +123,31 @@ static void FreeConfigAndStaticCtx(void) {
         RedisModule_FreeThreadSafeContext(rts_staticCtx);
         rts_staticCtx = NULL;
     }
+}
+
+static void RTS_InfoFunc(RedisModuleInfoCtx *ctx, int for_crash_report) {
+    REDISMODULE_NOT_USED(for_crash_report);
+    const RTSShardDirectoryStats *stats = ShardDirectory_GetStats();
+    if (!stats) {
+        return;
+    }
+    RedisModule_InfoAddSection(ctx, "shard_directory");
+    RedisModule_InfoAddFieldLongLong(
+        ctx, "mrangecoord_full_fanout", (long long)stats->mrangecoord_full_fanout);
+    RedisModule_InfoAddFieldLongLong(ctx, "mrangecoord_pruned", (long long)stats->mrangecoord_pruned);
+    const double avgTargets = (stats->mrangecoord_pruned == 0)
+                                  ? 0.0
+                                  : (double)stats->mrangecoord_targets_total /
+                                        (double)stats->mrangecoord_pruned;
+    RedisModule_InfoAddFieldDouble(ctx, "mrangecoord_targets_avg", avgTargets);
+    RedisModule_InfoAddFieldLongLong(
+        ctx, "directory_updates_sent", (long long)stats->directory_updates_sent);
+    RedisModule_InfoAddFieldLongLong(
+        ctx, "directory_updates_received", (long long)stats->directory_updates_received);
+    RedisModule_InfoAddFieldLongLong(
+        ctx, "directory_unknown_lookups", (long long)stats->directory_unknown_lookups);
+    RedisModule_InfoAddFieldCString(
+        ctx, "shard_pruning_enabled", TSGlobalConfig.shardPruningEnabled ? "yes" : "no");
 }
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -910,6 +936,7 @@ int CreateTsKey(RedisModuleCtx *ctx,
     }
 
     IndexMetric(keyName, (*series)->labels, (*series)->labelsCount);
+    ShardDirectory_OnSeriesCreated((*series)->labels, (*series)->labelsCount);
 
     return TSDB_OK;
 }
@@ -983,6 +1010,10 @@ int TSDB_alter(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     if (RMUtil_ArgIndex("LABELS", argv, argc) > 0) {
+        ShardDirectory_OnSeriesLabelsChanged(series->labels,
+                                             series->labelsCount,
+                                             cCtx.labels,
+                                             cCtx.labelsCount);
         RemoveIndexedMetric(keyName);
         // free current labels
         FreeLabels(series->labels, series->labelsCount);
@@ -1737,6 +1768,7 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
 
 int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     if (rts_staticCtx) {
+        ShardDirectory_Free();
         FreeConfigAndStaticCtx();
     }
 
@@ -1876,6 +1908,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     IndexInit();
+    ShardDirectory_Init(ctx);
+    if (RedisModule_RegisterInfoFunc) {
+        RedisModule_RegisterInfoFunc(ctx, RTS_InfoFunc);
+    }
     if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to register defrag function");
         FreeConfigAndStaticCtx();
