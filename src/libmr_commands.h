@@ -9,6 +9,7 @@ typedef struct MRangeData
 {
     RedisModuleBlockedClient *bc;
     MRangeArgs args;
+    bool validateSlotRanges;
 } MRangeData;
 
 typedef struct MData

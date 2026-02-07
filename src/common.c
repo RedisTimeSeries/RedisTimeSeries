@@ -1,6 +1,7 @@
 #include "common.h"
 #include "tsdb.h"
 #include "indexer.h"
+#include "shard_directory.h"
 
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") ==
@@ -10,6 +11,7 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         strcasecmp(event, "evicted") == 0 || strcasecmp(event, "key_trimmed") == 0 ||
         strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
+        ShardDirectory_OnSeriesDeletedByKey(key);
         RemoveIndexedMetric(key);
         return REDISMODULE_OK;
     }

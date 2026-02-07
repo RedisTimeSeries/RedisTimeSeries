@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <string.h>
 #include <float.h>
+#include <stdlib.h>
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
 
@@ -46,11 +47,40 @@ static RedisModuleString *getConfigStringCache = NULL;
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.password = NULL;
+    TSGlobalConfig.shardPruningEnabled = true;
+
+    const char *env = getenv("RTS_SHARD_PRUNING");
+    if (env && (*env != '\0')) {
+        if (!strcasecmp(env, "0") || !strcasecmp(env, "false") || !strcasecmp(env, "no")) {
+            TSGlobalConfig.shardPruningEnabled = false;
+        }
+    }
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
         getConfigStringCache = NULL;
     }
+}
+
+static int getModernBoolConfigValue(const char *name, void *privdata) {
+    REDISMODULE_NOT_USED(privdata);
+    if (!strcasecmp("ts-shard-pruning", name)) {
+        return TSGlobalConfig.shardPruningEnabled ? 1 : 0;
+    }
+    return 0;
+}
+
+static int setModernBoolConfigValue(const char *name,
+                                    int value,
+                                    void *privdata,
+                                    RedisModuleString **err) {
+    REDISMODULE_NOT_USED(privdata);
+    REDISMODULE_NOT_USED(err);
+    if (!strcasecmp("ts-shard-pruning", name)) {
+        TSGlobalConfig.shardPruningEnabled = (value != 0);
+        return REDISMODULE_OK;
+    }
+    return REDISMODULE_ERR;
 }
 
 static inline void ClearCompactionRules(void) {
@@ -534,6 +564,25 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         RedisModule_Log(
             ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
+
+    if (RedisModule_RegisterBoolConfig(ctx,
+                                       "ts-shard-pruning",
+                                       TSGlobalConfig.shardPruningEnabled ? 1 : 0,
+                                       REDISMODULE_CONFIG_UNPREFIXED,
+                                       getModernBoolConfigValue,
+                                       setModernBoolConfigValue,
+                                       NULL,
+                                       NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-shard-pruning",
+                    12,
+                    TSGlobalConfig.shardPruningEnabled ? "yes" : "no");
 
     RedisModule_Log(ctx, "notice", "]");
 
