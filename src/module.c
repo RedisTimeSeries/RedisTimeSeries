@@ -471,7 +471,7 @@ exit:
     return exitStatus;
 }
 
-int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
+static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
     MRangeArgs args;
