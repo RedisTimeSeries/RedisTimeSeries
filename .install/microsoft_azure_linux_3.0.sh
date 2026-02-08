@@ -40,7 +40,7 @@ wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz && \
     ln -sf /usr/local/bin/python3.9 /usr/local/bin/python3 && \
     ln -sf /usr/local/bin/pip3.9 /usr/local/bin/pip3
 
-python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install --upgrade pip "setuptools<81" wheel
 pip install -r tests/flow/requirements.txt
 
 pip install -r .install/build_package_requirements.txt  # required for packing the module (todo: move to pack.sh after refactor)
