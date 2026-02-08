@@ -1,13 +1,8 @@
-name: Event TAG
+name: Event Weekly
 
-permissions:
-  id-token: write
-  contents: read
-  
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  schedule:
+    - cron: "0 0 * * 0"
   workflow_dispatch:
     inputs:
       redis-ref:
@@ -15,7 +10,17 @@ on:
         required: true
         default: 'unstable'
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
+  run-benchmarks:
+    uses: ./.github/workflows/benchmark-runner.yml
+    secrets: inherit
+    with:
+      extended: true
+
   prepare-values:
     runs-on: ubuntu-latest
     outputs:
@@ -58,4 +63,20 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+    secrets: inherit
+  linux-valgrind:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      run_valgrind: true
+    secrets: inherit
+  linux-sanitizer:
+    uses: ./.github/workflows/flow-linux-x86.yml
+    needs: [prepare-values]
+    with:
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      run_sanitizer: true
     secrets: inherit
