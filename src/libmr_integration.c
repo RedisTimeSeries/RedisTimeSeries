@@ -648,6 +648,12 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 
 static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
+    if (sra == NULL) {
+        // Should never happen, because this function is only called in clustered environment.
+        // But to be on the safe side:
+        RedisModule_ReplyWithArray(ctx, 0);
+        return;
+    }
     RedisModule_ReplyWithArray(ctx, sra->num_ranges);
     for (int i = 0; i < sra->num_ranges; i++) {
         RedisModule_ReplyWithArray(ctx, 2);
