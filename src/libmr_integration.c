@@ -651,8 +651,8 @@ static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
     RedisModule_ReplyWithArray(ctx, sra->num_ranges);
     for (int i = 0; i < sra->num_ranges; i++) {
         RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithLongLong(ctx, sra->ranges->start);
-        RedisModule_ReplyWithLongLong(ctx, sra->ranges->end);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].start);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].end);
     }
     RedisModule_ClusterFreeSlotRanges(ctx, sra);
 }
