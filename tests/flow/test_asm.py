@@ -12,6 +12,18 @@ from utils import slot_table
 
 MIGRATION_CYCLES = 10
 
+# Retriable error substrings returned when topology changes during multi-shard execution
+RETRIABLE_ERROR_SUBSTRINGS = (
+    "cluster topology change during execution",
+    "missing slot ownership metadata",
+    "Query requires unavailable slots",
+    "Please retry",
+)
+
+
+def is_retriable_error(msg: str) -> bool:
+    return any(sub in msg for sub in RETRIABLE_ERROR_SUBSTRINGS)
+
 
 def test_asm_without_data():
     env = Env(shardsCount=2, decodeResponses=True)
@@ -64,12 +76,8 @@ def test_asm_with_data_and_queries_during_migrations():
             except Exception as e:
                 # Safe failure mode: topology changed mid-execution, so the command asks for retry.
                 msg = str(e)
-                assert (
-                    "cluster topology change during execution" in msg
-                    or "missing slot ownership metadata" in msg
-                    or "Query requires unavailable slots" in msg
-                    or "Please retry" in msg
-                ), msg
+                assert is_retriable_error(msg), msg
+                print(f"[ASM retriable error] {msg[:80]}{'...' if len(msg) > 80 else ''}")
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
@@ -84,6 +92,81 @@ def test_asm_with_data_and_queries_during_migrations():
             done.set()
             # This will raise an exception in case the validation function failed (or got stuck)
             future.result()
+
+
+def test_asm_multishard_queryindex_retriable_error_and_correctness():
+    """
+    Regular flow test: run TS.QUERYINDEX during ASM migrations.
+    - Every successful response must match expected keys (fail if incorrect).
+    - Every exception must be a known retriable error (fail if not).
+    - We must observe at least one retriable error (validates the retry path).
+    """
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 500 if not (VALGRIND or SANITIZER) else 100
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=1, label1=17)
+
+    expected_keys = set()
+    for i in range(number_of_keys):
+        hslot = i * (2**14 - 1) // (number_of_keys - 1)
+        expected_keys.add(f"ts:{{{slot_table[hslot]}}}")
+
+    conn = env.getConnection(0)
+    command = "TS.QUERYINDEX label1=17"
+
+    # Stressful enough to reliably hit retriable errors: more migration cycles
+    migration_cycles = 20 if not (VALGRIND or SANITIZER) else MIGRATION_CYCLES
+
+    done = threading.Event()
+    saw_retriable_error = threading.Event()
+    validation_failed = threading.Event()
+    failure_message = [None]  # list to allow assignment from nested function
+    retriable_error_count = [0]  # list so nested function can mutate
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            try:
+                res = conn.execute_command(command)
+                if not isinstance(res, list):
+                    validation_failed.set()
+                    failure_message[0] = f"Expected list, got {type(res).__name__}"
+                    return
+                if set(res) != expected_keys:
+                    validation_failed.set()
+                    failure_message[0] = (
+                        f"Response correctness failed: expected {len(expected_keys)} keys, "
+                        f"got {len(res)}; diff: {expected_keys.symmetric_difference(set(res))}"
+                    )
+                    return
+            except Exception as e:
+                msg = str(e)
+                if not is_retriable_error(msg):
+                    validation_failed.set()
+                    failure_message[0] = f"Non-retriable error: {msg}"
+                    return
+                saw_retriable_error.set()
+                retriable_error_count[0] += 1
+                print(f"[ASM retriable error] {msg[:80]}{'...' if len(msg) > 80 else ''}")
+
+    def migrate_slots():
+        for _ in range(migration_cycles):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        for future in as_completed(futures):
+            done.set()
+            future.result()
+
+    assert not validation_failed.is_set(), failure_message[0]
+    assert saw_retriable_error.is_set(), (
+        "Expected to see at least one retriable error during ASM migrations (retry path not exercised)"
+    )
+    print(f"[ASM] Saw {retriable_error_count[0]} retriable error(s) — stress level sufficient.")
 
 
 def test_asm_multishard_queryindex_is_consistent_or_retryable():
@@ -113,12 +196,8 @@ def test_asm_multishard_queryindex_is_consistent_or_retryable():
             except Exception as e:
                 # Safe failure mode: topology changed mid-execution, so the command asks for retry.
                 msg = str(e)
-                assert (
-                    "cluster topology change during execution" in msg
-                    or "missing slot ownership metadata" in msg
-                    or "Query requires unavailable slots" in msg
-                    or "Please retry" in msg
-                ), msg
+                assert is_retriable_error(msg), msg
+                print(f"[ASM retriable error] {msg[:80]}{'...' if len(msg) > 80 else ''}")
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
