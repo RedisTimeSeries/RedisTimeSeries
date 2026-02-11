@@ -74,9 +74,6 @@ jobs:
     needs: validate-and-check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v4 // workdid
-
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
@@ -95,11 +92,6 @@ jobs:
           fi
           echo "Tag $TAG does not exist, proceeding..."
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Configure Git
         working-directory: release-branch
         run: |
@@ -107,8 +99,41 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Set version
+        shell: python
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          python scripts/set_version.py "${{ inputs.version }}" --version-file release-branch/src/version.h
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          major, minor, patch = map(int, version.split('.'))
+          version_file = Path('release-branch/src/version.h')
+
+          if not version_file.exists():
+              print(f"::error::Version file not found: {version_file}")
+              sys.exit(1)
+
+          content = version_file.read_text()
+          current = re.search(
+              r'#define REDISTIMESERIES_VERSION_MAJOR (\d+)\n'
+              r'#define REDISTIMESERIES_VERSION_MINOR (\d+)\n'
+              r'#define REDISTIMESERIES_VERSION_PATCH (\d+)',
+              content
+          )
+          print(f"Current version: {current.group(1)}.{current.group(2)}.{current.group(3)}")
+
+          content = re.sub(
+              r'(#define REDISTIMESERIES_VERSION_MAJOR )\d+\n'
+              r'(#define REDISTIMESERIES_VERSION_MINOR )\d+\n'
+              r'(#define REDISTIMESERIES_VERSION_PATCH )\d+',
+              rf'\g<1>{major}\n\g<2>{minor}\n\g<3>{patch}',
+              content
+          )
+          version_file.write_text(content)
+          print(f"Updated to version {major}.{minor}.{patch}")
 
       - name: Commit version bump
         working-directory: release-branch
