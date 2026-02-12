@@ -418,13 +418,6 @@ runs:
                 }
               },
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "<\($workflow_url)|View Workflow Run>"
-                }
-              },
-              {
                 "type": "divider"
               },
               {
