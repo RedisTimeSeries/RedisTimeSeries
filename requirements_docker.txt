@@ -1,6 +1,0 @@
-setuptools<81
-pip
-jinja2
-ramp-packer
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
-statistics

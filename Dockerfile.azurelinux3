@@ -1,42 +1,40 @@
 FROM mcr.microsoft.com/azurelinux/base/core:3.0
 
-WORKDIR /workspace
+WORKDIR /app
 
-# Install dependencies
 RUN tdnf -y update && \
     tdnf install -y \
-    git \
-    wget \
-    curl \
-    gcc \
-    g++ \
-    make \
-    cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
-    jq \
-    ca-certificates \
-    tar
+        git \
+        wget \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        libffi-devel \
+        openssl-devel \
+        build-essential \
+        zlib-devel \
+        bzip2-devel \
+        readline-devel \
+        which \
+        unzip \
+        jq \ 
+        ca-certificates
+RUN wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz && \
+    tar -xf Python-3.9.9.tgz && \
+    cd Python-3.9.9 && \
+    ./configure --enable-optimizations && \
+    make -j $(nproc) && \
+    make altinstall && \
+    cd .. && \
+    rm -rf Python-3.9.9 Python-3.9.9.tgz && \
+    ln -sf /usr/local/bin/python3.9 /usr/local/bin/python3 && \
+    ln -sf /usr/local/bin/pip3.9 /usr/local/bin/pip3
 
-COPY .install /workspace/.install
+RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# Install Redis (SANITIZER can be 'address' for ASAN builds)
-ARG REDIS_REF=unstable
-ARG SANITIZER=
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install
 
-RUN chmod +x .install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} .install/install_redis.sh
-
-# Install uv and Python environment
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
-ENV PATH="/usr/local/bin:${PATH}"
-RUN uv venv --python=3.11 /opt/.venv
-ENV VIRTUAL_ENV=/opt/.venv
-ENV PATH="/opt/.venv/bin:${PATH}"
-COPY requirements_docker.txt /workspace/requirements.txt
-RUN uv pip install -r requirements.txt
+CMD [ "/bin/bash" ]
