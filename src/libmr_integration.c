@@ -765,7 +765,8 @@ static Series *ParseSeries(const redisReply *reply) {
         // This could be the compact way for a single sample, in which case we simply extract it
         if (samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
             timestamp = samplesElement->element[0]->integer;
-            parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len, &value);
+            parse_double_cstr(
+                samplesElement->element[1]->str, samplesElement->element[1]->len, &value);
             SeriesAddSample(result, timestamp, value);
             return result;
         }
