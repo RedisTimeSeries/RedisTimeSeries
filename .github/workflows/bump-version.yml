@@ -56,7 +56,6 @@ jobs:
           RELEASE_BRANCH=$(echo "$VERSION" | cut -d. -f1,2)
           echo "Derived release branch: $RELEASE_BRANCH"
           echo "release_branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
-
       - name: Check nightly build status on release branch
         if: ${{ !inputs.skip_nightly_check }}
         run: |
@@ -77,7 +76,6 @@ jobs:
           RUN_URL=$(echo "$WORKFLOW_RUNS" | jq -r '.html_url')
 
           echo "Latest nightly run: $RUN_URL"
-          echo "Status: $STATUS"
 
           if [ "$STATUS" != "success" ]; then
             echo "::error::Latest nightly build did not succeed (status: $STATUS). Use 'skip_nightly_check' to override."
