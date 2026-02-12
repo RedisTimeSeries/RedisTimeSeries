@@ -646,7 +646,7 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
     return ret;
 }
 
-static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *) {
+static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
     RedisModule_ReplyWithArray(ctx, sra->num_ranges);
     for (int i = 0; i < sra->num_ranges; i++) {
