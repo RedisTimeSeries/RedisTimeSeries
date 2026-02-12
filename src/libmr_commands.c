@@ -159,7 +159,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     } else {
         size_t totalLen = 0;
         array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
-        RedisModule_ReplyWithArray(ctx, totalLen);
+        ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
     array_foreach(nodesResults, seriesList, {
