@@ -25,7 +25,6 @@
 #include "tsdb.h"
 #include "version.h"
 
-#include "fast_double_parser_c/fast_double_parser_c.h"
 #include "LibMR/src/cluster.h"
 #include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
@@ -40,7 +39,6 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
-#include <math.h>
 
 #ifndef REDISTIMESERIES_GIT_SHA
 #define REDISTIMESERIES_GIT_SHA "unknown"

@@ -10,10 +10,27 @@
 #define MODULE_H
 
 #include <stdbool.h>
+#include <math.h>
 
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
+
+#include "fast_double_parser_c/fast_double_parser_c.h"
+
+static inline double parse_double_cstr(const char *str, size_t len) {
+    double value;
+    char const *const endptr = fast_double_parser_c_parse_number(str, &value);
+    return endptr && endptr - str == len ? value : NAN;
+}
+
+static inline double parse_double(const RedisModuleString *valueStr) {
+    // debugme: should take newer version (with nan support)
+    // debugme: also: this function is problematic because valueStr doesn't have to be null-terminated, so we need to refactor it
+    size_t len;
+    const char *valueCStr = RedisModule_StringPtrLen(valueStr, &len);
+    return parse_double_cstr(valueCStr, len);
+}
 
 /// @brief Check if the key is allowed by the ACLs for the current user.
 /// @param ctx The redis module context.
