@@ -96,7 +96,12 @@ jobs:
           RUN_BRANCH=$(echo "$RUN_INFO" | jq -r '.head_branch')
           RUN_STATUS=$(echo "$RUN_INFO" | jq -r '.conclusion // .status')
 
-          echo "job_results=$NORMALIZED" >> $GITHUB_OUTPUT
+          # Use heredoc for JSON to handle special characters properly
+          {
+            echo "job_results<<EOF"
+            echo "$NORMALIZED"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
           echo "source=run-$RUN_ID" >> $GITHUB_OUTPUT
           echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
           echo "run_commit=$RUN_COMMIT" >> $GITHUB_OUTPUT
@@ -162,19 +167,38 @@ jobs:
               ;;
           esac
 
-          echo "job_results=$(echo "$JOB_RESULTS" | jq -c .)" >> $GITHUB_OUTPUT
+          # Use heredoc for JSON to handle special characters properly
+          COMPACT_JSON=$(echo "$JOB_RESULTS" | jq -c .)
+          {
+            echo "job_results<<EOF"
+            echo "$COMPACT_JSON"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
           echo "source=mock-$SCENARIO" >> $GITHUB_OUTPUT
           echo "Testing with mock scenario: $SCENARIO"
 
       - name: Determine job results to use
         id: results
+        env:
+          FETCH_JOB_RESULTS: ${{ steps.fetch-results.outputs.job_results }}
+          FETCH_SOURCE: ${{ steps.fetch-results.outputs.source }}
+          MOCK_JOB_RESULTS: ${{ steps.mock-results.outputs.job_results }}
+          MOCK_SOURCE: ${{ steps.mock-results.outputs.source }}
         run: |
-          if [ -n "${{ steps.fetch-results.outputs.job_results }}" ]; then
-            echo "job_results=${{ steps.fetch-results.outputs.job_results }}" >> $GITHUB_OUTPUT
-            echo "source=${{ steps.fetch-results.outputs.source }}" >> $GITHUB_OUTPUT
+          if [ -n "$FETCH_JOB_RESULTS" ]; then
+            {
+              echo "job_results<<EOF"
+              echo "$FETCH_JOB_RESULTS"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+            echo "source=$FETCH_SOURCE" >> $GITHUB_OUTPUT
           else
-            echo "job_results=${{ steps.mock-results.outputs.job_results }}" >> $GITHUB_OUTPUT
-            echo "source=${{ steps.mock-results.outputs.source }}" >> $GITHUB_OUTPUT
+            {
+              echo "job_results<<EOF"
+              echo "$MOCK_JOB_RESULTS"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+            echo "source=$MOCK_SOURCE" >> $GITHUB_OUTPUT
           fi
 
       - name: Run test summary action
@@ -184,11 +208,13 @@ jobs:
           redis-ref: 'unstable'
           job-results: ${{ steps.results.outputs.job_results }}
           slack-webhook-url: ${{ secrets.TEST_SLACK_WH }}
-          send-notification: ${{ inputs.send-slack-message == true && 'true' || 'false' }}
+          send-notification: 'true'
           repository: ${{ github.repository }}
           commit-sha: ${{ github.sha }}
 
       - name: Display results
+        env:
+          JOB_RESULTS_JSON: ${{ steps.results.outputs.job_results }}
         run: |
           echo "## Test Summary Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -199,6 +225,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Input Job Results" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
-          echo '${{ steps.results.outputs.job_results }}' | jq . >> $GITHUB_STEP_SUMMARY
+          echo "$JOB_RESULTS_JSON" | jq . >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 

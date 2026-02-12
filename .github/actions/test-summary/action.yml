@@ -68,9 +68,14 @@ runs:
     - name: Aggregate job results
       id: aggregate
       shell: bash
+      env:
+        JOB_RESULTS_INPUT: ${{ inputs.job-results }}
       run: |
-        # Parse job results JSON
-        JOB_RESULTS='${{ inputs.job-results }}'
+        # Parse job results JSON from environment variable to avoid substitution issues
+        JOB_RESULTS="$JOB_RESULTS_INPUT"
+
+        # Debug: show what we received
+        echo "Received job results: $JOB_RESULTS"
         
         # Initialize counters
         FAILED_JOBS=""
@@ -85,15 +90,15 @@ runs:
         # Process each job
         for job in $(echo "$JOB_RESULTS" | jq -r 'keys[]'); do
           result=$(echo "$JOB_RESULTS" | jq -r --arg job "$job" '.[$job]')
-          ((TOTAL_JOBS++))
-          
+          TOTAL_JOBS=$((TOTAL_JOBS + 1))
+
           case "$result" in
             "success")
-              ((PASSED_JOBS++))
+              PASSED_JOBS=$((PASSED_JOBS + 1))
               ;;
             "failure")
               OVERALL_STATUS="failure"
-              ((FAILED_COUNT++))
+              FAILED_COUNT=$((FAILED_COUNT + 1))
               FAILED_JOBS="${FAILED_JOBS}• *${job}*\n"
               [[ -n "$FAILED_JOBS_ARRAY" ]] && FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY},"
               FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY}\"${job}\""
@@ -102,14 +107,14 @@ runs:
               if [[ "$OVERALL_STATUS" != "failure" ]]; then
                 OVERALL_STATUS="cancelled"
               fi
-              ((CANCELLED_COUNT++))
+              CANCELLED_COUNT=$((CANCELLED_COUNT + 1))
               FAILED_JOBS="${FAILED_JOBS}• *${job}* (cancelled)\n"
               ;;
             "skipped")
               if [[ "$OVERALL_STATUS" == "success" ]]; then
                 OVERALL_STATUS="skipped"
               fi
-              ((SKIPPED_COUNT++))
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
               FAILED_JOBS="${FAILED_JOBS}• *${job}* (skipped)\n"
               ;;
           esac
@@ -190,112 +195,123 @@ runs:
       id: send-slack
       if: inputs.send-notification == 'true' && steps.validate.outputs.valid == 'true'
       shell: bash
+      env:
+        FAILED_JOBS_TEXT: ${{ steps.aggregate.outputs.failed_jobs }}
+        PASSED_JOBS: ${{ steps.aggregate.outputs.passed_jobs }}
+        FAILED_COUNT: ${{ steps.aggregate.outputs.failed_count }}
+        SKIPPED_COUNT: ${{ steps.aggregate.outputs.skipped_count }}
+        CANCELLED_COUNT: ${{ steps.aggregate.outputs.cancelled_count }}
+        REPOSITORY: ${{ inputs.repository }}
+        REDIS_REF: ${{ inputs.redis-ref }}
+        SHORT_SHA: ${{ steps.commit-info.outputs.short_sha }}
+        COMMIT_MESSAGE: ${{ steps.commit-info.outputs.commit_message }}
+        WORKFLOW_URL: ${{ steps.urls.outputs.workflow_url }}
       run: |
         # Build the overall summary line
-        SUMMARY="✅ Passed: ${{ steps.aggregate.outputs.passed_jobs }}"
-        if [[ "${{ steps.aggregate.outputs.failed_count }}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ❌ Failed: ${{ steps.aggregate.outputs.failed_count }}"
+        SUMMARY="✅ Passed: ${PASSED_JOBS}"
+        if [[ "${FAILED_COUNT}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ❌ Failed: ${FAILED_COUNT}"
         fi
-        if [[ "${{ steps.aggregate.outputs.skipped_count }}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ⏭️ Skipped: ${{ steps.aggregate.outputs.skipped_count }}"
+        if [[ "${SKIPPED_COUNT}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ⏭️ Skipped: ${SKIPPED_COUNT}"
         fi
-        if [[ "${{ steps.aggregate.outputs.cancelled_count }}" != "0" ]]; then
-          SUMMARY="${SUMMARY} | ⚠️ Cancelled: ${{ steps.aggregate.outputs.cancelled_count }}"
+        if [[ "${CANCELLED_COUNT}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ⚠️ Cancelled: ${CANCELLED_COUNT}"
         fi
 
-        # Escape failed jobs for JSON
-        FAILED_JOBS_ESCAPED=$(echo '${{ steps.aggregate.outputs.failed_jobs }}' | jq -Rs . | sed 's/^"//;s/"$//')
-
-        # Build payload
-        PAYLOAD=$(cat <<'PAYLOAD_EOF'
-        {
-          "text": "Event Nightly Test Results",
-          "blocks": [
-            {
-              "type": "header",
-              "text": {
-                "type": "plain_text",
-                "text": "${{ inputs.repository }} - Event Nightly"
-              }
-            },
-            {
-              "type": "section",
-              "fields": [
-                {
-                  "type": "mrkdwn",
-                  "text": "*Redis Version:*\n${{ inputs.redis-ref }}"
-                },
-                {
-                  "type": "mrkdwn",
-                  "text": "*Build:*\n${{ steps.commit-info.outputs.short_sha }}"
+        # Build payload using jq to properly escape all values
+        PAYLOAD=$(jq -n \
+          --arg repo "$REPOSITORY" \
+          --arg redis_ref "$REDIS_REF" \
+          --arg short_sha "$SHORT_SHA" \
+          --arg commit_msg "$COMMIT_MESSAGE" \
+          --arg summary "$SUMMARY" \
+          --arg workflow_url "$WORKFLOW_URL" \
+          --arg failed_jobs "$FAILED_JOBS_TEXT" \
+          '{
+            "text": "Event Nightly Test Results",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "\($repo) - Event Nightly"
                 }
-              ]
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "*Commit:* ${{ steps.commit-info.outputs.commit_message }}"
-              }
-            },
-            {
-              "type": "divider"
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "*Overall Summary*\nSUMMARY_PLACEHOLDER"
-              }
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "<${{ steps.urls.outputs.workflow_url }}|View Workflow Run>"
-              }
-            },
-            {
-              "type": "divider"
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "*Failed Jobs:*\nFAILED_JOBS_PLACEHOLDER"
-              }
-            },
-            {
-              "type": "actions",
-              "elements": [
-                {
-                  "type": "button",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "Show Full Summary",
-                    "emoji": true
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Redis Version:*\n\($redis_ref)"
                   },
-                  "url": "${{ steps.urls.outputs.workflow_url }}",
-                  "style": "primary"
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Build:*\n\($short_sha)"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Commit:* \($commit_msg)"
                 }
-              ]
-            }
-          ]
-        }
-        PAYLOAD_EOF
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Overall Summary*\n\($summary)"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<\($workflow_url)|View Workflow Run>"
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Failed Jobs:*\n\($failed_jobs)"
+                }
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "Show Full Summary",
+                      "emoji": true
+                    },
+                    "url": "\($workflow_url)",
+                    "style": "primary"
+                  }
+                ]
+              }
+            ]
+          }'
         )
 
-        # Replace placeholders
-        PAYLOAD=$(echo "$PAYLOAD" | sed "s|SUMMARY_PLACEHOLDER|${SUMMARY}|g")
-        PAYLOAD=$(echo "$PAYLOAD" | sed "s|FAILED_JOBS_PLACEHOLDER|${FAILED_JOBS_ESCAPED}|g")
-
         # Send to Slack
+        SLACK_WEBHOOK="${{ inputs.slack-webhook-url }}"
         RESPONSE_FILE=$(mktemp)
         HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
           -X POST \
           -H 'Content-type: application/json' \
           --data "$PAYLOAD" \
-          "${{ inputs.slack-webhook-url }}")
+          "$SLACK_WEBHOOK")
 
         RESPONSE=$(cat "$RESPONSE_FILE")
         rm -f "$RESPONSE_FILE"
