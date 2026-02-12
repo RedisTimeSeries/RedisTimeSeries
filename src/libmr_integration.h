@@ -1,4 +1,5 @@
 #include "RedisModulesSDK/redismodule.h"
+#include "LibMR/src/utils/arr.h"
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "tsdb.h"
@@ -71,9 +72,22 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
+typedef struct SlotRangesRecord
+{
+    Record base;
+    RedisModuleSlotRangeArray *slotRanges;
+} SlotRangesRecord;
+
+typedef struct SeriesListRecord
+{
+    Record base;
+    ARR(Series*) seriesList;
+} SeriesListRecord;
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
+MRRecordType *GetSlotRangesRecordType();
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);

@@ -26,7 +26,8 @@ static inline double parse_double_cstr(const char *str, size_t len) {
 
 static inline double parse_double(const RedisModuleString *valueStr) {
     // debugme: should take newer version (with nan support)
-    // debugme: also: this function is problematic because valueStr doesn't have to be null-terminated, so we need to refactor it
+    // debugme: also: this function is problematic because valueStr doesn't have to be
+    // null-terminated, so we need to refactor it
     size_t len;
     const char *valueCStr = RedisModule_StringPtrLen(valueStr, &len);
     return parse_double_cstr(valueCStr, len);
