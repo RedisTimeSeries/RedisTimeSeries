@@ -160,6 +160,8 @@ jobs:
 
       - name: Run tests
         run: |
+          # Capture test output to file for parsing by capture-test-results action
+          # The workspace is mounted, so test_output.log will be accessible outside the container
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
@@ -167,16 +169,23 @@ jobs:
             --security-opt seccomp=unconfined \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
-            make test \
+            bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }}
+              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}" || true
 
       - name: Fix test log permissions
-        if: failure()
+        if: always()
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" tests || true
           sudo chmod -R a+rX tests || true
+          sudo chown "$(id -u)":"$(id -g)" test_output.log || true
+
+      - name: Capture test results
+        if: always()
+        uses: ./.github/actions/capture-test-results
+        with:
+          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
 
       - name: Upload test artifacts
         if: failure()
