@@ -33,12 +33,12 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=2, decodeResponses=True)
+    env = Env(shardsCount=3, decodeResponses=True)  # debugme should be 2
     if env.env != "oss-cluster":
         env.skip()
 
-    number_of_keys = 10 if not (VALGRIND or SANITIZER) else 100
-    samples_per_key = 5
+    number_of_keys = 10  # debugme 1000 if not (VALGRIND or SANITIZER) else 100
+    samples_per_key = 5  # debugme 150
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
@@ -51,7 +51,7 @@ def test_asm_with_data_and_queries_during_migrations():
         assert len(samples) == samples_per_key
         # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
 
-    time.sleep(1000)
+    time.sleep(1000)  # debugme
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
