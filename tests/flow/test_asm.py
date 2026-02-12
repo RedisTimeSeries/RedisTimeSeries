@@ -5,6 +5,7 @@ import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
+import redis
 
 from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
@@ -58,8 +59,17 @@ def test_asm_with_data_and_queries_during_migrations():
     done = threading.Event()
 
     def validate_command_in_a_loop():
+        # Note: should be the same as in libmr_commands.c
+        SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
-            validate_result(conn.execute_command(command))
+            try:
+                result = conn.execute_command(command)
+            except redis.exceptions.ResponseError as x:
+                error_message = str(x)
+                # An occasional SLOT_RANGES_ERROR is expected
+                assert error_message == SLOT_RANGES_ERROR, error_message
+                continue
+            validate_result(result)
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
