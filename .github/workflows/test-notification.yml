@@ -1,0 +1,204 @@
+name: Test Notification Action
+
+# Lightweight workflow to test the test-summary action without running full test suite
+# This allows rapid iteration on Slack notification formatting and logic
+#
+# Two modes:
+# 1. Use real job results from a previous workflow run (provide run-id)
+# 2. Use mock data for specific test scenarios (use mock-scenario)
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/test-summary/**'
+      - '.github/workflows/test-notification.yml'
+  workflow_dispatch:
+    inputs:
+      run-id:
+        description: 'Workflow run ID to fetch real results from. Leave empty to use mock data.'
+        required: false
+        type: string
+        default: '21529770374'  # Default to a known failed nightly run for testing
+      mock-scenario:
+        description: 'Mock scenario (only used if run-id is empty)'
+        required: false
+        type: choice
+        options:
+          - all-success
+          - some-failures
+          - all-failures
+          - mixed-with-skipped
+        default: 'some-failures'
+      send-slack-message:
+        description: 'Actually send Slack notification'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read  # Required to fetch job results from other workflow runs
+
+jobs:
+  test-notification:
+    name: Test Notification Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch real job results from previous run
+        id: fetch-results
+        if: ${{ inputs.run-id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID="${{ inputs.run-id }}"
+          echo "Fetching job results from workflow run: $RUN_ID"
+
+          # Fetch all jobs for the specified run
+          JOBS_RESPONSE=$(gh api "/repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs" --paginate)
+
+          # Extract job names and conclusions, filtering to our target jobs
+          # The API returns 'conclusion' which maps to what we need
+          # Possible values: success, failure, cancelled, skipped, null (if still running)
+          JOB_RESULTS=$(echo "$JOBS_RESPONSE" | jq -c '
+            .jobs |
+            map(select(.name | test("^(linter|build-linux-x86|mariner|arm64|macos|linux-valgrind|linux-sanitizer)"; "i"))) |
+            map({(.name | gsub(" .*"; "") | ascii_downcase): (.conclusion // "unknown")}) |
+            add // {}
+          ')
+
+          # Normalize job names to match expected format
+          # The reusable workflow jobs may have different display names
+          NORMALIZED=$(echo "$JOBS_RESPONSE" | jq -c '
+            .jobs |
+            reduce .[] as $job ({};
+              if ($job.name | test("linter"; "i")) then . + {"linter": ($job.conclusion // "unknown")}
+              elif ($job.name | test("linux.*x86|x86.*linux|build-linux-x86"; "i")) then . + {"build-linux-x86": ($job.conclusion // "unknown")}
+              elif ($job.name | test("mariner"; "i")) then . + {"mariner": ($job.conclusion // "unknown")}
+              elif ($job.name | test("arm64|aarch64"; "i")) then . + {"arm64": ($job.conclusion // "unknown")}
+              elif ($job.name | test("macos|darwin"; "i")) then . + {"macos": ($job.conclusion // "unknown")}
+              elif ($job.name | test("valgrind"; "i")) then . + {"linux-valgrind": ($job.conclusion // "unknown")}
+              elif ($job.name | test("sanitizer|asan|msan"; "i")) then . + {"linux-sanitizer": ($job.conclusion // "unknown")}
+              else .
+              end
+            )
+          ')
+
+          echo "Raw job results: $JOB_RESULTS"
+          echo "Normalized job results: $NORMALIZED"
+
+          # Get workflow run info for context
+          RUN_INFO=$(gh api "/repos/${{ github.repository }}/actions/runs/${RUN_ID}")
+          RUN_URL=$(echo "$RUN_INFO" | jq -r '.html_url')
+          RUN_COMMIT=$(echo "$RUN_INFO" | jq -r '.head_sha')
+          RUN_BRANCH=$(echo "$RUN_INFO" | jq -r '.head_branch')
+          RUN_STATUS=$(echo "$RUN_INFO" | jq -r '.conclusion // .status')
+
+          echo "job_results=$NORMALIZED" >> $GITHUB_OUTPUT
+          echo "source=run-$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+          echo "run_commit=$RUN_COMMIT" >> $GITHUB_OUTPUT
+          echo "run_branch=$RUN_BRANCH" >> $GITHUB_OUTPUT
+          echo "run_status=$RUN_STATUS" >> $GITHUB_OUTPUT
+
+          echo "## Fetched from Workflow Run" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID:** [$RUN_ID]($RUN_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** $RUN_BRANCH" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${RUN_COMMIT:0:7}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** $RUN_STATUS" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set mock job results
+        id: mock-results
+        if: ${{ inputs.run-id == '' }}
+        run: |
+          SCENARIO="${{ inputs.mock-scenario || 'some-failures' }}"
+
+          case "$SCENARIO" in
+            "all-success")
+              JOB_RESULTS='{
+                "linter": "success",
+                "build-linux-x86": "success",
+                "mariner": "success",
+                "arm64": "success",
+                "macos": "success",
+                "linux-valgrind": "success",
+                "linux-sanitizer": "success"
+              }'
+              ;;
+            "some-failures")
+              JOB_RESULTS='{
+                "linter": "success",
+                "build-linux-x86": "failure",
+                "mariner": "success",
+                "arm64": "success",
+                "macos": "failure",
+                "linux-valgrind": "success",
+                "linux-sanitizer": "success"
+              }'
+              ;;
+            "all-failures")
+              JOB_RESULTS='{
+                "linter": "failure",
+                "build-linux-x86": "failure",
+                "mariner": "failure",
+                "arm64": "failure",
+                "macos": "failure",
+                "linux-valgrind": "failure",
+                "linux-sanitizer": "failure"
+              }'
+              ;;
+            "mixed-with-skipped")
+              JOB_RESULTS='{
+                "linter": "success",
+                "build-linux-x86": "failure",
+                "mariner": "skipped",
+                "arm64": "cancelled",
+                "macos": "success",
+                "linux-valgrind": "skipped",
+                "linux-sanitizer": "success"
+              }'
+              ;;
+          esac
+
+          echo "job_results=$(echo "$JOB_RESULTS" | jq -c .)" >> $GITHUB_OUTPUT
+          echo "source=mock-$SCENARIO" >> $GITHUB_OUTPUT
+          echo "Testing with mock scenario: $SCENARIO"
+
+      - name: Determine job results to use
+        id: results
+        run: |
+          if [ -n "${{ steps.fetch-results.outputs.job_results }}" ]; then
+            echo "job_results=${{ steps.fetch-results.outputs.job_results }}" >> $GITHUB_OUTPUT
+            echo "source=${{ steps.fetch-results.outputs.source }}" >> $GITHUB_OUTPUT
+          else
+            echo "job_results=${{ steps.mock-results.outputs.job_results }}" >> $GITHUB_OUTPUT
+            echo "source=${{ steps.mock-results.outputs.source }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run test summary action
+        id: test-summary
+        uses: ./.github/actions/test-summary
+        with:
+          redis-ref: 'unstable'
+          job-results: ${{ steps.results.outputs.job_results }}
+          slack-webhook-url: ${{ secrets.TEST_SLACK_WH }}
+          send-notification: ${{ inputs.send-slack-message == true && 'true' || 'false' }}
+          repository: ${{ github.repository }}
+          commit-sha: ${{ github.sha }}
+
+      - name: Display results
+        run: |
+          echo "## Test Summary Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Data Source:** ${{ steps.results.outputs.source }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall Status:** ${{ steps.test-summary.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed Jobs:** ${{ steps.test-summary.outputs.failed-jobs || 'none' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Notification Sent:** ${{ steps.test-summary.outputs.notification-sent }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Input Job Results" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.results.outputs.job_results }}' | jq . >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
