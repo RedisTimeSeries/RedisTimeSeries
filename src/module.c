@@ -723,33 +723,6 @@ static int internalAdd(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-static inline bool is_nan_string(const char *str, size_t len) {
-    if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
-        return true;
-    }
-    if (len == 4 && (strncasecmp(str, "-nan", 4) == 0 || strncasecmp(str, "+nan", 4) == 0)) {
-        return true;
-    }
-    return false;
-}
-
-static inline bool parse_double(const RedisModuleString *valueStr, double *outValue) {
-    size_t len;
-    char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-
-    char const *const endptr = fast_double_parser_c_parse_number(valueCStr, outValue);
-    if (endptr && (size_t)(endptr - valueCStr) == len) {
-        return true;
-    }
-
-    if (is_nan_string(valueCStr, len)) {
-        *outValue = NAN;
-        return true;
-    }
-
-    return false;
-}
-
 static inline int add(RedisModuleCtx *ctx,
                       RedisModuleString *keyName,
                       const RedisModuleString *timestampStr,

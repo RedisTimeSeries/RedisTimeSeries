@@ -18,19 +18,42 @@
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
 
-static inline double parse_double_cstr(const char *str, size_t len) {
-    double value;
-    char const *const endptr = fast_double_parser_c_parse_number(str, &value);
-    return endptr && endptr - str == len ? value : NAN;
+static inline bool is_nan_string(const char *str, size_t len) {
+    if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
+        return true;
+    }
+    if (len == 4 && (strncasecmp(str, "-nan", 4) == 0 || strncasecmp(str, "+nan", 4) == 0)) {
+        return true;
+    }
+    return false;
 }
 
-static inline double parse_double(const RedisModuleString *valueStr) {
-    // debugme: should take newer version (with nan support)
-    // debugme: also: this function is problematic because valueStr doesn't have to be
-    // null-terminated, so we need to refactor it
+static inline bool parse_double_cstr(const char *str, size_t len, double *outValue) {
+    double value;
+    char const *const endptr = fast_double_parser_c_parse_number(str, &value);
+    if (unlikely(endptr > str + len)) {
+        // Unlikely, but could be that str[len] is a digit (or a dot)
+        // In such cases we copy, null-terminate and try again
+        char buf[1 + len];
+        strncpy(buf, str, len);
+        buf[len] = '\0';
+        return parse_double_cstr(buf, len, outValue);
+    }
+    if (unlikely(endptr == NULL || endptr - str != len)) {
+        if (likely(is_nan_string(str, len)))
+            value = NAN;
+        else
+            return false;
+    }
+    if (likely(outValue != NULL))
+        *outValue;
+    return true;
+}
+
+static inline bool parse_double(const RedisModuleString *valueStr, double *outValue) {
     size_t len;
-    const char *valueCStr = RedisModule_StringPtrLen(valueStr, &len);
-    return parse_double_cstr(valueCStr, len);
+    char const *const valueCStr = RedisModule_StringPtrLen(valueStr, &len);
+    return parse_double_cstr(valueCStr, len, outValue);
 }
 
 /// @brief Check if the key is allowed by the ACLs for the current user.
