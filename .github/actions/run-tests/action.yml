@@ -32,4 +32,8 @@ runs:
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        # Capture test output to file for parsing by capture-test-results action
+        TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
+        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server 2>&1 | tee "$TEST_OUTPUT_FILE" || true
+        # Store path for later steps (capture-test-results action)
+        echo "TEST_OUTPUT_FILE=$TEST_OUTPUT_FILE" >> $GITHUB_ENV
