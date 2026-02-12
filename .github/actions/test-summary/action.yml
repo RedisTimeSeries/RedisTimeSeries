@@ -27,6 +27,14 @@ inputs:
     description: 'Full commit SHA'
     required: false
     default: ${{ github.sha }}
+  test-mode:
+    description: 'If true, adds visual indicators that this is a TEST/MOCK notification'
+    required: false
+    default: 'false'
+  data-source:
+    description: 'Description of data source (e.g., "Mock Scenario - some-failures" or "Fetched from Run #12345")'
+    required: false
+    default: ''
 
 outputs:
   status:
@@ -319,7 +327,16 @@ runs:
         TOTAL_TESTS_SKIPPED: ${{ steps.test-metrics.outputs.total_skipped }}
         TOTAL_TESTS: ${{ steps.test-metrics.outputs.total_tests }}
         FAILED_OS_SUMMARY: ${{ steps.test-metrics.outputs.failed_os_summary }}
+        OS_SUMMARY: ${{ steps.test-metrics.outputs.os_summary }}
+        TEST_MODE: ${{ inputs.test-mode }}
+        DATA_SOURCE: ${{ inputs.data-source }}
       run: |
+        # Determine if this is a test/mock notification
+        IS_TEST_MODE="false"
+        if [[ "$TEST_MODE" == "true" ]]; then
+          IS_TEST_MODE="true"
+        fi
+
         # Build the job-level summary line
         JOB_SUMMARY="✅ Jobs Passed: ${PASSED_JOBS}"
         if [[ "${FAILED_COUNT}" != "0" ]]; then
@@ -346,20 +363,37 @@ runs:
           TEST_SUMMARY="No granular test metrics available"
         fi
 
-        # Fix Platform Results: if there are job-level failures but FAILED_OS_SUMMARY
-        # shows "All platforms passed", update it to reflect the job failures
-        PLATFORM_RESULTS="$FAILED_OS_SUMMARY"
+        # Determine platform results to show
+        # When there are failures, show ALL platform details for full visibility
+        # When all passed, show a summary message
         HAS_JOB_FAILURES=false
         if [[ "${FAILED_COUNT}" != "0" ]] || [[ "${CANCELLED_COUNT}" != "0" ]] || [[ "${SKIPPED_COUNT}" != "0" ]]; then
           HAS_JOB_FAILURES=true
         fi
 
-        # If FAILED_OS_SUMMARY indicates all passed but we have job failures, update the message
-        if [[ "$HAS_JOB_FAILURES" == "true" ]] && [[ "$PLATFORM_RESULTS" == *"All platforms passed"* ]]; then
-          PLATFORM_RESULTS="⚠️ See Failed Jobs section above for details"
+        # Check if we have any platform-level failures from artifacts
+        HAS_PLATFORM_FAILURES=false
+        if [[ "$FAILED_OS_SUMMARY" != *"All platforms passed"* ]] && [[ -n "$FAILED_OS_SUMMARY" ]]; then
+          HAS_PLATFORM_FAILURES=true
+        fi
+
+        # Build platform results section
+        if [[ "$HAS_JOB_FAILURES" == "true" ]] || [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
+          # Show all platform details when there are any failures
+          if [[ -n "$OS_SUMMARY" ]] && [[ "$OS_SUMMARY" != "No test result artifacts found" ]]; then
+            PLATFORM_RESULTS="$OS_SUMMARY"
+          elif [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
+            PLATFORM_RESULTS="$FAILED_OS_SUMMARY"
+          else
+            PLATFORM_RESULTS="⚠️ No platform-level details available. Check individual job logs."
+          fi
+        else
+          # All passed - show success message
+          PLATFORM_RESULTS="✅ All platforms passed!"
         fi
 
         # Build payload using jq to properly escape all values
+        # When in test mode, add visual indicators to distinguish from real notifications
         PAYLOAD=$(jq -n \
           --arg repo "$REPOSITORY" \
           --arg redis_ref "$REDIS_REF" \
@@ -370,87 +404,123 @@ runs:
           --arg workflow_url "$WORKFLOW_URL" \
           --arg failed_jobs "$FAILED_JOBS_TEXT" \
           --arg failed_os "$PLATFORM_RESULTS" \
-          '{
-            "text": "Event Nightly Test Results",
-            "blocks": [
-              {
-                "type": "header",
-                "text": {
-                  "type": "plain_text",
-                  "text": "\($repo) - Event Nightly"
-                }
-              },
-              {
-                "type": "section",
-                "fields": [
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Redis Version:*\n\($redis_ref)"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Build:*\n\($short_sha)"
-                  }
-                ]
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Commit:* \($commit_msg)"
-                }
-              },
-              {
-                "type": "divider"
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Job Summary*\n\($job_summary)"
-                }
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Test Summary*\n\($test_summary)"
-                }
-              },
-              {
-                "type": "divider"
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Failed Jobs:*\n\($failed_jobs)"
-                }
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Platform Results:*\n\($failed_os)"
-                }
-              },
-              {
-                "type": "actions",
-                "elements": [
-                  {
-                    "type": "button",
-                    "text": {
-                      "type": "plain_text",
-                      "text": "Show Full Summary",
-                      "emoji": true
-                    },
-                    "url": "\($workflow_url)",
-                    "style": "primary"
-                  }
-                ]
+          --arg is_test_mode "$IS_TEST_MODE" \
+          --arg data_source "$DATA_SOURCE" \
+          '
+          # Build header text based on test mode
+          (if $is_test_mode == "true" then "🧪 TEST: \($repo) - Event Nightly" else "\($repo) - Event Nightly" end) as $header_text |
+          (if $is_test_mode == "true" then "🧪 TEST MESSAGE - Event Nightly Test Results" else "Event Nightly Test Results" end) as $fallback_text |
+
+          # Build the base blocks array
+          [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": $header_text
               }
-            ]
-          }'
+            }
+          ] +
+          # Add test mode warning block if in test mode
+          (if $is_test_mode == "true" then [
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "⚠️ *This is a TEST/MOCK notification* - not a real nightly build result"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Data Source:* \($data_source)"
+              }
+            },
+            {
+              "type": "divider"
+            }
+          ] else [] end) +
+          # Continue with standard blocks
+          [
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Redis Version:*\n\($redis_ref)"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Build:*\n\($short_sha)"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Commit:* \($commit_msg)"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Job Summary*\n\($job_summary)"
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Test Summary*\n\($test_summary)"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Failed Jobs:*\n\($failed_jobs)"
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Platform Details (arch-os):*\n\($failed_os)"
+              }
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Show Full Summary",
+                    "emoji": true
+                  },
+                  "url": "\($workflow_url)",
+                  "style": "primary"
+                }
+              ]
+            }
+          ] |
+          # Combine into final payload
+          {
+            "text": $fallback_text,
+            "blocks": .
+          }
+          '
         )
 
         # Send to Slack

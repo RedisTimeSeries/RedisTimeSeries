@@ -64,7 +64,7 @@ jobs:
           # Possible values: success, failure, cancelled, skipped, null (if still running)
           JOB_RESULTS=$(echo "$JOBS_RESPONSE" | jq -c '
             .jobs |
-            map(select(.name | test("^(linter|build-linux-x86|mariner|arm64|macos|linux-valgrind|linux-sanitizer)"; "i"))) |
+            map(select(.name | test("^(linter|build-linux-x64|build-linux-arm64|macos|linux-valgrind|linux-sanitizer)"; "i"))) |
             map({(.name | gsub(" .*"; "") | ascii_downcase): (.conclusion // "unknown")}) |
             add // {}
           ')
@@ -75,9 +75,8 @@ jobs:
             .jobs |
             reduce .[] as $job ({};
               if ($job.name | test("linter"; "i")) then . + {"linter": ($job.conclusion // "unknown")}
-              elif ($job.name | test("linux.*x86|x86.*linux|build-linux-x86"; "i")) then . + {"build-linux-x86": ($job.conclusion // "unknown")}
-              elif ($job.name | test("mariner"; "i")) then . + {"mariner": ($job.conclusion // "unknown")}
-              elif ($job.name | test("arm64|aarch64"; "i")) then . + {"arm64": ($job.conclusion // "unknown")}
+              elif ($job.name | test("x64.*linux|linux.*x64|build-linux-x64"; "i")) then . + {"build-linux-x64": ($job.conclusion // "unknown")}
+              elif ($job.name | test("arm64.*linux|linux.*arm64|build-linux-arm64|aarch64"; "i")) then . + {"build-linux-arm64": ($job.conclusion // "unknown")}
               elif ($job.name | test("macos|darwin"; "i")) then . + {"macos": ($job.conclusion // "unknown")}
               elif ($job.name | test("valgrind"; "i")) then . + {"linux-valgrind": ($job.conclusion // "unknown")}
               elif ($job.name | test("sanitizer|asan|msan"; "i")) then . + {"linux-sanitizer": ($job.conclusion // "unknown")}
@@ -124,9 +123,8 @@ jobs:
             "all-success")
               JOB_RESULTS='{
                 "linter": "success",
-                "build-linux-x86": "success",
-                "mariner": "success",
-                "arm64": "success",
+                "build-linux-x64": "success",
+                "build-linux-arm64": "success",
                 "macos": "success",
                 "linux-valgrind": "success",
                 "linux-sanitizer": "success"
@@ -135,9 +133,8 @@ jobs:
             "some-failures")
               JOB_RESULTS='{
                 "linter": "success",
-                "build-linux-x86": "failure",
-                "mariner": "success",
-                "arm64": "success",
+                "build-linux-x64": "failure",
+                "build-linux-arm64": "success",
                 "macos": "failure",
                 "linux-valgrind": "success",
                 "linux-sanitizer": "success"
@@ -146,9 +143,8 @@ jobs:
             "all-failures")
               JOB_RESULTS='{
                 "linter": "failure",
-                "build-linux-x86": "failure",
-                "mariner": "failure",
-                "arm64": "failure",
+                "build-linux-x64": "failure",
+                "build-linux-arm64": "failure",
                 "macos": "failure",
                 "linux-valgrind": "failure",
                 "linux-sanitizer": "failure"
@@ -157,9 +153,8 @@ jobs:
             "mixed-with-skipped")
               JOB_RESULTS='{
                 "linter": "success",
-                "build-linux-x86": "failure",
-                "mariner": "skipped",
-                "arm64": "cancelled",
+                "build-linux-x64": "failure",
+                "build-linux-arm64": "cancelled",
                 "macos": "success",
                 "linux-valgrind": "skipped",
                 "linux-sanitizer": "success"
@@ -201,6 +196,20 @@ jobs:
             echo "source=$MOCK_SOURCE" >> $GITHUB_OUTPUT
           fi
 
+      - name: Build data source description
+        id: data-source
+        run: |
+          SOURCE="${{ steps.results.outputs.source }}"
+          if [[ "$SOURCE" == mock-* ]]; then
+            SCENARIO="${SOURCE#mock-}"
+            echo "description=Mock Scenario: ${SCENARIO}" >> $GITHUB_OUTPUT
+          elif [[ "$SOURCE" == run-* ]]; then
+            RUN_ID="${SOURCE#run-}"
+            echo "description=Fetched from Run #${RUN_ID}" >> $GITHUB_OUTPUT
+          else
+            echo "description=Unknown source: ${SOURCE}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run test summary action
         id: test-summary
         uses: ./.github/actions/test-summary
@@ -211,6 +220,8 @@ jobs:
           send-notification: 'true'
           repository: ${{ github.repository }}
           commit-sha: ${{ github.sha }}
+          test-mode: 'true'
+          data-source: ${{ steps.data-source.outputs.description }}
 
       - name: Display results
         env:
