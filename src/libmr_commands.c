@@ -28,11 +28,12 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
-                                    "A multi-shard command failed because at least one shard "
-                                    "did not reply within the given timeframe.");
+                                   "A multi-shard command failed because at least one shard "
+                                   "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
-        snprintf(buf, sizeof(buf), "Multi-shard command failed. %s", MR_ExecutionCtxGetError(eCtx, 0));
+        snprintf(
+            buf, sizeof(buf), "Multi-shard command failed. %s", MR_ExecutionCtxGetError(eCtx, 0));
 
         RedisModule_ReplyWithError(rctx, buf);
     }
@@ -226,18 +227,20 @@ __done:
 }
 
 static int compare_slot_ranges(const void *a, const void *b) {
-    const RedisModuleSlotRange *ra = *(const RedisModuleSlotRange**)a;
-    const RedisModuleSlotRange *rb = *(const RedisModuleSlotRange**)b;
+    const RedisModuleSlotRange *ra = *(const RedisModuleSlotRange **)a;
+    const RedisModuleSlotRange *rb = *(const RedisModuleSlotRange **)b;
     return (int)ra->start - (int)rb->start;
 }
 
-static bool valid_slot_ranges(ARR(RedisModuleSlotRange*) slotRanges) {
+static bool valid_slot_ranges(ARR(RedisModuleSlotRange *) slotRanges) {
     size_t len = array_len(slotRanges);
-    if (len == 0) return false;
+    if (len == 0)
+        return false;
     qsort(slotRanges, len, sizeof(*slotRanges), compare_slot_ranges);
     uint16_t slot = 0;
     for (size_t i = 0; i < len; i++) {
-        if (slot != slotRanges[i]->start) return false;
+        if (slot != slotRanges[i]->start)
+            return false;
         slot = 1 + slotRanges[i]->end;
     }
     return slot == (1 << 14);
@@ -250,8 +253,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = data->bc;
     MRangeArgs *args = &data->args;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    ARR(RedisModuleSlotRange*) slotRanges = NULL;
-    ARR(ARR(Series*)) nodesResults = NULL;
+    ARR(RedisModuleSlotRange *) slotRanges = NULL;
+    ARR(ARR(Series *)) nodesResults = NULL;
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
         goto __done;
@@ -259,23 +262,25 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     // Collect results
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    if (len % 2 != 0 || len == 0) {  // There should be 2 results from each node: slot ranges and internal mrange
+    if (len % 2 != 0 || len == 0) {
+        // There should be 2 results from each node: slot ranges and internal mrange
         RedisModule_Log(rctx, "warning", "Unexpected results from nodes");
         RedisModule_ReplyWithError(rctx, SLOT_RANGES_ERROR);
         goto __done;
     }
-    slotRanges = array_new(RedisModuleSlotRange*, len / 2);  // Minimal capacity (in case each node has one range)
-    nodesResults = array_new(ARR(Series*), len / 2);
+    slotRanges = array_new(RedisModuleSlotRange *,
+                           len / 2); // Minimal capacity (in case each node has one range)
+    nodesResults = array_new(ARR(Series *), len / 2);
     for (size_t i = 0; i < len; i++) {
         Record *r = MR_ExecutionCtxGetResult(eCtx, i);
         if (r->recordType == GetSlotRangesRecordType()) {
-            RedisModuleSlotRangeArray *sra = ((SlotRangesRecord*)r)->slotRanges;
+            RedisModuleSlotRangeArray *sra = ((SlotRangesRecord *)r)->slotRanges;
             for (size_t j = 0; j < sra->num_ranges; j++)
                 slotRanges = array_append(slotRanges, sra->ranges + j);
             continue;
         }
         if (r->recordType == GetSeriesListRecordType()) {
-            SeriesListRecord *record = (SeriesListRecord*)r;
+            SeriesListRecord *record = (SeriesListRecord *)r;
             nodesResults = array_append(nodesResults, record->seriesList);
             continue;
         }
@@ -284,7 +289,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         goto __done;
     }
 
-    bool redisClusterEnabled = (RedisModule_GetContextFlags(rctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
+    bool redisClusterEnabled =
+        (RedisModule_GetContextFlags(rctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
     if (redisClusterEnabled && !valid_slot_ranges(slotRanges)) {
         RedisModule_Log(rctx, "warning", "Invalid slot ranges");
         RedisModule_ReplyWithError(rctx, SLOT_RANGES_ERROR);
@@ -306,7 +312,14 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             if (args->groupByLabel)
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             else
-                ReplySeriesArrayPos(rctx, s, args->withLabels, args->limitLabels, args->numLimitLabels, &args->rangeArgs, args->reverse, false);
+                ReplySeriesArrayPos(rctx,
+                                    s,
+                                    args->withLabels,
+                                    args->limitLabels,
+                                    args->numLimitLabels,
+                                    &args->rangeArgs,
+                                    args->reverse,
+                                    false);
         });
     });
 
@@ -326,7 +339,13 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         minimizedArgs.filterByValueArgs.hasValue = false;
         minimizedArgs.latest = false;
 
-        replyResultSet(rctx, resultset, args->withLabels, args->limitLabels, args->numLimitLabels, &minimizedArgs, args->reverse);
+        replyResultSet(rctx,
+                       resultset,
+                       args->withLabels,
+                       args->limitLabels,
+                       args->numLimitLabels,
+                       &minimizedArgs,
+                       args->reverse);
         ResultSet_Free(resultset);
     }
 

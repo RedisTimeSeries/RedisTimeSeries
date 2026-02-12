@@ -127,7 +127,7 @@ static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 // Internal command records
 static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges);
 static void SlotRangesRecord_Free(void *base);
-static Record *SeriesListRecord_Create(ARR(Series*) seriesList);
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList);
 static void SeriesListRecord_Free(void *base);
 
 static Record *RedisStringRecord_Create(RedisModuleString *str);
@@ -652,7 +652,8 @@ static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *) {
 
 static Record *SlotRangesReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    size_t size = sizeof(RedisModuleSlotRangeArray) + reply->elements * sizeof(RedisModuleSlotRange);
+    size_t size =
+        sizeof(RedisModuleSlotRangeArray) + reply->elements * sizeof(RedisModuleSlotRange);
     RedisModuleSlotRangeArray *slotRanges = malloc(size);
     slotRanges->num_ranges = reply->elements;
     for (size_t i = 0; i < slotRanges->num_ranges; i++) {
@@ -667,7 +668,8 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
     return SlotRangesRecord_Create(slotRanges);
 }
 
-static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES, .replyParser = SlotRangesReplyParser };
+static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
+                                                        .replyParser = SlotRangesReplyParser };
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
@@ -767,7 +769,7 @@ static Series *ParseSeries(const redisReply *reply) {
 
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    ARR(Series*) seriesList = array_new(Series*, reply->elements);
+    ARR(Series *) seriesList = array_new(Series *, reply->elements);
     for (size_t i = 0; i < reply->elements; i++) {
         Series *series = ParseSeries(reply->element[i]);
         seriesList = array_append(seriesList, series);
@@ -776,7 +778,8 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
     return SeriesListRecord_Create(seriesList);
 }
 
-static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE, .replyParser = SeriesListReplyParser };
+static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
+                                                    .replyParser = SeriesListReplyParser };
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
@@ -890,34 +893,23 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
         return REDISMODULE_ERR;
     }
 
-    SlotRangesRecordType = MR_RecordTypeCreate("SlotRangesRecord",
-                                               SlotRangesRecord_Free,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL);
+    SlotRangesRecordType = MR_RecordTypeCreate(
+        "SlotRangesRecord", SlotRangesRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
 
     if (MR_RegisterRecord(SlotRangesRecordType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    SeriesListRecordType = MR_RecordTypeCreate("SeriesListRecord",
-                                               SeriesListRecord_Free,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL,
-                                               NULL);
+    SeriesListRecordType = MR_RecordTypeCreate(
+        "SeriesListRecord", SeriesListRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
 
     if (MR_RegisterRecord(SeriesListRecordType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
-    MR_RegisterInternalCommand("TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand(
+        "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
@@ -1320,7 +1312,8 @@ static void *NullRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **erro
 static void NullRecord_Free(void *base) {}
 
 static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges) {
-    SlotRangesRecord *result = (SlotRangesRecord*)MR_RecordCreate(SlotRangesRecordType, sizeof(*result));
+    SlotRangesRecord *result =
+        (SlotRangesRecord *)MR_RecordCreate(SlotRangesRecordType, sizeof(*result));
     result->slotRanges = slotRanges;
     return &result->base;
 }
@@ -1331,14 +1324,15 @@ static void SlotRangesRecord_Free(void *base) {
     free(record);
 }
 
-static Record *SeriesListRecord_Create(ARR(Series*) seriesList) {
-    SeriesListRecord *result = (SeriesListRecord*)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList) {
+    SeriesListRecord *result =
+        (SeriesListRecord *)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
     return &result->base;
 }
 
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
-    array_free_ex(record->seriesList, FreeSeries(*(Series**)ptr));
+    array_free_ex(record->seriesList, FreeSeries(*(Series **)ptr));
     free(record);
 }
