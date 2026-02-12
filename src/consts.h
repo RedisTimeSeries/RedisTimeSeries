@@ -125,8 +125,8 @@ typedef enum LibmrProtocol
 
 #define LIBMR_PROTOCOL_DEFAULT LIBMR_PROTOCOL_INTERNAL
 
-#define LIBMR_PROTOCOL_UNKNOWN_STR  "UNKNOWN"
-#define LIBMR_PROTOCOL_GEARS_STR    "GEARS"
+#define LIBMR_PROTOCOL_UNKNOWN_STR "UNKNOWN"
+#define LIBMR_PROTOCOL_GEARS_STR "GEARS"
 #define LIBMR_PROTOCOL_INTERNAL_STR "INTERNAL"
 
 static inline __attribute__((always_inline)) const char *LibmrProtocolToString(

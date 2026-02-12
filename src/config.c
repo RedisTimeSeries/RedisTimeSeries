@@ -766,6 +766,27 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     } else {
         TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     }
+
+    if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
+        LOG_DEPRECATED_OPTION("LIBMR_PROTOCOL", "ts-libmr-protocol", showDeprecationWarning);
+        RedisModuleString *protocol;
+        if (RMUtil_ParseArgsAfter("LIBMR_PROTOCOL", argv, argc, "s", &protocol) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after LIBMR_PROTOCOL");
+            return TSDB_ERROR;
+        }
+        size_t len;
+        const char *protocol_cstr = RedisModule_StringPtrLen(protocol, &len);
+        if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_INTERNAL_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_INTERNAL;
+        } else if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_GEARS_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_GEARS;
+        } else {
+            RedisModule_Log(ctx, "warning", "unknown LIBMR_PROTOCOL: %s", protocol_cstr);
+            return TSDB_ERROR;
+        }
+        isDeprecated = true;
+    }
+
     TSGlobalConfig.forceSaveCrossRef = false;
     if (argc > 1 && RMUtil_ArgIndex("DEUBG_FORCE_RULE_DUMP", argv, argc) >= 0) {
         RedisModuleString *forceSaveCrossRef;
