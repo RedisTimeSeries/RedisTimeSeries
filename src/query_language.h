@@ -114,7 +114,11 @@ typedef struct CreateCtx
     double ignoreMaxValDiff;
 } CreateCtx;
 
-int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);
+int parseLabelsFromArgs(RedisModuleString **argv,
+                        int argc,
+                        size_t *label_count,
+                        Label **labels,
+                        bool allow_null_values);
 
 int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,

@@ -35,7 +35,11 @@ static int parseTimestamp(RedisModuleString *string, timestamp_t *out) {
     return REDISMODULE_OK;
 }
 
-int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
+int parseLabelsFromArgs(RedisModuleString **argv,
+                        int argc,
+                        size_t *label_count,
+                        Label **labels,
+                        bool allow_null_values) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
     int first_label_pos = pos + 1;
     Label *labelsResult = NULL;
@@ -51,18 +55,24 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
             RedisModuleString *key = argv[first_label_pos + i * 2];
             RedisModuleString *value = argv[first_label_pos + i * 2 + 1];
 
-            // Verify Label Key or Value are not empty strings
-            size_t keyLen, valueLen;
+            // Verify Label Key or Value are not empty strings (also not nulls, if those are not
+            // allowed)
+            size_t keyLen = 0, valueLen = 0;
             RedisModule_StringPtrLen(key, &keyLen);
-            RedisModule_StringPtrLen(value, &valueLen);
-            if (keyLen == 0 || valueLen == 0 ||
-                strpbrk(RedisModule_StringPtrLen(value, NULL), "(),")) {
+            const char *valueStr = NULL;
+            if (value != NULL)
+                valueStr = RedisModule_StringPtrLen(value, &valueLen);
+            bool legalKey = keyLen > 0;
+            bool legalValue = (allow_null_values && value == NULL) ||
+                              (valueLen > 0 && strpbrk(valueStr, "(),") == NULL);
+            if (!(legalKey && legalValue)) {
                 FreeLabels(labelsResult, i); // need to release prior key values too
                 return REDISMODULE_ERR;
             }
 
             labelsResult[i].key = RedisModule_CreateStringFromString(NULL, key);
-            labelsResult[i].value = RedisModule_CreateStringFromString(NULL, value);
+            labelsResult[i].value =
+                value == NULL ? NULL : RedisModule_CreateStringFromString(NULL, value);
         };
     }
     *labels = labelsResult;
@@ -185,7 +195,8 @@ int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, Cre
     cCtx->chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx->labelsCount = 0;
     cCtx->labels = NULL;
-    if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels) == REDISMODULE_ERR) {
+    if (parseLabelsFromArgs(argv, argc, &cCtx->labelsCount, &cCtx->labels, false) ==
+        REDISMODULE_ERR) {
         RTS_ReplyGeneralError(ctx, "TSDB: Couldn't parse LABELS");
         goto err_exit;
     }

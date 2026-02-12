@@ -199,7 +199,10 @@ void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series) {
             RedisModule_ReplyWithArray(ctx, 2);
         }
         RedisModule_ReplyWithString(ctx, series->labels[i].key);
-        RedisModule_ReplyWithString(ctx, series->labels[i].value);
+        if (likely(series->labels[i].value != NULL))
+            RedisModule_ReplyWithString(ctx, series->labels[i].value);
+        else
+            RedisModule_ReplyWithNull(ctx);
     }
 }
 

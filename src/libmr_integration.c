@@ -739,20 +739,24 @@ static Series *ParseSeries(const redisReply *reply) {
         for (size_t i = 0; i < labelsElement->elements; i++) {
             const redisReply *labelElement = labelsElement->element[i];
             RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
-            RedisModule_Assert(labelElement->elements == 2);
+            RedisModule_Assert(labelElement->elements == 2); // name and value (which can be null)
             RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING &&
-                               labelElement->element[1]->type == REDIS_REPLY_STRING);
+                               (labelElement->element[1]->type == REDIS_REPLY_STRING ||
+                                labelElement->element[1]->type == REDIS_REPLY_NIL));
             RedisModuleString *name = RedisModule_CreateString(
                 rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
-            RedisModuleString *value = RedisModule_CreateString(
-                rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
+            RedisModuleString *value = NULL;
+            if (labelElement->element[1]->type == REDIS_REPLY_STRING)
+                value = RedisModule_CreateString(
+                    rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
             argv[1 + 2 * i] = name;
             argv[2 + 2 * i] = value;
         }
-        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels);
+        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
         RedisModule_Assert(r == REDISMODULE_OK);
         for (size_t i = 1 /* Don't free the LABELS "keyword" */; i < argc; i++)
-            RedisModule_FreeString(rts_staticCtx, argv[i]);
+            if (argv[i] != NULL)
+                RedisModule_FreeString(rts_staticCtx, argv[i]);
     }
 
     Series *result = NewSeries(name, &cCtx);
