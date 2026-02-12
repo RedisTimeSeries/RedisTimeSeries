@@ -115,6 +115,34 @@ static inline __attribute__((always_inline)) const char *DuplicatePolicyToString
 
 #define SERIES_OPT_DEFAULT_COMPRESSION SERIES_OPT_COMPRESSED_GORILLA
 
+/* LibMR Protocol */
+typedef enum LibmrProtocol
+{
+    LIBMR_PROTOCOL_UNKNOWN = 0,
+    LIBMR_PROTOCOL_GEARS = 1,
+    LIBMR_PROTOCOL_INTERNAL = 2,
+} LibmrProtocol;
+
+#define LIBMR_PROTOCOL_DEFAULT LIBMR_PROTOCOL_INTERNAL
+
+#define LIBMR_PROTOCOL_UNKNOWN_STR  "UNKNOWN"
+#define LIBMR_PROTOCOL_GEARS_STR    "GEARS"
+#define LIBMR_PROTOCOL_INTERNAL_STR "INTERNAL"
+
+static inline __attribute__((always_inline)) const char *LibmrProtocolToString(
+    const LibmrProtocol protocol) {
+    switch (protocol) {
+        case LIBMR_PROTOCOL_UNKNOWN:
+            return LIBMR_PROTOCOL_UNKNOWN_STR;
+        case LIBMR_PROTOCOL_GEARS:
+            return LIBMR_PROTOCOL_GEARS_STR;
+        case LIBMR_PROTOCOL_INTERNAL:
+            return LIBMR_PROTOCOL_INTERNAL_STR;
+        default:
+            return "invalid";
+    }
+}
+
 /* Chunk enum */
 typedef enum
 {

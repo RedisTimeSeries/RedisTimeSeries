@@ -9,6 +9,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include "consts.h"
 #include "parse_policies.h"
 #include "RedisModulesSDK/redismodule.h"
 
@@ -34,9 +35,10 @@ typedef struct
     long long chunkSizeBytes;
     short options;
     DuplicatePolicy duplicatePolicy;
-    long long numThreads;        // number of threads used by libMR
+    long long numThreads;        // number of threads used by LibMR
+    LibmrProtocol libmrProtocol; // protocol used for LibMR
     bool forceSaveCrossRef;      // Internal debug configuration param
-    char *password;              // tls password which used by libmr
+    char *password;              // tls password which used by LibMR
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
