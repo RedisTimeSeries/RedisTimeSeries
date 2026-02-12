@@ -397,7 +397,6 @@ exit:
     return exitStatus;
 }
 
-// Previous multirange reply logic ( unchanged )
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     RedisModuleString *currentKey;

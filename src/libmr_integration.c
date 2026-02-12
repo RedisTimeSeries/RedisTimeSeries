@@ -325,7 +325,7 @@ Record *ListSeriesLabels(const Series *series) {
 Record *ListSeriesLabelsWithLimit_rep3(const Series *series,
                                        const char *limitLabels[],
                                        RedisModuleString **rLimitLabels,
-                                       ushort limitLabelsSize) {
+                                       uint16_t limitLabelsSize) {
     Record *r = MapRecord_Create(series->labelsCount);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;
@@ -349,7 +349,7 @@ Record *ListSeriesLabelsWithLimit_rep3(const Series *series,
 Record *ListSeriesLabelsWithLimit(const Series *series,
                                   const char *limitLabels[],
                                   RedisModuleString **rLimitLabels,
-                                  ushort limitLabelsSize) {
+                                  uint16_t limitLabelsSize) {
     Record *r = ListRecord_Create(series->labelsCount);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;
@@ -694,10 +694,9 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
     mrangeArgs.rangeArgs.alignment = DefaultAlignment;
     mrangeArgs.rangeArgs.timestampAlignment = 0;
-    mrangeArgs.withLabels = queryArg->withLabels;
-    mrangeArgs.numLimitLabels = queryArg->limitLabelsSize;
-    for (int i = 0; i < mrangeArgs.numLimitLabels; i++)
-        mrangeArgs.limitLabels[i] = queryArg->limitLabels[i];
+    // Include all the labels because the aggregated result might be grouped by a label (in mrange_done)
+    mrangeArgs.withLabels = true;
+    mrangeArgs.numLimitLabels = 0;
     mrangeArgs.queryPredicates = queryArg->predicates;
     mrangeArgs.groupByLabel = NULL;
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;

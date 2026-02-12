@@ -67,7 +67,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
                         bool withlabels,
                         RedisModuleString *limitLabels[],
-                        ushort limitLabelsSize,
+                        uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
                         bool print_reduced) {
@@ -154,7 +154,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     const Series *series,
                                     RedisModuleString **limitLabels,
-                                    ushort limitLabelsSize) {
+                                    uint16_t limitLabelsSize) {
     const char **limitLabelsStr = malloc(sizeof(char *) * limitLabelsSize);
     for (int i = 0; i < limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(limitLabels[i], NULL);
@@ -166,7 +166,7 @@ void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
 void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                                      const Series *series,
                                      const char **limitLabels,
-                                     ushort limitLabelsSize) {
+                                     uint16_t limitLabelsSize) {
     ReplyWithMapOrArray(ctx, limitLabelsSize, false);
     for (int i = 0; i < limitLabelsSize; i++) {
         bool found = false;

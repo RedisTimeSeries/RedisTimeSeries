@@ -35,7 +35,7 @@ void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
                     bool withlabels,
                     RedisModuleString *limitLabels[],
-                    ushort limitLabelsSize,
+                    uint16_t limitLabelsSize,
                     RangeArgs *args,
                     bool rev);
 
