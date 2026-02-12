@@ -28,6 +28,7 @@ static MRRecordType *DoubleRecordType = NULL;
 static MRRecordType *MapRecordType = NULL;
 static MRRecordType *SlotRangesRecordType = NULL;
 static MRRecordType *SeriesListRecordType = NULL;
+static MRRecordType *StringListRecordType = NULL;
 
 static Record *GetNullRecord() {
     return &NullRecord;
@@ -51,6 +52,10 @@ MRRecordType *GetSlotRangesRecordType() {
 
 MRRecordType *GetSeriesListRecordType() {
     return SeriesListRecordType;
+}
+
+MRRecordType *GetStringListRecordType() {
+    return StringListRecordType;
 }
 
 static void QueryPredicates_ObjectFree(void *arg) {
@@ -129,6 +134,8 @@ static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges);
 static void SlotRangesRecord_Free(void *base);
 static Record *SeriesListRecord_Create(ARR(Series *) seriesList);
 static void SeriesListRecord_Free(void *base);
+static Record *StringListRecord_Create(ARR(RedisModuleString *) stringList);
+static void StringListRecord_Free(void *base);
 
 static Record *RedisStringRecord_Create(RedisModuleString *str);
 
@@ -874,20 +881,31 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     size_t keyNameLen;
     long long replylen = 0;
 
-    ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
         RedisModule_ReplyWithStringBuffer(ctx, keyName, keyNameLen);
         replylen++;
     }
-    ReplySetSetOrArrayLength(ctx, replylen);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
 }
 
+static Record *StringListReplyParser(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    ARR(RedisModuleString *) stringList = array_new(RedisModuleString *, reply->elements);
+    for (size_t i = 0; i < reply->elements; i++) {
+        redisReply *element = reply->element[i];
+        RedisModule_Assert(element->type == REDIS_REPLY_STRING);
+        RedisModuleString *s = RedisModule_CreateString(rts_staticCtx, element->str, element->len);
+        stringList = array_append(stringList, s);
+    }
+
+    return StringListRecord_Create(stringList);
+}
 static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
-                                                        .replyParser =
-                                                            QueryIndexRangesReplyParser };
+                                                        .replyParser = StringListReplyParser };
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
@@ -1003,15 +1021,19 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
 
     SlotRangesRecordType = MR_RecordTypeCreate(
         "SlotRangesRecord", SlotRangesRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
-
     if (MR_RegisterRecord(SlotRangesRecordType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
     SeriesListRecordType = MR_RecordTypeCreate(
         "SeriesListRecord", SeriesListRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
-
     if (MR_RegisterRecord(SeriesListRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    StringListRecordType = MR_RecordTypeCreate(
+        "StringListRecord", StringListRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
+    if (MR_RegisterRecord(StringListRecordType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -1444,5 +1466,19 @@ static Record *SeriesListRecord_Create(ARR(Series *) seriesList) {
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
     array_free_ex(record->seriesList, FreeSeries(*(Series **)ptr));
+    free(record);
+}
+
+static Record *StringListRecord_Create(ARR(RedisModuleString *) stringList) {
+    StringListRecord *result =
+        (StringListRecord *)MR_RecordCreate(StringListRecordType, sizeof(*result));
+    result->stringList = stringList;
+    return &result->base;
+}
+
+static void StringListRecord_Free(void *base) {
+    StringListRecord *record = base;
+    array_free_ex(record->stringList,
+                  RedisModule_FreeString(rts_staticCtx, *(RedisModuleString **)ptr));
     free(record);
 }
