@@ -23,4 +23,5 @@ runs:
       shell: bash
       run: |
         . venv/bin/activate
-        make test
+        make test TEST=test_ts_libmr_failiure:testLibmrFail
+
