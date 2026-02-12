@@ -3,6 +3,7 @@ name: Event Nightly
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 on:
   schedule:
@@ -19,6 +20,11 @@ on:
         description: 'Redis ref to checkout'
         required: true
         default: 'unstable'
+      send-slack-message:
+        description: 'Send Slack notification on completion'
+        required: false
+        type: boolean
+        default: true
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
@@ -90,3 +96,42 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_sanitizer: true
     secrets: inherit
+
+  notify-results:
+    name: Aggregate Results & Notify
+    runs-on: ubuntu-latest
+    needs: [prepare-values, linter, build-linux-x86, mariner, arm64, macos, linux-valgrind, linux-sanitizer]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build job results JSON
+        id: build-results
+        run: |
+          # Build JSON object with job results
+          JOB_RESULTS=$(cat <<'EOF'
+          {
+            "linter": "${{ needs.linter.result }}",
+            "build-linux-x86": "${{ needs.build-linux-x86.result }}",
+            "mariner": "${{ needs.mariner.result }}",
+            "arm64": "${{ needs.arm64.result }}",
+            "macos": "${{ needs.macos.result }}",
+            "linux-valgrind": "${{ needs.linux-valgrind.result }}",
+            "linux-sanitizer": "${{ needs.linux-sanitizer.result }}"
+          }
+          EOF
+          )
+          # Output as single line for GitHub Actions
+          echo "job_results=$(echo "$JOB_RESULTS" | jq -c .)" >> $GITHUB_OUTPUT
+
+      - name: Run test summary action
+        id: test-summary
+        uses: ./.github/actions/test-summary
+        with:
+          redis-ref: ${{ needs.prepare-values.outputs.redis-ref }}
+          job-results: ${{ steps.build-results.outputs.job_results }}
+          slack-webhook-url: ${{ secrets.TEST_SLACK_WH }}
+          send-notification: ${{ inputs.send-slack-message == false && 'false' || 'true' }}
+          repository: ${{ github.repository }}
+          commit-sha: ${{ github.sha }}

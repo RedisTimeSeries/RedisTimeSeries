@@ -1,0 +1,314 @@
+name: 'Test Summary Slack Notification'
+description: 'Aggregates test results from nightly CI runs and sends Slack notifications'
+
+inputs:
+  redis-ref:
+    description: 'Redis ref that was tested'
+    required: true
+  job-results:
+    description: 'JSON object mapping job names to their results (success/failure/cancelled/skipped)'
+    required: true
+  slack-webhook-url:
+    description: 'Slack webhook URL for sending notifications'
+    required: true
+  send-notification:
+    description: 'Whether to send the Slack notification'
+    required: false
+    default: 'true'
+  repository:
+    description: 'Repository name (owner/repo format)'
+    required: false
+    default: ${{ github.repository }}
+  workflow-url:
+    description: 'URL to the workflow run'
+    required: false
+    default: ''
+  commit-sha:
+    description: 'Full commit SHA'
+    required: false
+    default: ${{ github.sha }}
+
+outputs:
+  status:
+    description: 'Overall build status (success/failure/cancelled/skipped)'
+    value: ${{ steps.aggregate.outputs.status }}
+  failed-jobs:
+    description: 'List of failed job names'
+    value: ${{ steps.aggregate.outputs.failed_jobs }}
+  notification-sent:
+    description: 'Whether the notification was sent successfully'
+    value: ${{ steps.send-slack.outputs.sent }}
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout for commit info
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Collect commit information
+      id: commit-info
+      shell: bash
+      run: |
+        # Get short SHA (7 characters)
+        SHORT_SHA="${{ inputs.commit-sha }}"
+        SHORT_SHA="${SHORT_SHA:0:7}"
+        echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+        
+        # Get commit message (max 100 characters)
+        COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Commit message unavailable")
+        if [[ ${#COMMIT_MSG} -gt 100 ]]; then
+          COMMIT_MSG="${COMMIT_MSG:0:97}..."
+        fi
+        # Escape for JSON
+        COMMIT_MSG_ESCAPED=$(echo "$COMMIT_MSG" | jq -Rs . | sed 's/^"//;s/"$//')
+        echo "commit_message=${COMMIT_MSG_ESCAPED}" >> $GITHUB_OUTPUT
+
+    - name: Aggregate job results
+      id: aggregate
+      shell: bash
+      run: |
+        # Parse job results JSON
+        JOB_RESULTS='${{ inputs.job-results }}'
+        
+        # Initialize counters
+        FAILED_JOBS=""
+        FAILED_JOBS_ARRAY=""
+        OVERALL_STATUS="success"
+        TOTAL_JOBS=0
+        PASSED_JOBS=0
+        FAILED_COUNT=0
+        CANCELLED_COUNT=0
+        SKIPPED_COUNT=0
+        
+        # Process each job
+        for job in $(echo "$JOB_RESULTS" | jq -r 'keys[]'); do
+          result=$(echo "$JOB_RESULTS" | jq -r --arg job "$job" '.[$job]')
+          ((TOTAL_JOBS++))
+          
+          case "$result" in
+            "success")
+              ((PASSED_JOBS++))
+              ;;
+            "failure")
+              OVERALL_STATUS="failure"
+              ((FAILED_COUNT++))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}*\n"
+              [[ -n "$FAILED_JOBS_ARRAY" ]] && FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY},"
+              FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY}\"${job}\""
+              ;;
+            "cancelled")
+              if [[ "$OVERALL_STATUS" != "failure" ]]; then
+                OVERALL_STATUS="cancelled"
+              fi
+              ((CANCELLED_COUNT++))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}* (cancelled)\n"
+              ;;
+            "skipped")
+              if [[ "$OVERALL_STATUS" == "success" ]]; then
+                OVERALL_STATUS="skipped"
+              fi
+              ((SKIPPED_COUNT++))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}* (skipped)\n"
+              ;;
+          esac
+        done
+        
+        # Set outputs
+        echo "status=${OVERALL_STATUS}" >> $GITHUB_OUTPUT
+        echo "total_jobs=${TOTAL_JOBS}" >> $GITHUB_OUTPUT
+        echo "passed_jobs=${PASSED_JOBS}" >> $GITHUB_OUTPUT
+        echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
+        echo "cancelled_count=${CANCELLED_COUNT}" >> $GITHUB_OUTPUT
+        echo "skipped_count=${SKIPPED_COUNT}" >> $GITHUB_OUTPUT
+        
+        # Failed jobs list
+        if [[ -z "$FAILED_JOBS" ]]; then
+          echo "failed_jobs=✅ All jobs passed successfully!" >> $GITHUB_OUTPUT
+          echo "failed_jobs_array=[]" >> $GITHUB_OUTPUT
+        else
+          echo "failed_jobs<<EOF" >> $GITHUB_OUTPUT
+          echo -e "${FAILED_JOBS}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "failed_jobs_array=[${FAILED_JOBS_ARRAY}]" >> $GITHUB_OUTPUT
+        fi
+        
+        # Set emoji and color
+        case "$OVERALL_STATUS" in
+          "success")
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+            echo "status_text=Success" >> $GITHUB_OUTPUT
+            ;;
+          "failure")
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+            echo "status_text=Failed" >> $GITHUB_OUTPUT
+            ;;
+          "cancelled")
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+            echo "status_text=Cancelled" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "emoji=⏭️" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+            echo "status_text=Skipped" >> $GITHUB_OUTPUT
+            ;;
+        esac
+        
+        # Log summary
+        echo "=== Test Summary ==="
+        echo "Overall Status: ${OVERALL_STATUS}"
+        echo "Total Jobs: ${TOTAL_JOBS}"
+        echo "Passed: ${PASSED_JOBS}, Failed: ${FAILED_COUNT}, Cancelled: ${CANCELLED_COUNT}, Skipped: ${SKIPPED_COUNT}"
+
+    - name: Build workflow URL
+      id: urls
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.workflow-url }}" ]]; then
+          echo "workflow_url=${{ inputs.workflow-url }}" >> $GITHUB_OUTPUT
+        else
+          echo "workflow_url=${{ github.server_url }}/${{ inputs.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+        fi
+        echo "commit_url=${{ github.server_url }}/${{ inputs.repository }}/commit/${{ inputs.commit-sha }}" >> $GITHUB_OUTPUT
+
+    - name: Validate webhook URL
+      id: validate
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.slack-webhook-url }}" ]]; then
+          echo "::error::Slack webhook URL is empty or not configured"
+          echo "valid=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "valid=true" >> $GITHUB_OUTPUT
+
+    - name: Send Slack notification
+      id: send-slack
+      if: inputs.send-notification == 'true' && steps.validate.outputs.valid == 'true'
+      shell: bash
+      run: |
+        # Build the overall summary line
+        SUMMARY="✅ Passed: ${{ steps.aggregate.outputs.passed_jobs }}"
+        if [[ "${{ steps.aggregate.outputs.failed_count }}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ❌ Failed: ${{ steps.aggregate.outputs.failed_count }}"
+        fi
+        if [[ "${{ steps.aggregate.outputs.skipped_count }}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ⏭️ Skipped: ${{ steps.aggregate.outputs.skipped_count }}"
+        fi
+        if [[ "${{ steps.aggregate.outputs.cancelled_count }}" != "0" ]]; then
+          SUMMARY="${SUMMARY} | ⚠️ Cancelled: ${{ steps.aggregate.outputs.cancelled_count }}"
+        fi
+
+        # Escape failed jobs for JSON
+        FAILED_JOBS_ESCAPED=$(echo '${{ steps.aggregate.outputs.failed_jobs }}' | jq -Rs . | sed 's/^"//;s/"$//')
+
+        # Build payload
+        PAYLOAD=$(cat <<'PAYLOAD_EOF'
+        {
+          "text": "Event Nightly Test Results",
+          "blocks": [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": "${{ inputs.repository }} - Event Nightly"
+              }
+            },
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Redis Version:*\n${{ inputs.redis-ref }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Build:*\n${{ steps.commit-info.outputs.short_sha }}"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Commit:* ${{ steps.commit-info.outputs.commit_message }}"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Overall Summary*\nSUMMARY_PLACEHOLDER"
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "<${{ steps.urls.outputs.workflow_url }}|View Workflow Run>"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Failed Jobs:*\nFAILED_JOBS_PLACEHOLDER"
+              }
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Show Full Summary",
+                    "emoji": true
+                  },
+                  "url": "${{ steps.urls.outputs.workflow_url }}",
+                  "style": "primary"
+                }
+              ]
+            }
+          ]
+        }
+        PAYLOAD_EOF
+        )
+
+        # Replace placeholders
+        PAYLOAD=$(echo "$PAYLOAD" | sed "s|SUMMARY_PLACEHOLDER|${SUMMARY}|g")
+        PAYLOAD=$(echo "$PAYLOAD" | sed "s|FAILED_JOBS_PLACEHOLDER|${FAILED_JOBS_ESCAPED}|g")
+
+        # Send to Slack
+        RESPONSE_FILE=$(mktemp)
+        HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
+          -X POST \
+          -H 'Content-type: application/json' \
+          --data "$PAYLOAD" \
+          "${{ inputs.slack-webhook-url }}")
+
+        RESPONSE=$(cat "$RESPONSE_FILE")
+        rm -f "$RESPONSE_FILE"
+
+        echo "HTTP Response Code: ${HTTP_CODE}"
+        echo "Response Body: ${RESPONSE}"
+
+        if [[ "$HTTP_CODE" == "200" ]]; then
+          echo "sent=true" >> $GITHUB_OUTPUT
+          echo "✅ Slack notification sent successfully"
+        else
+          echo "sent=false" >> $GITHUB_OUTPUT
+          echo "::error::Failed to send Slack notification. HTTP Code: ${HTTP_CODE}, Response: ${RESPONSE}"
+          exit 1
+        fi
+
