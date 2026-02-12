@@ -299,9 +299,24 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     MRError *err = NULL;
 
-    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -346,9 +361,24 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 
     MRError *err = NULL;
 
-    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -382,10 +412,26 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
 
-    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
     MRError *err = NULL;
+
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
