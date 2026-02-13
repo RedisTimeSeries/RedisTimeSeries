@@ -12,8 +12,13 @@ cd $HERE
 
 valgrind_check() {
 	local logdir="$ROOT/tests/$DIR/logs"
+	local files=("$logdir"/*.valgrind.log)
 
-	for file in "$logdir"/*.valgrind.log; do
+	if [[ ! -e "${files[0]}" ]]; then
+		return 0
+	fi
+
+	for file in "${files[@]}"; do
 		if grep -q -e "definitely lost" -e "0x" -e "Invalid" -e "Mismatched" \
 		            -e "uninitialized" -e "has a fishy" -e "overlap" "$file"; then
 			echo
@@ -28,9 +33,14 @@ valgrind_check() {
 
 sanitizer_check() {
 	local logdir="$ROOT/tests/$DIR/logs"
+	local files=("$logdir"/*.asan.log*)
 
-	for file in "$logdir"/*.asan.log*; do
-		if grep -q -e "runtime error" -e "Sanitizer" -v "failed to allocate" "$file"; then
+	if [[ ! -e "${files[0]}" ]]; then
+		return 0
+	fi
+
+	for file in "${files[@]}"; do
+		if grep -E "runtime error|Sanitizer" "$file" | grep -qv "failed to allocate"; then
 			echo
 			echo "### Sanitizer error in $file:"
 			cat "$file"
