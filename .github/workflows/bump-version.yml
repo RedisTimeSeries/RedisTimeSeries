@@ -158,7 +158,7 @@ jobs:
       - name: Create annotated tag
         working-directory: release-branch
         run: |
-          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
+          git tag -a "v${{ inputs.version }}" -m ""
 
       - name: Push changes
         if: ${{ !inputs.dry_run }}
@@ -187,4 +187,12 @@ jobs:
           echo "- **Triggered From**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Dry Run**: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Nightly Check Skipped**: ${{ inputs.skip_nightly_check }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Slack notification
+        if: ${{ !inputs.dry_run }}
+        uses: ./.github/actions/slack_notification
+        with:
+          MESSAGE: "RedisTimeSeries version bump completed: v${{ inputs.version }} on branch ${{ needs.validate-and-check.outputs.release_branch }}"
+          CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
