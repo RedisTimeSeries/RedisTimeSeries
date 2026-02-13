@@ -1,0 +1,33 @@
+name: Slack Notification
+inputs:
+  MESSAGE:
+    required: true
+    description: 'Message to include in the notification'
+  CHANNEL_ID:
+    required: true
+    description: 'Slack channel id to send the notification to'
+  SLACK_BOT_TOKEN:
+    required: true
+    description: 'Slack bot token to use for sending the notification'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Slack notification
+      uses: slackapi/slack-github-action@v1.24.0
+      env:
+        SLACK_BOT_TOKEN: ${{ inputs.SLACK_BOT_TOKEN }}
+      with:
+        payload: |
+          {
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "${{ inputs.MESSAGE }}"
+                }
+              }
+            ]
+          }
+        channel-id: ${{ inputs.CHANNEL_ID }}
