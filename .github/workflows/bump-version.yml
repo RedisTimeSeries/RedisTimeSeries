@@ -1,22 +1,6 @@
 name: Bump Version
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to set (format: MAJOR.MINOR.PATCH, e.g., 8.4.8)'
-        required: true
-        type: string
-      skip_nightly_check:
-        description: 'Skip nightly build status check'
-        required: false
-        type: boolean
-        default: false
-      dry_run:
-        description: 'Dry run (do not push changes)'
-        required: false
-        type: boolean
-        default: false
   workflow_call:
     inputs:
       version:
@@ -34,13 +18,11 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
-  actions: read
-
 jobs:
   validate-and-check:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
     outputs:
       release_branch: ${{ steps.derive-branch.outputs.release_branch }}
     steps:
@@ -89,6 +71,8 @@ jobs:
   bump-version:
     needs: validate-and-check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout release branch
         uses: actions/checkout@v4
