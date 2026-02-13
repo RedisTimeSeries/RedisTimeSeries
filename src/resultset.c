@@ -23,7 +23,7 @@
 struct TS_ResultSet
 {
     RedisModuleDict *groups;
-    char *labelkey;
+    char *labelKey;
 };
 
 typedef struct TS_GroupList
@@ -41,13 +41,13 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
                             TS_GroupList *group,
                             char *labelKey,
                             const RangeArgs *args,
-                            const ReducerArgs *gropuByReducerArgs);
+                            const ReducerArgs *groupByReducerArgs);
 
 void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               TS_GroupList *group,
                               bool withlabels,
                               RedisModuleString *limitLabels[],
-                              ushort limitLabelsSize,
+                              uint16_t limitLabelsSize,
                               const RangeArgs *args,
                               bool reverse);
 
@@ -91,13 +91,13 @@ void GroupList_Free(TS_GroupList *groupList) {
     free(groupList);
 }
 
-static void GroupList_AddSerie(TS_GroupList *g, Series *serie, const char *name) {
+static void GroupList_AddSeries(TS_GroupList *g, Series *series, const char *name) {
     if (g->list == NULL) {
         g->list = malloc(sizeof *g->list);
     } else {
         g->list = realloc(g->list, sizeof *g->list * (g->count + 1));
     }
-    g->list[g->count] = serie;
+    g->list[g->count] = series;
     g->count++;
 }
 
@@ -105,7 +105,7 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               TS_GroupList *group,
                               bool withlabels,
                               RedisModuleString *limitLabels[],
-                              ushort limitLabelsSize,
+                              uint16_t limitLabelsSize,
                               const RangeArgs *args,
                               bool rev) {
     for (int i = 0; i < group->count; i++) {
@@ -117,12 +117,12 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
 Label *createReducedSeriesLabels(RedisModuleCtx *ctx,
                                  char *labelKey,
                                  char *labelValue,
-                                 const ReducerArgs *gropuByReducerArgs) {
+                                 const ReducerArgs *groupByReducerArgs) {
     // Labels:
     // <label>=<groupbyvalue>
     // __reducer__=<reducer>
     // __source__=key1,key2,key3
-    const char *reducer_str = AggTypeEnumToStringLowerCase(gropuByReducerArgs->agg_type);
+    const char *reducer_str = AggTypeEnumToStringLowerCase(groupByReducerArgs->agg_type);
 
     Label *labels = calloc(3, sizeof(Label));
     labels[0].key = RedisModule_CreateStringPrintf(NULL, "%s", labelKey);
@@ -137,7 +137,7 @@ Label *createReducedSeriesLabels(RedisModuleCtx *ctx,
 TS_ResultSet *ResultSet_Create() {
     TS_ResultSet *r = malloc(sizeof(TS_ResultSet));
     r->groups = RedisModule_CreateDict(NULL);
-    r->labelkey = NULL;
+    r->labelKey = NULL;
     return r;
 }
 
@@ -146,18 +146,18 @@ void GroupList_SetLabelValue(TS_GroupList *r, const char *label) {
 }
 
 void ResultSet_GroupbyLabel(TS_ResultSet *r, const char *label) {
-    r->labelkey = strdup(label);
+    r->labelKey = strdup(label);
 }
 
 void ResultSet_ApplyReducer(RedisModuleCtx *ctx,
                             TS_ResultSet *r,
                             const RangeArgs *args,
-                            const ReducerArgs *gropuByReducerArgs) {
+                            const ReducerArgs *groupByReducerArgs) {
     // ^ seek the smallest element of the radix tree.
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     TS_GroupList *groupList;
     while (RedisModule_DictNextC(iter, NULL, (void **)&groupList) != NULL) {
-        GroupList_ApplyReducer(ctx, groupList, r->labelkey, args, gropuByReducerArgs);
+        GroupList_ApplyReducer(ctx, groupList, r->labelKey, args, groupByReducerArgs);
     }
     RedisModule_DictIteratorStop(iter);
 }
@@ -165,11 +165,11 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
                             TS_GroupList *group,
                             char *labelKey,
                             const RangeArgs *args,
-                            const ReducerArgs *gropuByReducerArgs) {
-    Label *labels = createReducedSeriesLabels(ctx, labelKey, group->labelValue, gropuByReducerArgs);
-    size_t serie_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
-    char *serie_name = malloc(serie_name_len);
-    serie_name_len = sprintf(serie_name, "%s=%s", labelKey, group->labelValue);
+                            const ReducerArgs *groupByReducerArgs) {
+    Label *labels = createReducedSeriesLabels(ctx, labelKey, group->labelValue, groupByReducerArgs);
+    size_t series_name_len = strlen(labelKey) + strlen(group->labelValue) + 2;
+    char *series_name = malloc(series_name_len);
+    series_name_len = sprintf(series_name, "%s=%s", labelKey, group->labelValue);
 
     // create a temp serie
     CreateCtx cCtx = {
@@ -177,14 +177,15 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     };
     cCtx.options |= SERIES_OPT_UNCOMPRESSED;
 
-    Series *reduced = NewSeries(RedisModule_CreateString(NULL, serie_name, serie_name_len), &cCtx);
+    Series *reduced =
+        NewSeries(RedisModule_CreateString(NULL, series_name, series_name_len), &cCtx);
     if (_ReplyMap(ctx)) {
         // abuse srckey to store the source keys
         reduced->srcKey = (RedisModuleString *)array_new(RedisModuleString *, 1);
     }
     Series *source = NULL;
 
-    MultiSerieReduce(reduced, group->list, group->count, gropuByReducerArgs, args);
+    MultiSeriesReduce(reduced, group->list, group->count, groupByReducerArgs, args);
 
     // prepare labels
     for (int i = 0; i < group->count; i++) {
@@ -211,38 +212,37 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     reduced->labels = labels;
     reduced->labelsCount = 3;
 
-    free(serie_name);
+    free(series_name);
 }
 
-bool ResultSet_AddSerie(TS_ResultSet *r, Series *serie, const char *name) {
+bool ResultSet_AddSeries(TS_ResultSet *r, Series *series, const char *name) {
     size_t labelLen;
-    const char *labelValue = SeriesGetCStringLabelValue(serie, r->labelkey, &labelLen);
-    if (labelValue != NULL) {
-        int nokey;
-        TS_GroupList *labelGroup =
-            RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
-        if (nokey) {
-            labelGroup = GroupList_Create();
-            GroupList_SetLabelValue(labelGroup, labelValue);
-            RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
-        }
-        GroupList_AddSerie(labelGroup, serie, name);
-        return true;
-    }
+    const char *labelValue = SeriesGetCStringLabelValue(series, r->labelKey, &labelLen);
+    if (labelValue == NULL)
+        return false;
 
-    return false;
+    int nokey;
+    TS_GroupList *labelGroup =
+        RedisModule_DictGetC(r->groups, (void *)labelValue, labelLen, &nokey);
+    if (nokey) {
+        labelGroup = GroupList_Create();
+        GroupList_SetLabelValue(labelGroup, labelValue);
+        RedisModule_DictSetC(r->groups, (void *)labelValue, labelLen, labelGroup);
+    }
+    GroupList_AddSeries(labelGroup, series, name);
+    return true;
 }
 
 void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
                     bool withlabels,
                     RedisModuleString *limitLabels[],
-                    ushort limitLabelsSize,
+                    uint16_t limitLabelsSize,
                     RangeArgs *args,
                     bool rev) {
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
 
-    RedisModule_ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
+    ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
     TS_GroupList *innerGroupList;
     while (RedisModule_DictNextC(iter, NULL, (void **)&innerGroupList) != NULL) {
         GroupList_ReplyResultSet(
@@ -264,7 +264,6 @@ void ResultSet_Free(TS_ResultSet *r) {
         RedisModule_DictIteratorStop(iter);
         RedisModule_FreeDict(NULL, r->groups);
     }
-    if (r->labelkey)
-        free(r->labelkey);
+    free(r->labelKey);
     free(r);
 }

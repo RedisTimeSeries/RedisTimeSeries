@@ -22,5 +22,9 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: Test logs ${{ steps.artifact-names.outputs.name }}
-        path: tests/**/logs/*.log*
+        path: |
+          logs/*.log*
+          logs/**/*.log*
+          tests/**/logs/*.log*
+          tests/**/logs/**/*.log*
         if-no-files-found: ignore
