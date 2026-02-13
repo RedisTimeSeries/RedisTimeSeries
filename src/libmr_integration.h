@@ -1,7 +1,7 @@
 #include "RedisModulesSDK/redismodule.h"
+#include "LibMR/src/utils/arr.h"
 #include "generic_chunk.h"
 #include "indexer.h"
-#include "module.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -72,28 +72,35 @@ typedef struct LongRecord
     long num;
 } LongRecord;
 
-// Reuse Redis Module API slot range struct.
-typedef RedisModuleSlotRange SlotRangeRecord;
+// The following record structs are for internal commands.
+// They are a bit more lightweight than the above collection records because
+// their elements do not need to be "derived from" Record objects.
+// We create them in the `replyParser`s and use them in the `..._done()` callbacks.
 
-// Wrapper record used for shard->coordinator internal communication. It carries the shard's
-// owned slot ranges (captured under the thread-safe lock), alongside the actual mapper payload.
-typedef struct ShardEnvelopeRecord
+typedef struct SlotRangesRecord
 {
     Record base;
-    size_t slotRangesCount;
-    SlotRangeRecord *slotRanges;
-    Record *payload;
-} ShardEnvelopeRecord;
+    RedisModuleSlotRangeArray *slotRanges;
+} SlotRangesRecord;
+
+typedef struct SeriesListRecord
+{
+    Record base;
+    ARR(Series *) seriesList;
+} SeriesListRecord;
+
+typedef struct StringListRecord
+{
+    Record base;
+    ARR(RedisModuleString *) stringList;
+} StringListRecord;
 
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
-MRRecordType *GetShardEnvelopeRecordType();
-
-// Similar to RedisModule_StringPtrLen(): returns pointer and writes length to out param.
-const SlotRangeRecord *ShardEnvelopeRecord_SlotRanges(const ShardEnvelopeRecord *r, size_t *count);
-Record *ShardEnvelopeRecord_GetPayload(const ShardEnvelopeRecord *r);
-
+MRRecordType *GetSlotRangesRecordType();
+MRRecordType *GetSeriesListRecordType();
+MRRecordType *GetStringListRecordType();
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
@@ -108,7 +115,7 @@ void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error);
 void SeriesRecord_SendReply(RedisModuleCtx *rctx, void *record);
 Series *SeriesRecord_IntoSeries(SeriesRecord *record);
 
-int register_rg(RedisModuleCtx *ctx, long long numThreads);
+int register_mr(RedisModuleCtx *ctx, long long numThreads);
 bool IsMRCluster();
 
 #endif // REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
