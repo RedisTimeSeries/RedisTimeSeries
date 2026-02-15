@@ -29,8 +29,15 @@ VALGRIND = os.getenv('VALGRIND', '0') == '1'
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
 
-Defaults.terminate_retries = 3
-Defaults.terminate_retries_secs = 1
+if VALGRIND:
+    TERMINATE_RETRIES = int(os.getenv('RLTEST_TERMINATE_RETRIES', '120'))
+    TERMINATE_RETRY_SECS = int(os.getenv('RLTEST_TERMINATE_RETRY_SECS', '1'))
+else:
+    TERMINATE_RETRIES = 3
+    TERMINATE_RETRY_SECS = 1
+
+Defaults.terminate_retries = TERMINATE_RETRIES
+Defaults.terminate_retry_secs = TERMINATE_RETRY_SECS
 
 
 class ShardConnectionTimeoutException(Exception):
@@ -93,7 +100,10 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    env = rltestEnv(*args,
+                    terminateRetries=TERMINATE_RETRIES,
+                    terminateRetrySecs=TERMINATE_RETRY_SECS,
+                    **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
