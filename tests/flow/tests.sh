@@ -213,6 +213,10 @@ setup_valgrind() {
 		--vg-no-fail-on-errors \
 		--vg-suppressions $VALGRIND_SUPRESSIONS"
 
+	# Valgrind significantly slows command execution; relax per-test timeout.
+	RLTEST_TEST_TIMEOUT=${RLTEST_TEST_TIMEOUT:-600}
+	RLTEST_ARGS+=" --test-timeout $RLTEST_TEST_TIMEOUT"
+
 
 	# for module
 	export RS_GLOBAL_DTORS=1
