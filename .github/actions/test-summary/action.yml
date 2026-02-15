@@ -364,31 +364,25 @@ runs:
         fi
 
         # Determine platform results to show
-        # When there are failures, show ALL platform details for full visibility
-        # When all passed, show a summary message
-        HAS_JOB_FAILURES=false
-        if [[ "${FAILED_COUNT}" != "0" ]] || [[ "${CANCELLED_COUNT}" != "0" ]] || [[ "${SKIPPED_COUNT}" != "0" ]]; then
-          HAS_JOB_FAILURES=true
-        fi
+        # Only show detailed platform breakdown when there are actual platform-level issues
+        # Show summary message when all platform tests passed (even if job-level failures exist)
 
         # Check if we have any platform-level failures from artifacts
+        # Platform failure criteria: failed > 0 OR passed == 0 OR status == error/unknown
         HAS_PLATFORM_FAILURES=false
         if [[ "$FAILED_OS_SUMMARY" != *"All platforms passed"* ]] && [[ -n "$FAILED_OS_SUMMARY" ]]; then
           HAS_PLATFORM_FAILURES=true
         fi
 
-        # Build platform results section
-        if [[ "$HAS_JOB_FAILURES" == "true" ]] || [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
-          # Show all platform details when there are any failures
-          if [[ -n "$OS_SUMMARY" ]] && [[ "$OS_SUMMARY" != "No test result artifacts found" ]]; then
-            PLATFORM_RESULTS="$OS_SUMMARY"
-          elif [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
-            PLATFORM_RESULTS="$FAILED_OS_SUMMARY"
-          else
-            PLATFORM_RESULTS="⚠️ No platform-level details available. Check individual job logs."
-          fi
+        # Build platform results section based on platform-level status (not job-level)
+        if [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
+          # Show detailed breakdown only when platforms have actual test failures/issues
+          PLATFORM_RESULTS="$FAILED_OS_SUMMARY"
+        elif [[ -z "$OS_SUMMARY" ]] || [[ "$OS_SUMMARY" == "No test result artifacts found" ]]; then
+          # No artifacts found - indicate this clearly
+          PLATFORM_RESULTS="⚠️ No platform-level details available. Check individual job logs."
         else
-          # All passed - show success message
+          # All platform tests passed - show success message
           PLATFORM_RESULTS="✅ All platforms passed!"
         fi
 
@@ -491,6 +485,15 @@ runs:
                 "type": "mrkdwn",
                 "text": "*Failed Jobs:*\n\($failed_jobs)"
               }
+            },
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "─────────────────────────────────"
+                }
+              ]
             },
             {
               "type": "section",
