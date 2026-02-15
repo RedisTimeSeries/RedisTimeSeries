@@ -1909,11 +1909,17 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.mget", "read");
 
-    if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Failed to register timeseries command infos");
-        FreeConfigAndStaticCtx();
+    // Some Redis Enterprise packaging/upload pipelines still expect legacy command metadata.
+    // Avoid failing module registration there by skipping optional command-info registration.
+    if (!RTS_IsEnterprise()) {
+        if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Failed to register timeseries command infos");
+            FreeConfigAndStaticCtx();
 
-        return REDISMODULE_ERR;
+            return REDISMODULE_ERR;
+        }
+    } else {
+        RedisModule_Log(ctx, "notice", "Skipping command info registration on Redis Enterprise");
     }
 
     if (RedisModule_SubscribeToServerEvent) {
