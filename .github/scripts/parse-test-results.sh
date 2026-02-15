@@ -43,7 +43,8 @@ elif echo "$TEST_OUTPUT" | grep -qiE "^\s*failed\s*$|^\s*failed\s*\(|^failed"; t
     fi
 fi
 
-# Fallback to counting test lines; require SKIPPED=0 to preserve valid "all skipped" results
+# Fallback: count individual test lines if summary parsing failed
+# Check SKIPPED=0 to avoid overwriting valid "all tests skipped" results
 if [ "$TOTAL" = "0" ] || ([ "$PASSED" = "0" ] && [ "$FAILED" = "0" ] && [ "$SKIPPED" = "0" ]); then
     PASSED_COUNT=$(echo "$TEST_OUTPUT" | grep -cE "(test_\w+.*\bok\b|test_\w+.*\bPASS\b|\[PASS\]|\[OK\])" 2>/dev/null || echo "0")
     PASSED=$(echo "$PASSED_COUNT" | tr -d '\n\r ' | grep -oE '^[0-9]+' | head -1)
