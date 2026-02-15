@@ -165,12 +165,14 @@ runs:
     - name: Collect commit information
       id: commit-info
       shell: bash
+      env:
+        INPUT_COMMIT_SHA: ${{ inputs.commit-sha }}
       run: |
         # Get short SHA (7 characters)
-        SHORT_SHA="${{ inputs.commit-sha }}"
+        SHORT_SHA="${INPUT_COMMIT_SHA}"
         SHORT_SHA="${SHORT_SHA:0:7}"
         echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
-        
+
         # Get commit message (max 100 characters)
         COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Commit message unavailable")
         if [[ ${#COMMIT_MSG} -gt 100 ]]; then
@@ -287,19 +289,27 @@ runs:
     - name: Build workflow URL
       id: urls
       shell: bash
+      env:
+        INPUT_WORKFLOW_URL: ${{ inputs.workflow-url }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_COMMIT_SHA: ${{ inputs.commit-sha }}
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
       run: |
-        if [[ -n "${{ inputs.workflow-url }}" ]]; then
-          echo "workflow_url=${{ inputs.workflow-url }}" >> $GITHUB_OUTPUT
+        if [[ -n "$INPUT_WORKFLOW_URL" ]]; then
+          echo "workflow_url=$INPUT_WORKFLOW_URL" >> $GITHUB_OUTPUT
         else
-          echo "workflow_url=${{ github.server_url }}/${{ inputs.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "workflow_url=${GITHUB_SERVER_URL}/${INPUT_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
         fi
-        echo "commit_url=${{ github.server_url }}/${{ inputs.repository }}/commit/${{ inputs.commit-sha }}" >> $GITHUB_OUTPUT
+        echo "commit_url=${GITHUB_SERVER_URL}/${INPUT_REPOSITORY}/commit/${INPUT_COMMIT_SHA}" >> $GITHUB_OUTPUT
 
     - name: Validate webhook URL
       id: validate
       shell: bash
+      env:
+        INPUT_SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
       run: |
-        if [[ -z "${{ inputs.slack-webhook-url }}" ]]; then
+        if [[ -z "$INPUT_SLACK_WEBHOOK_URL" ]]; then
           echo "::error::Slack webhook URL is empty or not configured"
           echo "valid=false" >> $GITHUB_OUTPUT
           exit 1
@@ -330,6 +340,7 @@ runs:
         OS_SUMMARY: ${{ steps.test-metrics.outputs.os_summary }}
         TEST_MODE: ${{ inputs.test-mode }}
         DATA_SOURCE: ${{ inputs.data-source }}
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
       run: |
         # Determine if this is a test/mock notification
         IS_TEST_MODE="false"
@@ -527,7 +538,6 @@ runs:
         )
 
         # Send to Slack
-        SLACK_WEBHOOK="${{ inputs.slack-webhook-url }}"
         RESPONSE_FILE=$(mktemp)
         HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
           -X POST \
