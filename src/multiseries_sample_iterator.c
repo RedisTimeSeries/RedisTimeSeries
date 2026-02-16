@@ -66,19 +66,50 @@ ChunkResult MultiSeriesSampleIterator_GetNext(struct AbstractMultiSeriesSampleIt
 MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator **iters,
                                                          size_t n_series,
                                                          bool reverse) {
-    MultiSeriesSampleIterator *newIter = malloc(sizeof(MultiSeriesSampleIterator));
+    MultiSeriesSampleIterator *newIter = calloc(1, sizeof(MultiSeriesSampleIterator));
+    if (!newIter) {
+        for (size_t i = 0; i < n_series; ++i) {
+            iters[i]->Close(iters[i]);
+        }
+        return NULL;
+    }
+
     newIter->base.input = malloc(sizeof(AbstractSampleIterator *) * n_series);
+    if (!newIter->base.input) {
+        for (size_t i = 0; i < n_series; ++i) {
+            iters[i]->Close(iters[i]);
+        }
+        free(newIter);
+        return NULL;
+    }
     memcpy(newIter->base.input, iters, sizeof(AbstractSampleIterator *) * n_series);
     newIter->base.GetNext = MultiSeriesSampleIterator_GetNext;
     newIter->base.Close = MultiSeriesSampleIterator_Close;
     newIter->n_series = n_series;
     newIter->samples_heap = heap_new(reverse ? heap_cmp_func_reverse : heap_cmp_func, NULL);
+    if (!newIter->samples_heap) {
+        for (size_t i = 0; i < n_series; ++i) {
+            newIter->base.input[i]->Close(newIter->base.input[i]);
+        }
+        free(newIter->base.input);
+        free(newIter);
+        return NULL;
+    }
+
     for (size_t i = 0; i < newIter->n_series; ++i) {
         AbstractSampleIterator *sample_iter = newIter->base.input[i];
         MSSample *sample = malloc(sizeof(MSSample));
+        if (!sample) {
+            MultiSeriesSampleIterator_Close((AbstractMultiSeriesSampleIterator *)newIter);
+            return NULL;
+        }
         if (sample_iter->GetNext(sample_iter, &sample->sample) == CR_OK) {
             sample->iter = sample_iter;
-            assert(heap_offer(&newIter->samples_heap, sample) == 0);
+            if (heap_offer(&newIter->samples_heap, sample) != 0) {
+                free(sample);
+                MultiSeriesSampleIterator_Close((AbstractMultiSeriesSampleIterator *)newIter);
+                return NULL;
+            }
         } else {
             free(sample);
         }
