@@ -178,9 +178,7 @@ runs:
         if [[ ${#COMMIT_MSG} -gt 100 ]]; then
           COMMIT_MSG="${COMMIT_MSG:0:97}..."
         fi
-        # Escape for JSON
-        COMMIT_MSG_ESCAPED=$(echo "$COMMIT_MSG" | jq -Rs . | sed 's/^"//;s/"$//')
-        echo "commit_message=${COMMIT_MSG_ESCAPED}" >> $GITHUB_OUTPUT
+        echo "commit_message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
 
     - name: Aggregate job results
       id: aggregate
