@@ -94,12 +94,11 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          TAG="v$VERSION"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag $TAG already exists"
+          if git ls-remote --exit-code origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$VERSION already exists on remote"
             exit 1
           fi
-          echo "Tag $TAG does not exist, proceeding..."
+          echo "Tag v$VERSION does not exist, proceeding..."
 
       - name: Configure Git
         working-directory: release-branch
@@ -157,7 +156,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          git tag -a "v$VERSION" -m ""
+          git tag -a "v$VERSION" -m "Automated bump to v$VERSION"
 
       - name: Push changes
         if: ${{ !inputs.dry_run }}
@@ -168,6 +167,17 @@ jobs:
         run: |
           git push origin "$RELEASE_BRANCH"
           git push origin "v$VERSION"
+
+      - name: Verify push
+        if: ${{ !inputs.dry_run }}
+        working-directory: release-branch
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
+        run: |
+          git ls-remote --exit-code origin "refs/tags/v$VERSION"
+          git ls-remote --exit-code origin "refs/heads/$RELEASE_BRANCH"
+          echo "Verified: tag and branch exist on remote"
 
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
