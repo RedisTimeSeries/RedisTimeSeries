@@ -190,12 +190,3 @@ jobs:
           echo "- **Triggered From**: $REF_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **Dry Run**: $DRY_RUN" >> $GITHUB_STEP_SUMMARY
           echo "- **Nightly Check Skipped**: $SKIP_NIGHTLY" >> $GITHUB_STEP_SUMMARY
-
-      - name: Slack notification
-        if: ${{ !inputs.dry_run }}
-        uses: ./.github/actions/slack_notification
-        with:
-          MESSAGE: "RedisTimeSeries version bump completed: v${{ inputs.version }} on branch ${{ needs.validate-and-check.outputs.release_branch }}"
-          CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-
