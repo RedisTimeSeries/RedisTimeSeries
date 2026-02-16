@@ -13,7 +13,6 @@ on:
       - master
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
-  pull_request:
   workflow_dispatch:
     inputs:
       redis-ref:
@@ -132,7 +131,7 @@ jobs:
         with:
           redis-ref: ${{ needs.prepare-values.outputs.redis-ref }}
           job-results: ${{ steps.build-results.outputs.job_results }}
-          slack-webhook-url: ${{ secrets.TEST_SLACK_WH }}
+          slack-webhook-url: ${{ secrets.DATATYPES_SLACK_WEBHOOK_URL }}
           send-notification: ${{ inputs.send-slack-message == false && 'false' || 'true' }}
           repository: ${{ github.repository }}
           commit-sha: ${{ github.sha }}
