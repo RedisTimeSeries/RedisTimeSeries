@@ -42,6 +42,7 @@ jobs:
       - name: Check nightly build status on release branch
         if: ${{ !inputs.skip_nightly_check }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.derive-branch.outputs.release_branch }}
         run: |
           echo "Checking nightly build status for branch: $BRANCH"
