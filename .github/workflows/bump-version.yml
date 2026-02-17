@@ -27,6 +27,7 @@ concurrency:
 jobs:
   validate-and-check:
     runs-on: ubuntu-latest
+    if: github.actor == github.repository_owner
     permissions:
       actions: read
     outputs:
