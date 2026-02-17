@@ -1,0 +1,560 @@
+name: 'Test Summary Slack Notification'
+description: 'Aggregates test results from nightly CI runs and sends Slack notifications'
+
+inputs:
+  redis-ref:
+    description: 'Redis ref that was tested'
+    required: true
+  job-results:
+    description: 'JSON object mapping job names to their results (success/failure/cancelled/skipped)'
+    required: true
+  slack-webhook-url:
+    description: 'Slack webhook URL for sending notifications'
+    required: true
+  send-notification:
+    description: 'Whether to send the Slack notification'
+    required: false
+    default: 'true'
+  repository:
+    description: 'Repository name (owner/repo format)'
+    required: false
+    default: ${{ github.repository }}
+  workflow-url:
+    description: 'URL to the workflow run'
+    required: false
+    default: ''
+  commit-sha:
+    description: 'Full commit SHA'
+    required: false
+    default: ${{ github.sha }}
+  test-mode:
+    description: 'If true, adds visual indicators that this is a TEST/MOCK notification'
+    required: false
+    default: 'false'
+  data-source:
+    description: 'Description of data source (e.g., "Mock Scenario - some-failures" or "Fetched from Run #12345")'
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Overall build status (success/failure/cancelled/skipped)'
+    value: ${{ steps.aggregate.outputs.status }}
+  failed-jobs:
+    description: 'List of failed job names'
+    value: ${{ steps.aggregate.outputs.failed_jobs }}
+  notification-sent:
+    description: 'Whether the notification was sent successfully'
+    value: ${{ steps.send-slack.outputs.sent }}
+  total-tests-passed:
+    description: 'Total number of tests passed across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_passed }}
+  total-tests-failed:
+    description: 'Total number of tests failed across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_failed }}
+  total-tests-skipped:
+    description: 'Total number of tests skipped across all platforms'
+    value: ${{ steps.test-metrics.outputs.total_skipped }}
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout for commit info
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Download all test result artifacts
+      uses: actions/download-artifact@v4
+      continue-on-error: true
+      with:
+        pattern: test-results-*
+        merge-multiple: false
+
+    - name: Aggregate test metrics from artifacts
+      id: test-metrics
+      shell: bash
+      run: |
+        # Initialize counters for granular test metrics
+        TOTAL_PASSED=0
+        TOTAL_FAILED=0
+        TOTAL_SKIPPED=0
+        TOTAL_TESTS=0
+        OS_SUMMARY=""
+        FAILED_OS_SUMMARY=""
+
+        # Find all test result JSON files from downloaded artifacts
+        echo "Looking for test result artifacts..."
+
+        for result_file in test-results-*/test-results-*.json; do
+          if [ -f "$result_file" ]; then
+            echo "Processing: $result_file"
+
+            # Validate JSON file
+            if ! jq empty "$result_file" 2>/dev/null; then
+              echo "Warning: Invalid JSON in $result_file, skipping"
+              continue
+            fi
+
+            # Extract values from JSON
+            OS_NAME=$(jq -r '.os // "unknown"' "$result_file" 2>/dev/null || echo "unknown")
+            PASSED=$(jq -r '.passed // 0' "$result_file" 2>/dev/null || echo "0")
+            FAILED=$(jq -r '.failed // 0' "$result_file" 2>/dev/null || echo "0")
+            SKIPPED=$(jq -r '.skipped // 0' "$result_file" 2>/dev/null || echo "0")
+            STATUS=$(jq -r '.status // ""' "$result_file" 2>/dev/null || echo "")
+
+            # Ensure values are valid numbers
+            PASSED=${PASSED:-0}
+            FAILED=${FAILED:-0}
+            SKIPPED=${SKIPPED:-0}
+
+            # Accumulate totals
+            TOTAL_PASSED=$((TOTAL_PASSED + PASSED))
+            TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
+
+            # Build per-OS summary line
+            if [ "$STATUS" = "error" ] || [ "$STATUS" = "unknown" ]; then
+              OS_LINE="• *${OS_NAME}*: ⚠️ Status: ${STATUS}"
+            else
+              OS_LINE="• *${OS_NAME}*: ✅ ${PASSED}"
+              if [ "$FAILED" -gt 0 ]; then
+                OS_LINE="${OS_LINE} | ❌ ${FAILED}"
+              fi
+              if [ "$SKIPPED" -gt 0 ]; then
+                OS_LINE="${OS_LINE} | ⏭️ ${SKIPPED}"
+              fi
+            fi
+            OS_SUMMARY="${OS_SUMMARY}${OS_LINE}\n"
+
+            # Track failed OSs (failed > 0 OR passed = 0 OR status = error/unknown)
+            if [ "$FAILED" -gt 0 ] || [ "$PASSED" -eq 0 ] || [ "$STATUS" = "error" ] || [ "$STATUS" = "unknown" ]; then
+              FAILED_OS_SUMMARY="${FAILED_OS_SUMMARY}${OS_LINE}\n"
+            fi
+          fi
+        done
+
+        TOTAL_TESTS=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_SKIPPED))
+
+        # Set outputs
+        echo "total_passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+        echo "total_failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+        echo "total_skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
+        echo "total_tests=$TOTAL_TESTS" >> $GITHUB_OUTPUT
+
+        # Handle empty summaries
+        if [ -z "$OS_SUMMARY" ]; then
+          OS_SUMMARY="No test result artifacts found"
+        fi
+        if [ -z "$FAILED_OS_SUMMARY" ]; then
+          FAILED_OS_SUMMARY="✅ All platforms passed!"
+        fi
+
+        # Use heredoc for multi-line outputs
+        echo "os_summary<<EOF" >> $GITHUB_OUTPUT
+        echo -e "${OS_SUMMARY}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        echo "failed_os_summary<<EOF" >> $GITHUB_OUTPUT
+        echo -e "${FAILED_OS_SUMMARY}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        echo "=== Test Metrics Summary ==="
+        echo "Total Tests: $TOTAL_TESTS (Passed: $TOTAL_PASSED, Failed: $TOTAL_FAILED, Skipped: $TOTAL_SKIPPED)"
+
+    - name: Collect commit information
+      id: commit-info
+      shell: bash
+      env:
+        INPUT_COMMIT_SHA: ${{ inputs.commit-sha }}
+      run: |
+        # Get short SHA (7 characters)
+        SHORT_SHA="${INPUT_COMMIT_SHA}"
+        SHORT_SHA="${SHORT_SHA:0:7}"
+        echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+        # Get commit message (max 100 characters)
+        COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Commit message unavailable")
+        if [[ ${#COMMIT_MSG} -gt 100 ]]; then
+          COMMIT_MSG="${COMMIT_MSG:0:97}..."
+        fi
+        echo "commit_message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+
+    - name: Aggregate job results
+      id: aggregate
+      shell: bash
+      env:
+        JOB_RESULTS_INPUT: ${{ inputs.job-results }}
+      run: |
+        # Parse job results JSON from environment variable to avoid substitution issues
+        JOB_RESULTS="$JOB_RESULTS_INPUT"
+
+        # Debug: show what we received
+        echo "Received job results: $JOB_RESULTS"
+        
+        # Initialize counters
+        FAILED_JOBS=""
+        FAILED_JOBS_ARRAY=""
+        OVERALL_STATUS="success"
+        TOTAL_JOBS=0
+        PASSED_JOBS=0
+        FAILED_COUNT=0
+        CANCELLED_COUNT=0
+        SKIPPED_COUNT=0
+        
+        # Process each job
+        for job in $(echo "$JOB_RESULTS" | jq -r 'keys[]'); do
+          result=$(echo "$JOB_RESULTS" | jq -r --arg job "$job" '.[$job]')
+          TOTAL_JOBS=$((TOTAL_JOBS + 1))
+
+          case "$result" in
+            "success")
+              PASSED_JOBS=$((PASSED_JOBS + 1))
+              ;;
+            "failure")
+              OVERALL_STATUS="failure"
+              FAILED_COUNT=$((FAILED_COUNT + 1))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}*\n"
+              [[ -n "$FAILED_JOBS_ARRAY" ]] && FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY},"
+              FAILED_JOBS_ARRAY="${FAILED_JOBS_ARRAY}\"${job}\""
+              ;;
+            "cancelled")
+              if [[ "$OVERALL_STATUS" != "failure" ]]; then
+                OVERALL_STATUS="cancelled"
+              fi
+              CANCELLED_COUNT=$((CANCELLED_COUNT + 1))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}* (cancelled)\n"
+              ;;
+            "skipped")
+              if [[ "$OVERALL_STATUS" == "success" ]]; then
+                OVERALL_STATUS="skipped"
+              fi
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+              FAILED_JOBS="${FAILED_JOBS}• *${job}* (skipped)\n"
+              ;;
+          esac
+        done
+        
+        # Set outputs
+        echo "status=${OVERALL_STATUS}" >> $GITHUB_OUTPUT
+        echo "total_jobs=${TOTAL_JOBS}" >> $GITHUB_OUTPUT
+        echo "passed_jobs=${PASSED_JOBS}" >> $GITHUB_OUTPUT
+        echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
+        echo "cancelled_count=${CANCELLED_COUNT}" >> $GITHUB_OUTPUT
+        echo "skipped_count=${SKIPPED_COUNT}" >> $GITHUB_OUTPUT
+        
+        # Failed jobs list
+        if [[ -z "$FAILED_JOBS" ]]; then
+          echo "failed_jobs=✅ All jobs passed successfully!" >> $GITHUB_OUTPUT
+          echo "failed_jobs_array=[]" >> $GITHUB_OUTPUT
+        else
+          echo "failed_jobs<<EOF" >> $GITHUB_OUTPUT
+          echo -e "${FAILED_JOBS}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "failed_jobs_array=[${FAILED_JOBS_ARRAY}]" >> $GITHUB_OUTPUT
+        fi
+        
+        # Set emoji and color
+        case "$OVERALL_STATUS" in
+          "success")
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+            echo "status_text=Success" >> $GITHUB_OUTPUT
+            ;;
+          "failure")
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+            echo "status_text=Failed" >> $GITHUB_OUTPUT
+            ;;
+          "cancelled")
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+            echo "status_text=Cancelled" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "emoji=⏭️" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+            echo "status_text=Skipped" >> $GITHUB_OUTPUT
+            ;;
+        esac
+        
+        # Log summary
+        echo "=== Test Summary ==="
+        echo "Overall Status: ${OVERALL_STATUS}"
+        echo "Total Jobs: ${TOTAL_JOBS}"
+        echo "Passed: ${PASSED_JOBS}, Failed: ${FAILED_COUNT}, Cancelled: ${CANCELLED_COUNT}, Skipped: ${SKIPPED_COUNT}"
+
+    - name: Build workflow URL
+      id: urls
+      shell: bash
+      env:
+        INPUT_WORKFLOW_URL: ${{ inputs.workflow-url }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_COMMIT_SHA: ${{ inputs.commit-sha }}
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        if [[ -n "$INPUT_WORKFLOW_URL" ]]; then
+          echo "workflow_url=$INPUT_WORKFLOW_URL" >> $GITHUB_OUTPUT
+        else
+          echo "workflow_url=${GITHUB_SERVER_URL}/${INPUT_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+        fi
+        echo "commit_url=${GITHUB_SERVER_URL}/${INPUT_REPOSITORY}/commit/${INPUT_COMMIT_SHA}" >> $GITHUB_OUTPUT
+
+    - name: Validate webhook URL
+      id: validate
+      shell: bash
+      env:
+        INPUT_SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
+      run: |
+        if [[ -z "$INPUT_SLACK_WEBHOOK_URL" ]]; then
+          echo "::error::Slack webhook URL is empty or not configured"
+          echo "valid=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "valid=true" >> $GITHUB_OUTPUT
+
+    - name: Send Slack notification
+      id: send-slack
+      if: inputs.send-notification == 'true' && steps.validate.outputs.valid == 'true'
+      shell: bash
+      env:
+        FAILED_JOBS_TEXT: ${{ steps.aggregate.outputs.failed_jobs }}
+        PASSED_JOBS: ${{ steps.aggregate.outputs.passed_jobs }}
+        FAILED_COUNT: ${{ steps.aggregate.outputs.failed_count }}
+        SKIPPED_COUNT: ${{ steps.aggregate.outputs.skipped_count }}
+        CANCELLED_COUNT: ${{ steps.aggregate.outputs.cancelled_count }}
+        REPOSITORY: ${{ inputs.repository }}
+        REDIS_REF: ${{ inputs.redis-ref }}
+        SHORT_SHA: ${{ steps.commit-info.outputs.short_sha }}
+        COMMIT_MESSAGE: ${{ steps.commit-info.outputs.commit_message }}
+        WORKFLOW_URL: ${{ steps.urls.outputs.workflow_url }}
+        # Granular test metrics from artifacts
+        TOTAL_TESTS_PASSED: ${{ steps.test-metrics.outputs.total_passed }}
+        TOTAL_TESTS_FAILED: ${{ steps.test-metrics.outputs.total_failed }}
+        TOTAL_TESTS_SKIPPED: ${{ steps.test-metrics.outputs.total_skipped }}
+        TOTAL_TESTS: ${{ steps.test-metrics.outputs.total_tests }}
+        FAILED_OS_SUMMARY: ${{ steps.test-metrics.outputs.failed_os_summary }}
+        OS_SUMMARY: ${{ steps.test-metrics.outputs.os_summary }}
+        TEST_MODE: ${{ inputs.test-mode }}
+        DATA_SOURCE: ${{ inputs.data-source }}
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+      run: |
+        # Determine if this is a test/mock notification
+        IS_TEST_MODE="false"
+        if [[ "$TEST_MODE" == "true" ]]; then
+          IS_TEST_MODE="true"
+        fi
+
+        # Build the job-level summary line
+        JOB_SUMMARY="✅ Jobs Passed: ${PASSED_JOBS}"
+        if [[ "${FAILED_COUNT}" != "0" ]]; then
+          JOB_SUMMARY="${JOB_SUMMARY} | ❌ Failed: ${FAILED_COUNT}"
+        fi
+        if [[ "${SKIPPED_COUNT}" != "0" ]]; then
+          JOB_SUMMARY="${JOB_SUMMARY} | ⏭️ Skipped: ${SKIPPED_COUNT}"
+        fi
+        if [[ "${CANCELLED_COUNT}" != "0" ]]; then
+          JOB_SUMMARY="${JOB_SUMMARY} | ⚠️ Cancelled: ${CANCELLED_COUNT}"
+        fi
+
+        # Build the test-level summary line (granular metrics)
+        TEST_SUMMARY=""
+        if [[ "${TOTAL_TESTS}" != "0" ]] && [[ -n "${TOTAL_TESTS}" ]]; then
+          TEST_SUMMARY="✅ Tests Passed: ${TOTAL_TESTS_PASSED}"
+          if [[ "${TOTAL_TESTS_FAILED}" != "0" ]]; then
+            TEST_SUMMARY="${TEST_SUMMARY} | ❌ Failed: ${TOTAL_TESTS_FAILED}"
+          fi
+          if [[ "${TOTAL_TESTS_SKIPPED}" != "0" ]]; then
+            TEST_SUMMARY="${TEST_SUMMARY} | ⏭️ Skipped: ${TOTAL_TESTS_SKIPPED}"
+          fi
+        else
+          TEST_SUMMARY="No granular test metrics available"
+        fi
+
+        # Determine platform results to show
+        # Only show detailed platform breakdown when there are actual platform-level issues
+        # Show summary message when all platform tests passed (even if job-level failures exist)
+
+        # Check if we have any platform-level failures from artifacts
+        # Platform failure criteria: failed > 0 OR passed == 0 OR status == error/unknown
+        HAS_PLATFORM_FAILURES=false
+        if [[ "$FAILED_OS_SUMMARY" != *"All platforms passed"* ]] && [[ -n "$FAILED_OS_SUMMARY" ]]; then
+          HAS_PLATFORM_FAILURES=true
+        fi
+
+        # Build platform results section based on platform-level status (not job-level)
+        if [[ "$HAS_PLATFORM_FAILURES" == "true" ]]; then
+          # Show detailed breakdown only when platforms have actual test failures/issues
+          PLATFORM_RESULTS="$FAILED_OS_SUMMARY"
+        elif [[ -z "$OS_SUMMARY" ]] || [[ "$OS_SUMMARY" == "No test result artifacts found" ]]; then
+          # No artifacts found - indicate this clearly
+          PLATFORM_RESULTS="⚠️ No platform-level details available. Check individual job logs."
+        else
+          # All platform tests passed - show success message
+          PLATFORM_RESULTS="✅ All platforms passed!"
+        fi
+
+        # Build payload using jq to properly escape all values
+        # When in test mode, add visual indicators to distinguish from real notifications
+        PAYLOAD=$(jq -n \
+          --arg repo "$REPOSITORY" \
+          --arg redis_ref "$REDIS_REF" \
+          --arg short_sha "$SHORT_SHA" \
+          --arg commit_msg "$COMMIT_MESSAGE" \
+          --arg job_summary "$JOB_SUMMARY" \
+          --arg test_summary "$TEST_SUMMARY" \
+          --arg workflow_url "$WORKFLOW_URL" \
+          --arg failed_jobs "$FAILED_JOBS_TEXT" \
+          --arg failed_os "$PLATFORM_RESULTS" \
+          --arg is_test_mode "$IS_TEST_MODE" \
+          --arg data_source "$DATA_SOURCE" \
+          '
+          # Build header text based on test mode
+          (if $is_test_mode == "true" then "🧪 TEST: \($repo) - Event Nightly" else "\($repo) - Event Nightly" end) as $header_text |
+          (if $is_test_mode == "true" then "🧪 TEST MESSAGE - Event Nightly Test Results" else "Event Nightly Test Results" end) as $fallback_text |
+
+          # Build the base blocks array
+          [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": $header_text
+              }
+            }
+          ] +
+          # Add test mode warning block if in test mode
+          (if $is_test_mode == "true" then [
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "⚠️ *This is a TEST/MOCK notification* - not a real nightly build result"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Data Source:* \($data_source)"
+              }
+            },
+            {
+              "type": "divider"
+            }
+          ] else [] end) +
+          # Continue with standard blocks
+          [
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Redis Version:*\n\($redis_ref)"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Build:*\n\($short_sha)"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Commit:* \($commit_msg)"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Job Summary*\n\($job_summary)"
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Test Summary*\n\($test_summary)"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Failed Jobs:*\n\($failed_jobs)"
+              }
+            },
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "─────────────────────────────────"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Platform Details (arch-os):*\n\($failed_os)"
+              }
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Show Full Summary",
+                    "emoji": true
+                  },
+                  "url": "\($workflow_url)",
+                  "style": "primary"
+                }
+              ]
+            }
+          ] |
+          # Combine into final payload
+          {
+            "text": $fallback_text,
+            "blocks": .
+          }
+          '
+        )
+
+        # Send to Slack
+        RESPONSE_FILE=$(mktemp)
+        HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
+          -X POST \
+          -H 'Content-type: application/json' \
+          --data "$PAYLOAD" \
+          "$SLACK_WEBHOOK")
+
+        RESPONSE=$(cat "$RESPONSE_FILE")
+        rm -f "$RESPONSE_FILE"
+
+        echo "HTTP Response Code: ${HTTP_CODE}"
+        echo "Response Body: ${RESPONSE}"
+
+        if [[ "$HTTP_CODE" == "200" ]]; then
+          echo "sent=true" >> $GITHUB_OUTPUT
+          echo "✅ Slack notification sent successfully"
+        else
+          echo "sent=false" >> $GITHUB_OUTPUT
+          echo "::error::Failed to send Slack notification. HTTP Code: ${HTTP_CODE}, Response: ${RESPONSE}"
+          exit 1
+        fi
+

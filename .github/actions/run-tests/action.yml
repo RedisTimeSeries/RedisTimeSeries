@@ -24,12 +24,22 @@ runs:
   steps:
     - name: Run tests
       shell: bash
+      env:
+        INPUT_RUN_VALGRIND: ${{ inputs.run_valgrind }}
+        INPUT_RUN_SANITIZER: ${{ inputs.run_sanitizer }}
+        INPUT_QUICK: ${{ inputs.quick }}
+        INPUT_USE_VENV: ${{ inputs.use-venv }}
       run: |
         if command -v scl_source &> /dev/null
         then
             . scl_source enable devtoolset-11 || true
         fi
-        if [[ "${{ inputs.use-venv }}" == "1" ]]; then
+        if [[ "$INPUT_USE_VENV" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        # Capture test output to file for parsing by capture-test-results action
+        TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
+        make test VG="$INPUT_RUN_VALGRIND" SAN="$INPUT_RUN_SANITIZER" QUICK="$INPUT_QUICK" \
+          REDIS_SERVER="$GITHUB_WORKSPACE/redis/src/redis-server" 2>&1 | tee "$TEST_OUTPUT_FILE"
+        echo "TEST_OUTPUT_FILE=$TEST_OUTPUT_FILE" >> $GITHUB_ENV
+        exit ${PIPESTATUS[0]}
