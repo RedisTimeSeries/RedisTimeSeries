@@ -86,6 +86,10 @@ runs:
               exit 1
             fi
           fi
+
+          if [[ -n "${{ inputs.osnick }}" ]]; then
+            export OSNICK="${{ inputs.osnick }}"
+          fi
           echo ::endgroup::
           
           echo ::group::upload artifacts
