@@ -76,9 +76,17 @@ MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator 
     for (size_t i = 0; i < newIter->n_series; ++i) {
         AbstractSampleIterator *sample_iter = newIter->base.input[i];
         MSSample *sample = malloc(sizeof(MSSample));
+        if (!sample) {
+            MultiSeriesSampleIterator_Close((AbstractMultiSeriesSampleIterator *)newIter);
+            return NULL;
+        }
         if (sample_iter->GetNext(sample_iter, &sample->sample) == CR_OK) {
             sample->iter = sample_iter;
-            assert(heap_offer(&newIter->samples_heap, sample) == 0);
+            if (heap_offer(&newIter->samples_heap, sample) != 0) {
+                free(sample);
+                MultiSeriesSampleIterator_Close((AbstractMultiSeriesSampleIterator *)newIter);
+                return NULL;
+            }
         } else {
             free(sample);
         }
