@@ -28,9 +28,15 @@ valgrind_check() {
 
 sanitizer_check() {
 	local logdir="$ROOT/tests/$DIR/logs"
+	local files=()
 
-	for file in "$logdir"/*.asan.log*; do
-		if grep -q -e "runtime error" -e "Sanitizer" -v "failed to allocate" "$file"; then
+	shopt -s nullglob
+	files=("$logdir"/*.asan.log*)
+	shopt -u nullglob
+
+	for file in "${files[@]}"; do
+		if grep -q -E "runtime error|Sanitizer" "$file" && \
+		   ! grep -q "failed to allocate" "$file"; then
 			echo
 			echo "### Sanitizer error in $file:"
 			cat "$file"
