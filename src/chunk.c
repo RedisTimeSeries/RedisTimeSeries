@@ -335,6 +335,15 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     size_t string_buffer_size;
     uncompchunk->samples =
         (Sample *)LoadStringBuffer_IOError(io, &string_buffer_size, err, TSDB_ERROR);
+
+    if (uncompchunk->num_samples * SAMPLE_SIZE > uncompchunk->size) {
+        err = true;
+        return TSDB_ERROR;
+    }
+    if (uncompchunk->size != string_buffer_size) {
+        err = true;
+        return TSDB_ERROR;
+    }
     *chunk = (Chunk_t *)uncompchunk;
 
     return TSDB_OK;

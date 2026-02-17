@@ -130,6 +130,10 @@ typedef enum
 #define UNCOMPRESSED_ARG_STR "uncompressed"
 #define COMPRESSED_GORILLA_ARG_STR "compressed"
 
+// Max number of label key/value pairs allowed on a series.
+// This is enforced on command parsing and during RDB load.
+#define TS_MAX_LABELS_COUNT 1024
+
 // DC - Don't Care (Arbitrary value)
 #define DC 0
 

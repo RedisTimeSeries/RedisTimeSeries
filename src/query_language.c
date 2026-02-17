@@ -45,6 +45,11 @@ int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count,
         return REDISMODULE_OK;
     }
     *label_count = (size_t)(max(0, (argc - first_label_pos) / 2));
+    if (*label_count > TS_MAX_LABELS_COUNT) {
+        *labels = NULL;
+        *label_count = 0;
+        return REDISMODULE_ERR;
+    }
     if (*label_count > 0) {
         labelsResult = calloc((*label_count), sizeof(Label));
         for (int i = 0; i < *label_count; i++) {

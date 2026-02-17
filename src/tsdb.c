@@ -1101,6 +1101,10 @@ void SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
                                        Label *labels,
                                        size_t labelsCount) {
     const size_t compactedRuleLabelCount = labelsCount + 2;
+    if (compactedRuleLabelCount > TS_MAX_LABELS_COUNT) {
+        RM_LOG_WARNING(ctx, "Cannot create compacted keys, too many labels");
+        return;
+    }
 
     for (int i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
         SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
