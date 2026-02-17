@@ -188,12 +188,16 @@ jobs:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
 
       - name: Upload test artifacts
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
-            tests/**/*.log
+            logs/**
+            tests/**/logs/**
+            tests/**/*.log*
+            bin/artifacts/tests/**
+          if-no-files-found: warn
 
       - name: Pack module
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
