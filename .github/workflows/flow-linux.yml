@@ -172,7 +172,7 @@ jobs:
             bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}" || true
+              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
         if: always()
