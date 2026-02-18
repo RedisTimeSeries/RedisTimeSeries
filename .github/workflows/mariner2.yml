@@ -71,7 +71,7 @@ jobs:
         run: |
           # Capture test output to file for parsing by capture-test-results action
           TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
-          make test QUICK=${{inputs.quick && '1' || '0'}} 2>&1 | tee "$TEST_OUTPUT_FILE" || true
+          make test QUICK=${{inputs.quick && '1' || '0'}} 2>&1 | tee "$TEST_OUTPUT_FILE"
           echo "TEST_OUTPUT_FILE=$TEST_OUTPUT_FILE" >> $GITHUB_ENV
       - name: Capture test results
         if: always()
