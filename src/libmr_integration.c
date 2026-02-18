@@ -2,12 +2,14 @@
 
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
+#include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "module.h"
 #include "query_language.h"
 #include "tsdb.h"
+#include "series_iterator.h"
 #include <math.h>
 #include "reply.h"
 
@@ -29,6 +31,7 @@ static MRRecordType *MapRecordType = NULL;
 static MRRecordType *SlotRangesRecordType = NULL;
 static MRRecordType *SeriesListRecordType = NULL;
 static MRRecordType *StringListRecordType = NULL;
+static MRRecordType *RawSeriesListRecordType = NULL;
 
 static Record *GetNullRecord() {
     return &NullRecord;
@@ -56,6 +59,10 @@ MRRecordType *GetSeriesListRecordType() {
 
 MRRecordType *GetStringListRecordType() {
     return StringListRecordType;
+}
+
+MRRecordType *GetRawSeriesListRecordType() {
+    return RawSeriesListRecordType;
 }
 
 static void QueryPredicates_ObjectFree(void *arg) {
@@ -646,11 +653,49 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
     return ret;
 }
 
+// Cached slot ranges for the fallback path (computed once, invalidated on REFRESHCLUSTER)
+static int cachedSlotRangesCount = -1;
+static uint16_t cachedSlotRanges[256][2];
+
+void InvalidateCachedSlotRanges(void) {
+    cachedSlotRangesCount = -1;
+}
+
 static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
+    if (RedisModule_ClusterGetLocalSlotRanges == NULL) {
+        // API not available (e.g., OSS Redis). Use cached slot ranges from LibMR.
+        if (cachedSlotRangesCount < 0) {
+            uint16_t rangeStart = 0;
+            bool inRange = false;
+            cachedSlotRangesCount = 0;
+            for (uint16_t slot = 0; slot <= 16383; slot++) {
+                bool mine = MR_ClusterIsMySlot(slot);
+                if (mine && !inRange) {
+                    rangeStart = slot;
+                    inRange = true;
+                } else if (!mine && inRange) {
+                    cachedSlotRanges[cachedSlotRangesCount][0] = rangeStart;
+                    cachedSlotRanges[cachedSlotRangesCount][1] = slot - 1;
+                    cachedSlotRangesCount++;
+                    inRange = false;
+                }
+            }
+            if (inRange) {
+                cachedSlotRanges[cachedSlotRangesCount][0] = rangeStart;
+                cachedSlotRanges[cachedSlotRangesCount][1] = 16383;
+                cachedSlotRangesCount++;
+            }
+        }
+        RedisModule_ReplyWithArray(ctx, cachedSlotRangesCount);
+        for (int i = 0; i < cachedSlotRangesCount; i++) {
+            RedisModule_ReplyWithArray(ctx, 2);
+            RedisModule_ReplyWithLongLong(ctx, cachedSlotRanges[i][0]);
+            RedisModule_ReplyWithLongLong(ctx, cachedSlotRanges[i][1]);
+        }
+        return;
+    }
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
     if (sra == NULL) {
-        // Should never happen, because this function is only called in clustered environment.
-        // But to be on the safe side:
         RedisModule_ReplyWithArray(ctx, 0);
         return;
     }
@@ -810,6 +855,285 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
 
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
                                                     .replyParser = SeriesListReplyParser };
+
+// --- Raw (lightweight) series list for non-GROUPBY MRANGE fast path ---
+
+Record *RawSeriesListRecord_Create(RawSeriesEntry *entries, size_t count) {
+    RawSeriesListRecord *record = (RawSeriesListRecord *)MR_RecordCreate(
+        RawSeriesListRecordType, sizeof(RawSeriesListRecord));
+    record->entries = entries;
+    record->count = count;
+    return (Record *)record;
+}
+
+void RawSeriesListRecord_Free(void *base) {
+    RawSeriesListRecord *record = (RawSeriesListRecord *)base;
+    for (size_t i = 0; i < record->count; i++) {
+        RawSeriesEntry *e = &record->entries[i];
+        free(e->name);
+        for (size_t j = 0; j < e->labelsCount; j++) {
+            free(e->labels[j].key);
+            free(e->labels[j].value);
+        }
+        free(e->labels);
+        free(e->samples);
+    }
+    free(record->entries);
+    free(record);
+}
+
+static RawSeriesEntry ParseSeriesRaw(const redisReply *reply) {
+    RawSeriesEntry entry = {0};
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    RedisModule_Assert(reply->elements == 3);
+
+    // Name
+    const redisReply *nameEl = reply->element[0];
+    RedisModule_Assert(nameEl->type == REDIS_REPLY_STRING);
+    entry.name = malloc(nameEl->len);
+    memcpy(entry.name, nameEl->str, nameEl->len);
+    entry.nameLen = nameEl->len;
+
+    // Labels
+    const redisReply *labelsEl = reply->element[1];
+    RedisModule_Assert(labelsEl->type == REDIS_REPLY_ARRAY);
+    entry.labelsCount = labelsEl->elements;
+    if (entry.labelsCount > 0) {
+        entry.labels = malloc(sizeof(RawLabel) * entry.labelsCount);
+        for (size_t i = 0; i < entry.labelsCount; i++) {
+            const redisReply *lbl = labelsEl->element[i];
+            RedisModule_Assert(lbl->type == REDIS_REPLY_ARRAY && lbl->elements == 2);
+            entry.labels[i].key = malloc(lbl->element[0]->len);
+            memcpy(entry.labels[i].key, lbl->element[0]->str, lbl->element[0]->len);
+            entry.labels[i].keyLen = lbl->element[0]->len;
+            if (lbl->element[1]->type == REDIS_REPLY_STRING) {
+                entry.labels[i].value = malloc(lbl->element[1]->len);
+                memcpy(entry.labels[i].value, lbl->element[1]->str, lbl->element[1]->len);
+                entry.labels[i].valueLen = lbl->element[1]->len;
+            } else {
+                entry.labels[i].value = NULL;
+                entry.labels[i].valueLen = 0;
+            }
+        }
+    } else {
+        entry.labels = NULL;
+    }
+
+    // Samples
+    const redisReply *samplesEl = reply->element[2];
+    RedisModule_Assert(samplesEl->type == REDIS_REPLY_ARRAY);
+
+    // Handle compact single-sample case
+    if (samplesEl->elements == 2 && samplesEl->element[0]->type == REDIS_REPLY_INTEGER) {
+        entry.samplesCount = 1;
+        entry.samples = malloc(sizeof(RawSample));
+        entry.samples[0].timestamp = samplesEl->element[0]->integer;
+        parse_double_cstr(
+            samplesEl->element[1]->str, samplesEl->element[1]->len, &entry.samples[0].value);
+        return entry;
+    }
+
+    entry.samplesCount = samplesEl->elements;
+    if (entry.samplesCount > 0) {
+        entry.samples = malloc(sizeof(RawSample) * entry.samplesCount);
+        for (size_t i = 0; i < entry.samplesCount; i++) {
+            const redisReply *samp = samplesEl->element[i];
+            RedisModule_Assert(samp->type == REDIS_REPLY_ARRAY && samp->elements == 2);
+            entry.samples[i].timestamp = samp->element[0]->integer;
+            parse_double_cstr(
+                samp->element[1]->str, samp->element[1]->len, &entry.samples[i].value);
+        }
+    } else {
+        entry.samples = NULL;
+    }
+    return entry;
+}
+
+static Record *RawSeriesListReplyParser(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    size_t count = reply->elements;
+    RawSeriesEntry *entries = NULL;
+    if (count > 0) {
+        entries = malloc(sizeof(RawSeriesEntry) * count);
+        for (size_t i = 0; i < count; i++) {
+            entries[i] = ParseSeriesRaw(reply->element[i]);
+        }
+    }
+    return RawSeriesListRecord_Create(entries, count);
+}
+
+static InternalCommandCallbacks MrangeRawCallbacks = { .command = TS_INTERNAL_MRANGE,
+                                                       .replyParser = RawSeriesListReplyParser };
+
+// --- Packed binary protocol for MRANGE (1000x fewer hiredis objects) ---
+// Format per series: [name_string, labels_array, packed_binary_blob]
+// packed_binary_blob = bulk string of N * 16 bytes: [int64_t timestamp, double value] pairs
+
+static void TS_INTERNAL_MRANGE_PACKED(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+
+    QueryPredicateList *predicates = queryArg->predicates;
+    RedisModuleDict *qi = QueryIndex(ctx, predicates->list, predicates->count, NULL);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    long long replylen = 0;
+
+    char *currentKey;
+    size_t currentKeyLen;
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        RedisModuleKey *key;
+        Series *series;
+        const GetSeriesResult status =
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, flags);
+        if (status != GetSeriesResult_Success) {
+            RedisModule_FreeString(ctx, keyName);
+            continue;
+        }
+
+        RedisModule_ReplyWithArray(ctx, 3);
+
+        // 1. Name
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+
+        // 2. Labels (only if needed for GROUPBY; for raw path we skip)
+        if (queryArg->withLabels) {
+            ReplyWithSeriesLabels(ctx, series);
+        } else {
+            RedisModule_ReplyWithArray(ctx, 0);
+        }
+
+        // 3. Packed samples as binary bulk string
+        // First collect samples into a buffer
+        RangeArgs rangeArgs = {0};
+        rangeArgs.startTimestamp = queryArg->startTimestamp;
+        rangeArgs.endTimestamp = queryArg->endTimestamp;
+        rangeArgs.latest = queryArg->latest;
+        rangeArgs.count = -1LL;
+        rangeArgs.aggregationArgs.empty = false;
+        rangeArgs.aggregationArgs.timeDelta = 0;
+        rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
+        rangeArgs.aggregationArgs.aggregationClass = NULL;
+        rangeArgs.filterByValueArgs.hasValue = false;
+        rangeArgs.filterByTSArgs.hasValue = false;
+        rangeArgs.alignment = DefaultAlignment;
+        rangeArgs.timestampAlignment = 0;
+
+        AbstractIterator *siter = SeriesQuery(series, &rangeArgs, false, true);
+        EnrichedChunk *enrichedChunk;
+
+        // Use a dynamically growing buffer
+        size_t bufCap = 4096;
+        size_t bufLen = 0;
+        char *buf = malloc(bufCap);
+
+        while ((enrichedChunk = siter->GetNext(siter))) {
+            size_t needed = enrichedChunk->samples.num_samples * 16;
+            while (bufLen + needed > bufCap) {
+                bufCap *= 2;
+                buf = realloc(buf, bufCap);
+            }
+            for (size_t i = 0; i < enrichedChunk->samples.num_samples; i++) {
+                int64_t ts = (int64_t)enrichedChunk->samples.timestamps[i];
+                double val = enrichedChunk->samples.values[i];
+                memcpy(buf + bufLen, &ts, 8);
+                bufLen += 8;
+                memcpy(buf + bufLen, &val, 8);
+                bufLen += 8;
+            }
+        }
+        siter->Close(siter);
+
+        RedisModule_ReplyWithStringBuffer(ctx, buf, bufLen);
+        free(buf);
+
+        replylen++;
+        RedisModule_CloseKey(key);
+        RedisModule_FreeString(ctx, keyName);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
+    RedisModule_FreeDict(ctx, qi);
+}
+
+static RawSeriesEntry ParseSeriesPacked(const redisReply *reply) {
+    RawSeriesEntry entry = {0};
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    RedisModule_Assert(reply->elements == 3);
+
+    // Name
+    const redisReply *nameEl = reply->element[0];
+    RedisModule_Assert(nameEl->type == REDIS_REPLY_STRING);
+    entry.name = malloc(nameEl->len);
+    memcpy(entry.name, nameEl->str, nameEl->len);
+    entry.nameLen = nameEl->len;
+
+    // Labels
+    const redisReply *labelsEl = reply->element[1];
+    RedisModule_Assert(labelsEl->type == REDIS_REPLY_ARRAY);
+    entry.labelsCount = labelsEl->elements;
+    if (entry.labelsCount > 0) {
+        entry.labels = malloc(sizeof(RawLabel) * entry.labelsCount);
+        for (size_t i = 0; i < entry.labelsCount; i++) {
+            const redisReply *lbl = labelsEl->element[i];
+            RedisModule_Assert(lbl->type == REDIS_REPLY_ARRAY && lbl->elements == 2);
+            entry.labels[i].key = malloc(lbl->element[0]->len);
+            memcpy(entry.labels[i].key, lbl->element[0]->str, lbl->element[0]->len);
+            entry.labels[i].keyLen = lbl->element[0]->len;
+            if (lbl->element[1]->type == REDIS_REPLY_STRING) {
+                entry.labels[i].value = malloc(lbl->element[1]->len);
+                memcpy(entry.labels[i].value, lbl->element[1]->str, lbl->element[1]->len);
+                entry.labels[i].valueLen = lbl->element[1]->len;
+            } else {
+                entry.labels[i].value = NULL;
+                entry.labels[i].valueLen = 0;
+            }
+        }
+    } else {
+        entry.labels = NULL;
+    }
+
+    // Packed samples: binary bulk string of [int64_t ts, double val] pairs
+    const redisReply *samplesEl = reply->element[2];
+    RedisModule_Assert(samplesEl->type == REDIS_REPLY_STRING);
+    size_t blobLen = samplesEl->len;
+    entry.samplesCount = blobLen / 16;
+    if (entry.samplesCount > 0) {
+        entry.samples = malloc(sizeof(RawSample) * entry.samplesCount);
+        const char *ptr = samplesEl->str;
+        for (size_t i = 0; i < entry.samplesCount; i++) {
+            memcpy(&entry.samples[i].timestamp, ptr, 8);
+            ptr += 8;
+            memcpy(&entry.samples[i].value, ptr, 8);
+            ptr += 8;
+        }
+    } else {
+        entry.samples = NULL;
+    }
+    return entry;
+}
+
+static Record *PackedSeriesListReplyParser(const redisReply *reply) {
+    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+    size_t count = reply->elements;
+    RawSeriesEntry *entries = NULL;
+    if (count > 0) {
+        entries = malloc(sizeof(RawSeriesEntry) * count);
+        for (size_t i = 0; i < count; i++) {
+            entries[i] = ParseSeriesPacked(reply->element[i]);
+        }
+    }
+    return RawSeriesListRecord_Create(entries, count);
+}
+
+static InternalCommandCallbacks MrangePackedCallbacks = {
+    .command = TS_INTERNAL_MRANGE_PACKED,
+    .replyParser = PackedSeriesListReplyParser
+};
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
@@ -1047,10 +1371,19 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
         return REDISMODULE_ERR;
     }
 
+    RawSeriesListRecordType = MR_RecordTypeCreate(
+        "RawSeriesListRecord", RawSeriesListRecord_Free, NULL, NULL, NULL, NULL, NULL, NULL);
+    if (MR_RegisterRecord(RawSeriesListRecordType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
     MR_RegisterReader("ShardSeriesMapper", ShardSeriesMapper, QueryPredicatesType);
     MR_RegisterInternalCommand(
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE_RAW", &MrangeRawCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand(
+        "TS.INTERNAL_MRANGE_PACKED", &MrangePackedCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
 

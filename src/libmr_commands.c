@@ -121,6 +121,11 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
             nodesResults = array_append(nodesResults, record->stringList);
             continue;
         }
+        if (r->recordType == GetRawSeriesListRecordType()) {
+            RawSeriesListRecord *record = (RawSeriesListRecord *)r;
+            nodesResults = array_append(nodesResults, record);
+            continue;
+        }
 
         RedisModule_Log(ctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
@@ -144,64 +149,169 @@ __error:
     return NULL;
 }
 
+static void ReplyRawSeriesEntry(RedisModuleCtx *ctx,
+                                const RawSeriesEntry *entry,
+                                bool withLabels,
+                                RedisModuleString *limitLabels[],
+                                uint16_t numLimitLabels) {
+    if (!_ReplyMap(ctx)) {
+        RedisModule_ReplyWithArray(ctx, 3);
+    }
+    // Name
+    RedisModule_ReplyWithStringBuffer(ctx, entry->name, entry->nameLen);
+    if (_ReplyMap(ctx)) {
+        RedisModule_ReplyWithArray(ctx, 3);
+    }
+    // Labels
+    if (withLabels) {
+        ReplyWithMapOrArray(ctx, entry->labelsCount, false);
+        for (size_t i = 0; i < entry->labelsCount; i++) {
+            if (!_ReplyMap(ctx)) {
+                RedisModule_ReplyWithArray(ctx, 2);
+            }
+            RedisModule_ReplyWithStringBuffer(ctx, entry->labels[i].key, entry->labels[i].keyLen);
+            if (entry->labels[i].value)
+                RedisModule_ReplyWithStringBuffer(
+                    ctx, entry->labels[i].value, entry->labels[i].valueLen);
+            else
+                RedisModule_ReplyWithNull(ctx);
+        }
+    } else if (numLimitLabels > 0) {
+        ReplyWithMapOrArray(ctx, numLimitLabels, false);
+        for (uint16_t li = 0; li < numLimitLabels; li++) {
+            size_t wantLen;
+            const char *wantKey = RedisModule_StringPtrLen(limitLabels[li], &wantLen);
+            bool found = false;
+            for (size_t j = 0; j < entry->labelsCount; j++) {
+                if (entry->labels[j].keyLen == wantLen &&
+                    strncasecmp(entry->labels[j].key, wantKey, wantLen) == 0) {
+                    if (!_ReplyMap(ctx))
+                        RedisModule_ReplyWithArray(ctx, 2);
+                    RedisModule_ReplyWithStringBuffer(
+                        ctx, entry->labels[j].key, entry->labels[j].keyLen);
+                    if (entry->labels[j].value)
+                        RedisModule_ReplyWithStringBuffer(
+                            ctx, entry->labels[j].value, entry->labels[j].valueLen);
+                    else
+                        RedisModule_ReplyWithNull(ctx);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                if (!_ReplyMap(ctx))
+                    RedisModule_ReplyWithArray(ctx, 2);
+                RedisModule_ReplyWithStringBuffer(ctx, wantKey, wantLen);
+                RedisModule_ReplyWithNull(ctx);
+            }
+        }
+    } else {
+        ReplyWithMapOrArray(ctx, 0, false);
+    }
+    // Aggregators (RESP3)
+    if (_ReplyMap(ctx)) {
+        RedisModule_ReplyWithMap(ctx, 1);
+        RedisModule_ReplyWithCString(ctx, "aggregators");
+        RedisModule_ReplyWithArray(ctx, 0);
+    }
+    // Samples
+    RedisModule_ReplyWithArray(ctx, entry->samplesCount);
+    for (size_t i = 0; i < entry->samplesCount; i++) {
+        ReplyWithSample(ctx, entry->samples[i].timestamp, entry->samples[i].value);
+    }
+}
+
 static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
 
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(void *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
-    TS_ResultSet *resultset = NULL;
-    if (args->groupByLabel) {
-        resultset = ResultSet_Create();
-        ResultSet_GroupbyLabel(resultset, args->groupByLabel);
-    } else {
-        size_t totalLen = 0;
-        array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
-        ReplyWithMapOrArray(ctx, totalLen, false);
-    }
+    // Detect whether we got raw records (fast path) or full Series records
+    size_t numResults = array_len(nodesResults);
+    bool isRawPath = (numResults > 0);
+    // Check if we have RawSeriesListRecord pointers by examining the first result's type.
+    // collect_node_results appends RawSeriesListRecord* for raw, ARR(Series*) for full.
+    // We differentiate by checking if data has groupByLabel (raw path is only used without GROUPBY)
+    isRawPath = isRawPath && !args->groupByLabel;
 
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
-            if (args->groupByLabel)
-                ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
-            else
-                ReplySeriesArrayPos(ctx,
-                                    s,
+    if (isRawPath) {
+        // Fast path: reply directly from raw data without decompression
+        size_t totalLen = 0;
+        for (size_t n = 0; n < numResults; n++) {
+            RawSeriesListRecord *raw = (RawSeriesListRecord *)nodesResults[n];
+            totalLen += raw->count;
+        }
+        ReplyWithMapOrArray(ctx, totalLen, false);
+        for (size_t n = 0; n < numResults; n++) {
+            RawSeriesListRecord *raw = (RawSeriesListRecord *)nodesResults[n];
+            for (size_t i = 0; i < raw->count; i++) {
+                ReplyRawSeriesEntry(ctx,
+                                    &raw->entries[i],
                                     args->withLabels,
                                     args->limitLabels,
-                                    args->numLimitLabels,
-                                    &args->rangeArgs,
-                                    args->reverse,
-                                    false);
-        });
-    });
+                                    args->numLimitLabels);
+            }
+        }
+    } else {
+        // Original path for GROUPBY queries (uses full Series objects)
+        TS_ResultSet *resultset = NULL;
+        if (args->groupByLabel) {
+            resultset = ResultSet_Create();
+            ResultSet_GroupbyLabel(resultset, args->groupByLabel);
+        } else {
+            size_t totalLen = 0;
+            for (size_t n = 0; n < numResults; n++) {
+                ARR(Series *) seriesList = (ARR(Series *))nodesResults[n];
+                totalLen += array_len(seriesList);
+            }
+            ReplyWithMapOrArray(ctx, totalLen, false);
+        }
 
-    if (args->groupByLabel) {
-        // Apply the reducer
-        RangeArgs rangeArgs = args->rangeArgs;
-        rangeArgs.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
+        for (size_t n = 0; n < numResults; n++) {
+            ARR(Series *) seriesList = (ARR(Series *))nodesResults[n];
+            for (size_t si = 0; si < array_len(seriesList); si++) {
+                Series *s = seriesList[si];
+                if (args->groupByLabel)
+                    ResultSet_AddSeries(
+                        resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
+                else
+                    ReplySeriesArrayPos(ctx,
+                                        s,
+                                        args->withLabels,
+                                        args->limitLabels,
+                                        args->numLimitLabels,
+                                        &args->rangeArgs,
+                                        args->reverse,
+                                        false);
+            }
+        }
 
-        // Do not apply the aggregation on the resultset, do apply max results on the final result
-        RangeArgs minimizedArgs = args->rangeArgs;
-        minimizedArgs.startTimestamp = 0;
-        minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.aggregationClass = NULL;
-        minimizedArgs.aggregationArgs.timeDelta = 0;
-        minimizedArgs.filterByTSArgs.hasValue = false;
-        minimizedArgs.filterByValueArgs.hasValue = false;
-        minimizedArgs.latest = false;
+        if (args->groupByLabel) {
+            RangeArgs rangeArgs = args->rangeArgs;
+            rangeArgs.latest = false;
+            ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
 
-        replyResultSet(ctx,
-                       resultset,
-                       args->withLabels,
-                       args->limitLabels,
-                       args->numLimitLabels,
-                       &minimizedArgs,
-                       args->reverse);
-        ResultSet_Free(resultset);
+            RangeArgs minimizedArgs = args->rangeArgs;
+            minimizedArgs.startTimestamp = 0;
+            minimizedArgs.endTimestamp = UINT64_MAX;
+            minimizedArgs.aggregationArgs.aggregationClass = NULL;
+            minimizedArgs.aggregationArgs.timeDelta = 0;
+            minimizedArgs.filterByTSArgs.hasValue = false;
+            minimizedArgs.filterByValueArgs.hasValue = false;
+            minimizedArgs.latest = false;
+
+            replyResultSet(ctx,
+                           resultset,
+                           args->withLabels,
+                           args->limitLabels,
+                           args->numLimitLabels,
+                           &minimizedArgs,
+                           args->reverse);
+            ResultSet_Free(resultset);
+        }
     }
 
 __done:
@@ -592,7 +702,14 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            // Use packed binary protocol for non-GROUPBY queries to minimize
+            // hiredis RESP object overhead (1000x fewer objects)
+            if (args.groupByLabel) {
+                MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            } else {
+                MR_ExecutionBuilderInternalCommand(
+                    builder, "TS.INTERNAL_MRANGE_PACKED", queryArg);
+            }
             break;
         }
         default: {

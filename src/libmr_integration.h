@@ -95,12 +95,45 @@ typedef struct StringListRecord
     ARR(RedisModuleString *) stringList;
 } StringListRecord;
 
+// Lightweight sample pair for raw forwarding (no compression/chunks)
+typedef struct RawSample {
+    int64_t timestamp;
+    double value;
+} RawSample;
+
+// Lightweight label pair for raw forwarding
+typedef struct RawLabel {
+    char *key;
+    size_t keyLen;
+    char *value;
+    size_t valueLen;
+} RawLabel;
+
+// Lightweight series representation for non-GROUPBY forwarding
+typedef struct RawSeriesEntry {
+    char *name;
+    size_t nameLen;
+    RawLabel *labels;
+    size_t labelsCount;
+    RawSample *samples;
+    size_t samplesCount;
+} RawSeriesEntry;
+
+// Record that holds lightweight series data (avoids full Series object creation)
+typedef struct RawSeriesListRecord {
+    Record base;
+    RawSeriesEntry *entries;
+    size_t count;
+} RawSeriesListRecord;
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetSlotRangesRecordType();
 MRRecordType *GetSeriesListRecordType();
 MRRecordType *GetStringListRecordType();
+MRRecordType *GetRawSeriesListRecordType();
+void RawSeriesListRecord_Free(void *base);
 Record *MapRecord_GetRecord(MapRecord *record, size_t index);
 size_t MapRecord_GetLen(MapRecord *record);
 Record *ListRecord_GetRecord(ListRecord *record, size_t index);
