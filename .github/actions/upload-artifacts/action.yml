@@ -23,8 +23,5 @@ runs:
       with:
         name: Test logs ${{ steps.artifact-names.outputs.name }}
         path: |
-          logs/*.log*
-          logs/**/*.log*
-          tests/**/logs/*.log*
-          tests/**/logs/**/*.log*
+          tests/**/*.log
         if-no-files-found: ignore
