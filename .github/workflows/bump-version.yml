@@ -2,6 +2,22 @@ name: Bump Version
 
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to set (format: MAJOR.MINOR.PATCH, e.g., 8.4.8)'
+        required: true
+        type: string
+      skip_nightly_check:
+        description: 'Skip nightly build status check'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run (do not push changes)'
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       version:
@@ -27,7 +43,6 @@ concurrency:
 jobs:
   validate-and-check:
     runs-on: ubuntu-latest
-    if: github.actor == github.repository_owner
     permissions:
       actions: read
     outputs:
