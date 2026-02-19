@@ -1454,9 +1454,13 @@ int TSDB_delete(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
-    if ((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid))) &&
-        subevent == REDISMODULE_SUBEVENT_FLUSHDB_END) {
-        RemoveAllIndexedMetrics();
+    if ((!memcmp(&eid, &RedisModuleEvent_FlushDB, sizeof(eid)))){
+        RedisModuleFlushInfo *fi = data;
+        if (fi->dbnum==-1 && subevent == REDISMODULE_SUBEVENT_FLUSHDB_END){
+            RemoveAllIndexedMetrics();
+        }else if (fi->dbnum!=-1 && subevent == REDISMODULE_SUBEVENT_FLUSHDB_START){
+            RedisModule_Log(ctx, "warning", "flushdb isn't supported by redis timeseries,only flushall to delete all");
+        }
     }
 }
 
