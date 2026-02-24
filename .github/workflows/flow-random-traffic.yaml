@@ -19,6 +19,14 @@ on:
         description: 'Timeout in minutes'
         type: string
         default: '10'
+      beta-version:
+        description: 'Beta version for S3 uploads'
+        type: string
+        required: false
+      quick:
+        description: 'Run quick tests'
+        type: boolean
+        default: false
 
 jobs:
   prepare-values:
