@@ -18,6 +18,12 @@ cd $HERE
 
 #----------------------------------------------------------------------------------------------
 
+# Allow overriding python interpreter (useful when system python has incompatible deps).
+# If a relative path is provided, resolve it against the repo root.
+if [[ -n $PYTHON && ! ( $PYTHON == /* ) ]]; then
+	PYTHON="$ROOT/$PYTHON"
+fi
+
 help() {
 	cat <<-'END'
 		Run flow tests.
@@ -321,9 +327,9 @@ run_tests() {
 
 	local E=0
 	if [[ $NOP != 1 ]]; then
-		{ $OP python3 -m RLTest @$rltest_config; (( E |= $? )); } || true
+		{ $OP ${PYTHON:-python3} -m RLTest @$rltest_config; (( E |= $? )); } || true
 	else
-		$OP python3 -m RLTest @$rltest_config
+	$OP ${PYTHON:-python3} -m RLTest @$rltest_config
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config

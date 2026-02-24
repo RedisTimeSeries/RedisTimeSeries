@@ -755,16 +755,57 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
     }
-    if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
-        if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &TSGlobalConfig.numThreads) !=
-            REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after NUM_THREADS");
+    // Default, can be overridden either by legacy module arguments (deprecated) or by modern ones.
+    // Note: Modern module configs are loaded later via RedisModule_LoadConfigs(), but supporting
+    // the modern name here as a module argument helps users migrate from the legacy NUM_THREADS
+    // arg.
+    TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
+    bool modernNumThreadsFound = false;
+
+    if (argc > 1 && RMUtil_ArgIndex("ts-num-threads", argv, argc) >= 0) {
+        long long parsed = TSGlobalConfig.numThreads;
+        if (RMUtil_ParseArgsAfter("ts-num-threads", argv, argc, "l", &parsed) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "error", "Unable to parse argument after ts-num-threads");
             return TSDB_ERROR;
         }
+        if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
+            RedisModule_Log(ctx,
+                            "error",
+                            "Invalid value for ts-num-threads. Must be between %d and %d",
+                            NUM_THREADS_MIN,
+                            NUM_THREADS_MAX);
+            return TSDB_ERROR;
+        }
+        TSGlobalConfig.numThreads = parsed;
+        modernNumThreadsFound = true;
+    }
+
+    if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
+        long long parsed = TSGlobalConfig.numThreads;
+        if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &parsed) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "error", "Unable to parse argument after NUM_THREADS");
+            return TSDB_ERROR;
+        }
+        if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
+            RedisModule_Log(ctx,
+                            "error",
+                            "Invalid value for NUM_THREADS. Must be between %d and %d",
+                            NUM_THREADS_MIN,
+                            NUM_THREADS_MAX);
+            return TSDB_ERROR;
+        }
+
+        if (modernNumThreadsFound) {
+            RedisModule_Log(
+                ctx,
+                "warning",
+                "Both ts-num-threads and NUM_THREADS were provided. Using ts-num-threads.");
+        } else {
+            TSGlobalConfig.numThreads = parsed;
+        }
+
         LOG_DEPRECATED_OPTION("NUM_THREADS", "ts-num-threads", showDeprecationWarning);
         isDeprecated = true;
-    } else {
-        TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     }
 
     if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
