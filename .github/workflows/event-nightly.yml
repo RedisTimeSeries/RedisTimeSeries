@@ -96,7 +96,7 @@ jobs:
   #     run_sanitizer: true
   #   secrets: inherit
   random-traffic:
-    uses: ./.github/workflows/flow-random-traffic.yml
+    uses: ./.github/workflows/flow-random-traffic.yaml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
