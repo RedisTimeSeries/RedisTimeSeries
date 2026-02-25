@@ -18,7 +18,7 @@ on:
       timeout-minutes: 
         description: 'Timeout in minutes'
         type: string
-        default: '10'
+        default: '15'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -31,7 +31,7 @@ on:
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '10') }}
+    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '15') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
