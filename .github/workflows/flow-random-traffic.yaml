@@ -73,6 +73,7 @@ jobs:
             tail -n 100 random_traffic.txt
             pkill -f redis-server || true
       - name: Upload random traffic
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: random_traffic.txt
