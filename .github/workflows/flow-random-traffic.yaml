@@ -64,10 +64,13 @@ jobs:
       - name: Run Random Traffic
         shell: bash
         run: |
-            redis-server --loadmodule ./target/release/libtimeseries.so --port 6379 &
+            MODULE=$(find bin -name "redistimeseries.so" | head -1)
+            echo "Loading module: $MODULE"
+            redis-server --loadmodule ./$MODULE --port 6379 &
+            sleep 2
             python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
             tail -n 100 random_traffic.txt
-            pkill -f redis-server      
+            pkill -f redis-server || true
       - name: Upload random traffic
         uses: actions/upload-artifact@v4
         with:
