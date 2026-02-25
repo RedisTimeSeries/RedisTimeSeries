@@ -249,7 +249,9 @@ endif
 
 ifneq ($(SAN),)
 CC_FLAGS += -fblocks
+ifneq ($(OS),macos)
 LD_LIBS += -lBlocksRuntime
+endif
 endif
 
 #----------------------------------------------------------------------------------------------
