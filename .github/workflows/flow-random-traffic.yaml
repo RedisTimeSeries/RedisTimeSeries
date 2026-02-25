@@ -76,5 +76,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: random_traffic.txt
+          name: random-traffic-log
           path: random_traffic.txt
