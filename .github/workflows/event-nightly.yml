@@ -48,53 +48,53 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
-  # build-linux-x64:
-  #   uses: ./.github/workflows/flow-linux.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     arch: x64
-  #     os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 azurelinux3 mariner2
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     beta-version: ${{needs.prepare-values.outputs.beta-version}}
-  #     quick: false
-  #   secrets: inherit
-  # build-linux-arm64:
-  #   uses: ./.github/workflows/flow-linux.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     arch: arm64
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     beta-version: ${{needs.prepare-values.outputs.beta-version}}
-  #     quick: false
-  #   secrets: inherit
-  # macos:
-  #   uses: ./.github/workflows/flow-macos.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     beta-version: ${{needs.prepare-values.outputs.beta-version}}
-  #     quick: false
-  #   secrets: inherit
-  # linux-valgrind:
-  #   uses: ./.github/workflows/flow-linux.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     arch: x64
-  #     os: jammy
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     beta-version: ${{needs.prepare-values.outputs.beta-version}}
-  #     run_valgrind: true
-  #   secrets: inherit
-  # linux-sanitizer:
-  #   uses: ./.github/workflows/flow-linux.yml
-  #   needs: [prepare-values]
-  #   with:
-  #     arch: x64
-  #     os: jammy
-  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-  #     beta-version: ${{needs.prepare-values.outputs.beta-version}}
-  #     run_sanitizer: true
-  #   secrets: inherit
+  build-linux-x64:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 azurelinux3 mariner2
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
+    secrets: inherit
+  build-linux-arm64:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
+    secrets: inherit
+  macos:
+    uses: ./.github/workflows/flow-macos.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
+    secrets: inherit
+  linux-valgrind:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      run_valgrind: true
+    secrets: inherit
+  linux-sanitizer:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      run_sanitizer: true
+    secrets: inherit
   random-traffic:
     uses: ./.github/workflows/flow-random-traffic.yaml
     needs: [prepare-values]
@@ -107,7 +107,7 @@ jobs:
   notify-results:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
-    needs: [random-traffic, prepare-values] #, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer]
+    needs: [random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer]
     if: always() && (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.send-slack-message == true))
     permissions:
       actions: read
