@@ -43,8 +43,9 @@ jobs:
     steps:
       - name: Pick OS
         id: pick-os
+        env:
+          INPUT_OS: ${{ inputs.os }}
         run: |
-          INPUT_OS="${{ inputs.os }}"
           if [ -n "$INPUT_OS" ]; then
             echo "os=${INPUT_OS}" >> $GITHUB_OUTPUT
             echo "Using specified OS: ${INPUT_OS}"
