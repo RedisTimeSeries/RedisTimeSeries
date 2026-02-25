@@ -30,7 +30,7 @@ on:
 
 jobs:
   prepare-values:
-    runs-on: ubuntu:jammy
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
