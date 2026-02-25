@@ -60,7 +60,7 @@ jobs:
       - name: build
         uses: ./.github/actions/build-module-and-redis
         with:
-          use-venv: '1'
+          use-venv: '0'
       - name: Run Random Traffic
         shell: bash
         run: |
