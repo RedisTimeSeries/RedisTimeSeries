@@ -501,7 +501,7 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
                 }
             }
         }
-        free(predicate->key);
+        RedisModule_FreeString(NULL, predicate->key);
         free(predicate->valuesList);
     }
 }
