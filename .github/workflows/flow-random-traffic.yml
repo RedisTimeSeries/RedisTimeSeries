@@ -6,19 +6,22 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         default: 'unstable'
-      timeout-minutes: 
+      timeout-minutes:
         description: 'Timeout in minutes'
-        default: '15'
+        default: '30'
+      os:
+        description: 'OS to run on (leave empty for random)'
+        default: ''
   workflow_call:
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
         type: string
         default: 'unstable'
-      timeout-minutes: 
+      timeout-minutes:
         description: 'Timeout in minutes'
         type: string
-        default: '15'
+        default: '30'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -27,54 +30,82 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      os:
+        description: 'OS to run on (leave empty for random)'
+        type: string
+        default: ''
 
 jobs:
-  prepare-values:
+  pick-os:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '15') }}
+    outputs:
+      os: ${{ steps.pick-os.outputs.os }}
+    steps:
+      - name: Pick OS
+        id: pick-os
+        run: |
+          INPUT_OS="${{ inputs.os }}"
+          if [ -n "$INPUT_OS" ]; then
+            echo "os=${INPUT_OS}" >> $GITHUB_OUTPUT
+            echo "Using specified OS: ${INPUT_OS}"
+          else
+            OS_LIST=(bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 azurelinux3 mariner2 alpine)
+            RANDOM_INDEX=$((RANDOM % ${#OS_LIST[@]}))
+            SELECTED=${OS_LIST[$RANDOM_INDEX]}
+            echo "os=${SELECTED}" >> $GITHUB_OUTPUT
+            echo "Randomly selected OS: ${SELECTED}"
+          fi
+
+  run-random-traffic:
+    name: random-traffic (${{ needs.pick-os.outputs.os }})
+    needs: pick-os
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '30') }}
+    env:
+      DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
+      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-      - name: Checkout Redis
-        uses: actions/checkout@v4
-        with:
-          repository: redis/redis
-          ref: ${{ inputs.redis-ref }}
-          path: redis
-          submodules: 'recursive'
-      - name: Setup
-        working-directory: .install
-        shell: bash
+
+      - name: Build Docker Image
         run: |
-            ./install_script.sh
-      - name: Install python11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install python dependencies
-        shell: bash
+          docker build \
+            -f Dockerfile.${{ needs.pick-os.outputs.os }} \
+            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
+            -t ${{ env.DOCKER_IMAGE }} \
+            .
+
+      - name: Build module
         run: |
-            ./.install/common_installations.sh
-            pip install redis-command-generator
-      - name: build
-        uses: ./.github/actions/build-module-and-redis
-        with:
-          use-venv: '0'
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            ${{ env.DOCKER_IMAGE }} \
+            make build
+
       - name: Run Random Traffic
-        shell: bash
         run: |
-            MODULE=$(find bin -name "redistimeseries.so" | head -1)
-            echo "Loading module: $MODULE"
-            redis-server --loadmodule ./$MODULE --port 6379 &
-            sleep 2
-            python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
-            tail -n 100 random_traffic.txt
-            pkill -f redis-server || true
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            ${{ env.DOCKER_IMAGE }} \
+            bash -ec '
+              pip install redis-command-generator
+              MODULE=$(find bin -name "redistimeseries.so" | head -1)
+              echo "Loading module: $MODULE"
+              redis-server --loadmodule ./$MODULE --port 6379 &
+              sleep 2
+              python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 1000000 > random_traffic.txt
+              tail -n 100 random_traffic.txt
+              pkill -f redis-server || true
+            '
+
       - name: Upload random traffic
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: random-traffic-log
+          name: random-traffic-${{ needs.pick-os.outputs.os }}-log
           path: random_traffic.txt
