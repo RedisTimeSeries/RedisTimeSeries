@@ -31,6 +31,7 @@ on:
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '10') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
