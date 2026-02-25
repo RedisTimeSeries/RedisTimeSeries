@@ -69,7 +69,7 @@ jobs:
             echo "Loading module: $MODULE"
             redis-server --loadmodule ./$MODULE --port 6379 &
             sleep 2
-            python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 30000 > random_traffic.txt
+            python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 100000 > random_traffic.txt
             tail -n 100 random_traffic.txt
             pkill -f redis-server || true
       - name: Upload random traffic
