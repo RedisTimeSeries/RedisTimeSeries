@@ -141,21 +141,21 @@ jobs:
               sys.exit(1)
 
           content = version_file.read_text()
-          current = re.search(
-              r'#define REDISTIMESERIES_VERSION_MAJOR (\d+)\n'
-              r'#define REDISTIMESERIES_VERSION_MINOR (\d+)\n'
-              r'#define REDISTIMESERIES_VERSION_PATCH (\d+)',
-              content
-          )
-          print(f"Current version: {current.group(1)}.{current.group(2)}.{current.group(3)}")
 
-          content = re.sub(
-              r'(#define REDISTIMESERIES_VERSION_MAJOR )\d+\n'
-              r'(#define REDISTIMESERIES_VERSION_MINOR )\d+\n'
-              r'(#define REDISTIMESERIES_VERSION_PATCH )\d+',
-              rf'\g<1>{major}\n\g<2>{minor}\n\g<3>{patch}',
-              content
-          )
+          cur_major = re.search(r'#define REDISTIMESERIES_VERSION_MAJOR (\d+)', content)
+          cur_minor = re.search(r'#define REDISTIMESERIES_VERSION_MINOR (\d+)', content)
+          cur_patch = re.search(r'#define REDISTIMESERIES_VERSION_PATCH (\d+)', content)
+
+          if not all([cur_major, cur_minor, cur_patch]):
+              print("::error::Could not parse current version from version.h")
+              sys.exit(1)
+
+          print(f"Current version: {cur_major.group(1)}.{cur_minor.group(1)}.{cur_patch.group(1)}")
+
+          content = re.sub(r'(#define REDISTIMESERIES_VERSION_MAJOR )\d+', rf'\g<1>{major}', content)
+          content = re.sub(r'(#define REDISTIMESERIES_VERSION_MINOR )\d+', rf'\g<1>{minor}', content)
+          content = re.sub(r'(#define REDISTIMESERIES_VERSION_PATCH )\d+', rf'\g<1>{patch}', content)
+
           version_file.write_text(content)
           print(f"Updated to version {major}.{minor}.{patch}")
 
