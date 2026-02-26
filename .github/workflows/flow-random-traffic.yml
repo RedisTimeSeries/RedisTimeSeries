@@ -72,27 +72,29 @@ jobs:
           submodules: 'recursive'
 
       - name: Build Docker Image
+        env:
+          SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
           docker build \
-            -f Dockerfile.${{ needs.pick-os.outputs.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            -t ${{ env.DOCKER_IMAGE }} \
+            -f "Dockerfile.${SELECTED_OS}" \
+            --build-arg REDIS_REF="${REDIS_REF}" \
+            -t "${DOCKER_IMAGE}" \
             .
 
       - name: Build module
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
-            ${{ env.DOCKER_IMAGE }} \
+            "${DOCKER_IMAGE}" \
             make build
 
       - name: Run Random Traffic
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
-            ${{ env.DOCKER_IMAGE }} \
+            "${DOCKER_IMAGE}" \
             bash -ec '
               pip install redis-command-generator
               MODULE=$(find bin -name "redistimeseries.so" | head -1)
