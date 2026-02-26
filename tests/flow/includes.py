@@ -25,11 +25,14 @@ OSNICK = paella.Platform().osnick
 RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'
 
 SANITIZER = os.getenv('SANITIZER', '')
-VALGRIND = os.getenv('VALGRIND', '0') == '1'
+VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
-
-Defaults.terminate_retries = 3
+# Use generous terminate patience for all configurations. RLTest polls and
+# returns as soon as the process exits, so a high retry count costs nothing
+# when shutdown is fast, but prevents force-kills under Valgrind/sanitizer
+# where shutdown is much slower.
+Defaults.terminate_retries = 20
 Defaults.terminate_retries_secs = 1
 
 
@@ -93,7 +96,10 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    env = rltestEnv(*args,
+                    terminateRetries=Defaults.terminate_retries,
+                    terminateRetrySecs=Defaults.terminate_retries_secs,
+                    **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
