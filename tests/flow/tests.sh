@@ -202,6 +202,8 @@ setup_valgrind() {
 		--leak-check=$VG_LEAK_CHECK \
 		--show-reachable=no \
 		--track-origins=yes \
+		--trace-children=no \
+		--child-silent-after-fork=yes \
 		--show-possibly-lost=no"
 
 	VALGRIND_SUPRESSIONS=$ROOT/tests/memcheck/redis_valgrind.sup
