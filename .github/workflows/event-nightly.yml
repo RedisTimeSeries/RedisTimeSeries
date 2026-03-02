@@ -126,7 +126,8 @@ jobs:
             "build-linux-arm64": "${{ needs.build-linux-arm64.result }}",
             "macos": "${{ needs.macos.result }}",
             "linux-valgrind": "${{ needs.linux-valgrind.result }}",
-            "linux-sanitizer": "${{ needs.linux-sanitizer.result }}"
+            "linux-sanitizer": "${{ needs.linux-sanitizer.result }}",
+            "random-traffic": "${{ needs.random-traffic.result }}"
           }
           EOF
           )
