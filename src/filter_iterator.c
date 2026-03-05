@@ -666,6 +666,10 @@ static int fillEmptyBuckets(Samples *samples,
                 samples->og_values + padding + _read_index,
                 n_read_samples_left * sizeof(samples->og_values[0]));
 
+        // use compacted buffer so fillEmptyBuckets* write at correct indices (avoid overflow)
+        samples->timestamps = samples->og_timestamps;
+        samples->values = samples->og_values;
+
         // update the read index and num of samples
         _read_index = *write_index + n_empty_buckets;
         *read_index = _read_index - 1; // - 1 cause outside this function we inc by 1
