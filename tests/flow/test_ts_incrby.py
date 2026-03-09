@@ -98,3 +98,26 @@ def test_ts_incrby_NaN():
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.incrby', 'tester', 'nan')
             r.execute_command('TS.decrby', 'tester', 'nan')
+
+def test_ts_incrby_arg_validation_before_creation():
+    # This test ensures that the key is not created if validation fails (MOD-8167)
+    with Env().getClusterConnectionIfNeeded() as r:
+        # Test 1: Invalid value should not create the key
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.INCRBY', 'test_invalid_value', 'foo')
+        # Key should not exist
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.GET', 'test_invalid_value')
+        
+        # Test 2: Invalid timestamp should not create the key
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.INCRBY', 'test_invalid_ts', '5', 'TIMESTAMP', 'invalid')
+        # Key should not exist
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.GET', 'test_invalid_ts')
+        
+        # Test 3: Valid command should create the key
+        r.execute_command('TS.INCRBY', 'test_valid', '5')
+        # Key should exist
+        result = r.execute_command('TS.GET', 'test_valid')
+        assert result is not None

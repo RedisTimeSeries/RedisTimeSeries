@@ -1140,20 +1140,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     Series *series;
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_EMPTY) {
-        // the key doesn't exist, lets check we have enough information to create one
-        CreateCtx cCtx = { 0 };
-        if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
-            return REDISMODULE_ERR;
-        }
-
-        CreateTsKey(ctx, keyName, &cCtx, &series, &key);
-        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
-    } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+    const bool keyExists = RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY;
+    if (keyExists && RedisModule_ModuleTypeGetType(key) != SeriesType) {
         return RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
-
-    series = RedisModule_ModuleTypeGetValue(key);
 
     double incrby = 0;
     if (RMUtil_ParseArgs(argv, argc, 2, "d", &incrby) != REDISMODULE_OK) {
@@ -1167,6 +1157,19 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
         return RTS_ReplyGeneralError(ctx, "TSDB: invalid timestamp");
+    }
+
+    if (!keyExists) {
+        // the key doesn't exist, lets check we have enough information to create one
+        CreateCtx cCtx = { 0 };
+        if (parseCreateArgs(ctx, argv, argc, &cCtx) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+
+        CreateTsKey(ctx, keyName, &cCtx, &series, &key);
+        SeriesCreateRulesFromGlobalConfig(ctx, keyName, series, cCtx.labels, cCtx.labelsCount);
+    } else {
+        series = RedisModule_ModuleTypeGetValue(key);
     }
 
     if (currentUpdatedTime < series->lastTimestamp && series->lastTimestamp != 0) {
