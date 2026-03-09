@@ -333,8 +333,6 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
-
                 continue;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
@@ -417,7 +415,6 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
 
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
                 RedisModule_FreeString(ctx, currentKey);
 
                 break;
@@ -1307,7 +1304,6 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 RedisModule_CloseKey(key);
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
                 break;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,

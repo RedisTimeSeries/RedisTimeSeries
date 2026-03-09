@@ -446,8 +446,6 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
@@ -508,8 +506,6 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
@@ -649,8 +645,6 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
     if (sra == NULL) {
-        // Should never happen, because this function is only called in clustered environment.
-        // But to be on the safe side:
         RedisModule_ReplyWithArray(ctx, 0);
         return;
     }
