@@ -517,6 +517,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
 
     MRError *err = NULL;
 
@@ -579,6 +580,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
 
     MRError *err = NULL;
 
@@ -632,6 +634,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
 
     MRError *err = NULL;
 

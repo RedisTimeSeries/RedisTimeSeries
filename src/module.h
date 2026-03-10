@@ -66,7 +66,7 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
                                            const int permissionFlags) {
     if (ctx != NULL) {
         RedisModuleUser *user = GetCurrentUser(ctx);
-
+        
         if (!user) {
             size_t len = 0;
             const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
@@ -80,7 +80,7 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
 
         const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
 
-        RedisModule_FreeModuleUser(user);
+            RedisModule_FreeModuleUser(user);
 
         if (allowed != REDISMODULE_OK) {
             return false;
