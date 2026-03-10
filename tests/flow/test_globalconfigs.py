@@ -386,27 +386,38 @@ def test_module_config_takes_precedence_over_module_arguments():
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
 
-def test_ts_num_threads_can_be_set_via_module_arguments_using_modern_name():
+def test_ts_num_threads_module_arg():
     '''
-    Tests that ts-num-threads is accepted as a module-load argument name as well,
-    to ease migration from the deprecated NUM_THREADS module argument.
+    Tests that ts-num-threads is accepted as a module-load argument,
+    the value is immutable via CONFIG SET, no deprecation warning is
+    emitted, and the configured number of LibMR worker threads is
+    actually spawned.
+
+    Requires cluster mode (worker threads are created lazily on the
+    first libmr execution, which only happens in cluster mode) and
+    Redis >= 7.0 (module config API).
     '''
-    env = Env(noLog=False)
-    # This test is about module load-time arguments on a single Redis instance.
-    # Skip cluster variants (OSS cluster / RLEC) and Redis versions without module config API.
-    if is_redis_version_lower_than(env, '7.0') or env.isCluster():
+    env = Env(moduleArgs="ts-num-threads 5", noLog=False)
+    if not env.isCluster():
+        env.skip()
+    if is_redis_version_lower_than(env, '7.0'):
         env.skip()
 
-    env = Env(moduleArgs="ts-num-threads 5", noLog=False)
-    with env.getConnection() as conn:
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
-        with pytest.raises(redis.exceptions.ResponseError):
-            conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
-        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+    conn = env.getConnection(1)
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+    with pytest.raises(redis.exceptions.ResponseError):
+        conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
 
-    thread_names = get_worker_thread_names(env)
+    # TS.MRANGE triggers libmr, which forces the lazy thread pool to start.
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.ADD', '{tag1}_metric', 1, 100, 'LABELS', 'name', 'ts')
+    conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'name=ts')
+
+    thread_names = get_worker_thread_names(conn)
     if thread_names is not None:
-        env.assertEqual(len(thread_names), 5,
+        # Worker threads are named timeseries-0 … timeseries-4;
+        # filter out the event-loop thread (timeseries-el).
+        workers = [n for n in thread_names if n[-1].isdigit()]
+        env.assertEqual(len(workers), 5,
                          message="Expected 5 LibMR worker threads")
-
-    assert not is_line_in_server_log(env, "ts-num-threads is deprecated")

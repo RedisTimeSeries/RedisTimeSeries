@@ -208,9 +208,10 @@ def is_line_in_server_log(env, line):
                 return True
     return False
 
-def get_worker_thread_names(env, prefix="timeseries-"):
-    """Return the list of LibMR worker thread names for the Redis server process.
+def get_worker_thread_names(conn, prefix="timeseries-"):
+    """Return the list of LibMR worker thread names for a Redis server process.
 
+    *conn* is an open Redis connection to the instance to inspect.
     Reads /proc/<pid>/task/*/comm to discover thread names that start with
     *prefix*.  Only works on Linux; returns None on other platforms so the
     caller can skip the assertion.
@@ -218,9 +219,8 @@ def get_worker_thread_names(env, prefix="timeseries-"):
     if sys.platform != "linux":
         return None
 
-    with env.getConnection() as conn:
-        info = conn.info("server")
-        pid = info["process_id"]
+    info = conn.info("server")
+    pid = info["process_id"]
 
     task_dir = f"/proc/{pid}/task"
     if not os.path.isdir(task_dir):
