@@ -6,9 +6,6 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         default: 'unstable'
-      timeout-minutes:
-        description: 'Timeout in minutes'
-        default: '30'
       os:
         description: 'OS to run on (leave empty for random)'
         default: ''
@@ -18,10 +15,6 @@ on:
         description: 'Redis ref to checkout'
         type: string
         default: 'unstable'
-      timeout-minutes:
-        description: 'Timeout in minutes'
-        type: string
-        default: '30'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -61,7 +54,6 @@ jobs:
     name: random-traffic (${{ needs.pick-os.outputs.os }})
     needs: pick-os
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(inputs.timeout-minutes || '30') }}
     env:
       DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
