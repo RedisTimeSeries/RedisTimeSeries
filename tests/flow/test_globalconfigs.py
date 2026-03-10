@@ -400,9 +400,13 @@ def test_ts_num_threads_can_be_set_via_module_arguments_using_modern_name():
     env = Env(moduleArgs="ts-num-threads 5", noLog=False)
     with env.getConnection() as conn:
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
-        # This is an immutable module config (tested elsewhere too); keep it explicit here.
         with pytest.raises(redis.exceptions.ResponseError):
             conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+
+    thread_names = get_worker_thread_names(env)
+    if thread_names is not None:
+        env.assertEqual(len(thread_names), 5,
+                         message="Expected 5 LibMR worker threads")
 
     assert not is_line_in_server_log(env, "ts-num-threads is deprecated")
