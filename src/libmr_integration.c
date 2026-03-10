@@ -448,7 +448,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -463,7 +463,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
         RedisModuleString *keyName =
             RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
         const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
+            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags, NULL);
 
         RedisModule_FreeString(rts_staticCtx, keyName);
 
@@ -505,7 +505,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -526,7 +526,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         RedisModuleString *keyName =
             RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
         const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
+            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags, NULL);
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
@@ -601,7 +601,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
 
     // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL, NULL);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -708,21 +708,15 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-        {
-            RedisModule_SetContextUser(ctx, user);
-            user = GetCurrentUser(ctx);
-            SetCurrentUser(ctx, user);
-            if(!user)
-            {
-                RedisModule_ReplyWithError(ctx, "No user found");
-                return;
-            }
+        acl_user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user) {
+            RedisModule_SetContextUser(ctx, acl_user);
         }
     }
     MRangeArgs mrangeArgs;
+    mrangeArgs.acl_user = acl_user;
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
     mrangeArgs.rangeArgs.latest = queryArg->latest;
@@ -745,11 +739,17 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
-    RedisModuleDict *qi =
-        QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    RedisModuleDict *qi = QueryIndex(ctx,
+                                     mrangeArgs.queryPredicates->list,
+                                     mrangeArgs.queryPredicates->count,
+                                     NULL,
+                                     acl_user);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        if (acl_user) {
+            RedisModule_FreeModuleUser(acl_user);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }
@@ -852,10 +852,12 @@ static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANG
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-            RedisModule_SetContextUser(ctx, user);
+        acl_user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user) {
+            RedisModule_SetContextUser(ctx, acl_user);
+        }
     }
     MGetArgs mgetArgs;
     mgetArgs.withLabels = queryArg->withLabels;
@@ -865,8 +867,11 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     mgetArgs.queryPredicates = queryArg->predicates;
     mgetArgs.latest = queryArg->latest;
 
-    RedisModuleDict *qi =
-        QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
+    RedisModuleDict *qi = QueryIndex(ctx,
+                                     mgetArgs.queryPredicates->list,
+                                     mgetArgs.queryPredicates->count,
+                                     NULL,
+                                     acl_user);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -878,8 +883,13 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const GetSeriesResult status = GetSeries(
-            ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        const GetSeriesResult status = GetSeries(ctx,
+                                                 keyName,
+                                                 &key,
+                                                 &series,
+                                                 REDISMODULE_READ,
+                                                 GetSeriesFlags_SilentOperation,
+                                                 acl_user);
         RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;
@@ -919,6 +929,9 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        if (acl_user) {
+            RedisModule_FreeModuleUser(acl_user);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }
@@ -929,13 +942,18 @@ static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
 
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-            RedisModule_SetContextUser(ctx, user);
+        acl_user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user) {
+            RedisModule_SetContextUser(ctx, acl_user);
+        }
     }
-    RedisModuleDict *qi =
-        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+    RedisModuleDict *qi = QueryIndex(ctx,
+                                    queryArg->predicates->list,
+                                    queryArg->predicates->count,
+                                    NULL,
+                                    acl_user);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
     const char *keyName;
@@ -952,6 +970,9 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        if (acl_user) {
+            RedisModule_FreeModuleUser(acl_user);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }

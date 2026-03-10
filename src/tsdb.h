@@ -110,15 +110,18 @@ void RestoreKey(RedisModuleCtx *ctx, RedisModuleString *keyname);
 CompactionRule *GetRule(CompactionRule *rules, RedisModuleString *keyName);
 void deleteReferenceToDeletedSeries(RedisModuleCtx *ctx,
                                     Series *series,
-                                    const GetSeriesFlags flags);
+                                    const GetSeriesFlags flags,
+                                    RedisModuleUser *acl_user);
 
 // Deletes the reference if the series deleted, watch out of rules iterator invalidation
+// acl_user: optional; NULL = use context user for any ACL checks inside GetSeries.
 GetSeriesResult GetSeries(RedisModuleCtx *ctx,
                           RedisModuleString *keyName,
                           RedisModuleKey **key,
                           Series **series,
                           int mode,
-                          const GetSeriesFlags flags);
+                          const GetSeriesFlags flags,
+                          RedisModuleUser *acl_user);
 
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,

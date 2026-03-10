@@ -90,6 +90,7 @@ typedef struct MRangeArgs
     const char *groupByLabel;
     ReducerArgs groupByReducerArgs;
     bool reverse;
+    RedisModuleUser *acl_user;
 } MRangeArgs;
 
 typedef struct MGetArgs

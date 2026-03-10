@@ -431,7 +431,8 @@ static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
-                            bool *hasPermissionError) {
+                            bool *hasPermissionError,
+                            RedisModuleUser *acl_user) {
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
     RedisModuleDict *res = RedisModule_CreateDict(ctx);
@@ -456,7 +457,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
             if (hasPermissionError) {
-                if (!CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen)) {
+                if (!CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen, acl_user)) {
                     *hasPermissionError = true;
                     continue;
                 }

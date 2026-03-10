@@ -71,7 +71,8 @@ int IsKeyIndexed(RedisModuleString *ts_key);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
-                            bool *hasPermissionError);
+                            bool *hasPermissionError,
+                            RedisModuleUser *acl_user);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif
