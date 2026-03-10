@@ -331,7 +331,7 @@ run_tests() {
 	if [[ $NOP != 1 ]]; then
 		{ $OP ${PYTHON:-python3} -m RLTest @$rltest_config; (( E |= $? )); } || true
 	else
-	$OP ${PYTHON:-python3} -m RLTest @$rltest_config
+		$OP ${PYTHON:-python3} -m RLTest @$rltest_config
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config
