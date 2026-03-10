@@ -597,6 +597,29 @@ bool RegisterConfigurationOptions(RedisModuleCtx *ctx) {
     return RegisterModernConfigurationOptions(ctx);
 }
 
+static int ParseNumThreadsArg(RedisModuleCtx *ctx,
+                              const char *argName,
+                              RedisModuleString **argv,
+                              int argc,
+                              long long *out) {
+    long long parsed = 0;
+    if (RMUtil_ParseArgsAfter(argName, argv, argc, "l", &parsed) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "error", "Unable to parse argument after %s", argName);
+        return TSDB_ERROR;
+    }
+    if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
+        RedisModule_Log(ctx,
+                        "error",
+                        "Invalid value for %s. Must be between %d and %d",
+                        argName,
+                        NUM_THREADS_MIN,
+                        NUM_THREADS_MAX);
+        return TSDB_ERROR;
+    }
+    *out = parsed;
+    return TSDB_OK;
+}
+
 int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
                                  RedisModuleString **argv,
                                  int argc,
@@ -763,17 +786,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     bool modernNumThreadsFound = false;
 
     if (argc > 1 && RMUtil_ArgIndex("ts-num-threads", argv, argc) >= 0) {
-        long long parsed = TSGlobalConfig.numThreads;
-        if (RMUtil_ParseArgsAfter("ts-num-threads", argv, argc, "l", &parsed) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "error", "Unable to parse argument after ts-num-threads");
-            return TSDB_ERROR;
-        }
-        if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
-            RedisModule_Log(ctx,
-                            "error",
-                            "Invalid value for ts-num-threads. Must be between %d and %d",
-                            NUM_THREADS_MIN,
-                            NUM_THREADS_MAX);
+        long long parsed;
+        if (ParseNumThreadsArg(ctx, "ts-num-threads", argv, argc, &parsed) != TSDB_OK) {
             return TSDB_ERROR;
         }
         TSGlobalConfig.numThreads = parsed;
@@ -781,17 +795,8 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     }
 
     if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
-        long long parsed = TSGlobalConfig.numThreads;
-        if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &parsed) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "error", "Unable to parse argument after NUM_THREADS");
-            return TSDB_ERROR;
-        }
-        if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
-            RedisModule_Log(ctx,
-                            "error",
-                            "Invalid value for NUM_THREADS. Must be between %d and %d",
-                            NUM_THREADS_MIN,
-                            NUM_THREADS_MAX);
+        long long parsed;
+        if (ParseNumThreadsArg(ctx, "NUM_THREADS", argv, argc, &parsed) != TSDB_OK) {
             return TSDB_ERROR;
         }
 
