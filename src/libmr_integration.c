@@ -708,18 +708,12 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user_mr = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-        {
-            RedisModule_SetContextUser(ctx, user);
-            user = GetCurrentUser(ctx);
-            SetCurrentUser(ctx, user);
-            if(!user)
-            {
-                RedisModule_ReplyWithError(ctx, "No user found");
-                return;
-            }
+        acl_user_mr = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user_mr) {
+            RedisModule_SetContextUser(ctx, acl_user_mr);
+            SetACLUserMR(acl_user_mr);
         }
     }
     MRangeArgs mrangeArgs;
@@ -750,6 +744,10 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        ClearACLUserMR();
+        if (acl_user_mr) {
+            RedisModule_FreeModuleUser(acl_user_mr);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }
@@ -852,10 +850,13 @@ static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANG
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user_mr = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-            RedisModule_SetContextUser(ctx, user);
+        acl_user_mr = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user_mr) {
+            RedisModule_SetContextUser(ctx, acl_user_mr);
+            SetACLUserMR(acl_user_mr);
+        }
     }
     MGetArgs mgetArgs;
     mgetArgs.withLabels = queryArg->withLabels;
@@ -919,6 +920,10 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        ClearACLUserMR();
+        if (acl_user_mr) {
+            RedisModule_FreeModuleUser(acl_user_mr);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }
@@ -929,10 +934,13 @@ static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
 
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *acl_user_mr = NULL;
     if (queryArg->coordinator_username) {
-        RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
-        if (user)
-            RedisModule_SetContextUser(ctx, user);
+        acl_user_mr = RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
+        if (acl_user_mr) {
+            RedisModule_SetContextUser(ctx, acl_user_mr);
+            SetACLUserMR(acl_user_mr);
+        }
     }
     RedisModuleDict *qi =
         QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
@@ -952,6 +960,10 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
     if (queryArg->coordinator_username) {
+        ClearACLUserMR();
+        if (acl_user_mr) {
+            RedisModule_FreeModuleUser(acl_user_mr);
+        }
         RedisModule_FreeString(ctx, queryArg->coordinator_username);
         queryArg->coordinator_username = NULL;
     }

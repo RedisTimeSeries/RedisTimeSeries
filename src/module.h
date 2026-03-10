@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <math.h>
 
+#include "common.h"
 #include "tsdb.h"
 
 #include "RedisModulesSDK/redismodule.h"
@@ -80,7 +81,9 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
 
         const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
 
+        if (user != GetACLUserMR()) {
             RedisModule_FreeModuleUser(user);
+        }
 
         if (allowed != REDISMODULE_OK) {
             return false;
@@ -168,7 +171,9 @@ static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *c
 
     const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
 
-    RedisModule_FreeModuleUser(user);
+    if (user != GetACLUserMR()) {
+        RedisModule_FreeModuleUser(user);
+    }
 
     return ret;
 }

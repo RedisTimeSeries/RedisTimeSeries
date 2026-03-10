@@ -2,6 +2,20 @@
 #include "tsdb.h"
 #include "indexer.h"
 
+struct RedisModuleUser *g_acl_user_mr = NULL;
+
+void SetACLUserMR(struct RedisModuleUser *user) {
+    g_acl_user_mr = user;
+}
+
+void ClearACLUserMR(void) {
+    g_acl_user_mr = NULL;
+}
+
+struct RedisModuleUser *GetACLUserMR(void) {
+    return g_acl_user_mr;
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before

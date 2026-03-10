@@ -24,18 +24,27 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                              "TSDB: current user doesn't have read permission to one or more "     \
                              "keys that match the specified filter")
 
+// Global ACL user for the current MR (multi-shard) internal command on participant shards.
+// Set at start of TS_INTERNAL_* handlers, cleared and freed at end. Safe: internal commands
+// run on the redis-server main loop only (no threading).
+extern struct RedisModuleUser *g_acl_user_mr;
+void SetACLUserMR(struct RedisModuleUser *user);
+void ClearACLUserMR(void);
+struct RedisModuleUser *GetACLUserMR(void);
+
 // Returns the current user of the context.
+// When an MR internal command is running on a participant, returns g_acl_user_mr (coordinator user).
 static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {
     struct RedisModuleString *username = RedisModule_GetCurrentUserName(ctx);
 
-    if (!username) {
-        return NULL;
+    if (username) {
+        struct RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(username);
+        RedisModule_FreeString(ctx, username);
+        return user;
     }
 
-    struct RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(username);
-    RedisModule_FreeString(ctx, username);
-
-    return user;
+    /* Lower precedence: use MR ACL user when context has no user (e.g. participant shard). */
+    return GetACLUserMR();
 }
 
 static inline int stringEqualsC(const RedisModuleString *s1, const char *s2) {
