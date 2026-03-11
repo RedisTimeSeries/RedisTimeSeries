@@ -80,7 +80,6 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
         }
 
         const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
-        RedisModule_Log(ctx, "warning", "##TAL CheckKeyIsAllowedByAcls allowed: %d", allowed);
         if (user != GetInternalMCmdUser()) {
             RedisModule_FreeModuleUser(user);
         }

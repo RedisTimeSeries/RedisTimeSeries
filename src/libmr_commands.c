@@ -517,15 +517,12 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
     if (queryArg->coordinator_username)
-    {
         RedisModule_RetainString(ctx, queryArg->coordinator_username);
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mget_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
-    }
-    else {
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mget_MR username is NULL");
-    }
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
@@ -587,15 +584,13 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
     if (queryArg->coordinator_username)
-    {
         RedisModule_RetainString(ctx, queryArg->coordinator_username);
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mrange_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
-    }
-    else {
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mrange_MR username is NULL");
-    }
+
 
     MRError *err = NULL;
 
@@ -649,15 +644,13 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
     if (queryArg->coordinator_username)
-    {
         RedisModule_RetainString(ctx, queryArg->coordinator_username);
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_queryindex_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
-    }
-    else {
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_queryindex_MR username is NULL");
-    }
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;

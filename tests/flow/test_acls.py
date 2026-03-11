@@ -201,58 +201,76 @@ def do_test_libmr(env):
 def test_libmr_with_internal_secret_support(env):
     do_test_libmr(env)
 
+# Test constants: 3-shard MRANGE ACL test
+NUM_SHARDS_REQUIRED = 3
+POINTS_PER_SERIES = 2
+# Sample data (timestamp, value) added to each series
+SAMPLE_DATA = [(1, 10), (2, 20)]
+MAX_KEYS_TO_TRY = 30  # try up to this many hash tags to get one key per shard
+SHARD_0, SHARD_1, SHARD_2 = 0, 1, 2
+COORD_SHARD_USER1 = SHARD_1
+COORD_SHARD_USER2 = SHARD_1
+COORD_SHARD_USER3 = SHARD_2
+USER1_EXPECTED_SERIES_COUNT = 3
+USER2_EXPECTED_SERIES_COUNT = 2
+USER3_EXPECTED_SERIES_COUNT = 1
+KEY_PATTERN_ALL = '*'
+# Pattern that matches no key in this test (participant still replies with empty array)
+NO_MATCH_KEY_PATTERN = 'no_acl_key_*'
+
+
 @skip(onVersionLowerThan='7.4.0')
 def test_mrange_acl_partial_then_full_3shards(env):
     """MRANGE with 3 shards: one timeseries per shard (same filter), 2 values each.
     user1 = full permission on all shards → MRANGE returns 3 series.
     user2 = read permission on 2 shards only → MRANGE returns 2 series.
     user3 = read permission on 1 shard only → MRANGE returns 1 series."""
-    if not env.isCluster() or env.shardsCount < 3:
+    if not env.isCluster() or env.shardsCount < NUM_SHARDS_REQUIRED:
         env.skip()
 
     filter_label = 'group=acl_mrange_3s'
-    conns = [env.getConnection(0), env.getConnection(1), env.getConnection(2)]
+    conns = [env.getConnection(SHARD_0), env.getConnection(SHARD_1), env.getConnection(SHARD_2)]
 
     # Build slot→shard mapping (CLUSTER SLOTS order matches getConnection(0), (1), (2)).
-    slots_raw = conns[0].execute_command('CLUSTER', 'SLOTS')
+    slots_raw = conns[SHARD_0].execute_command('CLUSTER', 'SLOTS')
     ranges = sorted([(int(s[0]), int(s[1])) for s in slots_raw])
 
     def slot_to_shard(slot):
         for shard, (start, end) in enumerate(ranges):
             if start <= slot <= end:
                 return shard
-        return 0
+        return SHARD_0
 
     # Create keys with different hash tags until we have exactly one key per shard.
     keys_by_shard = [[] for _ in range(env.shardsCount)]
     with env.getClusterConnectionIfNeeded() as r:
-        for i in range(30):
+        for i in range(MAX_KEYS_TO_TRY):
             key = 'ts_acl_{}'.format(i) + '{' + str(i) + '}'
             r.execute_command('TS.CREATE', key, 'LABELS', 'group', 'acl_mrange_3s')
-            slot = conns[0].execute_command('CLUSTER', 'KEYSLOT', key)
+            slot = conns[SHARD_0].execute_command('CLUSTER', 'KEYSLOT', key)
             shard = slot_to_shard(slot)
             keys_by_shard[shard].append(key)
-            if all(keys_by_shard[s] for s in range(3)):
+            if all(keys_by_shard[s] for s in range(NUM_SHARDS_REQUIRED)):
                 break
 
-    if not all(keys_by_shard[s] for s in range(3)):
+    if not all(keys_by_shard[s] for s in range(NUM_SHARDS_REQUIRED)):
         env.skip()  # could not get one key per shard
 
     # Keep exactly one key per shard; delete the rest.
-    key_per_shard = [keys_by_shard[s][0] for s in range(3)]
+    key_per_shard = [keys_by_shard[s][0] for s in range(NUM_SHARDS_REQUIRED)]
     # QUERYINDEX has no key; use a shard connection so redis-py can route (command runs as MR on server).
-    raw = conns[0].execute_command('TS.QUERYINDEX', filter_label)
+    raw = conns[SHARD_0].execute_command('TS.QUERYINDEX', filter_label)
     all_created = [k.decode() if isinstance(k, bytes) else k for k in raw]
     with env.getClusterConnectionIfNeeded() as r:
         for k in all_created:
             if k not in key_per_shard:
                 r.delete(k)
 
-    # Add 2 values to each of the 3 timeseries.
+    # Add the same sample data to each timeseries.
     with env.getClusterConnectionIfNeeded() as r:
         for key in key_per_shard:
-            r.execute_command('TS.ADD', key, 1, 10)
-            r.execute_command('TS.ADD', key, 2, 20)
+            for ts, val in SAMPLE_DATA:
+                r.execute_command('TS.ADD', key, ts, val)
 
     # ACL helper: set key patterns for a user on a given connection (shard).
     def set_user_on_shard(conn, username, password, key_patterns):
@@ -268,19 +286,18 @@ def test_mrange_acl_partial_then_full_3shards(env):
 
     # user1: full permission on all shards
     for conn in conns:
-        set_user_on_shard(conn, user1, pw1, ['*'])
+        set_user_on_shard(conn, user1, pw1, [KEY_PATTERN_ALL])
 
     # user2: permission only on shards 0 and 1. On shard 2 use a pattern that matches no key
     # (so the participant still replies with empty; empty key pattern can cause shard to not reply).
-    no_match = '~no_acl_key_*'
-    set_user_on_shard(conns[0], user2, pw2, ['*'])
-    set_user_on_shard(conns[1], user2, pw2, ['*'])
-    set_user_on_shard(conns[2], user2, pw2, [no_match])
+    set_user_on_shard(conns[SHARD_0], user2, pw2, [KEY_PATTERN_ALL])
+    set_user_on_shard(conns[SHARD_1], user2, pw2, [KEY_PATTERN_ALL])
+    set_user_on_shard(conns[SHARD_2], user2, pw2, [NO_MATCH_KEY_PATTERN])
 
     # user3: permission only on shard 2; on shards 0 and 1 use a pattern that matches no key.
-    set_user_on_shard(conns[0], user3, pw3, [no_match])
-    set_user_on_shard(conns[1], user3, pw3, [no_match])
-    set_user_on_shard(conns[2], user3, pw3, ['*'])
+    set_user_on_shard(conns[SHARD_0], user3, pw3, [NO_MATCH_KEY_PATTERN])
+    set_user_on_shard(conns[SHARD_1], user3, pw3, [NO_MATCH_KEY_PATTERN])
+    set_user_on_shard(conns[SHARD_2], user3, pw3, [KEY_PATTERN_ALL])
 
     # Run MRANGE from a shard where the user has full key access (~*), so the coordinator
     # passes IsCurrentUserAllowedToReadAllTheKeys and the permission restriction only applies
@@ -316,60 +333,66 @@ def test_mrange_acl_partial_then_full_3shards(env):
                 print('   3) (empty array)')
         print('')
 
-    # Build expected reply shape: [name, [], [[1,10],[2,20]]] per series (we added 2 points to each key).
+    # Build expected reply shape: [name, [], [samples]] per series, using SAMPLE_DATA.
     def expected_reply(keys):
-        return [[k, [], [[1, 10], [2, 20]]] for k in keys]
+        samples = [[ts, val] for ts, val in SAMPLE_DATA]
+        return [[k, [], samples] for k in keys]
 
     # ---------- Scenario 1: user1 (full permission on all shards) ----------
     print('')
     print('=== Scenario 1: user1 ===')
-    print('Permissions: user1 has ~* (read all keys) on shard 0, shard 1, and shard 2.')
-    print('MRANGE is sent from coordinator shard 1. Expected: all 3 series (one per shard), each with 2 points.')
+    print('Permissions: user1 has ~* (read all keys) on shard {}, shard {}, and shard {}.'.format(SHARD_0, SHARD_1, SHARD_2))
+    print('MRANGE is sent from coordinator shard {}. Expected: {} series (one per shard), each with {} points.'.format(
+        COORD_SHARD_USER1, USER1_EXPECTED_SERIES_COUNT, POINTS_PER_SERIES))
     print('')
-    expected_count_1, expected_series_1 = 3, sorted(key_per_shard)
-    expected_data_1 = expected_reply(sorted(key_per_shard))
+    expected_series_1 = sorted(key_per_shard)
+    expected_data_1 = expected_reply(expected_series_1)
     print_mrange_format('user1', expected_data_1, 'expected')
-    res1 = run_mrange(conns[1], user1, pw1)
+    res1 = run_mrange(conns[COORD_SHARD_USER1], user1, pw1)
     print_mrange_format('user1', res1, 'result received')
     got_count_1, got_series_1 = len(res1), sorted(series_names(res1))
-    env.assertEqual(got_count_1, expected_count_1,
+    env.assertEqual(got_count_1, USER1_EXPECTED_SERIES_COUNT,
                     message='user1: expected {} series {}, got {} {}'.format(
-                        expected_count_1, expected_series_1, got_count_1, got_series_1))
+                        USER1_EXPECTED_SERIES_COUNT, expected_series_1, got_count_1, got_series_1))
     for series in res1:
         name = series[0] if isinstance(series[0], str) else series[0].decode()
         points = series[2]
-        env.assertEqual(len(points), 2, message='user1: each series should have 2 points, {} has {}'.format(name, len(points)))
+        env.assertEqual(len(points), POINTS_PER_SERIES,
+                        message='user1: each series should have {} points, {} has {}'.format(POINTS_PER_SERIES, name, len(points)))
 
     # ---------- Scenario 2: user2 (permission only on shards 0 and 1) ----------
     print('=== Scenario 2: user2 ===')
-    print('Permissions: user2 has ~* on shard 0 and shard 1; on shard 2 has ~no_acl_key_* (matches no key).')
-    print('MRANGE is sent from coordinator shard 1. Expected: 2 series (from shards 0 and 1 only); shard 2 participant returns empty.')
+    print('Permissions: user2 has ~* on shard {} and shard {}; on shard {} has ~{} (matches no key).'.format(
+        SHARD_0, SHARD_1, SHARD_2, NO_MATCH_KEY_PATTERN))
+    print('MRANGE is sent from coordinator shard {}. Expected: {} series (from shards {} and {} only); shard {} participant returns empty.'.format(
+        COORD_SHARD_USER2, USER2_EXPECTED_SERIES_COUNT, SHARD_0, SHARD_1, SHARD_2))
     print('')
-    expected_count_2 = 2
-    expected_series_2 = sorted([key_per_shard[0], key_per_shard[1]])
+    expected_series_2 = sorted([key_per_shard[SHARD_0], key_per_shard[SHARD_1]])
     expected_data_2 = expected_reply(expected_series_2)
     print_mrange_format('user2', expected_data_2, 'expected')
-    res2 = run_mrange(conns[1], user2, pw2)
+    res2 = run_mrange(conns[COORD_SHARD_USER2], user2, pw2)
     print_mrange_format('user2', res2, 'result received')
     got_count_2, got_series_2 = len(res2), sorted(series_names(res2))
-    env.assertEqual(got_count_2, expected_count_2,
+    env.assertEqual(got_count_2, USER2_EXPECTED_SERIES_COUNT,
                     message='user2: expected {} series {}, got {} {}'.format(
-                        expected_count_2, expected_series_2, got_count_2, got_series_2))
+                        USER2_EXPECTED_SERIES_COUNT, expected_series_2, got_count_2, got_series_2))
 
     # ---------- Scenario 3: user3 (permission only on shard 2) ----------
     print('=== Scenario 3: user3 ===')
-    print('Permissions: user3 has ~no_acl_key_* on shard 0 and shard 1 (matches no key); ~* on shard 2.')
-    print('MRANGE is sent from coordinator shard 2 (so coordinator check passes). Expected: 1 series (from shard 2 only); shards 0 and 1 participants return empty.')
+    print('Permissions: user3 has ~{} on shard {} and shard {} (matches no key); ~* on shard {}.'.format(
+        NO_MATCH_KEY_PATTERN, SHARD_0, SHARD_1, SHARD_2))
+    print('MRANGE is sent from coordinator shard {} (so coordinator check passes). Expected: {} series (from shard {} only); shards {} and {} participants return empty.'.format(
+        COORD_SHARD_USER3, USER3_EXPECTED_SERIES_COUNT, SHARD_2, SHARD_0, SHARD_1))
     print('')
-    expected_count_3, expected_series_3 = 1, [key_per_shard[2]]
+    expected_series_3 = [key_per_shard[SHARD_2]]
     expected_data_3 = expected_reply(expected_series_3)
     print_mrange_format('user3', expected_data_3, 'expected')
-    res3 = run_mrange(conns[2], user3, pw3)
+    res3 = run_mrange(conns[COORD_SHARD_USER3], user3, pw3)
     print_mrange_format('user3', res3, 'result received')
     got_count_3, got_series_3 = len(res3), series_names(res3)
-    env.assertEqual(got_count_3, expected_count_3,
+    env.assertEqual(got_count_3, USER3_EXPECTED_SERIES_COUNT,
                     message='user3: expected {} series {}, got {} {}'.format(
-                        expected_count_3, expected_series_3, got_count_3, got_series_3))
+                        USER3_EXPECTED_SERIES_COUNT, expected_series_3, got_count_3, got_series_3))
 
     # Cleanup
     for conn in conns:

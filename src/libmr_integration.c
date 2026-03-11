@@ -148,6 +148,7 @@ static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
 static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
     QueryPredicates_Arg *predicate_list = arg;
     /* Coordinator username for participant ACL (empty string = none). Retained on main thread like limitLabels. */
+    /*for empty string, we write a single byte of 0*/
     if (predicate_list->coordinator_username) {
         SerializationCtxWriteRedisString(sctx, predicate_list->coordinator_username, error);
     } else {
@@ -733,13 +734,7 @@ static void InternalCommandCoordinatorUserClear(RedisModuleCtx *ctx,
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
-    if(queryArg->coordinator_username)
-    {
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TS_INTERNAL_MRANGE username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
-    }
-    else {
-        RedisModule_Log(ctx, "warning", "##TAL coordinator TS_INTERNAL_MRANGE username is NULL");
-    }
+    
     RedisModuleUser *internal_m_cmd_user = InternalCommandCoordinatorUserApply(ctx, queryArg);
     MRangeArgs mrangeArgs;
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
