@@ -2,18 +2,18 @@
 #include "tsdb.h"
 #include "indexer.h"
 
-struct RedisModuleUser *g_acl_user_mr = NULL;
+struct RedisModuleUser *g_internal_m_cmd_user = NULL;
 
-void SetACLUserMR(struct RedisModuleUser *user) {
-    g_acl_user_mr = user;
+void SetInternalMCmdUser(struct RedisModuleUser *user) {
+    g_internal_m_cmd_user = user;
 }
 
-void ClearACLUserMR(void) {
-    g_acl_user_mr = NULL;
+void ClearInternalMCmdUser(void) {
+    g_internal_m_cmd_user = NULL;
 }
 
-struct RedisModuleUser *GetACLUserMR(void) {
-    return g_acl_user_mr;
+struct RedisModuleUser *GetInternalMCmdUser(void) {
+    return g_internal_m_cmd_user;
 }
 
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {

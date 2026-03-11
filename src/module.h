@@ -81,7 +81,7 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
 
         const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
 
-        if (user != GetACLUserMR()) {
+        if (user != GetInternalMCmdUser()) {
             RedisModule_FreeModuleUser(user);
         }
 
@@ -171,7 +171,7 @@ static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *c
 
     const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
 
-    if (user != GetACLUserMR()) {
+    if (user != GetInternalMCmdUser()) {
         RedisModule_FreeModuleUser(user);
     }
 
