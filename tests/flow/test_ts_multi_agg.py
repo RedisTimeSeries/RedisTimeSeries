@@ -260,6 +260,58 @@ def test_multi_agg_with_twa():
         assert result[0][3] == str(int(expected_twa)).encode('ascii')  # twa
 
 
+def test_multi_agg_twa_not_first_multi_bucket():
+    """Test that TWA produces correct results in multi-agg when it is NOT the first aggregation
+    and there are multiple buckets (exercising the bucket-boundary getLastSample code path)."""
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_twa_nf{a}')
+        # Data spanning 3 buckets of size 10: [0,10), [10,20), [20,30)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 2, 5)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 7, 10)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 12, 20)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 17, 30)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 22, 40)
+        r.execute_command('TS.ADD', 'magg_twa_nf{a}', 27, 50)
+
+        # Get reference TWA values from single-agg query
+        twa_only = r.execute_command('TS.RANGE', 'magg_twa_nf{a}', '-', '+',
+                                     'AGGREGATION', 'twa', 10)
+        assert len(twa_only) == 3
+
+        # TWA as second aggregation (non-first position triggers the bug)
+        result = r.execute_command('TS.RANGE', 'magg_twa_nf{a}', '-', '+',
+                                   'AGGREGATION', 'sum,twa', 10)
+        assert len(result) == 3
+        for i in range(3):
+            assert result[i][0] == twa_only[i][0]
+            assert float(result[i][2]) == pytest.approx(float(twa_only[i][1]), abs=0.01), \
+                f"TWA mismatch in bucket {i}: multi-agg={result[i][2]}, single={twa_only[i][1]}"
+
+        # Also verify sum values are correct
+        assert float(result[0][1]) == pytest.approx(15.0, abs=0.01)   # 5 + 10
+        assert float(result[1][1]) == pytest.approx(50.0, abs=0.01)   # 20 + 30
+        assert float(result[2][1]) == pytest.approx(90.0, abs=0.01)   # 40 + 50
+
+        # Same test with REVRANGE
+        twa_only_rev = r.execute_command('TS.REVRANGE', 'magg_twa_nf{a}', '-', '+',
+                                         'AGGREGATION', 'twa', 10)
+        result_rev = r.execute_command('TS.REVRANGE', 'magg_twa_nf{a}', '-', '+',
+                                       'AGGREGATION', 'sum,twa', 10)
+        assert len(result_rev) == 3
+        for i in range(3):
+            assert result_rev[i][0] == twa_only_rev[i][0]
+            assert float(result_rev[i][2]) == pytest.approx(float(twa_only_rev[i][1]), abs=0.01), \
+                f"REVRANGE TWA mismatch in bucket {i}: multi-agg={result_rev[i][2]}, single={twa_only_rev[i][1]}"
+
+        # Test with TWA in the middle: avg,twa,count
+        result_mid = r.execute_command('TS.RANGE', 'magg_twa_nf{a}', '-', '+',
+                                       'AGGREGATION', 'avg,twa,count', 10)
+        assert len(result_mid) == 3
+        for i in range(3):
+            assert float(result_mid[i][2]) == pytest.approx(float(twa_only[i][1]), abs=0.01), \
+                f"TWA-in-middle mismatch in bucket {i}"
+
+
 def test_createrule_multi_agg_error():
     """TS.CREATERULE should reject multiple aggregators."""
     with Env().getClusterConnectionIfNeeded() as r:

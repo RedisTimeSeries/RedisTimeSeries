@@ -117,8 +117,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                 RedisModule_ReplyWithArray(ctx, args->aggregationArgs.numClasses);
                 for (size_t i = 0; i < args->aggregationArgs.numClasses; i++) {
                     RedisModule_ReplyWithCString(
-                        ctx,
-                        AggTypeEnumToStringLowerCase(args->aggregationArgs.classes[i]->type));
+                        ctx, AggTypeEnumToStringLowerCase(args->aggregationArgs.classes[i]->type));
                 }
             }
         }
@@ -149,9 +148,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
                                         &enrichedChunk->samples.values[i * vps],
                                         vps);
             } else {
-                ReplyWithSample(ctx,
-                                enrichedChunk->samples.timestamps[i],
-                                enrichedChunk->samples.values[i]);
+                ReplyWithSample(
+                    ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);
             }
         }
         arraylen += n;

@@ -1049,8 +1049,8 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int aggTypes[TS_AGG_TYPES_MAX];
     size_t numAggTypes = 0;
     timestamp_t alignmentTS;
-    const int result =
-        _parseAggregationArgs(ctx, argv, argc, &bucketDuration, aggTypes, &numAggTypes, NULL, NULL, &alignmentTS);
+    const int result = _parseAggregationArgs(
+        ctx, argv, argc, &bucketDuration, aggTypes, &numAggTypes, NULL, NULL, &alignmentTS);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
@@ -1058,8 +1058,7 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
     if (numAggTypes != 1) {
-        return RTS_ReplyGeneralError(
-            ctx, "TSDB: CREATERULE requires exactly one aggregation type");
+        return RTS_ReplyGeneralError(ctx, "TSDB: CREATERULE requires exactly one aggregation type");
     }
     int aggType = aggTypes[0];
 

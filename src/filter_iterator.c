@@ -1017,11 +1017,18 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         }
                     }
 
-                    Sample last_sample;
                     bool hadValidSamples = self->validSamplesInBucket;
+                    // Collect last samples from each TWA context before finalizeBucket resets them
+                    Sample twa_last_samples[self->numAggregations];
                     if (self->hasTwa) {
-                        aggregation->getLastSample(aggregationContext, &last_sample);
+                        for (size_t a = 0; a < self->numAggregations; a++) {
+                            if (self->aggregations[a]->type == TS_AGG_TWA) {
+                                self->aggregations[a]->getLastSample(self->aggregationContexts[a],
+                                                                     &twa_last_samples[a]);
+                            }
+                        }
                     }
+
                     Samples *outSamples =
                         ensureOutputSamples(self, enrichedChunk, agg_n_samples + 1);
                     if (finalizeBucket(outSamples, agg_n_samples, self)) {
@@ -1071,11 +1078,11 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     for (size_t a = 0; a < self->numAggregations; a++) {
                         if (self->aggregations[a]->type == TS_AGG_TWA) {
                             if (hadValidSamples &&
-                                self->aggregations[a]->isValueValid(last_sample.value)) {
+                                self->aggregations[a]->isValueValid(twa_last_samples[a].value)) {
                                 self->aggregations[a]->addPrevBucketLastSample(
                                     self->aggregationContexts[a],
-                                    last_sample.value,
-                                    last_sample.timestamp);
+                                    twa_last_samples[a].value,
+                                    twa_last_samples[a].timestamp);
                             }
                             timestamp_t tb = twa_calc_tb(self->reverse,
                                                          self->aggregationLastTimestamp,
