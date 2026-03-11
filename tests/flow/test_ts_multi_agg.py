@@ -312,6 +312,56 @@ def test_multi_agg_twa_not_first_multi_bucket():
                 f"TWA-in-middle mismatch in bucket {i}"
 
 
+def test_multi_agg_empty_buckets_with_gaps():
+    """Test multi-agg with EMPTY flag and gaps between populated buckets.
+
+    This exercises fillEmptyBuckets in the multiAgg path where the output is
+    written to aux_chunk (a separate buffer) rather than in-place.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_gap{a}')
+        # Bucket [1000, 2000): values 100-109
+        for i in range(10):
+            r.execute_command('TS.ADD', 'magg_gap{a}', 1000 + i, 100 + i)
+        # Bucket [2000, 3000): empty (gap)
+        # Bucket [3000, 4000): values 300-309
+        for i in range(10):
+            r.execute_command('TS.ADD', 'magg_gap{a}', 3000 + i, 300 + i)
+        # Bucket [4000, 5000): empty (gap)
+        # Bucket [5000, 6000): values 500-509
+        for i in range(10):
+            r.execute_command('TS.ADD', 'magg_gap{a}', 5000 + i, 500 + i)
+
+        agg_types = ['min', 'max', 'count']
+        multi_agg_str = ','.join(agg_types)
+
+        # Verify multi-agg RANGE with EMPTY matches individual single-agg results
+        refs = [r.execute_command('TS.RANGE', 'magg_gap{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_gap{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Verify multi-agg REVRANGE with EMPTY matches individual single-agg results
+        refs_rev = [r.execute_command('TS.REVRANGE', 'magg_gap{a}', '-', '+',
+                                      'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result_rev = r.execute_command('TS.REVRANGE', 'magg_gap{a}', '-', '+',
+                                       'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+        assert len(result_rev) == len(refs_rev[0]), \
+            f"REVRANGE bucket count mismatch: multi-agg={len(result_rev)}, single-agg={len(refs_rev[0])}"
+        for i in range(len(result_rev)):
+            assert result_rev[i][0] == refs_rev[0][i][0], f"REVRANGE timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result_rev[i][1 + a] == refs_rev[a][i][1], \
+                    f"REVRANGE {agg} mismatch at bucket {i}: multi-agg={result_rev[i][1 + a]}, single={refs_rev[a][i][1]}"
+
+
 def test_createrule_multi_agg_error():
     """TS.CREATERULE should reject multiple aggregators."""
     with Env().getClusterConnectionIfNeeded() as r:

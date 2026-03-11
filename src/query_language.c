@@ -467,7 +467,7 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                                        NULL);
     if (result == TSDB_OK) {
         aggregationArgs.numClasses = num_agg_types;
-        aggregationArgs.classes = malloc(num_agg_types * sizeof(aggregationArgs.classes));
+        aggregationArgs.classes = malloc(num_agg_types * sizeof(*aggregationArgs.classes));
         for (size_t i = 0; i < num_agg_types; i++) {
             aggregationArgs.classes[i] = GetAggClass(agg_types[i]);
             if (aggregationArgs.classes[i] == NULL) {
@@ -705,39 +705,43 @@ int parseRangeArguments(RedisModuleCtx *ctx,
 
     if (parseAlignmentArgs(ctx, argv, argc, &args.alignment, &args.timestampAlignment) ==
         TSDB_ERROR) {
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     if (args.alignment != DefaultAlignment) {
         if (args.aggregationArgs.numClasses == 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
-            return TSDB_ERROR;
+            goto error_free_classes;
         }
 
         if (args.alignment == StartAlignment && startTimestampMin) {
             RTS_ReplyGeneralError(
                 ctx, "TSDB: start alignment can only be used with explicit start timestamp");
-            return TSDB_ERROR;
+            goto error_free_classes;
         }
 
         if (args.alignment == EndAlignment && endTimestampMax) {
             RTS_ReplyGeneralError(
                 ctx, "TSDB: end alignment can only be used with explicit end timestamp");
-            return TSDB_ERROR;
+            goto error_free_classes;
         }
     }
 
     if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     if (parseFilterByTimestamp(ctx, argv, argc, &args.filterByTSArgs) == TSDB_ERROR) {
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     *out = args;
 
     return REDISMODULE_OK;
+
+error_free_classes:
+    free(args.aggregationArgs.classes);
+    return REDISMODULE_ERR;
 }
 
 QueryPredicateList *parseLabelListFromArgs(RedisModuleCtx *ctx,
@@ -949,20 +953,20 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
     if (filter_location == -1) {
         RTS_ReplyGeneralError(ctx, "TSDB: missing FILTER argument");
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     if (parseLabelQuery(
             ctx, argv, argc, &args.withLabels, args.limitLabels, &args.numLimitLabels) ==
         REDISMODULE_ERR) {
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
 
     if (groupby_location > 0 && groupby_location < filter_location) {
         RTS_ReplyGeneralError(ctx, "TSDB: GROUPBY should always come after filter");
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     // If we have GROUPBY <label> REDUCE <reducer> then labels arguments
@@ -972,12 +976,12 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
     if (query_count == 0) {
         RTS_ReplyGeneralError(ctx, "TSDB: missing labels for filter argument");
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
 
     QueryPredicateList *queries = NULL;
     if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
+        goto error_free_classes;
     }
     args.queryPredicates = queries;
 
@@ -985,8 +989,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         if (groupby_location + 1 >= argc) {
             // GROUP BY without any argument
             RedisModule_WrongArity(ctx);
-            QueryPredicateList_Free(queries);
-            return REDISMODULE_ERR;
+            goto error_free_all;
         }
         args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
 
@@ -995,24 +998,27 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         // or we've detected a groupby by the total args don't match
         if (reduce_location < 0 || (argc - groupby_location != 4)) {
             RedisModule_WrongArity(ctx);
-            QueryPredicateList_Free(queries);
-            return REDISMODULE_ERR;
+            goto error_free_all;
         }
         if (parseMultiSeriesReduceArgs(ctx, argv[reduce_location + 1], &args.groupByReducerArgs) !=
             TSDB_OK) {
-            QueryPredicateList_Free(queries);
-            return REDISMODULE_ERR;
+            goto error_free_all;
         }
 
         if (args.rangeArgs.aggregationArgs.numClasses > 1) {
             RTS_ReplyGeneralError(
                 ctx, "TSDB: GROUPBY is not allowed when multiple aggregators are specified");
-            QueryPredicateList_Free(queries);
-            return REDISMODULE_ERR;
+            goto error_free_all;
         }
     }
     *out = args;
     return REDISMODULE_OK;
+
+error_free_all:
+    QueryPredicateList_Free(queries);
+error_free_classes:
+    free(args.rangeArgs.aggregationArgs.classes);
+    return REDISMODULE_ERR;
 }
 
 void MRangeArgs_Free(MRangeArgs *args) {

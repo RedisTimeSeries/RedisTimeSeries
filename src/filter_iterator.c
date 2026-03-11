@@ -1059,13 +1059,14 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         if (has_empty_buckets) {
                             Samples *emptySamples =
                                 ensureOutputSamples(self, enrichedChunk, agg_n_samples + 256);
+                            int64_t read_idx = -1;
                             int err = fillEmptyBuckets(emptySamples,
                                                        &agg_n_samples,
                                                        first_bucket,
                                                        last_bucket,
                                                        self,
                                                        is_reversed,
-                                                       multiAgg ? &(int64_t){ -1 } : &si);
+                                                       multiAgg ? &read_idx : &si);
                             if (err != 0) {
                                 return NULL;
                             }
