@@ -467,11 +467,6 @@ exit:
 
     if (exitStatus == REDISMODULE_OK) {
         ReplySetMapOrArrayLength(ctx, replylen, false);
-    } else {
-        /* PermissionError (or similar) in the first pass: we never started the reply.
-         * Send an empty array so the coordinator (e.g. LibMR) gets a valid response
-         * and does not time out waiting for this shard. */
-        ReplyWithMapOrArray(ctx, 0, false);
     }
 
     return exitStatus;
