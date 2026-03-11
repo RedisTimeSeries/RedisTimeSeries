@@ -518,7 +518,14 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     queryArg->resp3 = _ReplyMap(ctx);
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
-
+    if (queryArg->coordinator_username)
+    {
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mget_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
+    }
+    else {
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mget_MR username is NULL");
+    }
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
@@ -581,6 +588,14 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->coordinator_username)
+    {
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mrange_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
+    }
+    else {
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_mrange_MR username is NULL");
+    }
 
     MRError *err = NULL;
 
@@ -635,7 +650,14 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
     queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
-
+    if (queryArg->coordinator_username)
+    {
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_queryindex_MR username: %s", RedisModule_StringPtrLen(queryArg->coordinator_username, NULL));
+    }
+    else {
+        RedisModule_Log(ctx, "warning", "##TAL coordinator TSDB_queryindex_MR username is NULL");
+    }
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;

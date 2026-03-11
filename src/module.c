@@ -426,9 +426,10 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
                                 "warning",
                                 "The user lacks the required permissions for the key, stopping.");
                 RedisModule_FreeString(ctx, currentKey);
-                exitStatus = REDISMODULE_ERR;
-
-                goto exit;
+                RedisModule_DictIteratorStop(iter);
+                /* Reply with empty array so the coordinator gets a valid response and does not time out. */
+                ReplyWithMapOrArray(ctx, 0, false);
+                return REDISMODULE_ERR;
         }
     }
 
@@ -466,6 +467,11 @@ exit:
 
     if (exitStatus == REDISMODULE_OK) {
         ReplySetMapOrArrayLength(ctx, replylen, false);
+    } else {
+        /* PermissionError (or similar) in the first pass: we never started the reply.
+         * Send an empty array so the coordinator (e.g. LibMR) gets a valid response
+         * and does not time out waiting for this shard. */
+        ReplyWithMapOrArray(ctx, 0, false);
     }
 
     return exitStatus;

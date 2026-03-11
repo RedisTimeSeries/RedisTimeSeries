@@ -93,21 +93,21 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
 
     if (flags & GetSeriesFlags_CheckForAcls) {
         if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(ctx, keyName)) {
-            if (!isSilent) {
-                RTS_ReplyPermissionError(ctx,
-                                         "the current user doesn't have the read permission to "
-                                         "one or more keys that match the specified filter");
-            }
+            // if (!isSilent) {
+            //     RTS_ReplyPermissionError(ctx,
+            //                              "the current user doesn't have the read permission to "
+            //                              "one or more keys that match the specified filter");
+            // }
 
             return GetSeriesResult_PermissionError;
         }
 
         if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
-            if (!isSilent) {
-                RTS_ReplyPermissionError(ctx,
-                                         "the current user doesn't have the write permission "
-                                         "to one or more keys that match the specified filter");
-            }
+            // if (!isSilent) {
+            //     RTS_ReplyPermissionError(ctx,
+            //                              "the current user doesn't have the write permission "
+            //                              "to one or more keys that match the specified filter");
+            // }
 
             return GetSeriesResult_PermissionError;
         }
@@ -117,16 +117,16 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
 
     if (RedisModule_KeyType(new_key) == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_CloseKey(new_key);
-        if (!isSilent) {
-            RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
-        }
+        // if (!isSilent) {
+        //     RTS_ReplyGeneralError(ctx, "TSDB: the key does not exist");
+        // }
         return GetSeriesResult_GenericError;
     }
     if (RedisModule_ModuleTypeGetType(new_key) != SeriesType) {
         RedisModule_CloseKey(new_key);
-        if (!isSilent) {
-            RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        }
+        // if (!isSilent) {
+        //     RTS_ReplyGeneralError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        // }
         return GetSeriesResult_GenericError;
     }
 
