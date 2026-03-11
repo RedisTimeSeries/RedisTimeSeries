@@ -111,13 +111,15 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
             // reply aggregators
             RedisModule_ReplyWithMap(ctx, 1);
             RedisModule_ReplyWithCString(ctx, "aggregators");
-            if (!args->aggregationArgs.aggregationClass) {
+            if (args->aggregationArgs.numClasses == 0) {
                 RedisModule_ReplyWithArray(ctx, 0);
             } else {
-                RedisModule_ReplyWithArray(ctx, 1);
-                RedisModule_ReplyWithCString(
-                    ctx,
-                    AggTypeEnumToStringLowerCase(args->aggregationArgs.aggregationClass->type));
+                RedisModule_ReplyWithArray(ctx, args->aggregationArgs.numClasses);
+                for (size_t i = 0; i < args->aggregationArgs.numClasses; i++) {
+                    RedisModule_ReplyWithCString(
+                        ctx,
+                        AggTypeEnumToStringLowerCase(args->aggregationArgs.classes[i]->type));
+                }
             }
         }
     }
@@ -139,9 +141,18 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
 
     while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
         n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
+        size_t vps = enrichedChunk->samples.values_per_sample;
         for (size_t i = 0; i < n; ++i) {
-            ReplyWithSample(
-                ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);
+            if (vps > 1) {
+                ReplyWithMultiAggSample(ctx,
+                                        enrichedChunk->samples.timestamps[i],
+                                        &enrichedChunk->samples.values[i * vps],
+                                        vps);
+            } else {
+                ReplyWithSample(ctx,
+                                enrichedChunk->samples.timestamps[i],
+                                enrichedChunk->samples.values[i]);
+            }
         }
         arraylen += n;
     }
@@ -210,6 +221,17 @@ void ReplyWithSample(RedisModuleCtx *ctx, uint64_t timestamp, double value) {
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, timestamp);
     ReplyWithDoubleOrString(ctx, value);
+}
+
+void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
+                             uint64_t timestamp,
+                             double *values,
+                             size_t num_values) {
+    RedisModule_ReplyWithArray(ctx, 1 + num_values);
+    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    for (size_t i = 0; i < num_values; i++) {
+        ReplyWithDoubleOrString(ctx, values[i]);
+    }
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {

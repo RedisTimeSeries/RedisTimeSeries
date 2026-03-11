@@ -343,7 +343,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type,
+                          int *agg_types,
+                          size_t *num_agg_types,
                           bool *empty,
                           BucketTimestamp *bucketTS,
                           timestamp_t *alignmetTS) {
@@ -362,12 +363,45 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
 
-        *agg_type = RMStringLenAggTypeToEnum(aggTypeStr);
+        size_t aggStr_len;
+        const char *aggStr = RedisModule_StringPtrLen(aggTypeStr, &aggStr_len);
 
-        if (*agg_type < 0 || *agg_type >= TS_AGG_TYPES_MAX) {
+        size_t count = 0;
+        const char *p = aggStr;
+        const char *end = aggStr + aggStr_len;
+        while (p < end) {
+            const char *comma = memchr(p, ',', end - p);
+            size_t token_len = comma ? (size_t)(comma - p) : (size_t)(end - p);
+            if (token_len == 0) {
+                RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
+                return TSDB_ERROR;
+            }
+            if (count >= TS_AGG_TYPES_MAX) {
+                RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
+                return TSDB_ERROR;
+            }
+            int agg = StringLenAggTypeToEnum(p, token_len);
+            if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
+                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+                return TSDB_ERROR;
+            }
+            agg_types[count++] = agg;
+            if (comma) {
+                p = comma + 1;
+                if (p == end) {
+                    RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
+                    return TSDB_ERROR;
+                }
+            } else {
+                p = end;
+            }
+        }
+
+        if (count == 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
         }
+        *num_agg_types = count;
 
         if (temp_time_delta <= 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: bucketDuration must be greater than zero");
@@ -419,21 +453,28 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          AggregationArgs *out) {
-    int agg_type;
+    int agg_types[TS_AGG_TYPES_MAX];
+    size_t num_agg_types = 0;
     AggregationArgs aggregationArgs = { 0 };
     int result = _parseAggregationArgs(ctx,
                                        argv,
                                        argc,
                                        &aggregationArgs.timeDelta,
-                                       &agg_type,
+                                       agg_types,
+                                       &num_agg_types,
                                        &aggregationArgs.empty,
                                        &aggregationArgs.bucketTS,
                                        NULL);
     if (result == TSDB_OK) {
-        aggregationArgs.aggregationClass = GetAggClass(agg_type);
-        if (aggregationArgs.aggregationClass == NULL) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
-            return TSDB_ERROR;
+        aggregationArgs.numClasses = num_agg_types;
+        aggregationArgs.classes = malloc(num_agg_types * sizeof(aggregationArgs.classes));
+        for (size_t i = 0; i < num_agg_types; i++) {
+            aggregationArgs.classes[i] = GetAggClass(agg_types[i]);
+            if (aggregationArgs.classes[i] == NULL) {
+                free(aggregationArgs.classes);
+                RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
+                return TSDB_ERROR;
+            }
         }
         *out = aggregationArgs;
         return TSDB_OK;
@@ -618,7 +659,8 @@ int parseRangeArguments(RedisModuleCtx *ctx,
                         RangeArgs *out) {
     RangeArgs args = { 0 };
     args.aggregationArgs.timeDelta = 0;
-    args.aggregationArgs.aggregationClass = NULL;
+    args.aggregationArgs.numClasses = 0;
+    args.aggregationArgs.classes = NULL;
     args.filterByValueArgs.hasValue = false;
     args.filterByTSArgs.hasValue = false;
 
@@ -667,7 +709,7 @@ int parseRangeArguments(RedisModuleCtx *ctx,
     }
 
     if (args.alignment != DefaultAlignment) {
-        if (args.aggregationArgs.aggregationClass == NULL) {
+        if (args.aggregationArgs.numClasses == 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: ALIGN parameter can only be used with AGGREGATION");
             return TSDB_ERROR;
         }
@@ -961,6 +1003,13 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             QueryPredicateList_Free(queries);
             return REDISMODULE_ERR;
         }
+
+        if (args.rangeArgs.aggregationArgs.numClasses > 1) {
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: GROUPBY is not allowed when multiple aggregators are specified");
+            QueryPredicateList_Free(queries);
+            return REDISMODULE_ERR;
+        }
     }
     *out = args;
     return REDISMODULE_OK;
@@ -968,6 +1017,9 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
 
 void MRangeArgs_Free(MRangeArgs *args) {
     QueryPredicateList_Free(args->queryPredicates);
+    free(args->rangeArgs.aggregationArgs.classes);
+    args->rangeArgs.aggregationArgs.classes = NULL;
+    args->rangeArgs.aggregationArgs.numClasses = 0;
 }
 
 void MGetArgs_Free(MGetArgs *args) {
