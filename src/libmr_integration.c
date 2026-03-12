@@ -714,7 +714,7 @@ static RedisModuleUser *InternalCommandCoordinatorUserApply(RedisModuleCtx *ctx,
     RedisModuleUser *user =
         RedisModule_GetModuleUserFromUserName(queryArg->coordinator_username);
     if (user) {
-        SetInternalMCmdUser(user);
+        RedisModule_SetContextUser(ctx, user);
     }
     return user;
 }
@@ -724,7 +724,6 @@ static void InternalCommandCoordinatorUserClear(RedisModuleCtx *ctx,
                                                 RedisModuleUser *internal_m_cmd_user) {
     if (internal_m_cmd_user){
         RedisModule_FreeModuleUser(internal_m_cmd_user);
-        ClearInternalMCmdUser();
     }
     if (queryArg->coordinator_username) {
         RedisModule_FreeString(ctx, queryArg->coordinator_username);

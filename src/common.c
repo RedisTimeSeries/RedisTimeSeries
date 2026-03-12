@@ -8,14 +8,6 @@ void SetInternalMCmdUser(struct RedisModuleUser *user) {
     g_internal_m_cmd_user = user;
 }
 
-void ClearInternalMCmdUser(void) {
-    g_internal_m_cmd_user = NULL;
-}
-
-struct RedisModuleUser *GetInternalMCmdUser(void) {
-    return g_internal_m_cmd_user;
-}
-
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before
