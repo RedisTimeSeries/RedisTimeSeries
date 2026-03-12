@@ -517,6 +517,11 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->coordinator_username)
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
 
     MRError *err = NULL;
 
@@ -580,6 +585,13 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->coordinator_username)
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
+
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
@@ -632,6 +644,12 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+
+    // coordinator username is not used in the mapper, 
+    // but we need to retain it for the callback
+    queryArg->coordinator_username = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->coordinator_username)
+        RedisModule_RetainString(ctx, queryArg->coordinator_username);
 
     MRError *err = NULL;
 

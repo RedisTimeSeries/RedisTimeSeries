@@ -2,6 +2,12 @@
 #include "tsdb.h"
 #include "indexer.h"
 
+struct RedisModuleUser *g_internal_m_cmd_user = NULL;
+
+void SetInternalMCmdUser(struct RedisModuleUser *user) {
+    g_internal_m_cmd_user = user;
+}
+
 int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key) {
     if (strcasecmp(event, "del") ==
             0 || // unlink also notifies with del with freeseries called before
