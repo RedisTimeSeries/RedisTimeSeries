@@ -3,6 +3,7 @@
 #include "generic_chunk.h"
 #include "indexer.h"
 #include "tsdb.h"
+#include "compaction.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
 #define REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -27,6 +28,18 @@ typedef struct QueryPredicates_Arg
     RedisModuleString **limitLabels;
     bool latest;
     bool resp3;
+    // Shard-side aggregation: push aggregation down to shards to reduce data transfer
+    int aggType;                // TS_AGG_TYPES_T enum value, or TS_AGG_NONE
+    int64_t aggTimeDelta;       // aggregation bucket size in ms
+    int aggBucketTS;            // BucketTimestamp enum
+    bool aggEmpty;              // return empty buckets
+    timestamp_t aggAlignment;   // timestamp alignment for aggregation
+    int alignmentEnum;          // RangeAlignment enum
+    // Shard-side value filtering
+    bool filterByValueHasValue;
+    double filterByValueMin;
+    double filterByValueMax;
+    bool reverse;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord

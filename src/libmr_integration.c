@@ -153,6 +153,22 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->latest, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->resp3, error);
 
+    // Shard-side aggregation fields
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggType, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggTimeDelta, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggBucketTS, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggEmpty, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggAlignment, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->alignmentEnum, error);
+    // Shard-side value filtering fields
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByValueHasValue, error);
+    union { double d; long long ll; } umin, umax;
+    umin.d = predicate_list->filterByValueMin;
+    umax.d = predicate_list->filterByValueMax;
+    MR_SerializationCtxWriteLongLong(sctx, umin.ll, error);
+    MR_SerializationCtxWriteLongLong(sctx, umax.ll, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->reverse, error);
+
     for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
         SerializationCtxWriteRedisString(sctx, predicate_list->limitLabels[i], error);
     }
@@ -234,6 +250,22 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     if (unlikely(expect_resp && (bool)predicates->resp3 != predicates->resp3)) {
         goto err;
     }
+
+    // Shard-side aggregation fields
+    predicates->aggType = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggTimeDelta = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggBucketTS = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggEmpty = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggAlignment = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->alignmentEnum = MR_SerializationCtxReadLongLong(sctx, error);
+    // Shard-side value filtering fields
+    predicates->filterByValueHasValue = MR_SerializationCtxReadLongLong(sctx, error);
+    union { double d; long long ll; } umin, umax;
+    umin.ll = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->filterByValueMin = umin.d;
+    umax.ll = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->filterByValueMax = umax.d;
+    predicates->reverse = MR_SerializationCtxReadLongLong(sctx, error);
 
     predicates->limitLabels = calloc(predicates->limitLabelsSize, sizeof *predicates->limitLabels);
     for (int i = 0; i < predicates->limitLabelsSize; ++i) {
@@ -692,14 +724,30 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
     mrangeArgs.rangeArgs.latest = queryArg->latest;
     mrangeArgs.rangeArgs.count = -1LL;
-    mrangeArgs.rangeArgs.aggregationArgs.empty = false;
-    mrangeArgs.rangeArgs.aggregationArgs.timeDelta = 0;
-    mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
-    mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = NULL;
-    mrangeArgs.rangeArgs.filterByValueArgs.hasValue = false;
+
+    // Push aggregation to shards: use the actual aggregation args from the command
+    if (queryArg->aggType != TS_AGG_NONE && queryArg->aggType != TS_AGG_INVALID) {
+        mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = GetAggClass(queryArg->aggType);
+        mrangeArgs.rangeArgs.aggregationArgs.timeDelta = queryArg->aggTimeDelta;
+        mrangeArgs.rangeArgs.aggregationArgs.bucketTS = queryArg->aggBucketTS;
+        mrangeArgs.rangeArgs.aggregationArgs.empty = queryArg->aggEmpty;
+        mrangeArgs.rangeArgs.alignment = queryArg->alignmentEnum;
+        mrangeArgs.rangeArgs.timestampAlignment = queryArg->aggAlignment;
+    } else {
+        mrangeArgs.rangeArgs.aggregationArgs.empty = false;
+        mrangeArgs.rangeArgs.aggregationArgs.timeDelta = 0;
+        mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
+        mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = NULL;
+        mrangeArgs.rangeArgs.alignment = DefaultAlignment;
+        mrangeArgs.rangeArgs.timestampAlignment = 0;
+    }
+
+    // Push FILTER_BY_VALUE to shards
+    mrangeArgs.rangeArgs.filterByValueArgs.hasValue = queryArg->filterByValueHasValue;
+    mrangeArgs.rangeArgs.filterByValueArgs.min = queryArg->filterByValueMin;
+    mrangeArgs.rangeArgs.filterByValueArgs.max = queryArg->filterByValueMax;
+
     mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
-    mrangeArgs.rangeArgs.alignment = DefaultAlignment;
-    mrangeArgs.rangeArgs.timestampAlignment = 0;
     // Include all the labels because the aggregated result might be grouped by a label (in
     // mrange_done)
     mrangeArgs.withLabels = true;
@@ -708,7 +756,7 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByLabel = NULL;
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
-    mrangeArgs.reverse = false;
+    mrangeArgs.reverse = queryArg->reverse;
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);

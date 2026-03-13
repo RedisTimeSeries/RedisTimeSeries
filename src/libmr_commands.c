@@ -152,6 +152,21 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     if (!nodesResults)
         goto __done;
 
+    // Shards already applied aggregation, FILTER_BY_VALUE, and reverse.
+    // The coordinator must NOT re-apply them. Use minimized args that pass
+    // through the pre-processed data without modification.
+    bool shardSideAgg = (args->rangeArgs.aggregationArgs.aggregationClass != NULL);
+    RangeArgs coordRangeArgs = args->rangeArgs;
+    if (shardSideAgg) {
+        coordRangeArgs.startTimestamp = 0;
+        coordRangeArgs.endTimestamp = UINT64_MAX;
+        coordRangeArgs.aggregationArgs.aggregationClass = NULL;
+        coordRangeArgs.aggregationArgs.timeDelta = 0;
+        coordRangeArgs.filterByTSArgs.hasValue = false;
+        coordRangeArgs.filterByValueArgs.hasValue = false;
+        coordRangeArgs.latest = false;
+    }
+
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
         resultset = ResultSet_Create();
@@ -172,34 +187,24 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
                                     args->withLabels,
                                     args->limitLabels,
                                     args->numLimitLabels,
-                                    &args->rangeArgs,
+                                    &coordRangeArgs,
                                     args->reverse,
                                     false);
         });
     });
 
     if (args->groupByLabel) {
-        // Apply the reducer
-        RangeArgs rangeArgs = args->rangeArgs;
-        rangeArgs.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
-
-        // Do not apply the aggregation on the resultset, do apply max results on the final result
-        RangeArgs minimizedArgs = args->rangeArgs;
-        minimizedArgs.startTimestamp = 0;
-        minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.aggregationClass = NULL;
-        minimizedArgs.aggregationArgs.timeDelta = 0;
-        minimizedArgs.filterByTSArgs.hasValue = false;
-        minimizedArgs.filterByValueArgs.hasValue = false;
-        minimizedArgs.latest = false;
+        // Apply the reducer using coordRangeArgs (no re-aggregation if shards did it)
+        RangeArgs reducerArgs = coordRangeArgs;
+        reducerArgs.latest = false;
+        ResultSet_ApplyReducer(ctx, resultset, &reducerArgs, &args->groupByReducerArgs);
 
         replyResultSet(ctx,
                        resultset,
                        args->withLabels,
                        args->limitLabels,
                        args->numLimitLabels,
-                       &minimizedArgs,
+                       &coordRangeArgs,
                        args->reverse);
         ResultSet_Free(resultset);
     }
@@ -579,6 +584,28 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+
+    // Push aggregation args to shards for shard-side computation
+    if (args.rangeArgs.aggregationArgs.aggregationClass != NULL) {
+        queryArg->aggType = args.rangeArgs.aggregationArgs.aggregationClass->type;
+        queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+        queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+        queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+        queryArg->aggAlignment = args.rangeArgs.timestampAlignment;
+        queryArg->alignmentEnum = args.rangeArgs.alignment;
+    } else {
+        queryArg->aggType = TS_AGG_NONE;
+        queryArg->aggTimeDelta = 0;
+        queryArg->aggBucketTS = BucketStartTimestamp;
+        queryArg->aggEmpty = false;
+        queryArg->aggAlignment = 0;
+        queryArg->alignmentEnum = DefaultAlignment;
+    }
+    // Push FILTER_BY_VALUE to shards
+    queryArg->filterByValueHasValue = args.rangeArgs.filterByValueArgs.hasValue;
+    queryArg->filterByValueMin = args.rangeArgs.filterByValueArgs.min;
+    queryArg->filterByValueMax = args.rangeArgs.filterByValueArgs.max;
+    queryArg->reverse = reverse;
 
     MRError *err = NULL;
 
