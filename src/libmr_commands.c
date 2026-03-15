@@ -580,6 +580,28 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
+    // Push aggregation args to shards for shard-side computation
+    if (args.rangeArgs.aggregationArgs.aggregationClass != NULL) {
+        queryArg->aggType = args.rangeArgs.aggregationArgs.aggregationClass->type;
+        queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+        queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+        queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+        queryArg->aggAlignment = args.rangeArgs.timestampAlignment;
+        queryArg->alignmentEnum = args.rangeArgs.alignment;
+    } else {
+        queryArg->aggType = TS_AGG_NONE;
+        queryArg->aggTimeDelta = 0;
+        queryArg->aggBucketTS = BucketStartTimestamp;
+        queryArg->aggEmpty = false;
+        queryArg->aggAlignment = 0;
+        queryArg->alignmentEnum = DefaultAlignment;
+    }
+    // Push FILTER_BY_VALUE to shards
+    queryArg->filterByValueHasValue = args.rangeArgs.filterByValueArgs.hasValue;
+    queryArg->filterByValueMin = args.rangeArgs.filterByValueArgs.min;
+    queryArg->filterByValueMax = args.rangeArgs.filterByValueArgs.max;
+    queryArg->reverse = reverse;
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
