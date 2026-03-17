@@ -32,9 +32,12 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
                                    "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
-        snprintf(
-            buf, sizeof(buf), "Multi-shard command failed. %s", MR_ExecutionCtxGetError(eCtx, 0));
-
+        const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
+        if (strncmp(err_msg, "NOPERM ", 7) == 0) {
+            snprintf(buf, sizeof(buf), "NOPERM Multi-shard command failed. %s", err_msg + 7);
+        } else {
+            snprintf(buf, sizeof(buf), "Multi-shard command failed. %s", err_msg);
+        }
         RedisModule_ReplyWithError(rctx, buf);
     }
     return true;
@@ -517,6 +520,11 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    // coordinator username is not used in the mapper,
+    // but we need to retain it for the callback
+    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->contextUserName)
+        RedisModule_RetainString(ctx, queryArg->contextUserName);
 
     MRError *err = NULL;
 
@@ -580,6 +588,12 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
+    // coordinator username is not used in the mapper,
+    // but we need to retain it for the callback
+    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->contextUserName)
+        RedisModule_RetainString(ctx, queryArg->contextUserName);
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
@@ -632,6 +646,12 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+
+    // coordinator username is not used in the mapper,
+    // but we need to retain it for the callback
+    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
+    if (queryArg->contextUserName)
+        RedisModule_RetainString(ctx, queryArg->contextUserName);
 
     MRError *err = NULL;
 

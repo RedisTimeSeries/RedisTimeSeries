@@ -68,13 +68,12 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
         RedisModuleUser *user = GetCurrentUser(ctx);
 
         if (!user) {
-            size_t len = 0;
-            const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
-            RedisModule_Log(ctx,
-                            "warning",
-                            "No context user set, can't check for the ACLs for key %s",
-                            currentKeyStr);
-
+            const RedisModuleUser *contextUser = RedisModule_GetContextUser(ctx);
+            if (contextUser) {
+                return RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
+                                                          keyName,
+                                                          permissionFlags) == REDISMODULE_OK;
+            }
             return true;
         }
 
