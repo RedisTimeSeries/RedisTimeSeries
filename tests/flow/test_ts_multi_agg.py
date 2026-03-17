@@ -725,9 +725,9 @@ def test_multi_agg_twa_with_gaps_and_countall():
         agg_types = ['countall', 'min', 'twa']
         multi_agg_str = ','.join(agg_types)
 
-        refs = [r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 40,
+        refs = [r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 39,
                                   'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
-        result = r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 40,
+        result = r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 39,
                                    'AGGREGATION', multi_agg_str, 10, 'EMPTY')
 
         assert len(result) == len(refs[0]), \
@@ -737,6 +737,52 @@ def test_multi_agg_twa_with_gaps_and_countall():
             for a, agg in enumerate(agg_types):
                 assert result[i][1 + a] == refs[a][i][1], \
                     f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
+def test_multi_agg_twa_edge_gap_no_surrounding_samples():
+    """Test multi-agg with TWA + EMPTY where empty buckets are at the EDGE of the data
+    and have no surrounding samples on one side.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_edge{a}')
+        # Data only in bucket [0, 10)
+        r.execute_command('TS.ADD', 'magg_edge{a}', 2, 20)
+        r.execute_command('TS.ADD', 'magg_edge{a}', 7, 70)
+        # Buckets [10, 20) and [20, 30) are empty trailing gaps with no data after
+
+        agg_types = ['min', 'max', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_edge{a}', 0, 30,
+                                  'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_edge{a}', 0, 30,
+                                   'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Also test leading gap (data only at the end)
+        r.execute_command('TS.CREATE', 'magg_edge2{a}')
+        r.execute_command('TS.ADD', 'magg_edge2{a}', 22, 220)
+        r.execute_command('TS.ADD', 'magg_edge2{a}', 27, 270)
+
+        refs2 = [r.execute_command('TS.RANGE', 'magg_edge2{a}', 0, 30,
+                                   'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+        result2 = r.execute_command('TS.RANGE', 'magg_edge2{a}', 0, 30,
+                                    'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result2) == len(refs2[0]), \
+            f"leading gap: bucket count mismatch: multi-agg={len(result2)}, single-agg={len(refs2[0])}"
+        for i in range(len(result2)):
+            assert result2[i][0] == refs2[0][i][0], f"leading gap: timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result2[i][1 + a] == refs2[a][i][1], \
+                    f"leading gap: {agg} mismatch at bucket {i}: multi-agg={result2[i][1 + a]}, single={refs2[a][i][1]}"
 
 
 def test_createrule_multi_agg_error():

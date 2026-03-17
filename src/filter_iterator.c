@@ -404,14 +404,17 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
         }
     } else {
         double twa_empty_val;
-        if (self->hasTwa) {
-            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
-        }
+        bool twa_empty_computed = false;
         for (size_t a = 0; a < numAggs; a++) {
             if (self->validPerAgg[a]) {
                 self->aggregations[a]->finalize(self->aggregationContexts[a],
                                                 &samples->values[index * vps + a]);
             } else if (self->aggregations[a]->type == TS_AGG_TWA) {
+                if (!twa_empty_computed) {
+                    twa_compute_empty_bucket_value(
+                        self, self->aggregationLastTimestamp, &twa_empty_val);
+                    twa_empty_computed = true;
+                }
                 samples->values[index * vps + a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
@@ -1210,14 +1213,17 @@ _finalize:
         }
     } else {
         double twa_empty_val;
-        if (self->hasTwa) {
-            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
-        }
+        bool twa_empty_computed = false;
         for (size_t a = 0; a < numAggs; a++) {
             if (self->validPerAgg[a]) {
                 self->aggregations[a]->finalize(self->aggregationContexts[a],
                                                 &self->aux_chunk->samples.values[a]);
             } else if (self->aggregations[a]->type == TS_AGG_TWA) {
+                if (!twa_empty_computed) {
+                    twa_compute_empty_bucket_value(
+                        self, self->aggregationLastTimestamp, &twa_empty_val);
+                    twa_empty_computed = true;
+                }
                 self->aux_chunk->samples.values[a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
