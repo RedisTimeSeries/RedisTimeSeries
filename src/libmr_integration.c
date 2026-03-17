@@ -709,7 +709,7 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
                                                         .replyParser = SlotRangesReplyParser };
 
 static RedisModuleUser *InternalCommandUserApply(RedisModuleCtx *ctx,
-                                                            QueryPredicates_Arg *queryArg) {
+                                                 QueryPredicates_Arg *queryArg) {
     if (!queryArg->contextUserName)
         return NULL;
     RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->contextUserName);
@@ -720,8 +720,8 @@ static RedisModuleUser *InternalCommandUserApply(RedisModuleCtx *ctx,
 }
 
 static void InternalCommandUserClear(RedisModuleCtx *ctx,
-                                                QueryPredicates_Arg *queryArg,
-                                                RedisModuleUser *internal_m_cmd_user) {
+                                     QueryPredicates_Arg *queryArg,
+                                     RedisModuleUser *internal_m_cmd_user) {
     if (internal_m_cmd_user) {
         RedisModule_FreeModuleUser(internal_m_cmd_user);
     }

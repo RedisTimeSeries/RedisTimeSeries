@@ -12,6 +12,23 @@
 
 #include "rmutil/alloc.h"
 
+// Returns an untracked copy of the current user name.
+// RedisModule_GetCurrentUserName() returns a string auto-tracked by ctx, which
+// is freed when the command handler returns. Because LibMR executes
+// asynchronously (via blocked client), the string must outlive the handler.
+// We copy it into an untracked string (NULL ctx) so the caller owns it and
+// a single RedisModule_FreeString() releases it correctly.
+static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
+    RedisModuleString *ctxUserName = RedisModule_GetCurrentUserName(ctx);
+    if (!ctxUserName)
+        return NULL;
+    size_t len;
+    const char *ctxUserNameStr = RedisModule_StringPtrLen(ctxUserName, &len);
+    RedisModuleString *userName = RedisModule_CreateString(NULL, ctxUserNameStr, len);
+    RedisModule_FreeString(ctx, ctxUserName);
+    return userName;
+}
+
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (likely(len == 0))
@@ -520,11 +537,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
-    // coordinator username is not used in the mapper,
-    // but we need to retain it for the callback
-    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
-    if (queryArg->contextUserName)
-        RedisModule_RetainString(ctx, queryArg->contextUserName);
+    queryArg->contextUserName = CopyCurrentUserName(ctx);
 
     MRError *err = NULL;
 
@@ -588,11 +601,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
-    // coordinator username is not used in the mapper,
-    // but we need to retain it for the callback
-    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
-    if (queryArg->contextUserName)
-        RedisModule_RetainString(ctx, queryArg->contextUserName);
+    queryArg->contextUserName = CopyCurrentUserName(ctx);
 
     MRError *err = NULL;
 
@@ -647,11 +656,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
 
-    // coordinator username is not used in the mapper,
-    // but we need to retain it for the callback
-    queryArg->contextUserName = RedisModule_GetCurrentUserName(ctx);
-    if (queryArg->contextUserName)
-        RedisModule_RetainString(ctx, queryArg->contextUserName);
+    queryArg->contextUserName = CopyCurrentUserName(ctx);
 
     MRError *err = NULL;
 
