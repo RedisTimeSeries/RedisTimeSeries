@@ -459,6 +459,79 @@ def test_multi_agg_countnan_mixed():
                     f"{agg} mismatch at bucket {i} (countnan-first): multi-agg={result2[i][1 + a]}, single={refs2[a][i][1]}"
 
 
+def test_multi_agg_nan_only_bucket_mixed_validators():
+    """Test multi-agg where a bucket has ONLY NaN values and validators disagree.
+
+    When mixing countall (accepts NaN) with min (rejects NaN), a NaN-only bucket must
+    use finalizeEmpty for min (producing NaN) rather than finalize (which would produce
+    DBL_MAX from an empty context). This verifies per-aggregation validity tracking.
+
+    Uses EMPTY so all aggregations produce the same bucket count in both single-agg
+    and multi-agg modes (without EMPTY, single-agg min/max skip NaN-only buckets while
+    multi-agg emits them because countall had valid samples).
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_nanonly{a}')
+        # Bucket [1000, 2000): normal values
+        r.execute_command('TS.ADD', 'magg_nanonly{a}', 1000, 10)
+        r.execute_command('TS.ADD', 'magg_nanonly{a}', 1001, 20)
+        # Bucket [2000, 3000): only NaN values
+        r.execute_command('TS.ADD', 'magg_nanonly{a}', 2000, 'NaN')
+        r.execute_command('TS.ADD', 'magg_nanonly{a}', 2001, 'NaN')
+        # Bucket [3000, 4000): normal values again
+        r.execute_command('TS.ADD', 'magg_nanonly{a}', 3000, 30)
+
+        agg_types = ['countall', 'min', 'max']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_nanonly{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_nanonly{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
+def test_multi_agg_countnan_first_with_twa():
+    """Test that TWA init uses correct validator when countnan is the first aggregation.
+
+    When aggs are 'countnan,twa', the TWA init loop must NOT use countnan's
+    nanValueValid (only NaN passes) to find the prev-bucket sample for interpolation.
+    It must use non-NaN validity (what TWA needs) regardless of aggregation order.
+
+    Uses EMPTY so all aggregations produce the same bucket count (without EMPTY,
+    single-agg countnan skips buckets with no NaN values while multi-agg emits them
+    because TWA had valid samples).
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_cntwa{a}')
+        r.execute_command('TS.ADD', 'magg_cntwa{a}', 5, 50)
+        r.execute_command('TS.ADD', 'magg_cntwa{a}', 15, 150)
+        r.execute_command('TS.ADD', 'magg_cntwa{a}', 25, 250)
+
+        agg_types = ['countnan', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_cntwa{a}', 10, 30,
+                                  'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_cntwa{a}', 10, 30,
+                                   'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
 def test_createrule_multi_agg_error():
     """TS.CREATERULE should reject multiple aggregators."""
     with Env().getClusterConnectionIfNeeded() as r:

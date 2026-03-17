@@ -62,7 +62,8 @@ typedef struct AggregationIterator
     bool handled_twa_empty_prefix;
     bool handled_twa_empty_suffix;
     timestamp_t prev_ts;
-    bool validSamplesInBucket; // are there any valid samples in current bucket
+    bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
+    bool *validPerAgg;         // per-aggregation validity tracking for current bucket
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,

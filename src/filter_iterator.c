@@ -270,6 +270,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->handled_twa_empty_suffix = false;
     iter->prev_ts = DC;
     iter->validSamplesInBucket = false;
+    iter->validPerAgg = calloc(numAggregations, sizeof(bool));
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
     return iter;
@@ -384,6 +385,7 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
         if (!self->empty) {
             for (size_t a = 0; a < numAggs; a++) {
                 self->aggregations[a]->resetContext(self->aggregationContexts[a]);
+                self->validPerAgg[a] = false;
             }
             self->validSamplesInBucket = false;
             return false;
@@ -402,14 +404,20 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
         }
     } else {
         for (size_t a = 0; a < numAggs; a++) {
-            self->aggregations[a]->finalize(self->aggregationContexts[a],
-                                            &samples->values[index * vps + a]);
+            if (self->validPerAgg[a]) {
+                self->aggregations[a]->finalize(self->aggregationContexts[a],
+                                                &samples->values[index * vps + a]);
+            } else {
+                self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
+                                                     &samples->values[index * vps + a]);
+            }
         }
     }
     samples->timestamps[index] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     for (size_t a = 0; a < numAggs; a++) {
         self->aggregations[a]->resetContext(self->aggregationContexts[a]);
+        self->validPerAgg[a] = false;
     }
     self->validSamplesInBucket = false;
     return true;
@@ -441,24 +449,6 @@ static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
     }
 
     return l;
-}
-
-static void fillEmptyBucketWithValueIncIter(size_t *write_index,
-                                            timestamp_t *cur_ts,
-                                            Samples *samples,
-                                            timestamp_t ts,
-                                            double value,
-                                            const AggregationIterator *self,
-                                            bool reversed) {
-    size_t vps = samples->values_per_sample;
-    samples->values[(*write_index) * vps] = value;
-    samples->timestamps[*write_index] = ts;
-    if (reversed) {
-        (*cur_ts) -= self->aggregationTimeDelta;
-    } else {
-        (*cur_ts) += self->aggregationTimeDelta;
-    }
-    (*write_index)++;
 }
 
 static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
@@ -726,14 +716,6 @@ static int fillEmptyBuckets(Samples *samples,
 
 #define TWA_EMPTY_RANGE(iter) (((iter)->empty) && ((iter)->hasTwa))
 
-static inline void appendValueToAllContexts(AggregationIterator *self,
-                                            double value,
-                                            timestamp_t ts) {
-    for (size_t a = 0; a < self->numAggregations; a++) {
-        self->aggregations[a]->appendValue(self->aggregationContexts[a], value, ts);
-    }
-}
-
 static inline Samples *ensureOutputSamples(AggregationIterator *self,
                                            EnrichedChunk *enrichedChunk,
                                            size_t needed_samples) {
@@ -924,9 +906,9 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             };
             AbstractSampleIterator *sample_iterator =
                 SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
-            // Skip non valid samples - they shouldn't be used for interpolation
+            // Skip NaN samples - they shouldn't be used for TWA interpolation
             while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                if (aggregation->isValueValid(sample.value)) {
+                if (!isnan(sample.value)) {
                     for (size_t a = 0; a < self->numAggregations; a++) {
                         if (self->aggregations[a]->type == TS_AGG_TWA) {
                             self->aggregations[a]->addPrevBucketLastSample(
@@ -956,6 +938,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     for (int64_t idx = si; idx <= ei; idx++) {
                         if (aggregation->isValueValid(enrichedChunk->samples.values[idx])) {
                             self->validSamplesInBucket = true;
+                            self->validPerAgg[0] = true;
                         }
                     }
                     si = ei + 1;
@@ -1014,6 +997,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     if (aggregation->isValueValid(sample.value)) {
                         appendValue(aggregationContext, sample.value, sample.timestamp);
                         self->validSamplesInBucket = true;
+                        self->validPerAgg[0] = true;
                     }
                     si++;
                 }
@@ -1040,12 +1024,13 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         }
                     }
 
-                    bool hadValidSamples = self->validSamplesInBucket;
-                    // Collect last samples from each TWA context before finalizeBucket resets them
+                    // Collect last samples and per-agg validity before finalizeBucket resets them
                     Sample twa_last_samples[self->numAggregations];
+                    bool twaHadValid[self->numAggregations];
                     if (self->hasTwa) {
                         for (size_t a = 0; a < self->numAggregations; a++) {
                             if (self->aggregations[a]->type == TS_AGG_TWA) {
+                                twaHadValid[a] = self->validPerAgg[a];
                                 self->aggregations[a]->getLastSample(self->aggregationContexts[a],
                                                                      &twa_last_samples[a]);
                             }
@@ -1107,8 +1092,8 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                                      self->endTimestamp);
                         for (size_t a = 0; a < self->numAggregations; a++) {
                             if (self->aggregations[a]->type == TS_AGG_TWA) {
-                                if (hadValidSamples && self->aggregations[a]->isValueValid(
-                                                           twa_last_samples[a].value)) {
+                                if (twaHadValid[a] && self->aggregations[a]->isValueValid(
+                                                          twa_last_samples[a].value)) {
                                     self->aggregations[a]->addPrevBucketLastSample(
                                         self->aggregationContexts[a],
                                         twa_last_samples[a].value,
@@ -1127,18 +1112,16 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     if (aggregation->isValueValid(sample.value)) {
                         appendValue(aggregationContext, sample.value, sample.timestamp);
                         self->validSamplesInBucket = true;
+                        self->validPerAgg[0] = true;
                     }
                 } else {
-                    bool anyValid = false;
                     for (size_t a = 0; a < self->numAggregations; a++) {
                         if (self->aggregations[a]->isValueValid(sample.value)) {
                             self->aggregations[a]->appendValue(
                                 self->aggregationContexts[a], sample.value, sample.timestamp);
-                            anyValid = true;
+                            self->validSamplesInBucket = true;
+                            self->validPerAgg[a] = true;
                         }
-                    }
-                    if (anyValid) {
-                        self->validSamplesInBucket = true;
                     }
                 }
                 si++;
@@ -1191,12 +1174,12 @@ _finalize:
     }
 
     size_t numAggs = self->numAggregations;
-    size_t vps = self->aux_chunk->samples.values_per_sample;
     bool shouldBucketIgnored = self->validSamplesInBucket == 0;
     if (shouldBucketIgnored) {
         if (!self->empty) {
             for (size_t a = 0; a < numAggs; a++) {
                 self->aggregations[a]->resetContext(self->aggregationContexts[a]);
+                self->validPerAgg[a] = false;
             }
             self->validSamplesInBucket = false;
             self->aux_chunk->samples.num_samples = 0;
@@ -1217,9 +1200,17 @@ _finalize:
         }
     } else {
         for (size_t a = 0; a < numAggs; a++) {
-            self->aggregations[a]->finalize(self->aggregationContexts[a],
-                                            &self->aux_chunk->samples.values[a]);
+            if (self->validPerAgg[a]) {
+                self->aggregations[a]->finalize(self->aggregationContexts[a],
+                                                &self->aux_chunk->samples.values[a]);
+            } else {
+                self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
+                                                     &self->aux_chunk->samples.values[a]);
+            }
         }
+    }
+    for (size_t a = 0; a < numAggs; a++) {
+        self->validPerAgg[a] = false;
     }
     self->validSamplesInBucket = false;
 
@@ -1273,6 +1264,7 @@ void AggregationIterator_Close(struct AbstractIterator *iterator) {
     }
     free(self->aggregations);
     free(self->aggregationContexts);
+    free(self->validPerAgg);
     FreeEnrichedChunk(self->aux_chunk);
     free(iterator);
 }
