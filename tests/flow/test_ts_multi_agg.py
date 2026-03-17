@@ -362,6 +362,103 @@ def test_multi_agg_empty_buckets_with_gaps():
                     f"REVRANGE {agg} mismatch at bucket {i}: multi-agg={result_rev[i][1 + a]}, single={refs_rev[a][i][1]}"
 
 
+def test_multi_agg_twa_empty_prefix_gap():
+    """Test multi-agg with TWA + EMPTY where there are empty buckets before the first data point.
+
+    This exercises the TWA_EMPTY_RANGE prefix path in AggregationIterator_GetNextChunk,
+    ensuring the output goes to aux_chunk (not enrichedChunk) when multiAgg is true.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_twa_pfx{a}')
+        # Data starts at timestamp 30, query starts at 0 → buckets [0,10) and [10,20) are empty prefix
+        r.execute_command('TS.ADD', 'magg_twa_pfx{a}', 30, 100)
+        r.execute_command('TS.ADD', 'magg_twa_pfx{a}', 35, 200)
+        r.execute_command('TS.ADD', 'magg_twa_pfx{a}', 45, 300)
+
+        agg_types = ['min', 'max', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        # Get single-agg reference results
+        refs = [r.execute_command('TS.RANGE', 'magg_twa_pfx{a}', 0, 50,
+                                  'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+
+        result = r.execute_command('TS.RANGE', 'magg_twa_pfx{a}', 0, 50,
+                                   'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Also test REVRANGE
+        refs_rev = [r.execute_command('TS.REVRANGE', 'magg_twa_pfx{a}', 0, 50,
+                                      'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+        result_rev = r.execute_command('TS.REVRANGE', 'magg_twa_pfx{a}', 0, 50,
+                                       'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result_rev) == len(refs_rev[0]), \
+            f"REVRANGE bucket count mismatch: multi-agg={len(result_rev)}, single-agg={len(refs_rev[0])}"
+        for i in range(len(result_rev)):
+            assert result_rev[i][0] == refs_rev[0][i][0], f"REVRANGE timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result_rev[i][1 + a] == refs_rev[a][i][1], \
+                    f"REVRANGE {agg} mismatch at bucket {i}: multi-agg={result_rev[i][1 + a]}, single={refs_rev[a][i][1]}"
+
+
+def test_multi_agg_countnan_mixed():
+    """Test multi-agg mixing countnan/countall with standard aggregations.
+
+    countnan uses nanValueValid (only NaN passes), countall uses allValueValid (everything passes).
+    The per-aggregation isValueValid gate must be checked independently for each aggregation,
+    not just the first one.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_cnan{a}')
+        r.execute_command('TS.ADD', 'magg_cnan{a}', 1000, 10)
+        r.execute_command('TS.ADD', 'magg_cnan{a}', 1001, 'NaN')
+        r.execute_command('TS.ADD', 'magg_cnan{a}', 1002, 20)
+        r.execute_command('TS.ADD', 'magg_cnan{a}', 1003, 'NaN')
+        r.execute_command('TS.ADD', 'magg_cnan{a}', 1004, 30)
+
+        agg_types = ['sum', 'countnan', 'countall']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_cnan{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000) for agg in agg_types]
+
+        result = r.execute_command('TS.RANGE', 'magg_cnan{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000)
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Also test with countnan as the FIRST aggregation (gates all others in buggy code)
+        agg_types2 = ['countnan', 'min', 'max']
+        multi_agg_str2 = ','.join(agg_types2)
+
+        refs2 = [r.execute_command('TS.RANGE', 'magg_cnan{a}', '-', '+',
+                                   'AGGREGATION', agg, 1000) for agg in agg_types2]
+
+        result2 = r.execute_command('TS.RANGE', 'magg_cnan{a}', '-', '+',
+                                    'AGGREGATION', multi_agg_str2, 1000)
+
+        assert len(result2) == len(refs2[0]), \
+            f"bucket count mismatch (countnan-first): multi-agg={len(result2)}, single-agg={len(refs2[0])}"
+        for i in range(len(result2)):
+            assert result2[i][0] == refs2[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types2):
+                assert result2[i][1 + a] == refs2[a][i][1], \
+                    f"{agg} mismatch at bucket {i} (countnan-first): multi-agg={result2[i][1 + a]}, single={refs2[a][i][1]}"
+
+
 def test_createrule_multi_agg_error():
     """TS.CREATERULE should reject multiple aggregators."""
     with Env().getClusterConnectionIfNeeded() as r:

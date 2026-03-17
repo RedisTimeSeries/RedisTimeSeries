@@ -565,6 +565,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     ReplySeriesRange(ctx, series, &rangeArgs, rev);
+    free(rangeArgs.aggregationArgs.classes);
 
 _out:
     RedisModule_CloseKey(key);

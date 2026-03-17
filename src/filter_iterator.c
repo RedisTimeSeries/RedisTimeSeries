@@ -850,18 +850,34 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             }
         }
         if (has_empty_buckets) {
-            si = -1;
-            int err = fillEmptyBuckets(&enrichedChunk->samples,
-                                       &agg_n_samples,
-                                       first_bucket,
-                                       last_bucket,
-                                       self,
-                                       is_reversed,
-                                       &si);
-            if (err != 0) {
-                return NULL;
+            if (multiAgg) {
+                Samples *prefixSamples =
+                    ensureOutputSamples(self, enrichedChunk, agg_n_samples + 256);
+                int64_t read_idx = -1;
+                int err = fillEmptyBuckets(prefixSamples,
+                                           &agg_n_samples,
+                                           first_bucket,
+                                           last_bucket,
+                                           self,
+                                           is_reversed,
+                                           &read_idx);
+                if (err != 0) {
+                    return NULL;
+                }
+            } else {
+                si = -1;
+                int err = fillEmptyBuckets(&enrichedChunk->samples,
+                                           &agg_n_samples,
+                                           first_bucket,
+                                           last_bucket,
+                                           self,
+                                           is_reversed,
+                                           &si);
+                if (err != 0) {
+                    return NULL;
+                }
+                si++;
             }
-            si++;
         }
     }
     self->hasUnFinalizedContext = true;
@@ -1098,13 +1114,23 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     }
                 }
 
-                if (aggregation->isValueValid(sample.value)) {
-                    if (self->numAggregations == 1) {
+                if (self->numAggregations == 1) {
+                    if (aggregation->isValueValid(sample.value)) {
                         appendValue(aggregationContext, sample.value, sample.timestamp);
-                    } else {
-                        appendValueToAllContexts(self, sample.value, sample.timestamp);
+                        self->validSamplesInBucket = true;
                     }
-                    self->validSamplesInBucket = true;
+                } else {
+                    bool anyValid = false;
+                    for (size_t a = 0; a < self->numAggregations; a++) {
+                        if (self->aggregations[a]->isValueValid(sample.value)) {
+                            self->aggregations[a]->appendValue(
+                                self->aggregationContexts[a], sample.value, sample.timestamp);
+                            anyValid = true;
+                        }
+                    }
+                    if (anyValid) {
+                        self->validSamplesInBucket = true;
+                    }
                 }
                 si++;
             }
