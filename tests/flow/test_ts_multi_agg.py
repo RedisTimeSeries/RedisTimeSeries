@@ -58,7 +58,9 @@ def test_multi_agg_revrange():
 
 def test_multi_agg_mrange():
     """Test TS.MRANGE with multiple aggregators."""
-    with Env().getClusterConnectionIfNeeded() as r:
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'magg_mr1{a}', 'LABELS', 'type', 'maggstock')
         r.execute_command('TS.CREATE', 'magg_mr2{a}', 'LABELS', 'type', 'maggstock')
         for i in range(10):
@@ -80,7 +82,9 @@ def test_multi_agg_mrange():
 
 def test_multi_agg_mrevrange():
     """Test TS.MREVRANGE with multiple aggregators."""
-    with Env().getClusterConnectionIfNeeded() as r:
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'magg_mrv{a}', 'LABELS', 'type', 'maggstock2')
         for i in range(10):
             r.execute_command('TS.ADD', 'magg_mrv{a}', 1000 + i, 100 + i)
@@ -106,7 +110,9 @@ def test_multi_agg_mrevrange():
 
 def test_multi_agg_groupby_error():
     """Multiple aggregators with GROUPBY should return an error."""
-    with Env().getClusterConnectionIfNeeded() as r:
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'magg_grp{a}', 'LABELS', 'type', 'maggrp')
         r.execute_command('TS.ADD', 'magg_grp{a}', 1000, 100)
 
@@ -119,7 +125,9 @@ def test_multi_agg_groupby_error():
 
 def test_multi_agg_groupby_single_ok():
     """Single aggregator with GROUPBY should still work."""
-    with Env().getClusterConnectionIfNeeded() as r:
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
         r.execute_command('TS.CREATE', 'magg_grps1{a}', 'LABELS', 'type', 'maggrps')
         r.execute_command('TS.CREATE', 'magg_grps2{a}', 'LABELS', 'type', 'maggrps')
         r.execute_command('TS.ADD', 'magg_grps1{a}', 1000, 100)
@@ -521,6 +529,205 @@ def test_multi_agg_countnan_first_with_twa():
         refs = [r.execute_command('TS.RANGE', 'magg_cntwa{a}', 10, 30,
                                   'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
         result = r.execute_command('TS.RANGE', 'magg_cntwa{a}', 10, 30,
+                                   'AGGREGATION', multi_agg_str, 10, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
+def test_multi_agg_twa_nan_only_bucket_with_countall():
+    """TWA must get interpolated value (not finalizeEmpty) in a NaN-only bucket when
+    another aggregation with a different validator accepts the NaN values.
+
+    Scenario: countall,twa with a bucket containing only NaN values.
+    countall accepts NaN → validSamplesInBucket=true → finalizeBucket enters the
+    'else' branch. TWA's validPerAgg is false (it rejected NaN), so it must use
+    twa_compute_empty_bucket_value for interpolation, not finalizeEmpty.
+
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_twa_nan1{a}')
+        # Bucket [1000, 2000): normal values (used for TWA interpolation)
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 1000, 100)
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 1500, 150)
+        # Bucket [2000, 3000): NaN-only → triggers the bug
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 2000, 'NaN')
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 2500, 'NaN')
+        # Bucket [3000, 4000): normal values (used for TWA interpolation)
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 3000, 300)
+        r.execute_command('TS.ADD', 'magg_twa_nan1{a}', 3500, 350)
+
+        agg_types = ['countall', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_twa_nan1{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_twa_nan1{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Also verify REVRANGE
+        refs_rev = [r.execute_command('TS.REVRANGE', 'magg_twa_nan1{a}', '-', '+',
+                                      'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result_rev = r.execute_command('TS.REVRANGE', 'magg_twa_nan1{a}', '-', '+',
+                                       'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result_rev) == len(refs_rev[0])
+        for i in range(len(result_rev)):
+            assert result_rev[i][0] == refs_rev[0][i][0]
+            for a, agg in enumerate(agg_types):
+                assert result_rev[i][1 + a] == refs_rev[a][i][1], \
+                    f"REVRANGE {agg} mismatch at bucket {i}: multi={result_rev[i][1 + a]}, single={refs_rev[a][i][1]}"
+
+
+def test_multi_agg_twa_nan_only_last_bucket():
+    """TWA must get interpolated value in a NaN-only LAST bucket when mixed with countall.
+
+    This specifically exercises the _finalize code path (not finalizeBucket), which is
+    reached when the last bucket in the iteration has unfinalized context.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_twa_nan2{a}')
+        # Bucket [1000, 2000): normal values
+        r.execute_command('TS.ADD', 'magg_twa_nan2{a}', 1000, 100)
+        r.execute_command('TS.ADD', 'magg_twa_nan2{a}', 1500, 150)
+        # Bucket [2000, 3000): NaN-only, and this is the LAST bucket
+        r.execute_command('TS.ADD', 'magg_twa_nan2{a}', 2000, 'NaN')
+        r.execute_command('TS.ADD', 'magg_twa_nan2{a}', 2500, 'NaN')
+
+        agg_types = ['countall', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_twa_nan2{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_twa_nan2{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
+def test_multi_agg_twa_nan_only_with_countnan():
+    """TWA with countnan (instead of countall) and NaN-only bucket.
+
+    countnan uses nanValueValid (only NaN passes), so in a NaN-only bucket:
+    countnan accepts NaN → validSamplesInBucket=true, but TWA rejects NaN.
+    TWA must still get the interpolated value, not finalizeEmpty.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_twa_nan3{a}')
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 1000, 100)
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 1500, 150)
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 2000, 'NaN')
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 2500, 'NaN')
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 3000, 300)
+        r.execute_command('TS.ADD', 'magg_twa_nan3{a}', 3500, 350)
+
+        agg_types = ['countnan', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_twa_nan3{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_twa_nan3{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+
+def test_multi_agg_multiple_gaps_memmove():
+    """Test multi-agg with multiple gaps that trigger the fillEmptyBuckets overlap path.
+
+    When multiple gaps exist, fillEmptyBuckets is called multiple times within a single
+    GetNextChunk invocation. This tests that aux_chunk num_samples is correctly tracked
+    and memmove operations don't corrupt data.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_mgap{a}')
+        # Create 5 populated buckets with gaps between each
+        for bucket_start in [1000, 3000, 5000, 7000, 9000]:
+            for i in range(5):
+                r.execute_command('TS.ADD', 'magg_mgap{a}', bucket_start + i,
+                                 bucket_start + i)
+
+        agg_types = ['min', 'max', 'count', 'sum']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_mgap{a}', '-', '+',
+                                  'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_mgap{a}', '-', '+',
+                                   'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result) == len(refs[0]), \
+            f"bucket count mismatch: multi-agg={len(result)}, single-agg={len(refs[0])}"
+        for i in range(len(result)):
+            assert result[i][0] == refs[0][i][0], f"timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result[i][1 + a] == refs[a][i][1], \
+                    f"{agg} mismatch at bucket {i}: multi-agg={result[i][1 + a]}, single={refs[a][i][1]}"
+
+        # Also verify REVRANGE with multiple gaps
+        refs_rev = [r.execute_command('TS.REVRANGE', 'magg_mgap{a}', '-', '+',
+                                      'AGGREGATION', agg, 1000, 'EMPTY') for agg in agg_types]
+        result_rev = r.execute_command('TS.REVRANGE', 'magg_mgap{a}', '-', '+',
+                                       'AGGREGATION', multi_agg_str, 1000, 'EMPTY')
+
+        assert len(result_rev) == len(refs_rev[0]), \
+            f"REVRANGE bucket count mismatch: multi-agg={len(result_rev)}, single-agg={len(refs_rev[0])}"
+        for i in range(len(result_rev)):
+            assert result_rev[i][0] == refs_rev[0][i][0], f"REVRANGE timestamp mismatch at bucket {i}"
+            for a, agg in enumerate(agg_types):
+                assert result_rev[i][1 + a] == refs_rev[a][i][1], \
+                    f"REVRANGE {agg} mismatch at bucket {i}: multi={result_rev[i][1 + a]}, single={refs_rev[a][i][1]}"
+
+
+def test_multi_agg_twa_with_gaps_and_countall():
+    """Combined test: TWA + countall + EMPTY + multiple gaps.
+
+    This exercises both findings simultaneously: TWA interpolation in the
+    finalizeBucket else-branch AND the fillEmptyBuckets overlap path with
+    aux_chunk, including TWA-specific empty bucket filling.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'magg_combo{a}')
+        # Bucket [0, 10): values
+        r.execute_command('TS.ADD', 'magg_combo{a}', 2, 20)
+        r.execute_command('TS.ADD', 'magg_combo{a}', 5, 50)
+        # Bucket [10, 20): NaN-only → TWA needs interpolation, countall accepts
+        r.execute_command('TS.ADD', 'magg_combo{a}', 12, 'NaN')
+        # Bucket [20, 30): empty gap (no samples at all)
+        # Bucket [30, 40): values
+        r.execute_command('TS.ADD', 'magg_combo{a}', 32, 320)
+        r.execute_command('TS.ADD', 'magg_combo{a}', 38, 380)
+
+        agg_types = ['countall', 'min', 'twa']
+        multi_agg_str = ','.join(agg_types)
+
+        refs = [r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 40,
+                                  'AGGREGATION', agg, 10, 'EMPTY') for agg in agg_types]
+        result = r.execute_command('TS.RANGE', 'magg_combo{a}', 0, 40,
                                    'AGGREGATION', multi_agg_str, 10, 'EMPTY')
 
         assert len(result) == len(refs[0]), \

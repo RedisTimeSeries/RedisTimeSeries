@@ -403,10 +403,16 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
             }
         }
     } else {
+        double twa_empty_val;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
         for (size_t a = 0; a < numAggs; a++) {
             if (self->validPerAgg[a]) {
                 self->aggregations[a]->finalize(self->aggregationContexts[a],
                                                 &samples->values[index * vps + a]);
+            } else if (self->aggregations[a]->type == TS_AGG_TWA) {
+                samples->values[index * vps + a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
                                                      &samples->values[index * vps + a]);
@@ -840,6 +846,7 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             if (multiAgg) {
                 Samples *prefixSamples =
                     ensureOutputSamples(self, enrichedChunk, agg_n_samples + 256);
+                prefixSamples->num_samples = agg_n_samples;
                 int64_t read_idx = -1;
                 int err = fillEmptyBuckets(prefixSamples,
                                            &agg_n_samples,
@@ -1067,6 +1074,9 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                         if (has_empty_buckets) {
                             Samples *emptySamples =
                                 ensureOutputSamples(self, enrichedChunk, agg_n_samples + 256);
+                            if (multiAgg) {
+                                emptySamples->num_samples = agg_n_samples;
+                            }
                             int64_t read_idx = -1;
                             int err = fillEmptyBuckets(emptySamples,
                                                        &agg_n_samples,
@@ -1199,10 +1209,16 @@ _finalize:
             }
         }
     } else {
+        double twa_empty_val;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
         for (size_t a = 0; a < numAggs; a++) {
             if (self->validPerAgg[a]) {
                 self->aggregations[a]->finalize(self->aggregationContexts[a],
                                                 &self->aux_chunk->samples.values[a]);
+            } else if (self->aggregations[a]->type == TS_AGG_TWA) {
+                self->aux_chunk->samples.values[a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
                                                      &self->aux_chunk->samples.values[a]);
