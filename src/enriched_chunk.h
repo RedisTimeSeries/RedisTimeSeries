@@ -15,11 +15,12 @@
 typedef struct Samples
 {
     timestamp_t *timestamps;    // array of timestamps
-    double *values;             // array of values
+    double *values;             // array of values (interleaved when values_per_sample > 1)
     timestamp_t *og_timestamps; // The original buffer of timestamps
     double *og_values;          // The original buffer of values
     unsigned int num_samples;   // num of samples contained in the array
     size_t size;                // num of maximal samples which can be contained
+    size_t values_per_sample;   // number of values per sample (1 for single agg, N for multi-agg)
 } Samples;
 
 typedef struct EnrichedChunk

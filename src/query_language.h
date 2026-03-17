@@ -32,7 +32,8 @@ typedef struct AggregationArgs
     bool empty; // Should return empty buckets
     api_timestamp_t timeDelta;
     BucketTimestamp bucketTS;
-    AggregationClass *aggregationClass;
+    size_t numClasses;          // 0 = no aggregation
+    AggregationClass **classes; // heap-allocated array of pointers, NULL when numClasses == 0
 } AggregationArgs;
 
 // GroupBy reducer args
@@ -142,7 +143,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type,
+                          int *agg_types,
+                          size_t *num_agg_types,
                           bool *empty,
                           BucketTimestamp *bucketTS,
                           timestamp_t *alignmetTS);

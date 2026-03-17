@@ -1392,9 +1392,10 @@ AbstractIterator *SeriesQuery(Series *series,
             break;
     }
 
-    if (args->aggregationArgs.aggregationClass != NULL) {
+    if (args->aggregationArgs.numClasses > 0) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
-                                                            args->aggregationArgs.aggregationClass,
+                                                            args->aggregationArgs.numClasses,
+                                                            args->aggregationArgs.classes,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
                                                             reverse,

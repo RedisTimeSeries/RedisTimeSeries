@@ -43,10 +43,11 @@ EnrichedChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *bas
 typedef struct AggregationIterator
 {
     AbstractIterator base;
-    AggregationClass *aggregation;
+    size_t numAggregations;
+    AggregationClass **aggregations;
+    void **aggregationContexts;
     int64_t aggregationTimeDelta;
     timestamp_t timestampAlignment;
-    void *aggregationContext;
     timestamp_t aggregationLastTimestamp;
     bool hasUnFinalizedContext;
     bool reverse;
@@ -57,14 +58,17 @@ typedef struct AggregationIterator
     Series *series;
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
+    bool hasTwa; // precomputed: any aggregation is TWA
     bool handled_twa_empty_prefix;
     bool handled_twa_empty_suffix;
     timestamp_t prev_ts;
-    bool validSamplesInBucket; // are there any valid samples in current bucket
+    bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
+    bool *validPerAgg;         // per-aggregation validity tracking for current bucket
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
-                                             AggregationClass *aggregation,
+                                             size_t numAggregations,
+                                             AggregationClass **aggregations,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse,
