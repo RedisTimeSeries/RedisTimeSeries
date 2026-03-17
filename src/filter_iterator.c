@@ -388,10 +388,13 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
             self->validSamplesInBucket = false;
             return false;
         }
+        double twa_empty_val;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
         for (size_t a = 0; a < numAggs; a++) {
             if (self->aggregations[a]->type == TS_AGG_TWA) {
-                twa_compute_empty_bucket_value(
-                    self, self->aggregationLastTimestamp, &samples->values[index * vps + a]);
+                samples->values[index * vps + a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
                                                      &samples->values[index * vps + a]);
@@ -599,19 +602,21 @@ static void twa_fillEmptyBuckets(size_t *write_index,
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
         timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
+        double twa_val;
+        if (self->hasTwa) {
+            twa_calc_empty_bucket_val(ta,
+                                      tb,
+                                      &sample_before,
+                                      &sample_befBefore,
+                                      &sample_after,
+                                      &sample_afAfter,
+                                      n_samples_before,
+                                      n_samples_after,
+                                      &twa_val);
+        }
         for (size_t a = 0; a < self->numAggregations; a++) {
             if (self->aggregations[a]->type == TS_AGG_TWA) {
-                double val;
-                twa_calc_empty_bucket_val(ta,
-                                          tb,
-                                          &sample_before,
-                                          &sample_befBefore,
-                                          &sample_after,
-                                          &sample_afAfter,
-                                          n_samples_before,
-                                          n_samples_after,
-                                          &val);
-                samples->values[(*write_index) * vps + a] = val;
+                samples->values[(*write_index) * vps + a] = twa_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
                                                      &samples->values[(*write_index) * vps + a]);
@@ -888,21 +893,23 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
             CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
         self->initialized = true;
 
-        for (size_t a = 0; a < self->numAggregations; a++) {
-            if (self->aggregations[a]->type == TS_AGG_TWA) {
-                timestamp_t ta = twa_calc_ta(self->reverse,
-                                             BucketStartNormalize(self->aggregationLastTimestamp),
-                                             self->aggregationLastTimestamp + aggregationTimeDelta,
-                                             self->startTimestamp,
-                                             self->endTimestamp);
-                timestamp_t tb = twa_calc_tb(self->reverse,
-                                             BucketStartNormalize(self->aggregationLastTimestamp),
-                                             self->aggregationLastTimestamp + aggregationTimeDelta,
-                                             self->startTimestamp,
-                                             self->endTimestamp);
-                self->aggregations[a]->addBucketParams(self->aggregationContexts[a],
-                                                       (!self->reverse) ? ta : tb,
-                                                       (!self->reverse) ? tb : ta);
+        if (self->hasTwa) {
+            timestamp_t ta = twa_calc_ta(self->reverse,
+                                         BucketStartNormalize(self->aggregationLastTimestamp),
+                                         self->aggregationLastTimestamp + aggregationTimeDelta,
+                                         self->startTimestamp,
+                                         self->endTimestamp);
+            timestamp_t tb = twa_calc_tb(self->reverse,
+                                         BucketStartNormalize(self->aggregationLastTimestamp),
+                                         self->aggregationLastTimestamp + aggregationTimeDelta,
+                                         self->startTimestamp,
+                                         self->endTimestamp);
+            for (size_t a = 0; a < self->numAggregations; a++) {
+                if (self->aggregations[a]->type == TS_AGG_TWA) {
+                    self->aggregations[a]->addBucketParams(self->aggregationContexts[a],
+                                                           (!self->reverse) ? ta : tb,
+                                                           (!self->reverse) ? tb : ta);
+                }
             }
         }
 
@@ -1092,24 +1099,26 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                     self->aggregationLastTimestamp =
                         BucketStartNormalize(self->aggregationLastTimestamp);
 
-                    for (size_t a = 0; a < self->numAggregations; a++) {
-                        if (self->aggregations[a]->type == TS_AGG_TWA) {
-                            if (hadValidSamples &&
-                                self->aggregations[a]->isValueValid(twa_last_samples[a].value)) {
-                                self->aggregations[a]->addPrevBucketLastSample(
+                    if (self->hasTwa) {
+                        timestamp_t tb = twa_calc_tb(self->reverse,
+                                                     self->aggregationLastTimestamp,
+                                                     contextScope,
+                                                     self->startTimestamp,
+                                                     self->endTimestamp);
+                        for (size_t a = 0; a < self->numAggregations; a++) {
+                            if (self->aggregations[a]->type == TS_AGG_TWA) {
+                                if (hadValidSamples && self->aggregations[a]->isValueValid(
+                                                           twa_last_samples[a].value)) {
+                                    self->aggregations[a]->addPrevBucketLastSample(
+                                        self->aggregationContexts[a],
+                                        twa_last_samples[a].value,
+                                        twa_last_samples[a].timestamp);
+                                }
+                                self->aggregations[a]->addBucketParams(
                                     self->aggregationContexts[a],
-                                    twa_last_samples[a].value,
-                                    twa_last_samples[a].timestamp);
+                                    (!self->reverse) ? self->aggregationLastTimestamp : tb,
+                                    (!self->reverse) ? tb : contextScope);
                             }
-                            timestamp_t tb = twa_calc_tb(self->reverse,
-                                                         self->aggregationLastTimestamp,
-                                                         contextScope,
-                                                         self->startTimestamp,
-                                                         self->endTimestamp);
-                            self->aggregations[a]->addBucketParams(
-                                self->aggregationContexts[a],
-                                (!self->reverse) ? self->aggregationLastTimestamp : tb,
-                                (!self->reverse) ? tb : contextScope);
                         }
                     }
                 }
@@ -1193,11 +1202,14 @@ _finalize:
             self->aux_chunk->samples.num_samples = 0;
             return self->aux_chunk;
         }
+        double twa_empty_val;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
         for (size_t a = 0; a < numAggs; a++) {
             // For TWA, compute value using surrounding samples (same as truly empty buckets)
             if (self->aggregations[a]->type == TS_AGG_TWA) {
-                twa_compute_empty_bucket_value(
-                    self, self->aggregationLastTimestamp, &self->aux_chunk->samples.values[a]);
+                self->aux_chunk->samples.values[a] = twa_empty_val;
             } else {
                 self->aggregations[a]->finalizeEmpty(self->aggregationContexts[a],
                                                      &self->aux_chunk->samples.values[a]);
