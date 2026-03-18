@@ -45,15 +45,15 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
-                                   "A multi-shard command failed because at least one shard "
+                                   "A multi-keys command failed because at least one key "
                                    "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
         const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
         if (strncmp(err_msg, "NOPERM ", 7) == 0) {
-            snprintf(buf, sizeof(buf), "NOPERM Multi-shard command failed. %s", err_msg + 7);
+            snprintf(buf, sizeof(buf), "NOPERM Multi-keys command failed. %s", err_msg + 7);
         } else {
-            snprintf(buf, sizeof(buf), "Multi-shard command failed. %s", err_msg);
+            snprintf(buf, sizeof(buf), "Multi-keys command failed. %s", err_msg);
         }
         RedisModule_ReplyWithError(rctx, buf);
     }
