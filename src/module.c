@@ -316,8 +316,10 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
 
-    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) !=
-        GetSeriesResult_Success) {
+    if (CheckDictSeriesPermissions(
+            ctx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
         exitStatus = REDISMODULE_ERR;
         goto exit;
     }
@@ -413,8 +415,10 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
     long long replylen = 0;
     Series *series;
     int exitStatus = REDISMODULE_OK;
-    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) !=
-        GetSeriesResult_Success) {
+    if (CheckDictSeriesPermissions(
+            ctx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
