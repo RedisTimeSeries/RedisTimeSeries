@@ -340,6 +340,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                 RedisModule_Log(ctx,
                                 "warning",
                                 "The user lacks the required permissions for the key, stopping.");
+                RTS_ReplyKeyPermissionsError(ctx);
                 exitStatus = REDISMODULE_ERR;
 
                 goto exit;
@@ -507,10 +508,6 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        // if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-        //     return RTS_ReplyKeyPermissionsError(ctx);
-        // }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
@@ -528,10 +525,6 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        // if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-        //     return RTS_ReplyKeyPermissionsError(ctx);
-        // }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
@@ -1245,10 +1238,6 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyKeyPermissionsError(ctx);
-        }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
