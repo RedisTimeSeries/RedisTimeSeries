@@ -18,6 +18,9 @@ typedef struct QueryPredicates_Arg
 {
     bool shouldReturnNull;
     size_t refCount;
+    /** Username from coordinator (for participant ACL). Set on coordinator, serialized to
+     * participants; NULL if no user. */
+    RedisModuleString *contextUserName;
     QueryPredicateList *predicates;
     timestamp_t startTimestamp;
     timestamp_t endTimestamp;

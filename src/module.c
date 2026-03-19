@@ -310,54 +310,32 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
                                   RedisModuleDict *result,
                                   const MRangeArgs *args) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    RedisModuleDictIter *iter;
     char *currentKey = NULL;
     size_t currentKeyLen;
     Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      flags);
-
-        switch (status) {
-            case GetSeriesResult_Success:
-                RedisModule_CloseKey(key);
-
-                break;
-            case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
-
-                continue;
-            case GetSeriesResult_PermissionError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "The user lacks the required permissions for the key, stopping.");
-                exitStatus = REDISMODULE_ERR;
-
-                goto exit;
-        }
+    if (CheckDictSeriesPermissions(
+            ctx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        exitStatus = REDISMODULE_ERR;
+        goto exit;
     }
 
-    RedisModule_DictIteratorStop(iter);
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status =
             GetSeries(ctx,
                       RedisModule_CreateString(ctx, currentKey, currentKeyLen),
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      flags);
+                      GetSeriesFlags_None);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current
             // key.
@@ -397,49 +375,59 @@ exit:
     return exitStatus;
 }
 
-int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    RedisModuleString *currentKey;
-    long long replylen = 0;
+GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
+                                           RedisModuleDict *dict,
+                                           const GetSeriesFlags flags) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
     Series *series;
-    int exitStatus = REDISMODULE_OK;
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
 
-    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, flags);
+        RedisModule_FreeString(ctx, keyName);
 
         switch (status) {
             case GetSeriesResult_Success:
                 RedisModule_CloseKey(key);
-                RedisModule_FreeString(ctx, currentKey);
-
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
-                RedisModule_FreeString(ctx, currentKey);
-
                 break;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
                                 "warning",
                                 "The user lacks the required permissions for the key, stopping.");
-                RedisModule_FreeString(ctx, currentKey);
-                exitStatus = REDISMODULE_ERR;
-
-                goto exit;
+                RedisModule_DictIteratorStop(iter);
+                return GetSeriesResult_PermissionError;
         }
     }
 
     RedisModule_DictIteratorStop(iter);
+    return GetSeriesResult_Success;
+}
+
+int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
+    RedisModuleDictIter *iter;
+    RedisModuleString *currentKey;
+    long long replylen = 0;
+    Series *series;
+    int exitStatus = REDISMODULE_OK;
+    if (CheckDictSeriesPermissions(
+            ctx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        return REDISMODULE_ERR;
+    }
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
-
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
@@ -506,10 +494,6 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyKeyPermissionsError(ctx);
-        }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
@@ -527,10 +511,6 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyKeyPermissionsError(ctx);
-        }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
@@ -1244,10 +1224,6 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
-        if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
-            return RTS_ReplyKeyPermissionsError(ctx);
-        }
-
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
