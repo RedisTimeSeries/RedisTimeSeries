@@ -875,9 +875,8 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModuleDict *qi =
         QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
 
-    if (CheckDictSeriesPermissions(ctx, qi, GetSeriesFlags_CheckForAcls) ==
-        GetSeriesResult_PermissionError) {
-        RTS_ReplyKeyPermissionsError(ctx);
+    if (CheckDictSeriesPermissions(ctx, qi, GetSeriesFlags_CheckForAcls) !=
+        GetSeriesResult_Success) {
         RedisModule_FreeDict(ctx, qi);
         InternalCommandUserClear(ctx, queryArg, internal_m_cmd_user);
         return;
@@ -893,8 +892,9 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status =
-            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_CheckForAcls);
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
         RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;

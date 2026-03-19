@@ -316,7 +316,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
 
-    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) == GetSeriesResult_PermissionError) {
+    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
         exitStatus = REDISMODULE_ERR;
         goto exit;
     }
@@ -325,13 +325,14 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status =
             GetSeries(ctx,
                       RedisModule_CreateString(ctx, currentKey, currentKeyLen),
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      GetSeriesFlags_CheckForAcls);
+                      GetSeriesFlags_None);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current
             // key.
@@ -412,20 +413,16 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
     long long replylen = 0;
     Series *series;
     int exitStatus = REDISMODULE_OK;
-    const GetSeriesFlags flags = GetSeriesFlags_CheckForAcls;
-
-    if (CheckDictSeriesPermissions(ctx, result, flags) == GetSeriesResult_PermissionError) {
-        RTS_ReplyKeyPermissionsError(ctx);
+    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) !=
+        GetSeriesResult_Success) {
         return REDISMODULE_ERR;
     }
-
     iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
-        const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
-
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
+        const GetSeriesResult status = GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
