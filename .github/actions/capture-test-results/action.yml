@@ -5,10 +5,6 @@ inputs:
   os-name:
     description: 'OS name/platform identifier'
     required: true
-  test-mode:
-    description: 'Test mode suffix for artifact naming (e.g., sanitizer, valgrind). Prevents 409 conflicts when multiple callers invoke the same reusable workflow.'
-    required: false
-    default: ''
   test-log-dir:
     description: 'Directory containing test logs'
     required: false
@@ -35,12 +31,8 @@ runs:
         # Use job name and OS name to create unique artifact name
         JOB_NAME="${{ github.job }}"
         JOB_NAME_SANITIZED=$(echo "$JOB_NAME" | sed 's/[^a-zA-Z0-9_-]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//')
-        TEST_MODE="${{ inputs.test-mode }}"
-        # Create unique artifact name: job-name-os-name[-test-mode]
+        # Create unique artifact name: job-name-os-name
         ARTIFACT_NAME="test-results-${JOB_NAME_SANITIZED}-${OS_NAME_SANITIZED}"
-        if [ -n "$TEST_MODE" ]; then
-          ARTIFACT_NAME="${ARTIFACT_NAME}-${TEST_MODE}"
-        fi
         TEST_LOG_DIR="${{ inputs.test-log-dir }}"
         RESULTS_FILE="test-results-${OS_NAME_SANITIZED}.json"
         
