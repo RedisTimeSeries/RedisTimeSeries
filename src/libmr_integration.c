@@ -857,8 +857,198 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
     return SeriesListRecord_Create(seriesList);
 }
 
-static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
-                                                    .replyParser = SeriesListReplyParser };
+static Series *CloneSeriesWithSamples(const Series *src, const RangeArgs *rangeArgs, bool reverse) {
+    CreateCtx cCtx = { 0 };
+    cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
+    cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
+    cCtx.duplicatePolicy = DP_NONE;
+    cCtx.labelsCount = src->labelsCount;
+    cCtx.labels = malloc(sizeof(Label) * src->labelsCount);
+    for (size_t i = 0; i < src->labelsCount; i++) {
+        cCtx.labels[i].key = RedisModule_CreateStringFromString(NULL, src->labels[i].key);
+        cCtx.labels[i].value = src->labels[i].value
+                                   ? RedisModule_CreateStringFromString(NULL, src->labels[i].value)
+                                   : NULL;
+    }
+
+    RedisModuleString *keyName = RedisModule_CreateStringFromString(NULL, src->keyName);
+    Series *clone = NewSeries(keyName, &cCtx);
+
+    AbstractSampleIterator *iter =
+        SeriesCreateSampleIterator((Series *)src, rangeArgs, reverse, true);
+    Sample sample;
+    while (iter->GetNext(iter, &sample) == CR_OK) {
+        SeriesAddSample(clone, sample.timestamp, sample.value);
+    }
+    iter->Close(iter);
+
+    return clone;
+}
+
+static Series *CloneSeriesLastDatapoint(const Series *src, bool withLabels,
+                                        RedisModuleString **limitLabels, int numLimitLabels,
+                                        bool latest) {
+    CreateCtx cCtx = { 0 };
+    cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
+    cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
+    cCtx.duplicatePolicy = DP_NONE;
+    cCtx.labelsCount = src->labelsCount;
+    cCtx.labels = malloc(sizeof(Label) * src->labelsCount);
+    for (size_t i = 0; i < src->labelsCount; i++) {
+        cCtx.labels[i].key = RedisModule_CreateStringFromString(NULL, src->labels[i].key);
+        cCtx.labels[i].value = src->labels[i].value
+                                   ? RedisModule_CreateStringFromString(NULL, src->labels[i].value)
+                                   : NULL;
+    }
+
+    RedisModuleString *keyName = RedisModule_CreateStringFromString(NULL, src->keyName);
+    Series *clone = NewSeries(keyName, &cCtx);
+
+    bool should_finalize = should_finalize_last_bucket_get(latest, src);
+    if (should_finalize) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, src);
+        if (sample_ptr) {
+            SeriesAddSample(clone, sample.timestamp, sample.value);
+        } else if (src->totalSamples > 0) {
+            SeriesAddSample(clone, src->lastTimestamp, src->lastValue);
+        }
+    } else if (src->totalSamples > 0) {
+        SeriesAddSample(clone, src->lastTimestamp, src->lastValue);
+    }
+
+    return clone;
+}
+
+static Record *TS_INTERNAL_MRANGE_LOCAL(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *user = InternalCommandUserApply(ctx, queryArg);
+
+    MRangeArgs mrangeArgs;
+    mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
+    mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
+    mrangeArgs.rangeArgs.latest = queryArg->latest;
+    mrangeArgs.rangeArgs.count = -1LL;
+    mrangeArgs.rangeArgs.aggregationArgs.empty = false;
+    mrangeArgs.rangeArgs.aggregationArgs.timeDelta = 0;
+    mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
+    mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = NULL;
+    mrangeArgs.rangeArgs.filterByValueArgs.hasValue = false;
+    mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
+    mrangeArgs.rangeArgs.alignment = DefaultAlignment;
+    mrangeArgs.rangeArgs.timestampAlignment = 0;
+    mrangeArgs.withLabels = true;
+    mrangeArgs.numLimitLabels = 0;
+    mrangeArgs.queryPredicates = queryArg->predicates;
+    mrangeArgs.groupByLabel = NULL;
+    mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
+    mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
+    mrangeArgs.reverse = false;
+
+    RedisModuleDict *qi =
+        QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    ARR(Series *) seriesList = array_new(Series *, 8);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+    RedisModuleString *currentKey;
+
+    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        RedisModuleKey *key;
+        Series *series;
+        const GetSeriesResult status =
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
+
+        if (status == GetSeriesResult_PermissionError) {
+            RedisModule_FreeString(ctx, currentKey);
+            RedisModule_DictIteratorStop(iter);
+            array_foreach(seriesList, s, FreeSeries(s));
+            array_free(seriesList);
+            RedisModule_FreeDict(ctx, qi);
+            if (user) RedisModule_FreeModuleUser(user);
+            return NULL;
+        }
+        if (status != GetSeriesResult_Success) {
+            RedisModule_FreeString(ctx, currentKey);
+            continue;
+        }
+
+        seriesList =
+            array_append(seriesList, CloneSeriesWithSamples(series, &mrangeArgs.rangeArgs, false));
+        RedisModule_CloseKey(key);
+        RedisModule_FreeString(ctx, currentKey);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+    if (user) RedisModule_FreeModuleUser(user);
+    return SeriesListRecord_Create(seriesList);
+}
+
+static Record *TS_INTERNAL_MGET_LOCAL(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *user = InternalCommandUserApply(ctx, queryArg);
+
+    RedisModuleDict *qi =
+        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+
+    ARR(Series *) seriesList = array_new(Series *, 8);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    Series *series;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        const GetSeriesResult status =
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        RedisModule_FreeString(ctx, keyName);
+        if (status != GetSeriesResult_Success)
+            continue;
+
+        seriesList = array_append(
+            seriesList,
+            CloneSeriesLastDatapoint(series, queryArg->withLabels, queryArg->limitLabels,
+                                     queryArg->limitLabelsSize, queryArg->latest));
+        RedisModule_CloseKey(key);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+    if (user) RedisModule_FreeModuleUser(user);
+    return SeriesListRecord_Create(seriesList);
+}
+
+static Record *TS_INTERNAL_QUERYINDEX_LOCAL(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    RedisModuleUser *user = InternalCommandUserApply(ctx, queryArg);
+
+    RedisModuleDict *qi =
+        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+
+    ARR(RedisModuleString *) stringList = array_new(RedisModuleString *, 8);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+    const char *keyName;
+    size_t keyNameLen;
+
+    while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
+        RedisModuleString *s = RedisModule_CreateString(rts_staticCtx, keyName, keyNameLen);
+        stringList = array_append(stringList, s);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+    if (user) RedisModule_FreeModuleUser(user);
+    return StringListRecord_Create(stringList);
+}
+
+static InternalCommandCallbacks MrangeCallbacks = {
+    .command = TS_INTERNAL_MRANGE,
+    .replyParser = SeriesListReplyParser,
+    .localCommand = TS_INTERNAL_MRANGE_LOCAL,
+};
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
@@ -927,8 +1117,11 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     InternalCommandUserClear(ctx, queryArg, internal_m_cmd_user);
 }
 
-static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
-                                                  .replyParser = SeriesListReplyParser };
+static InternalCommandCallbacks MgetCallbacks = {
+    .command = TS_INTERNAL_MGET,
+    .replyParser = SeriesListReplyParser,
+    .localCommand = TS_INTERNAL_MGET_LOCAL,
+};
 
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
@@ -965,8 +1158,11 @@ static Record *StringListReplyParser(const redisReply *reply) {
 
     return StringListRecord_Create(stringList);
 }
-static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
-                                                        .replyParser = StringListReplyParser };
+static InternalCommandCallbacks QueryIndexCallbacks = {
+    .command = TS_INTERNAL_QUERYINDEX,
+    .replyParser = StringListReplyParser,
+    .localCommand = TS_INTERNAL_QUERYINDEX_LOCAL,
+};
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
