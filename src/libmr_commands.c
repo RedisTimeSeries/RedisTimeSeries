@@ -12,12 +12,9 @@
 
 #include "rmutil/alloc.h"
 
-// Returns an untracked copy of the current user name.
-// RedisModule_GetCurrentUserName() returns a string auto-tracked by ctx, which
-// is freed when the command handler returns. Because LibMR executes
-// asynchronously (via blocked client), the string must outlive the handler.
-// We copy it into an untracked string (NULL ctx) so the caller owns it and
-// a single RedisModule_FreeString() releases it correctly.
+// RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
+// so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
+// since the string must survive serialization to participant shards via LibMR.
 static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
     RedisModuleString *ctxUserName = RedisModule_GetCurrentUserName(ctx);
     if (!ctxUserName)
@@ -45,7 +42,7 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
-                                   "A multi-keys command failed because at least one key "
+                                   "A multi-keys command failed because at least one shards "
                                    "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
