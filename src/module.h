@@ -185,6 +185,10 @@ int CreateTsKey(RedisModuleCtx *ctx,
 
 bool CheckVersionForBlockedClientMeasureTime();
 
+GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
+                                           RedisModuleDict *dict,
+                                           const GetSeriesFlags flags);
+
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
 
 extern int persistence_in_progress;

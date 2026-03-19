@@ -2,6 +2,7 @@
 
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
+#include "common.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
@@ -873,19 +874,27 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
+    if (CheckDictSeriesPermissions(ctx, qi, GetSeriesFlags_CheckForAcls) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        RedisModule_FreeDict(ctx, qi);
+        InternalCommandUserClear(ctx, queryArg, internal_m_cmd_user);
+        return;
+    }
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long replylen = 0;
-
     char *currentKey;
     size_t currentKeyLen;
     Series *series;
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        const GetSeriesResult status = GetSeries(
-            ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        const GetSeriesResult status =
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_CheckForAcls);
         RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;
