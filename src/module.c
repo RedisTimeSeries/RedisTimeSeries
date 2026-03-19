@@ -316,7 +316,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
 
-    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
+    if (CheckDictSeriesPermissions(ctx, result, GetSeriesFlags_CheckForAcls) !=
+        GetSeriesResult_Success) {
         exitStatus = REDISMODULE_ERR;
         goto exit;
     }
@@ -394,10 +395,9 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
             case GetSeriesResult_GenericError:
                 break;
             case GetSeriesResult_PermissionError:
-                RedisModule_Log(
-                    ctx,
-                    "warning",
-                    "The user lacks the required permissions for the key, stopping.");
+                RedisModule_Log(ctx,
+                                "warning",
+                                "The user lacks the required permissions for the key, stopping.");
                 RedisModule_DictIteratorStop(iter);
                 return GetSeriesResult_PermissionError;
         }
@@ -422,7 +422,8 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         RedisModuleKey *key;
         // ACL permissions were already validated by CheckDictSeriesPermissions above.
-        const GetSeriesResult status = GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
+        const GetSeriesResult status =
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);
