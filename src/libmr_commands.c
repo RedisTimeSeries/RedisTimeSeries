@@ -42,7 +42,7 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
-                                   "A multi-keys command failed because at least one shards "
+                                   "A multi-keys command failed because at least one key "
                                    "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
