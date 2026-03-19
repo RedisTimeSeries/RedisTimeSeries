@@ -98,6 +98,5 @@ runs:
       with:
         name: ${{ steps.parse.outputs.artifact-name }}
         path: ${{ steps.parse.outputs.results-file }}
-        overwrite: true
         if-no-files-found: warn
 

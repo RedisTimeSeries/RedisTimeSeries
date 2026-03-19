@@ -195,7 +195,6 @@ jobs:
           path: |
             tests/**/*.log
             tests/**/*.log.*
-            test_output.log
           if-no-files-found: warn
 
       - name: Pack module
