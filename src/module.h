@@ -68,12 +68,6 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
         RedisModuleUser *user = GetCurrentUser(ctx);
 
         if (!user) {
-            const RedisModuleUser *contextUser = RedisModule_GetContextUser(ctx);
-            if (contextUser) {
-                return RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
-                                                          keyName,
-                                                          permissionFlags) == REDISMODULE_OK;
-            }
             return true;
         }
 
