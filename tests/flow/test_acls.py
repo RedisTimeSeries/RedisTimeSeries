@@ -48,6 +48,7 @@ def test_acl_ignore_on_metadata(env):
         result = conn1.execute_command('TS.QUERYINDEX', 'x=y')
         env.assertEqual(len(result), 2)
 
+@skip(on_cluster=True)
 @skip(onVersionLowerThan='7.4.0')
 def test_acl_with_ts_mget_mrange(env):
     username = 'testuser3'
@@ -237,6 +238,7 @@ KEY_PATTERN_ALL = '*'
 NO_MATCH_KEY_PATTERN = 'no_acl_key_*'
 
 
+@skip(on_cluster=True)
 @skip(onVersionLowerThan='7.4.0')
 def test_mrange_acl_partial_then_full_3shards(env):
     """MRANGE with 3 shards: one timeseries per shard (same filter), 2 values each.
@@ -426,6 +428,7 @@ def test_mrange_acl_partial_then_full_3shards(env):
                 pass
 
 
+@skip(on_cluster=True)
 @skip(onVersionLowerThan='7.4.0')
 def test_mrange_acl_coordinator_key_restriction(env):
     """The user sends the command directly to the COORDINATOR shard, and that
@@ -477,6 +480,7 @@ def test_mrange_acl_coordinator_key_restriction(env):
             r.delete(blocked_key)
 
 
+@skip(on_cluster=True)
 @skip(onVersionLowerThan='7.4.0')
 def test_mrange_acl_participant_key_restriction(env):
     """Restricted key is on a PARTICIPANT shard (not the coordinator).
