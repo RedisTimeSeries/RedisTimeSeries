@@ -37,6 +37,11 @@ on:
         description: 'Skip tests; still build, pack, and upload to S3'
         type: boolean
         default: false
+      skip_tests_on:
+        description: 'JSON array of matrix OS nicks to skip tests for (e.g. ["jammy"]). Empty [] = run tests on all.'
+        type: string
+        required: false
+        default: '[]'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -73,6 +78,11 @@ on:
         description: 'Skip tests; still build, pack, and upload to S3'
         type: boolean
         default: false
+      skip_tests_on:
+        description: 'JSON array of matrix OS nicks to skip tests for (e.g. ["jammy"]). Empty [] = run tests on all.'
+        type: string
+        required: false
+        default: '[]'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -167,7 +177,7 @@ jobs:
             make build
 
       - name: Run tests
-        if: ${{ !inputs.skip_tests }}
+        if: ${{ !inputs.skip_tests && !contains(fromJSON(inputs.skip_tests_on), matrix.platform.os) }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
@@ -191,7 +201,7 @@ jobs:
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
       - name: Capture test results
-        if: ${{ always() && !inputs.skip_tests }}
+        if: ${{ always() && !inputs.skip_tests && !contains(fromJSON(inputs.skip_tests_on), matrix.platform.os) }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
