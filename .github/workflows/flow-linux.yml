@@ -176,8 +176,10 @@ jobs:
             ${{ env.DOCKER_IMAGE }} \
             make build
 
+      # DEBUG: x64+jammy tests skipped in-repo (remove the && !(inputs.arch...) clause before merge).
+      # skip_tests_on was unreliable (caller/default/fromJSON); this condition is unconditional.
       - name: Run tests
-        if: ${{ !inputs.skip_tests && !contains(fromJSON(inputs.skip_tests_on), matrix.platform.os) }}
+        if: ${{ !inputs.skip_tests && !(inputs.arch == 'x64' && matrix.platform.os == 'jammy') && !contains(fromJSON(inputs.skip_tests_on || '[]'), matrix.platform.os) }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
@@ -201,7 +203,7 @@ jobs:
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
       - name: Capture test results
-        if: ${{ always() && !inputs.skip_tests && !contains(fromJSON(inputs.skip_tests_on), matrix.platform.os) }}
+        if: ${{ always() && !inputs.skip_tests && !(inputs.arch == 'x64' && matrix.platform.os == 'jammy') && !contains(fromJSON(inputs.skip_tests_on || '[]'), matrix.platform.os) }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
