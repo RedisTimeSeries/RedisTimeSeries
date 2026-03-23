@@ -8,6 +8,7 @@
  */
 #include "chunk.h"
 #include "common.h"
+#include "enriched_chunk.h"
 
 #include "libmr_integration.h"
 
@@ -229,7 +230,7 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
 
 void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
     __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->samples.num_samples);
-    __array_reverse_inplace(enrichedChunk->samples.values, enrichedChunk->samples.num_samples);
+    __array_reverse_inplace(enrichedChunk->samples._values, enrichedChunk->samples.num_samples);
     enrichedChunk->rev = true;
 }
 
@@ -277,14 +278,14 @@ void Uncompressed_ProcessChunk(const Chunk_t *chunk,
     if (unlikely(reverse)) {
         for (i = 0; i < enrichedChunk->samples.num_samples; ++i) {
             enrichedChunk->samples.timestamps[i] = _chunk->samples[ei - i].timestamp;
-            enrichedChunk->samples.values[i] = _chunk->samples[ei - i].value;
+            Samples_value_at(&enrichedChunk->samples, i, 0) = _chunk->samples[ei - i].value;
         }
         enrichedChunk->rev = true;
     } else {
         for (i = 0; i < enrichedChunk->samples.num_samples;
              ++i) { // use memcpy once chunk becomes columned
             enrichedChunk->samples.timestamps[i] = _chunk->samples[i + si].timestamp;
-            enrichedChunk->samples.values[i] = _chunk->samples[i + si].value;
+            Samples_value_at(&enrichedChunk->samples, i, 0) = _chunk->samples[i + si].value;
         }
         enrichedChunk->rev = false;
     }

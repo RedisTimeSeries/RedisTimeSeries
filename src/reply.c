@@ -9,6 +9,7 @@
 
 #include "reply.h"
 
+#include "enriched_chunk.h"
 #include "query_language.h"
 #include "series_iterator.h"
 #include "tsdb.h"
@@ -145,11 +146,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
             if (vps > 1) {
                 ReplyWithMultiAggSample(ctx,
                                         enrichedChunk->samples.timestamps[i],
-                                        &enrichedChunk->samples.values[i * vps],
+                                        Samples_values_row_ptr(&enrichedChunk->samples, i),
                                         vps);
             } else {
-                ReplyWithSample(
-                    ctx, enrichedChunk->samples.timestamps[i], enrichedChunk->samples.values[i]);
+                ReplyWithSample(ctx,
+                                enrichedChunk->samples.timestamps[i],
+                                Samples_value_at(&enrichedChunk->samples, i, 0));
             }
         }
         arraylen += n;

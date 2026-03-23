@@ -14,7 +14,7 @@ void ResetEnrichedChunk(EnrichedChunk *chunk) {
     chunk->rev = false;
     chunk->samples.num_samples = 0;
     chunk->samples.timestamps = chunk->samples.og_timestamps;
-    chunk->samples.values = chunk->samples.og_values;
+    chunk->samples._values = chunk->samples._og_values;
 }
 
 EnrichedChunk *NewEnrichedChunk() {
@@ -24,7 +24,7 @@ EnrichedChunk *NewEnrichedChunk() {
     chunk->samples.size = 0;
     chunk->samples.values_per_sample = 1;
     chunk->samples.og_timestamps = NULL;
-    chunk->samples.og_values = NULL;
+    chunk->samples._og_values = NULL;
     return chunk;
 }
 
@@ -33,13 +33,13 @@ void ReallocSamplesArray(Samples *samples, size_t n_samples) {
     samples->og_timestamps =
         (timestamp_t *)realloc(samples->og_timestamps, n_samples * sizeof(timestamp_t));
     size_t total_values = n_samples * samples->values_per_sample;
-    samples->og_values = (double *)realloc(samples->og_values, total_values * sizeof(double));
+    samples->_og_values = (double *)realloc(samples->_og_values, total_values * sizeof(double));
     samples->timestamps = samples->og_timestamps;
-    samples->values = samples->og_values;
+    samples->_values = samples->_og_values;
 }
 
 void FreeEnrichedChunk(EnrichedChunk *chunk) {
     free(chunk->samples.og_timestamps);
-    free(chunk->samples.og_values);
+    free(chunk->samples._og_values);
     free(chunk);
 }

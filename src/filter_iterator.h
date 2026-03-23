@@ -44,8 +44,8 @@ typedef struct AggregationIterator
 {
     AbstractIterator base;
     size_t numAggregations;
-    AggregationClass **aggregations;
-    void **aggregationContexts;
+    AggregationClass aggregations[TS_AGG_TYPES_MAX];
+    void *aggregationContexts[TS_AGG_TYPES_MAX];
     int64_t aggregationTimeDelta;
     timestamp_t timestampAlignment;
     timestamp_t aggregationLastTimestamp;
@@ -63,7 +63,7 @@ typedef struct AggregationIterator
     bool handled_twa_empty_suffix;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
-    bool *validPerAgg;         // per-aggregation validity tracking for current bucket
+    bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
