@@ -221,16 +221,23 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     __extension__({                                                                                \
         const size_t ei = len - 1;                                                                 \
         __typeof__(*arr) tmp;                                                                      \
-        for (size_t i = 0; i < len / 2; ++i) {                                                     \
-            tmp = arr[i];                                                                          \
-            arr[i] = arr[ei - i];                                                                  \
-            arr[ei - i] = tmp;                                                                     \
+        for (size_t _i = 0; _i < len / 2; ++_i) {                                                  \
+            tmp = arr[_i];                                                                         \
+            arr[_i] = arr[ei - _i];                                                                \
+            arr[ei - _i] = tmp;                                                                    \
         }                                                                                          \
     })
 
 void reverseEnrichedChunk(EnrichedChunk *enrichedChunk) {
-    __array_reverse_inplace(enrichedChunk->samples.timestamps, enrichedChunk->samples.num_samples);
-    __array_reverse_inplace(enrichedChunk->samples._values, enrichedChunk->samples.num_samples);
+    Samples *s = &enrichedChunk->samples;
+    const unsigned int n = s->num_samples;
+    const size_t vps = s->values_per_sample;
+    __array_reverse_inplace(s->timestamps, n);
+    /* _values is row-major: global reverse swaps rows, then per-row reverse restores agg order */
+    __array_reverse_inplace(s->_values, (size_t)n * vps);
+    for (unsigned int i = 0; i < n; ++i) {
+        __array_reverse_inplace(Samples_values_row_ptr(s, i), vps);
+    }
     enrichedChunk->rev = true;
 }
 
