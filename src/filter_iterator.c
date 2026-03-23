@@ -745,8 +745,6 @@ static inline Samples *ensureOutputSamples(AggregationIterator *self,
     return &enrichedChunk->samples;
 }
 
-
-
 // No samples from upstream: finalize, TWA-only empty range, or end stream.
 // Sets *enter_finalize when caller must run agg_iter_finalize().
 static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
@@ -766,8 +764,8 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
             self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
             timestamp_t first_bucket = CalcBucketStart(
                 self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
-            timestamp_t last_bucket = CalcBucketStart(
-                self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
+            timestamp_t last_bucket =
+                CalcBucketStart(self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
             if (is_reversed) {
                 __SWAP(first_bucket, last_bucket);
             }
@@ -863,17 +861,11 @@ static int agg_iter_apply_twa_empty_prefix(AggregationIterator *self,
         return 0;
     }
     if (multiAgg) {
-        Samples *prefixSamples =
-            ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
+        Samples *prefixSamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
         prefixSamples->num_samples = *agg_n_samples;
         int64_t read_idx = -1;
-        int err = fillEmptyBuckets(prefixSamples,
-                                   agg_n_samples,
-                                   first_bucket,
-                                   last_bucket,
-                                   self,
-                                   is_reversed,
-                                   &read_idx);
+        int err = fillEmptyBuckets(
+            prefixSamples, agg_n_samples, first_bucket, last_bucket, self, is_reversed, &read_idx);
         if (err != 0) {
             return -1;
         }
@@ -997,8 +989,7 @@ static void agg_iter_advance_context_scope(AggregationIterator *self,
                                            uint64_t aggregationTimeDelta,
                                            uint64_t *contextScope) {
     *contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
-    self->aggregationLastTimestamp =
-        BucketStartNormalize(self->aggregationLastTimestamp);
+    self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
 }
 
 // MAX fast path: vector-append samples with timestamp < *contextScope; advance si past the run.
@@ -1011,8 +1002,7 @@ static void agg_iter_max_drain_vec_segment(AggregationIterator *self,
                                            int64_t *ei) {
     *ei = findLastIndexbeforeTS(enrichedChunk, *contextScope, *si);
     if (likely(*ei >= 0)) {
-        aggregation->appendValueVec(
-            aggregationContext, enrichedChunk->samples._values, *si, *ei);
+        aggregation->appendValueVec(aggregationContext, enrichedChunk->samples._values, *si, *ei);
         for (int64_t idx = *si; idx <= *ei; idx++) {
             if (aggregation->isValueValid(Samples_value_at(&enrichedChunk->samples, idx, 0))) {
                 self->validSamplesInBucket = true;
@@ -1042,8 +1032,8 @@ static int agg_iter_max_emit_opening_sample(AggregationIterator *self,
     if (finalizeBucket(&enrichedChunk->samples, *agg_n_samples, self)) {
         (*agg_n_samples)++;
     }
-    self->aggregationLastTimestamp = CalcBucketStart(
-        sample->timestamp, aggregationTimeDelta, self->timestampAlignment);
+    self->aggregationLastTimestamp =
+        CalcBucketStart(sample->timestamp, aggregationTimeDelta, self->timestampAlignment);
     if (self->empty) {
         timestamp_t first_bucket, last_bucket;
         if (agg_iter_empty_gap_after_finalize(*contextScope,
@@ -1157,8 +1147,7 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
                                               false,
                                               &first_bucket,
                                               &last_bucket)) {
-            Samples *emptySamples =
-                ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
+            Samples *emptySamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
             if (multiAgg) {
                 emptySamples->num_samples = *agg_n_samples;
             }
@@ -1187,10 +1176,9 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
             if (self->aggregations[a].type == TS_AGG_TWA) {
                 if (twaHadValid[a] &&
                     self->aggregations[a].isValueValid(twa_last_samples[a].value)) {
-                    self->aggregations[a].addPrevBucketLastSample(
-                        self->aggregationContexts[a],
-                        twa_last_samples[a].value,
-                        twa_last_samples[a].timestamp);
+                    self->aggregations[a].addPrevBucketLastSample(self->aggregationContexts[a],
+                                                                  twa_last_samples[a].value,
+                                                                  twa_last_samples[a].timestamp);
                 }
                 self->aggregations[a].addBucketParams(
                     self->aggregationContexts[a],
@@ -1437,9 +1425,13 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         return r;
     }
 
-    if (agg_iter_apply_twa_empty_prefix(
-            self, enrichedChunk, aggregationTimeDelta, is_reversed, multiAgg, &agg_n_samples, &si) !=
-        0) {
+    if (agg_iter_apply_twa_empty_prefix(self,
+                                        enrichedChunk,
+                                        aggregationTimeDelta,
+                                        is_reversed,
+                                        multiAgg,
+                                        &agg_n_samples,
+                                        &si) != 0) {
         return NULL;
     }
     self->hasUnFinalizedContext = true;
