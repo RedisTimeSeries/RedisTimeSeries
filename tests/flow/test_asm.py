@@ -34,6 +34,7 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
+    NUM_ITERATIONS = 25
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":
         env.skip()
@@ -52,41 +53,44 @@ def test_asm_with_data_and_queries_during_migrations():
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
-    # First validate the result on the "static" cluster
-    validate_result(conn.execute_command(command))
+    for iteration in range(1, NUM_ITERATIONS + 1):
+        print(f"\n=== Iteration {iteration}/{NUM_ITERATIONS} starting ===")
 
-    # Now validate the command's result in a loop during the back and forth migrations
-    done = threading.Event()
+        # First validate the result on the "static" cluster
+        validate_result(conn.execute_command(command))
 
-    def validate_command_in_a_loop():
-        # Note: should be the same as in libmr_commands.c
-        SLOT_RANGES_ERROR = "Query requires unavailable slots"
-        while not done.is_set():
-            try:
-                result = conn.execute_command(command)
-            except redis.exceptions.ResponseError as x:
-                error_message = str(x)
-                # An occasional SLOT_RANGES_ERROR is expected
-                assert error_message == SLOT_RANGES_ERROR, error_message
-                continue
-            validate_result(result)
+        # Now validate the command's result in a loop during the back and forth migrations
+        done = threading.Event()
 
-    def migrate_slots():
-        for _ in range(MIGRATION_CYCLES):
-            if done.is_set():
-                break
-            migrate_slots_back_and_forth(env, command, validate_result)
+        def validate_command_in_a_loop():
+            # Note: should be the same as in libmr_commands.c
+            SLOT_RANGES_ERROR = "Query requires unavailable slots"
+            while not done.is_set():
+                try:
+                    result = conn.execute_command(command)
+                except redis.exceptions.ResponseError as x:
+                    error_message = str(x)
+                    # An occasional SLOT_RANGES_ERROR is expected
+                    assert error_message == SLOT_RANGES_ERROR, error_message
+                    continue
+                validate_result(result)
 
-    with ThreadPoolExecutor() as executor:
-        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        for future in as_completed(futures):
-            # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
-            done.set()
-            # This will raise an exception in case the validation function failed (or got stuck)
-            future.result()
+        def migrate_slots():
+            for _ in range(MIGRATION_CYCLES):
+                if done.is_set():
+                    break
+                migrate_slots_back_and_forth(env, command, validate_result)
 
-    # Validate that all is fine after the migrations
-    validate_result(conn.execute_command(command))
+        with ThreadPoolExecutor() as executor:
+            futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+            for future in as_completed(futures):
+                done.set()
+                future.result()
+
+        # Validate that all is fine after the migrations
+        validate_result(conn.execute_command(command))
+
+        print(f"=== Iteration {iteration}/{NUM_ITERATIONS} PASSED ===")
 
 
 # Helper structs and functions
