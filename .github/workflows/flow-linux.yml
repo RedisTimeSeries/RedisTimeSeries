@@ -169,7 +169,7 @@ jobs:
             --security-opt seccomp=unconfined \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
-            bash -c "for i in \$(seq 1 25); do echo '=== Run '\$i'/25 ==='; make test TEST=test_ts_mrange_groupby:test_filterby \
+            bash -c "for i in \$(seq 1 100); do echo '=== Run '\$i'/25 ==='; make test TEST=test_ts_mrange_groupby:test_filterby \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
               QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee -a /workspace/test_output.log; if [ \${PIPESTATUS[0]} -ne 0 ]; then echo '=== FAILED on run '\$i' ==='; exit 1; fi; done"
