@@ -288,7 +288,7 @@ libmr: $(LIBMR)
 
 $(LIBMR): $(LIBEVENT) $(HIREDIS)
 	@echo Building $@ ...
-	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR
+	$(SHOW)$(MAKE) --no-print-directory -C $(ROOT)/build/LibMR VG=$(VG)
 
 dragonbox: $(DRAGONBOX)
 
