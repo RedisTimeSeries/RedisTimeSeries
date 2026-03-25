@@ -8,10 +8,6 @@ from includes import *
 import random 
 import struct
 
-def test_TEMPORARY_force_failure():
-    """TEMPORARY: force a test failure to verify CI artifact upload fix (MOD-14250). Remove after verification."""
-    assert False, "MOD-14250: intentional failure to verify artifact upload fix"
-
 def test_add_different_slot_range():
     env = Env(decodeResponses=True)
     if not env.isCluster():

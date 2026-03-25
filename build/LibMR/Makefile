@@ -59,10 +59,6 @@ define CC_DEFS +=
 	MODULE_NAME=$(MODULE_NAME)
 endef
 
-ifeq ($(VG),1)
-CC_DEFS += _VALGRIND
-endif
-
 define CC_INCLUDES +=
 	$(SRCDIR)
 	$(BINDIR)
