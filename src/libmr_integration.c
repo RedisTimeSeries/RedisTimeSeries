@@ -16,6 +16,14 @@
 
 #include "LibMR/deps/hiredis/hiredis.h"
 
+#include <sys/time.h>
+
+static long long currentTimeMillis(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 #define SeriesRecordName "SeriesRecord"
 
 static Record NullRecord;
@@ -710,10 +718,18 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
+    long long t0 = currentTimeMillis();
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    long long t1 = currentTimeMillis();
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    long long t2 = currentTimeMillis();
     RedisModule_FreeDict(ctx, qi);
+    if (t2 - t0 > 500) {
+        RedisModule_Log(ctx, "warning",
+                        "TS_INTERNAL_MRANGE took %lldms (QueryIndex=%lldms, reply=%lldms)",
+                        t2 - t0, t1 - t0, t2 - t1);
+    }
 }
 
 static Series *ParseSeries(const redisReply *reply) {

@@ -1562,41 +1562,43 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
     switch (subevent) {
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_STARTED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM import started (subevent=%" PRIu64 ") received.",
-                            subevent);
+                            "warning",
+                            "Cluster ASM import started (subevent=%" PRIu64
+                            "), isAsmImporting was %d",
+                            subevent,
+                            isAsmImporting);
             isAsmImporting = true;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_FAILED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM import failed (subevent=%" PRIu64 ") received.",
+                            "warning",
+                            "Cluster ASM import FAILED (subevent=%" PRIu64 ")",
                             subevent);
             isAsmImporting = false;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_COMPLETED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM import completed (subevent=%" PRIu64 ") received.",
+                            "warning",
+                            "Cluster ASM import completed (subevent=%" PRIu64 ")",
                             subevent);
             isAsmImporting = false;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_STARTED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM migrate started (subevent=%" PRIu64 ") received.",
+                            "warning",
+                            "Cluster ASM migrate started (subevent=%" PRIu64 ")",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_FAILED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM migrate failed (subevent=%" PRIu64 ") received.",
+                            "warning",
+                            "Cluster ASM migrate FAILED (subevent=%" PRIu64 ")",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_COMPLETED:
             RedisModule_Log(ctx,
-                            "notice",
-                            "Cluster ASM migrate completed (subevent=%" PRIu64 ") received.",
+                            "warning",
+                            "Cluster ASM migrate completed (subevent=%" PRIu64 ")",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_MODULE_PROPAGATE:
