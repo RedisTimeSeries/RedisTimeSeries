@@ -10,7 +10,12 @@ import struct
 
 def test_TEMPORARY_force_failure():
     """TEMPORARY: force a test failure to verify CI artifact upload fix (MOD-14250). Remove after verification."""
-    assert False, "MOD-14250: intentional failure to verify artifact upload fix"
+    env = Env(decodeResponses=True)
+    with env.getConnectionIfNeeded() as r:
+        assert r.ping() is True
+        assert r.execute_command("TS.ADD", "temporary_force_failure_key", 1, 1) == 1
+
+    assert False, "MOD-14250: intentional failure after Redis instance startup to verify artifact upload fix"
 
 def test_add_different_slot_range():
     env = Env(decodeResponses=True)
