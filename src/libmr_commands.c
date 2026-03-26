@@ -188,7 +188,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         RangeArgs minimizedArgs = args->rangeArgs;
         minimizedArgs.startTimestamp = 0;
         minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.numClasses = 0;
+        minimizedArgs.aggregationArgs.classes = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;
@@ -287,7 +288,8 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         RangeArgs minimizedArgs = data->args.rangeArgs;
         minimizedArgs.startTimestamp = 0;
         minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.aggregationClass = NULL;
+        minimizedArgs.aggregationArgs.numClasses = 0;
+        minimizedArgs.aggregationArgs.classes = NULL;
         minimizedArgs.aggregationArgs.timeDelta = 0;
         minimizedArgs.filterByTSArgs.hasValue = false;
         minimizedArgs.filterByValueArgs.hasValue = false;

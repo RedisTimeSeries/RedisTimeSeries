@@ -13,6 +13,7 @@
 #include "utils/arr.h"
 #include <assert.h>
 #include <math.h> /* ceil */
+#include <string.h>
 
 static inline bool check_sample_value(double value, FilterByValueArgs *byValueArgs) {
     if (value >= byValueArgs->min && value <= byValueArgs->max) {
@@ -76,9 +77,11 @@ static size_t filterSamples(Samples *samples,
             for (size_t i = cur_frame.filter_si; i <= cur_frame.filter_ei; ++i) {
                 const timestamp_t sample_ts = samples->timestamps[cur_frame.si];
                 if (sample_ts == filter[i]) {
-                    double value = samples->values[cur_frame.si];
                     samples->timestamps[count] = sample_ts;
-                    samples->values[count] = value;
+                    for (size_t a = 0; a < samples->values_per_sample; ++a) {
+                        Samples_value_at(samples, count, a) =
+                            Samples_value_at(samples, cur_frame.si, a);
+                    }
                     ++(count);
                     break;
                 }
@@ -199,9 +202,13 @@ EnrichedChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *bas
         // currently if the query reversed the chunk will be already reversed here
         // assert(self->reverse == enrichedChunk->rev);
         for (i = 0; i < enrichedChunk->samples.num_samples; ++i) {
-            if (check_sample_value(enrichedChunk->samples.values[i], &self->byValueArgs)) {
+            if (check_sample_value(Samples_value_at(&enrichedChunk->samples, i, 0),
+                                   &self->byValueArgs)) {
                 enrichedChunk->samples.timestamps[count] = enrichedChunk->samples.timestamps[i];
-                enrichedChunk->samples.values[count] = enrichedChunk->samples.values[i];
+                for (size_t a = 0; a < enrichedChunk->samples.values_per_sample; ++a) {
+                    Samples_value_at(&enrichedChunk->samples, count, a) =
+                        Samples_value_at(&enrichedChunk->samples, i, a);
+                }
                 ++count;
             }
         }
@@ -225,7 +232,8 @@ SeriesFilterValIterator *SeriesFilterValIterator_New(AbstractIterator *input,
 }
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
-                                             AggregationClass *aggregation,
+                                             size_t numAggregations,
+                                             AggregationClass **aggregations,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse,
@@ -238,10 +246,13 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->base.GetNext = AggregationIterator_GetNextChunk;
     iter->base.Close = AggregationIterator_Close;
     iter->base.input = input;
-    iter->aggregation = aggregation;
+    iter->numAggregations = numAggregations;
+    for (size_t i = 0; i < numAggregations; i++) {
+        iter->aggregations[i] = *aggregations[i];
+        iter->aggregationContexts[i] = iter->aggregations[i].createContext(reverse);
+    }
     iter->timestampAlignment = timestampAlignment;
     iter->aggregationTimeDelta = aggregationTimeDelta;
-    iter->aggregationContext = iter->aggregation->createContext(reverse);
     iter->aggregationLastTimestamp = 0;
     iter->hasUnFinalizedContext = false;
     iter->reverse = reverse;
@@ -250,12 +261,21 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->empty = empty;
     iter->bucketTS = bucketTS;
     iter->aux_chunk = NewEnrichedChunk();
+    iter->aux_chunk->samples.values_per_sample = numAggregations;
     iter->startTimestamp = startTimestamp;
     iter->endTimestamp = endTimestamp;
+    iter->hasTwa = false;
+    for (size_t i = 0; i < numAggregations; i++) {
+        if (aggregations[i]->type == TS_AGG_TWA) {
+            iter->hasTwa = true;
+            break;
+        }
+    }
     iter->handled_twa_empty_prefix = false;
     iter->handled_twa_empty_suffix = false;
     iter->prev_ts = DC;
     iter->validSamplesInBucket = false;
+    memset(iter->validPerAgg, 0, sizeof(iter->validPerAgg));
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
     return iter;
@@ -364,26 +384,56 @@ static void twa_compute_empty_bucket_value(const AggregationIterator *self,
 // Returns true if bucket should be output, false if it should be skipped.
 static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIterator *self) {
     bool shouldBucketIgnored = !self->validSamplesInBucket;
+    size_t numAggs = self->numAggregations;
     if (shouldBucketIgnored) {
         // Bucket has only NaN samples - treat as empty bucket
         if (!self->empty) {
-            self->aggregation->resetContext(self->aggregationContext);
+            for (size_t a = 0; a < numAggs; a++) {
+                self->aggregations[a].resetContext(self->aggregationContexts[a]);
+                self->validPerAgg[a] = false;
+            }
             self->validSamplesInBucket = false;
             return false;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
-        if (self->aggregation->type == TS_AGG_TWA) {
-            twa_compute_empty_bucket_value(
-                self, self->aggregationLastTimestamp, &samples->values[index]);
-        } else {
-            self->aggregation->finalizeEmpty(self->aggregationContext, &samples->values[index]);
+        double twa_empty_val = 0;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
+        for (size_t a = 0; a < numAggs; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                Samples_value_at(samples, index, a) = twa_empty_val;
+            } else {
+                self->aggregations[a].finalizeEmpty(self->aggregationContexts[a],
+                                                    &Samples_value_at(samples, index, a));
+            }
         }
     } else {
-        self->aggregation->finalize(self->aggregationContext, &samples->values[index]);
+        double twa_empty_val;
+        bool twa_empty_computed = false;
+        for (size_t a = 0; a < numAggs; a++) {
+            if (self->validPerAgg[a]) {
+                self->aggregations[a].finalize(self->aggregationContexts[a],
+                                               &Samples_value_at(samples, index, a));
+            } else if (self->aggregations[a].type == TS_AGG_TWA) {
+                if (!twa_empty_computed) {
+                    twa_compute_empty_bucket_value(
+                        self, self->aggregationLastTimestamp, &twa_empty_val);
+                    twa_empty_computed = true;
+                }
+                Samples_value_at(samples, index, a) = twa_empty_val;
+            } else {
+                self->aggregations[a].finalizeEmpty(self->aggregationContexts[a],
+                                                    &Samples_value_at(samples, index, a));
+            }
+        }
     }
     samples->timestamps[index] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
-    self->aggregation->resetContext(self->aggregationContext);
+    for (size_t a = 0; a < numAggs; a++) {
+        self->aggregations[a].resetContext(self->aggregationContexts[a]);
+        self->validPerAgg[a] = false;
+    }
     self->validSamplesInBucket = false;
     return true;
 }
@@ -416,23 +466,6 @@ static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
     return l;
 }
 
-static void fillEmptyBucketWithValueIncIter(size_t *write_index,
-                                            timestamp_t *cur_ts,
-                                            Samples *samples,
-                                            timestamp_t ts,
-                                            double value,
-                                            const AggregationIterator *self,
-                                            bool reversed) {
-    samples->values[*write_index] = value;
-    samples->timestamps[*write_index] = ts;
-    if (reversed) {
-        (*cur_ts) -= self->aggregationTimeDelta;
-    } else {
-        (*cur_ts) += self->aggregationTimeDelta;
-    }
-    (*write_index)++;
-}
-
 // Empty bucket with no samples from left or right at all.
 static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
                                             timestamp_t cur_ts,
@@ -440,17 +473,19 @@ static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
                                             const AggregationIterator *self,
                                             size_t n_empty_buckets,
                                             bool reversed) {
-    double val;
     for (size_t i = 0; i < n_empty_buckets; ++i) {
-        self->aggregation->finalizeEmpty(self->aggregationContext, &val);
-        fillEmptyBucketWithValueIncIter(
-            write_index,
-            &cur_ts,
-            samples,
-            calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta),
-            val,
-            self,
-            reversed);
+        timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            self->aggregations[a].finalizeEmpty(self->aggregationContexts[a],
+                                                &Samples_value_at(samples, *write_index, a));
+        }
+        samples->timestamps[*write_index] = ts;
+        if (reversed) {
+            cur_ts -= self->aggregationTimeDelta;
+        } else {
+            cur_ts += self->aggregationTimeDelta;
+        }
+        (*write_index)++;
     }
 }
 
@@ -564,31 +599,40 @@ static void twa_fillEmptyBuckets(size_t *write_index,
     n_samples_before = twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
     n_samples_after = twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
 
-    double val;
     for (size_t i = 0; i < n_empty_buckets; ++i) {
         ta = twa_calc_ta(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
         tb = twa_calc_tb(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
-        twa_calc_empty_bucket_val(ta,
-                                  tb,
-                                  &sample_before,
-                                  &sample_befBefore,
-                                  &sample_after,
-                                  &sample_afAfter,
-                                  n_samples_before,
-                                  n_samples_after,
-                                  &val);
-
-        fillEmptyBucketWithValueIncIter(
-            write_index,
-            &cur_ts,
-            samples,
-            calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta),
-            val,
-            self,
-            reversed);
+        timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
+        double twa_val = 0;
+        if (self->hasTwa) {
+            twa_calc_empty_bucket_val(ta,
+                                      tb,
+                                      &sample_before,
+                                      &sample_befBefore,
+                                      &sample_after,
+                                      &sample_afAfter,
+                                      n_samples_before,
+                                      n_samples_after,
+                                      &twa_val);
+        }
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                Samples_value_at(samples, *write_index, a) = twa_val;
+            } else {
+                self->aggregations[a].finalizeEmpty(self->aggregationContexts[a],
+                                                    &Samples_value_at(samples, *write_index, a));
+            }
+        }
+        samples->timestamps[*write_index] = ts;
+        if (reversed) {
+            cur_ts -= self->aggregationTimeDelta;
+        } else {
+            cur_ts += self->aggregationTimeDelta;
+        }
+        (*write_index)++;
     }
 }
 
@@ -601,6 +645,7 @@ static int fillEmptyBuckets(Samples *samples,
                             int64_t *read_index) {
     int64_t agg_time_delta = self->aggregationTimeDelta;
     int64_t _read_index = *read_index + 1; // Cause we already stored the sample in read_index
+    size_t vps = samples->values_per_sample;
     if (reversed) {
         __SWAP(end_bucket_ts, first_bucket_ts);
     }
@@ -624,7 +669,7 @@ static int fillEmptyBuckets(Samples *samples,
 
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
-    if (self->aggregation->type == TS_AGG_TWA) {
+    if (self->hasTwa) {
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
         timestamp_t ta;
         int64_t agg_time_delta = self->aggregationTimeDelta;
@@ -656,19 +701,19 @@ static int fillEmptyBuckets(Samples *samples,
         memmove(samples->og_timestamps,
                 samples->og_timestamps + padding,
                 *write_index * sizeof(samples->og_timestamps[0]));
-        memmove(samples->og_values,
-                samples->og_values + padding,
-                *write_index * sizeof(samples->og_values[0]));
+        memmove(samples->_og_values,
+                samples->_og_values + padding * vps,
+                *write_index * vps * sizeof(double));
         memmove(samples->og_timestamps + *write_index + n_empty_buckets,
                 samples->og_timestamps + padding + _read_index,
                 n_read_samples_left * sizeof(samples->og_timestamps[0]));
-        memmove(samples->og_values + *write_index + n_empty_buckets,
-                samples->og_values + padding + _read_index,
-                n_read_samples_left * sizeof(samples->og_values[0]));
+        memmove(samples->_og_values + (*write_index + n_empty_buckets) * vps,
+                samples->_og_values + (padding + _read_index) * vps,
+                n_read_samples_left * vps * sizeof(double));
 
         // use compacted buffer so fillEmptyBuckets* write at correct indices (avoid overflow)
         samples->timestamps = samples->og_timestamps;
-        samples->values = samples->og_values;
+        samples->_values = samples->_og_values;
 
         // update the read index and num of samples
         _read_index = *write_index + n_empty_buckets;
@@ -676,416 +721,646 @@ static int fillEmptyBuckets(Samples *samples,
         samples->num_samples = _read_index + n_read_samples_left;
     }
 
-    if (self->aggregation->type != TS_AGG_TWA) {
+    if (self->hasTwa) {
+        twa_fillEmptyBuckets(write_index, cur_ts, samples, self, n_empty_buckets, reversed);
+    } else {
         fillEmptyBucketsWithDefaultVals(
             write_index, cur_ts, samples, self, n_empty_buckets, reversed);
-    } else {
-        twa_fillEmptyBuckets(write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     }
 
     return 0;
 }
 
-#define TWA_EMPTY_RANGE(iter) (((iter)->empty) && ((iter)->aggregation->type == TS_AGG_TWA))
+#define TWA_EMPTY_RANGE(iter) (((iter)->empty) && ((iter)->hasTwa))
 
-EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
-    AggregationIterator *self = (AggregationIterator *)iter;
-    AggregationClass *aggregation = self->aggregation;
-    void *aggregationContext = self->aggregationContext;
-    uint64_t aggregationTimeDelta = self->aggregationTimeDelta;
-    bool is_reversed = self->reverse;
-    Sample sample;
-
-    AbstractIterator *input = iter->input;
-    EnrichedChunk *enrichedChunk = input->GetNext(input);
-    double value;
-    size_t agg_n_samples = 0;
-    int64_t si = 0, ei;
-
-    if (!enrichedChunk || enrichedChunk->samples.num_samples == 0) {
-        if (self->hasUnFinalizedContext) {
-            goto _finalize;
-        } else if (TWA_EMPTY_RANGE(self)) {
-            if (!self->handled_twa_empty_prefix) {
-                self->handled_twa_empty_prefix = true;
-                self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
-                timestamp_t first_bucket = CalcBucketStart(
-                    self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
-                timestamp_t last_bucket = CalcBucketStart(
-                    self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
-                if (is_reversed) {
-                    __SWAP(first_bucket, last_bucket);
-                }
-                si = -1;
-                self->aux_chunk->samples.num_samples = 0;
-                int err = fillEmptyBuckets(&self->aux_chunk->samples,
-                                           &agg_n_samples,
-                                           first_bucket,
-                                           last_bucket,
-                                           self,
-                                           is_reversed,
-                                           &si);
-                if (err != 0) {
-                    return NULL;
-                }
-                si++;
-                self->aux_chunk->samples.num_samples = agg_n_samples;
-                return self->aux_chunk;
-            } else if (!self->handled_twa_empty_suffix) {
-                self->handled_twa_empty_suffix = true;
-                timestamp_t last_bucket =
-                    CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
-                                    aggregationTimeDelta,
-                                    self->timestampAlignment);
-                timestamp_t first_bucket =
-                    CalcBucketStart(self->prev_ts, aggregationTimeDelta, self->timestampAlignment);
-                if (!is_reversed) {
-                    first_bucket += aggregationTimeDelta;
-                    if (first_bucket > last_bucket) {
-                        return NULL;
-                    }
-                } else {
-                    if (first_bucket <= last_bucket) {
-                        return NULL;
-                    }
-                    first_bucket =
-                        max(0, (int64_t)((int64_t)first_bucket - (int64_t)aggregationTimeDelta));
-                }
-                si = -1;
-                self->aux_chunk->samples.num_samples = 0;
-                int err = fillEmptyBuckets(&self->aux_chunk->samples,
-                                           &agg_n_samples,
-                                           first_bucket,
-                                           last_bucket,
-                                           self,
-                                           is_reversed,
-                                           &si);
-                if (err != 0) {
-                    return NULL;
-                }
-                si++;
-                self->aux_chunk->samples.num_samples = agg_n_samples;
-                return self->aux_chunk;
-            } else {
-                return NULL;
-            }
-        } else {
-            return NULL;
+static inline Samples *ensureOutputSamples(AggregationIterator *self,
+                                           EnrichedChunk *enrichedChunk,
+                                           size_t needed_samples) {
+    if (self->numAggregations > 1) {
+        if (needed_samples >= self->aux_chunk->samples.size) {
+            ReallocSamplesArray(&self->aux_chunk->samples, needed_samples + 16);
         }
+        return &self->aux_chunk->samples;
     }
+    return &enrichedChunk->samples;
+}
 
-    if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_prefix) {
-        self->handled_twa_empty_prefix = true;
-        timestamp_t first_bucket =
-            CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
-                            aggregationTimeDelta,
-                            self->timestampAlignment);
-        timestamp_t first_sample_ts = enrichedChunk->samples.timestamps[0];
-        timestamp_t last_bucket =
-            CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
-        bool has_empty_buckets = true;
-        if (!is_reversed) {
-            if (first_bucket >= last_bucket) {
-                has_empty_buckets = false;
+// No samples from upstream: finalize, TWA-only empty range, or end stream.
+// Sets *enter_finalize when caller must run agg_iter_finalize().
+static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
+                                              uint64_t aggregationTimeDelta,
+                                              bool is_reversed,
+                                              size_t *agg_n_samples,
+                                              int64_t *si,
+                                              bool *enter_finalize) {
+    *enter_finalize = false;
+    if (self->hasUnFinalizedContext) {
+        *enter_finalize = true;
+        return NULL;
+    }
+    if (TWA_EMPTY_RANGE(self)) {
+        if (!self->handled_twa_empty_prefix) {
+            self->handled_twa_empty_prefix = true;
+            self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
+            timestamp_t first_bucket = CalcBucketStart(
+                self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
+            timestamp_t last_bucket =
+                CalcBucketStart(self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
+            if (is_reversed) {
+                __SWAP(first_bucket, last_bucket);
             }
-            last_bucket = max(0, (int64_t)((int64_t)last_bucket - (int64_t)aggregationTimeDelta));
-        } else {
-            last_bucket += aggregationTimeDelta;
-            if (first_bucket < last_bucket) {
-                has_empty_buckets = false;
-            }
-        }
-        if (has_empty_buckets) {
-            si = -1;
-            int err = fillEmptyBuckets(&enrichedChunk->samples,
-                                       &agg_n_samples,
+            *si = -1;
+            self->aux_chunk->samples.num_samples = 0;
+            int err = fillEmptyBuckets(&self->aux_chunk->samples,
+                                       agg_n_samples,
                                        first_bucket,
                                        last_bucket,
                                        self,
                                        is_reversed,
-                                       &si);
+                                       si);
             if (err != 0) {
                 return NULL;
             }
-            si++;
+            (*si)++;
+            self->aux_chunk->samples.num_samples = *agg_n_samples;
+            return self->aux_chunk;
         }
-    }
-    self->hasUnFinalizedContext = true;
-
-    if (!self->initialized) {
-        timestamp_t init_ts = enrichedChunk->samples.timestamps[si];
-        self->aggregationLastTimestamp =
-            CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
-        self->initialized = true;
-        if (aggregation->type == TS_AGG_TWA) {
-            timestamp_t ta = twa_calc_ta(self->reverse,
-                                         BucketStartNormalize(self->aggregationLastTimestamp),
-                                         self->aggregationLastTimestamp + aggregationTimeDelta,
-                                         self->startTimestamp,
-                                         self->endTimestamp);
-            timestamp_t tb = twa_calc_tb(self->reverse,
-                                         BucketStartNormalize(self->aggregationLastTimestamp),
-                                         self->aggregationLastTimestamp + aggregationTimeDelta,
-                                         self->startTimestamp,
-                                         self->endTimestamp);
-            aggregation->addBucketParams(
-                aggregationContext, (!self->reverse) ? ta : tb, (!self->reverse) ? tb : ta);
-        }
-
-        if (aggregation->type == TS_AGG_TWA && !((!is_reversed) && init_ts == 0)) {
-            RangeArgs args = {
-                .aggregationArgs = { 0 },
-                .filterByValueArgs = { 0 },
-                .filterByTSArgs = { 0 },
-                .startTimestamp = is_reversed ? init_ts + 1 : 0,
-                .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
-                .latest = false,
-            };
-            AbstractSampleIterator *sample_iterator =
-                SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
-            // Skip non valid samples - they shouldn't be used for interpolation
-            while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                if (aggregation->isValueValid(sample.value)) {
-                    aggregation->addPrevBucketLastSample(
-                        aggregationContext, sample.value, sample.timestamp);
-                    break;
+        if (!self->handled_twa_empty_suffix) {
+            self->handled_twa_empty_suffix = true;
+            timestamp_t last_bucket =
+                CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
+                                aggregationTimeDelta,
+                                self->timestampAlignment);
+            timestamp_t first_bucket =
+                CalcBucketStart(self->prev_ts, aggregationTimeDelta, self->timestampAlignment);
+            if (!is_reversed) {
+                first_bucket += aggregationTimeDelta;
+                if (first_bucket > last_bucket) {
+                    return NULL;
                 }
+            } else {
+                if (first_bucket <= last_bucket) {
+                    return NULL;
+                }
+                first_bucket =
+                    max(0, (int64_t)((int64_t)first_bucket - (int64_t)aggregationTimeDelta));
             }
-            sample_iterator->Close(sample_iterator);
+            *si = -1;
+            self->aux_chunk->samples.num_samples = 0;
+            int err = fillEmptyBuckets(&self->aux_chunk->samples,
+                                       agg_n_samples,
+                                       first_bucket,
+                                       last_bucket,
+                                       self,
+                                       is_reversed,
+                                       si);
+            if (err != 0) {
+                return NULL;
+            }
+            (*si)++;
+            self->aux_chunk->samples.num_samples = *agg_n_samples;
+            return self->aux_chunk;
+        }
+        return NULL;
+    }
+    return NULL;
+}
+
+// TWA empty range: fill buckets from query start to first raw sample. Returns 0 or -1 on error.
+static int agg_iter_apply_twa_empty_prefix(AggregationIterator *self,
+                                           EnrichedChunk *enrichedChunk,
+                                           uint64_t aggregationTimeDelta,
+                                           bool is_reversed,
+                                           bool multiAgg,
+                                           size_t *agg_n_samples,
+                                           int64_t *si) {
+    if (!TWA_EMPTY_RANGE(self) || self->handled_twa_empty_prefix) {
+        return 0;
+    }
+    self->handled_twa_empty_prefix = true;
+    timestamp_t first_bucket =
+        CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
+                        aggregationTimeDelta,
+                        self->timestampAlignment);
+    timestamp_t first_sample_ts = enrichedChunk->samples.timestamps[0];
+    timestamp_t last_bucket =
+        CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
+    bool has_empty_buckets = true;
+    if (!is_reversed) {
+        if (first_bucket >= last_bucket) {
+            has_empty_buckets = false;
+        }
+        last_bucket = max(0, (int64_t)((int64_t)last_bucket - (int64_t)aggregationTimeDelta));
+    } else {
+        last_bucket += aggregationTimeDelta;
+        if (first_bucket < last_bucket) {
+            has_empty_buckets = false;
+        }
+    }
+    if (!has_empty_buckets) {
+        return 0;
+    }
+    if (multiAgg) {
+        Samples *prefixSamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
+        prefixSamples->num_samples = *agg_n_samples;
+        int64_t read_idx = -1;
+        int err = fillEmptyBuckets(
+            prefixSamples, agg_n_samples, first_bucket, last_bucket, self, is_reversed, &read_idx);
+        if (err != 0) {
+            return -1;
+        }
+    } else {
+        *si = -1;
+        int err = fillEmptyBuckets(&enrichedChunk->samples,
+                                   agg_n_samples,
+                                   first_bucket,
+                                   last_bucket,
+                                   self,
+                                   is_reversed,
+                                   si);
+        if (err != 0) {
+            return -1;
+        }
+        (*si)++;
+    }
+    return 0;
+}
+
+// First chunk only: bucket start from first sample, TWA params, optional prior sample for TWA.
+static void agg_iter_init_if_needed(AggregationIterator *self,
+                                    EnrichedChunk *enrichedChunk,
+                                    int64_t si,
+                                    uint64_t aggregationTimeDelta,
+                                    bool is_reversed,
+                                    Sample *sample) {
+    if (self->initialized) {
+        return;
+    }
+    timestamp_t init_ts = enrichedChunk->samples.timestamps[si];
+    self->aggregationLastTimestamp =
+        CalcBucketStart(init_ts, aggregationTimeDelta, self->timestampAlignment);
+    self->initialized = true;
+
+    if (self->hasTwa) {
+        timestamp_t ta = twa_calc_ta(self->reverse,
+                                     BucketStartNormalize(self->aggregationLastTimestamp),
+                                     self->aggregationLastTimestamp + aggregationTimeDelta,
+                                     self->startTimestamp,
+                                     self->endTimestamp);
+        timestamp_t tb = twa_calc_tb(self->reverse,
+                                     BucketStartNormalize(self->aggregationLastTimestamp),
+                                     self->aggregationLastTimestamp + aggregationTimeDelta,
+                                     self->startTimestamp,
+                                     self->endTimestamp);
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                self->aggregations[a].addBucketParams(self->aggregationContexts[a],
+                                                      (!self->reverse) ? ta : tb,
+                                                      (!self->reverse) ? tb : ta);
+            }
         }
     }
 
-    void (*appendValue)(void *, double, timestamp_t) = aggregation->appendValue;
-    uint64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
-    self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
-    while (enrichedChunk) {
-        // currently if the query reversed the chunk will be already revered here
-        assert(self->reverse == enrichedChunk->rev || enrichedChunk->samples.num_samples == 0);
-        Samples *samples = &enrichedChunk->samples;
-        if (self->aggregation->type == TS_AGG_MAX &&
-            !is_reversed) { // Currently only implemented vectorization for specific case
-            while (si < samples->num_samples) {
-                ei = findLastIndexbeforeTS(enrichedChunk, contextScope, si);
-                if (likely(ei >= 0)) {
-                    aggregation->appendValueVec(
-                        aggregationContext, enrichedChunk->samples.values, si, ei);
-                    for (int64_t idx = si; idx <= ei; idx++) {
-                        if (aggregation->isValueValid(enrichedChunk->samples.values[idx])) {
-                            self->validSamplesInBucket = true;
-                        }
+    if (self->hasTwa && !((!is_reversed) && init_ts == 0)) {
+        RangeArgs args = {
+            .aggregationArgs = { 0 },
+            .filterByValueArgs = { 0 },
+            .filterByTSArgs = { 0 },
+            .startTimestamp = is_reversed ? init_ts + 1 : 0,
+            .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
+            .latest = false,
+        };
+        AbstractSampleIterator *sample_iterator =
+            SeriesCreateSampleIterator(self->series, &args, !is_reversed, true);
+        // Skip NaN samples - they shouldn't be used for TWA interpolation
+        while (sample_iterator->GetNext(sample_iterator, sample) == CR_OK) {
+            if (!isnan(sample->value)) {
+                for (size_t a = 0; a < self->numAggregations; a++) {
+                    if (self->aggregations[a].type == TS_AGG_TWA) {
+                        self->aggregations[a].addPrevBucketLastSample(
+                            self->aggregationContexts[a], sample->value, sample->timestamp);
                     }
-                    si = ei + 1;
-                } // else ei < 0: only need to finalize the previous bucket and update contextScope
-                if (si < samples->num_samples) { // if si == num_samples need to check next chunk
-                                                 // for more samples
-                    sample.timestamp =
-                        enrichedChunk->samples
-                            .timestamps[si]; // store sample cause we aggregate in place
-                    sample.value = enrichedChunk->samples
-                                       .values[si]; // store sample cause we aggregate in place
-                    assert(enrichedChunk->samples.timestamps[si] >= contextScope);
-                    if (finalizeBucket(&enrichedChunk->samples, agg_n_samples, self)) {
-                        agg_n_samples++;
-                    }
-                    self->aggregationLastTimestamp = CalcBucketStart(
-                        sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
-                    if (self->empty) {
-                        bool has_empty_buckets = true;
-                        timestamp_t first_bucket, last_bucket;
-                        if (is_reversed) {
-                            first_bucket = max(0,
-                                               (int64_t)((int64_t)contextScope -
-                                                         (int64_t)(2 * aggregationTimeDelta)));
-                            last_bucket = self->aggregationLastTimestamp + aggregationTimeDelta;
-                            if (contextScope > last_bucket + (2 * aggregationTimeDelta)) {
-                                has_empty_buckets = false;
-                            }
-                        } else {
-                            first_bucket = contextScope;
-                            if (first_bucket >= self->aggregationLastTimestamp) {
-                                has_empty_buckets = false;
-                            }
-                            last_bucket = max(0,
-                                              (int64_t)((int64_t)self->aggregationLastTimestamp -
-                                                        (int64_t)aggregationTimeDelta));
-                        }
-                        if (has_empty_buckets) {
-                            int err = fillEmptyBuckets(&enrichedChunk->samples,
-                                                       &agg_n_samples,
-                                                       first_bucket,
-                                                       last_bucket,
-                                                       self,
-                                                       is_reversed,
-                                                       &si);
-                            if (err != 0) {
-                                return NULL;
-                            }
-                        }
-                    }
-                    contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
-                    self->aggregationLastTimestamp =
-                        BucketStartNormalize(self->aggregationLastTimestamp);
-
-                    // append sample and inc si cause we aggregate in place
-                    if (aggregation->isValueValid(sample.value)) {
-                        appendValue(aggregationContext, sample.value, sample.timestamp);
-                        self->validSamplesInBucket = true;
-                    }
-                    si++;
                 }
+                break;
+            }
+        }
+        sample_iterator->Close(sample_iterator);
+    }
+}
+
+/*
+ * After finalizeBucket while aggregating in-place: decide if we must insert empty buckets between
+ * the previous contextScope and the new bucket start (aggregationLastTimestamp).
+ */
+static bool agg_iter_empty_gap_after_finalize(uint64_t contextScope,
+                                              timestamp_t aggregationLastTimestamp,
+                                              uint64_t aggregationTimeDelta,
+                                              bool is_reversed,
+                                              bool reversed_gap_max_style,
+                                              timestamp_t *out_first_bucket,
+                                              timestamp_t *out_last_bucket) {
+    bool has_empty_buckets = true;
+    if (is_reversed) {
+        *out_first_bucket =
+            max(0, (int64_t)((int64_t)contextScope - (int64_t)(2 * aggregationTimeDelta)));
+        *out_last_bucket = aggregationLastTimestamp + aggregationTimeDelta;
+        if (reversed_gap_max_style) {
+            if (contextScope > *out_last_bucket + (2 * aggregationTimeDelta)) {
+                has_empty_buckets = false;
             }
         } else {
-            while (si < samples->num_samples) {
-                sample.timestamp = enrichedChunk->samples
-                                       .timestamps[si]; // store sample cause we aggregate in place
-                sample.value =
-                    enrichedChunk->samples.values[si]; // store sample cause we aggregate in place
-                // (1) aggregationTimeDelta > 0,
-                // (2) self->aggregationLastTimestamp > chunk->samples.timestamp[0] -
-                // aggregationTimeDelta (3) self->aggregationLastTimestamp = samples.timestamps[0]
-                // - mod where 0 <= mod from (1)+(2) contextScope > chunk->samples.timestamps[0]
-                // from (3) chunk->samples.timestamps[0] >= self->aggregationLastTimestamp so the
-                // following condition should always be false on the first iteration
-                if ((!is_reversed && sample.timestamp >= contextScope) ||
-                    (is_reversed && sample.timestamp < self->aggregationLastTimestamp)) {
-                    if (aggregation->type == TS_AGG_TWA &&
-                        aggregation->isValueValid(sample.value)) {
-                        aggregation->addNextBucketFirstSample(
-                            aggregationContext, sample.value, sample.timestamp);
-                    }
+            if (contextScope < *out_last_bucket + (2 * aggregationTimeDelta)) {
+                has_empty_buckets = false;
+            }
+        }
+    } else {
+        *out_first_bucket = contextScope;
+        if (*out_first_bucket >= aggregationLastTimestamp) {
+            has_empty_buckets = false;
+        }
+        *out_last_bucket =
+            max(0, (int64_t)((int64_t)aggregationLastTimestamp - (int64_t)aggregationTimeDelta));
+    }
+    return has_empty_buckets;
+}
 
-                    Sample last_sample;
-                    bool hadValidSamples = self->validSamplesInBucket;
-                    if (aggregation->type == TS_AGG_TWA) {
-                        aggregation->getLastSample(aggregationContext, &last_sample);
-                    }
-                    if (finalizeBucket(&enrichedChunk->samples, agg_n_samples, self)) {
-                        agg_n_samples++;
-                    }
-                    self->aggregationLastTimestamp = CalcBucketStart(
-                        sample.timestamp, aggregationTimeDelta, self->timestampAlignment);
-                    if (self->empty) {
-                        bool has_empty_buckets = true;
-                        timestamp_t first_bucket, last_bucket;
-                        if (is_reversed) {
-                            first_bucket = max(0,
-                                               (int64_t)((int64_t)contextScope -
-                                                         (int64_t)(2 * aggregationTimeDelta)));
-                            last_bucket = self->aggregationLastTimestamp + aggregationTimeDelta;
-                            if (contextScope < last_bucket + (2 * aggregationTimeDelta)) {
-                                has_empty_buckets = false;
-                            }
-                        } else {
-                            first_bucket = contextScope;
-                            if (first_bucket >= self->aggregationLastTimestamp) {
-                                has_empty_buckets = false;
-                            }
-                            last_bucket = max(0,
-                                              (int64_t)((int64_t)self->aggregationLastTimestamp -
-                                                        (int64_t)aggregationTimeDelta));
-                        }
-                        if (has_empty_buckets) {
-                            int err = fillEmptyBuckets(&enrichedChunk->samples,
-                                                       &agg_n_samples,
-                                                       first_bucket,
-                                                       last_bucket,
-                                                       self,
-                                                       is_reversed,
-                                                       &si);
-                            if (err != 0) {
-                                return NULL;
-                            }
-                        }
-                    }
-                    contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
-                    self->aggregationLastTimestamp =
-                        BucketStartNormalize(self->aggregationLastTimestamp);
-                    if (aggregation->type == TS_AGG_TWA && hadValidSamples &&
-                        aggregation->isValueValid(last_sample.value)) {
-                        aggregation->addPrevBucketLastSample(
-                            aggregationContext, last_sample.value, last_sample.timestamp);
-                    }
+// Advance *contextScope to the next bucket boundary; normalize aggregationLastTimestamp.
+static void agg_iter_advance_context_scope(AggregationIterator *self,
+                                           uint64_t aggregationTimeDelta,
+                                           uint64_t *contextScope) {
+    *contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
+}
 
-                    if (aggregation->type == TS_AGG_TWA) {
-                        timestamp_t tb = twa_calc_tb(self->reverse,
-                                                     self->aggregationLastTimestamp,
-                                                     contextScope,
-                                                     self->startTimestamp,
-                                                     self->endTimestamp);
-                        aggregation->addBucketParams(
-                            aggregationContext,
-                            (!self->reverse) ? self->aggregationLastTimestamp : tb,
-                            (!self->reverse) ? tb : contextScope);
-                    }
+// MAX fast path: vector-append samples with timestamp < *contextScope; advance si past the run.
+static void agg_iter_max_drain_vec_segment(AggregationIterator *self,
+                                           EnrichedChunk *enrichedChunk,
+                                           AggregationClass *aggregation,
+                                           void *aggregationContext,
+                                           uint64_t *contextScope,
+                                           int64_t *si,
+                                           int64_t *ei) {
+    *ei = findLastIndexbeforeTS(enrichedChunk, *contextScope, *si);
+    if (likely(*ei >= 0)) {
+        aggregation->appendValueVec(aggregationContext, enrichedChunk->samples._values, *si, *ei);
+        for (int64_t idx = *si; idx <= *ei; idx++) {
+            if (aggregation->isValueValid(Samples_value_at(&enrichedChunk->samples, idx, 0))) {
+                self->validSamplesInBucket = true;
+                self->validPerAgg[0] = true;
+            }
+        }
+        *si = *ei + 1;
+    }
+}
+
+/* Opening sample after vec drain: finalize prior bucket, optional empty gap, advance scope, append.
+ * Returns 0 or -1 on fillEmptyBuckets error. Caller ensures *si < num_samples. */
+static int agg_iter_max_emit_opening_sample(AggregationIterator *self,
+                                            EnrichedChunk *enrichedChunk,
+                                            AggregationClass *aggregation,
+                                            void *aggregationContext,
+                                            uint64_t aggregationTimeDelta,
+                                            bool is_reversed,
+                                            void (*appendValue)(void *, double, timestamp_t),
+                                            uint64_t *contextScope,
+                                            size_t *agg_n_samples,
+                                            int64_t *si,
+                                            Sample *sample) {
+    sample->timestamp = enrichedChunk->samples.timestamps[*si];
+    sample->value = Samples_value_at(&enrichedChunk->samples, *si, 0);
+    assert(enrichedChunk->samples.timestamps[*si] >= *contextScope);
+    if (finalizeBucket(&enrichedChunk->samples, *agg_n_samples, self)) {
+        (*agg_n_samples)++;
+    }
+    self->aggregationLastTimestamp =
+        CalcBucketStart(sample->timestamp, aggregationTimeDelta, self->timestampAlignment);
+    if (self->empty) {
+        timestamp_t first_bucket, last_bucket;
+        if (agg_iter_empty_gap_after_finalize(*contextScope,
+                                              self->aggregationLastTimestamp,
+                                              aggregationTimeDelta,
+                                              is_reversed,
+                                              true,
+                                              &first_bucket,
+                                              &last_bucket)) {
+            int err = fillEmptyBuckets(&enrichedChunk->samples,
+                                       agg_n_samples,
+                                       first_bucket,
+                                       last_bucket,
+                                       self,
+                                       is_reversed,
+                                       si);
+            if (err != 0) {
+                return -1;
+            }
+        }
+    }
+    agg_iter_advance_context_scope(self, aggregationTimeDelta, contextScope);
+
+    if (aggregation->isValueValid(sample->value)) {
+        appendValue(aggregationContext, sample->value, sample->timestamp);
+        self->validSamplesInBucket = true;
+        self->validPerAgg[0] = true;
+    }
+    (*si)++;
+    return 0;
+}
+
+// Single agg MAX forward: vectorized append per bucket. Returns 0 or -1 on fillEmptyBuckets error.
+static int agg_iter_process_chunk_max_fast_path(AggregationIterator *self,
+                                                EnrichedChunk *enrichedChunk,
+                                                AggregationClass *aggregation,
+                                                void *aggregationContext,
+                                                uint64_t aggregationTimeDelta,
+                                                bool is_reversed,
+                                                void (*appendValue)(void *, double, timestamp_t),
+                                                uint64_t *contextScope,
+                                                size_t *agg_n_samples,
+                                                int64_t *si,
+                                                int64_t *ei,
+                                                Sample *sample) {
+    Samples *samples = &enrichedChunk->samples;
+    while (*si < (int64_t)samples->num_samples) {
+        agg_iter_max_drain_vec_segment(
+            self, enrichedChunk, aggregation, aggregationContext, contextScope, si, ei);
+        if (*si >= (int64_t)samples->num_samples) {
+            break;
+        }
+        if (agg_iter_max_emit_opening_sample(self,
+                                             enrichedChunk,
+                                             aggregation,
+                                             aggregationContext,
+                                             aggregationTimeDelta,
+                                             is_reversed,
+                                             appendValue,
+                                             contextScope,
+                                             agg_n_samples,
+                                             si,
+                                             sample) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
+                                               EnrichedChunk *enrichedChunk,
+                                               Sample *sample,
+                                               uint64_t aggregationTimeDelta,
+                                               bool is_reversed,
+                                               bool multiAgg,
+                                               uint64_t *contextScope,
+                                               size_t *agg_n_samples,
+                                               int64_t *si,
+                                               Sample *twa_last_samples,
+                                               bool *twaHadValid) {
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        if (self->aggregations[a].type == TS_AGG_TWA &&
+            self->aggregations[a].isValueValid(sample->value)) {
+            self->aggregations[a].addNextBucketFirstSample(
+                self->aggregationContexts[a], sample->value, sample->timestamp);
+        }
+    }
+
+    if (self->hasTwa) {
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                twaHadValid[a] = self->validPerAgg[a];
+                self->aggregations[a].getLastSample(self->aggregationContexts[a],
+                                                    &twa_last_samples[a]);
+            }
+        }
+    }
+
+    Samples *outSamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 1);
+    if (finalizeBucket(outSamples, *agg_n_samples, self)) {
+        (*agg_n_samples)++;
+    }
+    self->aggregationLastTimestamp =
+        CalcBucketStart(sample->timestamp, aggregationTimeDelta, self->timestampAlignment);
+    if (self->empty) {
+        timestamp_t first_bucket, last_bucket;
+        if (agg_iter_empty_gap_after_finalize(*contextScope,
+                                              self->aggregationLastTimestamp,
+                                              aggregationTimeDelta,
+                                              is_reversed,
+                                              false,
+                                              &first_bucket,
+                                              &last_bucket)) {
+            Samples *emptySamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
+            if (multiAgg) {
+                emptySamples->num_samples = *agg_n_samples;
+            }
+            int64_t read_idx = -1;
+            int err = fillEmptyBuckets(emptySamples,
+                                       agg_n_samples,
+                                       first_bucket,
+                                       last_bucket,
+                                       self,
+                                       is_reversed,
+                                       multiAgg ? &read_idx : si);
+            if (err != 0) {
+                return -1;
+            }
+        }
+    }
+    agg_iter_advance_context_scope(self, aggregationTimeDelta, contextScope);
+
+    if (self->hasTwa) {
+        timestamp_t tb = twa_calc_tb(self->reverse,
+                                     self->aggregationLastTimestamp,
+                                     *contextScope,
+                                     self->startTimestamp,
+                                     self->endTimestamp);
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                if (twaHadValid[a] &&
+                    self->aggregations[a].isValueValid(twa_last_samples[a].value)) {
+                    self->aggregations[a].addPrevBucketLastSample(self->aggregationContexts[a],
+                                                                  twa_last_samples[a].value,
+                                                                  twa_last_samples[a].timestamp);
                 }
+                self->aggregations[a].addBucketParams(
+                    self->aggregationContexts[a],
+                    (!self->reverse) ? self->aggregationLastTimestamp : tb,
+                    (!self->reverse) ? tb : *contextScope);
+            }
+        }
+    }
+    return 0;
+}
 
-                if (aggregation->isValueValid(sample.value)) {
-                    appendValue(aggregationContext, sample.value, sample.timestamp);
-                    self->validSamplesInBucket = true;
-                }
-                si++;
+static void agg_iter_append_sample_to_all_aggs(AggregationIterator *self,
+                                               AggregationClass *aggregation,
+                                               void *aggregationContext,
+                                               void (*appendValue)(void *, double, timestamp_t),
+                                               Sample *sample) {
+    if (self->numAggregations == 1) {
+        if (aggregation->isValueValid(sample->value)) {
+            appendValue(aggregationContext, sample->value, sample->timestamp);
+            self->validSamplesInBucket = true;
+            self->validPerAgg[0] = true;
+        }
+    } else {
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].isValueValid(sample->value)) {
+                self->aggregations[a].appendValue(
+                    self->aggregationContexts[a], sample->value, sample->timestamp);
+                self->validSamplesInBucket = true;
+                self->validPerAgg[a] = true;
+            }
+        }
+    }
+}
+
+static int agg_iter_process_chunk_general(AggregationIterator *self,
+                                          EnrichedChunk *enrichedChunk,
+                                          AggregationClass *aggregation,
+                                          void *aggregationContext,
+                                          uint64_t aggregationTimeDelta,
+                                          bool is_reversed,
+                                          bool multiAgg,
+                                          void (*appendValue)(void *, double, timestamp_t),
+                                          uint64_t *contextScope,
+                                          size_t *agg_n_samples,
+                                          int64_t *si,
+                                          Sample *sample) {
+    Samples *samples = &enrichedChunk->samples;
+    Sample twa_last_samples[self->numAggregations];
+    bool twaHadValid[self->numAggregations];
+
+    while (*si < (int64_t)samples->num_samples) {
+        sample->timestamp = enrichedChunk->samples.timestamps[*si];
+        sample->value = Samples_value_at(&enrichedChunk->samples, *si, 0);
+        if ((!is_reversed && sample->timestamp >= *contextScope) ||
+            (is_reversed && sample->timestamp < self->aggregationLastTimestamp)) {
+            if (agg_iter_general_on_bucket_boundary(self,
+                                                    enrichedChunk,
+                                                    sample,
+                                                    aggregationTimeDelta,
+                                                    is_reversed,
+                                                    multiAgg,
+                                                    contextScope,
+                                                    agg_n_samples,
+                                                    si,
+                                                    twa_last_samples,
+                                                    twaHadValid) != 0) {
+                return -1;
             }
         }
 
-        if (agg_n_samples > 0) {
-            self->prev_ts = enrichedChunk->samples.timestamps[agg_n_samples - 1];
-            enrichedChunk->samples.num_samples = agg_n_samples;
-            return enrichedChunk;
-        }
-        enrichedChunk = input->GetNext(input);
-        si = 0;
+        agg_iter_append_sample_to_all_aggs(
+            self, aggregation, aggregationContext, appendValue, sample);
+        (*si)++;
     }
+    return 0;
+}
 
-_finalize:
+static EnrichedChunk *agg_iter_try_emit_partial(AggregationIterator *self,
+                                                EnrichedChunk *enrichedChunk,
+                                                bool multiAgg,
+                                                size_t agg_n_samples) {
+    if (agg_n_samples == 0) {
+        return NULL;
+    }
+    if (multiAgg) {
+        self->prev_ts = self->aux_chunk->samples.timestamps[agg_n_samples - 1];
+        self->aux_chunk->samples.num_samples = agg_n_samples;
+        return self->aux_chunk;
+    }
+    self->prev_ts = enrichedChunk->samples.timestamps[agg_n_samples - 1];
+    enrichedChunk->samples.num_samples = agg_n_samples;
+    return enrichedChunk;
+}
+
+static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
+                                        uint64_t aggregationTimeDelta,
+                                        bool is_reversed,
+                                        Sample *sample) {
     self->hasUnFinalizedContext = false;
-    if (aggregation->type == TS_AGG_TWA) {
-        Sample last_sample;
-        aggregation->getLastSample(aggregationContext, &last_sample);
-        if (!(is_reversed && last_sample.timestamp == 0)) {
-            RangeArgs args = {
-                .aggregationArgs = { 0 },
-                .filterByValueArgs = { 0 },
-                .filterByTSArgs = { 0 },
-                .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
-                .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
-                .latest = false,
-            };
-            AbstractSampleIterator *sample_iterator =
-                SeriesCreateSampleIterator(self->series, &args, is_reversed, true);
-            // Skip non valid samples - they shouldn't be used for interpolation
-            while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-                if (aggregation->isValueValid(sample.value)) {
-                    aggregation->addNextBucketFirstSample(
-                        aggregationContext, sample.value, sample.timestamp);
-                    break;
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        if (self->aggregations[a].type == TS_AGG_TWA) {
+            Sample last_sample;
+            self->aggregations[a].getLastSample(self->aggregationContexts[a], &last_sample);
+            if (!(is_reversed && last_sample.timestamp == 0)) {
+                RangeArgs args = {
+                    .aggregationArgs = { 0 },
+                    .filterByValueArgs = { 0 },
+                    .filterByTSArgs = { 0 },
+                    .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
+                    .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
+                    .latest = false,
+                };
+                AbstractSampleIterator *sample_iterator =
+                    SeriesCreateSampleIterator(self->series, &args, is_reversed, true);
+                // Skip non valid samples - they shouldn't be used for interpolation
+                while (sample_iterator->GetNext(sample_iterator, sample) == CR_OK) {
+                    if (self->aggregations[a].isValueValid(sample->value)) {
+                        self->aggregations[a].addNextBucketFirstSample(
+                            self->aggregationContexts[a], sample->value, sample->timestamp);
+                        break;
+                    }
                 }
+                sample_iterator->Close(sample_iterator);
             }
-            sample_iterator->Close(sample_iterator);
         }
     }
 
+    size_t numAggs = self->numAggregations;
     bool shouldBucketIgnored = self->validSamplesInBucket == 0;
     if (shouldBucketIgnored) {
+        // Bucket has only NaN samples - treat as empty bucket
         if (!self->empty) {
-            aggregation->resetContext(aggregationContext);
+            for (size_t a = 0; a < numAggs; a++) {
+                self->aggregations[a].resetContext(self->aggregationContexts[a]);
+                self->validPerAgg[a] = false;
+            }
             self->validSamplesInBucket = false;
             self->aux_chunk->samples.num_samples = 0;
             return self->aux_chunk;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
-        if (aggregation->type == TS_AGG_TWA) {
-            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &value);
-        } else {
-            aggregation->finalizeEmpty(aggregationContext, &value);
+        double twa_empty_val = 0;
+        if (self->hasTwa) {
+            twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
+        }
+        for (size_t a = 0; a < numAggs; a++) {
+            if (self->aggregations[a].type == TS_AGG_TWA) {
+                Samples_value_at(&self->aux_chunk->samples, 0, a) = twa_empty_val;
+            } else {
+                self->aggregations[a].finalizeEmpty(
+                    self->aggregationContexts[a],
+                    &Samples_value_at(&self->aux_chunk->samples, 0, a));
+            }
         }
     } else {
-        aggregation->finalize(aggregationContext, &value);
+        double twa_empty_val;
+        bool twa_empty_computed = false;
+        for (size_t a = 0; a < numAggs; a++) {
+            if (self->validPerAgg[a]) {
+                self->aggregations[a].finalize(self->aggregationContexts[a],
+                                               &Samples_value_at(&self->aux_chunk->samples, 0, a));
+            } else if (self->aggregations[a].type == TS_AGG_TWA) {
+                if (!twa_empty_computed) {
+                    twa_compute_empty_bucket_value(
+                        self, self->aggregationLastTimestamp, &twa_empty_val);
+                    twa_empty_computed = true;
+                }
+                Samples_value_at(&self->aux_chunk->samples, 0, a) = twa_empty_val;
+            } else {
+                self->aggregations[a].finalizeEmpty(
+                    self->aggregationContexts[a],
+                    &Samples_value_at(&self->aux_chunk->samples, 0, a));
+            }
+        }
+    }
+    for (size_t a = 0; a < numAggs; a++) {
+        self->validPerAgg[a] = false;
     }
     self->validSamplesInBucket = false;
 
     self->aux_chunk->samples.timestamps[0] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
-    self->aux_chunk->samples.values[0] = value;
     size_t n_samples = 1;
     if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_suffix) {
         self->handled_twa_empty_suffix = true;
@@ -1126,10 +1401,98 @@ _finalize:
     return self->aux_chunk;
 }
 
+EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
+    AggregationIterator *self = (AggregationIterator *)iter;
+    AggregationClass *aggregation = &self->aggregations[0];
+    void *aggregationContext = self->aggregationContexts[0];
+    uint64_t aggregationTimeDelta = self->aggregationTimeDelta;
+    bool is_reversed = self->reverse;
+    bool multiAgg = self->numAggregations > 1;
+    Sample sample;
+
+    AbstractIterator *input = iter->input;
+    EnrichedChunk *enrichedChunk = input->GetNext(input);
+    size_t agg_n_samples = 0;
+    int64_t si = 0, ei;
+
+    if (!enrichedChunk || enrichedChunk->samples.num_samples == 0) {
+        bool enter_finalize;
+        EnrichedChunk *r = agg_iter_on_empty_chunk(
+            self, aggregationTimeDelta, is_reversed, &agg_n_samples, &si, &enter_finalize);
+        if (enter_finalize) {
+            return agg_iter_finalize(self, aggregationTimeDelta, is_reversed, &sample);
+        }
+        return r;
+    }
+
+    if (agg_iter_apply_twa_empty_prefix(self,
+                                        enrichedChunk,
+                                        aggregationTimeDelta,
+                                        is_reversed,
+                                        multiAgg,
+                                        &agg_n_samples,
+                                        &si) != 0) {
+        return NULL;
+    }
+    self->hasUnFinalizedContext = true;
+
+    agg_iter_init_if_needed(self, enrichedChunk, si, aggregationTimeDelta, is_reversed, &sample);
+
+    void (*appendValue)(void *, double, timestamp_t) = aggregation->appendValue;
+    uint64_t contextScope = self->aggregationLastTimestamp + aggregationTimeDelta;
+    self->aggregationLastTimestamp = BucketStartNormalize(self->aggregationLastTimestamp);
+    while (enrichedChunk) {
+        assert(self->reverse == enrichedChunk->rev || enrichedChunk->samples.num_samples == 0);
+        if (self->numAggregations == 1 && aggregation->type == TS_AGG_MAX && !is_reversed) {
+            if (agg_iter_process_chunk_max_fast_path(self,
+                                                     enrichedChunk,
+                                                     aggregation,
+                                                     aggregationContext,
+                                                     aggregationTimeDelta,
+                                                     is_reversed,
+                                                     appendValue,
+                                                     &contextScope,
+                                                     &agg_n_samples,
+                                                     &si,
+                                                     &ei,
+                                                     &sample) != 0) {
+                return NULL;
+            }
+        } else {
+            if (agg_iter_process_chunk_general(self,
+                                               enrichedChunk,
+                                               aggregation,
+                                               aggregationContext,
+                                               aggregationTimeDelta,
+                                               is_reversed,
+                                               multiAgg,
+                                               appendValue,
+                                               &contextScope,
+                                               &agg_n_samples,
+                                               &si,
+                                               &sample) != 0) {
+                return NULL;
+            }
+        }
+
+        EnrichedChunk *out =
+            agg_iter_try_emit_partial(self, enrichedChunk, multiAgg, agg_n_samples);
+        if (out) {
+            return out;
+        }
+        enrichedChunk = input->GetNext(input);
+        si = 0;
+    }
+
+    return agg_iter_finalize(self, aggregationTimeDelta, is_reversed, &sample);
+}
+
 void AggregationIterator_Close(struct AbstractIterator *iterator) {
     AggregationIterator *self = (AggregationIterator *)iterator;
     iterator->input->Close(iterator->input);
-    self->aggregation->freeContext(self->aggregationContext);
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        self->aggregations[a].freeContext(self->aggregationContexts[a]);
+    }
     FreeEnrichedChunk(self->aux_chunk);
     free(iterator);
 }
