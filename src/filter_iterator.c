@@ -396,7 +396,7 @@ static inline bool finalizeBucket(Samples *samples, size_t index, AggregationIte
             return false;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
-        double twa_empty_val;
+        double twa_empty_val = 0;
         if (self->hasTwa) {
             twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
         }
@@ -606,7 +606,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
         timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
-        double twa_val;
+        double twa_val = 0;
         if (self->hasTwa) {
             twa_calc_empty_bucket_val(ta,
                                       tb,
@@ -1320,7 +1320,7 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
             return self->aux_chunk;
         }
         // For TWA, compute value using surrounding samples (same as truly empty buckets)
-        double twa_empty_val;
+        double twa_empty_val = 0;
         if (self->hasTwa) {
             twa_compute_empty_bucket_value(self, self->aggregationLastTimestamp, &twa_empty_val);
         }
