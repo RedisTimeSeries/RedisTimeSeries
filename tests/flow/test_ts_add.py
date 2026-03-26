@@ -11,7 +11,7 @@ import struct
 def test_TEMPORARY_force_failure():
     """TEMPORARY: force a test failure to verify CI artifact upload fix (MOD-14250). Remove after verification."""
     env = Env(decodeResponses=True)
-    with env.getConnectionIfNeeded() as r:
+    with env.getClusterConnectionIfNeeded() as r:
         assert r.ping() is True
         assert r.execute_command("TS.ADD", "temporary_force_failure_key", 1, 1) == 1
 
