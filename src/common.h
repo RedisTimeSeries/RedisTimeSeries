@@ -9,6 +9,8 @@ void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleStr
 int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                                                 struct RedisModuleString *prefix,
                                                 int flags);
+int (*RedisModule_EnablePostponeClients)(void);
+int (*RedisModule_DisablePostponeClients)(void);
 
 #include <stdlib.h>
 #include <string.h>

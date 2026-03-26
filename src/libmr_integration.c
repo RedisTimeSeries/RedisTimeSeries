@@ -2,6 +2,7 @@
 
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
+#include "common.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
@@ -29,6 +30,27 @@ static MRRecordType *MapRecordType = NULL;
 static MRRecordType *SlotRangesRecordType = NULL;
 static MRRecordType *SeriesListRecordType = NULL;
 static MRRecordType *StringListRecordType = NULL;
+
+static void QueryPredicates_FreeUserName(QueryPredicates_Arg *predicate_list) {
+    if (predicate_list->userName) {
+        RedisModule_FreeString(NULL, predicate_list->userName);
+        predicate_list->userName = NULL;
+    }
+}
+
+static void QueryPredicates_FreeLimitLabels(QueryPredicates_Arg *predicate_list) {
+    if (!predicate_list->limitLabels) {
+        return;
+    }
+    for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
+        if (predicate_list->limitLabels[i]) {
+            RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
+        }
+    }
+    free(predicate_list->limitLabels);
+    predicate_list->limitLabels = NULL;
+    predicate_list->limitLabelsSize = 0;
+}
 
 static Record *GetNullRecord() {
     return &NullRecord;
@@ -66,10 +88,8 @@ static void QueryPredicates_ObjectFree(void *arg) {
     }
 
     QueryPredicateList_Free(predicate_list->predicates);
-    for (int i = 0; i < predicate_list->limitLabelsSize; i++) {
-        RedisModule_FreeString(NULL, predicate_list->limitLabels[i]);
-    }
-    free(predicate_list->limitLabels);
+    QueryPredicates_FreeLimitLabels(predicate_list);
+    QueryPredicates_FreeUserName(predicate_list);
     free(predicate_list);
 }
 
@@ -145,6 +165,14 @@ static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
 
 static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
     QueryPredicates_Arg *predicate_list = arg;
+    /* Client username for ACL (empty string = default user). Retained on main thread like
+     * limitLabels. */
+    if (predicate_list->userName) {
+        SerializationCtxWriteRedisString(sctx, predicate_list->userName, error);
+    } else {
+        /* For empty string, we write a single byte of 0. */
+        MR_SerializationCtxWriteBuffer(sctx, "", 1, error);
+    }
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->predicates->count, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->withLabels, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->limitLabelsSize, error);
@@ -188,6 +216,7 @@ static RedisModuleString *SerializationCtxReadRedisString(ReaderSerializationCtx
 }
 
 static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
+    QueryPredicates_FreeUserName(predicates);
     if (predicates->predicates->list) {
         for (int i = 0; i < predicates->predicates->count; i++) {
             QueryPredicate *predicate = &predicates->predicates->list[i];
@@ -205,12 +234,7 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
         free(predicates->predicates->list);
     }
     free(predicates->predicates);
-    if (predicates->limitLabels) {
-        for (int i = 0; i < predicates->limitLabelsSize && predicates->limitLabels[i]; ++i) {
-            RedisModule_FreeString(NULL, predicates->limitLabels[i]);
-        }
-        free(predicates->limitLabels);
-    }
+    QueryPredicates_FreeLimitLabels(predicates);
     free(predicates);
 }
 
@@ -220,6 +244,8 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     QueryPredicates_Arg *predicates = calloc(1, sizeof *predicates);
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
+    /* Username from wire as stored; empty vs NULL is interpreted only in ApplyCtxUser(). */
+    predicates->userName = SerializationCtxReadRedisString(sctx, error);
     predicates->predicates = calloc(1, sizeof *predicates->predicates);
     predicates->predicates->count = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->predicates->ref = 1;
@@ -684,9 +710,36 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
+static RedisModuleUser *ApplyCtxUser(RedisModuleCtx *ctx, QueryPredicates_Arg *queryArg) {
+    size_t len = 0;
+    if (!queryArg->userName)
+        return NULL;
+    RedisModule_StringPtrLen(queryArg->userName, &len);
+    if (len == 0)
+        return NULL;
+    RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(queryArg->userName);
+    if (user) {
+        RedisModule_SetContextUser(ctx, user);
+    }
+    return user;
+}
+
+static void ReleaseCtxUser(RedisModuleCtx *ctx,
+                           QueryPredicates_Arg *queryArg,
+                           RedisModuleUser *user) {
+    if (user) {
+        RedisModule_FreeModuleUser(user);
+    }
+    if (queryArg->userName) {
+        RedisModule_FreeString(ctx, queryArg->userName);
+        queryArg->userName = NULL;
+    }
+}
+
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
 
+    RedisModuleUser *ctxUser = ApplyCtxUser(ctx, queryArg);
     MRangeArgs mrangeArgs;
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
@@ -715,6 +768,7 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
     RedisModule_FreeDict(ctx, qi);
+    ReleaseCtxUser(ctx, queryArg, ctxUser);
 }
 
 static Series *ParseSeries(const redisReply *reply) {
@@ -814,7 +868,7 @@ static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANG
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
-
+    RedisModuleUser *ctxUser = ApplyCtxUser(ctx, queryArg);
     MGetArgs mgetArgs;
     mgetArgs.withLabels = queryArg->withLabels;
     mgetArgs.numLimitLabels = queryArg->limitLabelsSize;
@@ -825,17 +879,25 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
+    if (CheckDictSeriesPermissions(
+            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        goto _cleanup;
+    }
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     long long replylen = 0;
-
     char *currentKey;
     size_t currentKeyLen;
     Series *series;
+
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status = GetSeries(
             ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
         RedisModule_FreeString(ctx, keyName);
@@ -873,9 +935,11 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     }
 
     RedisModule_ReplySetArrayLength(ctx, replylen);
-
     RedisModule_DictIteratorStop(iter);
+
+_cleanup:
     RedisModule_FreeDict(ctx, qi);
+    ReleaseCtxUser(ctx, queryArg, ctxUser);
 }
 
 static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
@@ -883,7 +947,7 @@ static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
 
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
-
+    RedisModuleUser *ctxUser = ApplyCtxUser(ctx, queryArg);
     RedisModuleDict *qi =
         QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
@@ -901,6 +965,7 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
+    ReleaseCtxUser(ctx, queryArg, ctxUser);
 }
 
 static Record *StringListReplyParser(const redisReply *reply) {
