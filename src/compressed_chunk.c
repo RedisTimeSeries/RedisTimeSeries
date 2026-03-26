@@ -272,7 +272,7 @@ static inline void decompressChunkReverse(const CompressedChunk *compressedChunk
 
     Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
     timestamp_t *timestamps_ptr = enrichedChunk->samples.timestamps + numSamples - 1;
-    double *values_ptr = enrichedChunk->samples.values + numSamples - 1;
+    double *values_ptr = enrichedChunk->samples._values + numSamples - 1;
 
     // find the first sample which is greater than start
     Compressed_ChunkIteratorGetNext(iter, &sample);
@@ -332,7 +332,7 @@ static inline void decompressChunkReverse(const CompressedChunk *compressedChunk
 
 _done:
     enrichedChunk->samples.timestamps = timestamps_ptr + 1;
-    enrichedChunk->samples.values = values_ptr + 1;
+    enrichedChunk->samples._values = values_ptr + 1;
     enrichedChunk->samples.num_samples =
         enrichedChunk->samples.og_timestamps + numSamples - enrichedChunk->samples.timestamps;
     enrichedChunk->rev = true;
@@ -359,7 +359,7 @@ static inline void decompressChunk(const CompressedChunk *compressedChunk,
 
     Compressed_Iterator *iter = Compressed_NewChunkIterator(compressedChunk);
     timestamp_t *timestamps_ptr = enrichedChunk->samples.timestamps;
-    double *values_ptr = enrichedChunk->samples.values;
+    double *values_ptr = enrichedChunk->samples._values;
 
     // find the first sample which is greater than start
     res = Compressed_ChunkIteratorGetNext(iter, &sample);

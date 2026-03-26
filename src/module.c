@@ -379,7 +379,8 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     RangeArgs minimizedArgs = args->rangeArgs;
     minimizedArgs.startTimestamp = 0;
     minimizedArgs.endTimestamp = UINT64_MAX;
-    minimizedArgs.aggregationArgs.aggregationClass = NULL;
+    minimizedArgs.aggregationArgs.numClasses = 0;
+    minimizedArgs.aggregationArgs.classes = NULL;
     minimizedArgs.aggregationArgs.timeDelta = 0;
     minimizedArgs.filterByTSArgs.hasValue = false;
     minimizedArgs.filterByValueArgs.hasValue = false;
@@ -566,6 +567,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     ReplySeriesRange(ctx, series, &rangeArgs, rev);
 
 _out:
+    free(rangeArgs.aggregationArgs.classes);
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -1045,16 +1047,21 @@ int TSDB_createRule(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     // Validate aggregation arguments
     api_timestamp_t bucketDuration;
-    int aggType;
+    int aggTypes[TS_AGG_TYPES_MAX];
+    size_t numAggTypes = 0;
     timestamp_t alignmentTS;
-    const int result =
-        _parseAggregationArgs(ctx, argv, argc, &bucketDuration, &aggType, NULL, NULL, &alignmentTS);
+    const int result = _parseAggregationArgs(
+        ctx, argv, argc, &bucketDuration, aggTypes, &numAggTypes, NULL, NULL, &alignmentTS);
     if (result == TSDB_NOTEXISTS) {
         return RedisModule_WrongArity(ctx);
     }
     if (result == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
+    if (numAggTypes != 1) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: CREATERULE requires exactly one aggregation type");
+    }
+    int aggType = aggTypes[0];
 
     RedisModuleString *srcKeyName = argv[1];
     RedisModuleString *destKeyName = argv[2];
