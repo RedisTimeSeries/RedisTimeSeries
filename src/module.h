@@ -27,13 +27,7 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
         RedisModuleUser *user = GetCurrentUser(ctx);
 
         if (!user) {
-            size_t len = 0;
-            const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
-            RedisModule_Log(ctx,
-                            "warning",
-                            "No context user set, can't check for the ACLs for key %s",
-                            currentKeyStr);
-
+            /* No user on ctx (e.g. internal/LibMR path): allow access; ACL was enforced on client. */
             return true;
         }
 

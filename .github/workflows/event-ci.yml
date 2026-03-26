@@ -24,28 +24,28 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
-  build-linux-x86:
-    uses: ./.github/workflows/flow-linux-x86.yml
-    needs: [prepare-values]
-    with:
-      os: jammy rocky9 bullseye amazonlinux2 azurelinux3
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
-    secrets: inherit
-  mariner:
-    uses: ./.github/workflows/mariner2.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: true
-    secrets: inherit
-  arm64:
-    uses: ./.github/workflows/flow-linux-arm.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-    secrets: inherit
+  # build-linux-x86:
+  #   uses: ./.github/workflows/flow-linux-x86.yml
+  #   needs: [prepare-values]
+  #   with:
+  #     os: jammy rocky9 bullseye amazonlinux2 azurelinux3
+  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+  #     quick: true
+  #   secrets: inherit
+  # mariner:
+  #   uses: ./.github/workflows/mariner2.yml
+  #   needs: [prepare-values]
+  #   with:
+  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+  #     quick: true
+  #   secrets: inherit
+  # arm64:
+  #   uses: ./.github/workflows/flow-linux-arm.yml
+  #   needs: [prepare-values]
+  #   with:
+  #     redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+  #     quick: false
+  #   secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux-x86.yml
     needs: [prepare-values]

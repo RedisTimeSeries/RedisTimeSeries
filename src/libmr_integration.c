@@ -13,6 +13,14 @@
 #include "RedisModulesSDK/redismodule.h"
 #include "rmutil/alloc.h"
 
+#include <sys/time.h>
+
+static long long currentTimeMillis(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 #define SeriesRecordName "SeriesRecord"
 
 static Record NullRecord;
@@ -508,6 +516,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardSeriesMapper");
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     SlotRangeRecord *slotRanges = NULL;
@@ -515,8 +524,10 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     CaptureOwnedSlotRanges_locked(&slotRanges, &slotRangesCount);
 
     // The permission error is ignored.
+    long long t0 = currentTimeMillis();
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+    long long t1 = currentTimeMillis();
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -571,6 +582,13 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    long long t2 = currentTimeMillis();
+    if (t2 - t0 > 500) {
+        RedisModule_Log(rts_staticCtx, "warning",
+                        "ShardSeriesMapper took %lldms (QueryIndex=%lldms, series=%lldms)",
+                        t2 - t0, t1 - t0, t2 - t1);
+    }
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardSeriesMapper");
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 
@@ -582,6 +600,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardMgetMapper");
     const char **limitLabelsStr = calloc(predicates->limitLabelsSize, sizeof(char *));
     for (int i = 0; i < predicates->limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
@@ -694,6 +713,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardMgetMapper");
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_listOrMap)->base;
 }
 
@@ -705,6 +725,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardQueryindexMapper");
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     SlotRangeRecord *slotRanges = NULL;
@@ -741,6 +762,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardQueryindexMapper");
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
 }
 

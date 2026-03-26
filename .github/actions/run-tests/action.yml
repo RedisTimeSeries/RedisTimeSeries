@@ -32,4 +32,4 @@ runs:
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        for i in $(seq 1 100); do echo "=== Run $i/100 ==="; make test TEST=test_asm:test_asm_with_data_and_queries_during_migrations VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server 2>&1 | tee -a /tmp/test_output.log; if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "=== FAILED on run $i ==="; exit 1; fi; done
