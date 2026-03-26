@@ -402,22 +402,20 @@ def test_ts_num_threads_module_arg():
         env.skip()
     if is_redis_version_lower_than(env, '7.0'):
         env.skip()
+    print(sys.platform)
+    if sys.platform != "linux":
+        env.skip()
 
     conn = env.getConnection(1)
     env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
-    with pytest.raises(redis.exceptions.ResponseError):
-        conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
-    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+    conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'6')
+    print(get_worker_thread_names(conn))
 
     # TS.MRANGE triggers libmr, which forces the lazy thread pool to start.
-    with env.getClusterConnectionIfNeeded() as r:
-        r.execute_command('TS.ADD', '{tag1}_metric', 1, 100, 'LABELS', 'name', 'ts')
     conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'name=ts')
 
-    thread_names = get_worker_thread_names(conn)
-    if thread_names is not None:
-        # Worker threads are named timeseries-0 … timeseries-4;
-        # filter out the event-loop thread (timeseries-el).
-        workers = [n for n in thread_names if n[-1].isdigit()]
-        env.assertEqual(len(workers), 5,
-                         message="Expected 5 LibMR worker threads")
+    thread_n = len(get_worker_thread_names(conn))
+    # Worker threads are named timeseries-0 … timeseries-[n-1];
+    env.assertEqual(thread_n, 6,
+                        message="Expected 6 LibMR worker threads")

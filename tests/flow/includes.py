@@ -236,7 +236,7 @@ def get_worker_thread_names(conn, prefix="timeseries-"):
             continue
         if name.startswith(prefix):
             names.append(name)
-    return sorted(names)
+    return names
 
 
 # Creates a temporary file with the content provided.
