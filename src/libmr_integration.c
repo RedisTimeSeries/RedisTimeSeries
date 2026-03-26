@@ -884,9 +884,7 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
             ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
         GetSeriesResult_PermissionError) {
         RTS_ReplyKeyPermissionsError(ctx);
-        RedisModule_FreeDict(ctx, qi);
-        ReleaseCtxUser(ctx, queryArg, ctxUser);
-        return;
+        goto _cleanup;
     }
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
@@ -937,8 +935,9 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     }
 
     RedisModule_ReplySetArrayLength(ctx, replylen);
-
     RedisModule_DictIteratorStop(iter);
+
+_cleanup:
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx, queryArg, ctxUser);
 }
