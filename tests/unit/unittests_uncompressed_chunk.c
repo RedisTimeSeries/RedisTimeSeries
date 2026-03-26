@@ -8,6 +8,7 @@
  */
 #include "chunk.h"
 #include "compaction.h"
+#include "enriched_chunk.h"
 #include "minunit.h"
 #include "parse_policies.h"
 #include "tsdb.h"
@@ -143,9 +144,66 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
     Uncompressed_FreeChunk(chunk);
 }
 
+MU_TEST(test_reverseEnrichedChunk_multi_values_per_sample) {
+    EnrichedChunk *ec = NewEnrichedChunk();
+    ec->samples.values_per_sample = 2;
+    ReallocSamplesArray(&ec->samples, 4);
+    ec->samples.num_samples = 3;
+    ec->samples.timestamps[0] = 10;
+    ec->samples.timestamps[1] = 20;
+    ec->samples.timestamps[2] = 30;
+    Samples_value_at(&ec->samples, 0, 0) = 1.0;
+    Samples_value_at(&ec->samples, 0, 1) = 2.0;
+    Samples_value_at(&ec->samples, 1, 0) = 3.0;
+    Samples_value_at(&ec->samples, 1, 1) = 4.0;
+    Samples_value_at(&ec->samples, 2, 0) = 5.0;
+    Samples_value_at(&ec->samples, 2, 1) = 6.0;
+
+    reverseEnrichedChunk(ec);
+
+    mu_assert_int_eq(30, (int)ec->samples.timestamps[0]);
+    mu_assert_int_eq(20, (int)ec->samples.timestamps[1]);
+    mu_assert_int_eq(10, (int)ec->samples.timestamps[2]);
+    mu_assert_double_eq(5.0, Samples_value_at(&ec->samples, 0, 0));
+    mu_assert_double_eq(6.0, Samples_value_at(&ec->samples, 0, 1));
+    mu_assert_double_eq(3.0, Samples_value_at(&ec->samples, 1, 0));
+    mu_assert_double_eq(4.0, Samples_value_at(&ec->samples, 1, 1));
+    mu_assert_double_eq(1.0, Samples_value_at(&ec->samples, 2, 0));
+    mu_assert_double_eq(2.0, Samples_value_at(&ec->samples, 2, 1));
+    mu_assert(ec->rev == true, "rev flag set");
+
+    FreeEnrichedChunk(ec);
+}
+
+MU_TEST(test_reverseEnrichedChunk_single_value_per_sample) {
+    EnrichedChunk *ec = NewEnrichedChunk();
+    ec->samples.values_per_sample = 1;
+    ReallocSamplesArray(&ec->samples, 4);
+    ec->samples.num_samples = 3;
+    ec->samples.timestamps[0] = 10;
+    ec->samples.timestamps[1] = 20;
+    ec->samples.timestamps[2] = 30;
+    Samples_value_at(&ec->samples, 0, 0) = 1.0;
+    Samples_value_at(&ec->samples, 1, 0) = 2.0;
+    Samples_value_at(&ec->samples, 2, 0) = 3.0;
+
+    reverseEnrichedChunk(ec);
+
+    mu_assert_int_eq(30, (int)ec->samples.timestamps[0]);
+    mu_assert_int_eq(20, (int)ec->samples.timestamps[1]);
+    mu_assert_int_eq(10, (int)ec->samples.timestamps[2]);
+    mu_assert_double_eq(3.0, Samples_value_at(&ec->samples, 0, 0));
+    mu_assert_double_eq(2.0, Samples_value_at(&ec->samples, 1, 0));
+    mu_assert_double_eq(1.0, Samples_value_at(&ec->samples, 2, 0));
+
+    FreeEnrichedChunk(ec);
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy);
+    MU_RUN_TEST(test_reverseEnrichedChunk_multi_values_per_sample);
+    MU_RUN_TEST(test_reverseEnrichedChunk_single_value_per_sample);
 }

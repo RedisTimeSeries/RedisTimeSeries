@@ -695,7 +695,8 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.aggregationArgs.empty = false;
     mrangeArgs.rangeArgs.aggregationArgs.timeDelta = 0;
     mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
-    mrangeArgs.rangeArgs.aggregationArgs.aggregationClass = NULL;
+    mrangeArgs.rangeArgs.aggregationArgs.numClasses = 0;
+    mrangeArgs.rangeArgs.aggregationArgs.classes = NULL;
     mrangeArgs.rangeArgs.filterByValueArgs.hasValue = false;
     mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
     mrangeArgs.rangeArgs.alignment = DefaultAlignment;
