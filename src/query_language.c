@@ -347,7 +347,7 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                           size_t *num_agg_types,
                           bool *empty,
                           BucketTimestamp *bucketTS,
-                          timestamp_t *alignmetTS) {
+                          timestamp_t *alignmentTS) {
     RedisModuleString *aggTypeStr = NULL;
     int offset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (offset > 0) {
@@ -431,8 +431,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
             }
         }
 
-        if (alignmetTS) {
-            if (_parseAlignmentTS(ctx, argv, argc, alignmetTS, offset) != TSDB_OK) {
+        if (alignmentTS) {
+            if (_parseAlignmentTS(ctx, argv, argc, alignmentTS, offset) != TSDB_OK) {
                 return TSDB_ERROR;
             }
         }
