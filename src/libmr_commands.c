@@ -14,7 +14,7 @@
 
 // RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
 // so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
-// since the string must survive serialization to participant shards via LibMR.
+// since the string must survive serialization to other shards via LibMR.
 static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
     const RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
     if (!userName)

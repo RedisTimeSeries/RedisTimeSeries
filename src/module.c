@@ -335,7 +335,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                       &key,
                       &series,
                       REDISMODULE_READ,
-                      GetSeriesFlags_None);
+                      GetSeriesFlags_SilentOperation);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current
             // key.
@@ -425,7 +425,7 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
         RedisModuleKey *key;
         // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_None);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
         if (status != GetSeriesResult_Success) {
             // The iterator may have been invalidated, stop and restart from after the current key.
             RedisModule_DictIteratorStop(iter);

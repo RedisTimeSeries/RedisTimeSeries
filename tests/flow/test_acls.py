@@ -228,12 +228,12 @@ POINTS_PER_SERIES = 2
 SAMPLE_DATA = [(1, 10), (2, 20)]
 MAX_KEYS_TO_TRY = 30  # try up to this many hash tags to get one key per shard
 SHARD_0, SHARD_1, SHARD_2 = 0, 1, 2
-COORD_SHARD_USER1 = SHARD_1
-COORD_SHARD_USER2 = SHARD_1
-COORD_SHARD_USER3 = SHARD_2
+MRANGE_FROM_SHARD_USER1 = SHARD_1
+MRANGE_FROM_SHARD_USER2 = SHARD_1
+MRANGE_FROM_SHARD_USER3 = SHARD_2
 USER1_EXPECTED_SERIES_COUNT = 3
 KEY_PATTERN_ALL = '*'
-# Pattern that matches no key in this test (participant still replies with empty array)
+# Pattern that matches no key in this test (shards with no matching keys still reply with empty)
 NO_MATCH_KEY_PATTERN = 'no_acl_key_*'
 
 
@@ -310,21 +310,21 @@ def test_mrange_acl_partial_then_full_3shards(env):
     set_user_on_shard(conns[SHARD_1], user3, pw3, [NO_MATCH_KEY_PATTERN])
     set_user_on_shard(conns[SHARD_2], user3, pw3, [KEY_PATTERN_ALL])
 
-    # user4: on the coordinator shard (SHARD_1) use a restricted pattern (no access to its key),
-    # full permission on the other shards. The coordinator itself should detect the NOPERM.
+    # user4: on SHARD_1 use a restricted pattern (no access to its key), full permission on
+    # the other shards. MRANGE run on SHARD_1 should get NOPERM for that shard's key.
     set_user_on_shard(conns[SHARD_0], user4, pw4, [KEY_PATTERN_ALL])
     set_user_on_shard(conns[SHARD_1], user4, pw4, [NO_MATCH_KEY_PATTERN])
     set_user_on_shard(conns[SHARD_2], user4, pw4, [KEY_PATTERN_ALL])
 
-    # Run MRANGE from a shard where the user has full key access (~*), so the coordinator
-    # passes IsCurrentUserAllowedToReadAllTheKeys and the permission restriction only applies
-    # on participant shards (which then return empty).
-    def run_mrange(coord_conn, username, password):
-        coord_conn.execute_command('AUTH', username, password)
+    # Run MRANGE using a connection where the user has full key access (~*), so
+    # IsCurrentUserAllowedToReadAllTheKeys passes on that connection's shard; stricter rules
+    # only apply on other shards (which then return empty).
+    def run_mrange(connection, username, password):
+        connection.execute_command('AUTH', username, password)
         try:
-            return coord_conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', filter_label)
+            return connection.execute_command('TS.MRANGE', '-', '+', 'FILTER', filter_label)
         finally:
-            coord_conn.execute_command('AUTH', 'default', '')
+            connection.execute_command('AUTH', 'default', '')
 
     def series_names(result):
         return [r[0] if isinstance(r[0], str) else r[0].decode() for r in result]
@@ -359,13 +359,13 @@ def test_mrange_acl_partial_then_full_3shards(env):
     print('')
     print('=== Scenario 1: user1 ===')
     print('Permissions: user1 has ~* (read all keys) on shard {}, shard {}, and shard {}.'.format(SHARD_0, SHARD_1, SHARD_2))
-    print('MRANGE is sent from coordinator shard {}. Expected: {} series (one per shard), each with {} points.'.format(
-        COORD_SHARD_USER1, USER1_EXPECTED_SERIES_COUNT, POINTS_PER_SERIES))
+    print('MRANGE runs on shard {}. Expected: {} series (one per shard), each with {} points.'.format(
+        MRANGE_FROM_SHARD_USER1, USER1_EXPECTED_SERIES_COUNT, POINTS_PER_SERIES))
     print('')
     expected_series_1 = sorted(key_per_shard)
     expected_data_1 = expected_reply(expected_series_1)
     print_mrange_format('user1', expected_data_1, 'expected')
-    res1 = run_mrange(conns[COORD_SHARD_USER1], user1, pw1)
+    res1 = run_mrange(conns[MRANGE_FROM_SHARD_USER1], user1, pw1)
     print_mrange_format('user1', res1, 'result received')
     got_count_1, got_series_1 = len(res1), sorted(series_names(res1))
     env.assertEqual(got_count_1, USER1_EXPECTED_SERIES_COUNT,
@@ -381,27 +381,27 @@ def test_mrange_acl_partial_then_full_3shards(env):
     print('=== Scenario 2: user2 ===')
     print('Permissions: user2 has ~* on shard {} and shard {}; on shard {} has ~{} (no access to key).'.format(
         SHARD_0, SHARD_1, SHARD_2, NO_MATCH_KEY_PATTERN))
-    print('MRANGE is sent from coordinator shard {}. Expected: NOPERM error (shard {} rejects the key).'.format(
-        COORD_SHARD_USER2, SHARD_2))
+    print('MRANGE runs on shard {}. Expected: NOPERM error (shard {} rejects the key).'.format(
+        MRANGE_FROM_SHARD_USER2, SHARD_2))
     print('')
     with pytest.raises(redis.exceptions.NoPermissionError):
-        run_mrange(conns[COORD_SHARD_USER2], user2, pw2)
+        run_mrange(conns[MRANGE_FROM_SHARD_USER2], user2, pw2)
 
     # ---------- Scenario 3: user3 (no permission on shards 0 and 1) ----------
     print('=== Scenario 3: user3 ===')
     print('Permissions: user3 has ~{} on shard {} and shard {} (no access to keys); ~* on shard {}.'.format(
         NO_MATCH_KEY_PATTERN, SHARD_0, SHARD_1, SHARD_2))
-    print('MRANGE is sent from coordinator shard {}. Expected: NOPERM error (shards {} and {} reject the keys).'.format(
-        COORD_SHARD_USER3, SHARD_0, SHARD_1))
+    print('MRANGE runs on shard {}. Expected: NOPERM error (shards {} and {} reject the keys).'.format(
+        MRANGE_FROM_SHARD_USER3, SHARD_0, SHARD_1))
     print('')
     with pytest.raises(redis.exceptions.NoPermissionError):
-        run_mrange(conns[COORD_SHARD_USER3], user3, pw3)
+        run_mrange(conns[MRANGE_FROM_SHARD_USER3], user3, pw3)
 
-    # ---------- Scenario 4: user4 (coordinator shard has no permission) ----------
+    # ---------- Scenario 4: user4 (no key permission on SHARD_1 where MRANGE runs) ----------
     print('=== Scenario 4: user4 ===')
-    print('Permissions: user4 has ~* on shard {} and shard {}; on coordinator shard {} has ~{} (no access to its key).'.format(
+    print('Permissions: user4 has ~* on shard {} and shard {}; on shard {} has ~{} (no access to its key).'.format(
         SHARD_0, SHARD_2, SHARD_1, NO_MATCH_KEY_PATTERN))
-    print('MRANGE is sent from coordinator shard {}. Expected: NOPERM error (coordinator rejects its own key).'.format(
+    print('MRANGE runs on shard {}. Expected: NOPERM error (that shard rejects its local key).'.format(
         SHARD_1))
     print('')
     with pytest.raises(redis.exceptions.NoPermissionError):
@@ -427,84 +427,77 @@ def test_mrange_acl_partial_then_full_3shards(env):
 
 
 @skip(onVersionLowerThan='7.4.0')
-def test_mrange_acl_coordinator_key_restriction(env):
-    """The user sends the command directly to the COORDINATOR shard, and that
-    user has a key restriction (can only access ~allowed_key*).  Both keys
-    live on the coordinator's own shard.  The coordinator should return
-    NOPERM for TS.MRANGE / TS.MREVRANGE / TS.MGET."""
+def test_mrange_acl_command_same_shard_as_keys(env):
+    """TS.MRANGE / TS.MREVRANGE / TS.MGET run on the same shard that holds the keys.
+    The user may only access ~allowed_key*; expect NOPERM."""
     if not env.isCluster() or env.shardsCount < 2:
         env.skip()
 
-    label = 'env=coord_acl_test'
+    label = 'env=mrange_acl_same_keys'
     # Use hash tag {1} so both keys land on the same shard.
     allowed_key = 'allowed_key{1}'
     blocked_key = 'blocked_key{1}'
 
-    # Find which shard owns the {1} slot — that shard will be our coordinator.
     shard0 = env.getConnection(0)
     slot = shard0.execute_command('CLUSTER', 'KEYSLOT', allowed_key)
-    coord_shard = _shard_for_slot(env, slot)
-    coord = env.getConnection(coord_shard)
+    keys_shard = _shard_for_slot(env, slot)
+    cmd_conn = env.getConnection(keys_shard)
 
     with env.getClusterConnectionIfNeeded() as r:
-        r.execute_command('TS.CREATE', allowed_key, 'LABELS', 'env', 'coord_acl_test')
-        r.execute_command('TS.CREATE', blocked_key, 'LABELS', 'env', 'coord_acl_test')
+        r.execute_command('TS.CREATE', allowed_key, 'LABELS', 'env', 'mrange_acl_same_keys')
+        r.execute_command('TS.CREATE', blocked_key, 'LABELS', 'env', 'mrange_acl_same_keys')
         r.execute_command('TS.ADD', allowed_key, 1, 100)
         r.execute_command('TS.ADD', blocked_key, 1, 200)
 
-    # Create restricted user on the coordinator shard.
-    coord.execute_command(
-        'ACL', 'SETUSER', 'restricted_coord', 'on', '>pass',
+    cmd_conn.execute_command(
+        'ACL', 'SETUSER', 'restricted_acl_mr', 'on', '>pass',
         '+@all', '~allowed_key*'
     )
 
-    # Send as restricted user from the coordinator shard.
-    coord.execute_command('AUTH', 'restricted_coord', 'pass')
+    cmd_conn.execute_command('AUTH', 'restricted_acl_mr', 'pass')
     try:
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MRANGE', '-', '+', 'FILTER', label)
+            cmd_conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', label)
 
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', label)
+            cmd_conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', label)
 
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MGET', 'FILTER', label)
+            cmd_conn.execute_command('TS.MGET', 'FILTER', label)
     finally:
-        coord.execute_command('AUTH', 'default', '')
-        coord.execute_command('ACL', 'DELUSER', 'restricted_coord')
+        cmd_conn.execute_command('AUTH', 'default', '')
+        cmd_conn.execute_command('ACL', 'DELUSER', 'restricted_acl_mr')
         with env.getClusterConnectionIfNeeded() as r:
             r.delete(allowed_key)
             r.delete(blocked_key)
 
 
 @skip(onVersionLowerThan='7.4.0')
-def test_mrange_acl_participant_key_restriction(env):
-    """Restricted key is on a PARTICIPANT shard (not the coordinator).
-    The participant detects the NOPERM and replies with an error, which
-    LibMR propagates back to the client. Expected: NOPERM error."""
+def test_mrange_acl_command_different_shard_than_keys(env):
+    """Keys live on one shard; TS.MRANGE / TS.MREVRANGE / TS.MGET use a connection to
+    another shard. The shard that holds the keys returns NOPERM; LibMR surfaces it
+    to the client."""
     if not env.isCluster() or env.shardsCount < 2:
         env.skip()
 
-    label = 'env=part_acl_test'
+    label = 'env=mrange_acl_diff_shard'
     allowed_key = 'allowed_key{1}'
     blocked_key = 'blocked_key{1}'
 
     with env.getClusterConnectionIfNeeded() as r:
-        r.execute_command('TS.CREATE', allowed_key, 'LABELS', 'env', 'part_acl_test')
-        r.execute_command('TS.CREATE', blocked_key, 'LABELS', 'env', 'part_acl_test')
+        r.execute_command('TS.CREATE', allowed_key, 'LABELS', 'env', 'mrange_acl_diff_shard')
+        r.execute_command('TS.CREATE', blocked_key, 'LABELS', 'env', 'mrange_acl_diff_shard')
         r.execute_command('TS.ADD', allowed_key, 1, 100)
         r.execute_command('TS.ADD', blocked_key, 1, 200)
 
-    # Find which shard owns the {1} slot, then pick a DIFFERENT shard as coordinator.
     shard0 = env.getConnection(0)
     slot = shard0.execute_command('CLUSTER', 'KEYSLOT', allowed_key)
-    key_shard = _shard_for_slot(env, slot)
-    coord_shard = (key_shard + 1) % env.shardsCount
-    coord = env.getConnection(coord_shard)
+    keys_shard = _shard_for_slot(env, slot)
+    cmd_shard = (keys_shard + 1) % env.shardsCount
+    cmd_conn = env.getConnection(cmd_shard)
 
-    # The user must have full permission on the coordinator shard (so
-    # IsCurrentUserAllowedToReadAllTheKeys passes), but restricted on
-    # the participant shard where the keys actually live.
+    # Same user (~allowed_key* on every shard); TS.MRANGE uses cmd_conn on cmd_shard, keys on keys_shard.
+
     for i in range(env.shardsCount):
         conn = env.getConnection(i)
         conn.execute_command(
@@ -512,18 +505,18 @@ def test_mrange_acl_participant_key_restriction(env):
             '+@all', '~allowed_key*'
         )
 
-    coord.execute_command('AUTH', 'restricted_part', 'pass')
+    cmd_conn.execute_command('AUTH', 'restricted_part', 'pass')
     try:
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MRANGE', '-', '+', 'FILTER', label)
+            cmd_conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', label)
 
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', label)
+            cmd_conn.execute_command('TS.MREVRANGE', '-', '+', 'FILTER', label)
 
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord.execute_command('TS.MGET', 'FILTER', label)
+            cmd_conn.execute_command('TS.MGET', 'FILTER', label)
     finally:
-        coord.execute_command('AUTH', 'default', '')
+        cmd_conn.execute_command('AUTH', 'default', '')
         for i in range(env.shardsCount):
             try:
                 env.getConnection(i).execute_command('ACL', 'DELUSER', 'restricted_part')
@@ -537,7 +530,8 @@ def test_mrange_acl_participant_key_restriction(env):
 @skip(onVersionLowerThan='7.4.0')
 def test_mget_acl_key_restriction(env):
     """TS.MGET with ACL key restriction should return NOPERM.
-    Tests both coordinator and participant error paths."""
+    Covers NOPERM when the command runs on the shard that holds the keys, and when
+    it runs on another shard (error from LibMR)."""
     if not env.isCluster() or env.shardsCount < 2:
         env.skip()
 
@@ -573,45 +567,45 @@ def test_mget_acl_key_restriction(env):
     print('Permissions: mget_full has ~* on all shards.')
     print('TS.MGET sent from shard {}. Expected: 2 series returned.'.format(key_shard))
     print('')
-    coord_full = env.getConnection(key_shard)
-    coord_full.execute_command('AUTH', 'mget_full', 'pass')
+    fullperm_conn = env.getConnection(key_shard)
+    fullperm_conn.execute_command('AUTH', 'mget_full', 'pass')
     try:
-        res = coord_full.execute_command('TS.MGET', 'FILTER', label)
+        res = fullperm_conn.execute_command('TS.MGET', 'FILTER', label)
         print('Result: {} series returned'.format(len(res)))
         for s in res:
             name = s[0].decode() if isinstance(s[0], bytes) else s[0]
             print('  - {}: {}'.format(name, s))
         env.assertEqual(len(res), 2, message='mget_full: expected 2 series, got {}'.format(len(res)))
     finally:
-        coord_full.execute_command('AUTH', 'default', '')
+        fullperm_conn.execute_command('AUTH', 'default', '')
 
-    # Scenario A: coordinator is the shard that owns the keys.
+    # Scenario A: TS.MGET on the shard that holds the keys.
     print('')
-    print('=== Scenario A: coordinator owns the keys (shard {}) ==='.format(key_shard))
+    print('=== Scenario A: keys on shard {} ==='.format(key_shard))
     print('Permissions: mget_restricted has ~mget_allowed* (no access to {}).'.format(blocked_key))
-    print('TS.MGET sent from coordinator shard {}. Expected: NOPERM error.'.format(key_shard))
+    print('TS.MGET runs on shard {}. Expected: NOPERM error.'.format(key_shard))
     print('')
-    coord_same = env.getConnection(key_shard)
-    coord_same.execute_command('AUTH', 'mget_restricted', 'pass')
+    restricted_keyshard_conn = env.getConnection(key_shard)
+    restricted_keyshard_conn.execute_command('AUTH', 'mget_restricted', 'pass')
     try:
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord_same.execute_command('TS.MGET', 'FILTER', label)
+            restricted_keyshard_conn.execute_command('TS.MGET', 'FILTER', label)
     finally:
-        coord_same.execute_command('AUTH', 'default', '')
+        restricted_keyshard_conn.execute_command('AUTH', 'default', '')
 
-    # Scenario B: coordinator is a different shard (participant has the keys).
+    # Scenario B: keys on key_shard; TS.MGET from another shard.
     other_shard = (key_shard + 1) % env.shardsCount
-    print('=== Scenario B: participant owns the keys (shard {}), coordinator is shard {} ==='.format(key_shard, other_shard))
+    print('=== Scenario B: keys on shard {}, TS.MGET on shard {} ==='.format(key_shard, other_shard))
     print('Permissions: mget_restricted has ~mget_allowed* (no access to {}).'.format(blocked_key))
-    print('TS.MGET sent from coordinator shard {}. Expected: NOPERM error via LibMR.'.format(other_shard))
+    print('TS.MGET runs on shard {}. Expected: NOPERM error via LibMR.'.format(other_shard))
     print('')
-    coord_other = env.getConnection(other_shard)
-    coord_other.execute_command('AUTH', 'mget_restricted', 'pass')
+    restricted_othershard_conn = env.getConnection(other_shard)
+    restricted_othershard_conn.execute_command('AUTH', 'mget_restricted', 'pass')
     try:
         with pytest.raises(redis.exceptions.NoPermissionError):
-            coord_other.execute_command('TS.MGET', 'FILTER', label)
+            restricted_othershard_conn.execute_command('TS.MGET', 'FILTER', label)
     finally:
-        coord_other.execute_command('AUTH', 'default', '')
+        restricted_othershard_conn.execute_command('AUTH', 'default', '')
 
     # Cleanup
     for i in range(env.shardsCount):
