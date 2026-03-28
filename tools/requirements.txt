@@ -3,3 +3,4 @@ gevent==1.2.1
 Flask>=0.12
 Flask-Cors==3.0.9
 python-dateutil==2.6.0
+werkzeug>=2.2.3 # not directly required, pinned by Snyk to avoid a vulnerability
