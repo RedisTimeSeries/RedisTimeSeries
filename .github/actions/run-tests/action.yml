@@ -24,12 +24,29 @@ runs:
   steps:
     - name: Run tests
       shell: bash
+      env:
+        INPUT_RUN_VALGRIND: ${{ inputs.run_valgrind }}
+        INPUT_RUN_SANITIZER: ${{ inputs.run_sanitizer }}
+        INPUT_QUICK: ${{ inputs.quick }}
+        INPUT_USE_VENV: ${{ inputs.use-venv }}
       run: |
         if command -v scl_source &> /dev/null
         then
             . scl_source enable devtoolset-11 || true
         fi
-        if [[ "${{ inputs.use-venv }}" == "1" ]]; then
+        if [[ "$INPUT_USE_VENV" == "1" ]]; then
           . venv/bin/activate
         fi
-        make test VG=${{inputs.run_valgrind}} SAN=${{inputs.run_sanitizer}} QUICK=${{inputs.quick}} REDIS_SERVER=$GITHUB_WORKSPACE/redis/src/redis-server
+        make unit_tests VG="$INPUT_RUN_VALGRIND" SAN="$INPUT_RUN_SANITIZER" QUICK="$INPUT_QUICK"
+        for i in $(seq 1 100); do
+          echo "=== Run $i/100 ==="
+          make flow_tests TEST=test_asm:test_asm_with_data_and_queries_during_migrations \
+            VG="$INPUT_RUN_VALGRIND" \
+            SAN="$INPUT_RUN_SANITIZER" \
+            OSS_CLUSTER=1 GEN=0 AOF=0 SLAVES=0 AOF_SLAVES=0 \
+            REDIS_SERVER="$GITHUB_WORKSPACE/redis/src/redis-server" 2>&1 | tee -a /tmp/test_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "=== FAILED on run $i ==="
+            exit 1
+          fi
+        done
