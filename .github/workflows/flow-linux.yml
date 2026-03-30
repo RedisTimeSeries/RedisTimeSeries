@@ -170,6 +170,8 @@ jobs:
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
             bash -c "make test \
+              TEST='test_ts_add:test_TEMPORARY_warm_up_env test_ts_add:test_TEMPORARY_force_failure_WITH_fresh_env' \
+              SLOW=1 \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
               QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
