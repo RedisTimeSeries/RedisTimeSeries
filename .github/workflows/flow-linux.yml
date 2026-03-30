@@ -170,7 +170,6 @@ jobs:
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
             bash -c "make test \
-              TEST='test_ts_add:test_TEMPORARY_warm_up_env test_ts_add:test_TEMPORARY_force_failure_WITHOUT_fresh_env' \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
               QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
@@ -182,6 +181,31 @@ jobs:
           sudo chmod -R a+rX tests || true
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
+      - name: Log file diagnostic summary
+        if: always()
+        run: |
+          echo "=== LOG FILE DIAGNOSTIC ==="
+          echo ""
+          echo "--- .log files (server logs) ---"
+          find tests/flow/logs -name '*.log' ! -name '*.valgrind.log' ! -name '*.asan.log*' 2>/dev/null | wc -l | xargs -I{} echo "Count: {}"
+          find tests/flow/logs -name '*.log' ! -name '*.valgrind.log' ! -name '*.asan.log*' -size +0c 2>/dev/null | wc -l | xargs -I{} echo "Non-empty: {}"
+          echo ""
+          echo "--- .valgrind.log files ---"
+          find tests/flow/logs -name '*.valgrind.log' 2>/dev/null | wc -l | xargs -I{} echo "Count: {}"
+          find tests/flow/logs -name '*.valgrind.log' -size +0c 2>/dev/null | wc -l | xargs -I{} echo "Non-empty: {}"
+          echo ""
+          echo "--- Unique test names in .log files ---"
+          find tests/flow/logs -name '*.log' ! -name '*.valgrind.log' ! -name '*.asan.log*' -size +0c 2>/dev/null \
+            | sed 's/.*\.\(master\|slave\)-[0-9]*-//' | sed 's/-oss.*$//' | sort -u || true
+          echo ""
+          echo "--- Unique test names in .valgrind.log files ---"
+          find tests/flow/logs -name '*.valgrind.log' 2>/dev/null \
+            | sed 's/.*\.\(master\|slave\)-[0-9]*-//' | sed 's/-oss.*$//' | sort -u || true
+          echo ""
+          echo "--- Full listing (name + size) ---"
+          find tests/flow/logs -name '*.log' ! -name '*.valgrind.log' ! -name '*.asan.log*' 2>/dev/null \
+            -exec ls -la {} \; | awk '{print $5, $NF}' | sort -k2 || true
+
       - name: Capture test results
         if: always()
         uses: ./.github/actions/capture-test-results
@@ -189,7 +213,7 @@ jobs:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
 
       - name: Upload test artifacts
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
