@@ -155,7 +155,8 @@ jobs:
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
-          quick: ${{inputs.quick && '1' || '0'}}
+          quick: '1'
+          test: test_ts_add:test_TEMPORARY_force_failure
       - name: Capture test results
         if: always()
         uses: ./.github/actions/capture-test-results
