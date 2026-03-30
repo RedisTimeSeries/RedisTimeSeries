@@ -637,7 +637,7 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregationType"
+                        "name": "aggregators"
                     },
                     {
                         "name": "bucketDuration",
@@ -732,7 +732,7 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregationType"
+                        "name": "aggregators"
                     },
                     {
                         "name": "bucketDuration",
@@ -883,7 +883,7 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregationType"
+                        "name": "aggregators"
                     },
                     {
                         "name": "bucketDuration",
@@ -1060,7 +1060,7 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregationType"
+                        "name": "aggregators"
                     },
                     {
                         "name": "bucketDuration",
