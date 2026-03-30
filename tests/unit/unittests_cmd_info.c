@@ -634,7 +634,7 @@ MU_TEST(test_mrange_aggregation_options) {
                     
                     int found_aggregator = 0;
                     for (int k = 0; agg_subargs[k].name != NULL; k++) {
-                        if (strcmp(agg_subargs[k].name, "aggregationType") == 0) {
+                        if (strcmp(agg_subargs[k].name, "aggregators") == 0) {
                             found_aggregator = 1;
                             mu_check(agg_subargs[k].type == REDISMODULE_ARG_TYPE_STRING);
                             break;
