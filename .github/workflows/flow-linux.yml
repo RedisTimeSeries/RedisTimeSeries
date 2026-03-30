@@ -170,7 +170,6 @@ jobs:
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
             bash -c "make test \
-              TEST=test_ts_add:test_TEMPORARY_force_failure \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
               QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
@@ -194,6 +193,7 @@ jobs:
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
+            test_output.log
             tests/**/*.log
 
       - name: Pack module
