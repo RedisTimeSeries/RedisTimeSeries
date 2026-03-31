@@ -291,7 +291,23 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None, cycle=
         _safe_validate(second_conn, "step4-second")
 
 
+def _wait_for_bgsave(conn, timeout, label=""):
+    """Wait for any ongoing RDB background save to finish.
+    Redis only allows one child fork at a time, so a new migration can't
+    start its RDB channel while a previous fork is still running."""
+    start = time.time()
+    while time.time() - start < timeout:
+        info = conn.execute_command("INFO", "persistence")
+        if not info.get("rdb_bgsave_in_progress", 0):
+            return
+        time.sleep(0.1)
+    raise TimeoutError(f"[{label}] rdb_bgsave_in_progress still 1 after {timeout}s")
+
+
 def import_slots(env, source_conn, target_conn, slot_range: SlotRange, label=""):
+    bgsave_timeout = 10 if not (VALGRIND or SANITIZER) else 120
+    _wait_for_bgsave(source_conn, bgsave_timeout, f"{label} source pre-import")
+    _wait_for_bgsave(target_conn, bgsave_timeout, f"{label} target pre-import")
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
     def wait_for_completion(conn, role):
