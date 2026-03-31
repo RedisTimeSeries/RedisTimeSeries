@@ -375,10 +375,12 @@ static int setModernIntegerConfigValue(const char *name,
                                        void *data,
                                        RedisModuleString **err) {
     if (!strcasecmp("ts-num-threads", name)) {
-        if (LibMR_ResizeExecutionThreadPoolIfUnstarted(value) != REDISMODULE_OK) {
-            *err = RedisModule_CreateStringPrintf(
-                NULL, "Cannot set ts-num-threads after the LibMR worker pool has started");
-            return REDISMODULE_ERR;
+        if (LibMR_IsInitialized()) {
+            if (LibMR_ResizeExecutionThreadPoolIfUnstarted(value) != REDISMODULE_OK) {
+                *err = RedisModule_CreateStringPrintf(
+                    NULL, "Cannot set ts-num-threads after the LibMR worker pool has started");
+                return REDISMODULE_ERR;
+            }
         }
 
         TSGlobalConfig.numThreads = value;
