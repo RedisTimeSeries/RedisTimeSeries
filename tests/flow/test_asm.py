@@ -95,7 +95,7 @@ def test_asm_with_data_and_queries_during_migrations():
     if VALGRIND or SANITIZER:
         for shard in range(env.shardsCount):
             c = env.getConnection(shard)
-            c.config_set("repl-timeout", 300)
+            c.config_set("repl-timeout", 3600)
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
     samples_per_key = 150
