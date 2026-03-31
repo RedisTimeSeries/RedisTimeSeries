@@ -9,6 +9,7 @@
 #include "config.h"
 
 #include "consts.h"
+#include "libmr_integration.h"
 #include "module.h"
 #include "parse_policies.h"
 #include "query_language.h"
@@ -374,6 +375,12 @@ static int setModernIntegerConfigValue(const char *name,
                                        void *data,
                                        RedisModuleString **err) {
     if (!strcasecmp("ts-num-threads", name)) {
+        if (LibMR_ResizeExecutionThreadPoolIfUnstarted(value) != REDISMODULE_OK) {
+            *err = RedisModule_CreateStringPrintf(
+                NULL, "Cannot set ts-num-threads after the LibMR worker pool has started");
+            return REDISMODULE_ERR;
+        }
+
         TSGlobalConfig.numThreads = value;
 
         return REDISMODULE_OK;
@@ -434,8 +441,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-num-threads",
                                           TSGlobalConfig.numThreads,
-                                          REDISMODULE_CONFIG_IMMUTABLE |
-                                              REDISMODULE_CONFIG_UNPREFIXED,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
                                           NUM_THREADS_MIN,
                                           NUM_THREADS_MAX,
                                           getModernIntegerConfigValue,

@@ -1,4 +1,7 @@
 import os
+import re
+import shutil
+import subprocess
 import sys
 from logging import exception
 from RLTest import Env as rltestEnv, Defaults
@@ -208,20 +211,8 @@ def is_line_in_server_log(env, line):
                 return True
     return False
 
-def get_worker_thread_names(conn, prefix="timeseries-"):
-    """Return the list of LibMR worker thread names for a Redis server process.
 
-    *conn* is an open Redis connection to the instance to inspect.
-    Reads /proc/<pid>/task/*/comm to discover thread names that start with
-    *prefix*.  Only works on Linux; returns None on other platforms so the
-    caller can skip the assertion.
-    """
-    if sys.platform != "linux":
-        return None
-
-    info = conn.info("server")
-    pid = info["process_id"]
-
+def _get_worker_thread_names_linux(pid, prefix):
     task_dir = f"/proc/{pid}/task"
     if not os.path.isdir(task_dir):
         return None
@@ -237,6 +228,46 @@ def get_worker_thread_names(conn, prefix="timeseries-"):
         if name.startswith(prefix):
             names.append(name)
     return names
+
+def _get_worker_thread_names_darwin_sample(pid, prefix):
+    """Use /usr/bin/sample (1s) to read pthread names; returns None if sampling fails."""
+    sample_bin = shutil.which("sample")
+    if not sample_bin:
+        return None
+    r = subprocess.run(
+        [sample_bin, str(pid), "1"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return None
+    text = r.stdout or ""
+    # e.g. "    873 Thread_4791505: timeseries-5"
+    pat = re.compile(r"Thread_\d+:\s*(" + re.escape(prefix) + r"\d+)")
+    found = pat.findall(text)
+    return list(dict.fromkeys(found))
+
+
+def get_worker_thread_names(conn, prefix="timeseries-"):
+    """Return the list of LibMR worker thread names for a Redis server process.
+
+    *conn* is an open Redis connection to the instance to inspect.
+    On Linux, reads /proc/<pid>/task/*/comm. On macOS, runs ``sample`` for one
+    second and parses its stdout (requires ``/usr/bin/sample``).
+    Only includes numbered pool threads (*prefix* + digits), not e.g.
+    *prefix* + ``el``. Returns None if thread names cannot be read.
+    """
+    info = conn.info("server")
+    pid = info["process_id"]
+
+    if sys.platform == "linux":
+        return _get_worker_thread_names_linux(pid, prefix)
+
+    if sys.platform == "darwin":
+        return _get_worker_thread_names_darwin_sample(pid, prefix)
+
+    return None
 
 
 # Creates a temporary file with the content provided.

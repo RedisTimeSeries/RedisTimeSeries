@@ -918,6 +918,10 @@ static Record *StringListReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
                                                         .replyParser = StringListReplyParser };
 
+int LibMR_ResizeExecutionThreadPoolIfUnstarted(long long numThreads) {
+    return MR_ResizeExecutionThreadPoolIfUnstarted(numThreads);
+}
+
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
