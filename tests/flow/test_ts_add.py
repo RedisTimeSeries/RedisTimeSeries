@@ -8,29 +8,6 @@ from includes import *
 import random 
 import struct
 
-def test_TEMPORARY_warm_up_env():
-    """TEMPORARY: passing test that creates the env so the next test can reuse it."""
-    env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.ping() is True
-        assert r.execute_command("TS.ADD", "warmup_key", 1, 1) == 1
-
-def test_TEMPORARY_force_failure_WITH_fresh_env():
-    """TEMPORARY: fail with freshEnv=True to check if .log file appears in artifact."""
-    env = Env(decodeResponses=True, freshEnv=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.ping() is True
-        assert r.execute_command("TS.ADD", "fresh_env_key", 1, 1) == 1
-    assert False, "intentional failure: freshEnv=True - expect .log file in artifact"
-
-def test_TEMPORARY_force_failure_WITHOUT_fresh_env():
-    """TEMPORARY: fail without freshEnv to check if .log file is missing from artifact."""
-    env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.ping() is True
-        assert r.execute_command("TS.ADD", "no_fresh_env_key", 1, 1) == 1
-    assert False, "intentional failure: freshEnv=False - expect NO .log file in artifact"
-
 def test_add_different_slot_range():
     env = Env(decodeResponses=True)
     if not env.isCluster():
