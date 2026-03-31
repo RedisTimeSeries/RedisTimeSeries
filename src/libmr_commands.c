@@ -29,18 +29,23 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
         return false;
 
     RedisModule_Log(rctx, "warning", "got libmr error:");
-    bool max_idle_reached = false;
+    bool max_idle_reached = false, cluster_topology_changed = false;
     for (size_t i = 0; i < len; ++i) {
-        RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
-        if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
+        const char *execution_error = MR_ExecutionCtxGetError(eCtx, i);
+        RedisModule_Log(rctx, "warning", "%s", execution_error);
+        if (strcmp("execution max idle reached", execution_error) == 0)
             max_idle_reached = true;
-        }
+        if (strcmp("cluster topology changed", execution_error) == 0)
+            cluster_topology_changed = true;
     }
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
                                    "A multi-keys command failed because at least one shard "
                                    "did not reply within the given timeframe.");
+    } else if (cluster_topology_changed) {
+        RedisModule_ReplyWithError(rctx,
+                                   "A multi-shard command failed because the cluster topology has changed");
     } else {
         char buf[512] = { 0 };
         const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
