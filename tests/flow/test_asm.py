@@ -1,3 +1,5 @@
+import os
+import signal
 import time
 import random
 from dataclasses import dataclass
@@ -6,6 +8,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 import redis
+import psutil
 
 from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
@@ -77,13 +80,19 @@ def test_asm_with_data_and_queries_during_migrations():
                 break
             migrate_slots_back_and_forth(env, command, validate_result)
 
+    overall_timeout = MIGRATION_CYCLES * (10 if not (VALGRIND or SANITIZER) else 620)
     with ThreadPoolExecutor() as executor:
-        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        for future in as_completed(futures):
-            # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+        futures = list(map(executor.submit, [validate_command_in_a_loop, migrate_slots]))
+        try:
+            for future in as_completed(futures, timeout=overall_timeout):
+                done.set()
+                future.result()
+        except TimeoutError:
             done.set()
-            # This will raise an exception in case the validation function failed (or got stuck)
-            future.result()
+            _send_sigalrm_to_all_shards(env)
+            raise TimeoutError(
+                f"test_asm_with_data_and_queries_during_migrations hung for {overall_timeout} seconds"
+            )
 
     # Validate that all is fine after the migrations
     validate_result(conn.execute_command(command))
@@ -192,28 +201,28 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None):
     middle_of_original_first = middle_slot_range(original_first_slot_range)
     middle_of_original_second = middle_slot_range(original_second_slot_range)
 
-    import_slots(second_conn, first_conn, middle_of_original_second)
+    import_slots(env, second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
     if command is not None:
         validate_result(first_conn.execute_command(command))
         validate_result(second_conn.execute_command(command))
 
-    import_slots(first_conn, second_conn, middle_of_original_second)
+    import_slots(env, first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
         validate_result(first_conn.execute_command(command))
         validate_result(second_conn.execute_command(command))
 
-    import_slots(first_conn, second_conn, middle_of_original_first)
+    import_slots(env, first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
     if command is not None:
         validate_result(first_conn.execute_command(command))
         validate_result(second_conn.execute_command(command))
 
-    import_slots(second_conn, first_conn, middle_of_original_first)
+    import_slots(env, second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
@@ -221,7 +230,30 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None):
         validate_result(second_conn.execute_command(command))
 
 
-def import_slots(source_conn, target_conn, slot_range: SlotRange):
+def _send_sigalrm_to_all_shards(env):
+    """Send SIGALRM to all shard processes and their children to capture stacktraces in Redis logs."""
+    for shard_idx, shard in enumerate(env.envRunner.shards):
+        pid = shard.getPid('master')
+        try:
+            parent = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            print(f"Shard {shard_idx} master process (pid={pid}) no longer exists")
+            continue
+
+        children = parent.children(recursive=True)
+        all_pids = [parent] + children
+        for proc in all_pids:
+            try:
+                role = "child" if proc.pid != pid else "master"
+                print(f"Sending SIGALRM to shard {shard_idx} {role} process (pid={proc.pid})")
+                os.kill(proc.pid, signal.SIGALRM)
+            except (ProcessLookupError, psutil.NoSuchProcess):
+                pass
+
+    time.sleep(1)
+
+
+def import_slots(env, source_conn, target_conn, slot_range: SlotRange):
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
     def wait_for_completion(conn):
@@ -237,6 +269,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
                 break
             time.sleep(0.1)
         else:
+            _send_sigalrm_to_all_shards(env)
             raise TimeoutError(
                 f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
             )
