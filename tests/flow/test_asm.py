@@ -38,8 +38,13 @@ def test_asm_with_data_and_queries_during_migrations():
     if env.env != "oss-cluster":
         env.skip()
 
-    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
-    samples_per_key = 150
+    if VALGRIND or SANITIZER:
+        for shard in range(env.shardsCount):
+            c = env.getConnection(shard)
+            c.config_set("repl-timeout", 3600)
+
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 50
+    samples_per_key = 150 if not (VALGRIND or SANITIZER) else 50
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
@@ -61,6 +66,7 @@ def test_asm_with_data_and_queries_during_migrations():
     def validate_command_in_a_loop():
         # Note: should be the same as in libmr_commands.c
         SLOT_RANGES_ERROR = "Query requires unavailable slots"
+        poll_interval = 0.1 if (VALGRIND or SANITIZER) else 0
         while not done.is_set():
             try:
                 result = conn.execute_command(command)
@@ -70,9 +76,13 @@ def test_asm_with_data_and_queries_during_migrations():
                 assert error_message == SLOT_RANGES_ERROR, error_message
                 continue
             validate_result(result)
+            if poll_interval:
+                time.sleep(poll_interval)
+
+    cycles = 3 if (VALGRIND or SANITIZER) else MIGRATION_CYCLES
 
     def migrate_slots():
-        for _ in range(MIGRATION_CYCLES):
+        for _ in range(cycles):
             if done.is_set():
                 break
             migrate_slots_back_and_forth(env, command, validate_result)
@@ -221,7 +231,25 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None):
         validate_result(second_conn.execute_command(command))
 
 
+def _wait_for_bgsave(conn, timeout):
+    """Wait for any ongoing RDB background save to finish.
+    Redis only allows one child fork at a time, so a new migration can't
+    start its RDB channel while a previous fork is still running."""
+    start = time.time()
+    while time.time() - start < timeout:
+        info = conn.execute_command("INFO", "persistence")
+        if not info.get("rdb_bgsave_in_progress", 0):
+            return
+        time.sleep(0.1)
+    raise TimeoutError(f"rdb_bgsave_in_progress still 1 after {timeout}s")
+
+
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    if VALGRIND or SANITIZER:
+        bgsave_timeout = 120
+        _wait_for_bgsave(source_conn, bgsave_timeout)
+        _wait_for_bgsave(target_conn, bgsave_timeout)
+
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
     def wait_for_completion(conn):
@@ -229,7 +257,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 360)
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
             migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
