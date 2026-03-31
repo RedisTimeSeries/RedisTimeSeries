@@ -225,7 +225,7 @@ def _get_worker_thread_names_linux(pid, prefix):
                 name = f.read().strip()
         except OSError:
             continue
-        if name.startswith(prefix):
+        if re.fullmatch(re.escape(prefix) + r"\d+", name):
             names.append(name)
     return names
 
