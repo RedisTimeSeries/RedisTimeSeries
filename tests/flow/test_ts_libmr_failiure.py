@@ -1,5 +1,6 @@
 # import pytest
 # import redis
+import os
 import random
 from threading import Thread
 import time
@@ -127,3 +128,30 @@ def testLibmr_client_disconnect():
         # make sure we did not crash
         r.ping()
         r.close()
+
+
+# Must match src/libmr_commands.c (check_and_reply_on_error) after MOD-14439 / PR #1930.
+TOPOLOGY_CHANGED_USER_ERR = (
+    "A multi-shard command failed because the cluster topology has changed"
+)
+
+
+def test_mod_14439_topology_error_mapped_in_libmr_commands():
+    """
+    Regression guard for MOD-14439 / PR #1930: map LibMR's \"cluster topology changed\" to a stable
+    client error. Runs on every topology (standalone, cluster, etc.).
+
+    Note: A live cluster race (TS.MRANGE concurrent with timeseries.REFRESHCLUSTER on the initiator
+    shard) was tried but reproducibly crashes Redis (SIGSEGV in MR_ClusterExecuteInternalCommands ->
+    TS_INTERNAL_SLOT_RANGES) when LibMR frees cluster state while internal-command steps are still
+    running. A safe end-to-end race test needs additional hardening in TS/LibMR before it can run in CI.
+    """
+    env = Env()
+    cpath = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "src", "libmr_commands.c")
+    )
+    with open(cpath, "r", encoding="utf-8") as f:
+        src = f.read()
+    env.assertContains("cluster topology changed", src)
+    env.assertContains("cluster_topology_changed", src)
+    env.assertContains(TOPOLOGY_CHANGED_USER_ERR, src)
