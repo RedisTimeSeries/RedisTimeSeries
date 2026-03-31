@@ -81,18 +81,18 @@ def test_asm_with_data_and_queries_during_migrations():
             migrate_slots_back_and_forth(env, command, validate_result)
 
     overall_timeout = MIGRATION_CYCLES * (10 if not (VALGRIND or SANITIZER) else 620)
-    with ThreadPoolExecutor() as executor:
-        futures = list(map(executor.submit, [validate_command_in_a_loop, migrate_slots]))
-        try:
-            for future in as_completed(futures, timeout=overall_timeout):
-                done.set()
-                future.result()
-        except TimeoutError:
+    executor = ThreadPoolExecutor()
+    futures = list(map(executor.submit, [validate_command_in_a_loop, migrate_slots]))
+    try:
+        for future in as_completed(futures, timeout=overall_timeout):
             done.set()
-            _send_sigalrm_to_all_shards(env)
-            raise TimeoutError(
-                f"test_asm_with_data_and_queries_during_migrations hung for {overall_timeout} seconds"
-            )
+            future.result()
+    except TimeoutError:
+        done.set()
+        _send_sigalrm_to_all_shards(env)
+        raise
+    finally:
+        executor.shutdown(wait=False)
 
     # Validate that all is fine after the migrations
     validate_result(conn.execute_command(command))

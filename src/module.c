@@ -1569,43 +1569,41 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
     switch (subevent) {
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_STARTED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM import started (subevent=%" PRIu64
-                            "), isAsmImporting was %d",
-                            subevent,
-                            isAsmImporting);
+                            "notice",
+                            "Cluster ASM import started (subevent=%" PRIu64 ") received.",
+                            subevent);
             isAsmImporting = true;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_FAILED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM import FAILED (subevent=%" PRIu64 ")",
+                            "notice",
+                            "Cluster ASM import failed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_COMPLETED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM import completed (subevent=%" PRIu64 ")",
+                            "notice",
+                            "Cluster ASM import completed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_STARTED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM migrate started (subevent=%" PRIu64 ")",
+                            "notice",
+                            "Cluster ASM migrate started (subevent=%" PRIu64 ") received.",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_FAILED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM migrate FAILED (subevent=%" PRIu64 ")",
+                            "notice",
+                            "Cluster ASM migrate failed (subevent=%" PRIu64 ") received.",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_COMPLETED:
             RedisModule_Log(ctx,
-                            "warning",
-                            "Cluster ASM migrate completed (subevent=%" PRIu64 ")",
+                            "notice",
+                            "Cluster ASM migrate completed (subevent=%" PRIu64 ") received.",
                             subevent);
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_MODULE_PROPAGATE:
@@ -1707,40 +1705,6 @@ void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
         RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS);
         RedisModule_Log(ctx, "notice", "Enabled diskless replication");
     }
-}
-
-/* Log each public ts.* command at enter/exit (notice). For blocking handlers, "end" is return from
- * the C function, not when the client receives the final reply. */
-#define RTS_DEFINE_TRACED(inner, cmd_lit)                                                          \
-    static int RTS_traced_##inner(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {     \
-        RedisModule_Log(ctx, "notice", "RTS cmd begin %s", (cmd_lit));                            \
-        const int _rts_tr = inner(ctx, argv, argc);                                                \
-        RedisModule_Log(ctx, "notice", "RTS cmd end %s ret=%d", (cmd_lit), _rts_tr);               \
-        return _rts_tr;                                                                            \
-    }
-
-RTS_DEFINE_TRACED(TSDB_create, "ts.create")
-RTS_DEFINE_TRACED(TSDB_alter, "ts.alter")
-RTS_DEFINE_TRACED(TSDB_createRule, "ts.createrule")
-RTS_DEFINE_TRACED(TSDB_deleteRule, "ts.deleterule")
-RTS_DEFINE_TRACED(TSDB_add, "ts.add")
-RTS_DEFINE_TRACED(TSDB_incrby, "ts.incrby")
-RTS_DEFINE_TRACED(TSDB_range, "ts.range")
-RTS_DEFINE_TRACED(TSDB_revrange, "ts.revrange")
-RTS_DEFINE_TRACED(TSDB_queryindex, "ts.queryindex")
-RTS_DEFINE_TRACED(TSDB_madd, "ts.madd")
-RTS_DEFINE_TRACED(TSDB_mrange, "ts.mrange")
-RTS_DEFINE_TRACED(TSDB_mrevrange, "ts.mrevrange")
-RTS_DEFINE_TRACED(TSDB_mget, "ts.mget")
-RTS_DEFINE_TRACED(TSDB_info, "ts.info")
-RTS_DEFINE_TRACED(TSDB_get, "ts.get")
-RTS_DEFINE_TRACED(TSDB_delete, "ts.del")
-
-static int RTS_traced_TSDB_decrby_cmd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_Log(ctx, "notice", "RTS cmd begin %s", "ts.decrby");
-    const int _rts_tr = TSDB_incrby(ctx, argv, argc);
-    RedisModule_Log(ctx, "notice", "RTS cmd end %s ret=%d", "ts.decrby", _rts_tr);
-    return _rts_tr;
 }
 
 __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
@@ -1896,17 +1860,17 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     }
 
-    RegisterCommandWithModesAndAcls(ctx, "ts.create", RTS_traced_TSDB_create, "write deny-oom", "write fast");
-    RegisterCommandWithModesAndAcls(ctx, "ts.alter", RTS_traced_TSDB_alter, "write deny-oom", "write");
-    RegisterCommandWithModesAndAcls(ctx, "ts.createrule", RTS_traced_TSDB_createRule, "write fast", "write");
-    RegisterCommandWithModesAndAcls(ctx, "ts.deleterule", RTS_traced_TSDB_deleteRule, "write", "write fast");
-    RegisterCommandWithModesAndAcls(ctx, "ts.add", RTS_traced_TSDB_add, "write deny-oom", "write");
-    RegisterCommandWithModesAndAcls(ctx, "ts.incrby", RTS_traced_TSDB_incrby, "write deny-oom", "write");
-    RegisterCommandWithModesAndAcls(ctx, "ts.decrby", RTS_traced_TSDB_decrby_cmd, "write deny-oom", "write");
-    RegisterCommandWithModesAndAcls(ctx, "ts.range", RTS_traced_TSDB_range, "readonly", "read");
-    RegisterCommandWithModesAndAcls(ctx, "ts.revrange", RTS_traced_TSDB_revrange, "readonly", "read");
+    RegisterCommandWithModesAndAcls(ctx, "ts.create", TSDB_create, "write deny-oom", "write fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.alter", TSDB_alter, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.createrule", TSDB_createRule, "write fast", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.deleterule", TSDB_deleteRule, "write", "write fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.add", TSDB_add, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.incrby", TSDB_incrby, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.decrby", TSDB_incrby, "write deny-oom", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.range", TSDB_range, "readonly", "read");
+    RegisterCommandWithModesAndAcls(ctx, "ts.revrange", TSDB_revrange, "readonly", "read");
 
-    if (RedisModule_CreateCommand(ctx, "ts.queryindex", RTS_traced_TSDB_queryindex, "readonly", 0, 0, -1) ==
+    if (RedisModule_CreateCommand(ctx, "ts.queryindex", TSDB_queryindex, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
@@ -1915,11 +1879,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.queryindex", "read");
 
-    RegisterCommandWithModesAndAcls(ctx, "ts.info", RTS_traced_TSDB_info, "readonly", "read fast");
-    RegisterCommandWithModesAndAcls(ctx, "ts.get", RTS_traced_TSDB_get, "readonly", "read fast");
-    RegisterCommandWithModesAndAcls(ctx, "ts.del", RTS_traced_TSDB_delete, "write", "write");
+    RegisterCommandWithModesAndAcls(ctx, "ts.info", TSDB_info, "readonly", "read fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.get", TSDB_get, "readonly", "read fast");
+    RegisterCommandWithModesAndAcls(ctx, "ts.del", TSDB_delete, "write", "write");
 
-    if (RedisModule_CreateCommand(ctx, "ts.madd", RTS_traced_TSDB_madd, "write deny-oom", 1, -1, 3) ==
+    if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
@@ -1928,7 +1892,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.madd", "write");
 
-    if (RedisModule_CreateCommand(ctx, "ts.mrange", RTS_traced_TSDB_mrange, "readonly", 0, 0, -1) ==
+    if (RedisModule_CreateCommand(ctx, "ts.mrange", TSDB_mrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
@@ -1937,7 +1901,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.mrange", "read");
 
-    if (RedisModule_CreateCommand(ctx, "ts.mrevrange", RTS_traced_TSDB_mrevrange, "readonly", 0, 0, -1) ==
+    if (RedisModule_CreateCommand(ctx, "ts.mrevrange", TSDB_mrevrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
@@ -1946,7 +1910,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.mrevrange", "read");
 
-    if (RedisModule_CreateCommand(ctx, "ts.mget", RTS_traced_TSDB_mget, "readonly", 0, 0, -1) ==
+    if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
