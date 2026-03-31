@@ -97,8 +97,8 @@ def test_asm_with_data_and_queries_during_migrations():
             c = env.getConnection(shard)
             c.config_set("repl-timeout", 3600)
 
-    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
-    samples_per_key = 150
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 50
+    samples_per_key = 150 if not (VALGRIND or SANITIZER) else 50
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
@@ -124,6 +124,7 @@ def test_asm_with_data_and_queries_during_migrations():
     def validate_command_in_a_loop():
         # Note: should be the same as in libmr_commands.c
         SLOT_RANGES_ERROR = "Query requires unavailable slots"
+        poll_interval = 0.1 if (VALGRIND or SANITIZER) else 0
         while not done.is_set():
             try:
                 result = conn.execute_command(command)
@@ -134,9 +135,13 @@ def test_asm_with_data_and_queries_during_migrations():
                 assert error_message == SLOT_RANGES_ERROR, error_message
                 continue
             validate_result(result)
+            if poll_interval:
+                time.sleep(poll_interval)
+
+    cycles = 3 if (VALGRIND or SANITIZER) else MIGRATION_CYCLES
 
     def migrate_slots():
-        for cycle in range(MIGRATION_CYCLES):
+        for cycle in range(cycles):
             if done.is_set():
                 break
             migrate_slots_back_and_forth(env, command, validate_result, cycle=cycle)
