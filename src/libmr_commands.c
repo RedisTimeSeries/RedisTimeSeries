@@ -44,8 +44,8 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
                                    "A multi-keys command failed because at least one shard "
                                    "did not reply within the given timeframe.");
     } else if (cluster_topology_changed) {
-        RedisModule_ReplyWithError(rctx,
-                                   "A multi-shard command failed because the cluster topology has changed");
+        RedisModule_ReplyWithError(
+            rctx, "A multi-shard command failed because the cluster topology has changed");
     } else {
         char buf[512] = { 0 };
         const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
