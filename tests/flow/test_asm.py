@@ -92,6 +92,11 @@ def test_asm_with_data_and_queries_during_migrations():
     if env.env != "oss-cluster":
         env.skip()
 
+    if VALGRIND or SANITIZER:
+        for shard in range(env.shardsCount):
+            c = env.getConnection(shard)
+            c.config_set("repl-timeout", 300)
+
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
     samples_per_key = 150
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
@@ -315,7 +320,7 @@ def import_slots(env, source_conn, target_conn, slot_range: SlotRange, label="")
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 360)
         last_state = None
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
