@@ -1,8 +1,5 @@
 import time
 import random
-import sys
-import os
-import traceback
 from dataclasses import dataclass
 import re
 import threading
@@ -15,57 +12,6 @@ from utils import slot_table
 
 
 MIGRATION_CYCLES = 10
-
-
-def _dump_diagnostics(env, context="unknown"):
-    """Dump comprehensive diagnostics from all shards to help debug CI failures."""
-    print(f"\n{'='*80}", file=sys.stderr)
-    print(f"DIAGNOSTICS DUMP — context: {context}", file=sys.stderr)
-    print(f"{'='*80}", file=sys.stderr)
-    for shard in range(env.shardsCount):
-        conn = env.getConnection(shard)
-        port = conn.connection_pool.connection_kwargs.get('port', '?')
-        print(f"\n--- Shard {shard} (port {port}) ---", file=sys.stderr)
-        try:
-            print(f"CLUSTER NODES:\n{conn.execute_command('CLUSTER', 'NODES')}", file=sys.stderr)
-        except Exception as e:
-            print(f"  CLUSTER NODES failed: {e}", file=sys.stderr)
-        try:
-            statuses = conn.execute_command("CLUSTER", "MIGRATION", "STATUS")
-            print(f"CLUSTER MIGRATION STATUS: {statuses}", file=sys.stderr)
-        except Exception as e:
-            print(f"  CLUSTER MIGRATION STATUS failed: {e}", file=sys.stderr)
-        try:
-            info = conn.execute_command("INFO", "server")
-            for key in ("redis_version", "process_id", "uptime_in_seconds",
-                        "tcp_port", "executable"):
-                if key in info:
-                    print(f"  {key}: {info[key]}", file=sys.stderr)
-        except Exception as e:
-            print(f"  INFO server failed: {e}", file=sys.stderr)
-        try:
-            info = conn.execute_command("INFO", "replication")
-            for key in ("role", "connected_slaves", "master_failover_state",
-                        "rdb_bgsave_in_progress", "rdb_last_bgsave_status"):
-                if key in info:
-                    print(f"  {key}: {info[key]}", file=sys.stderr)
-        except Exception as e:
-            print(f"  INFO replication failed: {e}", file=sys.stderr)
-        try:
-            info = conn.execute_command("INFO", "persistence")
-            for key in ("rdb_bgsave_in_progress", "rdb_last_bgsave_status",
-                        "rdb_last_bgsave_time_sec", "aof_rewrite_in_progress",
-                        "rdb_last_cow_size", "current_fork_perc"):
-                if key in info:
-                    print(f"  {key}: {info[key]}", file=sys.stderr)
-        except Exception as e:
-            print(f"  INFO persistence failed: {e}", file=sys.stderr)
-        try:
-            clients = conn.execute_command("CLIENT", "LIST")
-            print(f"CLIENT LIST:\n{clients}", file=sys.stderr)
-        except Exception as e:
-            print(f"  CLIENT LIST failed: {e}", file=sys.stderr)
-    print(f"{'='*80}\n", file=sys.stderr)
 
 
 def test_asm_without_data():
@@ -112,11 +58,7 @@ def test_asm_with_data_and_queries_during_migrations():
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     # First validate the result on the "static" cluster
-    try:
-        validate_result(conn.execute_command(command))
-    except Exception:
-        _dump_diagnostics(env, "initial static validation FAILED")
-        raise
+    validate_result(conn.execute_command(command))
 
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
@@ -130,8 +72,7 @@ def test_asm_with_data_and_queries_during_migrations():
                 result = conn.execute_command(command)
             except redis.exceptions.ResponseError as x:
                 error_message = str(x)
-                if error_message != SLOT_RANGES_ERROR:
-                    _dump_diagnostics(env, f"validation loop unexpected error: {error_message}")
+                # An occasional SLOT_RANGES_ERROR is expected
                 assert error_message == SLOT_RANGES_ERROR, error_message
                 continue
             validate_result(result)
@@ -141,10 +82,10 @@ def test_asm_with_data_and_queries_during_migrations():
     cycles = 3 if (VALGRIND or SANITIZER) else MIGRATION_CYCLES
 
     def migrate_slots():
-        for cycle in range(cycles):
+        for _ in range(cycles):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, command, validate_result, cycle=cycle)
+            migrate_slots_back_and_forth(env, command, validate_result)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
@@ -155,11 +96,7 @@ def test_asm_with_data_and_queries_during_migrations():
             future.result()
 
     # Validate that all is fine after the migrations
-    try:
-        validate_result(conn.execute_command(command))
-    except Exception:
-        _dump_diagnostics(env, "post-migration validation FAILED")
-        raise
+    validate_result(conn.execute_command(command))
 
 
 # Helper structs and functions
@@ -237,7 +174,7 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
             rc.execute_command(*command.split())
 
 
-def migrate_slots_back_and_forth(env, command=None, validate_result=None, cycle=None):
+def migrate_slots_back_and_forth(env, command=None, validate_result=None):
     """
     Migrates slots between the two shards. When done all slots are back to their original places.
     Upon each migration, the command is executed and the result is validated (when not None).
@@ -258,13 +195,6 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None, cycle=
         middle = middle_slot_range(slot_range)
         return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
 
-    def _safe_validate(conn, step_label):
-        try:
-            validate_result(conn.execute_command(command))
-        except Exception:
-            _dump_diagnostics(env, f"post-import validation FAILED at {step_label} (cycle={cycle})")
-            raise
-
     first_conn, second_conn = env.getConnection(0), env.getConnection(1)
     # Store some original values to be used throughout the test
     (original_first_slot_range,) = cluster_node_of(first_conn).slots
@@ -272,36 +202,36 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None, cycle=
     middle_of_original_first = middle_slot_range(original_first_slot_range)
     middle_of_original_second = middle_slot_range(original_second_slot_range)
 
-    import_slots(env, second_conn, first_conn, middle_of_original_second, label=f"cycle={cycle} step=1")
+    import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
     if command is not None:
-        _safe_validate(first_conn, "step1-first")
-        _safe_validate(second_conn, "step1-second")
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
-    import_slots(env, first_conn, second_conn, middle_of_original_second, label=f"cycle={cycle} step=2")
+    import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
-        _safe_validate(first_conn, "step2-first")
-        _safe_validate(second_conn, "step2-second")
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
-    import_slots(env, first_conn, second_conn, middle_of_original_first, label=f"cycle={cycle} step=3")
+    import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
     if command is not None:
-        _safe_validate(first_conn, "step3-first")
-        _safe_validate(second_conn, "step3-second")
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
-    import_slots(env, second_conn, first_conn, middle_of_original_first, label=f"cycle={cycle} step=4")
+    import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
-        _safe_validate(first_conn, "step4-first")
-        _safe_validate(second_conn, "step4-second")
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
 
-def _wait_for_bgsave(conn, timeout, label=""):
+def _wait_for_bgsave(conn, timeout):
     """Wait for any ongoing RDB background save to finish.
     Redis only allows one child fork at a time, so a new migration can't
     start its RDB channel while a previous fork is still running."""
@@ -311,44 +241,35 @@ def _wait_for_bgsave(conn, timeout, label=""):
         if not info.get("rdb_bgsave_in_progress", 0):
             return
         time.sleep(0.1)
-    raise TimeoutError(f"[{label}] rdb_bgsave_in_progress still 1 after {timeout}s")
+    raise TimeoutError(f"rdb_bgsave_in_progress still 1 after {timeout}s")
 
 
-def import_slots(env, source_conn, target_conn, slot_range: SlotRange, label=""):
-    bgsave_timeout = 10 if not (VALGRIND or SANITIZER) else 120
-    _wait_for_bgsave(source_conn, bgsave_timeout, f"{label} source pre-import")
-    _wait_for_bgsave(target_conn, bgsave_timeout, f"{label} target pre-import")
+def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    if VALGRIND or SANITIZER:
+        bgsave_timeout = 120
+        _wait_for_bgsave(source_conn, bgsave_timeout)
+        _wait_for_bgsave(target_conn, bgsave_timeout)
+
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
-    def wait_for_completion(conn, role):
+    def wait_for_completion(conn):
         start_time = time.time()
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
         timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 360)
-        last_state = None
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
             migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
             if migration_status["state"] == "completed":
                 break
-            if migration_status["state"] != last_state:
-                elapsed = time.time() - start_time
-                print(f"  [{label}] {role} migration {task_id}: "
-                      f"state={migration_status['state']} (after {elapsed:.1f}s), "
-                      f"full_status={migration_status}",
-                      file=sys.stderr)
-                last_state = migration_status["state"]
             time.sleep(0.1)
         else:
-            _dump_diagnostics(env, f"migration TIMEOUT [{label}] {role}: "
-                              f"task={task_id} state={migration_status['state']} "
-                              f"slots={slot_range.start}-{slot_range.end}")
             raise TimeoutError(
                 f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
             )
 
-    wait_for_completion(target_conn, "target")
+    wait_for_completion(target_conn)
     # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
     # so let's wait for the source as well:
-    wait_for_completion(source_conn, "source")
+    wait_for_completion(source_conn)

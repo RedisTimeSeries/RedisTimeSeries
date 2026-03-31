@@ -21,6 +21,32 @@ jobs:
         id: set-env
         run: |
           echo "redis-ref=unstable" >> $GITHUB_OUTPUT  # todo change per version/tag
+  linter:
+    uses: ./.github/workflows/flow-linter.yml
+    secrets: inherit
+  build-linux-x64:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+    secrets: inherit
+  build-linux-arm64:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+    secrets: inherit
+  macos:
+    uses: ./.github/workflows/flow-macos.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+    secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
