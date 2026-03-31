@@ -16,6 +16,14 @@
 
 #include "LibMR/deps/hiredis/hiredis.h"
 
+#include <sys/time.h>
+
+static long long currentTimeMillis(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 #define SeriesRecordName "SeriesRecord"
 
 static Record NullRecord;
@@ -422,6 +430,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardSeriesMapper");
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     // The permission error is ignored.
@@ -463,6 +472,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardSeriesMapper");
     return series_list;
 }
 
@@ -474,6 +484,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardMgetMapper");
     const char **limitLabelsStr = calloc(predicates->limitLabelsSize, sizeof(char *));
     for (int i = 0; i < predicates->limitLabelsSize; i++) {
         limitLabelsStr[i] = RedisModule_StringPtrLen(predicates->limitLabels[i], NULL);
@@ -564,6 +575,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardMgetMapper");
     return series_listOrMap;
 }
 
@@ -575,6 +587,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     }
     predicates->shouldReturnNull = true;
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal begin ShardQueryindexMapper");
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
 
     // The permission error is ignored.
@@ -595,6 +608,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_FreeDict(rts_staticCtx, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
+    RedisModule_Log(rts_staticCtx, "notice", "RTS internal end ShardQueryindexMapper");
     return series_list;
 }
 
@@ -647,11 +661,13 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 }
 
 static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
+    RedisModule_Log(ctx, "notice", "RTS internal begin TS.INTERNAL_SLOT_RANGES");
     RedisModuleSlotRangeArray *sra = RedisModule_ClusterGetLocalSlotRanges(ctx);
     if (sra == NULL) {
         // Should never happen, because this function is only called in clustered environment.
         // But to be on the safe side:
         RedisModule_ReplyWithArray(ctx, 0);
+        RedisModule_Log(ctx, "notice", "RTS internal end TS.INTERNAL_SLOT_RANGES (no ranges)");
         return;
     }
     RedisModule_ReplyWithArray(ctx, sra->num_ranges);
@@ -661,6 +677,7 @@ static void TS_INTERNAL_SLOT_RANGES(RedisModuleCtx *ctx, void *args) {
         RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].end);
     }
     RedisModule_ClusterFreeSlotRanges(ctx, sra);
+    RedisModule_Log(ctx, "notice", "RTS internal end TS.INTERNAL_SLOT_RANGES");
 }
 
 static Record *SlotRangesReplyParser(const redisReply *reply) {
@@ -685,6 +702,7 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
                                                         .replyParser = SlotRangesReplyParser };
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
+    RedisModule_Log(ctx, "notice", "RTS internal begin TS.INTERNAL_MRANGE");
     QueryPredicates_Arg *queryArg = args;
 
     MRangeArgs mrangeArgs;
@@ -711,10 +729,19 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
+    long long t0 = currentTimeMillis();
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    long long t1 = currentTimeMillis();
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    long long t2 = currentTimeMillis();
     RedisModule_FreeDict(ctx, qi);
+    if (t2 - t0 > 500) {
+        RedisModule_Log(ctx, "warning",
+                        "TS_INTERNAL_MRANGE took %lldms (QueryIndex=%lldms, reply=%lldms)",
+                        t2 - t0, t1 - t0, t2 - t1);
+    }
+    RedisModule_Log(ctx, "notice", "RTS internal end TS.INTERNAL_MRANGE");
 }
 
 static Series *ParseSeries(const redisReply *reply) {
@@ -813,6 +840,7 @@ static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANG
                                                     .replyParser = SeriesListReplyParser };
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
+    RedisModule_Log(ctx, "notice", "RTS internal begin TS.INTERNAL_MGET");
     QueryPredicates_Arg *queryArg = args;
 
     MGetArgs mgetArgs;
@@ -876,12 +904,14 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
+    RedisModule_Log(ctx, "notice", "RTS internal end TS.INTERNAL_MGET");
 }
 
 static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
                                                   .replyParser = SeriesListReplyParser };
 
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
+    RedisModule_Log(ctx, "notice", "RTS internal begin TS.INTERNAL_QUERYINDEX");
     QueryPredicates_Arg *queryArg = args;
 
     RedisModuleDict *qi =
@@ -901,6 +931,7 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
+    RedisModule_Log(ctx, "notice", "RTS internal end TS.INTERNAL_QUERYINDEX");
 }
 
 static Record *StringListReplyParser(const redisReply *reply) {
