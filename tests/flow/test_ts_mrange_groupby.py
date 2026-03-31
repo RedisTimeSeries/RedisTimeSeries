@@ -183,7 +183,7 @@ def truncate_month(date):
     return "-".join(date.split("-")[0:2])
 
 def test_filterby():
-    env = Env(freshEnv=True, moduleArgs='CHUNK_SIZE_BYTES 4096')
+    env = Env(freshEnv=True, moduleArgs='CHUNK_SIZE_BYTES 4096', noLog=False)
     high_temps = defaultdict(lambda : defaultdict(lambda: 0))
     specific_days = defaultdict(lambda : defaultdict(lambda: 0))
     days = [1335830400000, 1338508800000]
