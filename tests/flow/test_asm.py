@@ -34,8 +34,7 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=2, decodeResponses=True, freshEnv=True,
-              moduleArgs='CHUNK_SIZE_BYTES 4096', noLog=False)
+    env = Env(shardsCount=2, decodeResponses=True, noLog=False)
     if env.env != "oss-cluster":
         env.skip()
 
