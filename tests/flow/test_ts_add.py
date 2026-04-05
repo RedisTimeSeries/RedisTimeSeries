@@ -8,14 +8,21 @@ from includes import *
 import random 
 import struct
 
-def test_TEMPORARY_force_failure():
-    """TEMPORARY: force a test failure to verify CI artifact upload fix (MOD-14250). Remove after verification."""
+def test_TEMPORARY_freshenv_has_log():
+    """TEMPORARY: verify that freshEnv=True produces a .log file in CI artifacts."""
+    env = Env(decodeResponses=True, freshEnv=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.ping() is True
+        assert r.execute_command("TS.ADD", "fresh_env_key", 1, 1) == 1
+    assert False, "TEMPORARY: intentional failure - check artifact for .log file (freshEnv=True)"
+
+def test_TEMPORARY_reused_env_has_log():
+    """TEMPORARY: verify whether reused env produces a .log file in CI artifacts."""
     env = Env(decodeResponses=True)
     with env.getClusterConnectionIfNeeded() as r:
         assert r.ping() is True
-        assert r.execute_command("TS.ADD", "temporary_force_failure_key", 1, 1) == 1
-
-    assert False, "MOD-14250: intentional failure after Redis instance startup to verify artifact upload fix"
+        assert r.execute_command("TS.ADD", "reused_env_key", 1, 1) == 1
+    assert False, "TEMPORARY: intentional failure - check artifact for .log file (reused env)"
 
 def test_add_different_slot_range():
     env = Env(decodeResponses=True)
