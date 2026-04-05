@@ -5,10 +5,13 @@ struct RedisModuleCtx;
 struct RedisModuleString;
 struct RedisModuleUser *(*RedisModule_GetModuleUserFromUserName)(struct RedisModuleString *name);
 struct RedisModuleString *(*RedisModule_GetCurrentUserName)(struct RedisModuleCtx *ctx);
+struct RedisModuleString *(*RedisModule_GetUserUsername)(const struct RedisModuleUser *user);
 void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleString *str);
 int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
                                                 struct RedisModuleString *prefix,
                                                 int flags);
+int (*RedisModule_EnablePostponeClients)(void);
+int (*RedisModule_DisablePostponeClients)(void);
 
 #include <stdlib.h>
 #include <string.h>

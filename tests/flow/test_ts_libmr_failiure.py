@@ -79,7 +79,7 @@ def testLibmrFail():
                                 'name=bob')
         assert(False)
     except Exception as e:
-        assert str(e) == "A multi-shard command failed because at least one shard did not reply within the given timeframe."
+        assert str(e) == "A multi-keys command failed because at least one shard did not reply within the given timeframe."
 
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)
