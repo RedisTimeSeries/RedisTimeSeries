@@ -918,6 +918,16 @@ static Record *StringListReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
                                                         .replyParser = StringListReplyParser };
 
+static bool mr_initialized = false;
+
+bool LibMR_IsInitialized() {
+    return mr_initialized;
+}
+
+int LibMR_ResizeExecutionThreadPoolIfUnstarted(long long numThreads) {
+    return MR_ResizeExecutionThreadPoolIfUnstarted(numThreads);
+}
+
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
@@ -1058,6 +1068,7 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardQueryindexMapper", ShardQueryindexMapper, QueryPredicatesType);
+    mr_initialized = true;
 
     return REDISMODULE_OK;
 }
