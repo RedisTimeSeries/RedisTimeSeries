@@ -412,6 +412,8 @@ def test_ts_num_threads_module_arg():
     conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'name=ts')
 
     names = get_worker_thread_names(conn)
+    if names is None:
+        assert False, "Failed to get worker thread names"
     # Worker threads are named timeseries-0 … timeseries-[n-1];
     env.assertEqual(len(names), 6,
                         message="Expected 6 LibMR worker threads")
