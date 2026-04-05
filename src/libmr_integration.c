@@ -456,6 +456,8 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
                 return; // Same user already set, nothing to do
             }
         }
+        RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
+        RedisModule_SetContextUser(ctx, NULL);
     }
 
     // Allocate and set the new user on the context
