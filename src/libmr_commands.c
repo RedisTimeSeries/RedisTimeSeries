@@ -12,6 +12,17 @@
 
 #include "rmutil/alloc.h"
 
+// RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
+// so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
+// since the string must survive serialization to other shards via LibMR.
+static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
+    const RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
+    if (!userName)
+        return NULL;
+
+    return RedisModule_CreateStringFromString(NULL, userName);
+}
+
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (likely(len == 0))
@@ -28,13 +39,16 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
 
     if (max_idle_reached) {
         RedisModule_ReplyWithError(rctx,
-                                   "A multi-shard command failed because at least one shard "
+                                   "A multi-keys command failed because at least one shard "
                                    "did not reply within the given timeframe.");
     } else {
         char buf[512] = { 0 };
-        snprintf(
-            buf, sizeof(buf), "Multi-shard command failed. %s", MR_ExecutionCtxGetError(eCtx, 0));
-
+        const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
+        if (strncmp(err_msg, "NOPERM ", 7) == 0) {
+            snprintf(buf, sizeof(buf), "NOPERM Multi-keys command failed. %s", err_msg + 7);
+        } else {
+            snprintf(buf, sizeof(buf), "Multi-keys command failed. %s", err_msg);
+        }
         RedisModule_ReplyWithError(rctx, buf);
     }
     return true;
@@ -519,6 +533,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    queryArg->userName = CopyCurrentUserName(ctx);
 
     MRError *err = NULL;
 
@@ -582,6 +597,8 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
+    queryArg->userName = CopyCurrentUserName(ctx);
+
     MRError *err = NULL;
 
     ExecutionBuilder *builder = NULL;
@@ -634,6 +651,8 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+
+    queryArg->userName = CopyCurrentUserName(ctx);
 
     MRError *err = NULL;
 
