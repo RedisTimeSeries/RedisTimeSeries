@@ -85,60 +85,73 @@ static bool valid_slot_ranges(ARR(RedisModuleSlotRange *) slotRanges) {
     return slot == (1 << 14);
 }
 
+static void extract_from_record(Record *r,
+                                ARR(RedisModuleSlotRange *) *slotRanges,
+                                ARR(void *) *nodesResults,
+                                MRRecordType **nodesResultsType,
+                                bool *error) {
+    if (r->recordType == GetSlotRangesRecordType()) {
+        RedisModuleSlotRangeArray *sra = ((SlotRangesRecord *)r)->slotRanges;
+        for (size_t j = 0; j < sra->num_ranges; j++)
+            *slotRanges = array_append(*slotRanges, sra->ranges + j);
+        return;
+    }
+
+    if (r->recordType == GetListRecordType()) {
+        size_t wrapLen = ListRecord_GetLen((ListRecord *)r);
+        for (size_t k = 0; k < wrapLen; k++) {
+            extract_from_record(
+                ListRecord_GetRecord((ListRecord *)r, k), slotRanges, nodesResults,
+                nodesResultsType, error);
+            if (*error) return;
+        }
+        return;
+    }
+
+    if (*nodesResultsType && *nodesResultsType != r->recordType) {
+        *error = true;
+        return;
+    }
+    *nodesResultsType = r->recordType;
+
+    if (r->recordType == GetSeriesListRecordType()) {
+        SeriesListRecord *record = (SeriesListRecord *)r;
+        *nodesResults = array_append(*nodesResults, record->seriesList);
+        return;
+    }
+    if (r->recordType == GetStringListRecordType()) {
+        StringListRecord *record = (StringListRecord *)r;
+        *nodesResults = array_append(*nodesResults, record->stringList);
+        return;
+    }
+
+    *error = true;
+}
+
 static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
     if (unlikely(check_and_reply_on_error(eCtx, ctx)))
         return NULL;
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    if (len == 0 || len % MR_ClusterGetSize() != 0) {
-        // Each node should return the same number of results because they were all ran the same
-        // internal commands
+    if (len == 0) {
         RedisModule_Log(ctx, "warning", "Unexpected results from nodes");
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
         return NULL;
     }
 
-    // Note that there could be more than one slot range per node, in which case the
-    // array_len(slotRanges) will expand and become larger than the cluster size, but this is a good
-    // initial capacity.
     ARR(RedisModuleSlotRange *) slotRanges = array_new(RedisModuleSlotRange *, MR_ClusterGetSize());
-    // The actual type of the nodesResult will be determined dynamically (below).
-    // Each entry will hold the full collection of results from a node's reply to an internal
-    // command.
     ARR(void *) nodesResults = array_new(void *, MR_ClusterGetSize());
-    // We keep track of the type to ensure different nodes don't reply with different types.
     MRRecordType *nodesResultsType = NULL;
 
     for (size_t i = 0; i < len; i++) {
         Record *r = MR_ExecutionCtxGetResult(eCtx, i);
-        if (r->recordType == GetSlotRangesRecordType()) {
-            RedisModuleSlotRangeArray *sra = ((SlotRangesRecord *)r)->slotRanges;
-            for (size_t j = 0; j < sra->num_ranges; j++)
-                slotRanges = array_append(slotRanges, sra->ranges + j);
-            continue;
-        }
-
-        if (nodesResultsType && nodesResultsType != r->recordType) {
-            RedisModule_Log(ctx, "warning", "Mixed node result types");
+        bool err = false;
+        extract_from_record(r, &slotRanges, &nodesResults, &nodesResultsType, &err);
+        if (err) {
+            RedisModule_Log(ctx, "warning", "Unexpected or mixed record type in results");
             RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
             goto __error;
         }
-        nodesResultsType = r->recordType;
-
-        if (r->recordType == GetSeriesListRecordType()) {
-            SeriesListRecord *record = (SeriesListRecord *)r;
-            nodesResults = array_append(nodesResults, record->seriesList);
-            continue;
-        }
-        if (r->recordType == GetStringListRecordType()) {
-            StringListRecord *record = (StringListRecord *)r;
-            nodesResults = array_append(nodesResults, record->stringList);
-            continue;
-        }
-
-        RedisModule_Log(ctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
-        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
-        goto __error;
     }
 
     bool redisClusterEnabled =
@@ -546,7 +559,6 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
-            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
             break;
         }
@@ -610,7 +622,6 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
-            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
             break;
         }
@@ -665,7 +676,6 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
-            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
             break;
         }
