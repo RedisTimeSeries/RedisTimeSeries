@@ -66,6 +66,12 @@ jobs:
           MODULE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "module-version=${MODULE_VERSION}" >> $GITHUB_OUTPUT
           echo "Module version: ${MODULE_VERSION}"
+
+      - name: Summary
+        run: |
+          echo "### Nightly Build Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Module Version:** ${{ steps.get-version.outputs.module-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Snapshot Template:** \`${{ steps.set-env.outputs.snapshot-template }}\`" >> $GITHUB_STEP_SUMMARY
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
