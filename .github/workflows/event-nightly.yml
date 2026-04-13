@@ -31,7 +31,12 @@ jobs:
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       beta-timestamp: ${{ steps.set-env.outputs.beta-timestamp }}
       beta-version: ${{ steps.set-env.outputs.beta-version }}
+      module-version: ${{ steps.get-version.outputs.module-version }}
+      snapshot-template: ${{ steps.set-env.outputs.snapshot-template }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: set env
         id: set-env
         run: |
@@ -45,6 +50,22 @@ jobs:
           echo "beta-timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
           echo "beta-version=${BETA_VERSION}" >> $GITHUB_OUTPUT
           echo "Generated beta version: ${BETA_VERSION}"
+
+          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_NAME="${BRANCH_NAME//[^A-Za-z0-9._-]/_}"
+          SNAPSHOT_TEMPLATE="redistimeseries/snapshots/redistimeseries.@OS.${BRANCH_NAME}.${TIMESTAMP}.${WORKFLOW_NUM}.zip"
+          echo "snapshot-template=${SNAPSHOT_TEMPLATE}" >> $GITHUB_OUTPUT
+          echo "Snapshot template: ${SNAPSHOT_TEMPLATE}"
+
+      - name: Extract module version
+        id: get-version
+        run: |
+          MAJOR=$(grep '#define REDISTIMESERIES_VERSION_MAJOR' src/version.h | awk '{print $3}')
+          MINOR=$(grep '#define REDISTIMESERIES_VERSION_MINOR' src/version.h | awk '{print $3}')
+          PATCH=$(grep '#define REDISTIMESERIES_VERSION_PATCH' src/version.h | awk '{print $3}')
+          MODULE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "module-version=${MODULE_VERSION}" >> $GITHUB_OUTPUT
+          echo "Module version: ${MODULE_VERSION}"
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
