@@ -24,7 +24,6 @@ RUN tdnf -y update && \
     ca-certificates \
     tar
 
-RUN python3 -m pip install --upgrade pip "setuptools<81" wheel
 COPY .install /workspace/.install
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
