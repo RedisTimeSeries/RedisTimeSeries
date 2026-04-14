@@ -127,3 +127,99 @@ def testLibmr_client_disconnect():
         # make sure we did not crash
         r.ping()
         r.close()
+
+
+# Must match src/libmr_commands.c (check_and_reply_on_error) after MOD-14439 / PR #1930.
+TOPOLOGY_CHANGED_USER_ERR = (
+    "A multi-shard command failed because the cluster topology has changed"
+)
+
+
+def test_libmr_topology_change_during_mrange():
+    """
+    MOD-14439: LibMR aborts initiator executions when timeseries.REFRESHCLUSTER is called.
+    Uses DEBUG SLEEP on a remote shard to guarantee the MRANGE execution is in-flight (waiting
+    for that shard's reply) when we fire REFRESHCLUSTER on the initiator shard.
+    """
+    env = Env()
+    if env.shardsCount < 3:
+        env.skip()
+    if not env.is_cluster():
+        env.skip()
+    env.skipOnSlave()
+    env.skipOnAOF()
+
+    start_ts = 1
+    samples_count = 10
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command("TS.CREATE", "tester1{1}", "LABELS", "name", "bob")
+        _insert_data(r, "tester1{1}", start_ts, samples_count, 1)
+
+    initiator_shard = 1
+    remote_shard = 2
+
+    mrange_error = [None]
+
+    def do_mrange():
+        try:
+            conn = env.getConnection(initiator_shard)
+            conn.execute_command(
+                "TS.mrange", start_ts, start_ts + samples_count,
+                "WITHLABELS", "FILTER", "name=bob",
+            )
+        except Exception as e:
+            mrange_error[0] = str(e)
+
+    def do_sleep_remote():
+        try:
+            conn = env.getConnection(remote_shard)
+            conn.execute_command("DEBUG", "SLEEP", "2")
+        except Exception:
+            pass
+
+    # 1. Block remote shard so it can't process internal commands
+    t_sleep = Thread(target=do_sleep_remote)
+    t_sleep.start()
+    time.sleep(0.3)
+
+    # 2. Fire MRANGE — it will block waiting for the sleeping shard
+    t_mrange = Thread(target=do_mrange)
+    t_mrange.start()
+    time.sleep(0.3)
+
+    # 3. While MRANGE is stuck waiting, fire REFRESHCLUSTER on the initiator
+    try:
+        env.getConnection(initiator_shard).execute_command("timeseries.REFRESHCLUSTER")
+    except Exception:
+        pass
+
+    t_mrange.join(timeout=30)
+    t_sleep.join(timeout=30)
+
+    env.assertEqual(
+        mrange_error[0],
+        TOPOLOGY_CHANGED_USER_ERR,
+        message=(
+            "Expected MRANGE to get %r but got %r"
+            % (TOPOLOGY_CHANGED_USER_ERR, mrange_error[0])
+        ),
+    )
+
+    _waitCluster(env)
+    Refresh_Cluster(env)
+    verifyClusterInitialized(env)
+    expected_res = [
+        [
+            b"tester1{1}",
+            [[b"name", b"bob"]],
+            [
+                [1, b"1"], [2, b"1"], [3, b"1"], [4, b"1"], [5, b"1"],
+                [6, b"1"], [7, b"1"], [8, b"1"], [9, b"1"], [10, b"1"],
+            ],
+        ]
+    ]
+    actual_result = env.getConnection(initiator_shard).execute_command(
+        "TS.mrange", start_ts, start_ts + samples_count,
+        "WITHLABELS", "FILTER", "name=bob",
+    )
+    env.assertEqual(actual_result, expected_res)
