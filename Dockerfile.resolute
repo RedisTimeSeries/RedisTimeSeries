@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     libblocksruntime-dev \
     unzip \
-    rsync
+    rsync \
+    python3-dev
 
 ARG REDIS_REF=unstable
 ARG SANITIZER=
