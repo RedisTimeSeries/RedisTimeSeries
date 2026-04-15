@@ -3,6 +3,7 @@ name: Flow Linux
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 on:
   workflow_dispatch:
