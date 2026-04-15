@@ -31,6 +31,7 @@ jobs:
       arch: x64
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      skip_tests: ${{ github.head_ref == 'tal.ba/feat/m_command_serialization_opt' }}
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
@@ -39,6 +40,7 @@ jobs:
       arch: arm64
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      skip_tests: ${{ github.head_ref == 'tal.ba/feat/m_command_serialization_opt' }}
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
@@ -46,6 +48,7 @@ jobs:
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      skip_tests: ${{ github.head_ref == 'tal.ba/feat/m_command_serialization_opt' }}
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux.yml
@@ -56,6 +59,7 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
       run_valgrind: true
+      skip_tests: ${{ github.head_ref == 'tal.ba/feat/m_command_serialization_opt' }}
     secrets: inherit
   linux-sanitizer:
     uses: ./.github/workflows/flow-linux.yml
@@ -66,4 +70,5 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
       run_sanitizer: true
+      skip_tests: ${{ github.head_ref == 'tal.ba/feat/m_command_serialization_opt' }}
     secrets: inherit

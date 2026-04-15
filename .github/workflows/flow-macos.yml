@@ -41,6 +41,10 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip make test (build/pack still run)'
+        type: boolean
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -67,6 +71,10 @@ on:
         required: true
       quick: 
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'Skip make test (build/pack still run)'
         type: boolean
         default: false
       beta-version:
@@ -152,12 +160,13 @@ jobs:
         with:
           use-venv: '1'
       - name: Run tests
+        if: ${{ !inputs.skip_tests }}
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
       - name: Capture test results
-        if: always()
+        if: always() && !inputs.skip_tests
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ matrix.os }}

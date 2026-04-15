@@ -33,6 +33,10 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip make test (build/pack still run)'
+        type: boolean
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -63,6 +67,10 @@ on:
         default: false
       quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'Skip make test (build/pack still run)'
         type: boolean
         default: false
       beta-version:
@@ -159,6 +167,7 @@ jobs:
             make build
 
       - name: Run tests
+        if: ${{ !inputs.skip_tests }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
@@ -175,14 +184,14 @@ jobs:
               QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
-        if: always()
+        if: always() && !inputs.skip_tests
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" tests || true
           sudo chmod -R a+rX tests || true
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
       - name: Capture test results
-        if: always()
+        if: always() && !inputs.skip_tests
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}

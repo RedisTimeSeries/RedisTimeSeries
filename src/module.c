@@ -1727,7 +1727,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RedisModule_Log(ctx,
                     "notice",
-                    "RedisTimeSeries version %d, git_sha=%s",
+                    "TALLL RedisTimeSeries version %d, git_sha=%s ",
                     REDISTIMESERIES_MODULE_VERSION,
                     REDISTIMESERIES_GIT_SHA);
 
