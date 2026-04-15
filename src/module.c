@@ -485,6 +485,10 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+    RedisModule_Log(ctx,
+                    "warning",
+                    "TSDB_mrange: IsMRCluster()=%s",
+                    IsMRCluster() ? "true" : "false");
     if (IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
@@ -503,6 +507,10 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+    RedisModule_Log(ctx,
+                    "notice",
+                    "TSDB_mrevrange: IsMRCluster()=%s",
+                    IsMRCluster() ? "true" : "false");
     if (IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
