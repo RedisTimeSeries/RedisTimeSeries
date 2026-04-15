@@ -4,7 +4,7 @@ FROM quay.io/rockylinux/rockylinux:10
 WORKDIR /workspace
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN dnf update -y
+RUN dnf clean all && dnf update -y
 RUN dnf install -y gcc gcc-c++ make wget git openssl openssl-devel which rsync unzip clang jq \
     autoconf automake libtool python3-devel
 
