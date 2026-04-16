@@ -1,28 +1,25 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM ubuntu:22.04
 
 WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
-    git \
-    wget \
-    curl \
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    make \
     gcc \
     g++ \
-    make \
-    cmake \
-    libffi-devel \
-    openssl-devel \
-    build-essential \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    which \
-    unzip \
+    gdb \
+    clang \
+    valgrind \
+    git \
     jq \
-    ca-certificates \
-    tar
+    libssl-dev \
+    autoconf \
+    automake \
+    libtool \
+    cmake \
+    curl \
+    libblocksruntime-dev
 
 COPY .install /workspace/.install
 
