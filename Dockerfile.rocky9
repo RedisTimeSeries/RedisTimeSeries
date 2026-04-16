@@ -1,28 +1,26 @@
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+FROM rockylinux:9
 
 WORKDIR /workspace
 
-# Install dependencies
-RUN tdnf -y update && \
-    tdnf install -y \
+RUN yum -y update --nobest
+RUN yum -y install --nobest --skip-broken gcc gcc-c++ \
     git \
-    wget \
-    curl \
-    gcc \
-    g++ \
     make \
-    cmake \
-    libffi-devel \
+    cmake3 \
+    wget \
     openssl-devel \
-    build-essential \
-    zlib-devel \
     bzip2-devel \
-    readline-devel \
+    libffi-devel \
+    zlib-devel \
+    scl-utils \
     which \
-    unzip \
     jq \
-    ca-certificates \
-    tar
+    unzip \
+    gcc-toolset-13-gcc \
+    gcc-toolset-13-gcc-c++ \
+    gcc-toolset-13-libatomic-devel \
+    automake \ 
+    libtool
 
 COPY .install /workspace/.install
 
