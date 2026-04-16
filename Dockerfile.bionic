@@ -4,6 +4,7 @@ WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update -qq \
+    && apt-get update \
     && apt upgrade -yqq \
     && apt dist-upgrade -yqq \
     && apt install -yqq software-properties-common unzip rsync \
