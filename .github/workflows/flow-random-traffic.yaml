@@ -5,7 +5,7 @@ on:
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
-        default: 'unstable'
+        default: '8.4'
       timeout-minutes: 
         description: 'Timeout in minutes'
         default: '10'
@@ -14,7 +14,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         type: string
-        default: 'unstable'
+        default: '8.4'
       timeout-minutes: 
         description: 'Timeout in minutes'
         type: string
