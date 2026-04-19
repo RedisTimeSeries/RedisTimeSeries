@@ -19,11 +19,11 @@
 
 #define SeriesRecordName "SeriesRecord"
 
-/* All four must be present: Apply sets user from name; Release reads and clears via the same API set. */
-#define API_USER_CONTEXT_SUPPORTED                                                                   \
-    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                     \
+/* All four must be present: Apply sets user from name; Release reads and clears via the same API
+ * set. */
+#define API_USER_CONTEXT_SUPPORTED                                                                 \
+    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
      RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
-
 
 static Record NullRecord;
 static MRRecordType *NullRecordType = NULL;
