@@ -3,7 +3,13 @@ FROM ubuntu:20.04
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 
+# CI: retries + longer per-fetch timeout for flaky mirror links during large apt install.
+RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/99-ci-retries \
+    && echo 'Acquire::http::Timeout "300";' >> /etc/apt/apt.conf.d/99-ci-retries \
+    && echo 'Acquire::https::Timeout "300";' >> /etc/apt/apt.conf.d/99-ci-retries
+
 RUN apt update -qq \
+    && apt-get update \
     && apt upgrade -yqq \
     && apt install -yqq wget make clang-format gcc lcov git openssl libssl-dev \
     unzip rsync build-essential gcc-10 g++-10 cargo libclang-dev clang curl cmake jq automake libtool \
