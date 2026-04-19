@@ -19,7 +19,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         required: true
-        default: '7.2'
+        default: '6.2'
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
