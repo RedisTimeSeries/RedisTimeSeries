@@ -439,7 +439,8 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
 // Set the context user for ACL checks. Skips allocation if the context
 // already has the same user set, to avoid redundant alloc+free cycles.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
-    if (!RedisModule_SetContextUser) return;
+    if (!RedisModule_SetContextUser)
+        return;
 
     size_t len = 0;
 
@@ -472,11 +473,13 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
 }
 
 static void ReleaseCtxUser(RedisModuleCtx *ctx) {
-    if (!RedisModule_GetContextUser) return;
+    if (!RedisModule_GetContextUser)
+        return;
     RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
     if (user) {
         RedisModule_FreeModuleUser(user);
-        RedisModule_SetContextUser(ctx, NULL);
+        if (RedisModule_SetContextUser)
+            RedisModule_SetContextUser(ctx, NULL);
     }
 }
 
