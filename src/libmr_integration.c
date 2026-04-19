@@ -19,6 +19,12 @@
 
 #define SeriesRecordName "SeriesRecord"
 
+/* All four must be present: Apply sets user from name; Release reads and clears via the same API set. */
+#define API_USER_CONTEXT_SUPPORTED                                                                   \
+    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                     \
+     RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
+
+
 static Record NullRecord;
 static MRRecordType *NullRecordType = NULL;
 static MRRecordType *StringRecordType = NULL;
@@ -439,9 +445,7 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
 // Set the context user for ACL checks. Skips allocation if the context
 // already has the same user set, to avoid redundant alloc+free cycles.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
-    /* All module APIs used below must be non-NULL (Set+GetContextUser pair with ReleaseCtxUser). */
-    if (!RedisModule_SetContextUser || !RedisModule_GetContextUser ||
-        !RedisModule_GetModuleUserFromUserName || !RedisModule_GetUserUsername)
+    if (!API_USER_CONTEXT_SUPPORTED)
         return;
 
     size_t len = 0;
@@ -473,13 +477,12 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
 }
 
 static void ReleaseCtxUser(RedisModuleCtx *ctx) {
-    if (!RedisModule_GetContextUser)
+    if (!API_USER_CONTEXT_SUPPORTED)
         return;
     RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
     if (user) {
         RedisModule_FreeModuleUser(user);
-        if (RedisModule_SetContextUser)
-            RedisModule_SetContextUser(ctx, NULL);
+        RedisModule_SetContextUser(ctx, NULL);
     }
 }
 
