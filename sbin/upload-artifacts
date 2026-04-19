@@ -5,8 +5,8 @@ HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 ROOT=$(cd $HERE/.. && pwd)
 READIES=$ROOT/deps/readies
 . $READIES/shibumi/defs
-set -e
 
+set -e
 #----------------------------------------------------------------------------------------------
 
 if [[ $1 == --help || $1 == help || $HELP == 1 ]]; then
@@ -32,9 +32,7 @@ fi
 
 #----------------------------------------------------------------------------------------------
 
-ARCH=$(uname -m)
-
-[[ $ARCH == arm64 ]] && ARCH="aarch64"
+ARCH=$($READIES/bin/platform --arch)
 [[ $ARCH == x64 ]] && ARCH="x86_64"
 [[ $ARCH == arm64v8 ]] && ARCH="aarch64"
 
@@ -92,11 +90,11 @@ else
 fi
 
 cd artifacts${MAYBE_SNAP}
-
 if du --help | grep -q -- --apparent-size; then
 	DU_ARGS='--apparent-size'
 fi
 [[ $VERBOSE == 1 ]] && du -ah ${DU_ARGS} *
+
 
 #----------------------------------------------------------------------------------------------
 
@@ -123,13 +121,11 @@ s3_upload() {
 	local upload_dir="${S3_URL}/${prod_subdir}${MAYBE_SNAP}"
 	local file
 	if [[ $SNAPSHOT == 1 ]]; then
-		files=$(ls ${prefix}.*${PLATFORM}*.zip)
-		for file in $files; do
+		for file in `ls ${prefix}.*${PLATFORM}*.zip ${prefix}.*${PLATFORM}*.tgz 2> /dev/null`; do
 			s3_upload_file $file $upload_dir
 		done
 	else
-		files=$(ls ${prefix}.*.zip)
-		for file in $files; do
+		for file in `ls ${prefix}.*.zip ${prefix}.*.tgz 2> /dev/null`; do
 			s3_upload_file $file $upload_dir
 		done
 	fi
