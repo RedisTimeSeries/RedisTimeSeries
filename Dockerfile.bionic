@@ -3,7 +3,13 @@ FROM ubuntu:18.04
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Slow / flaky links to archive.ubuntu.com during CI: give apt more patience per connection.
+RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/99-ci-retries \
+    && echo 'Acquire::http::Timeout "300";' >> /etc/apt/apt.conf.d/99-ci-retries \
+    && echo 'Acquire::https::Timeout "300";' >> /etc/apt/apt.conf.d/99-ci-retries
+
 RUN apt update -qq \
+    && apt-get update \
     && apt upgrade -yqq \
     && apt dist-upgrade -yqq \
     && apt install -yqq software-properties-common unzip rsync \

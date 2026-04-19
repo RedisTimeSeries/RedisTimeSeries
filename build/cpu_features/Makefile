@@ -37,7 +37,8 @@ MK_CMAKE_FILES=$(CURDIR)/CMakeLists.txt
 
 CMAKE_DEFS += \
 	BUILD_TESTING=off \
-	CMAKE_POSITION_INDEPENDENT_CODE=on
+	CMAKE_POSITION_INDEPENDENT_CODE=on \
+	CMAKE_POLICY_VERSION_MINIMUM=3.5
 
 #----------------------------------------------------------------------------------------------
 
