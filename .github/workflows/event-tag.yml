@@ -14,7 +14,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         required: true
-        default: 'unstable'
+        default: '7.4'
 
 jobs:
   prepare-values:
