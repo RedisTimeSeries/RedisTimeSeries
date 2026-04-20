@@ -3,7 +3,7 @@
 tdnf install -y build-essential wget tar openssl-devel cmake python3 python3-pip which unzip jq
 git config --global --add safe.directory $PWD
 
-pip install --upgrade setuptools
+pip install --upgrade "setuptools<81"
 pip3 install -q -r tests/flow/requirements.txt
 pip3 install -q -r .install/build_package_requirements.txt
 
