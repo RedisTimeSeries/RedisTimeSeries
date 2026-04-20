@@ -4,4 +4,5 @@ jinja2
 ramp-packer
 RLTest==0.7.5
 redis~=5.0.8
+hiredis==3.1.0
 statistics
