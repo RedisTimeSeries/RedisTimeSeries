@@ -3,7 +3,7 @@ name: "ts_range_90k_datapoints"
 description: "TS.RANGE ts - + || Replying the entire contents of a serie with 90K datapoints"
 remote:
  - type: oss-standalone
- - setup: redistimeseries-m5
+ - setup: modules-m5
 dbconfig:
   - dataset: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/datasets/devops/scale100/1_serie_90k_datapoints.rdb"
 clientconfig:
